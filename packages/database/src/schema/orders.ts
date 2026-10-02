@@ -844,6 +844,35 @@ export const paymentSessionAttempts = sqliteTable("payment_session_attempts", {
     // payment_session_attempts_live_order_singleflight ON (order_id, gateway, payment_type) WHERE status = 'processing'
 ]);
 
+/**
+ * A hold on an order's fulfilment, placed by an app's `order.risk` answer
+ * (`action: "hold"`). While any hold is open, no shipment is booked and
+ * the order cannot move to shipped or delivered; staff review it and release
+ * the hold. One row per order and app, ever: a re-run of the same check
+ * after a release adds nothing.
+ */
+export const orderHolds = sqliteTable("order_holds", {
+    /** `ohd_` + a hash of (order, plugin): the idempotency of the app's answer. */
+    id: text("id").primaryKey(),
+    orderId: text("order_id")
+        .notNull()
+        .references(() => orders.id, { onDelete: "cascade" }),
+    pluginId: text("plugin_id").notNull(),
+    /** The app's name as the merchant saw it when the hold was placed. */
+    appName: text("app_name").notNull(),
+    /** The app's reasons, joined for staff (buyer-free text, at most 5 lines). */
+    reason: text("reason").notNull(),
+    createdAt: integer("created_at").notNull().default(UNIX_NOW),
+    releasedAt: integer("released_at"),
+    releasedBy: text("released_by").references(() => user.id, { onDelete: "set null" }),
+}, (table) => [
+    index("order_holds_open_idx").on(table.orderId).where(sql`${table.releasedAt} IS NULL`),
+    check("order_holds_id_shape", sql`length(${table.id}) = 36 AND substr(${table.id}, 1, 4) = 'ohd_'`),
+    check("order_holds_app_name_length", sql`length(${table.appName}) BETWEEN 1 AND 80`),
+    check("order_holds_reason_length", sql`length(${table.reason}) BETWEEN 1 AND 1200`),
+    check("order_holds_release_pair", sql`(${table.releasedAt} IS NULL) OR (${table.releasedAt} >= ${table.createdAt})`),
+]);
+
 export const paymentPlans = sqliteTable("payment_plans", {
     id: text("id").primaryKey(),
     orderId: text("order_id")
@@ -946,6 +975,7 @@ export type RefundAttempt = InferSelectModel<typeof refundAttempts>;
 export type OrderSupportRequest = InferSelectModel<typeof orderSupportRequests>;
 export type OrderEvent = InferSelectModel<typeof orderEvents>;
 export type PaymentSessionAttempt = InferSelectModel<typeof paymentSessionAttempts>;
+export type OrderHold = InferSelectModel<typeof orderHolds>;
 export type PaymentPlan = InferSelectModel<typeof paymentPlans>;
 export type CodTracking = InferSelectModel<typeof codTracking>;
 export type WebhookEvent = InferSelectModel<typeof webhookEvents>;

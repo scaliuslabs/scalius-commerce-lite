@@ -9,7 +9,6 @@ import type { Database } from "@scalius/database/client";
 import { safeBatch } from "@scalius/database/client";
 import { pluginRecords } from "@scalius/database/schema";
 import { and, asc, desc, eq, gt, gte, lt, or, sql, type SQL } from "drizzle-orm";
-import { pluginCacheDepStatements, pluginCollectionCacheDeps } from "./cache-deps";
 import { PluginError } from "./errors";
 import { encodeIndexTuple, indexPrefixUpperBound, indexScalar, type IndexScalar } from "./index-encoding";
 
@@ -123,44 +122,41 @@ export async function putPluginRecord(
   const { data, json } = requireRecord(record);
   const columns = recordIndexColumns(declaration, data);
   try {
-    // The collection's storefront key advances with the write (cache-deps.ts).
-    await safeBatch(db, [
-      db.insert(pluginRecords).values({
-        pluginId,
-        collection,
-        id: recordId,
-        dataJson: json,
-        ...columns,
-        createdAt: sql`unixepoch()`,
-        updatedAt: sql`unixepoch()`,
-      }).onConflictDoUpdate({
-        target: [pluginRecords.pluginId, pluginRecords.collection, pluginRecords.id],
-        set: {
-          dataJson: sql`excluded.data_json`,
-          idx1: sql`excluded.idx1`,
-          idx2: sql`excluded.idx2`,
-          idx3: sql`excluded.idx3`,
-          idx4: sql`excluded.idx4`,
-          uq1: sql`excluded.uq1`,
-          uq2: sql`excluded.uq2`,
-          updatedAt: sql`excluded.updated_at`,
-        },
-      }),
-      ...pluginCacheDepStatements(db, pluginCollectionCacheDeps(pluginId, [collection])),
-    ]);
+    // A write advances the record's revision and (cdep trigger, 0110) the
+    // collection's storefront key.
+    await db.insert(pluginRecords).values({
+      pluginId,
+      collection,
+      id: recordId,
+      dataJson: json,
+      revision: 1,
+      ...columns,
+      createdAt: sql`unixepoch()`,
+      updatedAt: sql`unixepoch()`,
+    }).onConflictDoUpdate({
+      target: [pluginRecords.pluginId, pluginRecords.collection, pluginRecords.id],
+      set: {
+        dataJson: sql`excluded.data_json`,
+        revision: sql`${pluginRecords.revision} + 1`,
+        idx1: sql`excluded.idx1`,
+        idx2: sql`excluded.idx2`,
+        idx3: sql`excluded.idx3`,
+        idx4: sql`excluded.idx4`,
+        uq1: sql`excluded.uq1`,
+        uq2: sql`excluded.uq2`,
+        updatedAt: sql`excluded.updated_at`,
+      },
+    });
   } catch (error) {
     throw uniqueViolation(error, declaration) ?? error;
   }
 }
 
 export async function deletePluginRecord(db: Database, pluginId: string, collection: string, id: string): Promise<boolean> {
-  const [deleted] = await safeBatch(db, [
-    db.delete(pluginRecords)
-      .where(and(owned(pluginId, collection), eq(pluginRecords.id, requireRecordId(id))))
-      .returning({ id: pluginRecords.id }),
-    ...pluginCacheDepStatements(db, pluginCollectionCacheDeps(pluginId, [collection])),
-  ]);
-  return (deleted as Array<{ id: string }>).length > 0;
+  const deleted = await db.delete(pluginRecords)
+    .where(and(owned(pluginId, collection), eq(pluginRecords.id, requireRecordId(id))))
+    .returning({ id: pluginRecords.id });
+  return deleted.length > 0;
 }
 
 // ── Queries ──────────────────────────────────────────────────────────────
