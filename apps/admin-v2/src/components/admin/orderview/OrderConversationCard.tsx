@@ -300,7 +300,6 @@ export function OrderConversationCard({ order, request }: { order: Order; reques
       <CardHeader className="flex-row flex-wrap items-center justify-between gap-2 space-y-0">
         <div className="flex items-center gap-2">
           <CardTitle>{tr("card.title")}</CardTitle>
-          {conversation && conversation.unread > 0 ? <Badge variant="info">{tr("unread", { count: conversation.unread })}</Badge> : null}
           {active.length > 0 ? <Badge variant="attention">{t("requests.open", { count: active.length })}</Badge> : null}
         </div>
         {conversation ? (

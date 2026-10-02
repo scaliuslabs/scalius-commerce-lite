@@ -16,6 +16,7 @@ import {
   type OrderReturnDto,
 } from "~/lib/order-return-workflow";
 import type { Order } from "./types";
+import { hasReturnsCard } from "./card-rules";
 import { ApproveReturnDialog } from "./order-returns/ApproveReturnDialog";
 import { CancelReturnDialog } from "./order-returns/CancelReturnDialog";
 import { CreateReturnDialog } from "./order-returns/CreateReturnDialog";
@@ -51,6 +52,8 @@ export function OrderReturnsCard({ order, onRefund }: { order: Order; onRefund: 
   const refundOwed = Math.min(order.refundDue, Number(order.paidAmount ?? 0));
   const canRefundOwed = actions.canRefundOrders && refundOwed > 0 && !order.activeRefundOperation?.active;
   const close = (open: boolean) => !open && setDialog(null);
+  // Before delivery there is nothing to return: the card stays off the page (card-rules.ts).
+  if (!hasReturnsCard(order, returns.length)) return null;
 
   return (
     <Card>

@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -28,7 +27,6 @@ import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions"
 import { useHydrated } from "~/hooks/use-hydrated";
 import { formatNumber, useMessages } from "~/i18n";
 import { orderDetailLabel, orderDetailMessages, shipmentRecoveryCopy } from "~/i18n/order-detail";
-import { fulfillmentStatusLabel, orderMessages } from "~/i18n/orders";
 import { resourceMessages } from "~/i18n/resource";
 import {
   orderErrorMessage,
@@ -46,7 +44,6 @@ import { cn } from "@scalius/shared/utils";
 import { getOrderItemName } from "./order-returns/shared";
 import { OperationalReadNotice } from "./OperationalReadNotice";
 import { formatCurrencyAmount, formatOrderDate } from "./formatters";
-import { statusBadgeVariant } from "./status-badges";
 import type { Order, OrderFulfillment, OrderItem, OrderShipment } from "./types";
 import { canMarkDelivered, isPartSent } from "./primary-action";
 
@@ -467,15 +464,7 @@ export function BookCourier({ order, focusRequest, guard }: {
   );
 }
 
-const CLOSED_ORDER_STATUSES = new Set(["cancelled", "returned", "refunded", "incomplete"]);
 const SETTLED_SHIPMENT_STATUSES = new Set(["delivered", "returned", "cancelled", "failed"]);
-
-/** Whether the order has courier parcels to follow: it ships, or parcels exist from before. */
-export function hasDeliveryCard(order: Pick<Order, "requiresShipping" | "shipments" | "shipmentRecovery">): boolean {
-  return order.requiresShipping !== false
-    || (order.shipments ?? []).length > 0
-    || (order.shipmentRecovery?.state ?? "none") !== "none";
-}
 
 /**
  * The courier side of an order that ships: each parcel's live status and
@@ -484,7 +473,6 @@ export function hasDeliveryCard(order: Pick<Order, "requiresShipping" | "shipmen
  */
 export function ShipmentCard({ order }: { order: Order }) {
   const t = useMessages(orderDetailMessages);
-  const o = useMessages(orderMessages);
   const queryClient = useQueryClient();
   const hydrated = useHydrated();
   const [courierCheckOpen, setCourierCheckOpen] = useState(false);
@@ -527,11 +515,9 @@ export function ShipmentCard({ order }: { order: Order }) {
 
   return (
     <Card id="order-shipments" className="scroll-mt-4">
-      <CardHeader className="flex-row items-center justify-between gap-2 space-y-0">
+      {/* The fulfilment status is the page title's badge and each fulfilment card's: not repeated here. */}
+      <CardHeader>
         <CardTitle>{t("shipments.title")}</CardTitle>
-        {order.fulfillmentStatus && !CLOSED_ORDER_STATUSES.has(status) ? (
-          <Badge variant={statusBadgeVariant(order.fulfillmentStatus, "fulfillment")}>{fulfillmentStatusLabel(o, order.fulfillmentStatus)}</Badge>
-        ) : null}
       </CardHeader>
       <CardContent className="space-y-4">
         <ShipmentRecoveryNotice order={order} canManage={canManage} onCourierCheck={() => setCourierCheckOpen(true)} />

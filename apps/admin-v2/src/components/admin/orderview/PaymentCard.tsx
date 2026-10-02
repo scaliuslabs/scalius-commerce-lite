@@ -50,7 +50,6 @@ import { ORDER_DETAIL_PREFETCH_STALE_MS } from "~/lib/order-detail-prefetch";
 import { resolveOrderOperationalReadState } from "~/lib/order-operational-read-state";
 import {
   formatSavedMajorAmount,
-  formatSavedMinorAmount,
   resolveSavedOrderMoneySummary,
 } from "~/lib/order-tax-presentation";
 import { buildOrderPaymentPresentation } from "~/lib/order-payment-presentation";
@@ -60,6 +59,7 @@ import { OperationalReadNotice } from "./OperationalReadNotice";
 import { orderBadgeVisibility, statusBadgeVariant } from "./status-badges";
 import { isPartSent, type OrderActionRequest } from "./primary-action";
 import { GiftCardTenderRows, giftCardTenderLines } from "./GiftCardTenderRows";
+import { OrderSummaryRows } from "./OrderItemsCard";
 import { RefundSettlementField, refundSettlementBody, type RefundSettlement } from "./RefundSettlementField";
 import type { Order, OrderRefundAttempt, OrderTimestamp } from "./types";
 
@@ -362,7 +362,7 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
         ) : null}
 
         <dl className="space-y-1 tabular-nums">
-          <Row label={t("summary.total")} value={savedSummary ? formatSavedMinorAmount(savedSummary.totalMinor, savedSummary) : fmt(order.totalAmount)} />
+          <OrderSummaryRows order={order} />
           {methodPaidMinor > 0 ? (
             <Row label={t("payment.paidWith", { method: paymentMethodLabel(o, order.paymentMethod ?? "cod") })} value={money(methodPaid)} />
           ) : order.paymentMethod === "gift_card" && giftCardHeldMinor > 0 ? null : (

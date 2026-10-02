@@ -288,7 +288,7 @@ export const orderDetailMessages = defineMessages({
     "requests.status.completed": "Done",
     "requests.status.cancelled": "Cancelled",
 
-    "messages.title": "Messages",
+    "messages.title": "Notifications sent",
     "messages.empty": "No messages sent yet.",
     "messages.loadFailed": "Couldn't load messages.",
     "messages.sendAgain": "Send again",
@@ -522,7 +522,6 @@ export const orderDetailMessages = defineMessages({
     archive: "Archive",
 
     // Wave A: fulfilment groups, pickup, service, buyer inputs.
-    "summary.title": "Summary",
     "group.ship": "Shipping",
     "group.pickup": "Pickup",
     "group.service": "Service",
@@ -878,7 +877,7 @@ export const orderDetailMessages = defineMessages({
     "requests.status.completed": "সম্পন্ন",
     "requests.status.cancelled": "বাতিল করা",
 
-    "messages.title": "মেসেজ",
+    "messages.title": "পাঠানো নোটিফিকেশন",
     "messages.empty": "এখনো কোনো মেসেজ পাঠানো হয়নি।",
     "messages.loadFailed": "মেসেজ লোড হয়নি।",
     "messages.sendAgain": "আবার পাঠান",
@@ -1110,7 +1109,6 @@ export const orderDetailMessages = defineMessages({
     "timeline.rejectedCount": "{count}টি অনুমোদিত হয়নি",
     moreActions: "আরও অ্যাকশন",
     archive: "আর্কাইভ",
-    "summary.title": "সারসংক্ষেপ",
     "group.ship": "শিপিং",
     "group.pickup": "পিকআপ",
     "group.service": "সার্ভিস",
