@@ -11,6 +11,7 @@ import {
   storefrontTemplateTheme,
   storefrontThemeDocumentSchema,
   type StorefrontSection,
+  type StorefrontSectionType,
   type StorefrontThemeDocument,
 } from "@scalius/shared/storefront-theme";
 import { AdminApiResponseError } from "~/lib/admin-api-error";
@@ -93,7 +94,7 @@ const SHAPE = storeShapeFromFacts({
   hasDeliveryMethods: true,
 });
 
-const section = (type: StorefrontSection["type"], id: string, settings: Record<string, unknown> = {}) =>
+const section = (type: StorefrontSectionType, id: string, settings: Record<string, unknown> = {}) =>
   ({ ...storefrontSectionDefault(type, id), settings: { ...storefrontSectionDefault(type, id).settings, ...settings } }) as StorefrontSection;
 
 function themeWith(home: StorefrontSection[], base: StorefrontThemeDocument = DEFAULT_STOREFRONT_THEME): StorefrontThemeDocument {
@@ -109,6 +110,7 @@ const HOME = [
 function render(theme: StorefrontThemeDocument = themeWith(HOME), options: {
   shape?: typeof SHAPE;
   media?: ThemeWorkspaceDocument["media"];
+  apps?: ThemeWorkspaceDocument["apps"];
   refetch?: () => Promise<{ data?: ThemeWorkspaceDocument }>;
   published?: StorefrontThemeDocument;
 } = {}) {
@@ -118,6 +120,7 @@ function render(theme: StorefrontThemeDocument = themeWith(HOME), options: {
     draft: { theme, revision: 1, basePublishedRevision: 1, updatedAt: null },
     storeShape: options.shape ?? SHAPE,
     media: options.media ?? [],
+    apps: options.apps ?? [],
   } as unknown as ThemeWorkspaceDocument;
   act(() => {
     root.render(
@@ -325,6 +328,7 @@ describe("theme editor: settings and saving", () => {
         draft: { theme: newer, revision: 5, basePublishedRevision: 1, updatedAt: null },
         storeShape: SHAPE,
         media: [],
+        apps: [],
       } as unknown as ThemeWorkspaceDocument,
     }));
     render(themeWith(HOME), { refetch });
@@ -380,6 +384,131 @@ describe("theme editor: settings and saving", () => {
     render();
     act(() => button("Preview").click());
     expect(preview.open).toHaveBeenCalledWith(1, "/");
+  });
+});
+
+describe("theme editor: app sections", () => {
+  type App = ThemeWorkspaceDocument["apps"][number];
+  type Field = App["sections"][number]["settings"][number];
+  const setting = (key: string, label: string, extra: Partial<Field> = {}): Field => ({
+    key, label, help: null, type: "text", required: false, options: null, default: null,
+    min: null, max: null, integer: false, maxLength: null, ...extra,
+  });
+  const CAROUSEL = "acme.reviews/carousel";
+  const APPS: App[] = [{
+    id: "acme.reviews",
+    name: "Acme Reviews",
+    sections: [{
+      key: CAROUSEL,
+      type: "carousel",
+      name: "Reviews carousel",
+      description: "Your best reviews in a row.",
+      settings: [
+        setting("heading", "Heading", { maxLength: 60, default: "What buyers say" }),
+        setting("intro", "Intro", { type: "textarea", required: true, maxLength: 300 }),
+        setting("count", "Reviews shown", { type: "number", min: 1, max: 12, integer: true, default: 4 }),
+        setting("stars", "Show stars", { type: "boolean", default: true }),
+        setting("layout", "Layout", { type: "select", options: [{ value: "grid", label: "Grid" }, { value: "carousel", label: "Carousel" }], default: "grid" }),
+        setting("more", "More reviews link", { type: "url", help: "Where “See all” goes." }),
+        setting("accent", "Star colour", { type: "color", default: "#1a7f37" }),
+      ],
+    }],
+    productBlocks: [],
+  }];
+  const appSection = (id: string, values: Record<string, unknown>, app = CAROUSEL) =>
+    ({ id, type: "app", version: 1, settings: { app, values } }) as StorefrontSection;
+  const openAdd = () => act(() => container.querySelector<HTMLButtonElement>("button[aria-label='Add section']")!.click());
+  const option = (label: string) => [...document.querySelectorAll<HTMLButtonElement>("[role=option]")].find((each) => each.textContent?.startsWith(label));
+  const groupHeadings = () => [...document.querySelectorAll("[role=presentation]")].map((each) => each.textContent);
+  const status = () => container.querySelector("header [role=status]")?.textContent;
+
+  it("adds an app's section from the Apps group at its defaults and saves it once its settings are valid", async () => {
+    render(themeWith(HOME), { apps: APPS });
+    openAdd();
+    expect(groupHeadings()).toEqual(["Sections", "Apps"]);
+    expect(option("Reviews carousel")?.textContent).toBe("Reviews carousel · Acme Reviews");
+    act(() => option("Reviews carousel")!.click());
+    // The new section opens with the app's own words.
+    expect(container.querySelector("h2")?.textContent).toBe("Reviews carousel");
+    expect(container.textContent).toContain("Your best reviews in a row. From Acme Reviews");
+    expect(field("theme-section-app-values-heading").value).toBe("What buyers say");
+    // The app's required intro has no default: nothing saves until it is written.
+    expect(document.querySelector("#theme-section-app-values-intro-note")?.textContent).toBe("Fill this in.");
+    expect(status()).toBe("Fix the marked settings to save");
+    type(field<HTMLTextAreaElement>("theme-section-app-values-intro"), "Loved by 2,000 buyers");
+    type(field("theme-section-app-values-more"), "http://reviews.test");
+    expect(document.querySelector("#theme-section-app-values-more-note")?.textContent).toBe("Use a full https:// address.");
+    expect(field("theme-section-app-values-more").getAttribute("aria-invalid")).toBe("true");
+    type(field("theme-section-app-values-more"), "https://reviews.test/all");
+    type(field("theme-section-app-values-count"), "6");
+    await autosaved();
+    const saved = lastSaved().theme;
+    expect(saved.pages.home.at(-1)).toEqual({
+      id: "app",
+      type: "app",
+      version: 1,
+      settings: {
+        app: CAROUSEL,
+        values: { heading: "What buyers say", intro: "Loved by 2,000 buyers", count: 6, stars: true, layout: "grid", more: "https://reviews.test/all", accent: "#1a7f37" },
+      },
+    });
+    expect(storefrontThemeDocumentSchema.safeParse(saved).success).toBe(true);
+    // A new section is structure: the preview loads the page again.
+    expect(preview.send).toHaveBeenCalledWith({ type: "reload" });
+    act(() => button("All sections").click());
+    expect(rowText("app")).toBe("Reviews carouselFrom Acme Reviews");
+  });
+
+  it("edits an app section's values, drops settings the app no longer has, and swaps only that section", async () => {
+    render(themeWith([...HOME, appSection("reviews", { heading: "Reviews", intro: "Hi", count: 4, legacy: "old" })]), { apps: APPS });
+    expect(rowText("reviews")).toBe("Reviews carouselFrom Acme Reviews");
+    act(() => container.querySelector<HTMLButtonElement>('[data-section-row="reviews"] button:nth-of-type(2)')!.click());
+    act(() => field<HTMLButtonElement>("theme-section-reviews-values-stars").click());
+    choose(field<HTMLButtonElement>("theme-section-reviews-values-layout"), "Carousel");
+    type(field("theme-section-reviews-values-accent"), "#B4232A");
+    await autosaved();
+    expect(lastSaved().theme.pages.home.find((each) => each.id === "reviews")!.settings).toEqual({
+      app: CAROUSEL,
+      values: { heading: "Reviews", intro: "Hi", count: 4, stars: false, layout: "carousel", accent: "#b4232a" },
+    });
+    await vi.waitFor(() => expect(preview.send).toHaveBeenCalledWith({ type: "section-updated", sectionIds: ["reviews"] }));
+    // Undo puts the colour back.
+    act(() => button("Undo").click());
+    expect(field("theme-section-reviews-values-accent").value).toBe("#1a7f37");
+  });
+
+  it("keeps a section whose app is not active, says so, and lets the merchant remove it", async () => {
+    render(themeWith([...HOME, appSection("banner", { text: "Eid sale" }, "acme.gone/banner")]), { apps: APPS });
+    expect(rowText("banner")).toBe("acme.gone/bannerApp not active. Hidden on your store.");
+    act(() => container.querySelector<HTMLButtonElement>('[data-section-row="banner"] button:nth-of-type(2)')!.click());
+    expect(container.querySelector("h2")?.textContent).toBe("acme.gone/banner");
+    expect(container.textContent).toContain("This section's app isn't active, so your store doesn't show it.");
+    act(() => button("All sections").click());
+    openMenu("Actions for acme.gone/banner");
+    act(() => button("Remove").click());
+    expect(rows()).toEqual(["hero", "rail", "faq"]);
+    await autosaved();
+    expect(lastSaved().theme.pages.home.map((each) => each.id)).toEqual(["hero", "rail", "faq"]);
+  });
+
+  it("marks an app section whose values the app refuses, and stops adding at the homepage's app section limit", () => {
+    const eight = Array.from({ length: 8 }, (_, index) => appSection(`app-${index}`, { intro: "Hi", count: index === 0 ? 40 : 4 }));
+    render(themeWith(eight), { apps: APPS });
+    expect(rowText("app-0")).toBe("Reviews carouselFix its settings to save.");
+    expect(rowText("app-1")).toBe("Reviews carouselFrom Acme Reviews");
+    openAdd();
+    const carousel = option("Reviews carousel")!;
+    expect(carousel.disabled).toBe(true);
+    expect(carousel.textContent).toBe("Reviews carousel · A homepage shows up to 8 app sections.");
+    act(() => container.querySelector<HTMLButtonElement>('[data-section-row="app-0"] button:nth-of-type(2)')!.click());
+    expect(document.querySelector("#theme-section-app-0-values-count-note")?.textContent).toBe("Use 12 or less.");
+  });
+
+  it("offers no Apps group when no active app has a section", () => {
+    render(themeWith(HOME), { apps: [{ ...APPS[0]!, sections: [] }] });
+    openAdd();
+    expect(groupHeadings()).toEqual([]);
+    expect(option("Reviews carousel")).toBeUndefined();
   });
 });
 

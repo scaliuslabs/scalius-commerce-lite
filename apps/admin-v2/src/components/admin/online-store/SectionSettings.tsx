@@ -14,8 +14,10 @@ import {
   STOREFRONT_HERO_SLIDE_LIMIT,
   STOREFRONT_HERO_SLIDE_TEXT_LIMITS,
   STOREFRONT_SECTION_REGISTRY,
+  isStorefrontAppSection,
   type StorefrontFocalPoint,
   type StorefrontHeroSlide,
+  type StorefrontPlatformSection,
   type StorefrontSection,
   type StorefrontSectionType,
 } from "@scalius/shared/storefront-theme";
@@ -41,16 +43,13 @@ import {
   type SectionMediaPreview,
 } from "./schema-form/resource-fields";
 import { SchemaSettingsForm, type SettingWidgetProps } from "./schema-form/SchemaSettingsForm";
+import { nextFreeId } from "./theme-settings";
 
 type Section = StorefrontSection;
 
-/** A new section id: the type, then -2, -3… until it is free. */
-export function newSectionId(type: StorefrontSectionType, sections: readonly Section[]): string {
-  const taken = new Set(sections.map((each) => each.id));
-  if (!taken.has(type)) return type;
-  for (let number = 2; ; number += 1) {
-    if (!taken.has(`${type}-${number}`)) return `${type}-${number}`;
-  }
+/** A new section id: the type (`app` for an app's section), then -2, -3… until it is free. */
+export function newSectionId(type: Section["type"], sections: readonly Section[]): string {
+  return nextFreeId(type, sections);
 }
 
 /** The field ids of a section's settings start with this. */
@@ -301,18 +300,25 @@ function sectionSettingVisible(type: StorefrontSectionType) {
   };
 }
 
-/** A section's settings errors as shown messages, by data path under `settings`. */
+const NO_ERRORS: ReadonlyMap<string, string> = new Map();
+
+/**
+ * A platform section's settings errors as shown messages, by data path under
+ * `settings`. An app section's settings are its app's: the app settings form
+ * checks them against the fields the app declares (useAppSettingErrors).
+ */
 export function useSectionErrors(section: Section): ReadonlyMap<string, string> {
   const t = useMessages(themeSettingMessages);
+  if (isStorefrontAppSection(section)) return NO_ERRORS;
   const errors = settingErrors(STOREFRONT_SECTION_REGISTRY[section.type].settings, section.settings);
   return new Map([...errors].map(([path, error]) => [path, t(error.key, error.values)]));
 }
 
-/** The generated settings form of one section. */
+/** The generated settings form of one platform section. */
 export function SectionSettingsForm({ section, media, onChange, errors }: {
-  section: Section;
+  section: StorefrontPlatformSection;
   media: MediaPreviews;
-  onChange: (settings: Section["settings"]) => void;
+  onChange: (settings: StorefrontPlatformSection["settings"]) => void;
   errors?: ReadonlyMap<string, string>;
 }) {
   return (
@@ -321,7 +327,7 @@ export function SectionSettingsForm({ section, media, onChange, errors }: {
       scope={sectionLabelScope(section.type)}
       spec={sectionSettingSpec(section.type)}
       value={section.settings as Record<string, unknown>}
-      onChange={(settings) => onChange(settings as Section["settings"])}
+      onChange={(settings) => onChange(settings as StorefrontPlatformSection["settings"])}
       errors={errors}
       widgets={section.type === "hero" ? HERO_WIDGETS : undefined}
       visible={sectionSettingVisible(section.type)}
