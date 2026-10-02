@@ -164,4 +164,29 @@ describe("admin app routes", () => {
     const approved = await call("POST", "/apps/scalius.order-tagger/activate", { expectedRevision: updated.revision, grantKey: updated.grantKey });
     expect(approved.json.data.app).toMatchObject({ status: "active", needsApproval: false });
   });
+
+  it("lists what active apps add to the dashboard: pages by placement, cards, actions, widgets and their admin routes", async () => {
+    await call("GET", "/apps");
+    expect((await call("GET", "/apps/surfaces")).json.data.apps).toEqual([]);
+    for (const id of ["scalius.hello", "scalius.wishlist"]) {
+      const detail = (await call("GET", `/apps/${id}`)).json.data.app;
+      if (detail.settings.missing.length === 0) {
+        expect((await call("POST", `/apps/${id}/activate`, { expectedRevision: detail.revision, grantKey: detail.grantKey })).status).toBe(200);
+      }
+    }
+    const { apps } = (await call("GET", "/apps/surfaces")).json.data;
+    expect(apps.map((entry: Json) => entry.id)).toEqual(["scalius.hello", "scalius.wishlist"]);
+    expect(apps[0]).toMatchObject({
+      name: "Hello",
+      pages: [{ id: "overview", title: "Hello", placement: "apps", route: "dashboard" }],
+      cards: [{ id: "greeting", target: "order", title: "Hello", route: "order-card" }],
+      actions: [{ id: "wave", target: "product", label: "Wave hello", route: "wave", bulk: true, destructive: false }],
+      widgets: [{ id: "summary", title: "Hello", route: "widget" }],
+    });
+    expect(apps[0].routes).toEqual(expect.arrayContaining([{ name: "reset", methods: ["POST"] }, { name: "dashboard", methods: ["GET"] }]));
+    expect(apps[1]).toMatchObject({
+      pages: [{ id: "most-wished", placement: "products", route: "most-wished" }],
+      cards: [{ id: "wishes", target: "product", route: "product-card" }],
+    });
+  });
 });
