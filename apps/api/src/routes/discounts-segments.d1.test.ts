@@ -74,7 +74,8 @@ async function preview(headers: Record<string, string> = {}) {
 
 describe("a segment-limited code in the cart preview", () => {
   it("applies for the signed-in member, from the storefront proxy's header or the cookie", async () => {
-    for (const headers of [{ "X-Customer-Session": SESSION }, { Cookie: `cs_tok=${SESSION}` }]) {
+    const sessions: Array<Record<string, string>> = [{ "X-Customer-Session": SESSION }, { Cookie: `cs_tok=${SESSION}` }];
+    for (const headers of sessions) {
       const data = await preview(headers);
       expect(data.totalDiscount).toBe(100);
       expect(data.discounts).toEqual([expect.objectContaining({ code: "QA-OCT3-VIP", amount: 100 })]);
