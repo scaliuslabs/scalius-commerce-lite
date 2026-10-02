@@ -1,12 +1,13 @@
-// The post-write flush: only the core events module, no representations, so
-// the middleware's lazy import stays small.
+// The post-write flush: only the core events and plugin persistence modules,
+// no representations or plugin host, so the middleware's lazy import stays
+// small.
 import type { Database } from "@scalius/database/client";
 import {
-  EVENT_FAN_OUT_TARGETS,
   flushPendingEventOutbox,
   type EventFlushResult,
   type EventsQueue,
 } from "@scalius/core/modules/events";
+import { API_EVENT_FAN_OUT_TARGETS } from "./targets";
 
 /** Events handed to the queue right after a write (the scheduled sweep takes the rest). */
 export const POST_WRITE_EVENT_FLUSH_LIMIT = 50;
@@ -20,7 +21,7 @@ export async function flushEventsAfterWrite(db: Database, env: Env): Promise<Eve
   return flushPendingEventOutbox({
     db,
     queue: eventsQueue(env),
-    targets: EVENT_FAN_OUT_TARGETS,
+    targets: API_EVENT_FAN_OUT_TARGETS,
     limit: POST_WRITE_EVENT_FLUSH_LIMIT,
   });
 }

@@ -21,9 +21,13 @@ import {
   getPluginRecord,
   installPlugin,
   listPluginLogs,
+  pluginEventFanOutTarget,
   requirePluginInstallation,
   writePluginSettings,
 } from "@scalius/core/modules/plugins";
+import { toOutboxEvent } from "@scalius/core/modules/events";
+import { eventOutbox } from "@scalius/database/schema";
+import { eq } from "drizzle-orm";
 import { PLUGIN_API_VERSION } from "@scalius/shared/plugins";
 import { packPlugin } from "../../../../scripts/plugin-build.mjs";
 import { pluginBundleKey } from "./loaders/sandbox";
@@ -121,7 +125,7 @@ describe("plugins in the sandbox loader (Miniflare workerLoaders)", () => {
     const packed = await packPlugin("plugins/hello");
     helloSha = packed.sha256;
     const bucket = await mf.getR2Bucket("BUCKET");
-    await bucket.put(pluginBundleKey("scalius.hello", "0.1.0", helloSha), packed.code);
+    await bucket.put(pluginBundleKey("scalius.hello", packed.version, helloSha), packed.code);
     const installed = await installPlugin(db, { manifest: packed.manifest, source: "registry", bundleSha256: helloSha, actorUserId: "owner" });
     const configured = await writePluginSettings(db, "scalius.hello", { greeting: "Salam", discount_percent: 20, min_subtotal_minor: 0, api_key: "sandbox-secret" }, {
       expectedRevision: installed.revision,
@@ -168,7 +172,7 @@ describe("plugins in the sandbox loader (Miniflare workerLoaders)", () => {
     expect(await send({ action: "route", pluginId: "scalius.hello", surface: "public", name: "greet", request }))
       .toEqual({ ok: true, value: { status: 200, headers: {}, body: { message: "Salam, Karim!", visits: 1 } }, error: null });
     expect((await send({ action: "route", pluginId: "scalius.hello", surface: "admin", name: "dashboard", request: { ...request, query: {} } })).value.body)
-      .toMatchObject({ children: [{ label: "Greeted orders", value: 1 }, { label: "Paid events", value: 1 }, expect.anything()] });
+      .toMatchObject({ children: [{ label: "Greeted orders", value: 1 }, { label: "Paid events", value: 1 }, { label: "New orders", value: 0 }, expect.anything()] });
     expect(await send({ action: "cron", pluginId: "scalius.hello", name: "tidy", scheduledAt: "2027-01-01T00:00:00.000Z" }))
       .toEqual({ ok: true, value: null, error: null });
     expect(await getPluginRecord(db, "scalius.hello", "greetings", "ord_box1")).toBeNull();
@@ -194,5 +198,25 @@ describe("plugins in the sandbox loader (Miniflare workerLoaders)", () => {
     expect(outcome).toMatchObject({ ok: false, error: expect.stringMatching(/does not match its SHA-256/) });
     expect((await requirePluginInstallation(db, "acme.probe")).status).toBe("failed");
     expect(installation.status).toBe("active");
+  });
+
+  it("delivers an outbox event end to end: fan-out row, the plugins.deliver consumer, the isolate, exactly once", async () => {
+    sqlite.prepare(`INSERT INTO event_outbox (id, topic, resource_type, resource_id, data, occurred_at, status)
+      VALUES ('evt_sandbox_delivery1', 'order.created', 'order', 'ord_box1', '{"orderId":"ord_box1","status":"pending","paymentStatus":"unpaid","channel":"online_store"}', unixepoch(), 'processing')`).run();
+    const event = toOutboxEvent((await db.select().from(eventOutbox).where(eq(eventOutbox.id, "evt_sandbox_delivery1")).get())!)!;
+    const messages = await pluginEventFanOutTarget.fanOut(db, event);
+    expect(messages).toEqual([{ type: "plugins.deliver", deliveryId: expect.stringMatching(/^pld_/) }]);
+    const deliveryId = (messages[0] as { deliveryId: string }).deliveryId;
+
+    expect(await send({ action: "deliver", pluginId: "scalius.hello", deliveryId })).toEqual({ status: "succeeded", deliveryId, retryInSeconds: null });
+    expect(sqlite.prepare("SELECT plugin_id, status, attempts, last_error FROM plugin_event_deliveries WHERE id = ?").get(deliveryId))
+      .toEqual({ plugin_id: "scalius.hello", status: "succeeded", attempts: 1, last_error: null });
+    expect(await getPluginKv(db, "scalius.hello", "created_count")).toBe(1);
+
+    // A redelivered message and a re-dispatched event add nothing.
+    expect(await send({ action: "deliver", pluginId: "scalius.hello", deliveryId })).toEqual({ status: "skipped", deliveryId, reason: "not_due" });
+    expect(await pluginEventFanOutTarget.fanOut(db, event)).toEqual([]);
+    expect(sqlite.prepare("SELECT count(*) AS n FROM plugin_event_deliveries").get()).toEqual({ n: 1 });
+    expect(await getPluginKv(db, "scalius.hello", "created_count")).toBe(1);
   });
 });

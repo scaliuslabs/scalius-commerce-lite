@@ -15,7 +15,7 @@ export function classifyAdminRuntimePath(pathname: string): AdminRuntimeGroup | 
     return "sales";
   }
   if (["pages", "navigation", "settings", "custom-field-definitions", "custom-fields"].includes(segment)) return "content";
-  if (["rbac", "auth", "agent-access", "webhooks", "events"].includes(segment)) return "access";
+  if (["rbac", "auth", "agent-access", "webhooks", "events", "apps"].includes(segment)) return "access";
   return null;
 }
 

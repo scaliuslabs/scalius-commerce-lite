@@ -16,7 +16,7 @@
 //   auth.send_otp    → inline below (WhatsApp + email; SMS providers TBD)
 //   media.render_variants → core media renderMissingMediaVariants (delayed after upload)
 //   catalog.recommendations.refresh / catalog.projections.rebuild → ./utils/catalog-jobs.ts
-//   events.dispatch / webhooks.deliver → ./events/dispatch.ts (event outbox id / delivery id only)
+//   events.dispatch / webhooks.deliver / plugins.deliver → ./events/dispatch.ts (event outbox id / delivery id only)
 //
 // TODO: When 5-6 SMS providers are implemented, extract auth.send_otp to
 //       src/modules/notifications/otp.handler.ts
@@ -394,6 +394,12 @@ async function archiveJobsDlqMessage(
     const { releaseWebhookDeliveryFromQueue } = await import("@scalius/core/modules/events");
     const released = await releaseWebhookDeliveryFromQueue(db, payload.deliveryId, `webhooks_dlq_terminal: queue message ${msg.id} exhausted after ${msg.attempts} attempts`);
     return released ? "delivery_released" : "delivery_settled";
+  }
+  if (payload.type === "plugins.deliver") {
+    // Like webhooks: the delivery row owns its retries.
+    const { releasePluginDeliveryFromQueue } = await import("@scalius/core/modules/plugins");
+    const released = await releasePluginDeliveryFromQueue(db, payload.deliveryId, `plugins_dlq_terminal: queue message ${msg.id} exhausted after ${msg.attempts} attempts`);
+    return released ? "plugin_delivery_released" : "plugin_delivery_settled";
   }
   return "ignored";
 }
@@ -793,9 +799,10 @@ async function processQueueMessage(
     // infrastructure errors throw for a queue retry.
 
     case "events.dispatch":
-    case "webhooks.deliver": {
+    case "webhooks.deliver":
+    case "plugins.deliver": {
       const { processEventsQueueMessage } = await import("./events/dispatch");
-      await processEventsQueueMessage(payload, db, env);
+      await processEventsQueueMessage(payload, db, env, executionCtx);
       break;
     }
 

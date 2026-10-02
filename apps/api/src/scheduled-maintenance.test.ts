@@ -27,6 +27,7 @@ const mocks = vi.hoisted(() => {
     backfillMissingMediaVariants: vi.fn(),
     enqueueMediaVariantsBacklog: vi.fn(),
     runScheduledEventMaintenance: vi.fn(),
+    runScheduledPluginMaintenance: vi.fn(),
   };
 });
 
@@ -102,6 +103,10 @@ vi.mock("./utils/order-notification-queue", () => ({
 
 vi.mock("./events/dispatch", () => ({
   runScheduledEventMaintenance: mocks.runScheduledEventMaintenance,
+}));
+
+vi.mock("./plugins/scheduled", () => ({
+  runScheduledPluginMaintenance: mocks.runScheduledPluginMaintenance,
 }));
 
 vi.mock("./utils/webhook-idempotency", () => ({
@@ -192,7 +197,13 @@ describe("runScheduledMaintenance", () => {
     mocks.runScheduledEventMaintenance.mockResolvedValue({
       events: { scanned: 0, enqueued: 0, settledWithoutSubscribers: 0, failed: 0, skipped: 0 },
       deliveries: { scanned: 0, enqueued: 0, failed: 0, skipped: 0 },
-      pruned: { events: 0, deliveries: 0 },
+      pluginDeliveries: { scanned: 0, enqueued: 0, failed: 0, skipped: 0 },
+      pruned: { events: 0, deliveries: 0, pluginDeliveries: 0 },
+    });
+    mocks.runScheduledPluginMaintenance.mockResolvedValue({
+      bundled: { installed: [], updated: [], failed: [] },
+      cron: { due: 0, ran: 0, failed: 0, skipped: 0, deferred: 0, expired: 0 },
+      prunedCronRuns: 0,
     });
     mocks.flushPendingMetaPurchaseOutbox.mockResolvedValue({
       scanned: 0,
@@ -651,6 +662,15 @@ describe("runScheduledMaintenance", () => {
     // Refund reconciliation writes refunds whose events this run should hand over.
     expect(mocks.reconcileExternalRefundWebhooks.mock.invocationCallOrder[0])
       .toBeLessThan(mocks.runScheduledEventMaintenance.mock.invocationCallOrder[0]!);
+  });
+
+  it("runs the plugin tick (bundled sync, due cron slots) at the scheduled time, after the event sweep", async () => {
+    const env = createEnv();
+    const ctx = createExecutionContext();
+    await runScheduledMaintenance(env, ctx, { cron: "*/15 * * * *", scheduledTime: Date.parse("2026-10-02T10:15:00.000Z") });
+    expect(mocks.runScheduledPluginMaintenance).toHaveBeenCalledWith(mocks.db, env, ctx, Date.parse("2026-10-02T10:15:00.000Z"));
+    expect(mocks.runScheduledEventMaintenance.mock.invocationCallOrder[0])
+      .toBeLessThan(mocks.runScheduledPluginMaintenance.mock.invocationCallOrder[0]!);
   });
 
   it("runs the time-budgeted rendition backfill last, after every commerce sweep", async () => {
