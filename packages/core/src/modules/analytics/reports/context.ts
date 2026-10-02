@@ -91,10 +91,6 @@ export function num(value: unknown): number {
   return 0;
 }
 
-export function numOrNull(value: unknown): number | null {
-  return value === null || value === undefined ? null : num(value);
-}
-
 export function text(value: unknown): string {
   return typeof value === "string" ? value : value === null || value === undefined ? "" : String(value);
 }

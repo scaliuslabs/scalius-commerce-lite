@@ -243,19 +243,6 @@ export function analyticsBuckets(range: AnalyticsRange, granularity: AnalyticsGr
   return buckets;
 }
 
-/**
- * The comparison period's bucket that lines up with a current bucket: the
- * same position. Ranges of equal length have the same day count; a calendar
- * month or a year comparison may differ by a bucket at the edges, and the
- * unmatched one has no counterpart.
- */
-export function alignAnalyticsBuckets<T extends { key: string }>(
-  current: readonly T[],
-  previous: readonly T[],
-): Array<{ current: T; previous: T | null }> {
-  return current.map((bucket, index) => ({ current: bucket, previous: previous[index] ?? null }));
-}
-
 /** Percentage change, or null when there is no baseline to compare with. */
 export function analyticsChange(current: number, previous: number | null | undefined): number | null {
   if (previous === null || previous === undefined || !Number.isFinite(previous)) return null;

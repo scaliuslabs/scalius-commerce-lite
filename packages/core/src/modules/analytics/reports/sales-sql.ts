@@ -226,31 +226,6 @@ export function lineMeasuresSql(alias = "lv"): SQL {
       coalesce(sum(${alias}.gross - ${alias}.disc - ${alias}.returns + ${alias}.kept_tax), 0) as total_sales`);
 }
 
-/** The column names {@link orderMeasuresSql} produces. */
-export const ORDER_MEASURE_KEYS = [
-  "orders",
-  "gross_sales",
-  "discounts",
-  "returns",
-  "net_sales",
-  "shipping",
-  "taxes",
-  "total_sales",
-  "net_items_sold",
-] as const;
-
-/** The column names {@link lineMeasuresSql} produces. */
-export const LINE_MEASURE_KEYS = [
-  "orders",
-  "net_items_sold",
-  "gross_sales",
-  "discounts",
-  "returns",
-  "net_sales",
-  "taxes",
-  "total_sales",
-] as const;
-
 /**
  * Whether a customer identity ordered before the scope started (any sales
  * order). Index-backed: `orders_customer_activity_idx` for customer records,
