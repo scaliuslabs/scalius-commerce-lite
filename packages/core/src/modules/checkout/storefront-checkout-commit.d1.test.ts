@@ -172,6 +172,24 @@ describe.each(["d1", "turso"] as const)("storefront checkout commit (%s)", (prov
     }]);
   });
 
+  it("records the SKU's unit cost on the committed line, frozen against later cost changes", async () => {
+    const db = openStore(provider);
+    sqlite!.exec("UPDATE product_variants SET cost_minor = 6500 WHERE id = 'var_1'");
+    const { payload, commit } = prepare("cost");
+    await commitStorefrontOrderPayload(db, payload, commit);
+    const line = () => sqlite!.prepare("SELECT unit_price_minor, unit_cost_minor FROM order_items WHERE order_id = ?").get(payload.orderData.id);
+    expect(line()).toEqual({ unit_price_minor: 10_000, unit_cost_minor: 6500 });
+    sqlite!.exec("UPDATE product_variants SET cost_minor = 7000 WHERE id = 'var_1'");
+    expect(line()).toEqual({ unit_price_minor: 10_000, unit_cost_minor: 6500 });
+
+    // A SKU without a cost leaves the line without one.
+    sqlite!.exec("UPDATE product_variants SET cost_minor = NULL WHERE id = 'var_1'");
+    const second = prepare("nocost", { phone: "+8801799999999" });
+    await commitStorefrontOrderPayload(db, second.payload, second.commit);
+    expect(sqlite!.prepare("SELECT unit_cost_minor FROM order_items WHERE order_id = ?").get(second.payload.orderData.id))
+      .toEqual({ unit_cost_minor: null });
+  });
+
   it("commits one order and one hold for concurrent submits of the same checkout", async () => {
     const db = openStore(provider);
     const first = prepare("same");

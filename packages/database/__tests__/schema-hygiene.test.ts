@@ -17,7 +17,10 @@ describe("canonical schema hygiene", () => {
         RETIRED_PRE_CONSOLIDATION_TABLES.has(table));
 
       expect(d1Tables).toEqual(tursoTables);
-      expect(d1Tables).toHaveLength(162);
+      expect(d1Tables).toHaveLength(170);
+      for (const purchasing of ["suppliers", "purchase_orders", "purchase_order_lines", "purchase_order_receipt_lines", "inventory_commands", "inventory_transfers", "inventory_transfer_lines", "inventory_transfer_movements"]) {
+        expect(d1Tables).toContain(purchasing);
+      }
       for (const marketing of ["customer_marketing_consents", "customer_marketing_consent_events", "customer_tag_links", "customer_segments", "customer_order_stats", "promotion_customer_segments"]) {
         expect(d1Tables).toContain(marketing);
       }

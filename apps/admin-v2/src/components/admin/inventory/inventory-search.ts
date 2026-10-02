@@ -14,6 +14,9 @@ export const MOVEMENT_TYPES = [
   "restored",
   "preorder_reserved",
   "preorder_deducted",
+  "received",
+  "transfer_out",
+  "transfer_in",
 ] as const;
 const MOVEMENT_FILTERS = ["all", ...MOVEMENT_TYPES] as const;
 

@@ -47,7 +47,7 @@ export type ProductCreateComposition = Pick<CreateProductInput, "optionMatrix" |
 export type SimpleSkuDraft = Pick<DraftVariant, "sku" | "trackInventory" | "stock" | "barcode" | "barcodeType" | "weight">;
 
 /** A field the editor marks when a draft can't be saved. */
-export type DraftIssueField = "sku" | "price" | "stock" | "barcode" | "discount" | "photo" | "weight";
+export type DraftIssueField = "sku" | "price" | "stock" | "barcode" | "discount" | "photo" | "weight" | "cost";
 
 /**
  * Why a draft can't be saved, placed on the field that needs the change:
@@ -62,7 +62,7 @@ export interface DraftIssue {
 }
 
 /** Fields shown only after a row is expanded ("More fields"). */
-export const ADVANCED_FIELDS: ReadonlySet<DraftIssueField> = new Set(["sku", "discount", "barcode", "weight"]);
+export const ADVANCED_FIELDS: ReadonlySet<DraftIssueField> = new Set(["sku", "discount", "barcode", "weight", "cost"]);
 
 function checkNumber(value: number | null, max: number, integer: boolean): ProductMessageKey | null {
   if (value === null) return null;

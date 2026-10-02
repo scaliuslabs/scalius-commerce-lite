@@ -454,8 +454,8 @@ const CACHE_DEP_TABLE_RULES = {
   },
   product_variants: {
     kinds: ["p", "lm", "lo"],
-    noise: ["stock", "reserved_stock", "stock_version", "version", "updated_at", "tax_classification_version"],
-    note: "Raw stock (and updated_at, which every stock write sets) is noise; a change of the SKU's availability band (the SQL twin of resolveBuyerAvailabilityBand with the store default threshold) is not. `lm:shape`: SKU existence for the layout's store-shape counts.",
+    noise: ["stock", "reserved_stock", "stock_version", "version", "updated_at", "tax_classification_version", "cost_minor"],
+    note: "Raw stock (and updated_at, which every stock write sets) is noise; a change of the SKU's availability band (the SQL twin of resolveBuyerAvailabilityBand with the store default threshold) is not. The unit cost (0109) is staff-only and never read by a public route. `lm:shape`: SKU existence for the layout's store-shape counts.",
     rules: [
       { name: "ins", event: "insert", image: "new", keys: [p("product_id"), SHAPE] },
       { name: "del", event: "delete", image: "old", keys: [p("product_id"), SHAPE] },
@@ -747,6 +747,7 @@ const DERIVED_STOCK = "Stock ledger: its buyer-visible effect is the SKU band on
 const DRAFTS = "Dashboard drafts, history or sessions: public reads use the published row, which is registered.";
 const MACHINERY = "Cache machinery itself.";
 const FTS = "FTS index maintained by triggers from products/categories name and description, which advance srch.";
+const PURCHASING = "Purchasing and transfer documents: staff-only; buyers never see incoming or in-transit stock.";
 
 /** No table uses age-based freshness; retained for recording API compatibility. */
 export const CACHE_DEP_SOFT_TABLES: readonly string[] = [];
@@ -767,6 +768,16 @@ export const CACHE_DEP_EXEMPT_TABLES: Readonly<Record<string, string>> = {
   inventory_levels: DERIVED_STOCK,
   inventory_locations: "Where physical stock is held; buyers see SKU availability bands, never locations.",
   product_low_stock_alerts: DERIVED_STOCK,
+  // Purchasing and transfers (0109): staff-only documents. Their stock
+  // effect is ledger movements, whose buyer-visible effect is the SKU band.
+  inventory_commands: DERIVED_STOCK,
+  inventory_transfers: PURCHASING,
+  inventory_transfer_lines: PURCHASING,
+  inventory_transfer_movements: DERIVED_STOCK,
+  suppliers: PURCHASING,
+  purchase_orders: PURCHASING,
+  purchase_order_lines: PURCHASING,
+  purchase_order_receipt_lines: DERIVED_STOCK,
   // Drafts and history.
   theme_settings_drafts: DRAFTS,
   theme_settings_versions: DRAFTS,

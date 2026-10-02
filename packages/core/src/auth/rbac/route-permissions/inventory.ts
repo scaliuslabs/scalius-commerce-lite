@@ -63,4 +63,67 @@ export const INVENTORY_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/inventory/locations/*/default": {
     POST: { permission: PERMISSIONS.PRODUCTS_EDIT },
   },
+  // Inventory value and unit costs (0109). Costs are staff-only: whoever
+  // can see products can see what they cost.
+  "/api/v1/admin/inventory/valuation": {
+    GET: { permission: PERMISSIONS.PRODUCTS_VIEW },
+  },
+  "/api/v1/admin/inventory/costs": {
+    PUT: { permission: PERMISSIONS.PRODUCTS_EDIT },
+  },
+  // Suppliers, purchase orders and transfers (0109): read with
+  // products.view; every write, receiving included, needs products.edit.
+  "/api/v1/admin/inventory/suppliers": {
+    GET: { permission: PERMISSIONS.PRODUCTS_VIEW },
+    POST: { permission: PERMISSIONS.PRODUCTS_EDIT },
+  },
+  "/api/v1/admin/inventory/suppliers/*": {
+    GET: { permission: PERMISSIONS.PRODUCTS_VIEW },
+    PATCH: { permission: PERMISSIONS.PRODUCTS_EDIT },
+  },
+  "/api/v1/admin/inventory/suppliers/*/archive": {
+    POST: { permission: PERMISSIONS.PRODUCTS_EDIT },
+  },
+  "/api/v1/admin/inventory/suppliers/*/unarchive": {
+    POST: { permission: PERMISSIONS.PRODUCTS_EDIT },
+  },
+  "/api/v1/admin/inventory/purchase-orders": {
+    GET: { permission: PERMISSIONS.PRODUCTS_VIEW },
+    POST: { permission: PERMISSIONS.PRODUCTS_EDIT },
+  },
+  "/api/v1/admin/inventory/purchase-orders/*": {
+    GET: { permission: PERMISSIONS.PRODUCTS_VIEW },
+    PUT: { permission: PERMISSIONS.PRODUCTS_EDIT },
+    DELETE: { permission: PERMISSIONS.PRODUCTS_EDIT },
+  },
+  "/api/v1/admin/inventory/purchase-orders/*/export": {
+    GET: { permission: PERMISSIONS.PRODUCTS_VIEW },
+  },
+  "/api/v1/admin/inventory/purchase-orders/*/order": {
+    POST: { permission: PERMISSIONS.PRODUCTS_EDIT },
+  },
+  "/api/v1/admin/inventory/purchase-orders/*/receive": {
+    POST: { permission: PERMISSIONS.PRODUCTS_EDIT },
+  },
+  "/api/v1/admin/inventory/purchase-orders/*/cancel": {
+    POST: { permission: PERMISSIONS.PRODUCTS_EDIT },
+  },
+  "/api/v1/admin/inventory/transfers": {
+    GET: { permission: PERMISSIONS.PRODUCTS_VIEW },
+    POST: { permission: PERMISSIONS.PRODUCTS_EDIT },
+  },
+  "/api/v1/admin/inventory/transfers/*": {
+    GET: { permission: PERMISSIONS.PRODUCTS_VIEW },
+    PUT: { permission: PERMISSIONS.PRODUCTS_EDIT },
+    DELETE: { permission: PERMISSIONS.PRODUCTS_EDIT },
+  },
+  "/api/v1/admin/inventory/transfers/*/ship": {
+    POST: { permission: PERMISSIONS.PRODUCTS_EDIT },
+  },
+  "/api/v1/admin/inventory/transfers/*/receive": {
+    POST: { permission: PERMISSIONS.PRODUCTS_EDIT },
+  },
+  "/api/v1/admin/inventory/transfers/*/cancel": {
+    POST: { permission: PERMISSIONS.PRODUCTS_EDIT },
+  },
 };

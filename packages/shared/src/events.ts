@@ -28,6 +28,8 @@ export const EVENT_TOPICS = [
   "product.updated",
   "product.deleted",
   "inventory.level_changed",
+  "inventory.purchase_order_updated",
+  "inventory.transfer_updated",
   "customer.created",
   "customer.updated",
   "customer.consent_changed",
@@ -35,7 +37,15 @@ export const EVENT_TOPICS = [
 export type EventTopic = (typeof EVENT_TOPICS)[number];
 
 /** What an event is about; `resourceId` is that resource's id. */
-export const EVENT_RESOURCE_TYPES = ["order", "return", "product", "variant", "customer"] as const;
+export const EVENT_RESOURCE_TYPES = [
+  "order",
+  "return",
+  "product",
+  "variant",
+  "customer",
+  "purchase_order",
+  "inventory_transfer",
+] as const;
 export type EventResourceType = (typeof EVENT_RESOURCE_TYPES)[number];
 
 /** Each topic's resource type (inventory levels are reported per variant). */
@@ -51,6 +61,8 @@ export const EVENT_TOPIC_RESOURCE: Readonly<Record<EventTopic, EventResourceType
   "product.updated": "product",
   "product.deleted": "product",
   "inventory.level_changed": "variant",
+  "inventory.purchase_order_updated": "purchase_order",
+  "inventory.transfer_updated": "inventory_transfer",
   "customer.created": "customer",
   "customer.updated": "customer",
   "customer.consent_changed": "customer",
@@ -128,6 +140,29 @@ export const EVENT_FACT_SCHEMAS = {
     quantityDelta: z.number().int(),
     movementId: id,
     movementType: state,
+  }),
+  /**
+   * A purchase order was created, changed (any write advances its revision:
+   * edits, ordering, each receipt, cancelling) or a draft was deleted
+   * (`status` "deleted"). `previousStatus` is null when it was created.
+   * Receipts also emit `inventory.level_changed` per SKU.
+   */
+  "inventory.purchase_order_updated": z.object({
+    purchaseOrderId: id,
+    previousStatus: nullableState,
+    status: state,
+    revision: z.number().int(),
+  }),
+  /**
+   * A transfer between locations was created, changed (edits, shipping, each
+   * receipt, cancelling) or a draft was deleted (`status` "deleted").
+   * Shipping and receiving also emit `inventory.level_changed` per SKU.
+   */
+  "inventory.transfer_updated": z.object({
+    transferId: id,
+    previousStatus: nullableState,
+    status: state,
+    revision: z.number().int(),
   }),
   "customer.created": z.object({
     customerId: id,

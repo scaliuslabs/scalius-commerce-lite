@@ -56,6 +56,13 @@ const PAGE_PERMISSION_MAP: Record<string, PagePermissionConfig> = {
   // Inventory
   "/admin/inventory": { permission: PERMISSIONS.PRODUCTS_VIEW },
   "/admin/inventory/labels": { permission: PERMISSIONS.PRODUCTS_VIEW },
+  // Purchasing: viewing needs products.view; creating, receiving and every
+  // other write products.edit (the API route map; actions are gated inside).
+  "/admin/inventory/purchase-orders": { permission: PERMISSIONS.PRODUCTS_VIEW },
+  "/admin/inventory/purchase-orders/new": { permission: PERMISSIONS.PRODUCTS_EDIT },
+  "/admin/inventory/transfers": { permission: PERMISSIONS.PRODUCTS_VIEW },
+  "/admin/inventory/transfers/new": { permission: PERMISSIONS.PRODUCTS_EDIT },
+  "/admin/inventory/suppliers": { permission: PERMISSIONS.PRODUCTS_VIEW },
 
   // Products
   "/admin/products": { permission: PERMISSIONS.PRODUCTS_VIEW },
@@ -176,6 +183,16 @@ const DYNAMIC_PAGE_PERMISSIONS: Array<{
   {
     pattern: /^\/admin\/online-store\/navigation\/[^/]+$/,
     config: { permission: PERMISSIONS.SETTINGS_HEADER_EDIT },
+  },
+
+  // Purchase orders and transfers: one page each (actions gated inside); receiving writes stock.
+  {
+    pattern: /^\/admin\/inventory\/(?:purchase-orders|transfers)\/[^/]+\/receive$/,
+    config: { permission: PERMISSIONS.PRODUCTS_EDIT },
+  },
+  {
+    pattern: /^\/admin\/inventory\/(?:purchase-orders|transfers)\/[^/]+$/,
+    config: { permission: PERMISSIONS.PRODUCTS_VIEW },
   },
 
   // Products: one detail page; saving still requires products.edit.

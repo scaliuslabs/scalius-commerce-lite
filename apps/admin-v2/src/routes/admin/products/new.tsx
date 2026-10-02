@@ -8,6 +8,7 @@ import { DEFAULT_PRODUCT_CONDITION, type Category } from "~/components/admin/pro
 import { RouteErrorComponent } from "~/lib/route-error";
 import { LoadingFallback } from "~/components/admin/shared/LoadingFallback";
 import type { OptionMatrixEditorHandle, ProductCreateComposition } from "~/components/admin/product-form/variants/option-matrix-editor-model";
+import { SkuCostProvider, useSkuCostDraft } from "~/components/admin/product-form/sku-costs";
 import { pageHead } from "~/i18n/page-titles";
 
 const OptionMatrixEditor = lazy(() =>
@@ -59,39 +60,44 @@ function NewProductPage() {
   const [optionMatrixDirty, setOptionMatrixDirty] = useState(false);
   const [generation, setGeneration] = useState(0);
   const matrixRef = useRef<OptionMatrixEditorHandle>(null);
+  // Costs typed here are sent right after the product is created (useProductSubmit).
+  const costs = useSkuCostDraft();
 
   return (
-    <ProductForm
-      key={generation}
-      categories={allCategories}
-      defaultValues={defaultValues}
-      isEdit={false}
-      matrixRef={matrixRef}
-      createComposition={createComposition}
-      optionMatrixIssue={optionMatrixIssue}
-      optionMatrixDirty={optionMatrixDirty}
-      onDiscard={() => {
-        setGeneration((value) => value + 1);
-        setCreateComposition(null);
-        setOptionMatrixIssue(null);
-        setOptionMatrixDirty(false);
-      }}
-      optionManager={({ skuImages, productName, productPrice, isActive, onPricesChange, fulfilmentMode }) => (
-        <Suspense fallback={<LoadingFallback height="h-48" />}>
-          <OptionMatrixEditor
-            ref={matrixRef}
-            requirePositivePrice={isActive}
-            productName={productName}
-            productPrice={productPrice}
-            onPricesChange={onPricesChange}
-            images={skuImages}
-            onDraftChange={setCreateComposition}
-            onDraftIssueChange={setOptionMatrixIssue}
-            onDirtyChange={setOptionMatrixDirty}
-            fulfilmentMode={fulfilmentMode}
-          />
-        </Suspense>
-      )}
-    />
+    <SkuCostProvider store={costs}>
+      <ProductForm
+        key={generation}
+        categories={allCategories}
+        defaultValues={defaultValues}
+        isEdit={false}
+        matrixRef={matrixRef}
+        createComposition={createComposition}
+        optionMatrixIssue={optionMatrixIssue}
+        optionMatrixDirty={optionMatrixDirty}
+        onDiscard={() => {
+          setGeneration((value) => value + 1);
+          costs.reset();
+          setCreateComposition(null);
+          setOptionMatrixIssue(null);
+          setOptionMatrixDirty(false);
+        }}
+        optionManager={({ skuImages, productName, productPrice, isActive, onPricesChange, fulfilmentMode }) => (
+          <Suspense fallback={<LoadingFallback height="h-48" />}>
+            <OptionMatrixEditor
+              ref={matrixRef}
+              requirePositivePrice={isActive}
+              productName={productName}
+              productPrice={productPrice}
+              onPricesChange={onPricesChange}
+              images={skuImages}
+              onDraftChange={setCreateComposition}
+              onDraftIssueChange={setOptionMatrixIssue}
+              onDirtyChange={setOptionMatrixDirty}
+              fulfilmentMode={fulfilmentMode}
+            />
+          </Suspense>
+        )}
+      />
+    </SkuCostProvider>
   );
 }

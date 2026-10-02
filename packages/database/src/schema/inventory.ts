@@ -179,6 +179,180 @@ export const inventoryOperations = sqliteTable("inventory_operations", {
     index("inventory_operations_movement_idx").on(table.movementId),
 ]);
 
+/**
+ * Multi-SKU stock commands (migration 0109): receiving a purchase order and
+ * shipping, receiving or cancelling a transfer. One row per merchant
+ * operation key, inserted in the same batch as the command's ledger-v2
+ * movements and stockVersion CAS updates; an exact retry replays
+ * `result_payload`, a changed request under the same key is refused.
+ * Immutable (triggers).
+ */
+export const INVENTORY_COMMAND_TYPES = [
+    "purchase_order_receive",
+    "transfer_ship",
+    "transfer_receive",
+    "transfer_cancel",
+] as const;
+export type InventoryCommandType = (typeof INVENTORY_COMMAND_TYPES)[number];
+
+export const inventoryCommands = sqliteTable("inventory_commands", {
+    operationKey: text("operation_key").primaryKey(),
+    requestHash: text("request_hash").notNull(),
+    commandType: text("command_type", { enum: INVENTORY_COMMAND_TYPES }).notNull(),
+    /** The purchase order or transfer the command acted on. */
+    subjectId: text("subject_id").notNull(),
+    /** The subject's revision this command produced: commands of one subject in order. */
+    subjectRevision: integer("subject_revision").notNull(),
+    resultPayload: text("result_payload").notNull(),
+    createdBy: text("created_by"),
+    createdAt: integer("created_at", { mode: "timestamp" })
+        .notNull()
+        .default(UNIX_NOW),
+}, (table) => [
+    uniqueIndex("inventory_commands_subject_revision_unique").on(table.subjectId, table.subjectRevision),
+    check("inventory_commands_subject_revision_positive", sql`${table.subjectRevision} >= 1`),
+    check(
+        "inventory_commands_type_check",
+        sql`${table.commandType} IN ('purchase_order_receive', 'transfer_ship', 'transfer_receive', 'transfer_cancel')`,
+    ),
+    check("inventory_commands_payload_json", sql`json_valid(${table.resultPayload})`),
+]);
+
+/**
+ * Stock moved between two locations (migration 0109). Shipping takes the
+ * units out of the origin (`transfer_out` movements: they leave the origin
+ * level and the SKU's `stock`, so buyers cannot buy units in transit);
+ * receiving books them at the destination (`transfer_in`), partially if
+ * need be; cancelling returns whatever is still in transit to the origin
+ * (`transfer_in` there). Every step keeps sum(levels) = stock.
+ */
+export const INVENTORY_TRANSFER_STATUSES = [
+    "draft",
+    "in_transit",
+    "partially_received",
+    "received",
+    "cancelled",
+] as const;
+export type InventoryTransferStatus = (typeof INVENTORY_TRANSFER_STATUSES)[number];
+
+export const inventoryTransfers = sqliteTable("inventory_transfers", {
+    id: text("id").primaryKey(),
+    /** Merchant-facing number (#T1001), unique and increasing. */
+    number: integer("number").notNull(),
+    originLocationId: text("origin_location_id")
+        .notNull()
+        .references(() => inventoryLocations.id, { onDelete: "restrict" }),
+    destinationLocationId: text("destination_location_id")
+        .notNull()
+        .references(() => inventoryLocations.id, { onDelete: "restrict" }),
+    status: text("status", { enum: INVENTORY_TRANSFER_STATUSES }).notNull().default("draft"),
+    /** Calendar date (YYYY-MM-DD) the merchant expects it to arrive. */
+    expectedOn: text("expected_on"),
+    reference: text("reference"),
+    notes: text("notes"),
+    shippedAt: integer("shipped_at", { mode: "timestamp" }),
+    receivedAt: integer("received_at", { mode: "timestamp" }),
+    cancelledAt: integer("cancelled_at", { mode: "timestamp" }),
+    /** Advanced by every write; edits and commands require the current value. */
+    revision: integer("revision").notNull().default(1),
+    createdBy: text("created_by"),
+    createdAt: integer("created_at", { mode: "timestamp" })
+        .notNull()
+        .default(UNIX_NOW),
+    updatedAt: integer("updated_at", { mode: "timestamp" })
+        .notNull()
+        .default(UNIX_NOW),
+}, (table) => [
+    uniqueIndex("inventory_transfers_number_unique").on(table.number),
+    index("inventory_transfers_status_created_idx").on(table.status, table.createdAt),
+    index("inventory_transfers_origin_idx").on(table.originLocationId, table.status),
+    index("inventory_transfers_destination_idx").on(table.destinationLocationId, table.status),
+    check("inventory_transfers_number_positive", sql`${table.number} >= 1`),
+    check("inventory_transfers_locations_differ", sql`${table.originLocationId} <> ${table.destinationLocationId}`),
+    check(
+        "inventory_transfers_status_check",
+        sql`${table.status} IN ('draft', 'in_transit', 'partially_received', 'received', 'cancelled')`,
+    ),
+    check("inventory_transfers_revision_positive", sql`${table.revision} >= 1`),
+    check("inventory_transfers_expected_on", sql`${table.expectedOn} IS NULL OR length(${table.expectedOn}) = 10`),
+    check(
+        "inventory_transfers_text_lengths",
+        sql`(${table.reference} IS NULL OR length(${table.reference}) BETWEEN 1 AND 100) AND (${table.notes} IS NULL OR length(${table.notes}) BETWEEN 1 AND 2000)`,
+    ),
+]);
+
+/**
+ * One SKU on a transfer. In transit = shipped − received − returned; shipped
+ * is all of the quantity or nothing (a transfer ships whole).
+ */
+export const inventoryTransferLines = sqliteTable("inventory_transfer_lines", {
+    id: text("id").primaryKey(),
+    transferId: text("transfer_id")
+        .notNull()
+        .references(() => inventoryTransfers.id, { onDelete: "cascade" }),
+    variantId: text("variant_id")
+        .notNull()
+        .references(() => productVariants.id, { onDelete: "restrict" }),
+    position: integer("position").notNull().default(0),
+    quantity: integer("quantity").notNull(),
+    shippedQuantity: integer("shipped_quantity").notNull().default(0),
+    receivedQuantity: integer("received_quantity").notNull().default(0),
+    /** Units a cancellation returned to the origin. */
+    returnedQuantity: integer("returned_quantity").notNull().default(0),
+    createdAt: integer("created_at", { mode: "timestamp" })
+        .notNull()
+        .default(UNIX_NOW),
+    updatedAt: integer("updated_at", { mode: "timestamp" })
+        .notNull()
+        .default(UNIX_NOW),
+}, (table) => [
+    uniqueIndex("inventory_transfer_lines_transfer_variant_unique").on(table.transferId, table.variantId),
+    index("inventory_transfer_lines_variant_idx").on(table.variantId, table.transferId),
+    check("inventory_transfer_lines_quantity_positive", sql`${table.quantity} >= 1`),
+    check(
+        "inventory_transfer_lines_progress",
+        sql`(${table.shippedQuantity} = 0 OR ${table.shippedQuantity} = ${table.quantity}) AND ${table.receivedQuantity} >= 0 AND ${table.returnedQuantity} >= 0 AND ${table.receivedQuantity} + ${table.returnedQuantity} <= ${table.shippedQuantity}`,
+    ),
+    check("inventory_transfer_lines_position_nonnegative", sql`${table.position} >= 0`),
+]);
+
+/** Which ledger movement each transfer step wrote, per line. Immutable (triggers). */
+export const INVENTORY_TRANSFER_MOVEMENT_KINDS = ["ship", "receive", "return"] as const;
+export type InventoryTransferMovementKind = (typeof INVENTORY_TRANSFER_MOVEMENT_KINDS)[number];
+
+export const inventoryTransferMovements = sqliteTable("inventory_transfer_movements", {
+    id: text("id").primaryKey(),
+    operationKey: text("operation_key")
+        .notNull()
+        .references(() => inventoryCommands.operationKey, { onDelete: "restrict" }),
+    transferId: text("transfer_id")
+        .notNull()
+        .references(() => inventoryTransfers.id, { onDelete: "restrict" }),
+    transferLineId: text("transfer_line_id")
+        .notNull()
+        .references(() => inventoryTransferLines.id, { onDelete: "restrict" }),
+    variantId: text("variant_id")
+        .notNull()
+        .references(() => productVariants.id, { onDelete: "restrict" }),
+    locationId: text("location_id")
+        .notNull()
+        .references(() => inventoryLocations.id, { onDelete: "restrict" }),
+    movementId: text("movement_id")
+        .notNull()
+        .references(() => inventoryMovements.id, { onDelete: "restrict" }),
+    kind: text("kind", { enum: INVENTORY_TRANSFER_MOVEMENT_KINDS }).notNull(),
+    quantity: integer("quantity").notNull(),
+    createdBy: text("created_by"),
+    createdAt: integer("created_at", { mode: "timestamp" })
+        .notNull()
+        .default(UNIX_NOW),
+}, (table) => [
+    uniqueIndex("inventory_transfer_movements_movement_unique").on(table.movementId),
+    index("inventory_transfer_movements_transfer_idx").on(table.transferId, table.createdAt),
+    check("inventory_transfer_movements_kind_check", sql`${table.kind} IN ('ship', 'receive', 'return')`),
+    check("inventory_transfer_movements_quantity_positive", sql`${table.quantity} >= 1`),
+]);
+
 export const productLowStockAlerts = sqliteTable("product_low_stock_alerts", {
     id: text("id").primaryKey(),
     variantId: text("variant_id")
@@ -210,4 +384,8 @@ export type InventoryLocation = InferSelectModel<typeof inventoryLocations>;
 export type InventoryLevel = InferSelectModel<typeof inventoryLevels>;
 export type InventoryMovement = InferSelectModel<typeof inventoryMovements>;
 export type InventoryOperation = InferSelectModel<typeof inventoryOperations>;
+export type InventoryCommand = InferSelectModel<typeof inventoryCommands>;
+export type InventoryTransfer = InferSelectModel<typeof inventoryTransfers>;
+export type InventoryTransferLine = InferSelectModel<typeof inventoryTransferLines>;
+export type InventoryTransferMovement = InferSelectModel<typeof inventoryTransferMovements>;
 export type ProductLowStockAlert = InferSelectModel<typeof productLowStockAlerts>;

@@ -58,6 +58,67 @@ Movement history and its CSV carry the location (`locationId` filter, a
 be archived only when it is not the default, holds no units and no open order
 is set to ship from it.
 
+## Purchasing, transfers and unit cost (migration 0109)
+
+**Unit cost.** `product_variants.cost_minor` is the SKU's current cost per
+item (minor units, NULL = not set; a trigger keeps it a non-negative safe
+integer). It is staff-only: buyer reads project explicit columns and never
+carry it; staff reads present it as decimal `cost` (`presentCatalogPrice`).
+Costs may carry paisa (they are not cash amounts). `setSkuCosts` writes up to
+100 SKUs atomically, optionally guarded by the cost the merchant saw.
+`order_items.unit_cost_minor` snapshots the SKU cost when a line is created
+(trigger `order_items_unit_cost_snapshot`, every creation path, no extra bound
+values) and is immutable once set; no backfill of older orders.
+
+**Cost policy: weighted moving average, opt-in per receipt.** Receiving a
+purchase order with `updateCost` sets each received SKU's cost to
+`round_half_up((onHand × currentCost + received × unitCost) / (onHand + received))`
+with `onHand` = the SKU's stock across every location before the receipt
+(units in transit are not on hand). Without a current cost, or with nothing
+on hand, the receipt's unit cost becomes the cost. Exact BigInt arithmetic
+(`weightedAverageCostMinor`). Without `updateCost` the cost is unchanged.
+Every receipt line records its unit cost and the cost before/after
+(`purchase_order_receipt_lines`): the SKU's cost history. PO shipping, other
+costs and tax are kept as entered and are not spread into unit costs.
+
+**Stock commands** (`stock-commands.ts`): receiving a PO and shipping,
+receiving or cancelling a transfer each commit as one batch: subject guard
+(document still at the planned revision/status) → per SKU a ledger-v2 claim
+(`received`, `transfer_out`, `transfer_in`; pool regular, never reservations)
+and the stockVersion CAS update (plus the cost, guarded on the cost read) →
+CAS guards proving every SKU landed on its planned edge (a lost race aborts
+the whole batch, nothing partial) → the `inventory_commands` replay row
+(operation key, request hash, the subject revision it produced, unique per
+subject) → document writes → buyer-state refresh. The level triggers keep
+`sum(levels) = stock`; removals are pre-checked (`assertInventoryLocationCovers`,
+and stock may not drop below reserved) and the level CHECK is the backstop.
+An exact retry replays the stored result; the same key with a changed request
+is refused (409). Retries re-plan from fresh reads (3 attempts).
+
+**Purchase orders**: draft (editable, lines replaced, deletable) → ordered
+(lines locked by triggers; open quantity is incoming stock at the
+destination) → partially received → received, or cancelled (received units
+stay). At most 100 lines; live physical SKUs only.
+
+**Transfers**: draft → in transit (all lines leave the origin at once) →
+partially received → received, or cancelled (units still in transit return
+to the origin). **In-transit units are out of both locations and out of the
+SKU's `stock`**, so buyer availability (`stock − reserved`) never includes
+them; `inventory_transfer_lines` holds them (shipped − received − returned).
+Receiving or returning still works for a SKU retired meanwhile (the units
+exist); shipping and PO receipts need live SKUs.
+
+**Incoming** = open PO lines + transfers in transit, per destination
+(`readIncomingStock`, `incomingUnitsSql`); not on hand and never shown to
+buyers (no storefront "restocking soon" hint: it would need its own buyer
+dependency key). **Valuation** (`getInventoryValuation`) = on hand × current
+unit cost per location; SKUs without a cost are counted, not valued; units in
+transit are valued separately. A location with open POs or transfers cannot
+be archived; PO and transfer lines block a product's permanent delete like
+movements. Events: `inventory.purchase_order_updated` and
+`inventory.transfer_updated` (one per revision), plus
+`inventory.level_changed` per movement.
+
 ## Inventory Lifecycle / State Machine
 
 Stock follows a clear lifecycle driven by order status transitions. The order-level `inventoryAction` column (`orders.inventory_action`) tracks which phase each order is in.
@@ -187,6 +248,12 @@ The function is **idempotent** -- a same-pool "released" movement excludes that 
 | `inventory.validation.ts`  | `adjustInventorySchema` -- Zod schema for adjustment payload (delta, reason enum, notes, pool)     |
 | `inventory-transitions.ts` | Claimed movement + stock-CAS engine; `applyInventoryForStatusChange()` for order lifecycle transitions; `applyClaimedInventoryEntryBatch()` for version-scoped manual-order deltas; `InventoryAction` type |
 | `validation.ts`            | `validateStockNonNegative()`, `validateBackorderLimit()`, `validateReservedStockConsistency()`, `validatePositiveQuantity()` |
+| `stock-commands.ts`        | `executeStockCommand()` -- the multi-SKU command engine (receipts, transfers); `weightedAverageCostMinor()` |
+| `unit-costs.ts`            | `setSkuCosts()`, cost parsing (`unitCostToMinor`), `marginPercent()` |
+| `suppliers.ts`             | Supplier records (list, create, update at version, archive while no open PO, unarchive) |
+| `purchase-orders.ts`       | Purchase orders: list/get, draft create/edit/delete, mark ordered, receive (cost history, average cost), cancel, CSV |
+| `transfers.ts`             | Transfers: list/get, draft create/edit/delete, ship, receive in parts, cancel (returns in-transit units) |
+| `inventory-insights.ts`    | Incoming stock per SKU and location; inventory valuation per location |
 
 Admin stock-only mutations (`adjustInventory()`, `adjustStock()`, `setStock()`) affect product availability, not product/category/collection metadata. API routes call `bumpCacheGeneration(c)` after the write commits only when `findStockMutationAvailabilityTransitions()` reports an availability-band change; same-band writes leave public caches alone.
 
@@ -216,7 +283,7 @@ Admin stock-only mutations (`adjustInventory()`, `adjustStock()`, `setStock()`) 
 | `id`            | text PK   | UUID or deterministic reservation/release claim id             |
 | `variant_id`    | text FK   | References `product_variants.id` (restrict)                   |
 | `order_id`      | text      | Nullable order id, intentionally not FK-enforced because checkout reservation claims are written before the queued order row commits |
-| `type`          | text      | `reserved`, `deducted`, `released`, `adjusted`, `preorder_reserved`, `preorder_deducted` |
+| `type`          | text      | `reserved`, `deducted`, `released`, `adjusted`, `restored`, `preorder_reserved`, `preorder_deducted`, `received` (PO receipt), `transfer_out`, `transfer_in` |
 | `quantity`      | integer   | Positive = added, negative = removed                          |
 | `previous_stock`| integer   | Stock level before operation                                  |
 | `new_stock`     | integer   | Stock level after operation                                   |

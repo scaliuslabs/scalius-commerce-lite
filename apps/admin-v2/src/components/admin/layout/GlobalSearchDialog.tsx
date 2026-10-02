@@ -15,6 +15,7 @@ import {
   Settings,
   SunMoon,
   Tag,
+  Truck,
   UserRound,
 } from "lucide-react";
 import {
@@ -80,6 +81,7 @@ const RECENT_KEY = "scalius.search.recent";
 const TASKS: ReadonlyArray<{ key: ShellKey & KeywordKey; to: string; search?: Record<string, string>; icon: Entry["icon"] }> = [
   { key: "lowStock", to: "/admin/inventory", search: { section: "alerts" }, icon: PackageMinus },
   { key: "printLabels", to: "/admin/inventory/labels", icon: Barcode },
+  { key: "suppliers", to: "/admin/inventory/suppliers", icon: Truck },
 ];
 
 /** A page or task matches by its name or the words merchants use for it, in either language. */
