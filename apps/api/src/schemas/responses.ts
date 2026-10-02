@@ -33,6 +33,54 @@ export const paginatedEnvelope = (itemsKey: string, itemSchema: z.ZodTypeAny) =>
   );
 
 // ─────────────────────────────────────────
+// Keyset (cursor) pagination for large lists
+// ─────────────────────────────────────────
+
+/** How a keyset-paged list is walked, repeated on its schemas so SDK and agent docs carry it. */
+const KEYSET_PAGINATION_NOTE =
+  "Large lists are walked with opaque cursors: pass pageInfo.endCursor as `after` for the next page and pageInfo.startCursor as `before` for the previous one. "
+  + "`page` still works for the first 1,000 rows. `total` is exact up to 1,000 and a lower bound above it (see totalIsCapped).";
+
+/** The cursors and flags of one page of a keyset-paged list. */
+export const pageInfoSchema = z.object({
+  hasNextPage: z.boolean(),
+  hasPreviousPage: z.boolean(),
+  startCursor: z.string().nullable().openapi({ description: "Cursor of the first row; pass as `before` for the previous page. Null for an empty page." }),
+  endCursor: z.string().nullable().openapi({ description: "Cursor of the last row; pass as `after` for the next page. Null for an empty page." }),
+}).openapi({ description: KEYSET_PAGINATION_NOTE });
+
+/** Pagination counts of a keyset-paged list: `total` is capped, `offset` may be unknown. */
+export const cappedPaginationSchema = paginationSchema.extend({
+  total: z.number().openapi({ description: "Matching rows: exact up to 1,000, otherwise 1,000 with totalIsCapped true." }),
+  totalIsCapped: z.boolean().openapi({ description: "More rows match than `total` counts (show \"1,000+\")." }),
+  page: z.number().openapi({ description: "Page number of this page; 0 for a cursor page deeper than the first 1,000 rows." }),
+  offset: z.number().int().nullable().openapi({ description: "Zero-based index of the first row of this page; null deeper than the first 1,000 rows." }),
+});
+
+/**
+ * Envelope of a keyset-paged list: the items, the capped `pagination` counts
+ * and the `pageInfo` cursors. Additive to `paginatedEnvelope`.
+ */
+export const keysetPaginatedEnvelope = (itemsKey: string, itemSchema: z.ZodTypeAny) =>
+  successEnvelope(
+    z.object({
+      [itemsKey]: z.array(itemSchema),
+      pagination: cappedPaginationSchema,
+      pageInfo: pageInfoSchema,
+    }),
+  );
+
+/** The `after`/`before` query parameters shared by every keyset-paged list. */
+export const keysetQuerySchema = {
+  after: z.string().max(1024).optional().openapi({
+    description: "Rows after this cursor (pageInfo.endCursor of the previous page). Not with `before` or a `page` beyond 1; a cursor from another sort or direction is rejected with INVALID_CURSOR.",
+  }),
+  before: z.string().max(1024).optional().openapi({
+    description: "Rows before this cursor (pageInfo.startCursor of the next page). Not with `after`.",
+  }),
+};
+
+// ─────────────────────────────────────────
 // Error response
 // ─────────────────────────────────────────
 

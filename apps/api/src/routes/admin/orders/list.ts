@@ -13,7 +13,7 @@ import { FulfillmentStatus, PaymentStatus, productVariants, products } from "@sc
 import { and, inArray, isNull, sql } from "drizzle-orm";
 import { ValidationError } from "../../../utils/api-error";
 import { ok } from "../../../utils/api-response";
-import { paginatedEnvelope, errorResponses } from "../../../schemas/responses";
+import { paginatedEnvelope, keysetPaginatedEnvelope, keysetQuerySchema, errorResponses } from "../../../schemas/responses";
 import { orderSummarySchema, productSummarySchema } from "../../../schemas/entities";
 import { parseBangladeshDateOnlyBoundary } from "../order-date-filter";
 import {
@@ -97,6 +97,15 @@ function csvStream(chunks: readonly string[]): ReadableStream<Uint8Array> {
             controller.enqueue(encoder.encode(chunk));
         },
     });
+}
+
+/**
+ * An export's order. A best-match order is computed per row and can only page
+ * through the first 1,000 matches, so a file of up to 5,000 rows lists the
+ * matching orders in the list's newest-first (or last-updated) order instead.
+ */
+function exportSort(requested: OrderListSort | undefined, fallback: OrderListSort = "createdAt"): OrderListSort {
+    return requested && requested !== "relevance" ? requested : fallback;
 }
 
 // ─── GET /catalog-products ──────────────────────────────────────────────────
@@ -196,8 +205,9 @@ const listOrdersRoute = createRoute({
     description: "Find recent orders and orders needing fulfillment, shipping, payment, or lifecycle attention.",
     request: {
         query: z.object({
-            page: z.coerce.number().optional().default(1).openapi({ description: "Page number" }),
+            page: z.coerce.number().optional().default(1).openapi({ description: "Page number; reaches the first 1,000 rows only (PAGE_TOO_DEEP beyond), use after/before to go deeper" }),
             limit: z.coerce.number().optional().default(10).openapi({ description: "Items per page" }),
+            ...keysetQuerySchema,
             search: z.string().optional().openapi({ description: "Search query" }),
             status: z.string().optional().openapi({ description: "Filter by status" }),
             view: orderListViewQuerySchema.optional(),
@@ -226,9 +236,10 @@ const listOrdersRoute = createRoute({
     },
     responses: {
         200: {
-            description: "Paginated order list",
-            content: { "application/json": { schema: paginatedEnvelope("orders", orderSummarySchema) } },
+            description: "Cursor-paginated order list with a capped total",
+            content: { "application/json": { schema: keysetPaginatedEnvelope("orders", orderSummarySchema) } },
         },
+        ...errorResponses,
     }
 });
 
@@ -240,6 +251,8 @@ app.openapi(listOrdersRoute, async (c) => {
     const result = await listOrders(db, {
         page: query.page,
         limit: query.limit,
+        after: query.after,
+        before: query.before,
         search: query.search || "",
         status: query.status || undefined,
         view: query.view,
@@ -318,16 +331,18 @@ app.openapi(exportOrdersRoute, async (c) => {
         : undefined;
     if (ids && ids.length > 100) throw new ValidationError("Export at most 100 selected orders at a time.");
     const maxRows = Math.min(query.maxRows, ORDER_EXPORT_MAX_ROWS);
-    const effectiveSort: OrderListSort = query.sort
-        ?? (query.search?.trim() ? "relevance" : "createdAt");
+    const effectiveSort: OrderListSort = exportSort(query.sort);
     const csvBuilder = createOrdersCsvArtifactBuilder(query.format);
     let exportedRows = 0;
-    let page = 1;
+    let after: string | undefined;
+    // Rows remain beyond the file; the list's own total is only a capped count.
+    let moreRows = false;
     let total = 0;
+    let totalIsCapped = false;
 
-    exportPages: while (exportedRows < maxRows) {
+    exportPages: for (;;) {
         const result = await listOrders(db, {
-            page,
+            after,
             limit: ORDER_EXPORT_PAGE_SIZE,
             ids,
             search: ids ? "" : query.search || "",
@@ -348,6 +363,7 @@ app.openapi(exportOrdersRoute, async (c) => {
             endDate: parseBangladeshDateOnlyBoundary(query.endDate, "end"),
         });
         total = result.pagination.total;
+        totalIsCapped = result.pagination.totalIsCapped;
         const details = await loadOrderExportDetails(db, result.orders.map((order) => order.id));
         for (const order of result.orders) {
             const detail = details.get(order.id);
@@ -361,18 +377,25 @@ app.openapi(exportOrdersRoute, async (c) => {
                 notes: detail?.notes ?? null,
                 lines: detail?.lines ?? [],
             };
-            if (exportedRows >= maxRows || !csvBuilder.append(row)) break exportPages;
+            if (exportedRows >= maxRows || !csvBuilder.append(row)) {
+                moreRows = true;
+                break exportPages;
+            }
             exportedRows += 1;
         }
-        if (result.orders.length === 0 || page >= result.pagination.totalPages) break;
-        page += 1;
+        if (!result.pageInfo.hasNextPage || !result.pageInfo.endCursor) break;
+        if (exportedRows >= maxRows) {
+            moreRows = true;
+            break;
+        }
+        after = result.pageInfo.endCursor;
     }
 
     const artifact = csvBuilder.finish();
-    const limited = artifact.truncatedByBytes || total > artifact.rowCount;
+    const limited = artifact.truncatedByBytes || moreRows;
     const truncatedBy = artifact.truncatedByBytes
         ? "bytes"
-        : total > artifact.rowCount
+        : moreRows
             ? "rows"
             : "none";
     const filename = `orders-${commerceCalendarDateKey()}.csv`;
@@ -387,7 +410,9 @@ app.openapi(exportOrdersRoute, async (c) => {
         "X-Export-Artifact-Bytes": String(artifact.byteLength),
         "X-Export-Max-Bytes": String(ORDER_CSV_ARTIFACT_MAX_BYTES),
         "X-Export-Row-Count": String(artifact.rowCount),
-        "X-Export-Total-Count": String(total),
+        // Exact up to the list's count cap; above it a lower bound (X-Export-Total-Capped).
+        "X-Export-Total-Count": String(totalIsCapped ? Math.max(total, artifact.rowCount) : total),
+        "X-Export-Total-Capped": totalIsCapped ? "true" : "false",
     });
 });
 
@@ -402,8 +427,9 @@ const paymentRecoveryListRoute = createRoute({
     description: "Find failed or incomplete payment attempts that need merchant or buyer attention.",
     request: {
         query: z.object({
-            page: z.coerce.number().optional().default(1).openapi({ description: "Page number" }),
+            page: z.coerce.number().optional().default(1).openapi({ description: "Page number; reaches the first 1,000 rows only (PAGE_TOO_DEEP beyond), use after/before to go deeper" }),
             limit: z.coerce.number().max(100).optional().default(20).openapi({ description: "Items per page" }),
+            ...keysetQuerySchema,
             search: z.string().optional().openapi({ description: "Search query" }),
             state: paymentRecoveryQuerySchema.optional().default("recoverable").openapi({ description: "Hosted-payment recovery state" }),
             paymentMethod: paymentMethodQuerySchema.optional().openapi({ description: "Filter by payment gateway" }),
@@ -421,8 +447,8 @@ const paymentRecoveryListRoute = createRoute({
     },
     responses: {
         200: {
-            description: "Paginated hosted-payment recovery order list",
-            content: { "application/json": { schema: paginatedEnvelope("orders", orderSummarySchema) } },
+            description: "Cursor-paginated hosted-payment recovery order list with a capped total",
+            content: { "application/json": { schema: keysetPaginatedEnvelope("orders", orderSummarySchema) } },
         },
         ...errorResponses,
     },
@@ -436,6 +462,8 @@ app.openapi(paymentRecoveryListRoute, async (c) => {
     const result = await listOrders(db, {
         page: query.page,
         limit: query.limit,
+        after: query.after,
+        before: query.before,
         search: query.search || "",
         paymentMethod: query.paymentMethod,
         paymentRecovery: query.state as OrderPaymentRecoveryFilter,
@@ -494,16 +522,17 @@ app.openapi(paymentRecoveryExportRoute, async (c) => {
     const db = c.get("db");
     const query = c.req.valid("query");
     const maxRows = Math.min(query.maxRows, PAYMENT_RECOVERY_EXPORT_MAX_ROWS);
-    const effectiveSort: OrderListSort = query.sort
-        ?? (query.search?.trim() ? "relevance" : "updatedAt");
+    const effectiveSort: OrderListSort = exportSort(query.sort, "updatedAt");
     const csvBuilder = createPaymentRecoveryCsvArtifactBuilder();
     let exportedRows = 0;
-    let page = 1;
+    let after: string | undefined;
+    let moreRows = false;
     let total = 0;
+    let totalIsCapped = false;
 
-    exportPages: while (exportedRows < maxRows) {
+    exportPages: for (;;) {
         const result = await listOrders(db, {
-            page,
+            after,
             limit: PAYMENT_RECOVERY_EXPORT_PAGE_SIZE,
             search: query.search || "",
             status: query.status || undefined,
@@ -518,19 +547,27 @@ app.openapi(paymentRecoveryExportRoute, async (c) => {
             endDate: parseBangladeshDateOnlyBoundary(query.endDate, "end"),
         });
         total = result.pagination.total;
+        totalIsCapped = result.pagination.totalIsCapped;
         for (const order of result.orders) {
-            if (exportedRows >= maxRows || !csvBuilder.append(order)) break exportPages;
+            if (exportedRows >= maxRows || !csvBuilder.append(order)) {
+                moreRows = true;
+                break exportPages;
+            }
             exportedRows += 1;
         }
-        if (result.orders.length === 0 || page >= result.pagination.totalPages) break;
-        page += 1;
+        if (!result.pageInfo.hasNextPage || !result.pageInfo.endCursor) break;
+        if (exportedRows >= maxRows) {
+            moreRows = true;
+            break;
+        }
+        after = result.pageInfo.endCursor;
     }
 
     const artifact = csvBuilder.finish();
-    const limited = artifact.truncatedByBytes || total > artifact.rowCount;
+    const limited = artifact.truncatedByBytes || moreRows;
     const truncatedBy = artifact.truncatedByBytes
         ? "bytes"
-        : total > artifact.rowCount
+        : moreRows
             ? "rows"
             : "none";
     const filename = `payment-recovery-${commerceCalendarDateKey()}.csv`;
@@ -545,7 +582,9 @@ app.openapi(paymentRecoveryExportRoute, async (c) => {
         "X-Export-Artifact-Bytes": String(artifact.byteLength),
         "X-Export-Max-Bytes": String(ORDER_CSV_ARTIFACT_MAX_BYTES),
         "X-Export-Row-Count": String(artifact.rowCount),
-        "X-Export-Total-Count": String(total),
+        // Exact up to the list's count cap; above it a lower bound (X-Export-Total-Capped).
+        "X-Export-Total-Count": String(totalIsCapped ? Math.max(total, artifact.rowCount) : total),
+        "X-Export-Total-Capped": totalIsCapped ? "true" : "false",
     });
 });
 

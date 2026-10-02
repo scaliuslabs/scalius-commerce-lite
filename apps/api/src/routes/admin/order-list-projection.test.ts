@@ -78,7 +78,8 @@ describe("order list response projection", () => {
         paidAmount: 0,
         hasTaxSnapshot: true,
       }],
-      pagination: { page: 1, limit: 10, total: 1, totalPages: 1 },
+      pagination: { page: 1, limit: 10, total: 1, totalPages: 1, totalIsCapped: false, offset: 0 },
+      pageInfo: { hasNextPage: false, hasPreviousPage: false, startCursor: "c1", endCursor: "c1" },
     });
 
     expect(result.orders[0]).toMatchObject({

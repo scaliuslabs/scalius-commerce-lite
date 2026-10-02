@@ -15,7 +15,27 @@ import {
     FulfillmentStatus,
     ShipmentStatus,
 } from "@scalius/database/schema";
-import { sql, desc, eq, inArray, notInArray, type SQL } from "drizzle-orm";
+import { sql, desc, eq, inArray, notInArray, type SQL, type SQLWrapper } from "drizzle-orm";
+import {
+    LIST_COUNT_CAP,
+    LIST_MAX_OFFSET,
+    buildPageInfo,
+    capTotal,
+    encodeListCursor,
+    finishKeysetPage,
+    type CursorValueKind,
+} from "@scalius/shared/pagination";
+import {
+    COUNT_PROBE_COLUMN,
+    cappedCountQuery,
+    keysetCondition,
+    keysetOrderBy,
+    positionCursor,
+    resolveListPaging,
+    resolvePositionalPaging,
+    type KeysetOrder,
+    type ListPaging,
+} from "../../../utils/keyset";
 import { ftsMatch, isFts5SearchEnabled, sanitizeFtsQuery } from "../../../search/fts5";
 import { fromMinor } from "@scalius/shared/money";
 import { unixToDate } from "@scalius/shared/utils";
@@ -45,6 +65,19 @@ import {
 const MAX_ORDER_LIST_LIMIT = 100;
 
 type OrderListSort = "relevance" | "customerName" | "totalAmount" | "status" | "createdAt" | "updatedAt";
+
+/**
+ * The sorts that walk by keyset: the sort column (read raw, exactly as the
+ * ORDER BY compares it) and the type of its cursor value. `id` is the unique
+ * tiebreaker. None of these columns is nullable.
+ */
+const ORDER_KEYSET_SORTS = {
+    createdAt: { column: orders.createdAt, kind: "number" },
+    updatedAt: { column: orders.updatedAt, kind: "number" },
+    totalAmount: { column: orders.totalAmountMinor, kind: "number" },
+    customerName: { column: orders.customerName, kind: "text" },
+    status: { column: orders.status, kind: "text" },
+} as const satisfies Record<Exclude<OrderListSort, "relevance">, { column: SQLWrapper; kind: CursorValueKind }>;
 type OrderListItemCountRow = {
     orderId: string;
     count: number;
@@ -243,8 +276,13 @@ export async function listOrders(db: Database, options: {
     openRequest?: boolean;
     /** Exactly these orders (an export of a page or a selection). */
     ids?: string[];
+    /** A numbered page; only the first `LIST_MAX_OFFSET` rows are reachable this way. */
     page?: number;
     limit?: number;
+    /** Rows after this cursor (`pageInfo.endCursor` of the previous page). Excludes `before` and `page`. */
+    after?: string;
+    /** Rows before this cursor (`pageInfo.startCursor` of the next page). */
+    before?: string;
     showArchived?: boolean;
     sort?: OrderListSort;
     order?: "asc" | "desc";
@@ -266,6 +304,8 @@ export async function listOrders(db: Database, options: {
         channelSource,
         page: rawPage = 1,
         limit: rawLimit = 10,
+        after,
+        before,
         showArchived = false,
         sort = "createdAt",
         order = "desc",
@@ -274,7 +314,6 @@ export async function listOrders(db: Database, options: {
     } = options;
     const page = normalizeListPositiveInteger(rawPage, 1);
     const limit = normalizeListPositiveInteger(rawLimit, 10, MAX_ORDER_LIST_LIMIT);
-    const offset = (page - 1) * limit;
 
     const whereConditions: SQL[] = [];
 
@@ -380,43 +419,35 @@ export async function listOrders(db: Database, options: {
         ? sql`${sql.join(whereConditions, sql` AND `)}`
         : undefined;
 
-    const countQuery = db
-        .select({ count: sql<number>`count(*)` })
-        .from(orders)
-        .where(whereClause);
-
-    const orderByExpressions = (() => {
-        if (rankExpression && sort === "relevance") {
+    // A search ordered by relevance computes its rank per row and cannot
+    // seek, so it pages by position inside the first `LIST_MAX_OFFSET`
+    // matches. Every other sort walks by keyset (sort value + id).
+    const relevanceRanked = sort === "relevance" && rankExpression !== undefined;
+    const keysetSort = sort === "relevance" ? "updatedAt" : sort;
+    const keysetSpec = ORDER_KEYSET_SORTS[keysetSort as keyof typeof ORDER_KEYSET_SORTS] ?? ORDER_KEYSET_SORTS.updatedAt;
+    const keysetOrder: KeysetOrder = { column: keysetSpec.column, id: orders.id, direction: order };
+    const cursorSort = relevanceRanked ? "relevance" : keysetSort;
+    const positional = relevanceRanked ? resolvePositionalPaging({ page, limit, after, before }, cursorSort) : null;
+    const paging: ListPaging = positional
+        ? { mode: "offset", offset: positional.offset }
+        : resolveListPaging({ page, limit, after, before }, {
+            sort: cursorSort,
+            direction: order,
+            kinds: [keysetSpec.kind],
+        });
+    const backward = paging.mode === "before";
+    const take = positional?.take ?? limit;
+    const pageWhere = paging.mode === "offset"
+        ? whereClause
+        : sql`${whereClause} AND ${keysetCondition(keysetOrder, paging.cursor, { backward })}`;
+    const orderByExpressions = relevanceRanked
+        ? [
+            rankExpression!,
             // Equally good matches read newest first.
-            return [
-                rankExpression,
-                sql`${orders.createdAt} desc`,
-                sql`${orders.id} desc`,
-            ];
-        }
-
-        const sortField = (() => {
-            switch (sort) {
-                case "customerName":
-                    return orders.customerName;
-                case "totalAmount":
-                    return orders.totalAmountMinor;
-                case "status":
-                    return orders.status;
-                case "createdAt":
-                    return orders.createdAt;
-                case "relevance":
-                case "updatedAt":
-                default:
-                    return orders.updatedAt;
-            }
-        })();
-
-        return [
-            order === "asc" ? sql`${sortField} asc` : sql`${sortField} desc`,
-            order === "asc" ? sql`${orders.id} asc` : sql`${orders.id} desc`,
-        ];
-    })();
+            sql`${orders.createdAt} desc`,
+            sql`${orders.id} desc`,
+        ]
+        : keysetOrderBy(keysetOrder, backward);
 
     const dataQuery = db
         .select({
@@ -447,20 +478,37 @@ export async function listOrders(db: Database, options: {
             shipmentClaimId: orders.shipmentClaimId,
             shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
             paymentRecoveryApplicable: paymentRecoveryLifecycleCondition(),
+            // The sort column as stored (not the CAST above): a cursor must
+            // compare exactly what the ORDER BY compared.
+            keysetValue: sql<number | string>`${keysetSpec.column}`.as("keyset_value"),
             ...orderListFactsSelection(),
         })
         .from(orders)
         .leftJoin(codTracking, eq(codTracking.orderId, orders.id))
-        .where(whereClause)
-        .limit(limit)
-        .offset(offset)
+        .where(pageWhere)
+        // One row more than the page tells whether another page follows.
+        .limit(take + 1)
+        .offset(paging.mode === "offset" ? paging.offset : 0)
         .orderBy(...orderByExpressions);
 
-    // Batch count + data in a single round-trip
+    // The total reads at most LIST_COUNT_CAP + 1 rows. A cursor page also
+    // counts the rows up to its cursor (same cap) so the dashboard can print
+    // "51-100 of 1,000+" instead of only a total.
+    const statements: unknown[] = [
+        cappedCountQuery(db, db.select(COUNT_PROBE_COLUMN).from(orders).where(whereClause).$dynamic()),
+        dataQuery,
+    ];
+    if (paging.mode !== "offset") {
+        statements.push(cappedCountQuery(db, db.select(COUNT_PROBE_COLUMN).from(orders).where(
+            sql`${whereClause} AND ${keysetCondition(keysetOrder, paging.cursor, { backward: true, inclusive: !backward })}`,
+        ).$dynamic()));
+    }
+
+    // Batch counts + data in a single round-trip
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
-    const batchResult = await db.batch([countQuery, dataQuery] as any) as any;
+    const batchResult = await db.batch(statements as any) as any;
     const countArr = batchResult[0] as { count: number }[];
-    const results = batchResult[1] as ({
+    const fetched = batchResult[1] as ({
         id: string; customerName: string; customerPhone: string; customerEmail: string | null;
         customerId: string | null;
         currencyDecimalPlaces: number; totalAmountMinor: number; shippingAmountMinor: number;
@@ -472,8 +520,32 @@ export async function listOrders(db: Database, options: {
         cityName: string | null; zoneName: string | null; areaName: string | null;
         shipmentClaimId: string | null; shipmentClaimExpiresAt: Date | number | string | null;
         paymentRecoveryApplicable: number;
+        keysetValue: number | string;
     } & OrderListFactsRow)[];
-    const count = countArr[0]?.count ?? 0;
+    const { total, totalIsCapped } = capTotal(countArr[0]?.count ?? 0);
+    const pageRows = finishKeysetPage(fetched, take, backward);
+    // A ranked search only shows its first LIST_MAX_OFFSET matches.
+    if (positional && positional.offset + take >= LIST_MAX_OFFSET) pageRows.hasMore = false;
+    const results = pageRows.rows;
+
+    // Where the page starts in the full order: known for a numbered or
+    // positional page, and for a cursor page within the first LIST_COUNT_CAP rows.
+    const rowsUpToCursor = paging.mode === "offset" ? null : Number(batchResult[2]?.[0]?.count ?? 0);
+    const pageStart: number | null = paging.mode === "offset"
+        ? paging.offset
+        : rowsUpToCursor !== null && rowsUpToCursor <= LIST_COUNT_CAP
+            ? Math.max(0, rowsUpToCursor - (backward ? results.length : 0))
+            : null;
+    const pageInfo = buildPageInfo(
+        { rows: results.map((row, index) => ({ row, index })), hasMore: pageRows.hasMore },
+        {
+            backward,
+            anchored: paging.mode !== "offset" || paging.offset > 0,
+            cursorOf: ({ row, index }) => positional
+                ? positionCursor(cursorSort, positional.offset + index)
+                : encodeListCursor({ sort: cursorSort, direction: order, values: [row.keysetValue], id: row.id }),
+        },
+    );
 
     const orderIds = results.map((r) => r.id);
 
@@ -605,6 +677,7 @@ export async function listOrders(db: Database, options: {
         const latestShipment = shipmentMap.get(order.id) || null;
         const {
             paymentRecoveryApplicable: _paymentRecoveryApplicable,
+            keysetValue: _keysetValue,
             codStatus: _codStatus,
             codDeliveryAttempts: _codDeliveryAttempts,
             returnedValueMinor: _returnedValueMinor,
@@ -633,11 +706,17 @@ export async function listOrders(db: Database, options: {
     return {
         orders: formattedResults,
         pagination: {
-            total: count,
-            page,
+            total,
+            /** `total` is a lower bound: more orders match than the count reads. */
+            totalIsCapped,
+            /** The page's number; 0 for a cursor page deeper than the count cap. */
+            page: pageStart === null ? 0 : Math.floor(pageStart / limit) + 1,
             limit,
-            totalPages: Math.ceil(count / limit),
+            totalPages: Math.ceil(total / limit),
+            /** Zero-based index of the page's first row; null deeper than the count cap. */
+            offset: pageStart,
         },
+        pageInfo,
     };
 }
 
