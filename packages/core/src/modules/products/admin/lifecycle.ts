@@ -8,6 +8,8 @@ import {
     productAttributeValues,
     orderItems,
     inventoryMovements,
+    inventoryTransferLines,
+    purchaseOrderLines,
     productLowStockAlerts,
 } from "@scalius/database/schema";
 import { and, sql, eq, inArray, isNull, or } from "drizzle-orm";
@@ -157,8 +159,19 @@ async function assertNoVariantInventoryHistory(
     if (variantIds.length === 0) return;
     const variantIdSet = JSON.stringify(variantIds);
 
+    // Purchase orders and transfers are inventory history too (0109): their
+    // lines keep the SKU (foreign keys restrict) even before stock moved, so
+    // one read counts movements and those lines together.
     const movementCheckArr = await db
-        .select({ count: sql<number>`count(*)` })
+        .select({
+            count: sql<number>`count(*) + (
+                SELECT count(*) FROM ${purchaseOrderLines} AS history_po_line
+                WHERE history_po_line.variant_id IN (SELECT CAST(value AS TEXT) FROM json_each(${variantIdSet}))
+            ) + (
+                SELECT count(*) FROM ${inventoryTransferLines} AS history_transfer_line
+                WHERE history_transfer_line.variant_id IN (SELECT CAST(value AS TEXT) FROM json_each(${variantIdSet}))
+            )`,
+        })
         .from(inventoryMovements)
         .where(sql`${inventoryMovements.variantId} IN (
             SELECT CAST(value AS TEXT) FROM json_each(${variantIdSet})

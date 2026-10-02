@@ -8,11 +8,17 @@ import {
 } from "./ledger-v2";
 import { defaultInventoryLocationIdSql } from "./locations";
 
+/** Ledger-v2 movement types written outside the order transition engine. */
+export type StockMovementClaimType = "adjusted" | "received" | "transfer_out" | "transfer_in";
+
 /**
- * One guarded ledger-v2 `adjusted` movement. A movement that changes physical
- * stock books it at `locationId`, or at the default location when none is
- * named (product-editor edits, licence-key pools); one that does not leaves
- * the location null.
+ * One guarded ledger-v2 movement (`adjusted` unless another physical type is
+ * named: purchase order receipts and transfers, migration 0109). A movement
+ * that changes physical stock books it at `locationId`, or at the default
+ * location when none is named (product-editor edits, licence-key pools); one
+ * that does not leaves the location null. It inserts only while the SKU is
+ * still at `before.stockVersion` and live, unless `allowRetired` (units of a
+ * transfer already on the road still arrive for a SKU retired meanwhile).
  */
 export function buildStockMovementClaim(
   db: Database,
@@ -26,6 +32,8 @@ export function buildStockMovementClaim(
     notes: string;
     adminUserId?: string;
     locationId?: string;
+    type?: StockMovementClaimType;
+    allowRetired?: boolean;
   },
 ) {
   const edge = buildInventoryLedgerV2Edge({
@@ -45,7 +53,7 @@ export function buildStockMovementClaim(
         ${params.movementId},
         ${params.variantId},
         NULL,
-        ${"adjusted"},
+        ${params.type ?? "adjusted"},
         ${params.quantity},
         ${edge.previousStock},
         ${edge.newStock},
@@ -68,7 +76,7 @@ export function buildStockMovementClaim(
       FROM ${productVariants}
       WHERE ${productVariants.id} = ${params.variantId}
         AND ${productVariants.stockVersion} = ${edge.stockVersionBefore}
-        AND ${productVariants.deletedAt} IS NULL
+        ${params.allowRetired ? sql`` : sql`AND ${productVariants.deletedAt} IS NULL`}
     `)
     .returning({ id: inventoryMovements.id });
 }
