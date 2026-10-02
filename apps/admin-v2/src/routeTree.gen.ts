@@ -28,6 +28,7 @@ import { Route as AuthSetupRouteImport } from './routes/auth/setup'
 import { Route as AuthSetup2faRouteImport } from './routes/auth/setup-2fa'
 import { Route as AuthTwoFactorRouteImport } from './routes/auth/two-factor'
 import { Route as InvoiceOrderIdRouteImport } from './routes/invoice.$orderId'
+import { Route as AdminAnalyticsIndexRouteImport } from './routes/admin/analytics/index'
 import { Route as AdminAppsIndexRouteImport } from './routes/admin/apps/index'
 import { Route as AdminAppsPluginIdRouteImport } from './routes/admin/apps/$pluginId'
 import { Route as AdminArticlesIndexRouteImport } from './routes/admin/articles/index'
@@ -74,6 +75,8 @@ import { Route as AdminSettingsStoreRouteImport } from './routes/admin/settings/
 import { Route as AdminSettingsTaxesRouteImport } from './routes/admin/settings/taxes'
 import { Route as AdminSettingsUsersRouteImport } from './routes/admin/settings/users'
 import { Route as AdminSettingsWebhooksRouteImport } from './routes/admin/settings/webhooks'
+import { Route as AdminAnalyticsReportsIndexRouteImport } from './routes/admin/analytics/reports/index'
+import { Route as AdminAnalyticsReportsReportIdRouteImport } from './routes/admin/analytics/reports/$reportId'
 import { Route as AdminArticlesArticleIdEditRouteImport } from './routes/admin/articles/$articleId/edit'
 import { Route as AdminBrandsBrandIdEditRouteImport } from './routes/admin/brands/$brandId/edit'
 import { Route as AdminCategoriesCategoryIdEditRouteImport } from './routes/admin/categories/$categoryId/edit'
@@ -194,6 +197,11 @@ const InvoiceOrderIdRoute = InvoiceOrderIdRouteImport.update({
   id: '/invoice/$orderId',
   path: '/invoice/$orderId',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AdminAnalyticsIndexRoute = AdminAnalyticsIndexRouteImport.update({
+  id: '/analytics/',
+  path: '/analytics/',
+  getParentRoute: () => AdminRoute,
 } as any)
 const AdminAppsIndexRoute = AdminAppsIndexRouteImport.update({
   id: '/apps/',
@@ -432,6 +440,18 @@ const AdminSettingsWebhooksRoute = AdminSettingsWebhooksRouteImport.update({
   path: '/webhooks',
   getParentRoute: () => AdminSettingsRouteRoute,
 } as any)
+const AdminAnalyticsReportsIndexRoute =
+  AdminAnalyticsReportsIndexRouteImport.update({
+    id: '/analytics/reports/',
+    path: '/analytics/reports/',
+    getParentRoute: () => AdminRoute,
+  } as any)
+const AdminAnalyticsReportsReportIdRoute =
+  AdminAnalyticsReportsReportIdRouteImport.update({
+    id: '/analytics/reports/$reportId',
+    path: '/analytics/reports/$reportId',
+    getParentRoute: () => AdminRoute,
+  } as any)
 const AdminArticlesArticleIdEditRoute =
   AdminArticlesArticleIdEditRouteImport.update({
     id: '/articles/$articleId/edit',
@@ -629,6 +649,7 @@ export interface FileRoutesByFullPath {
   '/admin/settings/taxes': typeof AdminSettingsTaxesRoute
   '/admin/settings/users': typeof AdminSettingsUsersRoute
   '/admin/settings/webhooks': typeof AdminSettingsWebhooksRoute
+  '/admin/analytics/': typeof AdminAnalyticsIndexRoute
   '/admin/apps/': typeof AdminAppsIndexRoute
   '/admin/articles/': typeof AdminArticlesIndexRoute
   '/admin/brands/': typeof AdminBrandsIndexRoute
@@ -644,6 +665,7 @@ export interface FileRoutesByFullPath {
   '/admin/products/': typeof AdminProductsIndexRoute
   '/admin/reviews/': typeof AdminReviewsIndexRoute
   '/admin/settings/': typeof AdminSettingsIndexRoute
+  '/admin/analytics/reports/$reportId': typeof AdminAnalyticsReportsReportIdRoute
   '/admin/articles/$articleId/edit': typeof AdminArticlesArticleIdEditRoute
   '/admin/brands/$brandId/edit': typeof AdminBrandsBrandIdEditRoute
   '/admin/categories/$categoryId/edit': typeof AdminCategoriesCategoryIdEditRoute
@@ -661,6 +683,7 @@ export interface FileRoutesByFullPath {
   '/admin/settings/policies/warranty': typeof AdminSettingsPoliciesWarrantyRoute
   '/admin/settings/shipping/areas': typeof AdminSettingsShippingAreasRoute
   '/admin/settings/users/$userId': typeof AdminSettingsUsersUserIdRoute
+  '/admin/analytics/reports/': typeof AdminAnalyticsReportsIndexRoute
   '/admin/customers/segments/': typeof AdminCustomersSegmentsIndexRoute
   '/admin/online-store/navigation/': typeof AdminOnlineStoreNavigationIndexRoute
   '/admin/orders/$orderId/': typeof AdminOrdersOrderIdIndexRoute
@@ -718,6 +741,7 @@ export interface FileRoutesByTo {
   '/admin/settings/taxes': typeof AdminSettingsTaxesRoute
   '/admin/settings/users': typeof AdminSettingsUsersRoute
   '/admin/settings/webhooks': typeof AdminSettingsWebhooksRoute
+  '/admin/analytics': typeof AdminAnalyticsIndexRoute
   '/admin/apps': typeof AdminAppsIndexRoute
   '/admin/articles': typeof AdminArticlesIndexRoute
   '/admin/brands': typeof AdminBrandsIndexRoute
@@ -733,6 +757,7 @@ export interface FileRoutesByTo {
   '/admin/products': typeof AdminProductsIndexRoute
   '/admin/reviews': typeof AdminReviewsIndexRoute
   '/admin/settings': typeof AdminSettingsIndexRoute
+  '/admin/analytics/reports/$reportId': typeof AdminAnalyticsReportsReportIdRoute
   '/admin/articles/$articleId/edit': typeof AdminArticlesArticleIdEditRoute
   '/admin/brands/$brandId/edit': typeof AdminBrandsBrandIdEditRoute
   '/admin/categories/$categoryId/edit': typeof AdminCategoriesCategoryIdEditRoute
@@ -750,6 +775,7 @@ export interface FileRoutesByTo {
   '/admin/settings/policies/warranty': typeof AdminSettingsPoliciesWarrantyRoute
   '/admin/settings/shipping/areas': typeof AdminSettingsShippingAreasRoute
   '/admin/settings/users/$userId': typeof AdminSettingsUsersUserIdRoute
+  '/admin/analytics/reports': typeof AdminAnalyticsReportsIndexRoute
   '/admin/customers/segments': typeof AdminCustomersSegmentsIndexRoute
   '/admin/online-store/navigation': typeof AdminOnlineStoreNavigationIndexRoute
   '/admin/orders/$orderId': typeof AdminOrdersOrderIdIndexRoute
@@ -811,6 +837,7 @@ export interface FileRoutesById {
   '/admin/settings/taxes': typeof AdminSettingsTaxesRoute
   '/admin/settings/users': typeof AdminSettingsUsersRoute
   '/admin/settings/webhooks': typeof AdminSettingsWebhooksRoute
+  '/admin/analytics/': typeof AdminAnalyticsIndexRoute
   '/admin/apps/': typeof AdminAppsIndexRoute
   '/admin/articles/': typeof AdminArticlesIndexRoute
   '/admin/brands/': typeof AdminBrandsIndexRoute
@@ -826,6 +853,7 @@ export interface FileRoutesById {
   '/admin/products/': typeof AdminProductsIndexRoute
   '/admin/reviews/': typeof AdminReviewsIndexRoute
   '/admin/settings/': typeof AdminSettingsIndexRoute
+  '/admin/analytics/reports/$reportId': typeof AdminAnalyticsReportsReportIdRoute
   '/admin/articles/$articleId/edit': typeof AdminArticlesArticleIdEditRoute
   '/admin/brands/$brandId/edit': typeof AdminBrandsBrandIdEditRoute
   '/admin/categories/$categoryId/edit': typeof AdminCategoriesCategoryIdEditRoute
@@ -843,6 +871,7 @@ export interface FileRoutesById {
   '/admin/settings/policies_/warranty': typeof AdminSettingsPoliciesWarrantyRoute
   '/admin/settings/shipping_/areas': typeof AdminSettingsShippingAreasRoute
   '/admin/settings/users_/$userId': typeof AdminSettingsUsersUserIdRoute
+  '/admin/analytics/reports/': typeof AdminAnalyticsReportsIndexRoute
   '/admin/customers/segments/': typeof AdminCustomersSegmentsIndexRoute
   '/admin/online-store/navigation/': typeof AdminOnlineStoreNavigationIndexRoute
   '/admin/orders/$orderId/': typeof AdminOrdersOrderIdIndexRoute
@@ -905,6 +934,7 @@ export interface FileRouteTypes {
     | '/admin/settings/taxes'
     | '/admin/settings/users'
     | '/admin/settings/webhooks'
+    | '/admin/analytics/'
     | '/admin/apps/'
     | '/admin/articles/'
     | '/admin/brands/'
@@ -920,6 +950,7 @@ export interface FileRouteTypes {
     | '/admin/products/'
     | '/admin/reviews/'
     | '/admin/settings/'
+    | '/admin/analytics/reports/$reportId'
     | '/admin/articles/$articleId/edit'
     | '/admin/brands/$brandId/edit'
     | '/admin/categories/$categoryId/edit'
@@ -937,6 +968,7 @@ export interface FileRouteTypes {
     | '/admin/settings/policies/warranty'
     | '/admin/settings/shipping/areas'
     | '/admin/settings/users/$userId'
+    | '/admin/analytics/reports/'
     | '/admin/customers/segments/'
     | '/admin/online-store/navigation/'
     | '/admin/orders/$orderId/'
@@ -994,6 +1026,7 @@ export interface FileRouteTypes {
     | '/admin/settings/taxes'
     | '/admin/settings/users'
     | '/admin/settings/webhooks'
+    | '/admin/analytics'
     | '/admin/apps'
     | '/admin/articles'
     | '/admin/brands'
@@ -1009,6 +1042,7 @@ export interface FileRouteTypes {
     | '/admin/products'
     | '/admin/reviews'
     | '/admin/settings'
+    | '/admin/analytics/reports/$reportId'
     | '/admin/articles/$articleId/edit'
     | '/admin/brands/$brandId/edit'
     | '/admin/categories/$categoryId/edit'
@@ -1026,6 +1060,7 @@ export interface FileRouteTypes {
     | '/admin/settings/policies/warranty'
     | '/admin/settings/shipping/areas'
     | '/admin/settings/users/$userId'
+    | '/admin/analytics/reports'
     | '/admin/customers/segments'
     | '/admin/online-store/navigation'
     | '/admin/orders/$orderId'
@@ -1086,6 +1121,7 @@ export interface FileRouteTypes {
     | '/admin/settings/taxes'
     | '/admin/settings/users'
     | '/admin/settings/webhooks'
+    | '/admin/analytics/'
     | '/admin/apps/'
     | '/admin/articles/'
     | '/admin/brands/'
@@ -1101,6 +1137,7 @@ export interface FileRouteTypes {
     | '/admin/products/'
     | '/admin/reviews/'
     | '/admin/settings/'
+    | '/admin/analytics/reports/$reportId'
     | '/admin/articles/$articleId/edit'
     | '/admin/brands/$brandId/edit'
     | '/admin/categories/$categoryId/edit'
@@ -1118,6 +1155,7 @@ export interface FileRouteTypes {
     | '/admin/settings/policies_/warranty'
     | '/admin/settings/shipping_/areas'
     | '/admin/settings/users_/$userId'
+    | '/admin/analytics/reports/'
     | '/admin/customers/segments/'
     | '/admin/online-store/navigation/'
     | '/admin/orders/$orderId/'
@@ -1272,6 +1310,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/invoice/$orderId'
       preLoaderRoute: typeof InvoiceOrderIdRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/admin/analytics/': {
+      id: '/admin/analytics/'
+      path: '/analytics'
+      fullPath: '/admin/analytics/'
+      preLoaderRoute: typeof AdminAnalyticsIndexRouteImport
+      parentRoute: typeof AdminRoute
     }
     '/admin/apps/': {
       id: '/admin/apps/'
@@ -1595,6 +1640,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminSettingsWebhooksRouteImport
       parentRoute: typeof AdminSettingsRouteRoute
     }
+    '/admin/analytics/reports/': {
+      id: '/admin/analytics/reports/'
+      path: '/analytics/reports'
+      fullPath: '/admin/analytics/reports/'
+      preLoaderRoute: typeof AdminAnalyticsReportsIndexRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/analytics/reports/$reportId': {
+      id: '/admin/analytics/reports/$reportId'
+      path: '/analytics/reports/$reportId'
+      fullPath: '/admin/analytics/reports/$reportId'
+      preLoaderRoute: typeof AdminAnalyticsReportsReportIdRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/articles/$articleId/edit': {
       id: '/admin/articles/$articleId/edit'
       path: '/articles/$articleId/edit'
@@ -1881,6 +1940,7 @@ interface AdminRouteChildren {
   AdminOrdersNewRoute: typeof AdminOrdersNewRoute
   AdminPagesNewRoute: typeof AdminPagesNewRoute
   AdminProductsNewRoute: typeof AdminProductsNewRoute
+  AdminAnalyticsIndexRoute: typeof AdminAnalyticsIndexRoute
   AdminAppsIndexRoute: typeof AdminAppsIndexRoute
   AdminArticlesIndexRoute: typeof AdminArticlesIndexRoute
   AdminBrandsIndexRoute: typeof AdminBrandsIndexRoute
@@ -1895,6 +1955,7 @@ interface AdminRouteChildren {
   AdminPagesIndexRoute: typeof AdminPagesIndexRoute
   AdminProductsIndexRoute: typeof AdminProductsIndexRoute
   AdminReviewsIndexRoute: typeof AdminReviewsIndexRoute
+  AdminAnalyticsReportsReportIdRoute: typeof AdminAnalyticsReportsReportIdRoute
   AdminArticlesArticleIdEditRoute: typeof AdminArticlesArticleIdEditRoute
   AdminBrandsBrandIdEditRoute: typeof AdminBrandsBrandIdEditRoute
   AdminCategoriesCategoryIdEditRoute: typeof AdminCategoriesCategoryIdEditRoute
@@ -1907,6 +1968,7 @@ interface AdminRouteChildren {
   AdminOrdersOrderIdEditRoute: typeof AdminOrdersOrderIdEditRoute
   AdminPagesPageIdEditRoute: typeof AdminPagesPageIdEditRoute
   AdminProductsProductIdEditRoute: typeof AdminProductsProductIdEditRoute
+  AdminAnalyticsReportsIndexRoute: typeof AdminAnalyticsReportsIndexRoute
   AdminCustomersSegmentsIndexRoute: typeof AdminCustomersSegmentsIndexRoute
   AdminOnlineStoreNavigationIndexRoute: typeof AdminOnlineStoreNavigationIndexRoute
   AdminOrdersOrderIdIndexRoute: typeof AdminOrdersOrderIdIndexRoute
@@ -1936,6 +1998,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminOrdersNewRoute: AdminOrdersNewRoute,
   AdminPagesNewRoute: AdminPagesNewRoute,
   AdminProductsNewRoute: AdminProductsNewRoute,
+  AdminAnalyticsIndexRoute: AdminAnalyticsIndexRoute,
   AdminAppsIndexRoute: AdminAppsIndexRoute,
   AdminArticlesIndexRoute: AdminArticlesIndexRoute,
   AdminBrandsIndexRoute: AdminBrandsIndexRoute,
@@ -1950,6 +2013,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminPagesIndexRoute: AdminPagesIndexRoute,
   AdminProductsIndexRoute: AdminProductsIndexRoute,
   AdminReviewsIndexRoute: AdminReviewsIndexRoute,
+  AdminAnalyticsReportsReportIdRoute: AdminAnalyticsReportsReportIdRoute,
   AdminArticlesArticleIdEditRoute: AdminArticlesArticleIdEditRoute,
   AdminBrandsBrandIdEditRoute: AdminBrandsBrandIdEditRoute,
   AdminCategoriesCategoryIdEditRoute: AdminCategoriesCategoryIdEditRoute,
@@ -1962,6 +2026,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminOrdersOrderIdEditRoute: AdminOrdersOrderIdEditRoute,
   AdminPagesPageIdEditRoute: AdminPagesPageIdEditRoute,
   AdminProductsProductIdEditRoute: AdminProductsProductIdEditRoute,
+  AdminAnalyticsReportsIndexRoute: AdminAnalyticsReportsIndexRoute,
   AdminCustomersSegmentsIndexRoute: AdminCustomersSegmentsIndexRoute,
   AdminOnlineStoreNavigationIndexRoute: AdminOnlineStoreNavigationIndexRoute,
   AdminOrdersOrderIdIndexRoute: AdminOrdersOrderIdIndexRoute,

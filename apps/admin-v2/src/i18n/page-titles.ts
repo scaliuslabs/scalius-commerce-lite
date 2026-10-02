@@ -8,6 +8,8 @@ import { defineMessages, translate } from "./index";
 export const pageTitleMessages = defineMessages({
   en: {
     home: "Home",
+    analytics: "Analytics",
+    reports: "Reports",
     orders: "Orders",
     inbox: "Inbox",
     reviews: "Reviews",
@@ -65,6 +67,8 @@ export const pageTitleMessages = defineMessages({
   },
   bn: {
     home: "হোম",
+    analytics: "অ্যানালিটিক্স",
+    reports: "রিপোর্ট",
     orders: "অর্ডার",
     inbox: "ইনবক্স",
     reviews: "রিভিউ",

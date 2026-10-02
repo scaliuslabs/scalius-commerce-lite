@@ -10,7 +10,7 @@ import { Badge } from "~/components/ui/badge";
 import { statusBadgeVariant } from "~/components/admin/orderview/status-badges";
 import { orderMessages, orderStatusLabel } from "~/i18n/orders";
 import { PageHeader } from "~/components/admin/resource/PageHeader";
-import { DashboardSalesChart } from "~/components/admin/DashboardSalesChart";
+import { HomeAnalytics, homeOverviewQuery } from "~/components/admin/analytics/HomeAnalytics";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { useCurrency } from "~/hooks/use-currency";
 import { canAccessAdminPath } from "~/lib/admin-access";
@@ -36,6 +36,7 @@ export const Route = createFileRoute("/admin/")({
     void queryClient.prefetchQuery(dashboardSummaryQueryOptions());
     void queryClient.prefetchQuery(dashboardActivityQueryOptions());
     void queryClient.prefetchQuery(currencySettingsQueryOptions());
+    if (canOpen("/admin/analytics")) void queryClient.prefetchQuery(homeOverviewQuery("last_30_days"));
     if (canOpen("/admin/orders")) void queryClient.prefetchQuery(homeOpenOrdersQueryOptions());
     if (canOpen("/admin/inventory")) void queryClient.prefetchQuery(homeLowStockQueryOptions());
     if (canOpen("/admin/online-store/preferences")) void queryClient.prefetchQuery({ ...feedDiagnosticsQueryOptions(), staleTime: HOME_FEED_STALE_TIME_MS });
@@ -89,13 +90,11 @@ function HomePage() {
   const month = stats.currentMonth;
   if (stats.totalProducts === 0 && month.orders === 0 && recentOrders.length === 0) return <SetupCards canOpen={canOpen} />;
 
-  // The API sends no money to roles without "View sales numbers": order counts only.
-  const sales = month.revenue !== null;
+  // Sales numbers come from Analytics (the same definitions); a role without
+  // "View analytics" sees order counts only, and the API sends it no money.
+  const sales = canOpen("/admin/analytics");
   const canSeeOrders = canOpen("/admin/orders");
-  const days = (activity.data?.dailyActivityData ?? [])
-    .slice(-30)
-    .map((day) => ({ ...day, revenue: day.revenue ?? 0 }));
-  const today = days.find((day) => day.date === storeToday());
+  const today = (activity.data?.dailyActivityData ?? []).find((day) => day.date === storeToday());
   const openCount = openOrders.data?.pagination.total ?? 0;
   const lowCount = lowStock.data?.alerts.length ?? 0;
   const feedGaps = countFeedGaps(feed.data);
@@ -106,29 +105,16 @@ function HomePage() {
   return (
     <div className="space-y-4 pb-8">
       <PageHeader title={t("home")} />
-      <div className={sales ? "grid grid-cols-2 gap-3 lg:grid-cols-4" : "grid grid-cols-2 gap-3"}>
-        {sales ? <Metric label={t("salesToday")} value={fmt(today?.revenue ?? 0)} /> : null}
-        <Metric label={t("ordersToday")} value={formatNumber(today?.orders ?? 0)} />
-        {sales ? <Metric label={t("salesThisMonth")} value={fmt(month.revenue ?? 0)} change={month.revenueGrowth} /> : null}
-        <Metric label={t("ordersThisMonth")} value={formatNumber(month.orders)} change={month.orderGrowth} />
-      </div>
-
       {sales ? (
-        <Card>
-          <CardHeader className="space-y-1">
-            <CardTitle>{t("salesChart")}</CardTitle>
-            <p className="text-body text-muted-foreground">{t("grossHelp")}</p>
-          </CardHeader>
-          <CardContent>
-            {days.some((day) => day.revenue > 0) ? (
-              <DashboardSalesChart days={days} money={fmt} />
-            ) : (
-              <p className="py-8 text-center text-body text-muted-foreground">{t("noSalesYet")}</p>
-            )}
-          </CardContent>
-        </Card>
+        <HomeAnalytics />
       ) : (
-        <p className="text-body text-muted-foreground">{t("noSalesAccess")}</p>
+        <>
+          <div className="grid grid-cols-2 gap-3">
+            <Metric label={t("ordersToday")} value={formatNumber(today?.orders ?? 0)} />
+            <Metric label={t("ordersThisMonth")} value={formatNumber(month.orders)} change={month.orderGrowth} />
+          </div>
+          <p className="text-body text-muted-foreground">{t("noSalesAccess")}</p>
+        </>
       )}
 
       {/* Cards keep their own height: a short to-do list doesn't stretch to the orders list. */}
