@@ -4,6 +4,7 @@
 import {
   BadgePercent,
   Blocks,
+  ChartColumn,
   FileText,
   House,
   Inbox,
@@ -63,6 +64,8 @@ export const ADMIN_NAV: readonly NavItem[] = [
       { key: "categories", to: "/admin/categories" },
       { key: "brands", to: "/admin/brands" },
       { key: "inventory", to: "/admin/inventory" },
+      { key: "purchaseOrders", to: "/admin/inventory/purchase-orders" },
+      { key: "transfers", to: "/admin/inventory/transfers" },
       { key: "attributes", to: "/admin/attributes" },
       ...when(REVIEWS_NAV_ENABLED, { key: "reviews", to: "/admin/reviews", badge: "reviews" }),
       ...when(GIFT_CARDS_NAV_ENABLED, { key: "giftCards", to: "/admin/gift-cards" }),
@@ -83,6 +86,13 @@ export const ADMIN_NAV: readonly NavItem[] = [
       { key: "blogPosts", to: "/admin/articles" },
       { key: "files", to: "/admin/media" },
     ],
+  },
+  // Shopify's Analytics: the overview, with Reports under it.
+  {
+    key: "analytics",
+    to: "/admin/analytics",
+    icon: ChartColumn,
+    children: [{ key: "reports", to: "/admin/analytics/reports" }],
   },
   // Installed apps sit with the store's own sections: the panel draws every
   // ungrouped row above the group labels, so panel and rail keep one order.
@@ -157,4 +167,14 @@ export function isSectionActive(path: string, item: VisibleNavItem): boolean {
   // An app's page belongs to the section that lists it, not to Apps by its address.
   if (APP_PAGE_PATH.test(path)) return false;
   return matchesPath(path, item.to);
+}
+
+/**
+ * The sub-page the path is on: the most specific match, so Purchase orders
+ * (`/admin/inventory/purchase-orders/…`) is current rather than Inventory.
+ */
+export function activeNavChild(path: string, children: readonly NavLink[]): NavLink | undefined {
+  return children
+    .filter((child) => matchesPath(path, child.to))
+    .reduce<NavLink | undefined>((best, child) => (!best || child.to.length > best.to.length ? child : best), undefined);
 }

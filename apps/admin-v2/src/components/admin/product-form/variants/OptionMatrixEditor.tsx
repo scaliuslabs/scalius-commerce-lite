@@ -66,8 +66,9 @@ import {
   withFulfilmentMode,
 } from "./option-matrix-editor-model";
 import { constrainSkuForKind, productKindRules, useProductKindRules } from "../product-kind-rules";
-import { barcodePatch, Field, InventoryQuantityInput, type IssueFor, type StockElsewhere } from "./variant-fields";
-import { VariantTable } from "./VariantTable";
+import { usePublishSkuCostRows, useSkuCosts, type SkuCostRow } from "../sku-costs";
+import { barcodePatch, Field, InventoryQuantityInput, type IncomingUnits, type IssueFor, type StockElsewhere } from "./variant-fields";
+import { VariantTable, type VariantCosts } from "./VariantTable";
 
 const MAX_AXES = MAX_PRODUCT_OPTION_AXES;
 const MAX_COMBINATIONS = MAX_PRODUCT_OPTION_COMBINATIONS;
@@ -201,10 +202,23 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
   const { data: locations } = useQuery(inventoryLocationsQueryOptions());
   const severalLocations = kindRules.showInventory && hasSeveralLocations(locations);
   const homeLocation = severalLocations ? locations?.find((location) => location.isDefault) ?? null : null;
+  // Per-location levels (several locations) and units on their way (open
+  // purchase orders, transfers in transit), in one read for the saved SKUs.
   const { data: productLevels } = useQuery({
     ...productInventoryLevelsQueryOptions(productId ?? ""),
-    enabled: Boolean(productId) && severalLocations,
+    enabled: Boolean(productId) && kindRules.showInventory,
   });
+  const incomingByVariant = React.useMemo(() => {
+    const byVariant = new Map<string, IncomingUnits>();
+    for (const row of productLevels?.incoming ?? []) {
+      const current = byVariant.get(row.variantId) ?? { purchaseOrders: 0, transfers: 0 };
+      byVariant.set(row.variantId, {
+        purchaseOrders: current.purchaseOrders + row.purchaseOrders,
+        transfers: current.transfers + row.transfers,
+      });
+    }
+    return byVariant;
+  }, [productLevels]);
   const stockElsewhere = React.useMemo(() => {
     const byVariant = new Map<string, StockElsewhere>();
     if (!homeLocation || !productLevels || !locations) return byVariant;
@@ -271,16 +285,41 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
             const below = shownVariants.find((variant) => variant.trackInventory && variant.stock - elsewhereOf(variant.id) < 0);
             return below ? { message: t("issueQuantityWhole"), variantId: below.id, field: "stock" as const } : null;
           })();
+  // Cost per item: kept by the page's store (not this draft) and saved right after it.
+  // A product without options edits its hidden SKU's cost in the Pricing card.
+  const costs = useSkuCosts();
+  const costsShown = costs !== null && !kindRules.giftCard;
+  const simpleCostKey = costs?.simpleKey ?? "";
+  const costRows = React.useMemo<SkuCostRow[]>(() => {
+    if (!costsShown) return [];
+    return simpleMode
+      ? [{ key: simpleCostKey, sku: simpleSku.sku, isDefault: true }]
+      : shownVariants.map((variant) => ({ key: variant.id, sku: variant.sku, isDefault: false }));
+  }, [costsShown, shownVariants, simpleCostKey, simpleMode, simpleSku.sku]);
+  usePublishSkuCostRows(costs, costRows);
+  const costKeys = costRows.map((row) => row.key);
+  const costsDirty = costs?.isDirty(costKeys) ?? false;
+  const costTrouble = costs?.problemOf(costKeys) ?? null;
+  const costIssue: DraftIssue | null = costTrouble
+    ? { message: costTrouble.message, field: "cost", ...(simpleMode ? {} : { variantId: costTrouble.key }) }
+    : null;
+  const variantCosts = React.useMemo<VariantCosts | null>(
+    () => (costs ? { of: costs.costOf, change: (ids, cost) => costs.setCosts(ids, cost) } : null),
+    [costs],
+  );
+
   const draftIssue = locationIssue ?? (!simpleMode
     ? matrixIssue
-    : dirty || !productId ? getSimpleSkuIssue(shownSimpleSku, simpleCommitted, Boolean(productId)) : null);
+    : dirty || !productId ? getSimpleSkuIssue(shownSimpleSku, simpleCommitted, Boolean(productId)) : null) ?? costIssue;
   const lineFor = (issue: DraftIssue) => {
     const variant = issue.variantId ? variants.find((row) => row.id === issue.variantId) : undefined;
-    return variant ? `${nameOf(variant)}: ${issue.message}` : simpleMode && issue.field ? `${t("inventory")}: ${issue.message}` : issue.message;
+    if (variant) return `${nameOf(variant)}: ${issue.message}`;
+    if (simpleMode && issue.field) return `${t(issue.field === "cost" ? "costPerItem" : "inventory")}: ${issue.message}`;
+    return issue.message;
   };
   const draftLine = draftIssue ? lineFor(draftIssue) : null;
   // Problems show at their field once the merchant changed something, or after Save was refused.
-  const shownIssue = serverIssue ?? (dirty || revealed ? draftIssue : null);
+  const shownIssue = serverIssue ?? (dirty || costsDirty || revealed ? draftIssue : null);
   const issueFor: IssueFor = (variantId, field) =>
     shownIssue && shownIssue.field === field && shownIssue.variantId === variantId ? shownIssue.message : undefined;
 
@@ -303,7 +342,8 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
   }, [draftIssue, fulfilmentMode, kindRules, onDraftChange, options, simpleMode, shownSimpleSku, shownVariants]);
 
   React.useEffect(() => onDraftIssueChange?.(draftLine), [draftLine, onDraftIssueChange]);
-  React.useEffect(() => onDirtyChange?.(dirty), [dirty, onDirtyChange]);
+  // Typed costs count as a variant change: the page's Save sends them after the variants.
+  React.useEffect(() => onDirtyChange?.(dirty || costsDirty), [costsDirty, dirty, onDirtyChange]);
   const prices = options.length > 0 ? variants.map((variant) => variant.price).filter(Number.isFinite) : [];
   const minPrice = prices.length > 0 ? Math.min(...prices) : null;
   const maxPrice = prices.length > 0 ? Math.max(...prices) : null;
@@ -522,7 +562,7 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
           queryKey: queryKeys.products.variants(productId!),
         }),
       ]);
-      onSaved?.();
+      // `onSaved` (the page reloads the variants) runs once the costs are sent too: see `save`.
     },
   });
 
@@ -548,29 +588,41 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
   React.useEffect(() => onSavingChange?.(mutation.isPending), [mutation.isPending, onSavingChange]);
   React.useImperativeHandle(ref, () => ({
     save: async (revisionOverride) => {
-      if (!productId || !dirty || mutation.isPending) return;
+      const sendCosts = costs !== null && costsDirty;
+      if (!productId || (!dirty && !sendCosts) || mutation.isPending) return;
       if (draftIssue) {
         reveal();
         throw new SaveNotCompleted(lineFor(draftIssue));
       }
+      let variantsSaved = false;
       try {
-        sentDraft.current = draft;
-        await mutation.mutateAsync(revisionOverride);
-      } catch (error) {
-        const conflict = readProductRevisionConflict(error);
-        if (conflict) {
-          onRevisionConflict?.(conflict);
-          throw new SaveNotCompleted(t("changedElsewhere"));
+        if (dirty) {
+          try {
+            sentDraft.current = draft;
+            await mutation.mutateAsync(revisionOverride);
+            variantsSaved = true;
+          } catch (error) {
+            const conflict = readProductRevisionConflict(error);
+            if (conflict) {
+              onRevisionConflict?.(conflict);
+              throw new SaveNotCompleted(t("changedElsewhere"));
+            }
+            const issue = readSkuTaken(error) ?? readApiFieldIssues(error)?.[0];
+            const line = issue ? showServerIssue(issue.path, issue.message) : null;
+            throw new SaveNotCompleted(line ?? getServerFnError(error, t("saveFailed")));
+          }
         }
-        const issue = readSkuTaken(error) ?? readApiFieldIssues(error)?.[0];
-        const line = issue ? showServerIssue(issue.path, issue.message) : null;
-        throw new SaveNotCompleted(line ?? getServerFnError(error, t("saveFailed")));
+        // Costs go after the variants, so new variants have their ids; a refused cost keeps its edit.
+        if (costs && sendCosts) await costs.save(productId);
+      } finally {
+        // The page reloads the variants after the costs, so it never shows a cost from before them.
+        if (variantsSaved) onSaved?.();
       }
     },
     reveal,
     showServerIssue,
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [dirty, draft, draftIssue, mutation, productId, reveal, showServerIssue]);
+  }), [costs, costsDirty, dirty, draft, draftIssue, mutation, onSaved, productId, reveal, showServerIssue]);
 
   return (
     <section data-option-matrix data-variant-editor tabIndex={-1} className="space-y-3 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
@@ -597,6 +649,7 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
                     value={simpleSku.stock - simpleElsewhere}
                     committed={simpleCommitted}
                     elsewhere={defaultSku ? stockElsewhere.get(defaultSku.id) : undefined}
+                    incoming={defaultSku ? incomingByVariant.get(defaultSku.id) : undefined}
                     onChange={(stock) => {
                       updateSimple({ stock: Number.isFinite(stock) ? stock + simpleElsewhere : stock });
                       setSimpleStockEdited(true);
@@ -732,6 +785,8 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
           fulfilmentColumn={fulfilmentMode === "mixed"}
           quantityLabel={quantityLabel}
           stockElsewhere={stockElsewhere}
+          incoming={incomingByVariant}
+          costs={costsShown ? variantCosts : null}
         />
       ) : options.length > 0 && !combinationsPending ? (
         <p className="text-body text-muted-foreground">{t("addOptionValues")}</p>

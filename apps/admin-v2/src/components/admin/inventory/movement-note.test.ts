@@ -18,6 +18,21 @@ describe("describeMovementNote", () => {
     expect(row("Stocktake: Initial product stock")).toEqual({ labels: ["sourceProductCreated"], note: null });
   });
 
+  it("names the purchase order or transfer a receipt or shipment was booked on", () => {
+    expect(row("Received on purchase order PO1001")).toEqual({
+      labels: [], note: null, document: { label: "notePurchaseOrder", number: "PO1001" },
+    });
+    expect(row("Shipped on transfer T1001")).toEqual({
+      labels: [], note: null, document: { label: "noteTransfer", number: "T1001" },
+    });
+    expect(row("Received on transfer T1002")).toEqual({
+      labels: [], note: null, document: { label: "noteTransfer", number: "T1002" },
+    });
+    expect(row("Returned to origin: transfer T1003 cancelled")).toEqual({
+      labels: ["sourceTransferCancelled"], note: null, document: { label: "noteTransfer", number: "T1003" },
+    });
+  });
+
   it("hides server sentences about orders and system work", () => {
     expect(row("Stock deducted on order status transition for order JMT1AZTX", { orderId: "JMT1AZTX", actorType: "system" }).note).toBeNull();
     expect(row("Deducted stock restored")).toEqual({ labels: [], note: null });

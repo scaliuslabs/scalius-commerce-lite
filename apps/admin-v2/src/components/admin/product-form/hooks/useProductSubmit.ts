@@ -22,6 +22,7 @@ import {
 } from "~/lib/admin-api-error";
 import { SaveNotCompleted, copyValues, rebaseForm } from "../../shared/use-form-save-bar";
 import type { ProductCreateComposition } from "../variants/option-matrix-editor-model";
+import { useSkuCosts } from "../sku-costs";
 import { queryKeys } from "~/lib/query-keys";
 import { translate } from "~/i18n";
 import { productMessages, type ProductMessageKey } from "~/i18n/products";
@@ -90,6 +91,8 @@ export function useProductSubmit({
 }: UseProductSubmitOptions) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  // A new product's typed costs (the page's cost store; edits save costs with the variants).
+  const costs = useSkuCosts();
   const [mediaRemovalConflict, setMediaRemovalConflict] = useState<ProductMediaSkuReferenceConflict | null>(null);
   const [pendingValues, setPendingValues] = useState<ProductFormValues | null>(null);
   // The form as the save sent it: it becomes the saved values, and edits typed meanwhile stay unsaved.
@@ -118,7 +121,17 @@ export function useProductSubmit({
       }
       // Only an address the merchant typed is sent; otherwise the server makes one from the title.
       const slug = values.slugEdited && values.slug ? values.slug : undefined;
-      return apiData(postApiV1AdminProducts({ body: { ...formattedValues, slug, ...createComposition } }));
+      const created = await apiData(postApiV1AdminProducts({ body: { ...formattedValues, slug, ...createComposition } }));
+      // Costs per item go once the SKUs exist. The product is saved either way, so a failed
+      // cost save must not fail this one (a second Save would add the product twice).
+      if (costs) {
+        try {
+          await costs.save(String(created.id));
+        } catch {
+          toast.error(t("costsNotSavedAfterCreate"), { duration: 10_000 });
+        }
+      }
+      return created;
     },
     onSuccess: async (result, { values }) => {
       setMediaRemovalConflict(null);

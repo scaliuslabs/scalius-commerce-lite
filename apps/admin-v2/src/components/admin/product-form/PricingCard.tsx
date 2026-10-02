@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { useWatch, type UseFormReturn } from "react-hook-form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -12,10 +12,16 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Button } from "@/components/ui/button";
 import { NumberInput } from "@/components/ui/number-input";
 import { MoneyInput } from "@/components/admin/shared/MoneyInput";
+import { Label } from "@/components/ui/label";
+import { CostInput, formatMargin } from "@/components/admin/inventory/cost-fields";
 import { useCurrency } from "@/hooks/use-currency";
+import { costMargin, costProblem } from "@/lib/api-query-options/inventory-costs";
+import { getDecimalPlaces } from "@scalius/shared/currency";
+import { cn } from "@scalius/shared/utils";
 import { useMessages } from "~/i18n";
 import { productMessages } from "~/i18n/products";
 import { useProductKindRules } from "./product-kind-rules";
+import { useSkuCosts, type SkuCostStore } from "./sku-costs";
 import type { ProductFormValues } from "./types";
 import type { VariantPriceRange } from "./variants/option-matrix-editor-model";
 
@@ -29,8 +35,9 @@ export function PricingCard({ form, variantPrices }: {
   variantPrices: VariantPriceRange | null;
 }) {
   const t = useMessages(productMessages);
-  const { showDiscount } = useProductKindRules();
+  const { showDiscount, giftCard } = useProductKindRules();
   const { symbol, code, fmt, salePrice } = useCurrency();
+  const costs = useSkuCosts();
   const [discountShown, setDiscountShown] = useState(false);
   const [price, discountType, discountPercentage, discountAmount] = useWatch({
     control: form.control,
@@ -83,6 +90,12 @@ export function PricingCard({ form, variantPrices }: {
             </FormItem>
           )}
         />}
+
+        {/* One cost for a product without options; with options each variant has its own.
+            A gift card is worth its price, so it has no cost per item. */}
+        {costs && !variantPrices && !giftCard ? (
+          <ProductCostFields costs={costs} customerPays={Number.isFinite(price) ? sale ?? price ?? null : null} />
+        ) : null}
 
         {/* A gift card is worth its price: no discount (the product kind rules). */}
         {!showDiscount ? null : discountOpen ? (
@@ -162,5 +175,51 @@ export function PricingCard({ form, variantPrices }: {
         )}
       </CardContent>
     </Card>
+  );
+}
+
+/**
+ * Shopify's cost row: cost per item, then the profit and margin of what the
+ * customer pays (after the product discount). Costs keep paisa; customers
+ * never see them.
+ */
+function ProductCostFields({ costs, customerPays }: { costs: SkuCostStore; customerPays: number | null }) {
+  const t = useMessages(productMessages);
+  const { symbol, code, fmt } = useCurrency();
+  const id = useId();
+  const cost = costs.costOf(costs.simpleKey);
+  const problem = costProblem(cost);
+  const result = costMargin(customerPays, cost, getDecimalPlaces(code));
+  return (
+    <div className="grid gap-4 border-t pt-4 sm:grid-cols-3">
+      <div className="space-y-2">
+        <Label htmlFor={id}>{t("costPerItem")}</Label>
+        <CostInput
+          id={id}
+          symbol={symbol}
+          value={cost}
+          aria-invalid={problem ? true : undefined}
+          aria-describedby={`${id}-help`}
+          onValueChange={(next) => costs.setCosts([costs.simpleKey], next)}
+        />
+        <p id={`${id}-help`} className={cn("text-body", problem ? "text-destructive" : "text-muted-foreground")}>
+          {problem ? t(problem === "costInvalid" ? "issueCostInvalid" : "issueCostTooLarge") : t("costHelp")}
+        </p>
+      </div>
+      <dl className="grid grid-cols-2 gap-4 sm:col-span-2">
+        <div className="space-y-2">
+          <dt className="text-body font-medium">{t("profit")}</dt>
+          <dd className={cn("flex h-11 items-center text-body tabular-nums sm:h-9", result && result.profit < 0 && "text-destructive")}>
+            {result ? fmt(result.profit) : "—"}
+          </dd>
+        </div>
+        <div className="space-y-2">
+          <dt className="text-body font-medium">{t("margin")}</dt>
+          <dd className={cn("flex h-11 items-center text-body tabular-nums sm:h-9", result?.margin != null && result.margin < 0 && "text-destructive")}>
+            {formatMargin(result?.margin)}
+          </dd>
+        </div>
+      </dl>
+    </div>
   );
 }

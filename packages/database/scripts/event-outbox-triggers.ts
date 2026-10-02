@@ -151,6 +151,45 @@ export const CUSTOMER_UPDATED_COLUMNS = [
 
 const INCOMPLETE = "incomplete";
 
+/**
+ * Created, changed (its revision advanced) and deleted (a draft) events of a
+ * revisioned inventory document: facts `{ <idFact>, previousStatus, status,
+ * revision }`, with status "deleted" when the row is gone.
+ */
+function documentRevisionEvents(
+  table: "purchase_orders" | "inventory_transfers",
+  topic: Extract<EventTopic, "inventory.purchase_order_updated" | "inventory.transfer_updated">,
+  idFact: string,
+): EventTriggerSpec[] {
+  return [
+    {
+      name: `${table}_created`,
+      table,
+      event: "insert",
+      topic,
+      resourceId: NEW("id"),
+      facts: [[idFact, NEW("id")], ["previousStatus", NULL], ["status", NEW("status")], ["revision", NEW("revision")]],
+    },
+    {
+      name: `${table}_changed`,
+      table,
+      event: "update",
+      when: changed("revision"),
+      topic,
+      resourceId: NEW("id"),
+      facts: [[idFact, NEW("id")], ["previousStatus", OLD("status")], ["status", NEW("status")], ["revision", NEW("revision")]],
+    },
+    {
+      name: `${table}_deleted`,
+      table,
+      event: "delete",
+      topic,
+      resourceId: OLD("id"),
+      facts: [[idFact, OLD("id")], ["previousStatus", OLD("status")], ["status", text("deleted")], ["revision", OLD("revision")]],
+    },
+  ];
+}
+
 const orderCreatedFacts = [
   ["orderId", NEW("id")],
   ["status", NEW("status")],
@@ -403,6 +442,10 @@ export const EVENT_TRIGGER_SPECS: readonly EventTriggerSpec[] = [
       ["movementType", text("reversal")],
     ],
   },
+  // ── purchase orders and transfers (0109) ──────────────────────────────
+  // Every write advances `revision` exactly once, so one event per write.
+  ...documentRevisionEvents("purchase_orders", "inventory.purchase_order_updated", "purchaseOrderId"),
+  ...documentRevisionEvents("inventory_transfers", "inventory.transfer_updated", "transferId"),
   // ── customers ─────────────────────────────────────────────────────────
   {
     name: "customers_created",
@@ -461,6 +504,12 @@ export const EVENT_TRIGGER_SPECS: readonly EventTriggerSpec[] = [
 export const EVENT_TRIGGER_MIGRATIONS: Readonly<Record<string, string>> = {
   customer_marketing_consents_created: "0108_customer_marketing",
   customer_marketing_consents_changed: "0108_customer_marketing",
+  purchase_orders_created: "0109_inventory_purchasing",
+  purchase_orders_changed: "0109_inventory_purchasing",
+  purchase_orders_deleted: "0109_inventory_purchasing",
+  inventory_transfers_created: "0109_inventory_purchasing",
+  inventory_transfers_changed: "0109_inventory_purchasing",
+  inventory_transfers_deleted: "0109_inventory_purchasing",
 };
 
 /** The migration file name (without `.sql`) that installs a trigger spec. */

@@ -8,12 +8,17 @@ export type FlashState =
       type: "success";
       action: string;
       productName: string;
-      oldStock: number;
-      newStock: number;
+      /** A stock change ("Stock: 4 → 5"); receiving says `detail` instead. */
+      oldStock?: number;
+      newStock?: number;
+      detail?: string;
     }
   | {
       type: "error";
       barcode: string;
+      /** Why the scan didn't count ("Not on this purchase order"); "Not found" by default. */
+      title?: string;
+      detail?: string;
     };
 
 /** Full-screen confirmation shown for half a second after each scan. */
@@ -36,16 +41,20 @@ export function ScanFlash({ flash }: { flash: FlashState }) {
         )}
       >
         <Icon className="mx-auto mb-2 size-16" />
-        {success ? (
+        {flash.type === "success" ? (
           <>
             <p className="text-heading-lg font-semibold">{flash.action}</p>
             <p className="text-body">{flash.productName}</p>
-            <p className="text-body">{t("stockChange", { from: flash.oldStock, to: flash.newStock })}</p>
+            {flash.detail ? (
+              <p className="text-body">{flash.detail}</p>
+            ) : flash.oldStock !== undefined && flash.newStock !== undefined ? (
+              <p className="text-body">{t("stockChange", { from: flash.oldStock, to: flash.newStock })}</p>
+            ) : null}
           </>
         ) : (
           <>
-            <p className="text-heading-lg font-semibold">{t("notFound")}</p>
-            <p className="text-body">{t("barcodeValue", { code: flash.barcode })}</p>
+            <p className="text-heading-lg font-semibold">{flash.title ?? t("notFound")}</p>
+            <p className="text-body">{flash.detail ?? t("barcodeValue", { code: flash.barcode })}</p>
           </>
         )}
       </div>

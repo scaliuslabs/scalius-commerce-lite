@@ -195,6 +195,18 @@ these indexes without local and remote D1 `EXPLAIN QUERY PLAN` evidence.
 |-------|---------|
 | `inventoryMovements` | Stock movement audit log. Ledger-v2 rows carry pool/generation, CAS version edges, and before/after/delta values for physical, reserved, and preorder counters; legacy rows remain version-1 history |
 | `productLowStockAlerts` | Low stock alert tracking. `variantId` (unique), alert status |
+| `inventoryCommands` | Operation-key replay ledger of multi-SKU stock commands (PO receipts, transfer ship/receive/cancel); one per subject revision; immutable (0109) |
+| `inventoryTransfers` / `inventoryTransferLines` / `inventoryTransferMovements` | Transfers between locations: header, lines (shipped − received − returned = in transit) and the movement each step wrote (0109) |
+
+### `purchasing.ts` -- Purchasing (0109)
+
+| Table | Purpose |
+|-------|---------|
+| `suppliers` | Supplier records (name, contact, phone, email, notes); archived, never deleted |
+| `purchaseOrders` / `purchaseOrderLines` | Purchase orders (draft → ordered → partially received → received / cancelled; lines locked once ordered, received only moves up) |
+| `purchaseOrderReceiptLines` | One received quantity per PO line and movement: unit cost and SKU cost before/after (the cost history); immutable |
+
+`product_variants.cost_minor` is the SKU's unit cost (staff-only, DVC noise) and `order_items.unit_cost_minor` its trigger-written snapshot when a line is created.
 
 ### `delivery.ts` -- Delivery Domain
 

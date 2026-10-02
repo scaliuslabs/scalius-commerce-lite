@@ -320,6 +320,8 @@ describe("per-location reads", () => {
                 { variantId: "var_a", locationId: "loc_default", onHand: 5 },
                 { variantId: "var_a", locationId: branch.id, onHand: 3 },
             ],
+            // Nothing is on order or in transit.
+            incoming: [],
         });
         // A location the SKU holds nothing at is left out.
         expect((await getProductInventoryLevels(db, "prod_var_b")).levels).toEqual([]);

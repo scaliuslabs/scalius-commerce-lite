@@ -1088,8 +1088,8 @@ export const PERMISSION_METADATA: Record<
   },
   [PERMISSIONS.DASHBOARD_ANALYTICS]: {
     name: PERMISSIONS.DASHBOARD_ANALYTICS,
-    displayName: "View Sales Numbers",
-    description: "See sales and revenue totals on the home page",
+    displayName: "View Analytics",
+    description: "See sales numbers on Home, the Analytics overview and reports",
     resource: "dashboard",
     action: "analytics",
     category: "Dashboard",
@@ -1145,7 +1145,7 @@ const PERMISSION_NAMES = new Set<string>(Object.values(PERMISSIONS));
 
 /**
  * What a permission needs to be useful: its area's view permission ("Edit
- * products" needs "View products"; "View sales numbers" needs the home page),
+ * products" needs "View products"; "View analytics" needs the home page),
  * and delete before delete-forever. Roles are saved closed under this, and a
  * person's effective access drops anything whose prerequisite is missing.
  */

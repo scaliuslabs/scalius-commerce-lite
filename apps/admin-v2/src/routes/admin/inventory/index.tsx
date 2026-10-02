@@ -5,6 +5,7 @@ import { IndexTabs } from "~/components/admin/resource/IndexTabs";
 import { PageHeader } from "~/components/admin/resource/PageHeader";
 import { AlertsTab } from "~/components/admin/inventory/AlertsTab";
 import { HistoryTab } from "~/components/admin/inventory/HistoryTab";
+import { ValuationSummary } from "~/components/admin/inventory/ValuationSummary";
 import { VariantsTab } from "~/components/admin/inventory/VariantsTab";
 import {
   alertsQuery,
@@ -16,6 +17,7 @@ import {
 } from "~/components/admin/inventory/inventory-search";
 import type { InventoryWorkspaceSection } from "~/components/admin/inventory-workspace";
 import { inventoryQueryOptions } from "~/lib/api-query-options/inventory";
+import { inventoryValuationQueryOptions } from "~/lib/api-query-options/inventory-costs";
 import { adoptListSearch, useListSearch } from "~/lib/list-search";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { useMessages } from "~/i18n";
@@ -34,6 +36,7 @@ export const Route = createFileRoute("/admin/inventory/")({
       ? variantsQuery(filters)
       : filters.section === "alerts" ? alertsQuery(filters) : movementsQuery(filters);
     void queryClient.prefetchQuery(inventoryQueryOptions(query));
+    void queryClient.prefetchQuery(inventoryValuationQueryOptions());
   },
   head: () => pageHead("inventory"),
   errorComponent: RouteErrorComponent,
@@ -98,6 +101,7 @@ function InventoryPage() {
           </Button>
         )}
       />
+      <ValuationSummary />
       <div className="overflow-clip rounded-xl bg-card shadow-card">
         <IndexTabs
           label={t("views")}

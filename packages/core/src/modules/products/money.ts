@@ -54,14 +54,20 @@ export function storeDecimalToMinorSql(amount: number): SQL<number> {
     return sql<number>`CAST(round(CAST(${amount} AS DOUBLE PRECISION) * ${scale}) AS INTEGER)`;
 }
 
-/** Replaces stored catalog money columns with the decimal fields of the HTTP contract. */
-export function presentCatalogPrice<T extends CatalogPriceMinor>(row: T, decimalPlaces: number) {
-    const { priceMinor, discountBps, discountAmountMinor, ...rest } = row;
+/**
+ * Replaces stored catalog money columns with the decimal fields of the HTTP
+ * contract. A staff read of a whole SKU row also carries its unit cost
+ * (`costMinor` → `cost`, migration 0109); buyer reads project explicit
+ * columns without it, so they never see one.
+ */
+export function presentCatalogPrice<T extends CatalogPriceMinor & { costMinor?: number | null }>(row: T, decimalPlaces: number) {
+    const { priceMinor, discountBps, discountAmountMinor, costMinor, ...rest } = row;
     return {
         ...rest,
         price: fromMinor(priceMinor, decimalPlaces),
         discountPercentage: bpsToPercent(discountBps ?? 0),
         discountAmount: fromMinor(discountAmountMinor ?? 0, decimalPlaces),
+        ...(costMinor === undefined ? {} : { cost: costMinor === null ? null : fromMinor(costMinor, decimalPlaces) }),
     };
 }
 

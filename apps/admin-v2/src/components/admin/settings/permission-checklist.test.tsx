@@ -49,7 +49,7 @@ describe("role permission checklist", () => {
     expect(current).toEqual(new Set([PERMISSIONS.DASHBOARD_VIEW, PERMISSIONS.DASHBOARD_ANALYTICS]));
 
     ui.open("Home");
-    ui.click(ui.box("View sales numbers on home"));
+    ui.click(ui.box("View analytics, reports and sales numbers on home"));
     expect(ui.box("All Home permissions").getAttribute("aria-checked")).toBe("mixed");
     ui.unmount();
   });

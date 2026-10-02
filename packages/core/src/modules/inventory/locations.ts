@@ -12,13 +12,16 @@ import {
     INVENTORY_LOCATION_KINDS,
     inventoryLevels,
     inventoryLocations,
+    inventoryTransfers,
     orderFulfillments,
     orders,
     productVariants,
+    purchaseOrders,
     type InventoryLocationKind,
 } from "@scalius/database/schema";
 import { AppError, ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
 import { z } from "zod";
+import { readIncomingStock, type IncomingStockRow } from "./inventory-insights";
 
 /** RAISE message of the trigger that refuses a stock movement without an active location. */
 export const INVENTORY_LOCATION_REQUIRED = "INVENTORY_LOCATION_REQUIRED";
@@ -449,6 +452,7 @@ export async function archiveInventoryLocation(db: Database, id: string): Promis
             WHERE ${inventoryLevels.locationId} = ${id} AND ${inventoryLevels.onHand} > 0
         )`,
         sql`NOT ${openOrdersAtLocation(id)}`,
+        sql`NOT ${openStockDocumentsAtLocation(id)}`,
     )).returning({ id: inventoryLocations.id });
     if (archived.length > 0) return getInventoryLocationRecord(db, id);
 
@@ -460,7 +464,29 @@ export async function archiveInventoryLocation(db: Database, id: string): Promis
     if (location.onHand > 0) {
         throw new ConflictError(`${location.name} still holds ${location.onHand} units. Move or adjust that stock to zero first.`);
     }
+    const documents = await db.select({ open: sql<number>`CASE WHEN ${openStockDocumentsAtLocation(id)} THEN 1 ELSE 0 END` })
+        .from(inventoryLocations).where(eq(inventoryLocations.id, id)).get();
+    if (documents?.open) {
+        throw new ConflictError(`Purchase orders or transfers still arrive at or leave from ${location.name}. Receive or cancel them first.`);
+    }
     throw new ConflictError(`Open orders are set to ship from ${location.name}. Change their location first.`);
+}
+
+/**
+ * Purchase orders still expected at a location, and transfers on their way
+ * to or from it (in transit units return to the origin on cancel, so it
+ * must stay active).
+ */
+function openStockDocumentsAtLocation(locationId: string): SQL {
+    return sql`(EXISTS (
+        SELECT 1 FROM ${purchaseOrders}
+        WHERE ${purchaseOrders.destinationLocationId} = ${locationId}
+          AND ${purchaseOrders.status} IN ('ordered', 'partially_received')
+    ) OR EXISTS (
+        SELECT 1 FROM ${inventoryTransfers}
+        WHERE (${inventoryTransfers.originLocationId} = ${locationId} OR ${inventoryTransfers.destinationLocationId} = ${locationId})
+          AND ${inventoryTransfers.status} IN ('in_transit', 'partially_received')
+    ))`;
 }
 
 export async function unarchiveInventoryLocation(db: Database, id: string): Promise<InventoryLocationRecord> {
@@ -562,6 +588,12 @@ export interface ProductInventoryLevels {
     productId: string;
     /** Every live SKU's units at each location holding some (zero levels are omitted). */
     levels: Array<{ variantId: string; locationId: string; onHand: number }>;
+    /**
+     * Units coming to each location: open purchase order quantities and
+     * transfers in transit (rows with nothing incoming are omitted). Not on
+     * hand, and not in the SKU's stock.
+     */
+    incoming: IncomingStockRow[];
 }
 
 /**
@@ -592,7 +624,12 @@ export async function getProductInventoryLevels(db: Database, productId: string)
             asc(inventoryLevels.locationId),
         )
         .all();
-    return { productId, levels: rows.map((row) => ({ ...row, onHand: Number(row.onHand) })) };
+    const variantIds = await db.select({ id: productVariants.id })
+        .from(productVariants)
+        .where(and(eq(productVariants.productId, productId), isNull(productVariants.deletedAt)))
+        .all();
+    const incoming = await readIncomingStock(db, variantIds.map((row) => row.id));
+    return { productId, levels: rows.map((row) => ({ ...row, onHand: Number(row.onHand) })), incoming };
 }
 
 /** A SKU's units held anywhere but the default location, largest first. */

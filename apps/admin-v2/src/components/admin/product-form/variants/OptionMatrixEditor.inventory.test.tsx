@@ -367,10 +367,15 @@ describe("OptionMatrixEditor inventory for products without options", () => {
       expect(rows[0]).toMatchObject({ id: "var_s", stock: 3, expectedStockVersion: 4 });
     });
 
-    it("keeps a single-location store's quantity field as it was", async () => {
+    it("keeps a single-location store's quantity field as it was, with the units on their way", async () => {
       mocks.getApiV1AdminInventoryLocations.mockResolvedValue({
         locations: [{ id: "loc_default", name: "Main location", isDefault: true, status: "active" }],
       });
+      mocks.getApiV1AdminInventoryLevels.mockResolvedValue({
+        productId: "prod_1",
+        levels: [{ variantId: "var_default_prod_1", locationId: "loc_default", onHand: 5 }],
+        incoming: [{ variantId: "var_default_prod_1", locationId: "loc_default", purchaseOrders: 3, transfers: 2 }],
+      } as never);
       await render(
         <OptionMatrixEditor
           productId="prod_1"
@@ -383,9 +388,14 @@ describe("OptionMatrixEditor inventory for products without options", () => {
       );
       await settle();
 
+      await settle();
+
       expect(quantityInput()?.value).toBe("5");
       expect(host.querySelector(`input[aria-label="${atMain}"]`)).toBeNull();
-      expect(mocks.getApiV1AdminInventoryLevels).not.toHaveBeenCalled();
+      // One read for the units on their way (open purchase orders, transfers in transit).
+      expect(mocks.getApiV1AdminInventoryLevels).toHaveBeenCalledWith({ query: { productId: "prod_1" } });
+      const incoming = Array.from(host.querySelectorAll("p")).find((line) => line.textContent === translate(productMessages, "incomingCount", { count: 5 }));
+      expect(incoming?.getAttribute("title")).toBe(translate(productMessages, "incomingDetail", { orders: 3, transfers: 2 }));
     });
   });
 });

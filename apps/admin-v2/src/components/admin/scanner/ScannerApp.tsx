@@ -15,6 +15,7 @@ import { ManualSheet } from "./ManualSheet";
 import { ScanFlash, type FlashState } from "./ScanFlash";
 import { ScanHistory } from "./ScanHistory";
 import { LastScanBar } from "./LastScanBar";
+import { ReceiveMode, useReceiveSession } from "./ReceiveMode";
 import {
   getApiV1AdminInventoryLocations,
   getApiV1AdminInventoryScannerLookup,
@@ -37,10 +38,16 @@ import {
   type ScannerLocation,
 } from "./scanner-location";
 
-export type ScannerMode = "quick-receive" | "quick-deduct" | "manual";
+/** "receive" books a purchase order or transfer by scan; the others change stock per scan. */
+export type ScannerMode = "quick-receive" | "quick-deduct" | "manual" | "receive";
 
-const MODES: readonly ScannerMode[] = ["quick-receive", "quick-deduct", "manual"];
-const MODE_LABEL = { "quick-receive": "modeReceive", "quick-deduct": "modeDeduct", manual: "modeManual" } as const;
+const MODES: readonly ScannerMode[] = ["quick-receive", "quick-deduct", "manual", "receive"];
+const MODE_LABEL = {
+  "quick-receive": "modeReceive",
+  "quick-deduct": "modeDeduct",
+  manual: "modeManual",
+  receive: "modeReceiveDocument",
+} as const;
 
 /** Copy used inside callbacks (reads the current dashboard language). */
 const tr = (key: keyof typeof scannerMessages.en, vars?: Record<string, string | number>) =>
@@ -84,6 +91,11 @@ export interface ScanResult {
   /** Where the change happened; an undo reverses it there. */
   location?: ScanLocation;
   undoError?: string;
+  /**
+   * A purchase order or transfer receipt (Receive mode): booked on its
+   * document, so it is never undone here; `title` names the supplier or route.
+   */
+  receipt?: { title: string | null };
 }
 
 interface ScannerAppProps {
@@ -304,6 +316,25 @@ export function ScannerApp({ token }: ScannerAppProps) {
     setFlash(state);
     setTimeout(() => setFlash(null), 500);
   }, []);
+
+  // ---- Receive mode (purchase orders and transfers) ----
+  const receiveFeedback = useMemo(() => ({ flash: showFlash, beep, haptic }), [showFlash, beep, haptic]);
+  const recordReceipt = useCallback((receipt: { number: string; title: string | null; units: number }) => {
+    const entry: ScanResult = {
+      id: nextId(),
+      timestamp: Date.now(),
+      barcode: receipt.number,
+      product: { name: tr("receivedEntry", { number: receipt.number }), variantId: "", sku: "" },
+      action: "add",
+      quantity: receipt.units,
+      oldStock: 0,
+      newStock: 0,
+      reason: "receipt",
+      receipt: { title: receipt.title },
+    };
+    setHistory((prev) => [entry, ...prev].slice(0, 50));
+  }, []);
+  const receive = useReceiveSession({ locationId: location?.id ?? null, feedback: receiveFeedback, onReceived: recordReceipt });
 
   // ---- Barcode lookup ----
   const lookupBarcode = useCallback(
@@ -687,7 +718,8 @@ export function ScannerApp({ token }: ScannerAppProps) {
         ))}
       </div>
 
-      {location && locations ? (
+      {/* A receipt books at its document's destination: the picker is only needed to choose one. */}
+      {location && locations && !(mode === "receive" && receive.receiving) ? (
         <div className="shrink-0 bg-card px-3 pb-2">
           <SearchableSelect
             triggerClassName="w-full"
@@ -709,11 +741,17 @@ export function ScannerApp({ token }: ScannerAppProps) {
         </div>
       ) : null}
 
-      <div className="relative min-h-0 flex-1">
-        <BarcodeScanner onScan={handleScan} isActive={isCameraActive} showTorchButton />
-      </div>
+      {mode === "receive" ? (
+        <ReceiveMode session={receive} showDestination={!location && (locations?.length ?? 0) > 1} />
+      ) : (
+        <>
+          <div className="relative min-h-0 flex-1">
+            <BarcodeScanner onScan={handleScan} isActive={isCameraActive} showTorchButton />
+          </div>
 
-      <LastScanBar result={lastResult} mode={mode} />
+          <LastScanBar result={lastResult} mode={mode} />
+        </>
+      )}
 
       {manualProduct ? (
         <ManualSheet

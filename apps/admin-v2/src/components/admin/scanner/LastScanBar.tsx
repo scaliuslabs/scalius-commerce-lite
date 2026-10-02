@@ -65,6 +65,8 @@ export function LastScanBar({ result, mode }: { result: ScanResult | null; mode:
           </div>
           {isError ? (
             <p className="text-body text-destructive">{result.reason}</p>
+          ) : result.receipt ? (
+            result.receipt.title ? <p className="truncate text-body text-muted-foreground">{result.receipt.title}</p> : null
           ) : (
             <div className="flex items-center gap-1 text-body text-muted-foreground">
               <span>{formatNumber(result.oldStock)}</span>

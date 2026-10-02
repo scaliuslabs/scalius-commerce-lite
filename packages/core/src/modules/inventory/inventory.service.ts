@@ -19,6 +19,7 @@ import { variantOptionLabelSql } from "../products/option-model";
 import { adjustInventorySchema } from "./inventory.validation";
 import { executeInventoryOperation } from "./inventory-operations";
 import { locationOnHandSql } from "./locations";
+import { incomingUnitsSql } from "./inventory-insights";
 
 const ALLOWED_INVENTORY_SECTIONS: ReadonlySet<string> = new Set(["variants", "movements", "alerts"]);
 const ALLOWED_INVENTORY_STATUSES: ReadonlySet<string> = new Set(["all", "low", "out", "reserved"]);
@@ -34,6 +35,9 @@ const ALLOWED_MOVEMENT_TYPES: ReadonlySet<string> = new Set([
     "restored",
     "preorder_reserved",
     "preorder_deducted",
+    "received",
+    "transfer_out",
+    "transfer_in",
 ]);
 const MAX_MOVEMENT_CURSOR_LENGTH = 512;
 export const INVENTORY_LABEL_VARIANT_LIMIT = 150;
@@ -458,6 +462,9 @@ export async function getInventoryOverview(db: Database, params: {
                 lowStockThreshold: productVariants.lowStockThreshold,
                 version: productVariants.version,
                 locationOnHand: locationId ? locationOnHandSql(locationId) : sql<number | null>`NULL`,
+                // Open purchase order units and transfers in transit (at the location filter, if any).
+                incoming: incomingUnitsSql(sql.raw('"product_variants"."id"'), locationId),
+                costMinor: productVariants.costMinor,
                 storeCurrencyCode: storeCurrencyCodeSql(),
             })
             .from(productVariants)
@@ -509,9 +516,11 @@ export async function getInventoryOverview(db: Database, params: {
         };
 
         return {
-            variants: variantRows.map(({ priceMinor, storeCurrencyCode, locationOnHand, ...variant }) => ({
+            variants: variantRows.map(({ priceMinor, costMinor, storeCurrencyCode, locationOnHand, incoming, ...variant }) => ({
                 ...variant,
                 price: fromMinor(priceMinor, storeDecimalPlacesFromCode(storeCurrencyCode)),
+                cost: costMinor == null ? null : fromMinor(costMinor, storeDecimalPlacesFromCode(storeCurrencyCode)),
+                incoming: Number(incoming ?? 0),
                 // On-hand at the filtered location; null without a location filter.
                 locationOnHand: locationId ? Number(locationOnHand ?? 0) : null,
             })),

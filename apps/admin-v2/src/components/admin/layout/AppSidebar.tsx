@@ -11,7 +11,7 @@ import { useStorefrontUrl } from "~/hooks/use-storefront-url";
 import { withDashboardBasePath } from "~/lib/dashboard-base-path";
 import { useMessages } from "~/i18n";
 import { shellMessages } from "~/i18n/shell";
-import { SETTINGS_ITEM, isSectionActive, matchesPath, type VisibleNavItem } from "./AdminNav";
+import { SETTINGS_ITEM, activeNavChild, isSectionActive, matchesPath, type VisibleNavItem } from "./AdminNav";
 import { NAV_ICON_BUTTON, NAV_ROW } from "./nav-button";
 import { ariaKeys, comboCaps, SHORTCUTS } from "./shortcuts";
 import { ShellLink } from "./ShellLink";
@@ -201,7 +201,7 @@ function MainPanel({ nav, showSettings, onClose }: { nav: VisibleNavItem[]; show
 
   const renderItem = (item: VisibleNavItem) => {
     const open = isSectionActive(path, item);
-    const activeChild = item.children.find((child) => matchesPath(path, child.to));
+    const activeChild = activeNavChild(path, item.children);
     return (
       <li key={item.key} className="group/item relative">
         <ShellLink

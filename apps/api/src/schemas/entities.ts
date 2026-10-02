@@ -115,6 +115,8 @@ export const productVariantSchema = z.object({
   weight: z.number().nullable(),
   sku: z.string(),
   price: z.number(),
+  /** Unit cost ("cost per item") in major units; null when not set. Staff-only (0109). */
+  cost: z.number().nullable().optional(),
   stock: z.number(),
   reservedStock: z.number(),
   preorderStock: z.number().optional(),

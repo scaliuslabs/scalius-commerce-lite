@@ -19,6 +19,7 @@ export * from "./fulfilment";
 export * from "./conversations";
 export * from "./notifications";
 export * from "./inventory";
+export * from "./purchasing";
 export * from "./delivery";
 export * from "./marketing";
 export * from "./promotions";
