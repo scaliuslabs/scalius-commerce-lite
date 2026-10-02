@@ -118,6 +118,7 @@ describe("homepage brand wall and deal countdown reads", () => {
             ...structuredClone(DEFAULT_STOREFRONT_THEME),
             brand: { ...DEFAULT_STOREFRONT_THEME.brand, logo: "m_logo", favicon: "m_gone" },
             pages: {
+                ...DEFAULT_STOREFRONT_THEME.pages,
                 homeMode: { kind: "sections" },
                 home: [
                     { ...hero, settings: { ...hero.settings, slides: [{ image: "m_slide", phoneImage: "m_video", focalPoint: { x: 50, y: 50 }, alt: "Eid", link: null }] } },
