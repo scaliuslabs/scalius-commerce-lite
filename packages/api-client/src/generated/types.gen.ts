@@ -88,7 +88,7 @@ export type StorefrontAppSurface = {
 };
 
 export type StorefrontThemeDocument = {
-    version: 6;
+    version: 7;
     template: 'boutique' | 'heritage-editorial' | 'fashion-value' | 'spec-catalogue' | 'rounded-tech' | 'marketplace' | 'mass-retail' | 'department-mall' | 'daily-essentials' | 'showcase-landing';
     tokens: {
         colors: {
@@ -113,6 +113,10 @@ export type StorefrontThemeDocument = {
             ring: string;
         };
         typography: 'retail' | 'market' | 'editorial' | 'fresh' | 'beauty' | 'heritage' | 'tech';
+        legacyTypography?: {
+            heading: 'system' | 'modern' | 'editorial';
+            body: 'system' | 'modern' | 'humanist';
+        };
         typeScale: 'flat' | 'retail' | 'display';
         headingCase: 'sentence' | 'uppercase';
         density: 'dense' | 'compact' | 'comfortable' | 'airy';
@@ -536,6 +540,7 @@ export type StorefrontThemeDocument = {
             id: string;
             type: 'hero';
             version: 1;
+            hidden?: boolean;
             settings: {
                 layout: 'full-bleed' | 'contained-banners' | 'app-panel' | 'split' | 'story-cards' | 'full-screen' | 'wide-editorial';
                 slides: Array<{
@@ -567,6 +572,7 @@ export type StorefrontThemeDocument = {
             id: string;
             type: 'usp-strip';
             version: 1;
+            hidden?: boolean;
             settings: {
                 style: 'icons' | 'ticker';
                 source: {
@@ -583,6 +589,7 @@ export type StorefrontThemeDocument = {
             id: string;
             type: 'category-tiles';
             version: 1;
+            hidden?: boolean;
             settings: {
                 style: 'photo' | 'photo-grid' | 'round' | 'round-small' | 'round-row' | 'icons' | 'quad' | 'square';
                 title: string;
@@ -592,6 +599,7 @@ export type StorefrontThemeDocument = {
             id: string;
             type: 'collections';
             version: 1;
+            hidden?: boolean;
             settings: {
                 carousel: 'large' | 'compact';
                 collectionIds: Array<string>;
@@ -600,6 +608,7 @@ export type StorefrontThemeDocument = {
             id: string;
             type: 'product-rail';
             version: 1;
+            hidden?: boolean;
             settings: {
                 title: string;
                 source: {
@@ -621,6 +630,7 @@ export type StorefrontThemeDocument = {
             id: string;
             type: 'product-grid';
             version: 1;
+            hidden?: boolean;
             settings: {
                 title: string;
                 source: {
@@ -643,6 +653,7 @@ export type StorefrontThemeDocument = {
             id: string;
             type: 'deal-block';
             version: 1;
+            hidden?: boolean;
             settings: {
                 title: string;
                 source: {
@@ -664,6 +675,7 @@ export type StorefrontThemeDocument = {
             id: string;
             type: 'product-tabs';
             version: 1;
+            hidden?: boolean;
             settings: {
                 title: string;
                 tabs: Array<{
@@ -688,6 +700,7 @@ export type StorefrontThemeDocument = {
             id: string;
             type: 'shop-by';
             version: 1;
+            hidden?: boolean;
             settings: {
                 title: string;
                 cards: Array<{
@@ -700,6 +713,7 @@ export type StorefrontThemeDocument = {
             id: string;
             type: 'banner-mosaic';
             version: 1;
+            hidden?: boolean;
             settings: {
                 tiles: Array<{
                     mediaId: string;
@@ -711,6 +725,7 @@ export type StorefrontThemeDocument = {
             id: string;
             type: 'lookbook';
             version: 1;
+            hidden?: boolean;
             settings: {
                 title: string;
                 mediaId: string | null;
@@ -733,6 +748,7 @@ export type StorefrontThemeDocument = {
             id: string;
             type: 'banner';
             version: 1;
+            hidden?: boolean;
             settings: {
                 layout: 'full' | 'two-up' | 'four-up';
                 heading: string;
@@ -747,6 +763,7 @@ export type StorefrontThemeDocument = {
             id: string;
             type: 'brand-wall';
             version: 1;
+            hidden?: boolean;
             settings: {
                 title: string;
                 style: 'grid' | 'rail';
@@ -755,6 +772,7 @@ export type StorefrontThemeDocument = {
             id: string;
             type: 'editorial';
             version: 1;
+            hidden?: boolean;
             settings: {
                 layout: 'rich-text';
                 heading: string;
@@ -783,6 +801,7 @@ export type StorefrontThemeDocument = {
             id: string;
             type: 'faq';
             version: 1;
+            hidden?: boolean;
             settings: {
                 heading: string;
                 items: Array<{
@@ -794,6 +813,7 @@ export type StorefrontThemeDocument = {
             id: string;
             type: 'utility-cards';
             version: 1;
+            hidden?: boolean;
             settings: {
                 cards: Array<{
                     title: string;
@@ -805,6 +825,7 @@ export type StorefrontThemeDocument = {
             id: string;
             type: 'endless-grid';
             version: 1;
+            hidden?: boolean;
             settings: {
                 title: string;
                 pageSize: 12 | 24 | 36;
@@ -813,6 +834,7 @@ export type StorefrontThemeDocument = {
             id: string;
             type: 'seo-text';
             version: 1;
+            hidden?: boolean;
             settings: {
                 heading: string;
                 body: string;
@@ -821,6 +843,7 @@ export type StorefrontThemeDocument = {
             id: string;
             type: 'recently-viewed';
             version: 1;
+            hidden?: boolean;
             settings: {
                 title: string;
             };
@@ -828,6 +851,7 @@ export type StorefrontThemeDocument = {
             id: string;
             type: 'newsletter';
             version: 1;
+            hidden?: boolean;
             settings: {
                 heading: string;
                 text: string;
@@ -839,6 +863,7 @@ export type StorefrontThemeDocument = {
             id: string;
             type: 'app';
             version: 1;
+            hidden?: boolean;
             settings: {
                 app: string;
                 values: {
@@ -851,6 +876,365 @@ export type StorefrontThemeDocument = {
         } | {
             kind: 'product';
             productId: string;
+        };
+        landing: {
+            [key: string]: {
+                title: string;
+                sections: Array<{
+                    id: string;
+                    type: 'hero';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        layout: 'full-bleed' | 'contained-banners' | 'app-panel' | 'split' | 'story-cards' | 'full-screen' | 'wide-editorial';
+                        slides: Array<{
+                            image: string;
+                            phoneImage?: string;
+                            focalPoint: {
+                                x: number;
+                                y: number;
+                            };
+                            phoneFocalPoint?: {
+                                x: number;
+                                y: number;
+                            };
+                            alt: string;
+                            heading?: string;
+                            text?: string;
+                            buttonLabel?: string;
+                            link: string | null;
+                        }>;
+                        phonePlacement?: 'after-categories';
+                        sideBanners?: Array<{
+                            mediaId: string;
+                            alt: string;
+                            href: string | null;
+                        }>;
+                        phoneHeight?: 'screen' | 'compact';
+                    };
+                } | {
+                    id: string;
+                    type: 'usp-strip';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        style: 'icons' | 'ticker';
+                        source: {
+                            kind: 'delivery-facts';
+                        } | {
+                            kind: 'custom';
+                            items: Array<{
+                                title: string;
+                                detail: string;
+                            }>;
+                        };
+                    };
+                } | {
+                    id: string;
+                    type: 'category-tiles';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        style: 'photo' | 'photo-grid' | 'round' | 'round-small' | 'round-row' | 'icons' | 'quad' | 'square';
+                        title: string;
+                        categoryIds: Array<string>;
+                    };
+                } | {
+                    id: string;
+                    type: 'collections';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        carousel: 'large' | 'compact';
+                        collectionIds: Array<string>;
+                    };
+                } | {
+                    id: string;
+                    type: 'product-rail';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        title: string;
+                        source: {
+                            kind: 'newest';
+                        } | {
+                            kind: 'on-sale';
+                        } | {
+                            kind: 'popular';
+                        } | {
+                            kind: 'collection';
+                            collectionId: string;
+                        } | {
+                            kind: 'category';
+                            categoryId: string;
+                        };
+                        limit: number;
+                    };
+                } | {
+                    id: string;
+                    type: 'product-grid';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        title: string;
+                        source: {
+                            kind: 'newest';
+                        } | {
+                            kind: 'on-sale';
+                        } | {
+                            kind: 'popular';
+                        } | {
+                            kind: 'collection';
+                            collectionId: string;
+                        } | {
+                            kind: 'category';
+                            categoryId: string;
+                        };
+                        columns: number;
+                        rows: number;
+                    };
+                } | {
+                    id: string;
+                    type: 'deal-block';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        title: string;
+                        source: {
+                            kind: 'newest';
+                        } | {
+                            kind: 'on-sale';
+                        } | {
+                            kind: 'popular';
+                        } | {
+                            kind: 'collection';
+                            collectionId: string;
+                        } | {
+                            kind: 'category';
+                            categoryId: string;
+                        };
+                        promotionId?: string | null;
+                    };
+                } | {
+                    id: string;
+                    type: 'product-tabs';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        title: string;
+                        tabs: Array<{
+                            label: string;
+                            source: {
+                                kind: 'newest';
+                            } | {
+                                kind: 'on-sale';
+                            } | {
+                                kind: 'popular';
+                            } | {
+                                kind: 'collection';
+                                collectionId: string;
+                            } | {
+                                kind: 'category';
+                                categoryId: string;
+                            };
+                        }>;
+                        limit: number;
+                    };
+                } | {
+                    id: string;
+                    type: 'shop-by';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        title: string;
+                        cards: Array<{
+                            mediaId: string;
+                            title: string;
+                            href: string;
+                        }>;
+                    };
+                } | {
+                    id: string;
+                    type: 'banner-mosaic';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        tiles: Array<{
+                            mediaId: string;
+                            alt: string;
+                            href: string | null;
+                        }>;
+                    };
+                } | {
+                    id: string;
+                    type: 'lookbook';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        title: string;
+                        mediaId: string | null;
+                        source: {
+                            kind: 'newest';
+                        } | {
+                            kind: 'on-sale';
+                        } | {
+                            kind: 'popular';
+                        } | {
+                            kind: 'collection';
+                            collectionId: string;
+                        } | {
+                            kind: 'category';
+                            categoryId: string;
+                        };
+                        photo: 'tall' | 'square';
+                    };
+                } | {
+                    id: string;
+                    type: 'banner';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        layout: 'full' | 'two-up' | 'four-up';
+                        heading: string;
+                        text: string;
+                        mediaId: string | null;
+                        cta: {
+                            label: string;
+                            href: string;
+                        } | null;
+                    };
+                } | {
+                    id: string;
+                    type: 'brand-wall';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        title: string;
+                        style: 'grid' | 'rail';
+                    };
+                } | {
+                    id: string;
+                    type: 'editorial';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        layout: 'rich-text';
+                        heading: string;
+                        body: string;
+                    } | {
+                        layout: 'image-with-text';
+                        heading: string;
+                        body: string;
+                        mediaId: string | null;
+                        imageSide: 'start' | 'end';
+                    } | {
+                        layout: 'multicolumn';
+                        heading: string;
+                        columns: Array<{
+                            title: string;
+                            text: string;
+                        }>;
+                    } | {
+                        layout: 'testimonial';
+                        quotes: Array<{
+                            quote: string;
+                            author: string;
+                        }>;
+                    };
+                } | {
+                    id: string;
+                    type: 'faq';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        heading: string;
+                        items: Array<{
+                            question: string;
+                            answer: string;
+                        }>;
+                    };
+                } | {
+                    id: string;
+                    type: 'utility-cards';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        cards: Array<{
+                            title: string;
+                            text: string;
+                            href: string;
+                        }>;
+                    };
+                } | {
+                    id: string;
+                    type: 'endless-grid';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        title: string;
+                        pageSize: 12 | 24 | 36;
+                    };
+                } | {
+                    id: string;
+                    type: 'seo-text';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        heading: string;
+                        body: string;
+                    };
+                } | {
+                    id: string;
+                    type: 'recently-viewed';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        title: string;
+                    };
+                } | {
+                    id: string;
+                    type: 'newsletter';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        heading: string;
+                        text: string;
+                        email?: 'optional' | 'required' | 'hidden';
+                        whatsapp?: boolean;
+                        buttonLabel?: string;
+                    };
+                } | {
+                    id: string;
+                    type: 'app';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        app: string;
+                        values: {
+                            [key: string]: string | number | boolean | Array<string> | unknown;
+                        };
+                    };
+                }>;
+                overrideCms?: boolean;
+            };
+        };
+        product: {
+            blocks: Array<{
+                id: 'gallery' | 'title-price' | 'options' | 'buy-buttons' | 'description' | 'specs' | 'reviews' | 'related-products' | 'apps';
+                hidden: boolean;
+            }>;
+        };
+        collection: {
+            blocks: Array<{
+                id: 'breadcrumbs' | 'banner' | 'filters' | 'grid';
+                hidden: boolean;
+            }>;
+        };
+        search: {
+            blocks: Array<{
+                id: 'breadcrumbs' | 'banner' | 'filters' | 'grid';
+                hidden: boolean;
+            }>;
         };
     };
 };
@@ -5157,6 +5541,566 @@ export type GetApiV1StorefrontHomepageResponses = {
 
 export type GetApiV1StorefrontHomepageResponse = GetApiV1StorefrontHomepageResponses[keyof GetApiV1StorefrontHomepageResponses];
 
+export type GetApiV1StorefrontLandingBySlugData = {
+    body?: never;
+    path: {
+        slug: string;
+    };
+    query?: never;
+    url: '/api/v1/storefront/landing/{slug}';
+};
+
+export type GetApiV1StorefrontLandingBySlugErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1StorefrontLandingBySlugError = GetApiV1StorefrontLandingBySlugErrors[keyof GetApiV1StorefrontLandingBySlugErrors];
+
+export type GetApiV1StorefrontLandingBySlugResponses = {
+    /**
+     * Landing page and its bounded section data
+     */
+    200: {
+        success: true;
+        data: {
+            landing: {
+                title: string;
+                sections: Array<{
+                    id: string;
+                    type: 'hero';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        layout: 'full-bleed' | 'contained-banners' | 'app-panel' | 'split' | 'story-cards' | 'full-screen' | 'wide-editorial';
+                        slides: Array<{
+                            image: string;
+                            phoneImage?: string;
+                            focalPoint: {
+                                x: number;
+                                y: number;
+                            };
+                            phoneFocalPoint?: {
+                                x: number;
+                                y: number;
+                            };
+                            alt: string;
+                            heading?: string;
+                            text?: string;
+                            buttonLabel?: string;
+                            link: string | null;
+                        }>;
+                        phonePlacement?: 'after-categories';
+                        sideBanners?: Array<{
+                            mediaId: string;
+                            alt: string;
+                            href: string | null;
+                        }>;
+                        phoneHeight?: 'screen' | 'compact';
+                    };
+                } | {
+                    id: string;
+                    type: 'usp-strip';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        style: 'icons' | 'ticker';
+                        source: {
+                            kind: 'delivery-facts';
+                        } | {
+                            kind: 'custom';
+                            items: Array<{
+                                title: string;
+                                detail: string;
+                            }>;
+                        };
+                    };
+                } | {
+                    id: string;
+                    type: 'category-tiles';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        style: 'photo' | 'photo-grid' | 'round' | 'round-small' | 'round-row' | 'icons' | 'quad' | 'square';
+                        title: string;
+                        categoryIds: Array<string>;
+                    };
+                } | {
+                    id: string;
+                    type: 'collections';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        carousel: 'large' | 'compact';
+                        collectionIds: Array<string>;
+                    };
+                } | {
+                    id: string;
+                    type: 'product-rail';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        title: string;
+                        source: {
+                            kind: 'newest';
+                        } | {
+                            kind: 'on-sale';
+                        } | {
+                            kind: 'popular';
+                        } | {
+                            kind: 'collection';
+                            collectionId: string;
+                        } | {
+                            kind: 'category';
+                            categoryId: string;
+                        };
+                        limit: number;
+                    };
+                } | {
+                    id: string;
+                    type: 'product-grid';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        title: string;
+                        source: {
+                            kind: 'newest';
+                        } | {
+                            kind: 'on-sale';
+                        } | {
+                            kind: 'popular';
+                        } | {
+                            kind: 'collection';
+                            collectionId: string;
+                        } | {
+                            kind: 'category';
+                            categoryId: string;
+                        };
+                        columns: number;
+                        rows: number;
+                    };
+                } | {
+                    id: string;
+                    type: 'deal-block';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        title: string;
+                        source: {
+                            kind: 'newest';
+                        } | {
+                            kind: 'on-sale';
+                        } | {
+                            kind: 'popular';
+                        } | {
+                            kind: 'collection';
+                            collectionId: string;
+                        } | {
+                            kind: 'category';
+                            categoryId: string;
+                        };
+                        promotionId?: string | null;
+                    };
+                } | {
+                    id: string;
+                    type: 'product-tabs';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        title: string;
+                        tabs: Array<{
+                            label: string;
+                            source: {
+                                kind: 'newest';
+                            } | {
+                                kind: 'on-sale';
+                            } | {
+                                kind: 'popular';
+                            } | {
+                                kind: 'collection';
+                                collectionId: string;
+                            } | {
+                                kind: 'category';
+                                categoryId: string;
+                            };
+                        }>;
+                        limit: number;
+                    };
+                } | {
+                    id: string;
+                    type: 'shop-by';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        title: string;
+                        cards: Array<{
+                            mediaId: string;
+                            title: string;
+                            href: string;
+                        }>;
+                    };
+                } | {
+                    id: string;
+                    type: 'banner-mosaic';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        tiles: Array<{
+                            mediaId: string;
+                            alt: string;
+                            href: string | null;
+                        }>;
+                    };
+                } | {
+                    id: string;
+                    type: 'lookbook';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        title: string;
+                        mediaId: string | null;
+                        source: {
+                            kind: 'newest';
+                        } | {
+                            kind: 'on-sale';
+                        } | {
+                            kind: 'popular';
+                        } | {
+                            kind: 'collection';
+                            collectionId: string;
+                        } | {
+                            kind: 'category';
+                            categoryId: string;
+                        };
+                        photo: 'tall' | 'square';
+                    };
+                } | {
+                    id: string;
+                    type: 'banner';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        layout: 'full' | 'two-up' | 'four-up';
+                        heading: string;
+                        text: string;
+                        mediaId: string | null;
+                        cta: {
+                            label: string;
+                            href: string;
+                        } | null;
+                    };
+                } | {
+                    id: string;
+                    type: 'brand-wall';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        title: string;
+                        style: 'grid' | 'rail';
+                    };
+                } | {
+                    id: string;
+                    type: 'editorial';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        layout: 'rich-text';
+                        heading: string;
+                        body: string;
+                    } | {
+                        layout: 'image-with-text';
+                        heading: string;
+                        body: string;
+                        mediaId: string | null;
+                        imageSide: 'start' | 'end';
+                    } | {
+                        layout: 'multicolumn';
+                        heading: string;
+                        columns: Array<{
+                            title: string;
+                            text: string;
+                        }>;
+                    } | {
+                        layout: 'testimonial';
+                        quotes: Array<{
+                            quote: string;
+                            author: string;
+                        }>;
+                    };
+                } | {
+                    id: string;
+                    type: 'faq';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        heading: string;
+                        items: Array<{
+                            question: string;
+                            answer: string;
+                        }>;
+                    };
+                } | {
+                    id: string;
+                    type: 'utility-cards';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        cards: Array<{
+                            title: string;
+                            text: string;
+                            href: string;
+                        }>;
+                    };
+                } | {
+                    id: string;
+                    type: 'endless-grid';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        title: string;
+                        pageSize: 12 | 24 | 36;
+                    };
+                } | {
+                    id: string;
+                    type: 'seo-text';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        heading: string;
+                        body: string;
+                    };
+                } | {
+                    id: string;
+                    type: 'recently-viewed';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        title: string;
+                    };
+                } | {
+                    id: string;
+                    type: 'newsletter';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        heading: string;
+                        text: string;
+                        email?: 'optional' | 'required' | 'hidden';
+                        whatsapp?: boolean;
+                        buttonLabel?: string;
+                    };
+                } | {
+                    id: string;
+                    type: 'app';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        app: string;
+                        values: {
+                            [key: string]: string | number | boolean | Array<string> | unknown;
+                        };
+                    };
+                }>;
+                overrideCms?: boolean;
+            };
+            sections: {
+                lists: Array<{
+                    key: string;
+                    products: Array<{
+                        id: string;
+                        name: string;
+                        slug: string;
+                        price: number;
+                        discountType: string | null;
+                        discountPercentage: number | null;
+                        discountAmount: number | null;
+                        discountedPrice: number;
+                        priceVaries: boolean;
+                        availableForSale: boolean;
+                        quickAddEligible: boolean;
+                        freeDelivery: boolean;
+                        categoryId: string | null;
+                        hasVariants: boolean;
+                        imageUrl: string | null;
+                        imageMediaId: string | null;
+                        imageAlt: string | null;
+                        secondaryImageUrl: string | null;
+                        /**
+                         * Published-review average and count; null without a published review.
+                         */
+                        rating: {
+                            average: number;
+                            count: number;
+                        } | null;
+                        cardFacts?: ProductCardFacts;
+                    }>;
+                    category: {
+                        id: string;
+                        name: string;
+                        slug: string;
+                        canonicalPath: string | null;
+                    } | null;
+                    collection: {
+                        id: string;
+                        title: string;
+                    } | null;
+                }>;
+                media: Array<{
+                    id: string;
+                    url: string;
+                    alt: string;
+                    width: number | null;
+                    height: number | null;
+                }>;
+                brands: Array<{
+                    id: string;
+                    name: string;
+                    slug: string;
+                    canonicalPath: string | null;
+                    logo: {
+                        mediaId: string;
+                        url: string;
+                        alt: string;
+                        width: number | null;
+                        height: number | null;
+                    } | null;
+                }>;
+                promotions: Array<{
+                    id: string;
+                    endsAt: string;
+                }>;
+                categories: Array<{
+                    id: string;
+                    name: string;
+                    slug: string;
+                    description: string | null;
+                    imageUrl: string | null;
+                    canonicalPath: string | null;
+                }>;
+                collections: Array<{
+                    id: string;
+                    name: string;
+                    presentation: string;
+                    config: {
+                        maxProducts: number;
+                        title: string;
+                        subtitle: string;
+                    };
+                    sortOrder: number;
+                    isActive: boolean;
+                    categories: Array<{
+                        id: string;
+                        name: string;
+                        slug: string;
+                    }>;
+                    products: Array<{
+                        id: string;
+                        name: string;
+                        slug: string;
+                        price: number;
+                        discountType: string | null;
+                        discountPercentage: number | null;
+                        discountAmount: number | null;
+                        discountedPrice: number;
+                        priceVaries: boolean;
+                        availableForSale: boolean;
+                        quickAddEligible: boolean;
+                        freeDelivery: boolean;
+                        categoryId: string | null;
+                        hasVariants: boolean;
+                        imageUrl: string | null;
+                        imageMediaId: string | null;
+                        imageAlt: string | null;
+                        secondaryImageUrl: string | null;
+                        /**
+                         * Published-review average and count; null without a published review.
+                         */
+                        rating: {
+                            average: number;
+                            count: number;
+                        } | null;
+                        cardFacts?: ProductCardFacts;
+                    }>;
+                    featuredProduct: {
+                        id: string;
+                        name: string;
+                        slug: string;
+                        price: number;
+                        discountType: string | null;
+                        discountPercentage: number | null;
+                        discountAmount: number | null;
+                        discountedPrice: number;
+                        priceVaries: boolean;
+                        availableForSale: boolean;
+                        quickAddEligible: boolean;
+                        freeDelivery: boolean;
+                        categoryId: string | null;
+                        hasVariants: boolean;
+                        imageUrl: string | null;
+                        imageMediaId: string | null;
+                        imageAlt: string | null;
+                        secondaryImageUrl: string | null;
+                        /**
+                         * Published-review average and count; null without a published review.
+                         */
+                        rating: {
+                            average: number;
+                            count: number;
+                        } | null;
+                        cardFacts?: ProductCardFacts;
+                    } | null;
+                }>;
+                /**
+                 * A product homepage's product while it is public (the storefront answers `/` with a redirect to its page); null for a sections homepage or a product that is not public.
+                 */
+                homeProduct: {
+                    id: string;
+                    slug: string;
+                } | null;
+                /**
+                 * The app sections that drew something, by section id: sanitized HTML (no scripts, styles or event handlers) and the head tags their apps may add. An app section missing here renders nothing.
+                 */
+                apps: Array<StorefrontAppSurface & {
+                    sectionId: string;
+                }>;
+            };
+        };
+    };
+};
+
+export type GetApiV1StorefrontLandingBySlugResponse = GetApiV1StorefrontLandingBySlugResponses[keyof GetApiV1StorefrontLandingBySlugResponses];
+
 export type GetApiV1StorefrontProductAppsBySlugData = {
     body?: never;
     path: {
@@ -5306,6 +6250,508 @@ export type GetApiV1StorefrontPagesSlugBySlugResponses = {
                  * Storefront-visible custom fields with a value, in the merchant's order.
                  */
                 customFields: Array<StorefrontCustomField>;
+            };
+            template?: {
+                landing: {
+                    title: string;
+                    sections: Array<{
+                        id: string;
+                        type: 'hero';
+                        version: 1;
+                        hidden?: boolean;
+                        settings: {
+                            layout: 'full-bleed' | 'contained-banners' | 'app-panel' | 'split' | 'story-cards' | 'full-screen' | 'wide-editorial';
+                            slides: Array<{
+                                image: string;
+                                phoneImage?: string;
+                                focalPoint: {
+                                    x: number;
+                                    y: number;
+                                };
+                                phoneFocalPoint?: {
+                                    x: number;
+                                    y: number;
+                                };
+                                alt: string;
+                                heading?: string;
+                                text?: string;
+                                buttonLabel?: string;
+                                link: string | null;
+                            }>;
+                            phonePlacement?: 'after-categories';
+                            sideBanners?: Array<{
+                                mediaId: string;
+                                alt: string;
+                                href: string | null;
+                            }>;
+                            phoneHeight?: 'screen' | 'compact';
+                        };
+                    } | {
+                        id: string;
+                        type: 'usp-strip';
+                        version: 1;
+                        hidden?: boolean;
+                        settings: {
+                            style: 'icons' | 'ticker';
+                            source: {
+                                kind: 'delivery-facts';
+                            } | {
+                                kind: 'custom';
+                                items: Array<{
+                                    title: string;
+                                    detail: string;
+                                }>;
+                            };
+                        };
+                    } | {
+                        id: string;
+                        type: 'category-tiles';
+                        version: 1;
+                        hidden?: boolean;
+                        settings: {
+                            style: 'photo' | 'photo-grid' | 'round' | 'round-small' | 'round-row' | 'icons' | 'quad' | 'square';
+                            title: string;
+                            categoryIds: Array<string>;
+                        };
+                    } | {
+                        id: string;
+                        type: 'collections';
+                        version: 1;
+                        hidden?: boolean;
+                        settings: {
+                            carousel: 'large' | 'compact';
+                            collectionIds: Array<string>;
+                        };
+                    } | {
+                        id: string;
+                        type: 'product-rail';
+                        version: 1;
+                        hidden?: boolean;
+                        settings: {
+                            title: string;
+                            source: {
+                                kind: 'newest';
+                            } | {
+                                kind: 'on-sale';
+                            } | {
+                                kind: 'popular';
+                            } | {
+                                kind: 'collection';
+                                collectionId: string;
+                            } | {
+                                kind: 'category';
+                                categoryId: string;
+                            };
+                            limit: number;
+                        };
+                    } | {
+                        id: string;
+                        type: 'product-grid';
+                        version: 1;
+                        hidden?: boolean;
+                        settings: {
+                            title: string;
+                            source: {
+                                kind: 'newest';
+                            } | {
+                                kind: 'on-sale';
+                            } | {
+                                kind: 'popular';
+                            } | {
+                                kind: 'collection';
+                                collectionId: string;
+                            } | {
+                                kind: 'category';
+                                categoryId: string;
+                            };
+                            columns: number;
+                            rows: number;
+                        };
+                    } | {
+                        id: string;
+                        type: 'deal-block';
+                        version: 1;
+                        hidden?: boolean;
+                        settings: {
+                            title: string;
+                            source: {
+                                kind: 'newest';
+                            } | {
+                                kind: 'on-sale';
+                            } | {
+                                kind: 'popular';
+                            } | {
+                                kind: 'collection';
+                                collectionId: string;
+                            } | {
+                                kind: 'category';
+                                categoryId: string;
+                            };
+                            promotionId?: string | null;
+                        };
+                    } | {
+                        id: string;
+                        type: 'product-tabs';
+                        version: 1;
+                        hidden?: boolean;
+                        settings: {
+                            title: string;
+                            tabs: Array<{
+                                label: string;
+                                source: {
+                                    kind: 'newest';
+                                } | {
+                                    kind: 'on-sale';
+                                } | {
+                                    kind: 'popular';
+                                } | {
+                                    kind: 'collection';
+                                    collectionId: string;
+                                } | {
+                                    kind: 'category';
+                                    categoryId: string;
+                                };
+                            }>;
+                            limit: number;
+                        };
+                    } | {
+                        id: string;
+                        type: 'shop-by';
+                        version: 1;
+                        hidden?: boolean;
+                        settings: {
+                            title: string;
+                            cards: Array<{
+                                mediaId: string;
+                                title: string;
+                                href: string;
+                            }>;
+                        };
+                    } | {
+                        id: string;
+                        type: 'banner-mosaic';
+                        version: 1;
+                        hidden?: boolean;
+                        settings: {
+                            tiles: Array<{
+                                mediaId: string;
+                                alt: string;
+                                href: string | null;
+                            }>;
+                        };
+                    } | {
+                        id: string;
+                        type: 'lookbook';
+                        version: 1;
+                        hidden?: boolean;
+                        settings: {
+                            title: string;
+                            mediaId: string | null;
+                            source: {
+                                kind: 'newest';
+                            } | {
+                                kind: 'on-sale';
+                            } | {
+                                kind: 'popular';
+                            } | {
+                                kind: 'collection';
+                                collectionId: string;
+                            } | {
+                                kind: 'category';
+                                categoryId: string;
+                            };
+                            photo: 'tall' | 'square';
+                        };
+                    } | {
+                        id: string;
+                        type: 'banner';
+                        version: 1;
+                        hidden?: boolean;
+                        settings: {
+                            layout: 'full' | 'two-up' | 'four-up';
+                            heading: string;
+                            text: string;
+                            mediaId: string | null;
+                            cta: {
+                                label: string;
+                                href: string;
+                            } | null;
+                        };
+                    } | {
+                        id: string;
+                        type: 'brand-wall';
+                        version: 1;
+                        hidden?: boolean;
+                        settings: {
+                            title: string;
+                            style: 'grid' | 'rail';
+                        };
+                    } | {
+                        id: string;
+                        type: 'editorial';
+                        version: 1;
+                        hidden?: boolean;
+                        settings: {
+                            layout: 'rich-text';
+                            heading: string;
+                            body: string;
+                        } | {
+                            layout: 'image-with-text';
+                            heading: string;
+                            body: string;
+                            mediaId: string | null;
+                            imageSide: 'start' | 'end';
+                        } | {
+                            layout: 'multicolumn';
+                            heading: string;
+                            columns: Array<{
+                                title: string;
+                                text: string;
+                            }>;
+                        } | {
+                            layout: 'testimonial';
+                            quotes: Array<{
+                                quote: string;
+                                author: string;
+                            }>;
+                        };
+                    } | {
+                        id: string;
+                        type: 'faq';
+                        version: 1;
+                        hidden?: boolean;
+                        settings: {
+                            heading: string;
+                            items: Array<{
+                                question: string;
+                                answer: string;
+                            }>;
+                        };
+                    } | {
+                        id: string;
+                        type: 'utility-cards';
+                        version: 1;
+                        hidden?: boolean;
+                        settings: {
+                            cards: Array<{
+                                title: string;
+                                text: string;
+                                href: string;
+                            }>;
+                        };
+                    } | {
+                        id: string;
+                        type: 'endless-grid';
+                        version: 1;
+                        hidden?: boolean;
+                        settings: {
+                            title: string;
+                            pageSize: 12 | 24 | 36;
+                        };
+                    } | {
+                        id: string;
+                        type: 'seo-text';
+                        version: 1;
+                        hidden?: boolean;
+                        settings: {
+                            heading: string;
+                            body: string;
+                        };
+                    } | {
+                        id: string;
+                        type: 'recently-viewed';
+                        version: 1;
+                        hidden?: boolean;
+                        settings: {
+                            title: string;
+                        };
+                    } | {
+                        id: string;
+                        type: 'newsletter';
+                        version: 1;
+                        hidden?: boolean;
+                        settings: {
+                            heading: string;
+                            text: string;
+                            email?: 'optional' | 'required' | 'hidden';
+                            whatsapp?: boolean;
+                            buttonLabel?: string;
+                        };
+                    } | {
+                        id: string;
+                        type: 'app';
+                        version: 1;
+                        hidden?: boolean;
+                        settings: {
+                            app: string;
+                            values: {
+                                [key: string]: string | number | boolean | Array<string> | unknown;
+                            };
+                        };
+                    }>;
+                    overrideCms?: boolean;
+                };
+                sections: {
+                    lists: Array<{
+                        key: string;
+                        products: Array<{
+                            id: string;
+                            name: string;
+                            slug: string;
+                            price: number;
+                            discountType: string | null;
+                            discountPercentage: number | null;
+                            discountAmount: number | null;
+                            discountedPrice: number;
+                            priceVaries: boolean;
+                            availableForSale: boolean;
+                            quickAddEligible: boolean;
+                            freeDelivery: boolean;
+                            categoryId: string | null;
+                            hasVariants: boolean;
+                            imageUrl: string | null;
+                            imageMediaId: string | null;
+                            imageAlt: string | null;
+                            secondaryImageUrl: string | null;
+                            /**
+                             * Published-review average and count; null without a published review.
+                             */
+                            rating: {
+                                average: number;
+                                count: number;
+                            } | null;
+                            cardFacts?: ProductCardFacts;
+                        }>;
+                        category: {
+                            id: string;
+                            name: string;
+                            slug: string;
+                            canonicalPath: string | null;
+                        } | null;
+                        collection: {
+                            id: string;
+                            title: string;
+                        } | null;
+                    }>;
+                    media: Array<{
+                        id: string;
+                        url: string;
+                        alt: string;
+                        width: number | null;
+                        height: number | null;
+                    }>;
+                    brands: Array<{
+                        id: string;
+                        name: string;
+                        slug: string;
+                        canonicalPath: string | null;
+                        logo: {
+                            mediaId: string;
+                            url: string;
+                            alt: string;
+                            width: number | null;
+                            height: number | null;
+                        } | null;
+                    }>;
+                    promotions: Array<{
+                        id: string;
+                        endsAt: string;
+                    }>;
+                    categories: Array<{
+                        id: string;
+                        name: string;
+                        slug: string;
+                        description: string | null;
+                        imageUrl: string | null;
+                        canonicalPath: string | null;
+                    }>;
+                    collections: Array<{
+                        id: string;
+                        name: string;
+                        presentation: string;
+                        config: {
+                            maxProducts: number;
+                            title: string;
+                            subtitle: string;
+                        };
+                        sortOrder: number;
+                        isActive: boolean;
+                        categories: Array<{
+                            id: string;
+                            name: string;
+                            slug: string;
+                        }>;
+                        products: Array<{
+                            id: string;
+                            name: string;
+                            slug: string;
+                            price: number;
+                            discountType: string | null;
+                            discountPercentage: number | null;
+                            discountAmount: number | null;
+                            discountedPrice: number;
+                            priceVaries: boolean;
+                            availableForSale: boolean;
+                            quickAddEligible: boolean;
+                            freeDelivery: boolean;
+                            categoryId: string | null;
+                            hasVariants: boolean;
+                            imageUrl: string | null;
+                            imageMediaId: string | null;
+                            imageAlt: string | null;
+                            secondaryImageUrl: string | null;
+                            /**
+                             * Published-review average and count; null without a published review.
+                             */
+                            rating: {
+                                average: number;
+                                count: number;
+                            } | null;
+                            cardFacts?: ProductCardFacts;
+                        }>;
+                        featuredProduct: {
+                            id: string;
+                            name: string;
+                            slug: string;
+                            price: number;
+                            discountType: string | null;
+                            discountPercentage: number | null;
+                            discountAmount: number | null;
+                            discountedPrice: number;
+                            priceVaries: boolean;
+                            availableForSale: boolean;
+                            quickAddEligible: boolean;
+                            freeDelivery: boolean;
+                            categoryId: string | null;
+                            hasVariants: boolean;
+                            imageUrl: string | null;
+                            imageMediaId: string | null;
+                            imageAlt: string | null;
+                            secondaryImageUrl: string | null;
+                            /**
+                             * Published-review average and count; null without a published review.
+                             */
+                            rating: {
+                                average: number;
+                                count: number;
+                            } | null;
+                            cardFacts?: ProductCardFacts;
+                        } | null;
+                    }>;
+                    /**
+                     * A product homepage's product while it is public (the storefront answers `/` with a redirect to its page); null for a sections homepage or a product that is not public.
+                     */
+                    homeProduct: {
+                        id: string;
+                        slug: string;
+                    } | null;
+                    /**
+                     * The app sections that drew something, by section id: sanitized HTML (no scripts, styles or event handlers) and the head tags their apps may add. An app section missing here renders nothing.
+                     */
+                    apps: Array<StorefrontAppSurface & {
+                        sectionId: string;
+                    }>;
+                };
             };
         };
     };
@@ -5692,6 +7138,7 @@ export type PostApiV1StorefrontThemePreviewResolveResponse = PostApiV1Storefront
 export type PostApiV1StorefrontThemePreviewHomepageData = {
     body?: {
         token: string;
+        pageSlug?: string;
     };
     path?: never;
     query?: never;
@@ -5896,6 +7343,73 @@ export type PostApiV1StorefrontThemePreviewHomepageResponses = {
 };
 
 export type PostApiV1StorefrontThemePreviewHomepageResponse = PostApiV1StorefrontThemePreviewHomepageResponses[keyof PostApiV1StorefrontThemePreviewHomepageResponses];
+
+export type PostApiV1StorefrontThemePreviewProductAppsBySlugData = {
+    body: {
+        token: string;
+    };
+    path: {
+        slug: string;
+    };
+    query?: never;
+    url: '/api/v1/storefront/theme-preview/product-apps/{slug}';
+};
+
+export type PostApiV1StorefrontThemePreviewProductAppsBySlugErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1StorefrontThemePreviewProductAppsBySlugError = PostApiV1StorefrontThemePreviewProductAppsBySlugErrors[keyof PostApiV1StorefrontThemePreviewProductAppsBySlugErrors];
+
+export type PostApiV1StorefrontThemePreviewProductAppsBySlugResponses = {
+    /**
+     * The drawn app blocks
+     */
+    200: {
+        success: true;
+        data: {
+            blocks: Array<StorefrontAppSurface & {
+                id: string;
+                app: string;
+                placement: 'buy-box' | 'below';
+            }>;
+        };
+    };
+};
+
+export type PostApiV1StorefrontThemePreviewProductAppsBySlugResponse = PostApiV1StorefrontThemePreviewProductAppsBySlugResponses[keyof PostApiV1StorefrontThemePreviewProductAppsBySlugResponses];
 
 export type GetApiV1PlatformData = {
     body?: never;
@@ -45956,6 +47470,13 @@ export type GetApiV1AdminSettingsThemeWorkspaceResponses = {
                 basePublishedRevision: number;
                 updatedAt?: unknown;
             };
+            draftDiffersFromLive: boolean;
+            lastPublished: {
+                revision: number;
+                publishedBy: string | null;
+                publishedByName: string | null;
+                createdAt?: string;
+            } | null;
             storeShape: StorefrontStoreShape;
             media: Array<{
                 id: string;
@@ -45972,7 +47493,7 @@ export type GetApiV1AdminSettingsThemeWorkspaceResponses = {
 export type GetApiV1AdminSettingsThemeWorkspaceResponse = GetApiV1AdminSettingsThemeWorkspaceResponses[keyof GetApiV1AdminSettingsThemeWorkspaceResponses];
 
 export type PostApiV1AdminSettingsThemeDraftData = {
-    body: {
+    body?: {
         theme: StorefrontThemeDocument;
         expectedDraftRevision: number;
         basePublishedRevision: number;
@@ -46071,7 +47592,8 @@ export type PostApiV1AdminSettingsThemeDraftResponses = {
 export type PostApiV1AdminSettingsThemeDraftResponse = PostApiV1AdminSettingsThemeDraftResponses[keyof PostApiV1AdminSettingsThemeDraftResponses];
 
 export type PostApiV1AdminSettingsThemePublishData = {
-    body: {
+    body?: {
+        note?: string;
         expectedPublishedRevision: number;
         expectedDraftRevision: number;
     };
@@ -46168,6 +47690,13 @@ export type PostApiV1AdminSettingsThemePublishResponses = {
                 basePublishedRevision: number;
                 updatedAt?: unknown;
             };
+            draftDiffersFromLive: boolean;
+            lastPublished: {
+                revision: number;
+                publishedBy: string | null;
+                publishedByName: string | null;
+                createdAt?: string;
+            } | null;
         };
     };
 };
@@ -46268,6 +47797,15 @@ export type GetApiV1AdminSettingsThemeVersionsResponses = {
                 source: 'publish' | 'rollback' | 'migration';
                 sourceRevision: number | null;
                 publishedBy: string | null;
+                publishedByName: string | null;
+                summary: Array<string>;
+                changes: Array<{
+                    kind: 'added' | 'removed' | 'reordered' | 'settings';
+                    page: string;
+                    sectionId?: string;
+                    path?: string;
+                }>;
+                note: string | null;
                 createdAt?: unknown;
             }>;
         };
@@ -46277,7 +47815,7 @@ export type GetApiV1AdminSettingsThemeVersionsResponses = {
 export type GetApiV1AdminSettingsThemeVersionsResponse = GetApiV1AdminSettingsThemeVersionsResponses[keyof GetApiV1AdminSettingsThemeVersionsResponses];
 
 export type PostApiV1AdminSettingsThemeRollbackData = {
-    body: {
+    body?: {
         sourceRevision: number;
         expectedPublishedRevision: number;
         expectedDraftRevision: number;
@@ -46360,7 +47898,7 @@ export type PostApiV1AdminSettingsThemeRollbackError = PostApiV1AdminSettingsThe
 
 export type PostApiV1AdminSettingsThemeRollbackResponses = {
     /**
-     * Theme rollback published
+     * Theme version restored to draft
      */
     200: {
         success: true;
@@ -46375,15 +47913,4315 @@ export type PostApiV1AdminSettingsThemeRollbackResponses = {
                 basePublishedRevision: number;
                 updatedAt?: unknown;
             };
+            draftDiffersFromLive: boolean;
+            lastPublished: {
+                revision: number;
+                publishedBy: string | null;
+                publishedByName: string | null;
+                createdAt?: string;
+            } | null;
         };
     };
 };
 
 export type PostApiV1AdminSettingsThemeRollbackResponse = PostApiV1AdminSettingsThemeRollbackResponses[keyof PostApiV1AdminSettingsThemeRollbackResponses];
 
+export type PostApiV1AdminSettingsThemeRestoreData = {
+    body: {
+        expectedDraftRevision: number;
+        basePublishedRevision: number;
+        sourceRevision: number;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/theme/restore';
+};
+
+export type PostApiV1AdminSettingsThemeRestoreErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminSettingsThemeRestoreError = PostApiV1AdminSettingsThemeRestoreErrors[keyof PostApiV1AdminSettingsThemeRestoreErrors];
+
+export type PostApiV1AdminSettingsThemeRestoreResponses = {
+    /**
+     * Version restored to draft
+     */
+    200: {
+        success: true;
+        data: {
+            published: {
+                theme: StorefrontThemeDocument;
+                revision: number;
+            };
+            draft: {
+                theme: StorefrontThemeDocument;
+                revision: number;
+                basePublishedRevision: number;
+                updatedAt?: unknown;
+            };
+            draftDiffersFromLive: boolean;
+            lastPublished: {
+                revision: number;
+                publishedBy: string | null;
+                publishedByName: string | null;
+                createdAt?: string;
+            } | null;
+        };
+    };
+};
+
+export type PostApiV1AdminSettingsThemeRestoreResponse = PostApiV1AdminSettingsThemeRestoreResponses[keyof PostApiV1AdminSettingsThemeRestoreResponses];
+
+export type PostApiV1AdminSettingsThemeDiscardData = {
+    body: {
+        expectedDraftRevision: number;
+        basePublishedRevision: number;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/theme/discard';
+};
+
+export type PostApiV1AdminSettingsThemeDiscardErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminSettingsThemeDiscardError = PostApiV1AdminSettingsThemeDiscardErrors[keyof PostApiV1AdminSettingsThemeDiscardErrors];
+
+export type PostApiV1AdminSettingsThemeDiscardResponses = {
+    /**
+     * Draft reset to live
+     */
+    200: {
+        success: true;
+        data: {
+            published: {
+                theme: StorefrontThemeDocument;
+                revision: number;
+            };
+            draft: {
+                theme: StorefrontThemeDocument;
+                revision: number;
+                basePublishedRevision: number;
+                updatedAt?: unknown;
+            };
+            draftDiffersFromLive: boolean;
+            lastPublished: {
+                revision: number;
+                publishedBy: string | null;
+                publishedByName: string | null;
+                createdAt?: string;
+            } | null;
+        };
+    };
+};
+
+export type PostApiV1AdminSettingsThemeDiscardResponse = PostApiV1AdminSettingsThemeDiscardResponses[keyof PostApiV1AdminSettingsThemeDiscardResponses];
+
+export type PostApiV1AdminSettingsThemePageDraftData = {
+    body: {
+        expectedDraftRevision: number;
+        basePublishedRevision: number;
+        page: 'home';
+        value: Array<{
+            id: string;
+            type: 'hero';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                layout: 'full-bleed' | 'contained-banners' | 'app-panel' | 'split' | 'story-cards' | 'full-screen' | 'wide-editorial';
+                slides: Array<{
+                    image: string;
+                    phoneImage?: string;
+                    focalPoint: {
+                        x: number;
+                        y: number;
+                    };
+                    phoneFocalPoint?: {
+                        x: number;
+                        y: number;
+                    };
+                    alt: string;
+                    heading?: string;
+                    text?: string;
+                    buttonLabel?: string;
+                    link: string | null;
+                }>;
+                phonePlacement?: 'after-categories';
+                sideBanners?: Array<{
+                    mediaId: string;
+                    alt: string;
+                    href: string | null;
+                }>;
+                phoneHeight?: 'screen' | 'compact';
+            };
+        } | {
+            id: string;
+            type: 'usp-strip';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                style: 'icons' | 'ticker';
+                source: {
+                    kind: 'delivery-facts';
+                } | {
+                    kind: 'custom';
+                    items: Array<{
+                        title: string;
+                        detail: string;
+                    }>;
+                };
+            };
+        } | {
+            id: string;
+            type: 'category-tiles';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                style: 'photo' | 'photo-grid' | 'round' | 'round-small' | 'round-row' | 'icons' | 'quad' | 'square';
+                title: string;
+                categoryIds: Array<string>;
+            };
+        } | {
+            id: string;
+            type: 'collections';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                carousel: 'large' | 'compact';
+                collectionIds: Array<string>;
+            };
+        } | {
+            id: string;
+            type: 'product-rail';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                title: string;
+                source: {
+                    kind: 'newest';
+                } | {
+                    kind: 'on-sale';
+                } | {
+                    kind: 'popular';
+                } | {
+                    kind: 'collection';
+                    collectionId: string;
+                } | {
+                    kind: 'category';
+                    categoryId: string;
+                };
+                limit: number;
+            };
+        } | {
+            id: string;
+            type: 'product-grid';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                title: string;
+                source: {
+                    kind: 'newest';
+                } | {
+                    kind: 'on-sale';
+                } | {
+                    kind: 'popular';
+                } | {
+                    kind: 'collection';
+                    collectionId: string;
+                } | {
+                    kind: 'category';
+                    categoryId: string;
+                };
+                columns: number;
+                rows: number;
+            };
+        } | {
+            id: string;
+            type: 'deal-block';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                title: string;
+                source: {
+                    kind: 'newest';
+                } | {
+                    kind: 'on-sale';
+                } | {
+                    kind: 'popular';
+                } | {
+                    kind: 'collection';
+                    collectionId: string;
+                } | {
+                    kind: 'category';
+                    categoryId: string;
+                };
+                promotionId?: string | null;
+            };
+        } | {
+            id: string;
+            type: 'product-tabs';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                title: string;
+                tabs: Array<{
+                    label: string;
+                    source: {
+                        kind: 'newest';
+                    } | {
+                        kind: 'on-sale';
+                    } | {
+                        kind: 'popular';
+                    } | {
+                        kind: 'collection';
+                        collectionId: string;
+                    } | {
+                        kind: 'category';
+                        categoryId: string;
+                    };
+                }>;
+                limit: number;
+            };
+        } | {
+            id: string;
+            type: 'shop-by';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                title: string;
+                cards: Array<{
+                    mediaId: string;
+                    title: string;
+                    href: string;
+                }>;
+            };
+        } | {
+            id: string;
+            type: 'banner-mosaic';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                tiles: Array<{
+                    mediaId: string;
+                    alt: string;
+                    href: string | null;
+                }>;
+            };
+        } | {
+            id: string;
+            type: 'lookbook';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                title: string;
+                mediaId: string | null;
+                source: {
+                    kind: 'newest';
+                } | {
+                    kind: 'on-sale';
+                } | {
+                    kind: 'popular';
+                } | {
+                    kind: 'collection';
+                    collectionId: string;
+                } | {
+                    kind: 'category';
+                    categoryId: string;
+                };
+                photo: 'tall' | 'square';
+            };
+        } | {
+            id: string;
+            type: 'banner';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                layout: 'full' | 'two-up' | 'four-up';
+                heading: string;
+                text: string;
+                mediaId: string | null;
+                cta: {
+                    label: string;
+                    href: string;
+                } | null;
+            };
+        } | {
+            id: string;
+            type: 'brand-wall';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                title: string;
+                style: 'grid' | 'rail';
+            };
+        } | {
+            id: string;
+            type: 'editorial';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                layout: 'rich-text';
+                heading: string;
+                body: string;
+            } | {
+                layout: 'image-with-text';
+                heading: string;
+                body: string;
+                mediaId: string | null;
+                imageSide: 'start' | 'end';
+            } | {
+                layout: 'multicolumn';
+                heading: string;
+                columns: Array<{
+                    title: string;
+                    text: string;
+                }>;
+            } | {
+                layout: 'testimonial';
+                quotes: Array<{
+                    quote: string;
+                    author: string;
+                }>;
+            };
+        } | {
+            id: string;
+            type: 'faq';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                heading: string;
+                items: Array<{
+                    question: string;
+                    answer: string;
+                }>;
+            };
+        } | {
+            id: string;
+            type: 'utility-cards';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                cards: Array<{
+                    title: string;
+                    text: string;
+                    href: string;
+                }>;
+            };
+        } | {
+            id: string;
+            type: 'endless-grid';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                title: string;
+                pageSize: 12 | 24 | 36;
+            };
+        } | {
+            id: string;
+            type: 'seo-text';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                heading: string;
+                body: string;
+            };
+        } | {
+            id: string;
+            type: 'recently-viewed';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                title: string;
+            };
+        } | {
+            id: string;
+            type: 'newsletter';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                heading: string;
+                text: string;
+                email?: 'optional' | 'required' | 'hidden';
+                whatsapp?: boolean;
+                buttonLabel?: string;
+            };
+        } | {
+            id: string;
+            type: 'app';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                app: string;
+                values: {
+                    [key: string]: string | number | boolean | Array<string> | unknown;
+                };
+            };
+        }>;
+    } | {
+        expectedDraftRevision: number;
+        basePublishedRevision: number;
+        page: 'landing';
+        slug: string;
+        value: {
+            title: string;
+            sections: Array<{
+                id: string;
+                type: 'hero';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    layout: 'full-bleed' | 'contained-banners' | 'app-panel' | 'split' | 'story-cards' | 'full-screen' | 'wide-editorial';
+                    slides: Array<{
+                        image: string;
+                        phoneImage?: string;
+                        focalPoint: {
+                            x: number;
+                            y: number;
+                        };
+                        phoneFocalPoint?: {
+                            x: number;
+                            y: number;
+                        };
+                        alt: string;
+                        heading?: string;
+                        text?: string;
+                        buttonLabel?: string;
+                        link: string | null;
+                    }>;
+                    phonePlacement?: 'after-categories';
+                    sideBanners?: Array<{
+                        mediaId: string;
+                        alt: string;
+                        href: string | null;
+                    }>;
+                    phoneHeight?: 'screen' | 'compact';
+                };
+            } | {
+                id: string;
+                type: 'usp-strip';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    style: 'icons' | 'ticker';
+                    source: {
+                        kind: 'delivery-facts';
+                    } | {
+                        kind: 'custom';
+                        items: Array<{
+                            title: string;
+                            detail: string;
+                        }>;
+                    };
+                };
+            } | {
+                id: string;
+                type: 'category-tiles';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    style: 'photo' | 'photo-grid' | 'round' | 'round-small' | 'round-row' | 'icons' | 'quad' | 'square';
+                    title: string;
+                    categoryIds: Array<string>;
+                };
+            } | {
+                id: string;
+                type: 'collections';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    carousel: 'large' | 'compact';
+                    collectionIds: Array<string>;
+                };
+            } | {
+                id: string;
+                type: 'product-rail';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    title: string;
+                    source: {
+                        kind: 'newest';
+                    } | {
+                        kind: 'on-sale';
+                    } | {
+                        kind: 'popular';
+                    } | {
+                        kind: 'collection';
+                        collectionId: string;
+                    } | {
+                        kind: 'category';
+                        categoryId: string;
+                    };
+                    limit: number;
+                };
+            } | {
+                id: string;
+                type: 'product-grid';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    title: string;
+                    source: {
+                        kind: 'newest';
+                    } | {
+                        kind: 'on-sale';
+                    } | {
+                        kind: 'popular';
+                    } | {
+                        kind: 'collection';
+                        collectionId: string;
+                    } | {
+                        kind: 'category';
+                        categoryId: string;
+                    };
+                    columns: number;
+                    rows: number;
+                };
+            } | {
+                id: string;
+                type: 'deal-block';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    title: string;
+                    source: {
+                        kind: 'newest';
+                    } | {
+                        kind: 'on-sale';
+                    } | {
+                        kind: 'popular';
+                    } | {
+                        kind: 'collection';
+                        collectionId: string;
+                    } | {
+                        kind: 'category';
+                        categoryId: string;
+                    };
+                    promotionId?: string | null;
+                };
+            } | {
+                id: string;
+                type: 'product-tabs';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    title: string;
+                    tabs: Array<{
+                        label: string;
+                        source: {
+                            kind: 'newest';
+                        } | {
+                            kind: 'on-sale';
+                        } | {
+                            kind: 'popular';
+                        } | {
+                            kind: 'collection';
+                            collectionId: string;
+                        } | {
+                            kind: 'category';
+                            categoryId: string;
+                        };
+                    }>;
+                    limit: number;
+                };
+            } | {
+                id: string;
+                type: 'shop-by';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    title: string;
+                    cards: Array<{
+                        mediaId: string;
+                        title: string;
+                        href: string;
+                    }>;
+                };
+            } | {
+                id: string;
+                type: 'banner-mosaic';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    tiles: Array<{
+                        mediaId: string;
+                        alt: string;
+                        href: string | null;
+                    }>;
+                };
+            } | {
+                id: string;
+                type: 'lookbook';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    title: string;
+                    mediaId: string | null;
+                    source: {
+                        kind: 'newest';
+                    } | {
+                        kind: 'on-sale';
+                    } | {
+                        kind: 'popular';
+                    } | {
+                        kind: 'collection';
+                        collectionId: string;
+                    } | {
+                        kind: 'category';
+                        categoryId: string;
+                    };
+                    photo: 'tall' | 'square';
+                };
+            } | {
+                id: string;
+                type: 'banner';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    layout: 'full' | 'two-up' | 'four-up';
+                    heading: string;
+                    text: string;
+                    mediaId: string | null;
+                    cta: {
+                        label: string;
+                        href: string;
+                    } | null;
+                };
+            } | {
+                id: string;
+                type: 'brand-wall';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    title: string;
+                    style: 'grid' | 'rail';
+                };
+            } | {
+                id: string;
+                type: 'editorial';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    layout: 'rich-text';
+                    heading: string;
+                    body: string;
+                } | {
+                    layout: 'image-with-text';
+                    heading: string;
+                    body: string;
+                    mediaId: string | null;
+                    imageSide: 'start' | 'end';
+                } | {
+                    layout: 'multicolumn';
+                    heading: string;
+                    columns: Array<{
+                        title: string;
+                        text: string;
+                    }>;
+                } | {
+                    layout: 'testimonial';
+                    quotes: Array<{
+                        quote: string;
+                        author: string;
+                    }>;
+                };
+            } | {
+                id: string;
+                type: 'faq';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    heading: string;
+                    items: Array<{
+                        question: string;
+                        answer: string;
+                    }>;
+                };
+            } | {
+                id: string;
+                type: 'utility-cards';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    cards: Array<{
+                        title: string;
+                        text: string;
+                        href: string;
+                    }>;
+                };
+            } | {
+                id: string;
+                type: 'endless-grid';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    title: string;
+                    pageSize: 12 | 24 | 36;
+                };
+            } | {
+                id: string;
+                type: 'seo-text';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    heading: string;
+                    body: string;
+                };
+            } | {
+                id: string;
+                type: 'recently-viewed';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    title: string;
+                };
+            } | {
+                id: string;
+                type: 'newsletter';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    heading: string;
+                    text: string;
+                    email?: 'optional' | 'required' | 'hidden';
+                    whatsapp?: boolean;
+                    buttonLabel?: string;
+                };
+            } | {
+                id: string;
+                type: 'app';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    app: string;
+                    values: {
+                        [key: string]: string | number | boolean | Array<string> | unknown;
+                    };
+                };
+            }>;
+            overrideCms?: boolean;
+        } | null;
+    } | {
+        expectedDraftRevision: number;
+        basePublishedRevision: number;
+        page: 'product';
+        value: {
+            blocks: Array<{
+                id: 'gallery' | 'title-price' | 'options' | 'buy-buttons' | 'description' | 'specs' | 'reviews' | 'related-products' | 'apps';
+                hidden: boolean;
+            }>;
+        };
+    } | {
+        expectedDraftRevision: number;
+        basePublishedRevision: number;
+        page: 'collection';
+        value: {
+            blocks: Array<{
+                id: 'breadcrumbs' | 'banner' | 'filters' | 'grid';
+                hidden: boolean;
+            }>;
+        };
+    } | {
+        expectedDraftRevision: number;
+        basePublishedRevision: number;
+        page: 'search';
+        value: {
+            blocks: Array<{
+                id: 'breadcrumbs' | 'banner' | 'filters' | 'grid';
+                hidden: boolean;
+            }>;
+        };
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/theme/page-draft';
+};
+
+export type PostApiV1AdminSettingsThemePageDraftErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminSettingsThemePageDraftError = PostApiV1AdminSettingsThemePageDraftErrors[keyof PostApiV1AdminSettingsThemePageDraftErrors];
+
+export type PostApiV1AdminSettingsThemePageDraftResponses = {
+    /**
+     * Page draft saved
+     */
+    200: {
+        success: true;
+        data: {
+            theme: StorefrontThemeDocument;
+            revision: number;
+            basePublishedRevision: number;
+            updatedAt?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminSettingsThemePageDraftResponse = PostApiV1AdminSettingsThemePageDraftResponses[keyof PostApiV1AdminSettingsThemePageDraftResponses];
+
+export type GetApiV1AdminSettingsThemeAgentWorkspaceData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/theme/agent/workspace';
+};
+
+export type GetApiV1AdminSettingsThemeAgentWorkspaceErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsThemeAgentWorkspaceError = GetApiV1AdminSettingsThemeAgentWorkspaceErrors[keyof GetApiV1AdminSettingsThemeAgentWorkspaceErrors];
+
+export type GetApiV1AdminSettingsThemeAgentWorkspaceResponses = {
+    /**
+     * Theme revisions
+     */
+    200: {
+        success: true;
+        data: {
+            published: {
+                revision: number;
+            };
+            draft: {
+                revision: number;
+                basePublishedRevision: number;
+                updatedAt?: string;
+            };
+            draftDiffersFromLive: boolean;
+            lastPublished: {
+                revision: number;
+                publishedBy: string | null;
+                publishedByName: string | null;
+                createdAt?: string;
+            } | null;
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsThemeAgentWorkspaceResponse = GetApiV1AdminSettingsThemeAgentWorkspaceResponses[keyof GetApiV1AdminSettingsThemeAgentWorkspaceResponses];
+
+export type PostApiV1AdminSettingsThemeAgentDraftData = {
+    body: {
+        theme: StorefrontThemeDocument;
+        expectedDraftRevision: number;
+        basePublishedRevision: number;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/theme/agent/draft';
+};
+
+export type PostApiV1AdminSettingsThemeAgentDraftErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminSettingsThemeAgentDraftError = PostApiV1AdminSettingsThemeAgentDraftErrors[keyof PostApiV1AdminSettingsThemeAgentDraftErrors];
+
+export type PostApiV1AdminSettingsThemeAgentDraftResponses = {
+    /**
+     * Draft revision receipt
+     */
+    200: {
+        success: true;
+        data: {
+            revision: number;
+            basePublishedRevision: number;
+            updatedAt?: string;
+        };
+    };
+};
+
+export type PostApiV1AdminSettingsThemeAgentDraftResponse = PostApiV1AdminSettingsThemeAgentDraftResponses[keyof PostApiV1AdminSettingsThemeAgentDraftResponses];
+
+export type PostApiV1AdminSettingsThemeAgentPublishData = {
+    body: {
+        note?: string;
+        expectedPublishedRevision: number;
+        expectedDraftRevision: number;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/theme/agent/publish';
+};
+
+export type PostApiV1AdminSettingsThemeAgentPublishErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminSettingsThemeAgentPublishError = PostApiV1AdminSettingsThemeAgentPublishErrors[keyof PostApiV1AdminSettingsThemeAgentPublishErrors];
+
+export type PostApiV1AdminSettingsThemeAgentPublishResponses = {
+    /**
+     * Theme revisions
+     */
+    200: {
+        success: true;
+        data: {
+            published: {
+                revision: number;
+            };
+            draft: {
+                revision: number;
+                basePublishedRevision: number;
+                updatedAt?: string;
+            };
+            draftDiffersFromLive: boolean;
+            lastPublished: {
+                revision: number;
+                publishedBy: string | null;
+                publishedByName: string | null;
+                createdAt?: string;
+            } | null;
+        };
+    };
+};
+
+export type PostApiV1AdminSettingsThemeAgentPublishResponse = PostApiV1AdminSettingsThemeAgentPublishResponses[keyof PostApiV1AdminSettingsThemeAgentPublishResponses];
+
+export type PostApiV1AdminSettingsThemeAgentRestoreData = {
+    body: {
+        expectedDraftRevision: number;
+        basePublishedRevision: number;
+        sourceRevision: number;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/theme/agent/restore';
+};
+
+export type PostApiV1AdminSettingsThemeAgentRestoreErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminSettingsThemeAgentRestoreError = PostApiV1AdminSettingsThemeAgentRestoreErrors[keyof PostApiV1AdminSettingsThemeAgentRestoreErrors];
+
+export type PostApiV1AdminSettingsThemeAgentRestoreResponses = {
+    /**
+     * Theme revisions
+     */
+    200: {
+        success: true;
+        data: {
+            published: {
+                revision: number;
+            };
+            draft: {
+                revision: number;
+                basePublishedRevision: number;
+                updatedAt?: string;
+            };
+            draftDiffersFromLive: boolean;
+            lastPublished: {
+                revision: number;
+                publishedBy: string | null;
+                publishedByName: string | null;
+                createdAt?: string;
+            } | null;
+        };
+    };
+};
+
+export type PostApiV1AdminSettingsThemeAgentRestoreResponse = PostApiV1AdminSettingsThemeAgentRestoreResponses[keyof PostApiV1AdminSettingsThemeAgentRestoreResponses];
+
+export type PostApiV1AdminSettingsThemeAgentRollbackData = {
+    body: {
+        sourceRevision: number;
+        expectedPublishedRevision: number;
+        expectedDraftRevision: number;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/theme/agent/rollback';
+};
+
+export type PostApiV1AdminSettingsThemeAgentRollbackErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminSettingsThemeAgentRollbackError = PostApiV1AdminSettingsThemeAgentRollbackErrors[keyof PostApiV1AdminSettingsThemeAgentRollbackErrors];
+
+export type PostApiV1AdminSettingsThemeAgentRollbackResponses = {
+    /**
+     * Theme revisions
+     */
+    200: {
+        success: true;
+        data: {
+            published: {
+                revision: number;
+            };
+            draft: {
+                revision: number;
+                basePublishedRevision: number;
+                updatedAt?: string;
+            };
+            draftDiffersFromLive: boolean;
+            lastPublished: {
+                revision: number;
+                publishedBy: string | null;
+                publishedByName: string | null;
+                createdAt?: string;
+            } | null;
+        };
+    };
+};
+
+export type PostApiV1AdminSettingsThemeAgentRollbackResponse = PostApiV1AdminSettingsThemeAgentRollbackResponses[keyof PostApiV1AdminSettingsThemeAgentRollbackResponses];
+
+export type PostApiV1AdminSettingsThemeAgentDiscardData = {
+    body: {
+        expectedDraftRevision: number;
+        basePublishedRevision: number;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/theme/agent/discard';
+};
+
+export type PostApiV1AdminSettingsThemeAgentDiscardErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminSettingsThemeAgentDiscardError = PostApiV1AdminSettingsThemeAgentDiscardErrors[keyof PostApiV1AdminSettingsThemeAgentDiscardErrors];
+
+export type PostApiV1AdminSettingsThemeAgentDiscardResponses = {
+    /**
+     * Theme revisions
+     */
+    200: {
+        success: true;
+        data: {
+            published: {
+                revision: number;
+            };
+            draft: {
+                revision: number;
+                basePublishedRevision: number;
+                updatedAt?: string;
+            };
+            draftDiffersFromLive: boolean;
+            lastPublished: {
+                revision: number;
+                publishedBy: string | null;
+                publishedByName: string | null;
+                createdAt?: string;
+            } | null;
+        };
+    };
+};
+
+export type PostApiV1AdminSettingsThemeAgentDiscardResponse = PostApiV1AdminSettingsThemeAgentDiscardResponses[keyof PostApiV1AdminSettingsThemeAgentDiscardResponses];
+
+export type PostApiV1AdminSettingsThemeAgentPageDraftData = {
+    body: {
+        expectedDraftRevision: number;
+        basePublishedRevision: number;
+        page: 'home';
+        value: Array<{
+            id: string;
+            type: 'hero';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                layout: 'full-bleed' | 'contained-banners' | 'app-panel' | 'split' | 'story-cards' | 'full-screen' | 'wide-editorial';
+                slides: Array<{
+                    image: string;
+                    phoneImage?: string;
+                    focalPoint: {
+                        x: number;
+                        y: number;
+                    };
+                    phoneFocalPoint?: {
+                        x: number;
+                        y: number;
+                    };
+                    alt: string;
+                    heading?: string;
+                    text?: string;
+                    buttonLabel?: string;
+                    link: string | null;
+                }>;
+                phonePlacement?: 'after-categories';
+                sideBanners?: Array<{
+                    mediaId: string;
+                    alt: string;
+                    href: string | null;
+                }>;
+                phoneHeight?: 'screen' | 'compact';
+            };
+        } | {
+            id: string;
+            type: 'usp-strip';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                style: 'icons' | 'ticker';
+                source: {
+                    kind: 'delivery-facts';
+                } | {
+                    kind: 'custom';
+                    items: Array<{
+                        title: string;
+                        detail: string;
+                    }>;
+                };
+            };
+        } | {
+            id: string;
+            type: 'category-tiles';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                style: 'photo' | 'photo-grid' | 'round' | 'round-small' | 'round-row' | 'icons' | 'quad' | 'square';
+                title: string;
+                categoryIds: Array<string>;
+            };
+        } | {
+            id: string;
+            type: 'collections';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                carousel: 'large' | 'compact';
+                collectionIds: Array<string>;
+            };
+        } | {
+            id: string;
+            type: 'product-rail';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                title: string;
+                source: {
+                    kind: 'newest';
+                } | {
+                    kind: 'on-sale';
+                } | {
+                    kind: 'popular';
+                } | {
+                    kind: 'collection';
+                    collectionId: string;
+                } | {
+                    kind: 'category';
+                    categoryId: string;
+                };
+                limit: number;
+            };
+        } | {
+            id: string;
+            type: 'product-grid';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                title: string;
+                source: {
+                    kind: 'newest';
+                } | {
+                    kind: 'on-sale';
+                } | {
+                    kind: 'popular';
+                } | {
+                    kind: 'collection';
+                    collectionId: string;
+                } | {
+                    kind: 'category';
+                    categoryId: string;
+                };
+                columns: number;
+                rows: number;
+            };
+        } | {
+            id: string;
+            type: 'deal-block';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                title: string;
+                source: {
+                    kind: 'newest';
+                } | {
+                    kind: 'on-sale';
+                } | {
+                    kind: 'popular';
+                } | {
+                    kind: 'collection';
+                    collectionId: string;
+                } | {
+                    kind: 'category';
+                    categoryId: string;
+                };
+                promotionId?: string | null;
+            };
+        } | {
+            id: string;
+            type: 'product-tabs';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                title: string;
+                tabs: Array<{
+                    label: string;
+                    source: {
+                        kind: 'newest';
+                    } | {
+                        kind: 'on-sale';
+                    } | {
+                        kind: 'popular';
+                    } | {
+                        kind: 'collection';
+                        collectionId: string;
+                    } | {
+                        kind: 'category';
+                        categoryId: string;
+                    };
+                }>;
+                limit: number;
+            };
+        } | {
+            id: string;
+            type: 'shop-by';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                title: string;
+                cards: Array<{
+                    mediaId: string;
+                    title: string;
+                    href: string;
+                }>;
+            };
+        } | {
+            id: string;
+            type: 'banner-mosaic';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                tiles: Array<{
+                    mediaId: string;
+                    alt: string;
+                    href: string | null;
+                }>;
+            };
+        } | {
+            id: string;
+            type: 'lookbook';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                title: string;
+                mediaId: string | null;
+                source: {
+                    kind: 'newest';
+                } | {
+                    kind: 'on-sale';
+                } | {
+                    kind: 'popular';
+                } | {
+                    kind: 'collection';
+                    collectionId: string;
+                } | {
+                    kind: 'category';
+                    categoryId: string;
+                };
+                photo: 'tall' | 'square';
+            };
+        } | {
+            id: string;
+            type: 'banner';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                layout: 'full' | 'two-up' | 'four-up';
+                heading: string;
+                text: string;
+                mediaId: string | null;
+                cta: {
+                    label: string;
+                    href: string;
+                } | null;
+            };
+        } | {
+            id: string;
+            type: 'brand-wall';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                title: string;
+                style: 'grid' | 'rail';
+            };
+        } | {
+            id: string;
+            type: 'editorial';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                layout: 'rich-text';
+                heading: string;
+                body: string;
+            } | {
+                layout: 'image-with-text';
+                heading: string;
+                body: string;
+                mediaId: string | null;
+                imageSide: 'start' | 'end';
+            } | {
+                layout: 'multicolumn';
+                heading: string;
+                columns: Array<{
+                    title: string;
+                    text: string;
+                }>;
+            } | {
+                layout: 'testimonial';
+                quotes: Array<{
+                    quote: string;
+                    author: string;
+                }>;
+            };
+        } | {
+            id: string;
+            type: 'faq';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                heading: string;
+                items: Array<{
+                    question: string;
+                    answer: string;
+                }>;
+            };
+        } | {
+            id: string;
+            type: 'utility-cards';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                cards: Array<{
+                    title: string;
+                    text: string;
+                    href: string;
+                }>;
+            };
+        } | {
+            id: string;
+            type: 'endless-grid';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                title: string;
+                pageSize: 12 | 24 | 36;
+            };
+        } | {
+            id: string;
+            type: 'seo-text';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                heading: string;
+                body: string;
+            };
+        } | {
+            id: string;
+            type: 'recently-viewed';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                title: string;
+            };
+        } | {
+            id: string;
+            type: 'newsletter';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                heading: string;
+                text: string;
+                email?: 'optional' | 'required' | 'hidden';
+                whatsapp?: boolean;
+                buttonLabel?: string;
+            };
+        } | {
+            id: string;
+            type: 'app';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                app: string;
+                values: {
+                    [key: string]: string | number | boolean | Array<string> | unknown;
+                };
+            };
+        }>;
+    } | {
+        expectedDraftRevision: number;
+        basePublishedRevision: number;
+        page: 'landing';
+        slug: string;
+        value: {
+            title: string;
+            sections: Array<{
+                id: string;
+                type: 'hero';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    layout: 'full-bleed' | 'contained-banners' | 'app-panel' | 'split' | 'story-cards' | 'full-screen' | 'wide-editorial';
+                    slides: Array<{
+                        image: string;
+                        phoneImage?: string;
+                        focalPoint: {
+                            x: number;
+                            y: number;
+                        };
+                        phoneFocalPoint?: {
+                            x: number;
+                            y: number;
+                        };
+                        alt: string;
+                        heading?: string;
+                        text?: string;
+                        buttonLabel?: string;
+                        link: string | null;
+                    }>;
+                    phonePlacement?: 'after-categories';
+                    sideBanners?: Array<{
+                        mediaId: string;
+                        alt: string;
+                        href: string | null;
+                    }>;
+                    phoneHeight?: 'screen' | 'compact';
+                };
+            } | {
+                id: string;
+                type: 'usp-strip';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    style: 'icons' | 'ticker';
+                    source: {
+                        kind: 'delivery-facts';
+                    } | {
+                        kind: 'custom';
+                        items: Array<{
+                            title: string;
+                            detail: string;
+                        }>;
+                    };
+                };
+            } | {
+                id: string;
+                type: 'category-tiles';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    style: 'photo' | 'photo-grid' | 'round' | 'round-small' | 'round-row' | 'icons' | 'quad' | 'square';
+                    title: string;
+                    categoryIds: Array<string>;
+                };
+            } | {
+                id: string;
+                type: 'collections';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    carousel: 'large' | 'compact';
+                    collectionIds: Array<string>;
+                };
+            } | {
+                id: string;
+                type: 'product-rail';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    title: string;
+                    source: {
+                        kind: 'newest';
+                    } | {
+                        kind: 'on-sale';
+                    } | {
+                        kind: 'popular';
+                    } | {
+                        kind: 'collection';
+                        collectionId: string;
+                    } | {
+                        kind: 'category';
+                        categoryId: string;
+                    };
+                    limit: number;
+                };
+            } | {
+                id: string;
+                type: 'product-grid';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    title: string;
+                    source: {
+                        kind: 'newest';
+                    } | {
+                        kind: 'on-sale';
+                    } | {
+                        kind: 'popular';
+                    } | {
+                        kind: 'collection';
+                        collectionId: string;
+                    } | {
+                        kind: 'category';
+                        categoryId: string;
+                    };
+                    columns: number;
+                    rows: number;
+                };
+            } | {
+                id: string;
+                type: 'deal-block';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    title: string;
+                    source: {
+                        kind: 'newest';
+                    } | {
+                        kind: 'on-sale';
+                    } | {
+                        kind: 'popular';
+                    } | {
+                        kind: 'collection';
+                        collectionId: string;
+                    } | {
+                        kind: 'category';
+                        categoryId: string;
+                    };
+                    promotionId?: string | null;
+                };
+            } | {
+                id: string;
+                type: 'product-tabs';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    title: string;
+                    tabs: Array<{
+                        label: string;
+                        source: {
+                            kind: 'newest';
+                        } | {
+                            kind: 'on-sale';
+                        } | {
+                            kind: 'popular';
+                        } | {
+                            kind: 'collection';
+                            collectionId: string;
+                        } | {
+                            kind: 'category';
+                            categoryId: string;
+                        };
+                    }>;
+                    limit: number;
+                };
+            } | {
+                id: string;
+                type: 'shop-by';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    title: string;
+                    cards: Array<{
+                        mediaId: string;
+                        title: string;
+                        href: string;
+                    }>;
+                };
+            } | {
+                id: string;
+                type: 'banner-mosaic';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    tiles: Array<{
+                        mediaId: string;
+                        alt: string;
+                        href: string | null;
+                    }>;
+                };
+            } | {
+                id: string;
+                type: 'lookbook';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    title: string;
+                    mediaId: string | null;
+                    source: {
+                        kind: 'newest';
+                    } | {
+                        kind: 'on-sale';
+                    } | {
+                        kind: 'popular';
+                    } | {
+                        kind: 'collection';
+                        collectionId: string;
+                    } | {
+                        kind: 'category';
+                        categoryId: string;
+                    };
+                    photo: 'tall' | 'square';
+                };
+            } | {
+                id: string;
+                type: 'banner';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    layout: 'full' | 'two-up' | 'four-up';
+                    heading: string;
+                    text: string;
+                    mediaId: string | null;
+                    cta: {
+                        label: string;
+                        href: string;
+                    } | null;
+                };
+            } | {
+                id: string;
+                type: 'brand-wall';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    title: string;
+                    style: 'grid' | 'rail';
+                };
+            } | {
+                id: string;
+                type: 'editorial';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    layout: 'rich-text';
+                    heading: string;
+                    body: string;
+                } | {
+                    layout: 'image-with-text';
+                    heading: string;
+                    body: string;
+                    mediaId: string | null;
+                    imageSide: 'start' | 'end';
+                } | {
+                    layout: 'multicolumn';
+                    heading: string;
+                    columns: Array<{
+                        title: string;
+                        text: string;
+                    }>;
+                } | {
+                    layout: 'testimonial';
+                    quotes: Array<{
+                        quote: string;
+                        author: string;
+                    }>;
+                };
+            } | {
+                id: string;
+                type: 'faq';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    heading: string;
+                    items: Array<{
+                        question: string;
+                        answer: string;
+                    }>;
+                };
+            } | {
+                id: string;
+                type: 'utility-cards';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    cards: Array<{
+                        title: string;
+                        text: string;
+                        href: string;
+                    }>;
+                };
+            } | {
+                id: string;
+                type: 'endless-grid';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    title: string;
+                    pageSize: 12 | 24 | 36;
+                };
+            } | {
+                id: string;
+                type: 'seo-text';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    heading: string;
+                    body: string;
+                };
+            } | {
+                id: string;
+                type: 'recently-viewed';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    title: string;
+                };
+            } | {
+                id: string;
+                type: 'newsletter';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    heading: string;
+                    text: string;
+                    email?: 'optional' | 'required' | 'hidden';
+                    whatsapp?: boolean;
+                    buttonLabel?: string;
+                };
+            } | {
+                id: string;
+                type: 'app';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    app: string;
+                    values: {
+                        [key: string]: string | number | boolean | Array<string> | unknown;
+                    };
+                };
+            }>;
+            overrideCms?: boolean;
+        } | null;
+    } | {
+        expectedDraftRevision: number;
+        basePublishedRevision: number;
+        page: 'product';
+        value: {
+            blocks: Array<{
+                id: 'gallery' | 'title-price' | 'options' | 'buy-buttons' | 'description' | 'specs' | 'reviews' | 'related-products' | 'apps';
+                hidden: boolean;
+            }>;
+        };
+    } | {
+        expectedDraftRevision: number;
+        basePublishedRevision: number;
+        page: 'collection';
+        value: {
+            blocks: Array<{
+                id: 'breadcrumbs' | 'banner' | 'filters' | 'grid';
+                hidden: boolean;
+            }>;
+        };
+    } | {
+        expectedDraftRevision: number;
+        basePublishedRevision: number;
+        page: 'search';
+        value: {
+            blocks: Array<{
+                id: 'breadcrumbs' | 'banner' | 'filters' | 'grid';
+                hidden: boolean;
+            }>;
+        };
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/theme/agent/page-draft';
+};
+
+export type PostApiV1AdminSettingsThemeAgentPageDraftErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminSettingsThemeAgentPageDraftError = PostApiV1AdminSettingsThemeAgentPageDraftErrors[keyof PostApiV1AdminSettingsThemeAgentPageDraftErrors];
+
+export type PostApiV1AdminSettingsThemeAgentPageDraftResponses = {
+    /**
+     * Draft revision receipt
+     */
+    200: {
+        success: true;
+        data: {
+            revision: number;
+            basePublishedRevision: number;
+            updatedAt?: string;
+        };
+    };
+};
+
+export type PostApiV1AdminSettingsThemeAgentPageDraftResponse = PostApiV1AdminSettingsThemeAgentPageDraftResponses[keyof PostApiV1AdminSettingsThemeAgentPageDraftResponses];
+
+export type GetApiV1AdminSettingsThemeAgentVersionsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        limit?: number;
+        beforeRevision?: number;
+    };
+    url: '/api/v1/admin/settings/theme/agent/versions';
+};
+
+export type GetApiV1AdminSettingsThemeAgentVersionsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsThemeAgentVersionsError = GetApiV1AdminSettingsThemeAgentVersionsErrors[keyof GetApiV1AdminSettingsThemeAgentVersionsErrors];
+
+export type GetApiV1AdminSettingsThemeAgentVersionsResponses = {
+    /**
+     * Theme version metadata page
+     */
+    200: {
+        success: true;
+        data: {
+            versions: Array<{
+                id: string;
+                revision: number;
+                source: 'publish' | 'rollback' | 'migration';
+                sourceRevision: number | null;
+                publishedBy: string | null;
+                publishedByName: string | null;
+                summary: Array<string>;
+                note: string | null;
+                createdAt?: string;
+                changesCount: number;
+            }>;
+            nextBeforeRevision: number | null;
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsThemeAgentVersionsResponse = GetApiV1AdminSettingsThemeAgentVersionsResponses[keyof GetApiV1AdminSettingsThemeAgentVersionsResponses];
+
+export type PostApiV1AdminSettingsThemeAgentPageCheckData = {
+    body: {
+        expectedDraftRevision: number;
+        expectedPublishedRevision: number;
+        page: 'home';
+        value: Array<{
+            id: string;
+            type: 'hero';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                layout: 'full-bleed' | 'contained-banners' | 'app-panel' | 'split' | 'story-cards' | 'full-screen' | 'wide-editorial';
+                slides: Array<{
+                    image: string;
+                    phoneImage?: string;
+                    focalPoint: {
+                        x: number;
+                        y: number;
+                    };
+                    phoneFocalPoint?: {
+                        x: number;
+                        y: number;
+                    };
+                    alt: string;
+                    heading?: string;
+                    text?: string;
+                    buttonLabel?: string;
+                    link: string | null;
+                }>;
+                phonePlacement?: 'after-categories';
+                sideBanners?: Array<{
+                    mediaId: string;
+                    alt: string;
+                    href: string | null;
+                }>;
+                phoneHeight?: 'screen' | 'compact';
+            };
+        } | {
+            id: string;
+            type: 'usp-strip';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                style: 'icons' | 'ticker';
+                source: {
+                    kind: 'delivery-facts';
+                } | {
+                    kind: 'custom';
+                    items: Array<{
+                        title: string;
+                        detail: string;
+                    }>;
+                };
+            };
+        } | {
+            id: string;
+            type: 'category-tiles';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                style: 'photo' | 'photo-grid' | 'round' | 'round-small' | 'round-row' | 'icons' | 'quad' | 'square';
+                title: string;
+                categoryIds: Array<string>;
+            };
+        } | {
+            id: string;
+            type: 'collections';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                carousel: 'large' | 'compact';
+                collectionIds: Array<string>;
+            };
+        } | {
+            id: string;
+            type: 'product-rail';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                title: string;
+                source: {
+                    kind: 'newest';
+                } | {
+                    kind: 'on-sale';
+                } | {
+                    kind: 'popular';
+                } | {
+                    kind: 'collection';
+                    collectionId: string;
+                } | {
+                    kind: 'category';
+                    categoryId: string;
+                };
+                limit: number;
+            };
+        } | {
+            id: string;
+            type: 'product-grid';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                title: string;
+                source: {
+                    kind: 'newest';
+                } | {
+                    kind: 'on-sale';
+                } | {
+                    kind: 'popular';
+                } | {
+                    kind: 'collection';
+                    collectionId: string;
+                } | {
+                    kind: 'category';
+                    categoryId: string;
+                };
+                columns: number;
+                rows: number;
+            };
+        } | {
+            id: string;
+            type: 'deal-block';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                title: string;
+                source: {
+                    kind: 'newest';
+                } | {
+                    kind: 'on-sale';
+                } | {
+                    kind: 'popular';
+                } | {
+                    kind: 'collection';
+                    collectionId: string;
+                } | {
+                    kind: 'category';
+                    categoryId: string;
+                };
+                promotionId?: string | null;
+            };
+        } | {
+            id: string;
+            type: 'product-tabs';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                title: string;
+                tabs: Array<{
+                    label: string;
+                    source: {
+                        kind: 'newest';
+                    } | {
+                        kind: 'on-sale';
+                    } | {
+                        kind: 'popular';
+                    } | {
+                        kind: 'collection';
+                        collectionId: string;
+                    } | {
+                        kind: 'category';
+                        categoryId: string;
+                    };
+                }>;
+                limit: number;
+            };
+        } | {
+            id: string;
+            type: 'shop-by';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                title: string;
+                cards: Array<{
+                    mediaId: string;
+                    title: string;
+                    href: string;
+                }>;
+            };
+        } | {
+            id: string;
+            type: 'banner-mosaic';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                tiles: Array<{
+                    mediaId: string;
+                    alt: string;
+                    href: string | null;
+                }>;
+            };
+        } | {
+            id: string;
+            type: 'lookbook';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                title: string;
+                mediaId: string | null;
+                source: {
+                    kind: 'newest';
+                } | {
+                    kind: 'on-sale';
+                } | {
+                    kind: 'popular';
+                } | {
+                    kind: 'collection';
+                    collectionId: string;
+                } | {
+                    kind: 'category';
+                    categoryId: string;
+                };
+                photo: 'tall' | 'square';
+            };
+        } | {
+            id: string;
+            type: 'banner';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                layout: 'full' | 'two-up' | 'four-up';
+                heading: string;
+                text: string;
+                mediaId: string | null;
+                cta: {
+                    label: string;
+                    href: string;
+                } | null;
+            };
+        } | {
+            id: string;
+            type: 'brand-wall';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                title: string;
+                style: 'grid' | 'rail';
+            };
+        } | {
+            id: string;
+            type: 'editorial';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                layout: 'rich-text';
+                heading: string;
+                body: string;
+            } | {
+                layout: 'image-with-text';
+                heading: string;
+                body: string;
+                mediaId: string | null;
+                imageSide: 'start' | 'end';
+            } | {
+                layout: 'multicolumn';
+                heading: string;
+                columns: Array<{
+                    title: string;
+                    text: string;
+                }>;
+            } | {
+                layout: 'testimonial';
+                quotes: Array<{
+                    quote: string;
+                    author: string;
+                }>;
+            };
+        } | {
+            id: string;
+            type: 'faq';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                heading: string;
+                items: Array<{
+                    question: string;
+                    answer: string;
+                }>;
+            };
+        } | {
+            id: string;
+            type: 'utility-cards';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                cards: Array<{
+                    title: string;
+                    text: string;
+                    href: string;
+                }>;
+            };
+        } | {
+            id: string;
+            type: 'endless-grid';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                title: string;
+                pageSize: 12 | 24 | 36;
+            };
+        } | {
+            id: string;
+            type: 'seo-text';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                heading: string;
+                body: string;
+            };
+        } | {
+            id: string;
+            type: 'recently-viewed';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                title: string;
+            };
+        } | {
+            id: string;
+            type: 'newsletter';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                heading: string;
+                text: string;
+                email?: 'optional' | 'required' | 'hidden';
+                whatsapp?: boolean;
+                buttonLabel?: string;
+            };
+        } | {
+            id: string;
+            type: 'app';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                app: string;
+                values: {
+                    [key: string]: string | number | boolean | Array<string> | unknown;
+                };
+            };
+        }>;
+    } | {
+        expectedDraftRevision: number;
+        expectedPublishedRevision: number;
+        page: 'landing';
+        slug: string;
+        value: {
+            title: string;
+            sections: Array<{
+                id: string;
+                type: 'hero';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    layout: 'full-bleed' | 'contained-banners' | 'app-panel' | 'split' | 'story-cards' | 'full-screen' | 'wide-editorial';
+                    slides: Array<{
+                        image: string;
+                        phoneImage?: string;
+                        focalPoint: {
+                            x: number;
+                            y: number;
+                        };
+                        phoneFocalPoint?: {
+                            x: number;
+                            y: number;
+                        };
+                        alt: string;
+                        heading?: string;
+                        text?: string;
+                        buttonLabel?: string;
+                        link: string | null;
+                    }>;
+                    phonePlacement?: 'after-categories';
+                    sideBanners?: Array<{
+                        mediaId: string;
+                        alt: string;
+                        href: string | null;
+                    }>;
+                    phoneHeight?: 'screen' | 'compact';
+                };
+            } | {
+                id: string;
+                type: 'usp-strip';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    style: 'icons' | 'ticker';
+                    source: {
+                        kind: 'delivery-facts';
+                    } | {
+                        kind: 'custom';
+                        items: Array<{
+                            title: string;
+                            detail: string;
+                        }>;
+                    };
+                };
+            } | {
+                id: string;
+                type: 'category-tiles';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    style: 'photo' | 'photo-grid' | 'round' | 'round-small' | 'round-row' | 'icons' | 'quad' | 'square';
+                    title: string;
+                    categoryIds: Array<string>;
+                };
+            } | {
+                id: string;
+                type: 'collections';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    carousel: 'large' | 'compact';
+                    collectionIds: Array<string>;
+                };
+            } | {
+                id: string;
+                type: 'product-rail';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    title: string;
+                    source: {
+                        kind: 'newest';
+                    } | {
+                        kind: 'on-sale';
+                    } | {
+                        kind: 'popular';
+                    } | {
+                        kind: 'collection';
+                        collectionId: string;
+                    } | {
+                        kind: 'category';
+                        categoryId: string;
+                    };
+                    limit: number;
+                };
+            } | {
+                id: string;
+                type: 'product-grid';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    title: string;
+                    source: {
+                        kind: 'newest';
+                    } | {
+                        kind: 'on-sale';
+                    } | {
+                        kind: 'popular';
+                    } | {
+                        kind: 'collection';
+                        collectionId: string;
+                    } | {
+                        kind: 'category';
+                        categoryId: string;
+                    };
+                    columns: number;
+                    rows: number;
+                };
+            } | {
+                id: string;
+                type: 'deal-block';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    title: string;
+                    source: {
+                        kind: 'newest';
+                    } | {
+                        kind: 'on-sale';
+                    } | {
+                        kind: 'popular';
+                    } | {
+                        kind: 'collection';
+                        collectionId: string;
+                    } | {
+                        kind: 'category';
+                        categoryId: string;
+                    };
+                    promotionId?: string | null;
+                };
+            } | {
+                id: string;
+                type: 'product-tabs';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    title: string;
+                    tabs: Array<{
+                        label: string;
+                        source: {
+                            kind: 'newest';
+                        } | {
+                            kind: 'on-sale';
+                        } | {
+                            kind: 'popular';
+                        } | {
+                            kind: 'collection';
+                            collectionId: string;
+                        } | {
+                            kind: 'category';
+                            categoryId: string;
+                        };
+                    }>;
+                    limit: number;
+                };
+            } | {
+                id: string;
+                type: 'shop-by';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    title: string;
+                    cards: Array<{
+                        mediaId: string;
+                        title: string;
+                        href: string;
+                    }>;
+                };
+            } | {
+                id: string;
+                type: 'banner-mosaic';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    tiles: Array<{
+                        mediaId: string;
+                        alt: string;
+                        href: string | null;
+                    }>;
+                };
+            } | {
+                id: string;
+                type: 'lookbook';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    title: string;
+                    mediaId: string | null;
+                    source: {
+                        kind: 'newest';
+                    } | {
+                        kind: 'on-sale';
+                    } | {
+                        kind: 'popular';
+                    } | {
+                        kind: 'collection';
+                        collectionId: string;
+                    } | {
+                        kind: 'category';
+                        categoryId: string;
+                    };
+                    photo: 'tall' | 'square';
+                };
+            } | {
+                id: string;
+                type: 'banner';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    layout: 'full' | 'two-up' | 'four-up';
+                    heading: string;
+                    text: string;
+                    mediaId: string | null;
+                    cta: {
+                        label: string;
+                        href: string;
+                    } | null;
+                };
+            } | {
+                id: string;
+                type: 'brand-wall';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    title: string;
+                    style: 'grid' | 'rail';
+                };
+            } | {
+                id: string;
+                type: 'editorial';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    layout: 'rich-text';
+                    heading: string;
+                    body: string;
+                } | {
+                    layout: 'image-with-text';
+                    heading: string;
+                    body: string;
+                    mediaId: string | null;
+                    imageSide: 'start' | 'end';
+                } | {
+                    layout: 'multicolumn';
+                    heading: string;
+                    columns: Array<{
+                        title: string;
+                        text: string;
+                    }>;
+                } | {
+                    layout: 'testimonial';
+                    quotes: Array<{
+                        quote: string;
+                        author: string;
+                    }>;
+                };
+            } | {
+                id: string;
+                type: 'faq';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    heading: string;
+                    items: Array<{
+                        question: string;
+                        answer: string;
+                    }>;
+                };
+            } | {
+                id: string;
+                type: 'utility-cards';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    cards: Array<{
+                        title: string;
+                        text: string;
+                        href: string;
+                    }>;
+                };
+            } | {
+                id: string;
+                type: 'endless-grid';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    title: string;
+                    pageSize: 12 | 24 | 36;
+                };
+            } | {
+                id: string;
+                type: 'seo-text';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    heading: string;
+                    body: string;
+                };
+            } | {
+                id: string;
+                type: 'recently-viewed';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    title: string;
+                };
+            } | {
+                id: string;
+                type: 'newsletter';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    heading: string;
+                    text: string;
+                    email?: 'optional' | 'required' | 'hidden';
+                    whatsapp?: boolean;
+                    buttonLabel?: string;
+                };
+            } | {
+                id: string;
+                type: 'app';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    app: string;
+                    values: {
+                        [key: string]: string | number | boolean | Array<string> | unknown;
+                    };
+                };
+            }>;
+            overrideCms?: boolean;
+        } | null;
+    } | {
+        expectedDraftRevision: number;
+        expectedPublishedRevision: number;
+        page: 'product';
+        value: {
+            blocks: Array<{
+                id: 'gallery' | 'title-price' | 'options' | 'buy-buttons' | 'description' | 'specs' | 'reviews' | 'related-products' | 'apps';
+                hidden: boolean;
+            }>;
+        };
+    } | {
+        expectedDraftRevision: number;
+        expectedPublishedRevision: number;
+        page: 'collection';
+        value: {
+            blocks: Array<{
+                id: 'breadcrumbs' | 'banner' | 'filters' | 'grid';
+                hidden: boolean;
+            }>;
+        };
+    } | {
+        expectedDraftRevision: number;
+        expectedPublishedRevision: number;
+        page: 'search';
+        value: {
+            blocks: Array<{
+                id: 'breadcrumbs' | 'banner' | 'filters' | 'grid';
+                hidden: boolean;
+            }>;
+        };
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/theme/agent/page-check';
+};
+
+export type PostApiV1AdminSettingsThemeAgentPageCheckErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminSettingsThemeAgentPageCheckError = PostApiV1AdminSettingsThemeAgentPageCheckErrors[keyof PostApiV1AdminSettingsThemeAgentPageCheckErrors];
+
+export type PostApiV1AdminSettingsThemeAgentPageCheckResponses = {
+    /**
+     * Exact page verification
+     */
+    200: {
+        success: true;
+        data: {
+            matches: boolean;
+            pageMatches: boolean;
+            revisionMatches: boolean;
+            publishedRevisionMatches: boolean;
+            draftRevision: number;
+            publishedRevision: number;
+        };
+    };
+};
+
+export type PostApiV1AdminSettingsThemeAgentPageCheckResponse = PostApiV1AdminSettingsThemeAgentPageCheckResponses[keyof PostApiV1AdminSettingsThemeAgentPageCheckResponses];
+
+export type GetApiV1AdminSettingsThemeAgentDocumentData = {
+    body?: never;
+    path?: never;
+    query?: {
+        source?: 'draft' | 'published' | 'version';
+        sourceRevision?: number;
+        page?: 'home' | 'landing' | 'product' | 'collection' | 'search';
+        slug?: string;
+    };
+    url: '/api/v1/admin/settings/theme/agent/document';
+};
+
+export type GetApiV1AdminSettingsThemeAgentDocumentErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsThemeAgentDocumentError = GetApiV1AdminSettingsThemeAgentDocumentErrors[keyof GetApiV1AdminSettingsThemeAgentDocumentErrors];
+
+export type GetApiV1AdminSettingsThemeAgentDocumentResponses = {
+    /**
+     * Theme or page document JSON
+     */
+    200: {
+        success: true;
+        data: {
+            source: 'draft' | 'published' | 'version';
+            revision: number;
+            basePublishedRevision: number;
+            page: 'home' | 'landing' | 'product' | 'collection' | 'search' | null;
+            slug: string | null;
+            document: StorefrontThemeDocument | Array<{
+                id: string;
+                type: 'hero';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    layout: 'full-bleed' | 'contained-banners' | 'app-panel' | 'split' | 'story-cards' | 'full-screen' | 'wide-editorial';
+                    slides: Array<{
+                        image: string;
+                        phoneImage?: string;
+                        focalPoint: {
+                            x: number;
+                            y: number;
+                        };
+                        phoneFocalPoint?: {
+                            x: number;
+                            y: number;
+                        };
+                        alt: string;
+                        heading?: string;
+                        text?: string;
+                        buttonLabel?: string;
+                        link: string | null;
+                    }>;
+                    phonePlacement?: 'after-categories';
+                    sideBanners?: Array<{
+                        mediaId: string;
+                        alt: string;
+                        href: string | null;
+                    }>;
+                    phoneHeight?: 'screen' | 'compact';
+                };
+            } | {
+                id: string;
+                type: 'usp-strip';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    style: 'icons' | 'ticker';
+                    source: {
+                        kind: 'delivery-facts';
+                    } | {
+                        kind: 'custom';
+                        items: Array<{
+                            title: string;
+                            detail: string;
+                        }>;
+                    };
+                };
+            } | {
+                id: string;
+                type: 'category-tiles';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    style: 'photo' | 'photo-grid' | 'round' | 'round-small' | 'round-row' | 'icons' | 'quad' | 'square';
+                    title: string;
+                    categoryIds: Array<string>;
+                };
+            } | {
+                id: string;
+                type: 'collections';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    carousel: 'large' | 'compact';
+                    collectionIds: Array<string>;
+                };
+            } | {
+                id: string;
+                type: 'product-rail';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    title: string;
+                    source: {
+                        kind: 'newest';
+                    } | {
+                        kind: 'on-sale';
+                    } | {
+                        kind: 'popular';
+                    } | {
+                        kind: 'collection';
+                        collectionId: string;
+                    } | {
+                        kind: 'category';
+                        categoryId: string;
+                    };
+                    limit: number;
+                };
+            } | {
+                id: string;
+                type: 'product-grid';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    title: string;
+                    source: {
+                        kind: 'newest';
+                    } | {
+                        kind: 'on-sale';
+                    } | {
+                        kind: 'popular';
+                    } | {
+                        kind: 'collection';
+                        collectionId: string;
+                    } | {
+                        kind: 'category';
+                        categoryId: string;
+                    };
+                    columns: number;
+                    rows: number;
+                };
+            } | {
+                id: string;
+                type: 'deal-block';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    title: string;
+                    source: {
+                        kind: 'newest';
+                    } | {
+                        kind: 'on-sale';
+                    } | {
+                        kind: 'popular';
+                    } | {
+                        kind: 'collection';
+                        collectionId: string;
+                    } | {
+                        kind: 'category';
+                        categoryId: string;
+                    };
+                    promotionId?: string | null;
+                };
+            } | {
+                id: string;
+                type: 'product-tabs';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    title: string;
+                    tabs: Array<{
+                        label: string;
+                        source: {
+                            kind: 'newest';
+                        } | {
+                            kind: 'on-sale';
+                        } | {
+                            kind: 'popular';
+                        } | {
+                            kind: 'collection';
+                            collectionId: string;
+                        } | {
+                            kind: 'category';
+                            categoryId: string;
+                        };
+                    }>;
+                    limit: number;
+                };
+            } | {
+                id: string;
+                type: 'shop-by';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    title: string;
+                    cards: Array<{
+                        mediaId: string;
+                        title: string;
+                        href: string;
+                    }>;
+                };
+            } | {
+                id: string;
+                type: 'banner-mosaic';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    tiles: Array<{
+                        mediaId: string;
+                        alt: string;
+                        href: string | null;
+                    }>;
+                };
+            } | {
+                id: string;
+                type: 'lookbook';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    title: string;
+                    mediaId: string | null;
+                    source: {
+                        kind: 'newest';
+                    } | {
+                        kind: 'on-sale';
+                    } | {
+                        kind: 'popular';
+                    } | {
+                        kind: 'collection';
+                        collectionId: string;
+                    } | {
+                        kind: 'category';
+                        categoryId: string;
+                    };
+                    photo: 'tall' | 'square';
+                };
+            } | {
+                id: string;
+                type: 'banner';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    layout: 'full' | 'two-up' | 'four-up';
+                    heading: string;
+                    text: string;
+                    mediaId: string | null;
+                    cta: {
+                        label: string;
+                        href: string;
+                    } | null;
+                };
+            } | {
+                id: string;
+                type: 'brand-wall';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    title: string;
+                    style: 'grid' | 'rail';
+                };
+            } | {
+                id: string;
+                type: 'editorial';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    layout: 'rich-text';
+                    heading: string;
+                    body: string;
+                } | {
+                    layout: 'image-with-text';
+                    heading: string;
+                    body: string;
+                    mediaId: string | null;
+                    imageSide: 'start' | 'end';
+                } | {
+                    layout: 'multicolumn';
+                    heading: string;
+                    columns: Array<{
+                        title: string;
+                        text: string;
+                    }>;
+                } | {
+                    layout: 'testimonial';
+                    quotes: Array<{
+                        quote: string;
+                        author: string;
+                    }>;
+                };
+            } | {
+                id: string;
+                type: 'faq';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    heading: string;
+                    items: Array<{
+                        question: string;
+                        answer: string;
+                    }>;
+                };
+            } | {
+                id: string;
+                type: 'utility-cards';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    cards: Array<{
+                        title: string;
+                        text: string;
+                        href: string;
+                    }>;
+                };
+            } | {
+                id: string;
+                type: 'endless-grid';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    title: string;
+                    pageSize: 12 | 24 | 36;
+                };
+            } | {
+                id: string;
+                type: 'seo-text';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    heading: string;
+                    body: string;
+                };
+            } | {
+                id: string;
+                type: 'recently-viewed';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    title: string;
+                };
+            } | {
+                id: string;
+                type: 'newsletter';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    heading: string;
+                    text: string;
+                    email?: 'optional' | 'required' | 'hidden';
+                    whatsapp?: boolean;
+                    buttonLabel?: string;
+                };
+            } | {
+                id: string;
+                type: 'app';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    app: string;
+                    values: {
+                        [key: string]: string | number | boolean | Array<string> | unknown;
+                    };
+                };
+            }> | {
+                title: string;
+                sections: Array<{
+                    id: string;
+                    type: 'hero';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        layout: 'full-bleed' | 'contained-banners' | 'app-panel' | 'split' | 'story-cards' | 'full-screen' | 'wide-editorial';
+                        slides: Array<{
+                            image: string;
+                            phoneImage?: string;
+                            focalPoint: {
+                                x: number;
+                                y: number;
+                            };
+                            phoneFocalPoint?: {
+                                x: number;
+                                y: number;
+                            };
+                            alt: string;
+                            heading?: string;
+                            text?: string;
+                            buttonLabel?: string;
+                            link: string | null;
+                        }>;
+                        phonePlacement?: 'after-categories';
+                        sideBanners?: Array<{
+                            mediaId: string;
+                            alt: string;
+                            href: string | null;
+                        }>;
+                        phoneHeight?: 'screen' | 'compact';
+                    };
+                } | {
+                    id: string;
+                    type: 'usp-strip';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        style: 'icons' | 'ticker';
+                        source: {
+                            kind: 'delivery-facts';
+                        } | {
+                            kind: 'custom';
+                            items: Array<{
+                                title: string;
+                                detail: string;
+                            }>;
+                        };
+                    };
+                } | {
+                    id: string;
+                    type: 'category-tiles';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        style: 'photo' | 'photo-grid' | 'round' | 'round-small' | 'round-row' | 'icons' | 'quad' | 'square';
+                        title: string;
+                        categoryIds: Array<string>;
+                    };
+                } | {
+                    id: string;
+                    type: 'collections';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        carousel: 'large' | 'compact';
+                        collectionIds: Array<string>;
+                    };
+                } | {
+                    id: string;
+                    type: 'product-rail';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        title: string;
+                        source: {
+                            kind: 'newest';
+                        } | {
+                            kind: 'on-sale';
+                        } | {
+                            kind: 'popular';
+                        } | {
+                            kind: 'collection';
+                            collectionId: string;
+                        } | {
+                            kind: 'category';
+                            categoryId: string;
+                        };
+                        limit: number;
+                    };
+                } | {
+                    id: string;
+                    type: 'product-grid';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        title: string;
+                        source: {
+                            kind: 'newest';
+                        } | {
+                            kind: 'on-sale';
+                        } | {
+                            kind: 'popular';
+                        } | {
+                            kind: 'collection';
+                            collectionId: string;
+                        } | {
+                            kind: 'category';
+                            categoryId: string;
+                        };
+                        columns: number;
+                        rows: number;
+                    };
+                } | {
+                    id: string;
+                    type: 'deal-block';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        title: string;
+                        source: {
+                            kind: 'newest';
+                        } | {
+                            kind: 'on-sale';
+                        } | {
+                            kind: 'popular';
+                        } | {
+                            kind: 'collection';
+                            collectionId: string;
+                        } | {
+                            kind: 'category';
+                            categoryId: string;
+                        };
+                        promotionId?: string | null;
+                    };
+                } | {
+                    id: string;
+                    type: 'product-tabs';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        title: string;
+                        tabs: Array<{
+                            label: string;
+                            source: {
+                                kind: 'newest';
+                            } | {
+                                kind: 'on-sale';
+                            } | {
+                                kind: 'popular';
+                            } | {
+                                kind: 'collection';
+                                collectionId: string;
+                            } | {
+                                kind: 'category';
+                                categoryId: string;
+                            };
+                        }>;
+                        limit: number;
+                    };
+                } | {
+                    id: string;
+                    type: 'shop-by';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        title: string;
+                        cards: Array<{
+                            mediaId: string;
+                            title: string;
+                            href: string;
+                        }>;
+                    };
+                } | {
+                    id: string;
+                    type: 'banner-mosaic';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        tiles: Array<{
+                            mediaId: string;
+                            alt: string;
+                            href: string | null;
+                        }>;
+                    };
+                } | {
+                    id: string;
+                    type: 'lookbook';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        title: string;
+                        mediaId: string | null;
+                        source: {
+                            kind: 'newest';
+                        } | {
+                            kind: 'on-sale';
+                        } | {
+                            kind: 'popular';
+                        } | {
+                            kind: 'collection';
+                            collectionId: string;
+                        } | {
+                            kind: 'category';
+                            categoryId: string;
+                        };
+                        photo: 'tall' | 'square';
+                    };
+                } | {
+                    id: string;
+                    type: 'banner';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        layout: 'full' | 'two-up' | 'four-up';
+                        heading: string;
+                        text: string;
+                        mediaId: string | null;
+                        cta: {
+                            label: string;
+                            href: string;
+                        } | null;
+                    };
+                } | {
+                    id: string;
+                    type: 'brand-wall';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        title: string;
+                        style: 'grid' | 'rail';
+                    };
+                } | {
+                    id: string;
+                    type: 'editorial';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        layout: 'rich-text';
+                        heading: string;
+                        body: string;
+                    } | {
+                        layout: 'image-with-text';
+                        heading: string;
+                        body: string;
+                        mediaId: string | null;
+                        imageSide: 'start' | 'end';
+                    } | {
+                        layout: 'multicolumn';
+                        heading: string;
+                        columns: Array<{
+                            title: string;
+                            text: string;
+                        }>;
+                    } | {
+                        layout: 'testimonial';
+                        quotes: Array<{
+                            quote: string;
+                            author: string;
+                        }>;
+                    };
+                } | {
+                    id: string;
+                    type: 'faq';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        heading: string;
+                        items: Array<{
+                            question: string;
+                            answer: string;
+                        }>;
+                    };
+                } | {
+                    id: string;
+                    type: 'utility-cards';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        cards: Array<{
+                            title: string;
+                            text: string;
+                            href: string;
+                        }>;
+                    };
+                } | {
+                    id: string;
+                    type: 'endless-grid';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        title: string;
+                        pageSize: 12 | 24 | 36;
+                    };
+                } | {
+                    id: string;
+                    type: 'seo-text';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        heading: string;
+                        body: string;
+                    };
+                } | {
+                    id: string;
+                    type: 'recently-viewed';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        title: string;
+                    };
+                } | {
+                    id: string;
+                    type: 'newsletter';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        heading: string;
+                        text: string;
+                        email?: 'optional' | 'required' | 'hidden';
+                        whatsapp?: boolean;
+                        buttonLabel?: string;
+                    };
+                } | {
+                    id: string;
+                    type: 'app';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        app: string;
+                        values: {
+                            [key: string]: string | number | boolean | Array<string> | unknown;
+                        };
+                    };
+                }>;
+                overrideCms?: boolean;
+            } | {
+                blocks: Array<{
+                    id: 'gallery' | 'title-price' | 'options' | 'buy-buttons' | 'description' | 'specs' | 'reviews' | 'related-products' | 'apps';
+                    hidden: boolean;
+                }>;
+            } | {
+                blocks: Array<{
+                    id: 'breadcrumbs' | 'banner' | 'filters' | 'grid';
+                    hidden: boolean;
+                }>;
+            };
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsThemeAgentDocumentResponse = GetApiV1AdminSettingsThemeAgentDocumentResponses[keyof GetApiV1AdminSettingsThemeAgentDocumentResponses];
+
 export type PostApiV1AdminSettingsThemePreviewSessionData = {
     body?: {
         expectedDraftRevision: number;
+        sourceRevision?: number;
         path?: string;
         device?: 'full' | 'desktop' | 'mobile';
     };
