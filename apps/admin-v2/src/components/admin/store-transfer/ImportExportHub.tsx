@@ -8,7 +8,7 @@ import { useMessages } from "~/i18n";
 import { storeTransferMessages } from "~/i18n/store-transfer";
 import { SettingsCard } from "../settings/SettingsPage";
 import { ExportCustomersDialog } from "../customers/ExportCustomersDialog";
-import { ImportDialog } from "./ImportDialog";
+import { ImportDialog } from "./LazyImportDialog";
 import { downloadPagedExport, type PagedExport } from "./export-download";
 import type { ImportKind } from "./import-plan";
 

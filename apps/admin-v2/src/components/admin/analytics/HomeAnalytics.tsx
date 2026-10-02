@@ -3,9 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { cn } from "@scalius/shared/utils";
 import {
-  analyticsPresetRange,
   analyticsToday,
-  defaultAnalyticsGranularity,
   type AnalyticsPreset,
 } from "@scalius/shared/analytics-period";
 import { Button } from "~/components/ui/button";
@@ -14,22 +12,12 @@ import { Skeleton } from "~/components/ui/skeleton";
 import { useCurrency } from "~/hooks/use-currency";
 import { formatNumber, useMessages } from "~/i18n";
 import { analyticsMessages } from "~/i18n/analytics";
-import { analyticsOverviewQueryOptions } from "~/lib/api-query-options/analytics";
+import { homeOverviewQuery } from "~/lib/api-query-options/analytics";
 import { MetricTile } from "./MetricTile";
 import { SalesTrendChart } from "./SalesTrendChart";
 import { formatBucketLabel, formatPercent, formatRangeLabel } from "./analytics-format";
 
 const HOME_PRESETS: AnalyticsPreset[] = ["today", "last_7_days", "last_30_days"];
-
-/** Home's overview read for a preset: the same numbers the Analytics page shows. */
-export function homeOverviewQuery(preset: AnalyticsPreset, today: string = analyticsToday()) {
-  const range = analyticsPresetRange(preset, today);
-  return analyticsOverviewQueryOptions({
-    ...range,
-    comparison: "previous_period",
-    granularity: defaultAnalyticsGranularity(range),
-  });
-}
 
 /**
  * Home's sales strip (Shopify's Home): total sales, orders, average order

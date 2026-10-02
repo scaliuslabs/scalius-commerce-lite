@@ -17,7 +17,7 @@ import {
 } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
 import { SearchableSelect } from "~/components/ui/searchable-select";
-import { useCurrency } from "~/hooks/use-currency";
+import { priceRangeText, useCurrency, type BuyerPriceRange } from "~/hooks/use-currency";
 import { useDebounce } from "~/hooks/use-debounce";
 import { formatNumber, useMessages } from "~/i18n";
 import { discountsMessages } from "~/i18n/discounts";
@@ -27,7 +27,6 @@ import {
   collectionsByIdsQueryOptions,
 } from "~/lib/api-query-options/collections";
 import { productsByIdsQueryOptions } from "~/lib/api-query-options/products";
-import { priceRangeText, type BuyerPriceRange } from "~/lib/format-utils";
 
 const LIMIT = 90;
 

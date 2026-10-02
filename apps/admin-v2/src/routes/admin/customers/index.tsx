@@ -26,7 +26,7 @@ import { DateText, sortHeader } from "~/components/admin/resource/columns";
 import { CustomerBulkActions } from "~/components/admin/customers/CustomerBulkActions";
 import { CustomerListFilters } from "~/components/admin/customers/CustomerListFilters";
 import { ExportCustomersDialog } from "~/components/admin/customers/ExportCustomersDialog";
-import { ImportDialog } from "~/components/admin/store-transfer/ImportDialog";
+import { ImportDialog } from "~/components/admin/store-transfer/LazyImportDialog";
 import { storeTransferMessages } from "~/i18n/store-transfer";
 import {
   CUSTOMER_FILTER_PARAMS,

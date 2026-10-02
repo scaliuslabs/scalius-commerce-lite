@@ -6,12 +6,11 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useOrderForm } from "./OrderFormContext";
 import type { Product } from "./types";
-import { useCurrency } from "@/hooks/use-currency";
+import { priceRangeText, useCurrency } from "@/hooks/use-currency";
 import { useMessages } from "@/i18n";
 import { orderFormMessages } from "@/i18n/order-form";
 import { resourceMessages } from "@/i18n/resource";
 import { discountedUnitPrice } from "./order-item-presentation";
-import { priceRangeText } from "@/lib/format-utils";
 
 export const PRODUCT_SEARCH_INPUT_ID = "order-product-search";
 
