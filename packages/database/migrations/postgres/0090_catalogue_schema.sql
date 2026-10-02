@@ -398,7 +398,7 @@ CREATE TABLE "attribute_values" (
 	CONSTRAINT "attribute_values_id_shape" CHECK(substr("attribute_values"."id", 1, 4) = 'atv_' AND length("attribute_values"."id") BETWEEN 10 AND 68 AND "attribute_values"."id" !~ '[^A-Za-z0-9_-]'),
 	CONSTRAINT "attribute_values_value_valid" CHECK("attribute_values"."value" = trim("attribute_values"."value") AND length("attribute_values"."value") BETWEEN 1 AND 200),
 	CONSTRAINT "attribute_values_normalized_value_valid" CHECK("attribute_values"."normalized_value" = lower(trim("attribute_values"."value"))),
-	CONSTRAINT "attribute_values_swatch_hex_valid" CHECK("attribute_values"."swatch_hex" IS NULL OR (length("attribute_values"."swatch_hex") = 7 AND "attribute_values"."swatch_hex" ~ '#[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]'))
+	CONSTRAINT "attribute_values_swatch_hex_valid" CHECK("attribute_values"."swatch_hex" IS NULL OR (length("attribute_values"."swatch_hex") = 7 AND "attribute_values"."swatch_hex" ~ '^#[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]$'))
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX "attribute_values_live_value_unique" ON "attribute_values" ("attribute_id","normalized_value") WHERE "attribute_values"."deleted_at" IS NULL;

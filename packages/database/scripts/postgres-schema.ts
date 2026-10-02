@@ -60,19 +60,36 @@ function unquoteIdentifier(identifier: string): string {
   return value;
 }
 
+/** SQLite GLOB pattern text to an anchored POSIX regex (GLOB is case-sensitive, as is `~`). */
+export function globToPostgresRegex(pattern: string): string {
+  // The common shape `*[class]*` ("contains a character of the class") stays
+  // the short unanchored class, as every sidecar already writes it.
+  const contains = /^\*(\[[^\]]+\])\*$/.exec(pattern);
+  if (contains) return contains[1]!;
+  let regex = "^";
+  for (let index = 0; index < pattern.length; index += 1) {
+    const character = pattern[index]!;
+    if (character === "*") regex += ".*";
+    else if (character === "?") regex += ".";
+    else if (character === "[") {
+      const close = pattern.indexOf("]", index + 2);
+      if (close === -1) {
+        regex += "\\[";
+        continue;
+      }
+      regex += pattern.slice(index, close + 1);
+      index = close;
+    } else regex += /[.+(){}|\\$^]/.test(character) ? `\\${character}` : character;
+  }
+  return `${regex}$`;
+}
+
 function compileGlobPatterns(sql: string): string {
-  return sql
-    .replaceAll("'*[^A-Z]*'", "'[^A-Z]'")
-    .replaceAll("'*[^A-Z0-9_-]*'", "'[^A-Z0-9_-]'")
-    .replaceAll("'*[^A-Za-z0-9_-]*'", "'[^A-Za-z0-9_-]'")
-    // Custom field namespaces and keys (0104).
-    .replaceAll("'*[^a-z0-9.-]*'", "'[^a-z0-9.-]'")
-    .replaceAll("'*[^_a-z0-9]*'", "'[^_a-z0-9]'")
-    // Plugin runtime: hex index values and collection names (0105).
-    .replaceAll("'*[^0-9a-f]*'", "'[^0-9a-f]'")
-    .replaceAll("'*[^a-z0-9-]*'", "'[^a-z0-9-]'")
-    .replace(/\bNOT\s+GLOB\b/gi, "!~")
-    .replace(/\bGLOB\b/gi, "~");
+  return sql.replace(
+    /\b(NOT\s+)?GLOB\s+'((?:[^']|'')*)'/gi,
+    (_match, not: string | undefined, pattern: string) =>
+      `${not ? "!~" : "~"} '${globToPostgresRegex(pattern.replaceAll("''", "'")).replaceAll("'", "''")}'`,
+  );
 }
 
 function compileNumericJsonChecks(sql: string): string {
@@ -396,6 +413,41 @@ function sortTablesByForeignKeys(
 }
 
 /**
+ * Unique indexes another table's foreign key points at (a composite target
+ * that is not the primary key). PostgreSQL needs them before that table's
+ * CREATE TABLE, so they move into the pre-data phase beside their table;
+ * every other index stays post-data for fast bulk loads.
+ */
+function foreignKeyTargetIndexes(
+  database: DatabaseSync,
+  tableObjects: readonly SqliteSchemaObject[],
+  indexObjects: readonly SqliteSchemaObject[],
+): ReadonlySet<string> {
+  const targets = new Set<string>();
+  for (const table of tableObjects) {
+    const escaped = table.name.replaceAll('"', '""');
+    const keys = new Map<number, { table: string; columns: string[] }>();
+    for (const row of database.prepare(`PRAGMA foreign_key_list("${escaped}")`).all()) {
+      const id = Number(row.id);
+      const key = keys.get(id) ?? { table: String(row.table), columns: [] };
+      key.columns[Number(row.seq)] = String(row.to);
+      keys.set(id, key);
+    }
+    for (const key of keys.values()) targets.add(`${key.table}(${key.columns.join(",")})`);
+  }
+  const hoisted = new Set<string>();
+  for (const index of indexObjects) {
+    if (!/^CREATE\s+UNIQUE\s+INDEX\b/i.test(index.sql) || /\bWHERE\b/i.test(index.sql)) continue;
+    const escaped = index.name.replaceAll('"', '""');
+    const columns = database.prepare(`PRAGMA index_info("${escaped}")`).all()
+      .sort((left, right) => Number(left.seqno) - Number(right.seqno))
+      .map((row) => String(row.name));
+    if (targets.has(`${index.tableName}(${columns.join(",")})`)) hoisted.add(index.name);
+  }
+  return hoisted;
+}
+
+/**
  * The fresh PostgreSQL schema compiled from the canonical SQLite chain.
  * `beforeMigration` stops before that file so sidecar parity tests can
  * upgrade an older schema and compare it with a fresh one.
@@ -411,8 +463,10 @@ export async function compileCanonicalPostgresSchema(
       database,
       objects.filter((object) => object.type === "table" && applicationTables.has(object.name)),
     );
-    const indexObjects = objects.filter((object) =>
+    const allIndexObjects = objects.filter((object) =>
       object.type === "index" && applicationTables.has(object.tableName));
+    const foreignKeyTargets = foreignKeyTargetIndexes(database, tableObjects, allIndexObjects);
+    const indexObjects = allIndexObjects.filter((object) => !foreignKeyTargets.has(object.name));
     const triggerDefinitions = readFinalTriggerDefinitions(database);
     // Cache dependency triggers have their own PostgreSQL form (deferred
     // constraint triggers that lock the clock at commit), generated from the
@@ -431,7 +485,12 @@ export async function compileCanonicalPostgresSchema(
     const preDataSql = [
       "BEGIN;",
       POSTGRES_SQLITE_PROFILE_BOOTSTRAP_SQL.trim(),
-      ...tableObjects.map((object) => `${compileSqliteDdlForPostgres(object.sql)};`),
+      ...tableObjects.flatMap((object) => [
+        `${compileSqliteDdlForPostgres(object.sql)};`,
+        ...allIndexObjects
+          .filter((index) => index.tableName === object.name && foreignKeyTargets.has(index.name))
+          .map((index) => `${compileSqliteDdlForPostgres(index.sql)};`),
+      ]),
       "COMMIT;",
       "",
     ].join("\n\n");
@@ -451,7 +510,7 @@ export async function compileCanonicalPostgresSchema(
       sql,
       sha256: createHash("sha256").update(sql).digest("hex"),
       applicationTables: tableObjects.length,
-      indexes: indexObjects.length,
+      indexes: allIndexObjects.length,
       triggers: compiledTriggers.length,
     };
   } finally {

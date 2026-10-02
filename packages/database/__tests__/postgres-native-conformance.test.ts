@@ -1,8 +1,10 @@
 import { randomUUID } from "node:crypto";
 
 import { and, eq, gt, inArray, isNull } from "drizzle-orm";
+import { Client } from "pg";
 import { describe, expect, it } from "vitest";
 
+import { compileCanonicalPostgresSchema } from "../scripts/postgres-schema";
 import { safeBatch } from "../src/batch-helper";
 import {
   connectPostgres,
@@ -10,13 +12,34 @@ import {
 } from "../src/postgres-adapter";
 import { customers, customerSessions } from "../src/schema";
 
-// Opt-in because this suite mutates its target. Point it only at an isolated,
-// disposable PostgreSQL database or branch; normal test runs remain offline.
-const nativePostgresUrl = process.env.SCALIUS_TEST_POSTGRES_URL?.trim();
+// Opt-in: point SCALIUS_TEST_POSTGRES_URL at a disposable server. The suite
+// creates its own database with the fresh schema there and drops it after.
+const serverUrl = process.env.SCALIUS_TEST_POSTGRES_URL?.trim();
 
-describe.runIf(nativePostgresUrl)("native PostgreSQL adapter conformance", () => {
+async function freshDatabaseUrl(): Promise<{ url: string; drop: () => Promise<void> }> {
+  const name = `scalius_native_${randomUUID().replaceAll("-", "")}`;
+  const admin = new Client({ connectionString: serverUrl });
+  await admin.connect();
+  await admin.query(`CREATE DATABASE ${name}`);
+  const url = new URL(serverUrl!);
+  url.pathname = `/${name}`;
+  const schema = new Client({ connectionString: url.toString() });
+  await schema.connect();
+  await schema.query((await compileCanonicalPostgresSchema()).sql);
+  await schema.end();
+  return {
+    url: url.toString(),
+    drop: async () => {
+      await admin.query(`DROP DATABASE IF EXISTS ${name} WITH (FORCE)`);
+      await admin.end();
+    },
+  };
+}
+
+describe.runIf(serverUrl)("native PostgreSQL adapter conformance", () => {
   it("persists, revokes, expires, and rolls back customer sessions", async () => {
-    const db = createPostgresDatabase(nativePostgresUrl!, {
+    const target = await freshDatabaseUrl();
+    const db = createPostgresDatabase(target.url, {
       connect: connectPostgres,
     });
     const scope = randomUUID().replaceAll("-", "");
@@ -113,6 +136,7 @@ describe.runIf(nativePostgresUrl)("native PostgreSQL adapter conformance", () =>
         customers.id,
         [customerId, rollbackCustomerId],
       ));
+      await target.drop();
     }
   });
 });

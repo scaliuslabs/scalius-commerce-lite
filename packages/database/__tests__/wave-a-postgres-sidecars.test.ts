@@ -123,7 +123,8 @@ describe.runIf(postgresUrl)("Wave A PostgreSQL sidecars", () => {
     ]);
     const freshDatabase = await database(fresh.sql);
     const upgraded = await database(before.sql);
-    await applySidecars(upgraded);
+    // 0083 through 0086, the migrations the fresh 0086 schema contains.
+    await applySidecars(upgraded, WAVE_A_SIDECARS.filter((name) => name < "0087_"));
 
     const [expected, actual] = await Promise.all([catalog(freshDatabase), catalog(upgraded)]);
     expect(actual.columns).toEqual(expected.columns);

@@ -69,7 +69,8 @@ const postgresUrl = process.env.SCALIUS_TEST_POSTGRES_URL?.trim();
 let postgresSchema: Promise<string> | undefined;
 
 async function postgresStore(): Promise<Store> {
-  postgresSchema ??= compileCanonicalPostgresSchema().then((bundle) => bundle.sql);
+  // The same pre-0065 schema the SQLite stores start from.
+  postgresSchema ??= compileCanonicalPostgresSchema({ beforeMigration: "0065_" }).then((bundle) => bundle.sql);
   const name = `scalius_migration_${randomUUID().replaceAll("-", "")}`;
   const admin = new Client({ connectionString: postgresUrl });
   await admin.connect();
