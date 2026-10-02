@@ -17,7 +17,6 @@ import {
 } from "~/components/admin/inventory/inventory-search";
 import type { InventoryWorkspaceSection } from "~/components/admin/inventory-workspace";
 import { inventoryQueryOptions } from "~/lib/api-query-options/inventory";
-import { inventoryValuationQueryOptions } from "~/lib/api-query-options/inventory-costs";
 import { adoptListSearch, useListSearch } from "~/lib/list-search";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { useMessages } from "~/i18n";
@@ -36,7 +35,9 @@ export const Route = createFileRoute("/admin/inventory/")({
       ? variantsQuery(filters)
       : filters.section === "alerts" ? alertsQuery(filters) : movementsQuery(filters);
     void queryClient.prefetchQuery(inventoryQueryOptions(query));
-    void queryClient.prefetchQuery(inventoryValuationQueryOptions());
+    // The value card's read (and its money helpers) come with the page's code, not the first download.
+    void import("~/lib/api-query-options/inventory-costs").then(({ inventoryValuationQueryOptions }) =>
+      queryClient.prefetchQuery(inventoryValuationQueryOptions()));
   },
   head: () => pageHead("inventory"),
   errorComponent: RouteErrorComponent,

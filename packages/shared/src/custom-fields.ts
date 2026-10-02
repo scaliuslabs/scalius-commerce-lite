@@ -20,7 +20,7 @@
 
 import { toHandle } from "./handle";
 import { fromMinor, isWholeCashAmountMinor, toMinor, WHOLE_TAKA_MESSAGE } from "./money";
-import { PLUGIN_ID_PATTERN } from "./plugins/manifest";
+import { PLUGIN_ID_PATTERN } from "./plugins/ids";
 
 // ---------------------------------------------------------------------------
 // Vocabulary

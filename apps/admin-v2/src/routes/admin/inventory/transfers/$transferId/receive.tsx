@@ -7,7 +7,11 @@ import { RouteErrorComponent } from "~/lib/route-error";
 import { pageHead } from "~/i18n/page-titles";
 
 export const Route = createFileRoute("/admin/inventory/transfers/$transferId/receive")({
-  loader: ({ context: { queryClient }, params }) => queryClient.ensureQueryData(transferQueryOptions(params.transferId)),
+  // The read's module comes with the page's own code, not the dashboard's first download.
+  loader: async ({ context: { queryClient }, params }) => {
+    const { transferQueryOptions: options } = await import("~/lib/api-query-options/purchasing");
+    return queryClient.ensureQueryData(options(params.transferId));
+  },
   head: () => pageHead("receiveItems"),
   errorComponent: RouteErrorComponent,
   component: ReceiveTransferPage,
