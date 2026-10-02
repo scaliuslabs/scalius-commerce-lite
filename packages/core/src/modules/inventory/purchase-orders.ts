@@ -34,7 +34,6 @@ import { fromMinor } from "@scalius/shared/money";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
 import { variantOptionLabelSql } from "../products/option-model";
-import { spreadsheetSafeCsvCell } from "../orders/csv-export";
 import { readStoreCurrency, type StoreCurrency } from "../settings/store-money";
 import { inventoryOperationKeySchema } from "./inventory.validation";
 import { resolveActiveInventoryLocation } from "./locations";
@@ -920,6 +919,17 @@ export async function receivePurchaseOrder(
 // ─────────────────────────────────────────
 // Export
 // ─────────────────────────────────────────
+
+/**
+ * A quoted CSV cell a spreadsheet will not run as a formula (the same rule as
+ * the order and movement exports; kept here so inventory does not depend on
+ * the orders domain).
+ */
+function spreadsheetSafeCsvCell(value: unknown): string {
+  const text = value == null ? "" : value instanceof Date ? value.toISOString() : String(value);
+  const safe = /^[\t\r\n ]*[=+\-@]/.test(text) && !/^\+\d{6,15}$/.test(text) ? `'${text}` : text;
+  return `"${safe.replaceAll('"', '""')}"`;
+}
 
 /** One purchase order as CSV: a header block, then one row per line (formula-safe). */
 export async function buildPurchaseOrderCsv(db: Database, id: string) {
