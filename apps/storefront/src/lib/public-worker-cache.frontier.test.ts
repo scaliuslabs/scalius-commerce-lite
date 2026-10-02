@@ -272,11 +272,12 @@ describe("one frontier refresh and one slow check per isolate", () => {
     let release!: () => void;
     const gate = new Promise<void>((resolve) => { release = resolve; });
     const original = mock.getMockImplementation()! as (...args: Parameters<T>) => Promise<unknown>;
-    mock.mockImplementation((async (...args: Parameters<T>) => {
+    const held = async (...args: Parameters<T>) => {
       const answer = await original(...args);
       await gate;
       return answer;
-    }) as T);
+    };
+    mock.mockImplementation(held as unknown as Parameters<typeof mock.mockImplementation>[0]);
     return release;
   }
 
