@@ -1,11 +1,11 @@
-import type { OrderFormMessageKey } from "~/i18n/order-form";
+import type { OrderEditLockMessageKey } from "~/i18n/order-edit-locks";
 
 interface EditState {
   allowed: boolean;
   reason: string | null;
 }
 
-const LOCK_MESSAGE: Record<string, OrderFormMessageKey> = {
+const LOCK_MESSAGE: Record<string, OrderEditLockMessageKey> = {
   shipped: "lockShipped",
   closed: "lockClosed",
   paid: "lockPaid",
@@ -19,7 +19,7 @@ const LOCK_MESSAGE: Record<string, OrderFormMessageKey> = {
 };
 
 /** The plain sentence for a server edit-lock reason code. */
-export function editLockMessageKey(reason: string | null): OrderFormMessageKey {
+export function editLockMessageKey(reason: string | null): OrderEditLockMessageKey {
   return (reason && LOCK_MESSAGE[reason]) || "lockUnknown";
 }
 
@@ -30,7 +30,7 @@ export function editLockMessageKey(reason: string | null): OrderFormMessageKey {
  */
 export function orderEditState(readiness: { items: EditState; details: EditState }):
   | { mode: "amend" }
-  | { mode: "locked"; message: OrderFormMessageKey; canEditDetails: boolean } {
+  | { mode: "locked"; message: OrderEditLockMessageKey; canEditDetails: boolean } {
   if (readiness.items.allowed) return { mode: "amend" };
   return {
     mode: "locked",

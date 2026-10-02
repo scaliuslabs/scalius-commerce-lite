@@ -11,7 +11,7 @@ import { useMessages } from "@/i18n";
 import { orderFormMessages } from "@/i18n/order-form";
 import { resourceMessages } from "@/i18n/resource";
 import { discountedUnitPrice } from "./order-item-presentation";
-import { priceRangeText } from "@/lib/format-utils";
+import { priceRangeText } from "@/lib/price-range";
 
 export const PRODUCT_SEARCH_INPUT_ID = "order-product-search";
 

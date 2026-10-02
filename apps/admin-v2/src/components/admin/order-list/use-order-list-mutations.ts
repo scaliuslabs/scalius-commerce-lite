@@ -11,7 +11,7 @@ import { apiData } from "~/lib/api";
 import { getServerFnError } from "~/lib/api-helpers";
 import { queryKeys } from "~/lib/query-keys";
 import { useMessages } from "~/i18n";
-import { orderListMessages } from "~/i18n/order-list";
+import { orderArchiveMessages } from "~/i18n/order-archive";
 import { chunk, summarizeBulkResults, type OrderBulkOutcome } from "./order-bulk-actions";
 
 /** Orders, their details, the home dashboard and stock all change with these actions. */
@@ -55,7 +55,7 @@ async function runBulkChunk(input: BulkInput, orderIds: string[]) {
  */
 export function useOrderBulkRun() {
   const queryClient = useQueryClient();
-  const t = useMessages(orderListMessages);
+  const t = useMessages(orderArchiveMessages);
   return useMutation({
     mutationFn: async (input: BulkInput): Promise<OrderBulkOutcome> => {
       const outcome: OrderBulkOutcome = { succeeded: [], failures: [] };
@@ -87,7 +87,7 @@ export interface ArchivableOrder {
  */
 export function useArchiveOrdersWithUndo({ canUndo }: { canUndo: boolean }) {
   const queryClient = useQueryClient();
-  const t = useMessages(orderListMessages);
+  const t = useMessages(orderArchiveMessages);
 
   const restore = async (orders: readonly ArchivableOrder[]) => {
     let failed = 0;

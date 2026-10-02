@@ -6,7 +6,7 @@ import { mediaImageUrl } from "@scalius/shared/media-variants";
 import { useCurrency } from "~/hooks/use-currency";
 import { useDebounce } from "~/hooks/use-debounce";
 import { collectionProductOptionsQueryOptions } from "~/lib/api-query-options/collections";
-import { priceRangeText } from "~/lib/format-utils";
+import { priceRangeText } from "~/lib/price-range";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";

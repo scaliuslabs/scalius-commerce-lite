@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { Archive, Blocks, CircleCheck, Download, MoreHorizontal, Printer, Send, ShoppingBag, Truck } from "lucide-react";
@@ -28,7 +28,6 @@ import { translate, useLocale, useMessages } from "~/i18n";
 import { resourceMessages } from "~/i18n/resource";
 import { orderListMessages } from "~/i18n/order-list";
 import { BulkOrdersDialog } from "./BulkOrdersDialog";
-import { OrderRowCancelDialog } from "./CancelOrderDialog";
 import { ExportOrdersDialog } from "./ExportOrdersDialog";
 import { getOrderColumns } from "./order-columns";
 import { getOrderRefreshPause, planOrderBulkAction, type OrderBulkAction } from "./order-bulk-actions";
@@ -46,6 +45,10 @@ import { OrderListToolbar } from "./OrderListToolbar";
 import { OrderMobileCard } from "./OrderMobileCard";
 import { useOrderActions, type OrderSelection } from "./use-order-actions";
 import { useOrderAutoRefresh } from "./use-order-auto-refresh";
+
+// The cancel confirmation (the order page's restock and reason copy) loads the
+// first time Cancelled is chosen from a row's status menu.
+const OrderRowCancelDialog = lazy(() => import("./CancelOrderDialog").then((module) => ({ default: module.OrderRowCancelDialog })));
 
 const selectOrders = createDataSelector<OrderListItem>("orders");
 /** "Archive all matching orders" loads at most this many orders to act on. */
@@ -284,6 +287,10 @@ export function OrderList({
     onChange({ ...CLEARED_ORDER_FILTERS, ...orderSearchSortUpdates("", term, search.sort), view: undefined });
   };
   const cancelOrder = actions.cancelOrder;
+  const [cancelLoaded, setCancelLoaded] = useState(false);
+  useEffect(() => {
+    if (cancelOrder) setCancelLoaded(true);
+  }, [cancelOrder]);
 
   return (
     <>
@@ -354,14 +361,18 @@ export function OrderList({
       </SelectionSheet>
       {appActions.dialogs}
 
-      <OrderRowCancelDialog
-        order={cancelOrder}
-        pending={cancelOrder !== null && actions.updatingStatusIds.has(cancelOrder.id)}
-        onOpenChange={(open) => {
-          if (!open) actions.setCancelOrder(null);
-        }}
-        onConfirm={(order, reason) => actions.changeStatus(order, "cancelled", { confirmed: true, reason })}
-      />
+      {cancelLoaded ? (
+        <Suspense fallback={null}>
+          <OrderRowCancelDialog
+            order={cancelOrder}
+            pending={cancelOrder !== null && actions.updatingStatusIds.has(cancelOrder.id)}
+            onOpenChange={(open) => {
+              if (!open) actions.setCancelOrder(null);
+            }}
+            onConfirm={(order, reason) => actions.changeStatus(order, "cancelled", { confirmed: true, reason })}
+          />
+        </Suspense>
+      ) : null}
 
       <BulkOrdersDialog
         action={actions.dialog?.action ?? null}

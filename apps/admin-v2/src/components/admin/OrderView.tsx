@@ -15,7 +15,7 @@ import { PageHeader } from "~/components/admin/resource/PageHeader";
 import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions";
 import { useMessages } from "~/i18n";
 import { orderDetailMessages } from "~/i18n/order-detail";
-import { orderFormMessages } from "~/i18n/order-form";
+import { orderEditLockMessages } from "~/i18n/order-edit-locks";
 import { orderMessages } from "~/i18n/orders";
 import { useMarkOrderDelivered, useRestoreOrder, useUpdateOrderStatus } from "~/lib/api-mutations/orders";
 import { orderSkipReason } from "./order-list/order-bulk-actions";
@@ -60,7 +60,7 @@ const SELF_EXPLAINED_LOCKS = new Set(["shipped", "closed", "archived"]);
 export function OrderView({ order }: { order: Order }) {
   const t = useMessages(orderDetailMessages);
   const o = useMessages(orderMessages);
-  const f = useMessages(orderFormMessages);
+  const f = useMessages(orderEditLockMessages);
   const actions = useOrderActionPermissions();
   const statusMutation = useUpdateOrderStatus();
   const restoreMutation = useRestoreOrder();
