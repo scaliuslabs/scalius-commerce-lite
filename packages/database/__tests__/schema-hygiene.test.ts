@@ -17,11 +17,11 @@ describe("canonical schema hygiene", () => {
         RETIRED_PRE_CONSOLIDATION_TABLES.has(table));
 
       expect(d1Tables).toEqual(tursoTables);
-      expect(d1Tables).toHaveLength(154);
+      expect(d1Tables).toHaveLength(156);
       // The homepage hero is the theme document's hero section (0106).
       expect(d1Tables).not.toContain("hero_sliders");
       expect(d1Tables).not.toContain("hero_sections");
-      for (const plugins of ["plugin_installations", "plugin_registrations", "plugin_records", "plugin_kv", "plugin_log_entries"]) {
+      for (const plugins of ["plugin_installations", "plugin_registrations", "plugin_records", "plugin_kv", "plugin_log_entries", "plugin_event_deliveries", "plugin_cron_runs"]) {
         expect(d1Tables).toContain(plugins);
       }
       expect(d1Tables).toContain("custom_field_definitions");

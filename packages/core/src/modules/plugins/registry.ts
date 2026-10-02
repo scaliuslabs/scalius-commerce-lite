@@ -49,6 +49,33 @@ export async function listActiveEventPlugins(db: Database, topic: string): Promi
   return rows.filter((row) => !seen.has(row.installation.pluginId) && Boolean(seen.add(row.installation.pluginId)));
 }
 
+/** Whether any active plugin subscribes to any topic: the event pipeline's "nobody listens" check. */
+export async function hasActiveEventPlugins(db: Database): Promise<boolean> {
+  const row = await db.select({ pluginId: pluginRegistrations.pluginId })
+    .from(pluginRegistrations)
+    .innerJoin(pluginInstallations, eq(pluginInstallations.pluginId, pluginRegistrations.pluginId))
+    .where(and(eq(pluginRegistrations.kind, "event"), eq(pluginInstallations.status, "active")))
+    .limit(1)
+    .get();
+  return Boolean(row);
+}
+
+/** Every cron job of every active plugin (one row per job), by plugin id then job name. */
+export async function listActiveCronJobs(db: Database): Promise<RegisteredPlugin[]> {
+  const rows = await db.select({ priority: pluginRegistrations.priority, name: pluginRegistrations.name, installation: pluginInstallations })
+    .from(pluginRegistrations)
+    .innerJoin(pluginInstallations, eq(pluginInstallations.pluginId, pluginRegistrations.pluginId))
+    .where(and(eq(pluginRegistrations.kind, "cron"), eq(pluginInstallations.status, "active")))
+    .orderBy(asc(pluginRegistrations.pluginId), asc(pluginRegistrations.name))
+    .all();
+  const result: RegisteredPlugin[] = [];
+  for (const row of rows) {
+    const installation = toPluginInstallation(row.installation);
+    if (installation) result.push({ installation, priority: row.priority, name: row.name });
+  }
+  return result;
+}
+
 export async function getActivePluginInstallation(db: Database, pluginId: string): Promise<PluginInstallation | null> {
   const row = await db.select().from(pluginInstallations)
     .where(and(eq(pluginInstallations.pluginId, pluginId), eq(pluginInstallations.status, "active")))

@@ -6,7 +6,7 @@
 // passed with each call, bound by the host to this installation's authority.
 
 import { SANDBOX_RUNTIME_MODULE } from "../sandbox-runtime.gen";
-import type { PluginBridgeProps } from "../bridge";
+import { pluginBridgeFactory } from "./sandbox-availability";
 import type { PluginInvocationResult } from "@scalius/plugin-sdk/runtime";
 import { PluginLoadError, type PluginLoader, type PluginLoadTarget } from "./types";
 
@@ -28,18 +28,7 @@ interface SandboxEntrypoint {
   invokeLifecycle(bridge: unknown, seed: unknown, hook: string, options: { keepData?: boolean }): Promise<PluginInvocationResult>;
 }
 
-type BridgeFactory = (options: { props: PluginBridgeProps }) => unknown;
-
-/** The loopback binding for the `PluginBridge` entrypoint re-exported by the Worker entry. */
-export function pluginBridgeFactory(ctx: ExecutionContext): BridgeFactory | null {
-  const exportsObject = (ctx as unknown as { exports?: Record<string, unknown> }).exports;
-  const factory = exportsObject?.PluginBridge;
-  return typeof factory === "function" ? factory as BridgeFactory : null;
-}
-
-export function isPluginSandboxAvailable(env: Env, ctx: ExecutionContext): boolean {
-  return Boolean(env.LOADER) && pluginBridgeFactory(ctx) !== null;
-}
+export { isPluginSandboxAvailable, pluginBridgeFactory } from "./sandbox-availability";
 
 async function sha256Hex(bytes: ArrayBuffer): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", bytes);

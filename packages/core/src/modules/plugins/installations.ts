@@ -6,6 +6,9 @@
 import type { Database } from "@scalius/database/client";
 import { buildBatchGuard, isBatchGuardError, safeBatch } from "@scalius/database/client";
 import {
+  customFieldDefinitions,
+  pluginCronRuns,
+  pluginEventDeliveries,
   pluginInstallations,
   pluginKv,
   pluginLogEntries,
@@ -30,7 +33,7 @@ import {
   type PluginSettingValue,
   type PluginSettingValues,
 } from "@scalius/shared/plugins";
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { PluginError } from "./errors";
 import { isKnownPermission, isPluginGrantablePermission } from "./grants";
 import {
@@ -292,7 +295,16 @@ function missingRequiredSettings(installation: PluginInstallation): string[] {
 export async function activatePlugin(
   db: Database,
   pluginId: string,
-  options: { actorUserId: string; expectedRevision: number },
+  options: {
+    actorUserId: string;
+    expectedRevision: number;
+    /**
+     * The grant key of the request the approver was shown. When given, a
+     * manifest that changed since (a new grant request) refuses instead of
+     * approving something nobody saw.
+     */
+    expectedGrantKey?: string;
+  },
 ): Promise<PluginInstallation> {
   const installation = await requirePluginInstallation(db, pluginId);
   const missing = missingRequiredSettings(installation);
@@ -300,6 +312,11 @@ export async function activatePlugin(
     throw new PluginError("installation.settings_incomplete", `Fill in the required settings first: ${missing.join(", ")}.`, { missing });
   }
   const grant = pluginGrantRequest(installation.manifest);
+  if (options.expectedGrantKey !== undefined && options.expectedGrantKey !== pluginGrantKey(grant)) {
+    throw new PluginError("installation.grant_changed", `${installation.manifest.name} now asks for different access; review it again.`, {
+      currentRevision: installation.revision,
+    });
+  }
   const updated = await db.update(pluginInstallations).set({
     status: "active",
     grantJson: JSON.stringify(grant),
@@ -375,8 +392,11 @@ export interface UpdatePluginInput {
 /**
  * Replaces the code and manifest. An active plugin whose new grant request
  * asks for anything not yet approved waits in `installed` for a Super Admin
- * (the old grant is kept on record); a narrower one stays active. Storage
- * collections whose index declaration changed are re-indexed.
+ * (the old grant is kept on record, `pluginNeedsApproval` reports it); a
+ * narrower one stays active. A `failed` plugin was running when it failed
+ * (only active plugins run), so an update resumes it the same way: active
+ * when its grant still covers the new request, else waiting for approval.
+ * Storage collections whose index declaration changed are re-indexed.
  */
 export async function updatePluginInstallation(
   db: Database,
@@ -388,9 +408,10 @@ export async function updatePluginInstallation(
   if (manifest.id !== pluginId) throw new PluginError("manifest.invalid", `The manifest is for ${manifest.id}, not ${pluginId}.`);
   const sha256 = requireSha256(input.bundleSha256);
   const request = pluginGrantRequest(manifest);
-  const needsApproval = current.status === "active" && (!current.grant || pluginGrantExpands(current.grant, request));
-  const status: PluginInstallationStatus = current.status === "active" ? (needsApproval ? "installed" : "active") : current.status;
-  const grant = current.status === "active" && !needsApproval ? request : current.grant;
+  const wasRunning = current.status === "active" || (current.status === "failed" && current.grant !== null && current.activatedBy !== null);
+  const needsApproval = wasRunning && (!current.grant || pluginGrantExpands(current.grant, request));
+  const status: PluginInstallationStatus = wasRunning ? (needsApproval ? "installed" : "active") : current.status;
+  const grant = wasRunning && !needsApproval ? request : current.grant;
   const settings = migrateStoredSettings(current.storedSettings, manifest.settings);
 
   try {
@@ -425,26 +446,58 @@ export async function updatePluginInstallation(
   return requirePluginInstallation(db, pluginId);
 }
 
-/** Removes the installation and its logs; records and KV stay unless `keepData` is false. */
+/**
+ * Removes the installation (its registrations go with it), in one batch.
+ * `keepData: true` keeps everything the plugin owns for a reinstall: storage
+ * records, KV, logs, the delivery and cron history (deliveries still waiting
+ * are cancelled) and its custom fields. `keepData: false` deletes all of it,
+ * including its custom-field namespace (definitions and, by cascade, values).
+ */
 export async function uninstallPlugin(
   db: Database,
   pluginId: string,
   options: { keepData: boolean; expectedRevision: number },
 ): Promise<void> {
+  const waiting = ["pending", "enqueueing", "queued", "processing", "failed"] as const;
   try {
     await safeBatch(db, [
       revisionGuard(db, pluginId, options.expectedRevision),
       db.delete(pluginInstallations).where(eq(pluginInstallations.pluginId, pluginId)),
-      db.delete(pluginLogEntries).where(eq(pluginLogEntries.pluginId, pluginId)),
-      ...(options.keepData ? [] : [
-        db.delete(pluginRecords).where(eq(pluginRecords.pluginId, pluginId)),
-        db.delete(pluginKv).where(eq(pluginKv.pluginId, pluginId)),
-      ]),
+      ...(options.keepData
+        ? [
+          db.update(pluginEventDeliveries).set({
+            status: "cancelled",
+            claimId: null,
+            claimExpiresAt: null,
+            lastError: "The app was uninstalled.",
+            nextAttemptAt: 253_402_300_799,
+            updatedAt: sql`unixepoch()`,
+          }).where(and(eq(pluginEventDeliveries.pluginId, pluginId), inArray(pluginEventDeliveries.status, [...waiting]))),
+        ]
+        : [
+          db.delete(pluginRecords).where(eq(pluginRecords.pluginId, pluginId)),
+          db.delete(pluginKv).where(eq(pluginKv.pluginId, pluginId)),
+          db.delete(pluginLogEntries).where(eq(pluginLogEntries.pluginId, pluginId)),
+          db.delete(pluginEventDeliveries).where(eq(pluginEventDeliveries.pluginId, pluginId)),
+          db.delete(pluginCronRuns).where(eq(pluginCronRuns.pluginId, pluginId)),
+          // Plugin namespaces are plugin ids (COMMERCE-HOOKS H4); values cascade.
+          db.delete(customFieldDefinitions).where(eq(customFieldDefinitions.namespace, pluginId)),
+        ]),
     ] as never);
   } catch (error) {
     if (isBatchGuardError(error, REVISION_GUARD)) await requireRevision(db, pluginId, options.expectedRevision, []);
     throw error;
   }
+}
+
+/**
+ * An update asked for access the approved grant does not cover: the plugin
+ * waits (`installed`) until a Super Admin approves the new request.
+ */
+export function pluginNeedsApproval(installation: PluginInstallation): boolean {
+  return installation.status !== "active"
+    && installation.grant !== null
+    && pluginGrantExpands(installation.grant, pluginGrantRequest(installation.manifest));
 }
 
 // ── Settings ─────────────────────────────────────────────────────────────

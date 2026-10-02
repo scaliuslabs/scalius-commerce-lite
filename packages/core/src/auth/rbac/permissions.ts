@@ -192,6 +192,19 @@ export const PERMISSIONS = {
   WEBHOOKS_MANAGE: "webhooks.manage",
 
   // =============================================
+  // Apps (3 permissions): installed plugins (docs/platform/PLUGINS.md).
+  // View: see installed apps and open their pages (an app's pages show what
+  // the app reads under its own grant). Use: take actions inside an app
+  // (its pages' mutating calls). Manage: activate, approve access, change
+  // settings, deactivate, uninstall - SUPER ADMIN DEFAULT; approving an
+  // app's access additionally requires a Super Admin. Plugins can never hold
+  // any of these (grants.ts).
+  // =============================================
+  APPS_VIEW: "apps.view",
+  APPS_USE: "apps.use",
+  APPS_MANAGE: "apps.manage",
+
+  // =============================================
   // Dashboard (2 permissions)
   // =============================================
   DASHBOARD_VIEW: "dashboard.view",
@@ -1029,6 +1042,35 @@ export const PERMISSION_METADATA: Record<
     displayName: "Manage Webhooks",
     description: "Create, edit, test, rotate secrets of, retry and delete webhook endpoints",
     resource: "webhooks",
+    action: "manage",
+    category: "Settings",
+    isSensitive: true,
+  },
+
+  // Apps
+  [PERMISSIONS.APPS_VIEW]: {
+    name: PERMISSIONS.APPS_VIEW,
+    displayName: "View Apps",
+    description: "See installed apps, their activity and logs, and open their pages",
+    resource: "apps",
+    action: "view",
+    category: "Settings",
+    isSensitive: false,
+  },
+  [PERMISSIONS.APPS_USE]: {
+    name: PERMISSIONS.APPS_USE,
+    displayName: "Use Apps",
+    description: "Take actions inside installed apps' pages",
+    resource: "apps",
+    action: "use",
+    category: "Settings",
+    isSensitive: false,
+  },
+  [PERMISSIONS.APPS_MANAGE]: {
+    name: PERMISSIONS.APPS_MANAGE,
+    displayName: "Manage Apps",
+    description: "Activate, configure, retry, deactivate and uninstall apps",
+    resource: "apps",
     action: "manage",
     category: "Settings",
     isSensitive: true,

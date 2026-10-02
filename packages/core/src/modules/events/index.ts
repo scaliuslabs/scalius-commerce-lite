@@ -10,8 +10,10 @@ export * from "./webhook-subscriptions";
 export * from "./webhook-delivery";
 
 /**
- * Every fan-out target, in dispatch order. A plugin subscriber target joins
- * this list (it implements `EventFanOutTarget`: idempotent per event id,
- * recording its own durable work and returning follow-up queue messages).
+ * The core fan-out targets. The API composes the full list
+ * (apps/api/src/events/targets.ts) with the plugin subscriber target from
+ * `@scalius/core/modules/plugins`, which depends on this module and so cannot
+ * be listed here. Every target implements `EventFanOutTarget`: idempotent per
+ * event id, recording its own durable work and returning follow-up messages.
  */
 export const EVENT_FAN_OUT_TARGETS: readonly EventFanOutTarget[] = [webhookFanOutTarget];

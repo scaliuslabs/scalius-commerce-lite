@@ -542,14 +542,35 @@ async function runScheduledMaintenanceInner(
     if (
       events.events.scanned > 0
       || events.deliveries.scanned > 0
+      || events.pluginDeliveries.scanned > 0
       || events.pruned.events > 0
       || events.pruned.deliveries > 0
+      || events.pruned.pluginDeliveries > 0
     ) {
       console.log(
         `[scheduled] Event outbox: scanned=${events.events.scanned}, enqueued=${events.events.enqueued}, ` +
           `settledWithoutSubscribers=${events.events.settledWithoutSubscribers}, failed=${events.events.failed}, ` +
           `deliveriesScanned=${events.deliveries.scanned}, deliveriesEnqueued=${events.deliveries.enqueued}, ` +
-          `prunedEvents=${events.pruned.events}, prunedDeliveries=${events.pruned.deliveries}`,
+          `pluginDeliveriesScanned=${events.pluginDeliveries.scanned}, pluginDeliveriesEnqueued=${events.pluginDeliveries.enqueued}, ` +
+          `prunedEvents=${events.pruned.events}, prunedDeliveries=${events.pruned.deliveries}, ` +
+          `prunedPluginDeliveries=${events.pruned.pluginDeliveries}`,
+      );
+    }
+  });
+
+  await isolated(async () => {
+    // Plugins (docs/platform/PLUGINS.md): bundled installations in step with
+    // the deployed code, then due cron slots (each claimed once).
+    const { runScheduledPluginMaintenance } = await import("./plugins/scheduled");
+    const plugins = await timed("plugin_maintenance", () =>
+      runScheduledPluginMaintenance(db, env, executionCtx, runContext.scheduledAt));
+    const { bundled, cron } = plugins;
+    if (bundled.installed.length > 0 || bundled.updated.length > 0 || bundled.failed.length > 0 || cron.due > 0 || cron.expired > 0) {
+      console.log(
+        `[scheduled] Plugins: installed=${bundled.installed.length}, updated=${bundled.updated.length}, ` +
+          `syncFailed=${bundled.failed.length}, cronDue=${cron.due}, cronRan=${cron.ran}, cronFailed=${cron.failed}, ` +
+          `cronSkipped=${cron.skipped}, cronDeferred=${cron.deferred}, cronExpired=${cron.expired}, ` +
+          `prunedCronRuns=${plugins.prunedCronRuns}`,
       );
     }
   });

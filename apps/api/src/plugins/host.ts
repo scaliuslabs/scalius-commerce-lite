@@ -39,11 +39,22 @@ export const PLUGIN_ROUTE_BODY_MAX_BYTES = 1024 * 1024;
 const ROUTE_HEADER_NAME = /^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,64}$/;
 const ROUTE_FORBIDDEN_HEADERS = /^(?:set-cookie|content-length|transfer-encoding|connection|access-control-.*|strict-transport-security|content-security-policy.*)$/i;
 
+/**
+ * Why an invocation did not produce a value: the plugin is not active, the
+ * installation was just updated to the deployed build (try again), the
+ * platform cannot load it here (no sandbox), its code could not be loaded
+ * (the plugin is now failed), it ran out of wall time, it threw, or it
+ * returned an invalid value.
+ */
+export type PluginInvocationFailure = "inactive" | "outdated" | "unavailable" | "load_failed" | "timeout" | "error" | "invalid";
+
 export interface PluginInvocationOutcome<T = null> {
   ok: boolean;
   value: T | null;
   /** Plain-language reason when not ok (also written to the plugin's log). */
   error: string | null;
+  /** Set when not ok. */
+  failure?: PluginInvocationFailure;
 }
 
 export interface PluginHostOptions {
@@ -148,20 +159,20 @@ export class PluginHost {
   ): Promise<PluginInvocationOutcome<PluginFunctionOutput<P>>> {
     const wallMs = Math.min(installation.manifest.limits.wallMs, PLUGIN_FUNCTION_WALL_MS);
     const outcome = await this.run(installation, { kind: "function", point, input }, `function:${point}`, wallMs);
-    if (!outcome.ok) return { ok: false, value: null, error: outcome.error };
+    if (!outcome.ok) return failed(outcome);
     const parsed = PLUGIN_FUNCTION_SCHEMAS[point].output.safeParse(outcome.value);
     if (!parsed.success) {
       const issue = parsed.error.issues[0];
       const reason = `Invalid ${point} output${issue ? ` at ${issue.path.join(".") || "(root)"}: ${issue.message}` : ""}.`;
       await this.incident(installation, `function:${point}`, reason);
-      return { ok: false, value: null, error: reason };
+      return { ok: false, value: null, error: reason, failure: "invalid" };
     }
     return { ok: true, value: parsed.data as PluginFunctionOutput<P>, error: null };
   }
 
   async invokeEvent(installation: PluginInstallation, event: PluginEvent): Promise<PluginInvocationOutcome> {
     const outcome = await this.run(installation, { kind: "event", event }, `event:${event.topic}`, installation.manifest.limits.wallMs);
-    return { ok: outcome.ok, value: null, error: outcome.error };
+    return outcome.ok ? { ok: true, value: null, error: null } : failed(outcome);
   }
 
   async invokeRoute(
@@ -172,18 +183,18 @@ export class PluginHost {
   ): Promise<PluginInvocationOutcome<{ status: number; headers: Record<string, string>; body: unknown }>> {
     const source = `route:${surface}/${name}`;
     const outcome = await this.run(installation, { kind: "route", surface, name, request }, source, installation.manifest.limits.wallMs);
-    if (!outcome.ok) return { ok: false, value: null, error: outcome.error };
+    if (!outcome.ok) return failed(outcome);
     const response = validatePluginRouteResponse(outcome.value);
     if (typeof response === "string") {
       await this.incident(installation, source, `Invalid route response: ${response}`);
-      return { ok: false, value: null, error: response };
+      return { ok: false, value: null, error: response, failure: "invalid" };
     }
     return { ok: true, value: response, error: null };
   }
 
   async invokeCron(installation: PluginInstallation, name: string, scheduledAt: string): Promise<PluginInvocationOutcome> {
     const outcome = await this.run(installation, { kind: "cron", name, scheduledAt }, `cron:${name}`, installation.manifest.limits.wallMs);
-    return { ok: outcome.ok, value: null, error: outcome.error };
+    return outcome.ok ? { ok: true, value: null, error: null } : failed(outcome);
   }
 
   async invokeLifecycle(
@@ -192,7 +203,7 @@ export class PluginHost {
     options: { keepData?: boolean } = {},
   ): Promise<PluginInvocationOutcome> {
     const outcome = await this.run(installation, { kind: "lifecycle", hook, keepData: options.keepData }, `lifecycle:${hook}`, installation.manifest.limits.wallMs);
-    return { ok: outcome.ok, value: null, error: outcome.error };
+    return outcome.ok ? { ok: true, value: null, error: null } : failed(outcome);
   }
 
   // ── internals ──────────────────────────────────────────────────────────
@@ -250,9 +261,9 @@ export class PluginHost {
     invocation: PluginInvocation,
     source: string,
     wallMs: number,
-  ): Promise<{ ok: boolean; value: unknown; error: string | null }> {
+  ): Promise<RunOutcome> {
     if (installation.status !== "active") {
-      return { ok: false, value: null, error: `${installation.pluginId} is not active.` };
+      return { ok: false, value: null, error: `${installation.pluginId} is not active.`, failure: "inactive" };
     }
     const { seed, secrets, unreadable } = await this.seed(installation, invocation.kind !== "function");
     const lines: PluginLogInput[] = [];
@@ -265,6 +276,7 @@ export class PluginHost {
     });
     let result: PluginInvocationResult | null = null;
     let error: string | null = null;
+    let failure: PluginInvocationFailure = "error";
     try {
       result = await Promise.race([
         this.loaderFor(installation).invoke({ installation, invocation, seed, bridgeProps: this.bridgeProps(installation) }),
@@ -273,8 +285,21 @@ export class PluginHost {
     } catch (thrown) {
       if (thrown instanceof PluginTimeoutError) {
         error = `${source} exceeded its ${wallMs} ms wall-time limit.`;
+        failure = "timeout";
+      } else if (thrown instanceof PluginLoadError && thrown.outdated) {
+        // The deployment carries a newer build: bring the installation in
+        // step (bundled-sync.ts); the next call runs the new version, or
+        // waits for approval when the update asks for more access.
+        const { syncBundledPlugin } = await import("./bundled-sync");
+        const synced = await syncBundledPlugin(this.db, installation.pluginId).catch(() => null);
+        error = synced
+          ? `${installation.pluginId} was updated to ${synced.version}${synced.status === "active" ? "" : " and waits for approval"}.`
+          : thrown.message;
+        failure = synced ? "outdated" : "load_failed";
+        if (!synced) await markPluginFailed(this.db, installation.pluginId, thrown.message);
       } else if (thrown instanceof PluginLoadError) {
         error = thrown.message;
+        failure = thrown.markFailed ? "load_failed" : "unavailable";
         if (thrown.markFailed) await markPluginFailed(this.db, installation.pluginId, thrown.message);
       } else {
         error = `${source} failed: ${thrown instanceof Error ? thrown.name : "error"}.`;
@@ -289,12 +314,13 @@ export class PluginHost {
         error = result.error?.message ?? `${source} failed.`;
         if (result.error?.code === "plugin.handlers_mismatch" || result.error?.code === "plugin.identity_mismatch") {
           await markPluginFailed(this.db, installation.pluginId, error);
+          failure = "load_failed";
         }
       }
     }
-    if (error) lines.push({ level: "error", source: "host", message: `${source}: ${error}` });
+    if (error) lines.push({ level: failure === "outdated" ? "info" : "error", source: "host", message: `${source}: ${error}` });
     await this.writeLogs(installation, lines, secrets);
-    return error ? { ok: false, value: null, error } : { ok: true, value: result?.value ?? null, error: null };
+    return error ? { ok: false, value: null, error, failure } : { ok: true, value: result?.value ?? null, error: null };
   }
 
   private async incident(installation: PluginInstallation, source: string, message: string): Promise<void> {
@@ -310,6 +336,14 @@ export class PluginHost {
       console.warn(`[plugins] ${installation.pluginId} log write failed`);
     }
   }
+}
+
+type RunOutcome =
+  | { ok: true; value: unknown; error: null }
+  | { ok: false; value: null; error: string; failure: PluginInvocationFailure };
+
+function failed<T>(outcome: Extract<RunOutcome, { ok: false }>): PluginInvocationOutcome<T> {
+  return { ok: false, value: null, error: outcome.error, failure: outcome.failure };
 }
 
 class PluginTimeoutError extends Error {

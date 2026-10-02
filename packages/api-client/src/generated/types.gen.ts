@@ -1521,6 +1521,181 @@ export type StoreEvent = {
     dispatchedAt: string | null;
 };
 
+export type AppSummary = {
+    id: string;
+    name: string;
+    version: string;
+    description: string;
+    author: {
+        name: string;
+        url: string | null;
+    };
+    homepage: string | null;
+    source: 'bundled' | 'registry' | 'upload';
+    status: 'installed' | 'active' | 'disabled' | 'failed';
+    /**
+     * An update asks for more access than was approved; the app waits until a Super Admin approves it.
+     */
+    needsApproval: boolean;
+    failureReason: string | null;
+    revision: number;
+    installedAt: string;
+    activatedAt: string | null;
+    updatedAt: string;
+};
+
+export type AppDetail = AppSummary & {
+    /**
+     * Send back on activation: approving a request nobody was shown is refused.
+     */
+    grantKey: string;
+    request: AppGrant;
+    granted: AppGrant & unknown;
+    added: AppGrant & unknown;
+    permissions: Array<{
+        name: string;
+        risk: 'read' | 'write' | 'destructive' | 'financial';
+        sensitive: boolean;
+    }>;
+    activatedBy: {
+        id: string;
+        name: string;
+    } | null;
+    runtime: 'bundled' | 'sandbox';
+    runtimeAvailable: boolean;
+    settings: {
+        fields: Array<AppSettingField>;
+        values: {
+            [key: string]: string | number | boolean | Array<string> | unknown;
+        };
+        /**
+         * Whether each secret is set; secret values are never returned.
+         */
+        secrets: {
+            [key: string]: boolean;
+        };
+        /**
+         * Required settings still empty (activation needs them).
+         */
+        missing: Array<string>;
+    };
+    routes: {
+        admin: Array<{
+            name: string;
+            methods: Array<string>;
+        }>;
+        public: Array<{
+            name: string;
+            methods: Array<string>;
+        }>;
+        webhooks: Array<string>;
+    };
+    cron: Array<{
+        name: string;
+        schedule: string;
+        lastRun: {
+            scheduledFor: string;
+            status: 'running' | 'succeeded' | 'failed';
+            finishedAt: string | null;
+            durationMs: number | null;
+            error: string | null;
+        } | null;
+    }>;
+    storage: Array<string>;
+    customFields: Array<{
+        ownerType: string;
+        key: string;
+        name: string;
+        type: string;
+    }>;
+    storefront: {
+        proxy: boolean;
+        head: boolean;
+        sections: number;
+        productBlocks: number;
+        scripts: Array<{
+            src: string;
+            placement: string;
+            pages: Array<string>;
+        }>;
+    };
+    admin: {
+        pages: Array<{
+            id: string;
+            title: string;
+            placement: string;
+            route: string;
+        }>;
+        cards: number;
+        actions: number;
+        widgets: number;
+    };
+    limits: {
+        cpuMs: number;
+        wallMs: number;
+    };
+};
+
+/**
+ * What an app may do; the consent screen lists it in plain words.
+ */
+export type AppGrant = {
+    permissions: Array<string>;
+    allowedHosts: Array<string>;
+    events: Array<string>;
+    functions: Array<string>;
+    providers: Array<string>;
+    publicRoutes: boolean;
+    storefrontScripts: Array<string>;
+    storefrontSurfaces: boolean;
+    customFieldOwners: Array<string>;
+};
+
+export type AppSettingField = {
+    key: string;
+    label: string;
+    help: string | null;
+    type: 'text' | 'textarea' | 'number' | 'boolean' | 'select' | 'multiselect' | 'secret' | 'url' | 'email' | 'color';
+    required: boolean;
+    options: Array<{
+        value: string;
+        label: string;
+    }> | null;
+    default: string | number | boolean | Array<string> | unknown;
+    min: number | null;
+    max: number | null;
+    integer: boolean;
+    maxLength: number | null;
+};
+
+export type AppLogLine = {
+    id: string;
+    level: 'debug' | 'info' | 'warn' | 'error';
+    source: string;
+    message: string;
+    fields: {
+        [key: string]: unknown;
+    };
+    createdAt: string;
+};
+
+export type AppEventDelivery = {
+    id: string;
+    eventId: string | null;
+    topic: string;
+    resourceType: string;
+    resourceId: string;
+    status: 'pending' | 'enqueueing' | 'queued' | 'processing' | 'succeeded' | 'failed' | 'exhausted' | 'cancelled';
+    attempts: number;
+    maxAttempts: number;
+    durationMs: number | null;
+    error: string | null;
+    nextAttemptAt: string | null;
+    lastAttemptAt: string | null;
+    deliveredAt: string | null;
+    createdAt: string;
+};
+
 export type AdminCustomFieldDefinition = {
     id: string;
     ownerType: 'product' | 'variant' | 'customer' | 'order' | 'category' | 'collection' | 'brand' | 'page';
@@ -69406,6 +69581,800 @@ export type GetApiV1AdminEventsResponses = {
 };
 
 export type GetApiV1AdminEventsResponse = GetApiV1AdminEventsResponses[keyof GetApiV1AdminEventsResponses];
+
+export type GetApiV1AdminAppsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/apps';
+};
+
+export type GetApiV1AdminAppsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminAppsError = GetApiV1AdminAppsErrors[keyof GetApiV1AdminAppsErrors];
+
+export type GetApiV1AdminAppsResponses = {
+    /**
+     * Installed apps
+     */
+    200: {
+        success: true;
+        data: {
+            apps: Array<AppSummary>;
+            sandboxAvailable: boolean;
+        };
+    };
+};
+
+export type GetApiV1AdminAppsResponse = GetApiV1AdminAppsResponses[keyof GetApiV1AdminAppsResponses];
+
+export type GetApiV1AdminAppsByIdData = {
+    body?: never;
+    path: {
+        /**
+         * The app's id (vendor.name).
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/apps/{id}';
+};
+
+export type GetApiV1AdminAppsByIdErrors = {
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminAppsByIdError = GetApiV1AdminAppsByIdErrors[keyof GetApiV1AdminAppsByIdErrors];
+
+export type GetApiV1AdminAppsByIdResponses = {
+    /**
+     * The app
+     */
+    200: {
+        success: true;
+        data: {
+            app: AppDetail;
+        };
+    };
+};
+
+export type GetApiV1AdminAppsByIdResponse = GetApiV1AdminAppsByIdResponses[keyof GetApiV1AdminAppsByIdResponses];
+
+export type PostApiV1AdminAppsByIdActivateData = {
+    body: {
+        /**
+         * The app's current revision (every change advances it).
+         */
+        expectedRevision: number;
+        grantKey: string;
+    };
+    path: {
+        /**
+         * The app's id (vendor.name).
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/apps/{id}/activate';
+};
+
+export type PostApiV1AdminAppsByIdActivateErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminAppsByIdActivateError = PostApiV1AdminAppsByIdActivateErrors[keyof PostApiV1AdminAppsByIdActivateErrors];
+
+export type PostApiV1AdminAppsByIdActivateResponses = {
+    /**
+     * Active
+     */
+    200: {
+        success: true;
+        data: {
+            app: AppDetail;
+            hookError: string | null;
+        };
+    };
+};
+
+export type PostApiV1AdminAppsByIdActivateResponse = PostApiV1AdminAppsByIdActivateResponses[keyof PostApiV1AdminAppsByIdActivateResponses];
+
+export type PostApiV1AdminAppsByIdDeactivateData = {
+    body: {
+        /**
+         * The app's current revision (every change advances it).
+         */
+        expectedRevision: number;
+    };
+    path: {
+        /**
+         * The app's id (vendor.name).
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/apps/{id}/deactivate';
+};
+
+export type PostApiV1AdminAppsByIdDeactivateErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminAppsByIdDeactivateError = PostApiV1AdminAppsByIdDeactivateErrors[keyof PostApiV1AdminAppsByIdDeactivateErrors];
+
+export type PostApiV1AdminAppsByIdDeactivateResponses = {
+    /**
+     * Stopped
+     */
+    200: {
+        success: true;
+        data: {
+            app: AppDetail;
+            hookError: string | null;
+        };
+    };
+};
+
+export type PostApiV1AdminAppsByIdDeactivateResponse = PostApiV1AdminAppsByIdDeactivateResponses[keyof PostApiV1AdminAppsByIdDeactivateResponses];
+
+export type PutApiV1AdminAppsByIdSettingsData = {
+    body: {
+        /**
+         * The app's current revision (every change advances it).
+         */
+        expectedRevision: number;
+        values: {
+            [key: string]: string | number | boolean | Array<string> | unknown;
+        };
+    };
+    path: {
+        /**
+         * The app's id (vendor.name).
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/apps/{id}/settings';
+};
+
+export type PutApiV1AdminAppsByIdSettingsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PutApiV1AdminAppsByIdSettingsError = PutApiV1AdminAppsByIdSettingsErrors[keyof PutApiV1AdminAppsByIdSettingsErrors];
+
+export type PutApiV1AdminAppsByIdSettingsResponses = {
+    /**
+     * Saved
+     */
+    200: {
+        success: true;
+        data: {
+            app: AppDetail;
+        };
+    };
+};
+
+export type PutApiV1AdminAppsByIdSettingsResponse = PutApiV1AdminAppsByIdSettingsResponses[keyof PutApiV1AdminAppsByIdSettingsResponses];
+
+export type PostApiV1AdminAppsByIdUninstallData = {
+    body: {
+        /**
+         * The app's current revision (every change advances it).
+         */
+        expectedRevision: number;
+        keepData: boolean;
+    };
+    path: {
+        /**
+         * The app's id (vendor.name).
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/apps/{id}/uninstall';
+};
+
+export type PostApiV1AdminAppsByIdUninstallErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminAppsByIdUninstallError = PostApiV1AdminAppsByIdUninstallErrors[keyof PostApiV1AdminAppsByIdUninstallErrors];
+
+export type PostApiV1AdminAppsByIdUninstallResponses = {
+    /**
+     * Uninstalled
+     */
+    200: {
+        success: true;
+        data: {
+            id: string;
+            uninstalled: true;
+            keepData: boolean;
+            hookError: string | null;
+        };
+    };
+};
+
+export type PostApiV1AdminAppsByIdUninstallResponse = PostApiV1AdminAppsByIdUninstallResponses[keyof PostApiV1AdminAppsByIdUninstallResponses];
+
+export type GetApiV1AdminAppsByIdLogsData = {
+    body?: never;
+    path: {
+        /**
+         * The app's id (vendor.name).
+         */
+        id: string;
+    };
+    query?: {
+        /**
+         * `nextCursor` of the previous page.
+         */
+        before?: string;
+        limit?: number;
+    };
+    url: '/api/v1/admin/apps/{id}/logs';
+};
+
+export type GetApiV1AdminAppsByIdLogsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminAppsByIdLogsError = GetApiV1AdminAppsByIdLogsErrors[keyof GetApiV1AdminAppsByIdLogsErrors];
+
+export type GetApiV1AdminAppsByIdLogsResponses = {
+    /**
+     * Log lines
+     */
+    200: {
+        success: true;
+        data: {
+            lines: Array<AppLogLine>;
+            nextCursor: string | null;
+        };
+    };
+};
+
+export type GetApiV1AdminAppsByIdLogsResponse = GetApiV1AdminAppsByIdLogsResponses[keyof GetApiV1AdminAppsByIdLogsResponses];
+
+export type GetApiV1AdminAppsByIdDeliveriesData = {
+    body?: never;
+    path: {
+        /**
+         * The app's id (vendor.name).
+         */
+        id: string;
+    };
+    query?: {
+        status?: 'pending' | 'enqueueing' | 'queued' | 'processing' | 'succeeded' | 'failed' | 'exhausted' | 'cancelled';
+        /**
+         * `nextCursor` of the previous page.
+         */
+        cursor?: string;
+        limit?: number;
+    };
+    url: '/api/v1/admin/apps/{id}/deliveries';
+};
+
+export type GetApiV1AdminAppsByIdDeliveriesErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminAppsByIdDeliveriesError = GetApiV1AdminAppsByIdDeliveriesErrors[keyof GetApiV1AdminAppsByIdDeliveriesErrors];
+
+export type GetApiV1AdminAppsByIdDeliveriesResponses = {
+    /**
+     * Deliveries
+     */
+    200: {
+        success: true;
+        data: {
+            deliveries: Array<AppEventDelivery>;
+            nextCursor: string | null;
+        };
+    };
+};
+
+export type GetApiV1AdminAppsByIdDeliveriesResponse = GetApiV1AdminAppsByIdDeliveriesResponses[keyof GetApiV1AdminAppsByIdDeliveriesResponses];
+
+export type PostApiV1AdminAppsByIdDeliveriesByDeliveryIdRetryData = {
+    body?: never;
+    path: {
+        /**
+         * The app's id (vendor.name).
+         */
+        id: string;
+        deliveryId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/apps/{id}/deliveries/{deliveryId}/retry';
+};
+
+export type PostApiV1AdminAppsByIdDeliveriesByDeliveryIdRetryErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Service unavailable
+     */
+    503: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminAppsByIdDeliveriesByDeliveryIdRetryError = PostApiV1AdminAppsByIdDeliveriesByDeliveryIdRetryErrors[keyof PostApiV1AdminAppsByIdDeliveriesByDeliveryIdRetryErrors];
+
+export type PostApiV1AdminAppsByIdDeliveriesByDeliveryIdRetryResponses = {
+    /**
+     * The delivery, queued for a fresh retry cycle
+     */
+    200: {
+        success: true;
+        data: {
+            delivery: AppEventDelivery;
+        };
+    };
+};
+
+export type PostApiV1AdminAppsByIdDeliveriesByDeliveryIdRetryResponse = PostApiV1AdminAppsByIdDeliveriesByDeliveryIdRetryResponses[keyof PostApiV1AdminAppsByIdDeliveriesByDeliveryIdRetryResponses];
 
 export type GetApiV1AdminCustomFieldDefinitionsData = {
     body?: never;

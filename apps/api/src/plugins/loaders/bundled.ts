@@ -72,6 +72,7 @@ export class BundledLoader implements PluginLoader {
     if (entry.version !== installation.version || entry.sha256 !== installation.bundleSha256) {
       throw new PluginLoadError(
         `The deployed code is ${installation.pluginId}@${entry.version}, but ${installation.version} is installed; update the installation.`,
+        false,
         true,
       );
     }

@@ -280,4 +280,17 @@ export const queryKeys = {
         ? (["webhooks", "deliveries", id, status] as const)
         : (["webhooks", "deliveries", id] as const),
   },
+
+  // ── Apps (installed plugins) ─────────────────────────────────────
+  apps: {
+    all: ["apps"] as const,
+    list: () => ["apps", "list"] as const,
+    detail: (id: string) => ["apps", "detail", id] as const,
+    logs: (id: string) => ["apps", "logs", id] as const,
+    /** Without `status`: every status filter of one app (for invalidation). */
+    deliveries: (id: string, status?: string) =>
+      status !== undefined
+        ? (["apps", "deliveries", id, status] as const)
+        : (["apps", "deliveries", id] as const),
+  },
 } as const;

@@ -750,6 +750,13 @@
       "when": 1790908237945,
       "tag": "0106_theme_document_v6",
       "breakpoints": true
+    },
+    {
+      "idx": 107,
+      "version": "6",
+      "when": 1790947366519,
+      "tag": "0107_plugin_platform",
+      "breakpoints": true
     }
   ]
 }

@@ -1,4 +1,4 @@
-export type RuntimeAppName = "probe" | "public" | "admin" | "system" | "docs";
+export type RuntimeAppName = "probe" | "public" | "admin" | "system" | "docs" | "plugins";
 
 const PUBLIC_PREFIXES = [
   "/api/v1/abandoned-checkouts",
@@ -54,6 +54,7 @@ export function classifyRuntimeApiPath(pathname: string): RuntimeAppName | null 
     pathname === "/api/v1/openapi.json"
   ) return "docs";
   if (matchesPathPrefix(pathname, "/api/v1/admin")) return "admin";
+  if (matchesPathPrefix(pathname, "/api/v1/plugins")) return "plugins";
   if (SYSTEM_PREFIXES.some((prefix) => matchesPathPrefix(pathname, prefix))) {
     return "system";
   }
@@ -109,6 +110,10 @@ export async function fetchRuntimeApiApp(
     }
     case "public": {
       const { default: app } = await import("./public-app");
+      return app.fetch(request, env, ctx);
+    }
+    case "plugins": {
+      const { default: app } = await import("./plugins-app");
       return app.fetch(request, env, ctx);
     }
   }

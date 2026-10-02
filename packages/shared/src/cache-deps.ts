@@ -807,6 +807,9 @@ export const CACHE_DEP_EXEMPT_TABLES: Readonly<Record<string, string>> = {
   plugin_records: PRIVATE,
   plugin_kv: PRIVATE,
   plugin_log_entries: PRIVATE,
+  // Plugin event deliveries and cron claims (0107): platform bookkeeping.
+  plugin_event_deliveries: PRIVATE,
+  plugin_cron_runs: PRIVATE,
   user: PRIVATE,
   session: PRIVATE,
   account: PRIVATE,

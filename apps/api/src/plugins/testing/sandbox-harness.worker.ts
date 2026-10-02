@@ -87,10 +87,15 @@ export default {
       import("../functions"),
     ]);
     const command = await request.json() as {
-      action: "event" | "function" | "route" | "cron" | "lifecycle";
+      action: "event" | "function" | "route" | "cron" | "lifecycle" | "deliver";
       pluginId: string;
       [key: string]: unknown;
     };
+    if (command.action === "deliver") {
+      // The whole `plugins.deliver` consumer: claim, host, record.
+      const { processPluginEventDelivery } = await import("../event-delivery");
+      return Response.json(await processPluginEventDelivery({ db, env, ctx, deliveryId: command.deliveryId as string }));
+    }
     const installation = await requirePluginInstallation(db, command.pluginId);
     const host = new PluginHost({ env, ctx, db });
     switch (command.action) {

@@ -40,4 +40,35 @@ describe("scalius.hello", () => {
     expect((await harness.route("public", "greet", { query: { name: "Karim" } })).value).toEqual({ body: { message: "Hello, Karim!", visits: 1 } });
     expect((await harness.route("public", "greet")).value).toEqual({ body: { message: "Hello, friend!", visits: 2 } });
   });
+
+  it("takes visits by POST (JSON or form) and caches the public count briefly", async () => {
+    const harness = createPluginTestHarness(hello);
+    expect((await harness.route("public", "visits", { method: "POST", body: { name: "Rina" } })).value)
+      .toEqual({ status: 201, body: { message: "Welcome, Rina!", visits: 1 } });
+    expect((await harness.route("public", "visits", { method: "POST", body: {} })).value).toMatchObject({ status: 422 });
+    expect((await harness.route("public", "visits")).value).toEqual({ headers: { "cache-control": "public, max-age=60" }, body: { visits: 1 } });
+  });
+
+  it("counts each created order once, even when the event is redelivered", async () => {
+    const harness = createPluginTestHarness(hello);
+    expect((await harness.event("order.created", { type: "order", id: "o1" }, {}, { id: "evt_1" })).ok).toBe(true);
+    expect((await harness.event("order.created", { type: "order", id: "o1" }, {}, { id: "evt_1" })).ok).toBe(true);
+    expect(harness.kv.get("created_count")).toBe(1);
+    expect((await harness.event("order.created", { type: "order", id: "o2" }, {}, { id: "evt_2" })).ok).toBe(true);
+    expect(harness.kv.get("created_count")).toBe(2);
+  });
+
+  it("accepts a ping only with a valid HMAC of the raw body", async () => {
+    const secret = "ping-secret-123";
+    const rawBody = JSON.stringify({ hello: "world" });
+    const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+    const signature = Array.from(new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(rawBody))), (byte) => byte.toString(16).padStart(2, "0")).join("");
+    const unset = createPluginTestHarness(hello);
+    expect((await unset.route("webhooks", "ping", { method: "POST", rawBody })).value).toMatchObject({ status: 503 });
+    const harness = createPluginTestHarness(hello, { settings: { webhook_secret: secret } });
+    expect((await harness.route("webhooks", "ping", { method: "POST", rawBody, headers: { "x-hello-signature": "00" } })).value).toMatchObject({ status: 401 });
+    expect((await harness.route("webhooks", "ping", { method: "POST", rawBody, body: { hello: "world" }, headers: { "x-hello-signature": signature } })).value)
+      .toEqual({ body: { received: true } });
+    expect(harness.kv.get("last_ping")).toEqual({ hello: "world" });
+  });
 });

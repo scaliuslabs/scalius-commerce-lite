@@ -16,6 +16,7 @@ export type PermissionGroup =
   | "discounts"
   | "content"
   | "tracking"
+  | "apps"
   | "settings"
   | "staff";
 
@@ -37,11 +38,12 @@ const GROUP_BY_RESOURCE: Record<string, PermissionGroup> = {
   taxes: "settings",
   agent_access: "settings",
   webhooks: "settings",
+  apps: "apps",
   team: "staff",
 };
 
 const GROUP_ORDER: PermissionGroup[] = [
-  "home", "orders", "products", "customers", "discounts", "content", "tracking", "settings", "staff",
+  "home", "orders", "products", "customers", "discounts", "content", "tracking", "apps", "settings", "staff",
 ];
 
 export const PERMISSION_GROUPS: ReadonlyArray<{ group: PermissionGroup; permissions: PermissionName[] }> =

@@ -10,6 +10,8 @@ const RESERVED_PAGE_CANONICAL_SEGMENTS = new Set([
   "account",
   "admin",
   "api",
+  // Installed apps' storefront proxy (/apps/<plugin id>/*).
+  "apps",
   "buy",
   "blog",
   "brands",

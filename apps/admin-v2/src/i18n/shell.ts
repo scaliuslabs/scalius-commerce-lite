@@ -28,6 +28,7 @@ export const shellMessages = defineMessages({
     theme: "Theme",
     navigation: "Navigation",
     preferences: "Preferences",
+    apps: "Apps",
     settings: "Settings",
     viewStore: "View your store",
     mainNavigation: "Main navigation",
@@ -97,6 +98,7 @@ export const shellMessages = defineMessages({
     theme: "থিম",
     navigation: "মেনু",
     preferences: "পছন্দসমূহ",
+    apps: "অ্যাপ",
     settings: "সেটিংস",
     viewStore: "আপনার স্টোর দেখুন",
     mainNavigation: "প্রধান মেনু",
@@ -162,6 +164,7 @@ export const navKeywordMessages = defineMessages({
     theme: "style styles styling design colours colors fonts logo favicon appearance homepage banners slider hero announcement footer",
     navigation: "menus header footer links",
     preferences: "store title description seo search engine feed facebook google social image",
+    apps: "plugins extensions integrations add-ons",
   },
   bn: {
     home: "ড্যাশবোর্ড বিক্রি আজকের",
@@ -181,5 +184,6 @@ export const navKeywordMessages = defineMessages({
     theme: "স্টাইল ডিজাইন রং ফন্ট লোগো হোমপেজ ব্যানার স্লাইডার ঘোষণা ফুটার",
     navigation: "মেনু হেডার ফুটার লিংক",
     preferences: "স্টোরের নাম বিবরণ এসইও ফিড ফেসবুক গুগল",
+    apps: "অ্যাপস প্লাগইন এক্সটেনশন ইন্টিগ্রেশন",
   },
 });

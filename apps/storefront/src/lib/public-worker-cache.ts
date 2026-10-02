@@ -59,6 +59,7 @@ const MAX_PUBLIC_QUERY_VALUE_LENGTH = 512;
 
 const RESERVED_TOP_LEVEL_PATHS = new Set([
   "account",
+  "apps",
   "api",
   "blog",
   "brands",

@@ -28,6 +28,8 @@ import { Route as AuthSetupRouteImport } from './routes/auth/setup'
 import { Route as AuthSetup2faRouteImport } from './routes/auth/setup-2fa'
 import { Route as AuthTwoFactorRouteImport } from './routes/auth/two-factor'
 import { Route as InvoiceOrderIdRouteImport } from './routes/invoice.$orderId'
+import { Route as AdminAppsIndexRouteImport } from './routes/admin/apps/index'
+import { Route as AdminAppsPluginIdRouteImport } from './routes/admin/apps/$pluginId'
 import { Route as AdminArticlesIndexRouteImport } from './routes/admin/articles/index'
 import { Route as AdminArticlesNewRouteImport } from './routes/admin/articles/new'
 import { Route as AdminBrandsIndexRouteImport } from './routes/admin/brands/index'
@@ -189,6 +191,16 @@ const InvoiceOrderIdRoute = InvoiceOrderIdRouteImport.update({
   id: '/invoice/$orderId',
   path: '/invoice/$orderId',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AdminAppsIndexRoute = AdminAppsIndexRouteImport.update({
+  id: '/apps/',
+  path: '/apps/',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminAppsPluginIdRoute = AdminAppsPluginIdRouteImport.update({
+  id: '/apps/$pluginId',
+  path: '/apps/$pluginId',
+  getParentRoute: () => AdminRoute,
 } as any)
 const AdminArticlesIndexRoute = AdminArticlesIndexRouteImport.update({
   id: '/articles/',
@@ -564,6 +576,7 @@ export interface FileRoutesByFullPath {
   '/auth/two-factor': typeof AuthTwoFactorRoute
   '/invoice/$orderId': typeof InvoiceOrderIdRoute
   '/admin/': typeof AdminIndexRoute
+  '/admin/apps/$pluginId': typeof AdminAppsPluginIdRoute
   '/admin/articles/new': typeof AdminArticlesNewRoute
   '/admin/brands/new': typeof AdminBrandsNewRoute
   '/admin/categories/new': typeof AdminCategoriesNewRoute
@@ -594,6 +607,7 @@ export interface FileRoutesByFullPath {
   '/admin/settings/taxes': typeof AdminSettingsTaxesRoute
   '/admin/settings/users': typeof AdminSettingsUsersRoute
   '/admin/settings/webhooks': typeof AdminSettingsWebhooksRoute
+  '/admin/apps/': typeof AdminAppsIndexRoute
   '/admin/articles/': typeof AdminArticlesIndexRoute
   '/admin/brands/': typeof AdminBrandsIndexRoute
   '/admin/categories/': typeof AdminCategoriesIndexRoute
@@ -649,6 +663,7 @@ export interface FileRoutesByTo {
   '/auth/two-factor': typeof AuthTwoFactorRoute
   '/invoice/$orderId': typeof InvoiceOrderIdRoute
   '/admin': typeof AdminIndexRoute
+  '/admin/apps/$pluginId': typeof AdminAppsPluginIdRoute
   '/admin/articles/new': typeof AdminArticlesNewRoute
   '/admin/brands/new': typeof AdminBrandsNewRoute
   '/admin/categories/new': typeof AdminCategoriesNewRoute
@@ -678,6 +693,7 @@ export interface FileRoutesByTo {
   '/admin/settings/taxes': typeof AdminSettingsTaxesRoute
   '/admin/settings/users': typeof AdminSettingsUsersRoute
   '/admin/settings/webhooks': typeof AdminSettingsWebhooksRoute
+  '/admin/apps': typeof AdminAppsIndexRoute
   '/admin/articles': typeof AdminArticlesIndexRoute
   '/admin/brands': typeof AdminBrandsIndexRoute
   '/admin/categories': typeof AdminCategoriesIndexRoute
@@ -736,6 +752,7 @@ export interface FileRoutesById {
   '/auth/two-factor': typeof AuthTwoFactorRoute
   '/invoice/$orderId': typeof InvoiceOrderIdRoute
   '/admin/': typeof AdminIndexRoute
+  '/admin/apps/$pluginId': typeof AdminAppsPluginIdRoute
   '/admin/articles/new': typeof AdminArticlesNewRoute
   '/admin/brands/new': typeof AdminBrandsNewRoute
   '/admin/categories/new': typeof AdminCategoriesNewRoute
@@ -766,6 +783,7 @@ export interface FileRoutesById {
   '/admin/settings/taxes': typeof AdminSettingsTaxesRoute
   '/admin/settings/users': typeof AdminSettingsUsersRoute
   '/admin/settings/webhooks': typeof AdminSettingsWebhooksRoute
+  '/admin/apps/': typeof AdminAppsIndexRoute
   '/admin/articles/': typeof AdminArticlesIndexRoute
   '/admin/brands/': typeof AdminBrandsIndexRoute
   '/admin/categories/': typeof AdminCategoriesIndexRoute
@@ -825,6 +843,7 @@ export interface FileRouteTypes {
     | '/auth/two-factor'
     | '/invoice/$orderId'
     | '/admin/'
+    | '/admin/apps/$pluginId'
     | '/admin/articles/new'
     | '/admin/brands/new'
     | '/admin/categories/new'
@@ -855,6 +874,7 @@ export interface FileRouteTypes {
     | '/admin/settings/taxes'
     | '/admin/settings/users'
     | '/admin/settings/webhooks'
+    | '/admin/apps/'
     | '/admin/articles/'
     | '/admin/brands/'
     | '/admin/categories/'
@@ -910,6 +930,7 @@ export interface FileRouteTypes {
     | '/auth/two-factor'
     | '/invoice/$orderId'
     | '/admin'
+    | '/admin/apps/$pluginId'
     | '/admin/articles/new'
     | '/admin/brands/new'
     | '/admin/categories/new'
@@ -939,6 +960,7 @@ export interface FileRouteTypes {
     | '/admin/settings/taxes'
     | '/admin/settings/users'
     | '/admin/settings/webhooks'
+    | '/admin/apps'
     | '/admin/articles'
     | '/admin/brands'
     | '/admin/categories'
@@ -996,6 +1018,7 @@ export interface FileRouteTypes {
     | '/auth/two-factor'
     | '/invoice/$orderId'
     | '/admin/'
+    | '/admin/apps/$pluginId'
     | '/admin/articles/new'
     | '/admin/brands/new'
     | '/admin/categories/new'
@@ -1026,6 +1049,7 @@ export interface FileRouteTypes {
     | '/admin/settings/taxes'
     | '/admin/settings/users'
     | '/admin/settings/webhooks'
+    | '/admin/apps/'
     | '/admin/articles/'
     | '/admin/brands/'
     | '/admin/categories/'
@@ -1208,6 +1232,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/invoice/$orderId'
       preLoaderRoute: typeof InvoiceOrderIdRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/admin/apps/': {
+      id: '/admin/apps/'
+      path: '/apps'
+      fullPath: '/admin/apps/'
+      preLoaderRoute: typeof AdminAppsIndexRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/apps/$pluginId': {
+      id: '/admin/apps/$pluginId'
+      path: '/apps/$pluginId'
+      fullPath: '/admin/apps/$pluginId'
+      preLoaderRoute: typeof AdminAppsPluginIdRouteImport
+      parentRoute: typeof AdminRoute
     }
     '/admin/articles/': {
       id: '/admin/articles/'
@@ -1765,6 +1803,7 @@ interface AdminRouteChildren {
   AdminAttributesRoute: typeof AdminAttributesRoute
   AdminMediaRoute: typeof AdminMediaRoute
   AdminIndexRoute: typeof AdminIndexRoute
+  AdminAppsPluginIdRoute: typeof AdminAppsPluginIdRoute
   AdminArticlesNewRoute: typeof AdminArticlesNewRoute
   AdminBrandsNewRoute: typeof AdminBrandsNewRoute
   AdminCategoriesNewRoute: typeof AdminCategoriesNewRoute
@@ -1781,6 +1820,7 @@ interface AdminRouteChildren {
   AdminOrdersNewRoute: typeof AdminOrdersNewRoute
   AdminPagesNewRoute: typeof AdminPagesNewRoute
   AdminProductsNewRoute: typeof AdminProductsNewRoute
+  AdminAppsIndexRoute: typeof AdminAppsIndexRoute
   AdminArticlesIndexRoute: typeof AdminArticlesIndexRoute
   AdminBrandsIndexRoute: typeof AdminBrandsIndexRoute
   AdminCategoriesIndexRoute: typeof AdminCategoriesIndexRoute
@@ -1815,6 +1855,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminAttributesRoute: AdminAttributesRoute,
   AdminMediaRoute: AdminMediaRoute,
   AdminIndexRoute: AdminIndexRoute,
+  AdminAppsPluginIdRoute: AdminAppsPluginIdRoute,
   AdminArticlesNewRoute: AdminArticlesNewRoute,
   AdminBrandsNewRoute: AdminBrandsNewRoute,
   AdminCategoriesNewRoute: AdminCategoriesNewRoute,
@@ -1831,6 +1872,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminOrdersNewRoute: AdminOrdersNewRoute,
   AdminPagesNewRoute: AdminPagesNewRoute,
   AdminProductsNewRoute: AdminProductsNewRoute,
+  AdminAppsIndexRoute: AdminAppsIndexRoute,
   AdminArticlesIndexRoute: AdminArticlesIndexRoute,
   AdminBrandsIndexRoute: AdminBrandsIndexRoute,
   AdminCategoriesIndexRoute: AdminCategoriesIndexRoute,

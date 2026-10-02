@@ -6,8 +6,13 @@ import type { BundledPluginEntry } from "./loaders/bundled";
 
 export const BUNDLED_PLUGINS: Readonly<Record<string, BundledPluginEntry>> = {
   "scalius.hello": {
-    version: "0.1.0",
-    sha256: "6d68596de8fd52d7714840277316bffe9dc8df14cf86481c807e7bf88bb51bab",
+    version: "0.2.0",
+    sha256: "b6a2d34a5144a7a042ec8405c6a57c12079a627244c5101b93a8c572baf9c258",
     load: () => import("../../../../plugins/hello/src/index"),
+  },
+  "scalius.order-tagger": {
+    version: "0.1.0",
+    sha256: "bd1c5c6d90d226f7469d76fb74b37da7a9801ea2d948f9c47f4edde66ed2181f",
+    load: () => import("../../../../plugins/order-tagger/src/index"),
   },
 };

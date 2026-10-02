@@ -1,9 +1,13 @@
-// Plugin platform persistence (docs/platform/PLUGINS.md, P1): installations
-// and their grants and settings, extension-point registrations, declared
-// storage collections, the plugin key/value store and the plugin log ring.
-// The host runtime (loaders, bridge, principal) lives in apps/api/src/plugins.
+// Plugin platform persistence (docs/platform/PLUGINS.md): installations and
+// their grants and settings, extension-point registrations, declared storage
+// collections, the plugin key/value store, the plugin log ring, event
+// deliveries (the event outbox's plugin fan-out target) and cron claims.
+// The host runtime (loaders, bridge, principal, routes, delivery and cron
+// runners) lives in apps/api/src/plugins.
 
+export * from "./cron-runs";
 export * from "./errors";
+export * from "./event-deliveries";
 export * from "./grants";
 export * from "./index-encoding";
 export * from "./installations";

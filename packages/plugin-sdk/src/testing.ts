@@ -170,9 +170,22 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
     customFields,
     logs,
     sent,
-    event: (topic: EventTopic, resource: { type: string; id: string }, facts: Record<string, unknown> = {}) => run({
+    /** Delivers an event; pass the same `id` again to test that a redelivery changes nothing. */
+    event: (
+      topic: EventTopic,
+      resource: { type: string; id: string },
+      facts: Record<string, unknown> = {},
+      options: { id?: string; occurredAt?: string } = {},
+    ) => run({
       kind: "event",
-      event: { id: `evt_test_${Date.now()}`, topic, apiVersion: "2026-10", occurredAt: new Date().toISOString(), resource, facts },
+      event: {
+        id: options.id ?? `evt_test_${Date.now()}${Math.random().toString(16).slice(2, 8)}`,
+        topic,
+        apiVersion: "2026-10",
+        occurredAt: options.occurredAt ?? new Date().toISOString(),
+        resource,
+        facts,
+      },
     }),
     fn: (point: string, input: unknown) => run({ kind: "function", point, input }),
     route: (surface: "admin" | "public" | "webhooks", name: string, request: Partial<PluginRouteRequest> = {}) => run({

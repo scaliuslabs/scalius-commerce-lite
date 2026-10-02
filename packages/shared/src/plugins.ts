@@ -6,3 +6,4 @@ export * from "./plugins/settings-schema";
 export * from "./plugins/manifest";
 export * from "./plugins/functions";
 export * from "./plugins/handlers";
+export * from "./plugins/cron";

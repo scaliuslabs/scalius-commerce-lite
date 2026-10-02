@@ -20,6 +20,7 @@ describe("generated runtime payload boundaries", () => {
     adminContent: () => import("./admin-content-app"),
     adminAccess: () => import("./admin-access-app"),
     system: () => import("./system-app"),
+    plugins: () => import("./plugins-app"),
   } as const;
 
   it.each(Object.keys(routeLoaders) as Array<keyof typeof routeLoaders>)(
