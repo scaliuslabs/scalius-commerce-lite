@@ -323,7 +323,9 @@ function ComboboxView({
   });
 
   return (
-    <Popover open={open} onOpenChange={changeOpen}>
+    // Modal: the list owns the scroll lock, so the wheel scrolls it even when
+    // the field sits in a dialog (whose lock would otherwise swallow it).
+    <Popover modal open={open} onOpenChange={changeOpen}>
       <div data-slot="searchable-select" className={cn("relative inline-block max-w-full align-middle", triggerClassName)}>
         <PopoverTrigger asChild>
           <button

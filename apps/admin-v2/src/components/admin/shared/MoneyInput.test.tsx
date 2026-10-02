@@ -34,7 +34,8 @@ describe("MoneyInput", () => {
     act(() => root.render(<MoneyInput aria-label="Taka" currencyCode="BDT" value={null} onValueChange={onValueChange} />));
     const taka = host.querySelector("input")!;
     act(() => type(taka, "75.4"));
-    expect(onValueChange).not.toHaveBeenCalled();
+    // Refused (NaN), never rewritten to 754; number-input.test.tsx covers the kept text.
+    expect(onValueChange).toHaveBeenLastCalledWith(Number.NaN);
     expect(taka.validationMessage).toBe("Taka amounts are whole numbers.");
 
     act(() => root.render(<MoneyInput aria-label="Dollars" currencyCode="USD" value={null} onValueChange={onValueChange} />));
