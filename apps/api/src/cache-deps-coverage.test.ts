@@ -86,6 +86,7 @@ const URLS = [
   "/api/v1/collections/col_rail",
   "/api/v1/storefront/homepage",
   "/api/v1/storefront/layout",
+  "/api/v1/storefront/product-apps/linen-panjabi",
   "/api/v1/storefront/pages/slug/about",
   "/api/v1/checkout/config",
   "/api/v1/checkout-languages/active",
