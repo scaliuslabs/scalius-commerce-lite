@@ -271,7 +271,7 @@ describe("one frontier refresh and one slow check per isolate", () => {
   function gated<T extends (...args: never[]) => Promise<unknown>>(mock: ReturnType<typeof vi.fn<T>>) {
     let release!: () => void;
     const gate = new Promise<void>((resolve) => { release = resolve; });
-    const original = mock.getMockImplementation()!;
+    const original = mock.getMockImplementation()! as (...args: Parameters<T>) => Promise<unknown>;
     mock.mockImplementation((async (...args: Parameters<T>) => {
       const answer = await original(...args);
       await gate;

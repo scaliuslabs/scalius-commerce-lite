@@ -65,7 +65,8 @@ export async function putKvHint(
 ): Promise<boolean> {
   if (!kv || kvHintWritesPaused(now)) return false;
   try {
-    await kv.put(key, value, options);
+    // No third argument unless there are options: the write is the same call it always was.
+    await (options ? kv.put(key, value, options) : kv.put(key, value));
     backoffMs = KV_HINT_BREAKER_INITIAL_MS;
     return true;
   } catch (error) {

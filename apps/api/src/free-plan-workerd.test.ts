@@ -41,6 +41,9 @@ const COMPATIBILITY_DATE = "2026-07-30";
 const COMPATIBILITY_FLAGS = ["nodejs_compat", "global_fetch_strictly_public", "disable_nodejs_process_v2"];
 const CREDENTIAL_KEY = btoa("0123456789abcdef0123456789abcdef");
 
+/** Miniflare's own (undici) request init, not the Workers-types one `RequestInit` names here. */
+type DispatchInit = NonNullable<Parameters<Miniflare["dispatchFetch"]>[1]>;
+
 interface Timing { kind: string; cpuMs: number; wallMs: number; waitMs: number; d1Calls: number }
 interface Row { id: string; label: string; cold: Timing; warm: Timing[]; }
 
@@ -58,7 +61,7 @@ describe.skipIf(!enabled)("the API Worker in workerd", () => {
     return await response.json() as Timing;
   }
 
-  type Call = [string, RequestInit?];
+  type Call = [string, DispatchInit?];
 
   async function measured(request: () => Call, runs: number): Promise<{ cold: Timing; warm: Timing[]; statuses: number[] }> {
     const timings: Timing[] = [];
@@ -156,7 +159,7 @@ describe.skipIf(!enabled)("the API Worker in workerd", () => {
     if (workdir) rmSync(workdir, { recursive: true, force: true });
   });
 
-  const json = (url: string, body: unknown, headers: Record<string, string> = {}): [string, RequestInit] =>
+  const json = (url: string, body: unknown, headers: Record<string, string> = {}): [string, DispatchInit] =>
     [url, { method: "POST", headers: { "Content-Type": "application/json", ...headers }, body: JSON.stringify(body) }];
 
   it("password hashing at the Free and Paid cost", async () => {
@@ -197,7 +200,7 @@ describe.skipIf(!enabled)("the API Worker in workerd", () => {
   });
 
   it("admin order list and product save", async () => {
-    const admin = (path: string, init: RequestInit = {}): Call => [`${STORE.dashboard}${path}`, {
+    const admin = (path: string, init: DispatchInit = {}): Call => [`${STORE.dashboard}${path}`, {
       ...init,
       headers: { Cookie: cookie, Origin: STORE.dashboard, "Content-Type": "application/json" },
     }];
@@ -249,7 +252,7 @@ describe.skipIf(!enabled)("the API Worker in workerd", () => {
     const worker = await mf.getWorker();
     const timings: Timing[] = [];
     for (let index = 0; index < 4; index += 1) {
-      await worker.scheduled({ cron: "*/15 * * * *", scheduledTime: Date.parse("2026-10-03T10:15:00Z") + index * 900_000 });
+      await worker.scheduled({ cron: "*/15 * * * *", scheduledTime: new Date(Date.parse("2026-10-03T10:15:00Z") + index * 900_000) });
       timings.push(await last());
     }
     rows.push({ id: "workerd-cron", label: "Cron maintenance run (idle store)", cold: timings[0]!, warm: timings.slice(1) });

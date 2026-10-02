@@ -62,13 +62,16 @@ type StoredParams = (
 
 const encoder = new TextEncoder();
 
-function toBase64Url(bytes: Uint8Array): string {
+/** WebCrypto's BufferSource wants an ArrayBuffer-backed view, not an ArrayBufferLike one. */
+type Bytes = Uint8Array<ArrayBuffer>;
+
+function toBase64Url(bytes: Bytes): string {
   let binary = "";
   for (const byte of bytes) binary += String.fromCharCode(byte);
   return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }
 
-function fromBase64Url(text: string): Uint8Array | null {
+function fromBase64Url(text: string): Bytes | null {
   if (!/^[A-Za-z0-9_-]+$/.test(text)) return null;
   try {
     const padded = text.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(text.length / 4) * 4, "=");
@@ -78,7 +81,7 @@ function fromBase64Url(text: string): Uint8Array | null {
   }
 }
 
-function constantTimeEqual(a: Uint8Array, b: Uint8Array): boolean {
+function constantTimeEqual(a: Bytes, b: Bytes): boolean {
   if (a.length !== b.length) return false;
   let difference = 0;
   for (let index = 0; index < a.length; index += 1) difference |= a[index]! ^ b[index]!;
@@ -86,9 +89,9 @@ function constantTimeEqual(a: Uint8Array, b: Uint8Array): boolean {
 }
 
 /** The pepper: HKDF-SHA256 of the credential key. Null when no usable key is configured. */
-async function derivePepper(keyBase64: string | undefined): Promise<Uint8Array | null> {
+async function derivePepper(keyBase64: string | undefined): Promise<Bytes | null> {
   if (!keyBase64) return null;
-  let keyBytes: Uint8Array;
+  let keyBytes: Bytes;
   try {
     keyBytes = Uint8Array.from(atob(keyBase64), (character) => character.charCodeAt(0));
   } catch {
@@ -104,14 +107,14 @@ async function derivePepper(keyBase64: string | undefined): Promise<Uint8Array |
 }
 
 /** What the KDF is fed: the NFKC-normalised password, keyed with the pepper when there is one. */
-async function kdfInput(password: string, pepper: Uint8Array | null): Promise<Uint8Array> {
+async function kdfInput(password: string, pepper: Bytes | null): Promise<Bytes> {
   const normalized = encoder.encode(password.normalize("NFKC"));
   if (!pepper) return normalized;
   const key = await crypto.subtle.importKey("raw", pepper, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
   return new Uint8Array(await crypto.subtle.sign("HMAC", key, normalized));
 }
 
-function scryptBytes(input: Uint8Array, salt: Uint8Array, params: { N: number; r: number; p: number }): Promise<Uint8Array> {
+function scryptBytes(input: Bytes, salt: Bytes, params: { N: number; r: number; p: number }): Promise<Bytes> {
   return new Promise((resolve, reject) => {
     nodeScrypt(
       input,
@@ -123,7 +126,7 @@ function scryptBytes(input: Uint8Array, salt: Uint8Array, params: { N: number; r
   });
 }
 
-async function derive(params: StoredParams, input: Uint8Array, salt: Uint8Array): Promise<Uint8Array> {
+async function derive(params: StoredParams, input: Bytes, salt: Bytes): Promise<Bytes> {
   if (params.algorithm === "scrypt") return scryptBytes(input, salt, params);
   const key = await crypto.subtle.importKey("raw", input, "PBKDF2", false, ["deriveBits"]);
   return new Uint8Array(await crypto.subtle.deriveBits(
@@ -150,7 +153,7 @@ function paramMap(text: string): Map<string, number> | null {
   return map;
 }
 
-function parseStored(stored: string): { params: StoredParams; salt: Uint8Array; hash: Uint8Array } | null {
+function parseStored(stored: string): { params: StoredParams; salt: Bytes; hash: Bytes } | null {
   if (!stored.startsWith(PASSWORD_HASH_PREFIX)) return null;
   const [algorithm, paramText, saltText, hashText, ...rest] = stored.slice(PASSWORD_HASH_PREFIX.length).split("$");
   if (rest.length > 0 || !algorithm || !paramText || !saltText || !hashText) return null;

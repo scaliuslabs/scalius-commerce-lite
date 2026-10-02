@@ -2011,7 +2011,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
       identifier: "buyer@example.com",
       code: "123456",
       name: "Buyer",
-    } as const);
+    } as never);
     const bulkLast = createMessage({ type: "media.render_variants", mediaId: "media_b" } as never);
     // The OTP's provider call fails: that message alone is retried.
     mocks.sendEmail.mockRejectedValueOnce(new Error("provider unavailable"));
