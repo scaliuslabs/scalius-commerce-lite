@@ -66,7 +66,7 @@ export function TemplateBlocks({ page, theme, setDraft }: { page: FixedEditorPag
   const t = useMessages(themeEditorMessages);
   const store = useMessages(onlineStoreMessages);
   const blocks = theme.pages[page].blocks;
-  const update = (next: typeof blocks) => setDraft((current) => ({ ...current, pages: { ...current.pages, [page]: { ...current.pages[page], blocks: next } } }));
+  const update = (next: (typeof blocks)[number][]) => setDraft((current) => ({ ...current, pages: { ...current.pages, [page]: { ...current.pages[page], blocks: next } } }));
   const move = (from: number, to: number) => { const next = [...blocks]; const [block] = next.splice(from, 1); next.splice(to, 0, block!); update(next); };
   return <div className="space-y-3">{page !== "product" ? <div className="space-y-1"><Label htmlFor="template-grid-density">{store("density")}</Label><SearchableSelect id="template-grid-density" value={theme.tokens.density} options={STOREFRONT_DENSITIES.map((value) => ({ value, label: store(`density_${value}`), description: store(`density_${value}Help`) }))} onValueChange={(density) => setDraft((current) => ({ ...current, tokens: { ...current.tokens, density: density as typeof current.tokens.density } }))} /><p className="text-body text-muted-foreground">{store("densityHelp")}</p></div> : null}<p className="text-body text-muted-foreground">{t("templateHelp")}</p><ol aria-label={t(`page_${page}`)} className="space-y-1">{blocks.map((block, index) => {
     const name = t(BLOCK_LABEL[block.id as StorefrontPageBlockId]);
