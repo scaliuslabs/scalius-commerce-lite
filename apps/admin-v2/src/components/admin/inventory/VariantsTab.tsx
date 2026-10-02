@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { SelectionSheet } from "~/components/admin/shared/SelectionSheet";
 import { Link } from "@tanstack/react-router";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -32,7 +32,6 @@ import { formatNumber, useMessages } from "~/i18n";
 import { inventoryMessages } from "~/i18n/inventory";
 import { resourceMessages } from "~/i18n/resource";
 import { AdjustStockDialog } from "./AdjustStockDialog";
-import { BulkCostDialog } from "./BulkCostDialog";
 import {
   STOCK_FILTERS,
   variantsQuery,
@@ -41,6 +40,9 @@ import {
   type StockFilter,
   type VariantSort,
 } from "./inventory-search";
+
+// The bulk cost dialog loads on the first Edit cost, then stays mounted.
+const BulkCostDialog = lazy(() => import("./BulkCostDialog").then((module) => ({ default: module.BulkCostDialog })));
 
 const FILTER_LABEL = { all: "filterAll", low: "filterLow", out: "filterOut", reserved: "filterReserved" } as const;
 const STATUS_HELP = { inStock: "inStockHelp", lowStock: "lowStockHelp", soldOut: "soldOutHelp" } as const;
@@ -443,14 +445,18 @@ export function VariantsTab({ filters, onFiltersChange, onSelectionChange }: Var
           queryClient.invalidateQueries({ queryKey: inventoryLocationKeys.all }),
         ])}
       />
-      <BulkCostDialog
-        key={costSession}
-        variants={selectedRows}
-        open={costOpen && canEditCosts}
-        onClose={() => setCostOpen(false)}
-        onSaved={() => void queryClient.invalidateQueries({ queryKey: queryKeys.inventory.all })}
-        onReload={async () => (await queryClient.fetchQuery({ ...listQuery, staleTime: 0 })).variants ?? []}
-      />
+      {costSession > 0 ? (
+        <Suspense fallback={null}>
+          <BulkCostDialog
+            key={costSession}
+            variants={selectedRows}
+            open={costOpen && canEditCosts}
+            onClose={() => setCostOpen(false)}
+            onSaved={() => void queryClient.invalidateQueries({ queryKey: queryKeys.inventory.all })}
+            onReload={async () => (await queryClient.fetchQuery({ ...listQuery, staleTime: 0 })).variants ?? []}
+          />
+        </Suspense>
+      ) : null}
       <SelectionSheet count={showSelectionBar ? selectedIds.length : 0} clearLabel={t("clearSelection")} onClear={clearSelection}>
         {canEditCosts ? <Button type="button" variant="outline" onClick={openCostEdit}>{t("editCost")}</Button> : null}
         <Button asChild>

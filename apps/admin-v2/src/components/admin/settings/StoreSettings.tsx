@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { lazy, Suspense, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { GripVertical, ImageIcon, Plus, Search, Trash2, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ImageIcon, Plus, Search, Trash2, X } from "lucide-react";
 import { z } from "zod";
 import {
   getApiV1AdminSettingsBusiness,
@@ -27,6 +27,7 @@ import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import { SearchableSelect } from "~/components/ui/searchable-select";
+import { Skeleton } from "~/components/ui/skeleton";
 import { Textarea } from "~/components/ui/textarea";
 import { useHasPermission } from "~/contexts/PermissionContext";
 import { useSettingsForm } from "~/hooks/use-settings-form";
@@ -46,11 +47,11 @@ import { settingsMessages } from "~/i18n/settings";
 import { storeSettingsMessages } from "~/i18n/settings-store";
 import { fieldErrorMessages } from "~/i18n/save-bar";
 import { MediaManager } from "../media-manager";
-import { ImageField } from "../online-store/ImageField";
-import { SortableList } from "../shared/SortableList";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
 import { AdminPhoneInput, adminPhoneProblem, type PhoneCountryPolicy } from "../shared/AdminPhoneInput";
 import { SettingsCard, SettingsDialog, SettingsField, SettingsRow, SettingsCardLoading } from "./SettingsPage";
+
+const ImageField = lazy(() => import("../online-store/ImageField").then((module) => ({ default: module.ImageField })));
 
 type Business = Omit<ApiResult<typeof getApiV1AdminSettingsBusiness>, "revision">;
 type SocialLink = Business["socialLinks"][number];
@@ -262,32 +263,27 @@ function SocialProfileFields() {
       {links.length === 0 ? (
         <p className="text-body text-muted-foreground">{t("noSocial")}</p>
       ) : (
-        <SortableList
-          items={links}
-          onReorder={setLinks}
-          className="space-y-2"
-          renderItem={(link, sortable) => {
-            const index = links.indexOf(link);
+        // Ordered picks move with up/down buttons (DESIGN.md), as in the theme editor.
+        <ol className="space-y-2">
+          {links.map((link, index) => {
             const name = link.label.trim() || t("socialProfile", { number: index + 1 });
             const labelId = `business-socialLinks.${index}.label`;
             const urlId = `business-socialLinks.${index}.url`;
+            const move = (step: -1 | 1) => {
+              const next = [...links];
+              [next[index], next[index + step]] = [next[index + step]!, next[index]!];
+              setLinks(next);
+            };
             return (
-              <div
-                ref={sortable.ref}
-                // eslint-disable-next-line shadcn/no-inline-styles -- dnd-kit moves the dragged row with a live transform.
-                style={sortable.style}
-                className="flex items-start gap-2 rounded-lg border bg-card p-3"
-              >
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="mt-6 shrink-0 cursor-grab touch-none"
-                  aria-label={t("reorderSocial", { name })}
-                  {...sortable.dragHandleProps}
-                >
-                  <GripVertical aria-hidden="true" />
-                </Button>
+              <li key={link.id} className="flex items-start gap-2 rounded-lg border bg-card p-3">
+                <div className="mt-6 flex shrink-0 flex-col">
+                  <Button type="button" variant="ghost" size="icon-sm" disabled={index === 0} aria-label={t("moveSocialUp", { name })} onClick={() => move(-1)}>
+                    <ArrowUp aria-hidden="true" />
+                  </Button>
+                  <Button type="button" variant="ghost" size="icon-sm" disabled={index === links.length - 1} aria-label={t("moveSocialDown", { name })} onClick={() => move(1)}>
+                    <ArrowDown aria-hidden="true" />
+                  </Button>
+                </div>
                 <div className="grid min-w-0 flex-1 gap-3 sm:grid-cols-2">
                   <SettingsField id={labelId} label={t("socialLabel")}>
                     <Input
@@ -317,16 +313,19 @@ function SocialProfileFields() {
                     />
                   </SettingsField>
                   <div className="sm:col-span-2">
-                    <ImageField
-                      label={t("socialIcon")}
-                      src={link.iconUrl ?? ""}
-                      onChange={(image) => setLinks(links.map((each) => {
-                        if (each.id !== link.id) return each;
-                        // Removing the icon drops the key: the server stores no empty icon.
-                        const { iconUrl: _previous, ...rest } = each;
-                        return image.src ? { ...rest, iconUrl: image.src } : rest;
-                      }))}
-                    />
+                    {/* The image field (and the online-store copy it speaks) loads with the first profile. */}
+                    <Suspense fallback={<Skeleton className="h-16 w-full" />}>
+                      <ImageField
+                        label={t("socialIcon")}
+                        src={link.iconUrl ?? ""}
+                        onChange={(image) => setLinks(links.map((each) => {
+                          if (each.id !== link.id) return each;
+                          // Removing the icon drops the key: the server stores no empty icon.
+                          const { iconUrl: _previous, ...rest } = each;
+                          return image.src ? { ...rest, iconUrl: image.src } : rest;
+                        }))}
+                      />
+                    </Suspense>
                   </div>
                 </div>
                 <Button
@@ -339,10 +338,10 @@ function SocialProfileFields() {
                 >
                   <Trash2 aria-hidden="true" />
                 </Button>
-              </div>
+              </li>
             );
-          }}
-        />
+          })}
+        </ol>
       )}
       {links.length < SOCIAL_LINKS_MAX ? (
         <Button

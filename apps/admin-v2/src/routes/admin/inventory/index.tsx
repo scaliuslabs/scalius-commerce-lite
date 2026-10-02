@@ -1,10 +1,9 @@
 import { createFileRoute, Link, stripSearchParams, useNavigate } from "@tanstack/react-router";
-import { useCallback, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { Button } from "~/components/ui/button";
+import { Skeleton } from "~/components/ui/skeleton";
 import { IndexTabs } from "~/components/admin/resource/IndexTabs";
 import { PageHeader } from "~/components/admin/resource/PageHeader";
-import { AlertsTab } from "~/components/admin/inventory/AlertsTab";
-import { HistoryTab } from "~/components/admin/inventory/HistoryTab";
 import { ValuationSummary } from "~/components/admin/inventory/ValuationSummary";
 import { VariantsTab } from "~/components/admin/inventory/VariantsTab";
 import {
@@ -22,6 +21,20 @@ import { RouteErrorComponent } from "~/lib/route-error";
 import { useMessages } from "~/i18n";
 import { inventoryMessages } from "~/i18n/inventory";
 import { pageHead } from "~/i18n/page-titles";
+
+// The Low stock and History tabs load when opened: the page opens on Variants.
+const AlertsTab = lazy(() => import("~/components/admin/inventory/AlertsTab").then((module) => ({ default: module.AlertsTab })));
+const HistoryTab = lazy(() => import("~/components/admin/inventory/HistoryTab").then((module) => ({ default: module.HistoryTab })));
+
+/** A tab's rows while its code arrives: the toolbar, then a few rows. */
+function TabSkeleton() {
+  return (
+    <div className="space-y-2 p-3" aria-busy="true">
+      <Skeleton className="h-9 w-full" />
+      {["a", "b", "c", "d", "e"].map((key) => <Skeleton key={key} className="h-10 w-full" />)}
+    </div>
+  );
+}
 
 export const Route = createFileRoute("/admin/inventory/")({
   validateSearch: validateInventorySearch,
@@ -116,17 +129,21 @@ function InventoryPage() {
         />
         {search.section === "variants" ? (
           <VariantsTab filters={filters} onFiltersChange={updateFilters} onSelectionChange={setSelectedIds} />
-        ) : search.section === "alerts" ? (
-          <AlertsTab
-            filters={filters}
-            onFiltersChange={updateFilters}
-            onReview={(sku) => {
-              setTerm(sku);
-              openTab("variants");
-            }}
-          />
         ) : (
-          <HistoryTab filters={filters} onFiltersChange={updateFilters} />
+          <Suspense fallback={<TabSkeleton />}>
+            {search.section === "alerts" ? (
+              <AlertsTab
+                filters={filters}
+                onFiltersChange={updateFilters}
+                onReview={(sku) => {
+                  setTerm(sku);
+                  openTab("variants");
+                }}
+              />
+            ) : (
+              <HistoryTab filters={filters} onFiltersChange={updateFilters} />
+            )}
+          </Suspense>
         )}
       </div>
     </div>
