@@ -3,49 +3,92 @@ import { ChevronDown } from "lucide-react";
 import { Card, CardContent, CardHeader } from "../../ui/card";
 import { cn } from "@scalius/shared/utils";
 
+const REVEAL_EVENT = "scalius:reveal-card";
+
+/**
+ * Opens the collapsible card with this id, scrolls it into view and puts the
+ * keyboard on its title (e.g. Inventory's "Add file" opens Digital delivery).
+ */
+export function revealCard(id: string) {
+  window.dispatchEvent(new CustomEvent(REVEAL_EVENT, { detail: id }));
+}
+
 interface CollapsibleCardProps {
   title: string;
   description?: string;
   children: React.ReactNode;
+  /** One muted line under the title while the card is closed ("2 bundles", "Not set up"). */
   summary?: React.ReactNode;
   defaultOpen?: boolean;
+  /** Anchor for `revealCard(id)` and in-page links. */
+  id?: string;
   className?: string;
 }
 
-/** A card whose body opens from its title row (Attributes, Extra sections, Search engine listing). */
+/**
+ * An advanced section of an editor: its title is always visible, its body
+ * opens from the title row. It starts closed when empty (the caller decides).
+ * Once opened, the body stays mounted while closed, so an upload or a typed
+ * draft inside it survives closing the card.
+ */
 export function CollapsibleCard({
   title,
   description,
   children,
   summary,
   defaultOpen = false,
+  id,
   className,
 }: CollapsibleCardProps) {
   const [isOpen, setIsOpen] = React.useState(defaultOpen);
+  const [seen, setSeen] = React.useState(defaultOpen);
   const contentId = React.useId();
+  const cardRef = React.useRef<HTMLDivElement>(null);
+  const toggleRef = React.useRef<HTMLButtonElement>(null);
+
+  React.useEffect(() => {
+    if (!id) return;
+    const onReveal = (event: Event) => {
+      if ((event as CustomEvent<string>).detail !== id) return;
+      setIsOpen(true);
+      setSeen(true);
+      requestAnimationFrame(() => {
+        cardRef.current?.scrollIntoView?.({ block: "start", behavior: "smooth" });
+        toggleRef.current?.focus({ preventScroll: true });
+      });
+    };
+    window.addEventListener(REVEAL_EVENT, onReveal);
+    return () => window.removeEventListener(REVEAL_EVENT, onReveal);
+  }, [id]);
+
+  const toggle = () => {
+    setIsOpen((open) => !open);
+    setSeen(true);
+  };
 
   return (
-    <Card className={className}>
+    <Card ref={cardRef} id={id} className={cn("scroll-mt-4", className)}>
       <CardHeader>
         <button
+          ref={toggleRef}
           type="button"
           className="flex w-full items-start justify-between gap-3 rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           aria-expanded={isOpen}
           aria-controls={contentId}
-          onClick={() => setIsOpen((open) => !open)}
+          onClick={toggle}
         >
           <span className="min-w-0 space-y-1">
-            <span className="block text-heading-md font-semibold">{title}</span>
+            <span className="block text-heading-sm">{title}</span>
             {description ? <span className="block text-body text-muted-foreground">{description}</span> : null}
           </span>
-          <span className="flex h-6 shrink-0 items-center">
-            <ChevronDown className={cn("h-4 w-4 text-muted-foreground", isOpen && "rotate-180")} />
+          <span className="flex h-lh shrink-0 items-center">
+            <ChevronDown aria-hidden="true" className={cn("size-4 text-muted-foreground", isOpen && "rotate-180")} />
           </span>
         </button>
       </CardHeader>
       {!isOpen && summary ? <CardContent>{summary}</CardContent> : null}
-      {isOpen ? (
-        <CardContent id={contentId} className="space-y-4">
+      {seen ? (
+        <CardContent id={contentId} hidden={!isOpen} className="space-y-4">
           {children}
         </CardContent>
       ) : null}

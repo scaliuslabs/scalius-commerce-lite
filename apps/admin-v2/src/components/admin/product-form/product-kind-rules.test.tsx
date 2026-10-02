@@ -8,10 +8,10 @@ import { Form } from "@/components/ui/form";
 import { translate } from "~/i18n";
 import { giftCardProductMessages } from "~/i18n/gift-card-product";
 import { productMessages } from "~/i18n/products";
-import { FulfilmentCard } from "./FulfilmentCard";
+import { ShippingCard } from "./ShippingCard";
 import { PricingCard } from "./PricingCard";
 import { StatusCard } from "./StatusCard";
-import { constrainSkuForKind, ProductKindRulesContext, productKindRules } from "./product-kind-rules";
+import { constrainSkuForKind, isDigitalSku, ProductKindRulesContext, productKindRules } from "./product-kind-rules";
 import type { ProductFormValues } from "./types";
 
 vi.mock("@/hooks/use-currency", () => ({
@@ -29,8 +29,11 @@ describe("productKindRules", () => {
       showDiscount: true,
       showInventory: true,
       forcedFulfillmentKind: null,
+      fulfilmentMode: "physical",
     });
     expect(productKindRules({ fulfillmentKind: "service" }).showWeight).toBe(false);
+    // Nothing is packed for a download either.
+    expect(productKindRules({ fulfillmentKind: "digital" }).showWeight).toBe(false);
     expect(productKindRules({ fulfillmentKind: "digital" }).showDiscount).toBe(true);
   });
 
@@ -42,6 +45,7 @@ describe("productKindRules", () => {
       showDiscount: false,
       showInventory: false,
       forcedFulfillmentKind: "digital",
+      fulfilmentMode: "digital",
     });
   });
 });
@@ -75,6 +79,22 @@ describe("constrainSkuForKind", () => {
     const already = { trackInventory: false, stock: 0, fulfillmentKind: "digital" as const };
     expect(constrainSkuForKind(already, giftCard)).toBe(already);
   });
+
+  it("never carries a typed quantity on a digital SKU: its stock is its licence keys", () => {
+    const digital = productKindRules({ fulfillmentKind: "digital" });
+    // A new digital row starts at 0 whatever was typed; tracking stays the merchant's (keys vs unlimited files).
+    expect(constrainSkuForKind(sku, digital)).toEqual({ ...sku, stock: 0 });
+    // A saved SKU keeps its recorded quantity (the keys), so a save writes no stock.
+    expect(constrainSkuForKind(sku, digital, true)).toBe(sku);
+    // Set per variant: only the digital rows.
+    const mixed = productKindRules({ fulfillmentKind: "mixed" });
+    expect(isDigitalSku(mixed, { fulfillmentKind: "digital" })).toBe(true);
+    expect(isDigitalSku(mixed, { fulfillmentKind: "physical" })).toBe(false);
+    expect(constrainSkuForKind(sku, mixed)).toBe(sku);
+    expect(constrainSkuForKind({ ...sku, fulfillmentKind: "digital" as const }, mixed).stock).toBe(0);
+    // A gift card is untracked, not a digital-stock SKU.
+    expect(isDigitalSku(productKindRules({ isGiftCard: true }), { fulfillmentKind: "digital" })).toBe(false);
+  });
 });
 
 function Cards({ isGiftCard }: { isGiftCard: boolean }) {
@@ -95,7 +115,7 @@ function Cards({ isGiftCard }: { isGiftCard: boolean }) {
     <ProductKindRulesContext.Provider value={productKindRules({ isGiftCard, fulfillmentKind: form.getValues("fulfillmentKind") })}>
       <Form {...form}>
         <PricingCard form={form} variantPrices={null} />
-        <FulfilmentCard form={form} hasOptions={false} />
+        <ShippingCard form={form} hasOptions={false} />
         <StatusCard form={form} />
       </Form>
     </ProductKindRulesContext.Provider>
@@ -119,7 +139,7 @@ describe("product cards follow the kind rules", () => {
 
   const p = (key: keyof (typeof productMessages)["en"]) => translate(productMessages, key);
 
-  it("shows discount, the fulfilment choice and free delivery for a regular product", async () => {
+  it("shows discount, the fulfilment choice and free delivery (in Shipping) for a regular product", async () => {
     await act(async () => root.render(<Cards isGiftCard={false} />));
     expect(host.textContent).toContain(p("addDiscount"));
     expect(host.textContent).toContain(p("freeDelivery"));

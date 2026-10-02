@@ -6,7 +6,6 @@ import { CUSTOMIZATION_LIMITS } from "@scalius/shared/line-properties";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { useCurrency } from "@/hooks/use-currency";
 import { useMessages } from "~/i18n";
 import { productMessages } from "~/i18n/products";
@@ -16,6 +15,7 @@ import {
   schemaFromDrafts,
   type BuyerInputDraft,
 } from "./buyer-inputs";
+import { CollapsibleCard } from "./CollapsibleCard";
 import type { ProductFormValues } from "./types";
 
 // The editor opens without them: the dialog loads on the first Add or Edit
@@ -80,12 +80,18 @@ export function BuyerInputsCard({ form, readOnly = false, savedInvalid = false, 
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{t("buyerInputs")}</CardTitle>
-        <CardDescription>{t("buyerInputsHelp")}</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
+    // Closed while the product has none: the title stays on the page for when it's wanted.
+    <CollapsibleCard
+      id="product-buyer-inputs"
+      title={t("buyerInputs")}
+      description={t("buyerInputsHelp")}
+      defaultOpen={drafts.length > 0 || savedInvalid || conflict !== null}
+      summary={(
+        <p className="text-body text-muted-foreground">
+          {drafts.length > 0 ? t("buyerInputsCount", { count: drafts.length }) : t("buyerInputsEmpty")}
+        </p>
+      )}
+    >
         {conflict ? (
           <Alert variant="warning">
             <AlertDescription>
@@ -178,9 +184,8 @@ export function BuyerInputsCard({ form, readOnly = false, savedInvalid = false, 
             ) : null}
           </section>
         ) : null}
-      </CardContent>
       {readOnly ? null : (
-        <CardFooter className="justify-between">
+        <div className="flex items-center justify-between gap-2 border-t pt-4">
           <p className="text-body text-muted-foreground" aria-live="polite">
             {full ? t("buyerInputsFull", { max: CUSTOMIZATION_LIMITS.fields }) : null}
           </p>
@@ -188,7 +193,7 @@ export function BuyerInputsCard({ form, readOnly = false, savedInvalid = false, 
             <Plus className="size-4" />
             {t("addBuyerInput")}
           </Button>
-        </CardFooter>
+        </div>
       )}
       {dialogLoaded ? (
         <React.Suspense fallback={null}>
@@ -208,6 +213,6 @@ export function BuyerInputsCard({ form, readOnly = false, savedInvalid = false, 
       />
         </React.Suspense>
       ) : null}
-    </Card>
+    </CollapsibleCard>
   );
 }

@@ -4,14 +4,12 @@ import { toast } from "sonner";
 import { FileText, MoreHorizontal } from "lucide-react";
 import {
   deleteApiV1AdminDigitalAssetsById,
-  getApiV1AdminProductsByIdDigitalAssets,
   patchApiV1AdminDigitalAssetsById,
   postApiV1AdminProductsByIdDigitalAssets,
 } from "@scalius/api-client/sdk";
 import { DIGITAL_DOWNLOAD_LIMIT_DEFAULT, DIGITAL_MAX_FILE_BYTES } from "@scalius/shared/digital";
 import { Badge, type BadgeVariant } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -37,7 +35,6 @@ import { AdminApiResponseError } from "@/lib/admin-api-error";
 import { apiData } from "@/lib/api";
 import { getServerFnError } from "@/lib/api-helpers";
 import { productQueryOptions, type ProductVariant } from "@/lib/api-query-options/products";
-import { queryKeys } from "@/lib/query-keys";
 import { useMessages } from "~/i18n";
 import { digitalMessages, type DigitalMessageKey } from "~/i18n/digital";
 import { resourceMessages } from "~/i18n/resource";
@@ -51,10 +48,9 @@ import {
   type DigitalUploadSessionDto,
 } from "./digital-upload";
 import { KeyImportDialog, KeyRevokeDialog } from "./DigitalKeyDialogs";
+import { digitalAssetsKey, digitalAssetsQueryOptions } from "./digital-stock";
 
 type T = (key: DigitalMessageKey, vars?: Record<string, string | number>) => string;
-
-export const digitalAssetsKey = (productId: string) => [...queryKeys.products.detail(productId), "digital-assets"] as const;
 
 /** A known refusal in words; anything else as the server said it. */
 export function digitalErrorText(error: unknown, t: T): string {
@@ -85,23 +81,9 @@ interface Upload {
   controller: AbortController;
 }
 
-export function DigitalDeliveryPanel({ productId, readOnly }: { productId: string | undefined; readOnly: boolean }) {
-  const t = useMessages(digitalMessages);
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{t("title")}</CardTitle>
-        <CardDescription>{t("description")}</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {productId ? (
-          <DigitalItems productId={productId} readOnly={readOnly} />
-        ) : (
-          <p className="text-body text-muted-foreground">{t("saveFirst")}</p>
-        )}
-      </CardContent>
-    </Card>
-  );
+/** The files and licence-key pools of a saved digital product (the Digital delivery card's body). */
+export function DigitalDeliveryPanel({ productId, readOnly }: { productId: string; readOnly: boolean }) {
+  return <DigitalItems productId={productId} readOnly={readOnly} />;
 }
 
 function DigitalItems({ productId, readOnly }: { productId: string; readOnly: boolean }) {
@@ -109,10 +91,7 @@ function DigitalItems({ productId, readOnly }: { productId: string; readOnly: bo
   const r = useMessages(resourceMessages);
   const queryClient = useQueryClient();
   const key = digitalAssetsKey(productId);
-  const assetsQuery = useQuery({
-    queryKey: key,
-    queryFn: async () => (await apiData(getApiV1AdminProductsByIdDigitalAssets({ path: { id: productId } }))).assets,
-  });
+  const assetsQuery = useQuery(digitalAssetsQueryOptions(productId));
   // The editor already holds the saved product; its variants say which SKUs are digital.
   const productQuery = useQuery({ ...productQueryOptions(productId), staleTime: Number.POSITIVE_INFINITY });
   const digitalVariants = (productQuery.data?.variants ?? [])

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { Archive, ChevronLeft, ChevronRight, MessageCircle, MoreHorizontal, Phone } from "lucide-react";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { Alert } from "~/components/ui/alert";
@@ -46,6 +46,8 @@ import { resolveOrderPrimaryAction, unitsLeftToSend, type OrderActionRequest } f
 import { orderBadgeVisibility, statusBadgeVariant } from "./orderview/status-badges";
 import { customerContactLinks } from "./orderview/contact-links";
 import { useOrderNeighbours } from "./orderview/order-neighbours";
+import { ariaKeys } from "./layout/shortcuts";
+import { usePagerShortcuts } from "./shared/use-pager-shortcuts";
 import type { Order } from "./orderview/types";
 import { CustomFieldsCard } from "./custom-fields/CustomFieldsCard";
 import { appActionKey, useAppActionRunner } from "./apps/ui/AppActions";
@@ -83,6 +85,9 @@ export function OrderView({ order }: { order: Order }) {
   const status = order.status.toLowerCase();
   const badges = orderBadgeVisibility(order);
   const neighbours = useOrderNeighbours(order.id);
+  const navigate = useNavigate();
+  const openOrder = (id: string | null | undefined) => (id ? () => void navigate({ to: "/admin/orders/$orderId", params: { orderId: id } }) : null);
+  usePagerShortcuts({ previous: openOrder(neighbours?.previous), next: openOrder(neighbours?.next) });
   const contact = customerContactLinks(order.customerPhone);
   const name = formatOrderNumber(order.orderNumber, order.id);
   const archived = Boolean(order.archivedAt);
@@ -238,8 +243,8 @@ export function OrderView({ order }: { order: Order }) {
                 {appActions.dialogs}
                 {primaryButton ?<span className="hidden lg:inline-flex">{primaryButton}</span> : null}
                 <div className="hidden lg:flex">
-                  <NeighbourLink orderId={neighbours?.previous ?? null} label={t("nav.previous")}><ChevronLeft className="size-4" /></NeighbourLink>
-                  <NeighbourLink orderId={neighbours?.next ?? null} label={t("nav.next")}><ChevronRight className="size-4" /></NeighbourLink>
+                  <NeighbourLink orderId={neighbours?.previous ?? null} label={t("nav.previous")} keys={ariaKeys("previousItem")}><ChevronLeft className="size-4" /></NeighbourLink>
+                  <NeighbourLink orderId={neighbours?.next ?? null} label={t("nav.next")} keys={ariaKeys("nextItem")}><ChevronRight className="size-4" /></NeighbourLink>
                 </div>
               </>
             }
@@ -328,13 +333,13 @@ function PhoneActionBar({ children }: { children: ReactNode }) {
   );
 }
 
-function NeighbourLink({ orderId, label, children }: { orderId: string | null; label: string; children: ReactNode }) {
+function NeighbourLink({ orderId, label, keys, children }: { orderId: string | null; label: string; keys: string; children: ReactNode }) {
   if (!orderId) {
     return <Button variant="ghost" size="icon" disabled aria-label={label}>{children}</Button>;
   }
   return (
     <Button variant="ghost" size="icon" asChild>
-      <Link to="/admin/orders/$orderId" params={{ orderId }} aria-label={label}>{children}</Link>
+      <Link to="/admin/orders/$orderId" params={{ orderId }} aria-label={label} aria-keyshortcuts={keys} title={`${label} (${keys})`}>{children}</Link>
     </Button>
   );
 }
