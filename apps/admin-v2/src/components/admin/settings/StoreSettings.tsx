@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ImageIcon, Search, X } from "lucide-react";
+import { GripVertical, ImageIcon, Plus, Search, Trash2, X } from "lucide-react";
 import { z } from "zod";
 import {
   getApiV1AdminSettingsBusiness,
@@ -46,11 +46,14 @@ import { settingsMessages } from "~/i18n/settings";
 import { storeSettingsMessages } from "~/i18n/settings-store";
 import { fieldErrorMessages } from "~/i18n/save-bar";
 import { MediaManager } from "../media-manager";
+import { ImageField } from "../online-store/ImageField";
+import { SortableList } from "../shared/SortableList";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
 import { AdminPhoneInput, adminPhoneProblem, type PhoneCountryPolicy } from "../shared/AdminPhoneInput";
 import { SettingsCard, SettingsDialog, SettingsField, SettingsRow, SettingsCardLoading } from "./SettingsPage";
 
 type Business = Omit<ApiResult<typeof getApiV1AdminSettingsBusiness>, "revision">;
+type SocialLink = Business["socialLinks"][number];
 type Platform = Omit<ApiResult<typeof getApiV1AdminSettingsPlatform>, "revision">;
 type Country = CountryPolicy["allowedCountries"][number];
 type CountryMode = CountryPolicy["allowedCountriesMode"];
@@ -70,7 +73,21 @@ const BUSINESS_DEFAULTS: Business = {
   invoicePrefix: "INV",
   invoiceLogoUrl: "",
   invoiceFooterText: "",
+  socialLinks: [],
 };
+
+/** The most social profiles a store lists (the server's BUSINESS_SOCIAL_LINKS_MAX). */
+const SOCIAL_LINKS_MAX = 8;
+
+/** A profile address the storefront may link to: https, no credentials (the server checks the same). */
+export function isSafeSocialDestination(value: string): boolean {
+  try {
+    const url = new URL(value.trim());
+    return url.protocol === "https:" && !url.username && !url.password;
+  } catch {
+    return false;
+  }
+}
 
 function useCanEditStore() {
   return useHasPermission(ADMIN_PERMISSIONS.SETTINGS_GENERAL_EDIT);
@@ -115,14 +132,16 @@ function useBusinessForm() {
     canEdit: useCanEditStore(),
     isValid: (values) =>
       isValidLogo(values.invoiceLogoUrl) &&
+      values.socialLinks.every((link) => isSafeSocialDestination(link.url)) &&
       isValidInvoicePrefix(values.invoicePrefix) &&
       !contactProblem("email", values.email) &&
       !contactProblem("phone", values.phone, policy),
+    // `socialLinks.2.url` marks that profile's field (ids follow the list order).
     fields: (path) => `business-${path}`,
   });
 }
 
-type BusinessKey = Exclude<keyof Business, "invoiceLogoUrl" | "invoiceFooterText">;
+type BusinessKey = Exclude<keyof Business, "invoiceLogoUrl" | "invoiceFooterText" | "socialLinks">;
 
 function BusinessFields({ fields }: { fields: Array<{ key: BusinessKey; label: string; help?: string; type?: string }> }) {
   const t = useMessages(storeSettingsMessages);
@@ -225,6 +244,123 @@ function InvoiceFields() {
   );
 }
 
+/**
+ * The store's social profiles, in order: shown in the storefront's header,
+ * footer and phone menu (their only source). Each is a name, an https link
+ * and an optional icon from Files.
+ */
+function SocialProfileFields() {
+  const t = useMessages(storeSettingsMessages);
+  const { values, setValue } = useBusinessForm();
+  const links = values.socialLinks;
+  const setLinks = (next: SocialLink[]) => setValue("socialLinks", next);
+  const update = (id: string, updates: Partial<SocialLink>) =>
+    setLinks(links.map((link) => (link.id === id ? { ...link, ...updates } : link)));
+  return (
+    <>
+      <p className="text-body text-muted-foreground">{t("socialHelp")}</p>
+      {links.length === 0 ? (
+        <p className="text-body text-muted-foreground">{t("noSocial")}</p>
+      ) : (
+        <SortableList
+          items={links}
+          onReorder={setLinks}
+          className="space-y-2"
+          renderItem={(link, sortable) => {
+            const index = links.indexOf(link);
+            const name = link.label.trim() || t("socialProfile", { number: index + 1 });
+            const labelId = `business-socialLinks.${index}.label`;
+            const urlId = `business-socialLinks.${index}.url`;
+            return (
+              <div
+                ref={sortable.ref}
+                // eslint-disable-next-line shadcn/no-inline-styles -- dnd-kit moves the dragged row with a live transform.
+                style={sortable.style}
+                className="flex items-start gap-2 rounded-lg border bg-card p-3"
+              >
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="mt-6 shrink-0 cursor-grab touch-none"
+                  aria-label={t("reorderSocial", { name })}
+                  {...sortable.dragHandleProps}
+                >
+                  <GripVertical aria-hidden="true" />
+                </Button>
+                <div className="grid min-w-0 flex-1 gap-3 sm:grid-cols-2">
+                  <SettingsField id={labelId} label={t("socialLabel")}>
+                    <Input
+                      id={labelId}
+                      value={link.label}
+                      maxLength={200}
+                      placeholder={t("socialLabelPlaceholder")}
+                      onChange={(event) => update(link.id, { label: event.target.value })}
+                    />
+                  </SettingsField>
+                  <SettingsField
+                    id={urlId}
+                    label={t("socialUrl")}
+                    error={isSafeSocialDestination(link.url) ? null : t("socialUrlInvalid")}
+                  >
+                    <Input
+                      id={urlId}
+                      type="url"
+                      inputMode="url"
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck={false}
+                      maxLength={2048}
+                      value={link.url}
+                      placeholder="https://facebook.com/yourshop"
+                      onChange={(event) => update(link.id, { url: event.target.value })}
+                    />
+                  </SettingsField>
+                  <div className="sm:col-span-2">
+                    <ImageField
+                      label={t("socialIcon")}
+                      src={link.iconUrl ?? ""}
+                      onChange={(image) => setLinks(links.map((each) => {
+                        if (each.id !== link.id) return each;
+                        // Removing the icon drops the key: the server stores no empty icon.
+                        const { iconUrl: _previous, ...rest } = each;
+                        return image.src ? { ...rest, iconUrl: image.src } : rest;
+                      }))}
+                    />
+                  </div>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="mt-6 shrink-0"
+                  aria-label={t("removeSocial", { name })}
+                  onClick={() => setLinks(links.filter((each) => each.id !== link.id))}
+                >
+                  <Trash2 aria-hidden="true" />
+                </Button>
+              </div>
+            );
+          }}
+        />
+      )}
+      {links.length < SOCIAL_LINKS_MAX ? (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => setLinks([...links, { id: crypto.randomUUID(), label: "", url: "" }])}
+        >
+          <Plus aria-hidden="true" />
+          {t("addSocial")}
+        </Button>
+      ) : (
+        <p className="text-body text-muted-foreground">{t("socialLimit", { count: SOCIAL_LINKS_MAX })}</p>
+      )}
+    </>
+  );
+}
+
 export function BusinessCard() {
   const t = useMessages(storeSettingsMessages);
   const canEdit = useCanEditStore();
@@ -233,6 +369,11 @@ export function BusinessCard() {
     return <SettingsLoadFailure title={t("loadBusiness")} onRetry={refetch} />;
   }
   if (!data) return <SettingsCardLoading />;
+  const social = data.socialLinks ?? [];
+  const socialNames = social.map((link) => link.label.trim()).filter(Boolean);
+  const socialSummary = social.length === 0
+    ? t("noSocial")
+    : socialNames.length === social.length ? socialNames.join(", ") : t("socialCount", { count: social.length });
   return (
     <SettingsCard id="business"
       title={t("businessTitle")}
@@ -282,6 +423,18 @@ export function BusinessCard() {
                 { key: "country", label: t("country") },
               ]}
             />
+          </SettingsDialog>
+          <SettingsDialog
+            title={t("socialRow")}
+            trigger={
+              <SettingsRow
+                label={t("socialRow")}
+                disabled={!canEdit}
+                value={socialSummary}
+              />
+            }
+          >
+            <SocialProfileFields />
           </SettingsDialog>
           <SettingsDialog
             title={t("invoiceRow")}

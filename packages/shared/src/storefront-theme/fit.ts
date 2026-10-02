@@ -48,10 +48,16 @@ export const storeShapeSchema = z.object({
   hasDeliveryMethods: z.boolean(),
   /** A live attribute flagged `key_spec` has a value on a public product (spec cards, spec tables). */
   hasKeySpecs: z.boolean(),
+  /** The store's EMI document is on with at least one plan (Settings -> EMI). */
   hasEmiPlans: z.boolean(),
+  /** A live SKU of an active product is a digital line. */
   hasDigitalLines: z.boolean(),
+  /** Reviews are on and a review is published. */
   hasReviews: z.boolean(),
-  hasQuestions: z.boolean(),
+  /**
+   * A public product has a content block the product page renders
+   * (`STOREFRONT_RENDERED_CONTENT_BLOCK_TYPES`, outside the description tabs).
+   */
   hasContentBlocks: z.boolean(),
 }).strict();
 
@@ -74,7 +80,6 @@ export const EMPTY_STORE_SHAPE: StoreShape = Object.freeze({
   hasEmiPlans: false,
   hasDigitalLines: false,
   hasReviews: false,
-  hasQuestions: false,
   hasContentBlocks: false,
 });
 
@@ -201,7 +206,6 @@ export function storeShapeFromFacts(facts: {
   hasEmiPlans?: boolean;
   hasDigitalLines?: boolean;
   hasReviews?: boolean;
-  hasQuestions?: boolean;
   hasContentBlocks?: boolean;
 }): StoreShape {
   const groups = facts.menu.map((item) =>
@@ -222,7 +226,6 @@ export function storeShapeFromFacts(facts: {
     hasEmiPlans: facts.hasEmiPlans ?? false,
     hasDigitalLines: facts.hasDigitalLines ?? false,
     hasReviews: facts.hasReviews ?? false,
-    hasQuestions: facts.hasQuestions ?? false,
     hasContentBlocks: facts.hasContentBlocks ?? false,
   });
 }

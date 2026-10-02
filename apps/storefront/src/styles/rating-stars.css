@@ -7,11 +7,12 @@
  *   <span class="sc-stars" style="--sc-fill:90%" aria-hidden="true"></span>
  *
  * `--sc-star` sets the star size, `--sc-star-on`/`--sc-star-off` the colours
- * (amber on a quiet track by default; each card variant sets its reference's).
+ * (the theme's rating amber, `--theme-rating`, on a quiet track by default;
+ * each card variant sets its reference's).
  */
 .sc-stars {
   --sc-star: 1em;
-  --sc-star-on: #f59e0b;
+  --sc-star-on: var(--theme-rating, #f59e0b);
   --sc-star-off: color-mix(in srgb, currentColor 22%, transparent);
   display: inline-block;
   flex-shrink: 0;

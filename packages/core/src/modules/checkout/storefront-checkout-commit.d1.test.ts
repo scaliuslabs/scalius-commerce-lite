@@ -152,6 +152,9 @@ describe.each(["d1", "turso"] as const)("storefront checkout commit (%s)", (prov
 
     expect(result).toMatchObject({ orderId: payload.orderData.id, alreadyCommitted: false });
     const orderId = payload.orderData.id;
+    // The storefront's own checkout (COMMERCE-HOOKS H2), never left to the column default.
+    expect(sqlite!.prepare("SELECT channel, channel_source FROM orders WHERE id = ?").get(orderId))
+      .toEqual({ channel: "online_store", channel_source: null });
     expect(rows("order_items", `order_id = '${orderId}'`)).toBe(1);
     expect(rows("order_item_tax_snapshots", `order_id = '${orderId}'`)).toBe(1);
     expect(rows("checkout_attempts", `order_id = '${orderId}' AND status = 'committed'`)).toBe(1);

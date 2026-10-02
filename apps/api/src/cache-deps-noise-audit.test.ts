@@ -62,14 +62,10 @@ const STATIC_URLS = [
   "/api/v1/attributes/search-filters",
   "/api/v1/pages",
   "/api/v1/articles",
-  "/api/v1/hero/sliders?type=desktop",
-  "/api/v1/hero/sliders?type=mobile",
   "/api/v1/analytics/configurations",
   "/api/v1/seo",
-  "/api/v1/header",
   "/api/v1/navigation",
   "/api/v1/navigation/placements",
-  "/api/v1/footer",
 ];
 
 function changedPaths(before: unknown, after: unknown, path = "$", out: string[] = []): string[] {

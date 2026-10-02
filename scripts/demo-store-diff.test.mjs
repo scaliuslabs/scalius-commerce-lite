@@ -28,7 +28,7 @@ function emptySnapshot() {
     media: [],
     attributes: [],
     collections: [],
-    presentation: { general: {}, theme: {}, heroes: [] },
+    presentation: { theme: {} },
   };
 }
 
@@ -148,7 +148,7 @@ describe("demo-store diff and evidence", () => {
     expect(diff.summary.conflicts).toBe(1);
   });
 
-  it("reports homepage placement drift independently from publication", () => {
+  it("leaves homepage placement to the theme rather than collection config", () => {
     const snapshot = emptySnapshot();
     const desired = demoStoreManifest.collections[0];
     snapshot.collections = [{
@@ -162,7 +162,7 @@ describe("demo-store diff and evidence", () => {
 
     const diff = buildDemoStoreDiff(demoStoreManifest, snapshot);
     expect(diff.resources.collections.find((item) => item.name === desired.name))
-      .toMatchObject({ action: "update", fields: ["showOnHomepage"] });
+      .toMatchObject({ action: "match", fields: [] });
   });
 
   it("writes a private evidence bundle and a whitelisted resume journal", async () => {

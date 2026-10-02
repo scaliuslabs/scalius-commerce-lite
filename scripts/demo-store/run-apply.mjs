@@ -20,6 +20,7 @@ import {
   verifyDemoApplyDesiredState,
 } from "./apply/verification.mjs";
 import { compileDemoStoreAdminCommands } from "./compile.mjs";
+import { assertDemoThemeWorkspace } from "./theme-homepage.mjs";
 
 export { assertRetainedProductAuthority } from "./apply/retained-authority.mjs";
 
@@ -57,10 +58,9 @@ function assertStagedResourcesInactive(manifest, snapshot) {
   if (activeCollection) {
     throw new Error(`Inactive staging requires collection ${activeCollection.name} to be quarantined before apply.`);
   }
-  const activeHero = (snapshot.presentation?.heroes ?? snapshot.heroes ?? []).find((hero) => hero.isActive === true);
-  if (activeHero) {
-    throw new Error(`Inactive staging requires the ${activeHero.type} hero to be quarantined before apply.`);
-  }
+  // The homepage is staged as a theme draft, which is not public; a draft
+  // holding the merchant's unpublished changes is refused before any write.
+  assertDemoThemeWorkspace(snapshot.presentation?.theme);
 }
 
 function simpleResumeSlugs(manifest, snapshot, completed) {

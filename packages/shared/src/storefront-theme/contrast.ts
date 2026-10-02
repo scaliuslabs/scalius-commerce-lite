@@ -134,6 +134,52 @@ export function storefrontHeaderToneColors(
     : { background: "background", foreground: "foreground" };
 }
 
+/** `from` moved `weight` (0-1) of the way to `to`, in sRGB, as `#rrggbb`. */
+export function storefrontThemeMix(from: string, to: string, weight: number): string {
+  const channels = (hex: string) => {
+    const value = Number.parseInt(hex.slice(1), 16);
+    return [(value >> 16) & 255, (value >> 8) & 255, value & 255];
+  };
+  const [a, b] = [channels(from), channels(to)];
+  return `#${a.map((channel, index) => Math.round(channel + (b[index]! - channel) * weight)
+    .toString(16).padStart(2, "0")).join("")}`;
+}
+
+/** The most a raised header band moves toward the header's text. */
+const HEADER_RAISE = 0.14;
+/** How far a deep header band moves away from the header's text. */
+const HEADER_DEEPEN = 0.25;
+
+/**
+ * Two bands derived from the header surface for blocks painted in the
+ * header's tone (Amazon's footer: a raised "Back to top" band and a deeper
+ * bottom band). `deep` moves away from the header's text (toward black under
+ * light text, toward white under dark text), so its contrast with that text
+ * is never lower than the header pair's. `raised` moves toward the text, by
+ * at most 14% and never below AA (4.5:1); at worst it is the header itself.
+ * The header pair is in the base AA set, so both bands keep their text
+ * readable for every valid document.
+ */
+export function storefrontHeaderBands(
+  tone: StorefrontThemeHeaderTone,
+  colors: StorefrontThemeColors,
+): { deep: string; raised: string } {
+  const keys = storefrontHeaderToneColors(tone, colors);
+  const background = colors[keys.background];
+  const foreground = colors[keys.foreground];
+  const lightText = storefrontThemeLuminance(foreground) > storefrontThemeLuminance(background);
+  const deep = storefrontThemeMix(background, lightText ? "#000000" : "#ffffff", HEADER_DEEPEN);
+  let raised = background;
+  for (let step = 7; step > 0; step -= 1) {
+    const candidate = storefrontThemeMix(background, foreground, (HEADER_RAISE * step) / 7);
+    if (storefrontThemeContrast(foreground, candidate) >= STOREFRONT_THEME_MIN_CONTRAST) {
+      raised = candidate;
+      break;
+    }
+  }
+  return { deep, raised };
+}
+
 export function resolveStorefrontContrastRole(
   role: StorefrontThemeContrastRole,
   colors: StorefrontThemeColors,

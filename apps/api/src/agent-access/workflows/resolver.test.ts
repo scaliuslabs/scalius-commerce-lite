@@ -408,13 +408,15 @@ describe("reviewed agent workflow resolver", () => {
       });
     }
 
+    // Ambiguous: notification rules, Meta Conversions API settings and
+    // notification templates are all plausible, so the resolver asks.
     expect(resolveWorkflow({
       surface: "dashboard",
       prompt: "Update the conversion event configuration.",
     })).toMatchObject({
       kind: "choices",
       disposition: "ask",
-      choices: [expect.objectContaining({ id: "dashboard.notification-rules" })],
+      choices: expect.arrayContaining([expect.objectContaining({ id: "dashboard.notification-rules" })]),
     });
     expect(resolveWorkflow({
       surface: "dashboard",
@@ -1856,11 +1858,12 @@ describe("reviewed agent workflow resolver", () => {
       expect(operationIds.indexOf("dashboard.navigation.items_search"), caseId).toBeLessThan(
         operationIds.indexOf("dashboard.navigation.items_create"),
       );
-      expect(operationIds.indexOf("dashboard.settings_header.get_header"), caseId).toBeLessThan(
-        operationIds.indexOf("dashboard.settings_header.header"),
+      // The announcement and slides are the theme draft's: read it, save it, publish that revision.
+      expect(operationIds.indexOf("dashboard.theme.workspace_get"), caseId).toBeLessThan(
+        operationIds.indexOf("dashboard.theme.draft_save"),
       );
-      expect(operationIds.indexOf("dashboard.hero_sliders.list"), caseId).toBeLessThan(
-        operationIds.indexOf("dashboard.hero_sliders.create"),
+      expect(operationIds.indexOf("dashboard.theme.draft_save"), caseId).toBeLessThan(
+        operationIds.indexOf("dashboard.theme.publish"),
       );
       for (const forbidden of [
         "dashboard.content.update",
@@ -1870,7 +1873,7 @@ describe("reviewed agent workflow resolver", () => {
         "dashboard.seo.settings_update",
       ]) expect(operationIds, caseId).not.toContain(forbidden);
       expect(operationIds.join(" "), caseId).not.toMatch(
-        /products|categories|attributes|inventory|theme/,
+        /products|categories|attributes|inventory|theme\.rollback/,
       );
       const rules = resolution.plan.rules.join(" ");
       expect(rules, caseId).toContain("staged non-atomic acceptance");
@@ -1881,7 +1884,9 @@ describe("reviewed agent workflow resolver", () => {
       expect(rules, caseId).toContain("append top-level");
       expect(rules, caseId).toContain("publish returned revision");
       expect(rules, caseId).toContain("never update/move/reorder");
-      expect(rules, caseId).toContain("topBar text/enabled only");
+      expect(rules, caseId).toContain("topBar text/link only");
+      expect(rules, caseId).toContain("stop if it differs from the published theme");
+      expect(rules, caseId).toContain("publish that draft revision");
       expect(rules, caseId).toContain("Max 3 HTTPS imports");
       expect(rules, caseId).toContain("preflight unique filename/folder");
       expect(rules, caseId).toContain("one unambiguous new exact match");
@@ -1931,7 +1936,7 @@ describe("reviewed agent workflow resolver", () => {
 
   it.each([
     ["absolute canonical", "Use https://other.example/eid?x=1#hero as canonical.", "absolute/query/fragment stops"],
-    ["clickable topBar", "Add a clickable URL to topBar.", "no link"],
+    ["insecure topBar link", "Link the topBar to http://example.com/eid.", "store path or https"],
     ["automatic mobile fallback", "Reuse the desktop slide on mobile without approval.", "distinct desktop/mobile assets or approved reuse"],
     ["local or base64 media", "Import /tmp/hero.png and data:image/png;base64 directly.", "Local/base64: upload/re-enter"],
     ["atomic rollback", "Guarantee atomic rollback for every write.", "Non-atomic/no rollback"],
@@ -1950,7 +1955,7 @@ describe("reviewed agent workflow resolver", () => {
       "dashboard.categories.create",
       "dashboard.attributes.create",
       "dashboard.inventory.adjust_stock",
-      "dashboard.theme.publish",
+      "dashboard.theme.rollback",
       "dashboard.navigation.items_update",
       "dashboard.navigation.items_move",
     ];
@@ -3039,6 +3044,8 @@ describe("reviewed agent workflow resolver", () => {
       createdAt: "2026-08-18T00:00:00.000Z",
       itemCount: 1,
       totalQuantity: 1,
+      channel: "admin",
+      channelSource: index === 0 ? "facebook" : null,
       customerName: "Private Buyer",
       email: "buyer@example.com",
       phone: "+8801700000000",
@@ -3064,7 +3071,10 @@ describe("reviewed agent workflow resolver", () => {
       createdAt: "2026-08-18T00:00:00.000Z",
       itemCount: 1,
       totalQuantity: 1,
+      channel: "admin",
+      channelSource: "facebook",
     });
+    expect(orderQueue[1]).toMatchObject({ channel: "admin", channelSource: null });
     expect(JSON.stringify(projected)).not.toMatch(
       /Private Buyer|buyer@example\.com|\+8801700000000|Private address/,
     );

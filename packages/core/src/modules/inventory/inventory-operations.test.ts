@@ -18,6 +18,14 @@ vi.mock("./alerts", () => ({
   checkAndAlertLowStock: vi.fn(),
 }));
 
+// One location holding all of the SKU's stock; the D1 tests cover levels.
+vi.mock("./locations", async (importActual) => ({
+  ...(await importActual<typeof import("./locations")>()),
+  resolveActiveInventoryLocation: vi.fn(async () => ({ id: "loc_default", name: "Main location" })),
+  readLocationOnHand: vi.fn(async (_db: unknown, _locationId: string, variantIds: string[]) =>
+    new Map(variantIds.map((id) => [id, 5]))),
+}));
+
 type StoredOperation = { requestHash: string; resultPayload: string };
 type Statement = { kind: "insert" | "update"; table: unknown };
 
@@ -122,6 +130,9 @@ describe("merchant inventory operation idempotency", () => {
         previousStock: 5,
         newStock: 8,
         delta: 3,
+        locationId: "loc_default",
+        locationPreviousStock: 5,
+        locationNewStock: 8,
       });
 
     expect(batches).toHaveLength(1);
@@ -232,13 +243,26 @@ describe("merchant inventory operation idempotency", () => {
         previousStock: 5,
         newStock: 5,
         delta: 0,
+        locationId: "loc_default",
+        locationPreviousStock: 5,
+        locationNewStock: 5,
       });
     expect(batches[0]).toEqual([
       expect.objectContaining({ kind: "insert", table: inventoryOperations }),
     ]);
   });
 
-  it("includes mode, variant, quantity, reason, notes, and pool in the canonical hash", async () => {
+  it("refuses a location for preorder stock, which is held nowhere", async () => {
+    const { db, batches } = createOperationDb();
+    await expect(executeInventoryOperation(db as never, {
+      ...baseInput,
+      pool: "preorderStock",
+      locationId: "loc_other",
+    })).rejects.toThrow(/isn't held at a location/);
+    expect(batches).toHaveLength(0);
+  });
+
+  it("includes mode, variant, quantity, reason, notes, pool, and location in the canonical hash", async () => {
     const original = await buildInventoryOperationRequestHash(baseInput);
     await expect(buildInventoryOperationRequestHash({
       ...baseInput,
@@ -250,6 +274,7 @@ describe("merchant inventory operation idempotency", () => {
       { ...baseInput, reason: "correction" },
       { ...baseInput, notes: "different note" },
       { ...baseInput, pool: "preorderStock" as const },
+      { ...baseInput, locationId: "loc_other" },
       {
         operationKey: baseInput.operationKey,
         operationType: "stocktake" as const,

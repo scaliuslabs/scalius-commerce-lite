@@ -1,0 +1,164 @@
+// Plugin functions (docs/platform/PLUGINS.md): synchronous decision points in
+// checkout. A function is pure: it receives the input below plus its plugin's
+// settings, does no I/O, and returns an output the platform validates and
+// applies. Inputs carry ids, quantities, money in integer minor units and
+// customer segments — never contact details. A function that throws, times
+// out or returns an invalid output is skipped (`fail open`) and the incident
+// is logged for the merchant; no plugin can take checkout down.
+// Part of the versioned plugin API.
+
+import { z } from "zod";
+import type { PluginFunctionPoint } from "./manifest";
+
+const id = z.string().min(1).max(128);
+const minor = z.number().int().safe();
+const nonNegativeMinor = minor.min(0);
+const code = z.string().regex(/^[a-z0-9][a-z0-9_.-]{0,63}$/);
+const message = z.string().trim().min(1).max(200);
+const label = z.string().trim().min(1).max(80);
+
+/** One cart line as functions see it. */
+export const functionCartLineSchema = z.object({
+  lineId: id,
+  productId: id,
+  variantId: id,
+  sku: z.string().max(128).nullable(),
+  title: z.string().max(300),
+  quantity: z.number().int().min(1),
+  unitPriceMinor: nonNegativeMinor,
+  /** After the platform's own discounts, before plugin discounts. */
+  lineTotalMinor: nonNegativeMinor,
+  categoryIds: z.array(id).max(20),
+  collectionIds: z.array(id).max(50),
+  brandId: id.nullable(),
+  /** Buyer inputs captured on the line (engraving text, gift note…). */
+  properties: z.record(z.string().max(64), z.string().max(500)),
+}).strict();
+
+export const functionCartSchema = z.object({
+  currency: z.string().length(3),
+  decimalPlaces: z.number().int().min(0).max(4),
+  channel: z.enum(["online_store", "admin", "pos", "agent", "app"]),
+  lines: z.array(functionCartLineSchema).max(250),
+  subtotalMinor: nonNegativeMinor,
+  /** The buyer's segment facts when signed in; null for guests. */
+  customer: z.object({
+    id,
+    tags: z.array(z.string().max(64)).max(50),
+    orderCount: z.number().int().min(0),
+    totalSpentMinor: nonNegativeMinor,
+  }).strict().nullable(),
+  /** Region only, for rules like "Dhaka only". */
+  destination: z.object({
+    country: z.string().length(2),
+    city: z.string().max(120).nullable(),
+    zone: z.string().max(120).nullable(),
+  }).strict().nullable(),
+  discountCodes: z.array(z.string().max(64)).max(10),
+}).strict();
+export type FunctionCart = z.infer<typeof functionCartSchema>;
+
+// ── cart.validate ─────────────────────────────────────────────────────────
+
+export const cartValidateOutputSchema = z.object({
+  /** Any error blocks checkout and is shown to the buyer (on its line when `lineId` is set). */
+  errors: z.array(z.object({ code, message, lineId: id.optional() }).strict()).max(20),
+}).strict();
+
+// ── checkout.discounts ────────────────────────────────────────────────────
+
+export const checkoutDiscountsOutputSchema = z.object({
+  discounts: z.array(z.object({
+    title: label,
+    /** A code this discount answers to, when it is code-driven. */
+    code: z.string().max(64).optional(),
+    target: z.discriminatedUnion("kind", [
+      z.object({ kind: z.literal("order") }).strict(),
+      z.object({ kind: z.literal("lines"), lineIds: z.array(id).min(1).max(250) }).strict(),
+      z.object({ kind: z.literal("shipping") }).strict(),
+    ]),
+    value: z.discriminatedUnion("type", [
+      z.object({ type: z.literal("percentage"), percent: z.number().gt(0).max(100) }).strict(),
+      z.object({ type: z.literal("fixed_amount"), amountMinor: minor.positive() }).strict(),
+    ]),
+    /** Caps the discount's total. */
+    maxAmountMinor: minor.positive().optional(),
+  }).strict()).max(10),
+}).strict();
+
+// ── checkout.shipping_rates ───────────────────────────────────────────────
+
+export const functionShippingRateSchema = z.object({
+  rateId: id,
+  name: label,
+  amountMinor: nonNegativeMinor,
+  kind: z.enum(["delivery", "pickup"]),
+}).strict();
+
+export const checkoutShippingRatesOutputSchema = z.object({
+  operations: z.array(z.discriminatedUnion("op", [
+    z.object({ op: z.literal("hide"), rateId: id }).strict(),
+    z.object({ op: z.literal("rename"), rateId: id, name: label }).strict(),
+    z.object({ op: z.literal("price"), rateId: id, amountMinor: nonNegativeMinor }).strict(),
+    z.object({ op: z.literal("reorder"), rateIds: z.array(id).min(1).max(50) }).strict(),
+  ])).max(50),
+}).strict();
+
+// ── checkout.payment_methods ──────────────────────────────────────────────
+
+export const checkoutPaymentMethodsOutputSchema = z.object({
+  operations: z.array(z.discriminatedUnion("op", [
+    z.object({ op: z.literal("hide"), methodId: id }).strict(),
+    z.object({ op: z.literal("rename"), methodId: id, name: label }).strict(),
+    z.object({ op: z.literal("reorder"), methodIds: z.array(id).min(1).max(20) }).strict(),
+  ])).max(40),
+}).strict();
+
+// ── order.risk ────────────────────────────────────────────────────────────
+
+export const orderRiskInputSchema = z.object({
+  orderId: id,
+  cart: functionCartSchema,
+  totalMinor: nonNegativeMinor,
+  paymentMethod: z.string().max(64),
+  /** Prior orders by the same verified phone or account (counts only). */
+  history: z.object({
+    orders: z.number().int().min(0),
+    cancelled: z.number().int().min(0),
+    returnedToSender: z.number().int().min(0),
+  }).strict(),
+}).strict();
+
+/** Advisory only: shown to the merchant on the order, never auto-cancels. */
+export const orderRiskOutputSchema = z.object({
+  level: z.enum(["low", "medium", "high"]),
+  reasons: z.array(message).max(5),
+}).strict();
+
+// ── Registry ──────────────────────────────────────────────────────────────
+
+export const PLUGIN_FUNCTION_SCHEMAS = {
+  "cart.validate": {
+    input: z.object({ cart: functionCartSchema }).strict(),
+    output: cartValidateOutputSchema,
+  },
+  "checkout.discounts": {
+    input: z.object({ cart: functionCartSchema }).strict(),
+    output: checkoutDiscountsOutputSchema,
+  },
+  "checkout.shipping_rates": {
+    input: z.object({ cart: functionCartSchema, rates: z.array(functionShippingRateSchema).max(50) }).strict(),
+    output: checkoutShippingRatesOutputSchema,
+  },
+  "checkout.payment_methods": {
+    input: z.object({ cart: functionCartSchema, methods: z.array(z.object({ methodId: id, name: label }).strict()).max(20) }).strict(),
+    output: checkoutPaymentMethodsOutputSchema,
+  },
+  "order.risk": {
+    input: orderRiskInputSchema,
+    output: orderRiskOutputSchema,
+  },
+} as const satisfies Record<PluginFunctionPoint, { input: z.ZodType; output: z.ZodType }>;
+
+export type PluginFunctionInput<P extends PluginFunctionPoint> = z.infer<(typeof PLUGIN_FUNCTION_SCHEMAS)[P]["input"]>;
+export type PluginFunctionOutput<P extends PluginFunctionPoint> = z.infer<(typeof PLUGIN_FUNCTION_SCHEMAS)[P]["output"]>;

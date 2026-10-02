@@ -10,6 +10,7 @@ export * from "./admin/create";
 export * from "./admin/amend";
 export * from "./admin/edit";
 export * from "./admin/readiness";
+export * from "./admin/fulfillment-location";
 export * from "./admin/archive";
 export * from "./admin/recovery-link";
 export * from "./status/lifecycle";

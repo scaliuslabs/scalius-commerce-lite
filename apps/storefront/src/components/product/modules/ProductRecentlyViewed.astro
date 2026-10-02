@@ -1,0 +1,32 @@
+---
+// "Recently viewed" under a product (Apple Gadgets, Aarong): this browser's
+// own list (lib/recently-viewed.ts), without the product on screen. The
+// cached page carries only an empty, hidden module; the inline script after
+// it fills the row from localStorage as the parser reaches it, so nothing
+// shifts. Without JavaScript, on a first visit or with storage blocked, it
+// stays hidden: nothing leaves the browser and no server read is made.
+import { recentlyViewedRenderScript } from "@/lib/recently-viewed";
+
+interface Props {
+  title: string;
+  /** The product on screen, left out of the row. */
+  slug: string;
+}
+
+const { title, slug } = Astro.props;
+const rootId = "recently-viewed";
+const headingId = `${rootId}-heading`;
+---
+
+<section
+  id={rootId}
+  class="product-module mx-auto max-w-7xl border-t border-border px-3 py-6 sm:px-6 lg:px-8 lg:py-10"
+  data-product-module={rootId}
+  data-recently-viewed
+  aria-labelledby={headingId}
+  hidden
+>
+  <h2 id={headingId} class="mb-4 text-xl font-bold leading-tight text-foreground lg:text-2xl">{title}</h2>
+  <ul class="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 [scrollbar-width:none] md:gap-4 [&::-webkit-scrollbar]:hidden" data-recently-viewed-list></ul>
+</section>
+<script is:inline set:html={recentlyViewedRenderScript(rootId, slug)} />

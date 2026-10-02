@@ -40,13 +40,8 @@ import {
     productBundleTierInputListSchema,
     readProductBundleSection,
 } from "./bundles";
-import {
-    catalogPriceColumns,
-    presentCatalogPrice,
-    readStoreDecimalPlaces,
-    storeCurrencyCodeSql,
-    storeDecimalPlacesFromCode,
-} from "./money";
+import { catalogPriceColumns, presentCatalogPrice, readStoreDecimalPlaces } from "./money";
+import { storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../settings/store-money";
 import { executeProductAggregateMutationBatch } from "./aggregate-revision";
 import { updateProductMediaSection } from "./admin/write";
 import { MAX_PRODUCT_MEDIA_ASSOCIATIONS } from "./media";

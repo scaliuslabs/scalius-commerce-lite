@@ -7,6 +7,7 @@ import type { TaxQuote } from "../tax/types";
 import type { PromotionCheckoutSnapshot } from "../promotions/checkout-snapshot";
 import type { CustomerRequestType } from "../settings/customer-request-policy.shared";
 import type { DeliveryMethodKind, FulfillmentType } from "@scalius/shared/fulfilment";
+import type { OrderChannel } from "@scalius/shared/order-channel";
 import type {
     AdminOrderFulfilmentView,
     OrderLineFulfilmentFacts,
@@ -187,6 +188,10 @@ export interface OrderListItem {
     /** Sequential store number, shown as "#1001". */
     orderNumber: number | null;
     archivedAt: Date | null;
+    /** The surface that created the order (COMMERCE-HOOKS H2); never changes. */
+    channel: OrderChannel;
+    /** Where it came in within the channel (`facebook`, `walk_in`, …), a lowercase slug. */
+    channelSource: string | null;
     /** The open customer request, so it isn't shipped unnoticed. */
     openRequestType: "cancel_pre_shipment" | "return" | "refund" | null;
     cod: { status: string; deliveryAttempts: number } | null;
@@ -203,6 +208,13 @@ export interface OrderListItem {
 
 export interface OrderDetails extends OrderListItem {
     editReadiness: OrderEditReadiness;
+    /** The order's own location (null = the store default). */
+    fulfillmentLocationId: string | null;
+    /**
+     * Where the order's stock leaves from: its own location or the default
+     * (`explicit` false). Changeable while `editReadiness.details` allows edits.
+     */
+    fulfillmentLocation: { id: string; name: string; explicit: boolean } | null;
     notes: string | null;
     /** Null when nothing ships (pickup, service-only or digital orders). */
     shippingAddress: string | null;

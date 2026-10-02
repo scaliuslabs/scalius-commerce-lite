@@ -33,6 +33,8 @@ export const receiveOrderReturnSchema = z.object({
   commandKey: commandKeySchema,
   expectedVersion: z.number().int().min(1),
   notes: noteSchema,
+  /** The active location restocked units go to; omitted, they return to where they were sent from. */
+  restockLocationId: z.string().trim().min(1).max(100).nullable().optional(),
   lines: z.array(z.object({
     lineId: z.string().trim().min(1),
     receivedQuantity: z.number().int().min(1).max(99_999),

@@ -194,6 +194,7 @@ export const DASHBOARD_ORDER_OPERATIONS = {
     batch: "forbidden",
   },
   "dashboard.orders.update_details": { revision: "required" },
+  "dashboard.orders.fulfillment_location_set": { revision: "required" },
   "dashboard.orders.update_status": {
     openWorld: true,
     batch: "forbidden",

@@ -8,6 +8,7 @@ import {
     deliveryShipments,
     deliveryProviders,
     codTracking,
+    inventoryLocations,
 } from "@scalius/database/schema";
 import { listOrderDiscountLines } from "../../promotions/order-discount-lines";
 import { sql, desc, eq } from "drizzle-orm";
@@ -114,6 +115,19 @@ async function getOrderDetailsOnce(
             updatedAt: sql<number>`CAST(${orders.updatedAt} AS INTEGER)`,
             deletedAt: sql<number>`CAST(${orders.deletedAt} AS INTEGER)`,
             shipmentClaimExpiresAt: orders.shipmentClaimExpiresAt,
+            fulfillmentLocationId: orders.fulfillmentLocationId,
+            // Where the order's stock leaves from: its own location, else the default.
+            effectiveFulfillmentLocationId: sql<string | null>`COALESCE(${orders.fulfillmentLocationId}, (
+                SELECT ${inventoryLocations.id} FROM ${inventoryLocations}
+                WHERE ${inventoryLocations.isDefault} = 1 AND ${inventoryLocations.status} = 'active'
+            ))`,
+            effectiveFulfillmentLocationName: sql<string | null>`(
+                SELECT ${inventoryLocations.name} FROM ${inventoryLocations}
+                WHERE ${inventoryLocations.id} = COALESCE(${orders.fulfillmentLocationId}, (
+                    SELECT default_location.id FROM ${inventoryLocations} AS default_location
+                    WHERE default_location.is_default = 1 AND default_location.status = 'active'
+                ))
+            )`,
             paymentRecoveryApplicable: paymentRecoveryLifecycleCondition(),
             ...orderEditEvidenceSelection(),
             ...orderListFactsSelection(),
@@ -242,6 +256,8 @@ async function getOrderDetailsOnce(
         codDeliveryAttempts: _codDeliveryAttempts,
         returnedValueMinor: _returnedValueMinor,
         refundedMinor: _refundedMinor,
+        effectiveFulfillmentLocationId,
+        effectiveFulfillmentLocationName,
         ...publicOrder
     } = omitOrderEditEvidence(order);
 
@@ -278,6 +294,13 @@ async function getOrderDetailsOnce(
         supportRequests,
         paymentRecovery: buildPaymentRecoverySummary(order, paymentAttempts, nowSeconds),
         editReadiness: buildOrderEditReadiness(order),
+        fulfillmentLocation: effectiveFulfillmentLocationId && effectiveFulfillmentLocationName
+            ? {
+                id: effectiveFulfillmentLocationId,
+                name: effectiveFulfillmentLocationName,
+                explicit: order.fulfillmentLocationId !== null,
+            }
+            : null,
         customerRecord: customerRecord
             ? { id: customerRecord.id, name: customerRecord.name, phone: customerRecord.phone, kind: customerKind(customerRecord) }
             : null,

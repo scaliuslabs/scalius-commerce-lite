@@ -6,7 +6,6 @@ import {
     createNavigationMenu,
     createNavigationMenuItem,
     deleteNavigationMenuItem,
-    getNavigationAuthorityShadowReport,
     getNavigationMenuItemAuthority,
     getNavigationMenuMoveOptions,
     getNavigationMenuAuthority,
@@ -993,32 +992,6 @@ app.openapi(savePlacementRoute, async (c) => {
     });
 
     return ok(c, result);
-});
-
-const shadowReportRoute = createRoute({
-    method: "get",
-    path: "/authority-shadow",
-    tags: ["Admin - Navigation"],
-    summary: "Compare the normalized navigation authority with the typed bridge",
-    operationId: "dashboard.navigation.authority_shadow",
-    responses: {
-        200: {
-            description: "Navigation migration parity",
-            content: { "application/json": { schema: successEnvelope(z.object({
-                ready: z.boolean(),
-                legacyMenuCount: z.number().int().nonnegative(),
-                authorityMenuCount: z.number().int().nonnegative(),
-                legacyItemCount: z.number().int().nonnegative(),
-                authorityItemCount: z.number().int().nonnegative(),
-                mismatches: z.array(z.string()),
-            })) } },
-        },
-        ...errorResponses,
-    },
-});
-
-app.openapi(shadowReportRoute, async (c) => {
-    return ok(c, await getNavigationAuthorityShadowReport(c.get("db")));
 });
 
 export { app as adminNavigationRoutes };

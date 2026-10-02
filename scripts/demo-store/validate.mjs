@@ -189,9 +189,23 @@ export function validateDemoStoreManifest(manifest = demoStoreManifest) {
   expectUnique(errors, "Media logical keys", allMedia.map((media) => media.logicalKey));
   expectUnique(errors, "Media alt text", allMedia.map((media) => media.altText));
   expectUnique(errors, "Collection logical keys", manifest.collections.map((collection) => collection.logicalKey));
-  for (const collection of manifest.collections) {
-    if (typeof collection.showOnHomepage !== "boolean") {
-      errors.push(`Collection ${collection.logicalKey} needs explicit homepage placement`);
+  // The homepage is the storefront theme: its collections section holds at
+  // most eight collections and its hero at most ten slides.
+  const collectionKeys = new Set(manifest.collections.map((collection) => collection.logicalKey));
+  const homepageCollections = Array.isArray(manifest.homepageCollections) ? manifest.homepageCollections : null;
+  if (!homepageCollections || homepageCollections.length > 8) errors.push("Homepage collections must be a list of at most 8 collections");
+  expectUnique(errors, "Homepage collections", homepageCollections ?? []);
+  for (const logicalKey of homepageCollections ?? []) {
+    if (!collectionKeys.has(logicalKey)) errors.push(`Homepage collection ${logicalKey} is not a manifest collection`);
+  }
+  if (manifest.heroes.length > 10) errors.push("Heroes must be at most 10 theme slides");
+  for (const hero of manifest.heroes) {
+    const [kind, slug] = hero.destination?.split(":") ?? [];
+    if (!(kind === "category" && categorySlugs.has(slug)) && !(kind === "collection" && collectionKeys.has(hero.destination))) {
+      errors.push(`Hero ${hero.logicalKey} links to unknown destination ${hero.destination}`);
+    }
+    if (!hero.title?.trim() || hero.title.length > 160 || !hero.copy?.trim() || hero.copy.length > 160) {
+      errors.push(`Hero ${hero.logicalKey} needs a title and copy of at most 160 characters`);
     }
   }
 

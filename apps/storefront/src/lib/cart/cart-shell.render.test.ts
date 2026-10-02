@@ -90,16 +90,10 @@ const envelope = (data: unknown) => JSON.stringify({ success: true, data });
 
 const LAYOUT = {
   analytics: [],
-  header: {
-    topBar: { text: "", isEnabled: false },
-    logo: { src: "", alt: "Nakshi Ghor" },
-    favicon: { src: "", alt: "" },
-    contact: { phone: "", text: "", isEnabled: false },
-    social: [],
-  },
   navigation: [],
-  footer: { logo: { src: "", alt: "Nakshi Ghor" }, tagline: "", description: "", copyrightText: "", menus: [], social: [] },
-  currency: { code: "BDT", symbol: "৳", usdExchangeRate: 120, decimalPlaces: 0 },
+  footerMenus: [],
+  brand: { logo: null, footerLogo: null, favicon: null },
+  currency: { code: "BDT", symbol: "৳", decimalPlaces: 0 },
   policies: [
     { kind: "terms", title: "Terms", path: "/terms" },
     { kind: "privacy", title: "Privacy policy", path: "/privacy-policy" },

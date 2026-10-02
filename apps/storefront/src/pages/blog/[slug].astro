@@ -6,6 +6,7 @@ import { setRuntimeImageCdnPolicy } from "@/lib/api/runtime";
 import { mediaImageSrcSet, mediaImageUrl } from "@/lib/media-url";
 import { firstRichContentImageUrl, optimizeRichContentImages } from "@/lib/rich-content-media";
 import { resolveStoreShareImage } from "@/lib/store-identity";
+import { resolveRequestTheme } from "@/lib/storefront-theme-context";
 import { applyStorefrontPrefetchPolicyToHtml } from "@/lib/prefetch-policy";
 import { processShortcodes } from "@/lib/shortcodes";
 import {
@@ -50,13 +51,15 @@ const featuredImageUrl = article.featuredImage?.url
   ? mediaImageUrl(article.featuredImage.url, 1200)
   : null;
 // Posts without a featured image share their first content image, then the
-// store's share image, so BlogPosting always has an image.
+// store's share image (the social image, else the theme's logo), so
+// BlogPosting always has an image.
+const { brand } = await resolveRequestTheme(Astro, layoutData);
 const shareImageUrl =
   featuredImageUrl ||
   firstRichContentImageUrl(article.content, 1200) ||
   resolveStoreShareImage({
     socialImage: layoutData.seo?.socialImage,
-    logo: layoutData.header?.logo?.src,
+    logo: brand.logo?.url,
   });
 const absoluteImageUrl = toAbsoluteStorefrontSeoUrl(shareImageUrl);
 const featuredImageAlt =

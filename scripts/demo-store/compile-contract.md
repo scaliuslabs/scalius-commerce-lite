@@ -54,8 +54,12 @@ blind-retry.
 
 Commands are grouped into create-only vocabulary reconciliation, category
 reconciliation, product base/matrix/simple
-SKU work, activation, category publication, collections, and desktop/mobile
-hero documents. Manual collection membership is explicit and ordered. Dynamic
+SKU work, activation, category publication, collections, and one theme draft
+(`theme:draft`): the heroes as the first hero section's slides and
+`homepageCollections` as the first collections section's ids, composed by the
+binder into the published theme read in the snapshot (`$demoHomepage`) and
+saved at the workspace revisions read there (`current-theme`). Collections
+carry no homepage flag. Manual collection membership is explicit and ordered. Dynamic
 collections contain explicit category references. New categories publish only
 after a first product dependency; new products start inactive and activate only
 after their SKU/media/content payload is complete.
@@ -68,8 +72,10 @@ pre-write conflict rather than an unsafe update.
 `apply-bind.mjs` is resolution-only: it binds compiler references from a fresh
 authenticated snapshot, verified staged assets, or safe prerequisite command
 authority (`id` and monotonic revisions). It must not rebuild or reinterpret a
-request payload. `run-apply.mjs` currently executes only category, product,
-inactive collection, and inactive presentation commands. Activation and
+request payload; the one composition it performs is `$demoHomepage` (the
+compiled slides and collection ids placed into the snapshot's published
+theme). `run-apply.mjs` currently executes only category, product,
+inactive collection, and theme draft commands. Activation and
 publication remain excluded until the browser-verification milestone; the
 public CLI still exposes no write mode.
 

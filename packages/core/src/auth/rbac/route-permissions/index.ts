@@ -22,6 +22,8 @@ import { REVIEW_ROUTE_PERMISSIONS } from "./reviews";
 import { GIFT_CARD_ROUTE_PERMISSIONS } from "./gift-cards";
 import { DIGITAL_ROUTE_PERMISSIONS } from "./digital";
 import { WARRANTY_ROUTE_PERMISSIONS } from "./warranty";
+import { WEBHOOK_ROUTE_PERMISSIONS } from "./webhooks";
+import { CUSTOM_FIELD_ROUTE_PERMISSIONS } from "./custom-fields";
 import type { HttpMethod, RoutePermission, RoutePermissionMap } from "./shared";
 
 /**
@@ -50,6 +52,8 @@ export const ROUTE_PERMISSION_MAPS: readonly RoutePermissionMap[] = [
   GIFT_CARD_ROUTE_PERMISSIONS,
   DIGITAL_ROUTE_PERMISSIONS,
   WARRANTY_ROUTE_PERMISSIONS,
+  WEBHOOK_ROUTE_PERMISSIONS,
+  CUSTOM_FIELD_ROUTE_PERMISSIONS,
 ];
 
 /**

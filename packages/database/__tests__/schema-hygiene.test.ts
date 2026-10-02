@@ -17,7 +17,20 @@ describe("canonical schema hygiene", () => {
         RETIRED_PRE_CONSOLIDATION_TABLES.has(table));
 
       expect(d1Tables).toEqual(tursoTables);
-      expect(d1Tables).toHaveLength(144);
+      expect(d1Tables).toHaveLength(154);
+      // The homepage hero is the theme document's hero section (0106).
+      expect(d1Tables).not.toContain("hero_sliders");
+      expect(d1Tables).not.toContain("hero_sections");
+      for (const plugins of ["plugin_installations", "plugin_registrations", "plugin_records", "plugin_kv", "plugin_log_entries"]) {
+        expect(d1Tables).toContain(plugins);
+      }
+      expect(d1Tables).toContain("custom_field_definitions");
+      expect(d1Tables).toContain("custom_field_values");
+      expect(d1Tables).toContain("inventory_locations");
+      expect(d1Tables).toContain("inventory_levels");
+      for (const events of ["event_outbox", "webhook_subscriptions", "webhook_event_deliveries"]) {
+        expect(d1Tables).toContain(events);
+      }
       for (const waveB of ["product_reviews", "product_review_stats", "order_review_requests", "digital_assets", "digital_asset_uploads", "digital_entitlements", "digital_licence_keys", "gift_cards", "gift_card_transactions", "warranty_policies", "warranty_policy_revisions", "order_item_warranties", "warranty_claims"]) {
         expect(d1Tables).toContain(waveB);
       }

@@ -6,8 +6,6 @@ import { toast } from "sonner";
 import {
   postApiV1AdminNavigationMenus,
   postApiV1AdminNavigationMenusByMenuIdPublish,
-  postApiV1AdminSettingsFooter,
-  postApiV1AdminSettingsHeader,
   putApiV1AdminNavigationPlacementsByPlacementId,
 } from "@scalius/api-client/sdk";
 import { Button } from "~/components/ui/button";
@@ -22,8 +20,6 @@ import {
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { SearchableSelect } from "~/components/ui/searchable-select";
-import { Switch } from "~/components/ui/switch";
-import { DeferredTiptapEditor } from "~/components/ui/tiptap/DeferredTiptapEditor";
 import { SaveBarProvider } from "~/components/admin/shared/SaveBar";
 import { apiData } from "~/lib/api";
 import type {
@@ -31,22 +27,12 @@ import type {
   NavigationPlacementSetting,
 } from "~/lib/api-query-options/navigation";
 import {
-  footerQueryOptions,
-  headerQueryOptions,
   navigationMenusQueryOptions,
   navigationPlacementsQueryOptions,
 } from "~/lib/api-query-options/online-store";
 import { useMessages } from "~/i18n";
 import { onlineStoreMessages } from "~/i18n/online-store";
-import { SocialLinksCard, isSafeSocialDestination, socialFieldId, type SocialLink } from "./SocialLinksCard";
 import { actionErrorText, failSave, Field, OnlineStorePage, SectionCard, useDocumentDraft } from "./shared";
-
-/** `social.2.url` → the control that shows it. */
-function socialField(path: string, social: SocialLink[]): string | undefined {
-  const [group, index, field] = path.split(".");
-  const link = group === "social" ? social[Number(index)] : undefined;
-  return link && (field === "url" || field === "label") ? socialFieldId(link.id, field) : undefined;
-}
 
 /** Storefront slots a menu can fill: the header menu and four footer columns. */
 const SLOTS = [
@@ -275,157 +261,6 @@ function LocationsCard() {
   );
 }
 
-function StoreDetailsCards() {
-  const t = useMessages(onlineStoreMessages);
-  const queryClient = useQueryClient();
-  const header = useSuspenseQuery(headerQueryOptions());
-  const footer = useSuspenseQuery(footerQueryOptions());
-  const socialInvalid = (social: { url: string }[]) =>
-    social.some((link) => !isSafeSocialDestination(link.url));
-  const headerDraft = useDocumentDraft({
-    label: t("header"),
-    saved: header.data.config,
-    invalid: (config) => socialInvalid(config.social),
-    fields: (path, config) =>
-      socialField(path, config.social) ?? ({
-        "topBar.text": "announcement-text",
-        "contact.phone": "contact-phone",
-        "contact.text": "contact-text",
-      } as Record<string, string>)[path],
-    save: async (config) => {
-      try {
-        const saved = await apiData(postApiV1AdminSettingsHeader({
-          body: { ...config, expectedRevision: header.data.revision },
-        }));
-        queryClient.setQueryData(headerQueryOptions().queryKey, { config, revision: saved.revision });
-      } catch (error) {
-        failSave(error, () => void header.refetch());
-      }
-    },
-  });
-  const footerDraft = useDocumentDraft({
-    label: t("footer"),
-    saved: footer.data.config,
-    invalid: (config) => socialInvalid(config.social),
-    fields: (path, config) =>
-      socialField(path, config.social) ??
-      ({ tagline: "footer-tagline", copyrightText: "footer-copyright" } as Record<string, string>)[path],
-    save: async (config) => {
-      try {
-        const saved = await apiData(postApiV1AdminSettingsFooter({
-          body: { ...config, expectedRevision: footer.data.revision },
-        }));
-        queryClient.setQueryData(footerQueryOptions().queryKey, { config, revision: saved.revision });
-      } catch (error) {
-        failSave(error, () => void footer.refetch());
-      }
-    },
-  });
-  const headerConfig = headerDraft.draft;
-  const footerConfig = footerDraft.draft;
-  const setHeader = (updates: Partial<typeof headerConfig>) =>
-    headerDraft.setDraft((current) => ({ ...current, ...updates }));
-  const setFooter = (updates: Partial<typeof footerConfig>) =>
-    footerDraft.setDraft((current) => ({ ...current, ...updates }));
-
-  return (
-    <>
-      <SectionCard
-        title={t("announcementBar")}
-        description={t("announcementBarHelp")}
-        action={
-          <Switch
-            checked={headerConfig.topBar.isEnabled}
-            aria-label={t("announcementBar")}
-            onCheckedChange={(isEnabled) => setHeader({ topBar: { ...headerConfig.topBar, isEnabled } })}
-          />
-        }
-      >
-        <Field id="announcement-text" label={t("message")}>
-          <Input
-            id="announcement-text"
-            value={headerConfig.topBar.text}
-            maxLength={200}
-            placeholder={t("announcementPlaceholder")}
-            onChange={(event) => setHeader({ topBar: { ...headerConfig.topBar, text: event.target.value } })}
-          />
-        </Field>
-      </SectionCard>
-
-      <SectionCard
-        title={t("headerPhone")}
-        description={t("headerPhoneHelp")}
-        action={
-          <Switch
-            checked={headerConfig.contact.isEnabled}
-            aria-label={t("headerPhone")}
-            onCheckedChange={(isEnabled) => setHeader({ contact: { ...headerConfig.contact, isEnabled } })}
-          />
-        }
-      >
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field id="contact-phone" label={t("phoneNumber")}>
-            <Input
-              id="contact-phone"
-              type="tel"
-              value={headerConfig.contact.phone}
-              maxLength={64}
-              placeholder="+880 1712 345678"
-              onChange={(event) => setHeader({ contact: { ...headerConfig.contact, phone: event.target.value } })}
-            />
-          </Field>
-          <Field id="contact-text" label={t("phoneLabel")}>
-            <Input
-              id="contact-text"
-              value={headerConfig.contact.text}
-              maxLength={200}
-              placeholder={t("phoneLabelPlaceholder")}
-              onChange={(event) => setHeader({ contact: { ...headerConfig.contact, text: event.target.value } })}
-            />
-          </Field>
-        </div>
-      </SectionCard>
-
-      <SocialLinksCard
-        social={footerConfig.social}
-        onChange={(social) => {
-          setHeader({ social });
-          setFooter({ social });
-        }}
-      />
-
-      <SectionCard title={t("footer")}>
-        <Field id="footer-tagline" label={t("tagline")}>
-          <Input
-            id="footer-tagline"
-            value={footerConfig.tagline ?? ""}
-            maxLength={200}
-            onChange={(event) => setFooter({ tagline: event.target.value })}
-          />
-        </Field>
-        <div className="space-y-1.5">
-          <Label id="footer-about-label">{t("aboutText")}</Label>
-          <DeferredTiptapEditor
-            content={footerConfig.description ?? ""}
-            onChange={(description) => setFooter({ description })}
-            ariaLabel={t("aboutText")}
-            compact
-          />
-        </div>
-        <Field id="footer-copyright" label={t("copyright")} help={t("copyrightHelp")}>
-          <Input
-            id="footer-copyright"
-            value={footerConfig.copyrightText ?? ""}
-            maxLength={200}
-            aria-describedby="footer-copyright-note"
-            onChange={(event) => setFooter({ copyrightText: event.target.value })}
-          />
-        </Field>
-      </SectionCard>
-    </>
-  );
-}
-
 export function NavigationPage() {
   const t = useMessages(onlineStoreMessages);
   const [adding, setAdding] = useState(false);
@@ -441,7 +276,6 @@ export function NavigationPage() {
       >
         <MenusCard />
         <LocationsCard />
-        <StoreDetailsCards />
       </OnlineStorePage>
       <AddMenuDialog open={adding} onOpenChange={setAdding} />
     </SaveBarProvider>

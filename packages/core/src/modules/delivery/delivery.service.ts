@@ -16,6 +16,8 @@ import { NotFoundError, ValidationError, ServiceUnavailableError, ConflictError 
 import { assertNoActiveShipmentClaim, hasActiveShipmentClaim } from "../orders/shipment-claim";
 import { assertNoActiveRefundAttempt } from "../payments/refund-attempt-guard";
 import { assertNoActivePaymentSessionAttempt } from "../payments/payment-session-attempts";
+import { assertOrderStockCoverable } from "../inventory/inventory-transitions";
+import { InventoryLocationShortfallError } from "../inventory/locations";
 import { getExternalLocationIds, isPositiveIntegerExternalLocationId } from "./locations";
 import {
   assertDeliveryProviderReadyForActivation,
@@ -480,6 +482,15 @@ export async function createShipment(
 
   const preflightFailure = await preflightProviderShipmentSetup(db, provider.type, order);
   if (preflightFailure) return preflightFailure;
+
+  // Booking ships the order, which deducts its stock at its fulfilment
+  // location: never book a courier for units that location doesn't hold.
+  try {
+    await assertOrderStockCoverable(db, orderId);
+  } catch (error) {
+    if (error instanceof InventoryLocationShortfallError) return { success: false, message: error.message };
+    throw error;
+  }
 
   // Load order items with product names for item description and count
   const items = await db

@@ -14,11 +14,8 @@ import { quickAddEligibleSql } from "../products/buyer-projection";
 import type { ProductCondition } from "@scalius/shared/product-condition";
 import type { StorefrontProductFilterInput } from "../products/types";
 import type { Database } from "@scalius/database/client";
-import {
-    presentBuyerPricing,
-    storeCurrencyCodeSql,
-    storeDecimalPlacesFromCode,
-} from "../products/money";
+import { presentBuyerPricing } from "../products/money";
+import { storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../settings/store-money";
 import { publicCategoryConditions } from "../categories/categories.publication";
 import { publicCategorySubtreeCondition } from "../categories/categories.tree";
 import { resolveProductCardImages } from "../products/media";

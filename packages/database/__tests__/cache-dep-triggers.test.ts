@@ -19,6 +19,10 @@ import {
 } from "../../shared/src/cache-deps";
 import {
   CACHE_DEP_CLOCK_TRIGGERS,
+  CACHE_DEP_LATER_TABLES,
+  CACHE_DEP_RETIRED_TABLES,
+  retiredCacheDepFunctionDrops,
+  retiredCacheDepTriggerNames,
   CACHE_DEP_MIGRATION,
   CACHE_DEP_MIGRATION_PATHS,
   CACHE_DEP_TRIGGER_PREFIX,
@@ -98,9 +102,20 @@ describe("0100_cache_dependencies", () => {
 
   it("has a PostgreSQL trigger for every rule in the sidecar", () => {
     const sidecar = readFileSync(CACHE_DEP_MIGRATION_PATHS.postgres, "utf8")
-      + readFileSync(CACHE_DEP_PROJECTION_MIGRATION_PATHS.postgres, "utf8");
+      + readFileSync(CACHE_DEP_PROJECTION_MIGRATION_PATHS.postgres, "utf8")
+      + [...new Set(Object.values(CACHE_DEP_LATER_TABLES))]
+        .map((name) => readFileSync(join(import.meta.dirname, `../migrations/postgres/${name}.sql`), "utf8")).join("");
     const names = [...sidecar.matchAll(/CREATE CONSTRAINT TRIGGER "([a-z0-9_]+)"/g)].map((match) => match[1]).sort();
-    expect(names).toEqual(expectedTriggerNames());
+    // Deployed 0100 still installs a retired table's triggers; the migration
+    // that drops the table drops them (and their functions) on PostgreSQL.
+    const retired = new Set(retiredCacheDepTriggerNames());
+    expect(names.filter((name) => !retired.has(name!))).toEqual(expectedTriggerNames());
+    for (const [table, { droppedIn }] of Object.entries(CACHE_DEP_RETIRED_TABLES)) {
+      expect(table in CACHE_DEP_TABLES, table).toBe(false);
+      const dropping = readFileSync(join(import.meta.dirname, `../migrations/postgres/${droppedIn}.sql`), "utf8");
+      expect(dropping).toContain(`DROP TABLE IF EXISTS "${table}"`);
+      for (const statement of retiredCacheDepFunctionDrops(droppedIn)) expect(dropping).toContain(statement);
+    }
     expect(sidecar).toContain('CREATE OR REPLACE FUNCTION scalius_compat."cache_dep_bump"');
   });
 

@@ -5,7 +5,7 @@ import { SearchableSelect } from "~/components/ui/searchable-select";
 import { CancelOrderDialog } from "~/components/admin/order-list/CancelOrderDialog";
 import { useMessages } from "~/i18n";
 import { orderDetailMessages } from "~/i18n/order-detail";
-import { orderMessages, orderStatusLabel } from "~/i18n/orders";
+import { orderChannelText, orderMessages, orderStatusLabel } from "~/i18n/orders";
 import { resourceMessages } from "~/i18n/resource";
 import { useUpdateOrderStatus, type UpdateOrderStatusInput } from "~/lib/api-mutations/orders";
 import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions";
@@ -151,6 +151,11 @@ export function OrderStatusCard({ order }: { order: Order }) {
           </p>
         ) : null}
         {placedAt ? <p className="text-muted-foreground">{t("status.placedAt", { date: placedAt })}</p> : null}
+        {order.channel ? (
+          <p className="text-muted-foreground">
+            {t("status.channel", { channel: orderChannelText(o, order.channel, order.channelSource) })}
+          </p>
+        ) : null}
       </CardContent>
       <CancelOrderDialog
         open={confirmCancel}

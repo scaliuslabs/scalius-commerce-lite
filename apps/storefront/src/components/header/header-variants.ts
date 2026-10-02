@@ -15,6 +15,16 @@ import type { StorefrontBlockVariant } from "@scalius/shared/storefront-theme";
 
 export type HeaderVariant = StorefrontBlockVariant<"header">;
 
+/**
+ * The header's logo: the theme's logo image (`src`, "" for none: the store
+ * name in text), the store name as its alt text and its computer width.
+ */
+export interface HeaderLogo {
+  src: string;
+  alt: string;
+  width: number;
+}
+
 export interface HeaderSpec {
   /** The main row wears the header tone (`headerTone`: dark or brand headers). */
   toneRow: boolean;

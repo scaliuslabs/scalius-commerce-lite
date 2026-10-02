@@ -413,6 +413,37 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 20,
         postgresStatements: 20,
       },
+      {
+        version: 102,
+        name: "0102_inventory_locations",
+        sqliteStatements: 26,
+        postgresStatements: 34,
+      },
+      {
+        version: 103,
+        name: "0103_order_channel_event_outbox",
+        sqliteStatements: 48,
+        postgresStatements: 44,
+      },
+      {
+        version: 104,
+        name: "0104_custom_fields",
+        sqliteStatements: 43,
+        postgresStatements: 43,
+      },
+      {
+        version: 105,
+        name: "0105_plugin_runtime",
+        sqliteStatements: 18,
+        postgresStatements: 18,
+      },
+      {
+        version: 106,
+        name: "0106_theme_document_v6",
+        // T1 theme reset (5) + T2 retired tables/documents; Postgres also drops the hero trigger functions.
+        sqliteStatements: 8,
+        postgresStatements: 11,
+      },
     ]);
   });
 
@@ -563,6 +594,11 @@ describe("provider-neutral schema upgrades", () => {
           { version: 99, name: "0099_customer_whatsapp" },
           { version: 100, name: "0100_cache_dependencies" },
           { version: 101, name: "0101_cache_ordering_dependencies" },
+          { version: 102, name: "0102_inventory_locations" },
+          { version: 103, name: "0103_order_channel_event_outbox" },
+          { version: 104, name: "0104_custom_fields" },
+          { version: 105, name: "0105_plugin_runtime" },
+          { version: 106, name: "0106_theme_document_v6" },
         ],
       });
     } finally {

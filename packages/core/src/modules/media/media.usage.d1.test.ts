@@ -10,7 +10,8 @@ import {
   trashMediaFile,
 } from "./media.service";
 import { countMediaUsage, loadMediaUsage } from "./media.usage";
-import { saveFooterConfig, saveHeaderConfig, saveSeoSettings } from "../settings/site-settings.service";
+import { saveSeoSettings } from "../settings/site-settings.service";
+import { DEFAULT_STOREFRONT_THEME } from "@scalius/shared/storefront-theme";
 import { saveBusinessSettings } from "../settings/business-settings.service";
 
 const BASE = "https://media.example";
@@ -67,23 +68,30 @@ describe("media usage", () => {
       INSERT INTO pages (id, title, slug, content, content_type) VALUES
         ('page_a', 'About', 'about', '<img src="${photo}">', 'page'),
         ('post_a', 'Eid guide', 'eid-guide', '<p>No images</p>', 'article');
-      INSERT INTO hero_sliders (id, type, images) VALUES ('hero_a', 'desktop', '[{"url":"${photo}"}]');
       UPDATE media SET poster_media_id = 'media_photo' WHERE id = 'media_video';
       INSERT INTO orders (id, customer_name, customer_phone, shipping_address, city, zone, total_amount_minor, shipping_amount_minor)
         VALUES ('order_1', 'Buyer', '+8801700000001', 'Address', 'city', 'zone', 1000, 0);
       INSERT INTO order_items (id, order_id, product_id, quantity, unit_price_minor, product_image_media_id)
         VALUES ('item_1', 'order_1', 'prod_a', 1, 1000, 'media_photo');
     `);
-    await saveHeaderConfig(db, { logo: { src: logo, alt: "Logo" }, social: [{ icon: photo }] }, 0);
-    await saveFooterConfig(db, { logo: { src: logo, alt: "Logo" } }, 0);
+    // The published theme names files by id: the logo and a hero slide.
+    const theme = structuredClone(DEFAULT_STOREFRONT_THEME);
+    theme.brand = { ...theme.brand, logo: "media_logo" };
+    theme.pages.home = theme.pages.home.map((section) => section.type === "hero"
+      ? { ...section, settings: { ...section.settings, slides: [{ image: "media_photo", focalPoint: { x: 50, y: 50 }, alt: "Eid", link: null }] } }
+      : section);
+    sqlite.prepare("INSERT INTO theme_settings (id, colors, revision) VALUES ('default', ?, 1)").run(JSON.stringify(theme));
     await saveSeoSettings(db, { socialImage: social });
-    await saveBusinessSettings(db, { invoiceLogoUrl: logo });
+    await saveBusinessSettings(db, {
+      invoiceLogoUrl: logo,
+      socialLinks: [{ id: "facebook", label: "Facebook", url: "https://facebook.com/shop", iconUrl: photo }],
+    });
 
     const counts = await countMediaUsage(db, ["media_photo", "media_logo", "media_social", "media_unused"]);
     // Panjabi (photo + description), Kurti (in trash), Men, Eid picks, About,
-    // banners, navigation (header social link) and the video's cover.
+    // the theme (a hero slide), a social link's icon and the video's cover.
     expect(counts.get("media_photo")).toEqual({ usageCount: 8, keptForOrders: true });
-    // Header and footer logos are one "theme" place; the invoice is another.
+    // The theme's logo is one place; the invoice is another.
     expect(counts.get("media_logo")).toEqual({ usageCount: 2, keptForOrders: false });
     expect(counts.get("media_social")).toEqual({ usageCount: 1, keptForOrders: false });
     expect(counts.get("media_unused")).toEqual({ usageCount: 0, keptForOrders: false });
@@ -97,8 +105,8 @@ describe("media usage", () => {
       { kind: "category", id: "cat_a", name: "Men", trashed: false },
       { kind: "collection", id: "col_a", name: "Eid picks", trashed: false },
       { kind: "page", id: "page_a", name: "About", trashed: false },
-      { kind: "banner", id: null, name: null, trashed: false },
-      { kind: "navigation", id: null, name: null, trashed: false },
+      { kind: "theme", id: null, name: null, trashed: false },
+      { kind: "social_link", id: null, name: null, trashed: false },
       { kind: "video_cover", id: "media_video", name: "media_video.mp4", trashed: false },
     ]);
     expect((await loadMediaUsage(db, "media_social")).references).toEqual([

@@ -6,18 +6,6 @@ import {
   SEO_RETURN_POLICY_METHODS,
   isValidSeoReturnPolicyUrl,
 } from "@scalius/shared/seo-return-policy";
-import {
-  HOMEPAGE_MODES,
-  MAX_HOMEPAGE_CATEGORY_IDS,
-  MAX_HOMEPAGE_CATEGORY_RAIL_TITLE_LENGTH,
-  MAX_HOMEPAGE_LANDING_PRODUCT_ID_LENGTH,
-} from "@scalius/shared/homepage-presentation";
-import {
-  HEADER_LOGO_WIDTH_DEFAULT,
-  HEADER_LOGO_WIDTH_MAX,
-  HEADER_LOGO_WIDTH_MIN,
-  HEADER_LOGO_WIDTH_STEP,
-} from "@scalius/shared/brand-presentation";
 import { normalizeStorefrontOrigin } from "@scalius/shared/storefront-url";
 import {
   runSeoDiscoveryLiveProbe,
@@ -28,24 +16,17 @@ import {
   getCurrencySettings,
   isCurrencyCodeLocked,
   saveCurrencySettings,
-  getGeneralSettings,
-  saveHeaderConfig,
-  saveFooterConfig,
-  getThemeSettings,
   getThemeWorkspace,
   saveThemeDraft,
-  rebaseThemeDraft,
   publishThemeDraft,
   listThemeVersions,
   rollbackThemeSettings,
   createThemePreviewSession,
-  saveThemeSettings,
+  THEME_VERSION_HISTORY_LIMIT,
   isValidMediaHostInput,
   saveMediaOptimizationSettings,
   getSeoSettings,
   saveSeoSettings,
-  getHomepagePresentationSettings,
-  saveHomepagePresentationSettings,
   saveAllowedCountries,
   readSettingsForEdit,
   currencyDocument,
@@ -69,9 +50,8 @@ import {
   conflictResponse,
   serviceUnavailableResponse,
 } from "../../../schemas/responses";
-import { readinessSchema } from "../../../schemas/readiness";
 import { storeShapeApiSchema, storefrontThemeDocumentApiSchema } from "../../../schemas/storefront-theme";
-import { readHomeSectionMedia, readStoreShape } from "@scalius/core/modules/storefront";
+import { readStoreShape, readThemeMedia } from "@scalius/core/modules/storefront";
 import { isPublicMediaUrl } from "@scalius/shared/platform-config";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const revisionSchema = z.number().int().nonnegative();
@@ -177,431 +157,8 @@ app.openapi(saveCurrencyRoute, async (c) => {
 });
 
 // ─────────────────────────────────────────
-// GENERAL (header + footer config)
-// ─────────────────────────────────────────
-
-const getGeneralRoute = createRoute({
-  method: "get",
-  path: "/general",
-  tags: ["Admin - Settings"],
-  summary: "Get general settings (header + footer config)",
-  operationId: "dashboard.settings.general_get",
-  responses: {
-    200: {
-      description: "General settings",
-      content: {
-        "application/json": {
-          schema: successEnvelope(
-            z.object({
-              headerConfig: z.record(z.string(), z.unknown()),
-              footerConfig: z.record(z.string(), z.unknown()),
-              revisions: z.object({
-                header: z.number().int().nonnegative(),
-                footer: z.number().int().nonnegative(),
-              }),
-              navigationReadiness: z.object({
-                header: readinessSchema,
-                footer: readinessSchema,
-              }),
-            }),
-          ),
-        },
-      },
-    },
-    ...errorResponses,
-  },
-});
-
-app.openapi(getGeneralRoute, async (c) => {
-  const db = c.get("db");
-  const result = await getGeneralSettings(db);
-  return ok(c, result);
-});
-
-// ─────────────────────────────────────────
-// HEADER
-// ─────────────────────────────────────────
-const SITE_PRESENTATION_TEXT_MAX_LENGTH = 2_000;
-const SITE_PRESENTATION_URL_MAX_LENGTH = 2_048;
-const SITE_PRESENTATION_SOCIAL_MAX_COUNT = 24;
-
-function presentationRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
-}
-
-function presentationText(
-  value: unknown,
-  maximumLength: number,
-  fallback = "",
-): string {
-  return typeof value === "string" ? value.slice(0, maximumLength) : fallback;
-}
-
-const socialLinkSchema = z.object({
-  id: z.string().max(128),
-  label: z.string().max(200),
-  url: z.string().max(SITE_PRESENTATION_URL_MAX_LENGTH),
-  iconUrl: z.string().max(SITE_PRESENTATION_URL_MAX_LENGTH).optional(),
-});
-const headerLogoWidthSchema = z
-  .number()
-  .int()
-  .min(HEADER_LOGO_WIDTH_MIN)
-  .max(HEADER_LOGO_WIDTH_MAX)
-  .multipleOf(HEADER_LOGO_WIDTH_STEP);
-const headerConfigSchema = z.object({
-  topBar: z.object({
-    text: z.string().max(SITE_PRESENTATION_TEXT_MAX_LENGTH),
-    isEnabled: z.boolean().optional().default(true),
-  }),
-  logo: z.object({
-    src: z.string().max(SITE_PRESENTATION_URL_MAX_LENGTH),
-    alt: z.string().max(200),
-    width: headerLogoWidthSchema.optional().default(HEADER_LOGO_WIDTH_DEFAULT),
-  }),
-  favicon: z.object({
-    src: z.string().max(SITE_PRESENTATION_URL_MAX_LENGTH),
-    alt: z.string().max(200),
-  }),
-  contact: z.object({
-    phone: z.string().max(64),
-    text: z.string().max(200),
-    isEnabled: z.boolean().optional().default(true),
-  }),
-  social: z.array(socialLinkSchema).max(SITE_PRESENTATION_SOCIAL_MAX_COUNT),
-});
-
-function projectSocialLinks(value: unknown) {
-  if (!Array.isArray(value)) return [];
-  return value.slice(0, SITE_PRESENTATION_SOCIAL_MAX_COUNT).map((entry) => {
-    const link = presentationRecord(entry);
-    const iconUrl = presentationText(
-      link.iconUrl,
-      SITE_PRESENTATION_URL_MAX_LENGTH,
-    );
-    return {
-      id: presentationText(link.id, 128),
-      label: presentationText(link.label, 200),
-      url: presentationText(link.url, SITE_PRESENTATION_URL_MAX_LENGTH),
-      ...(iconUrl ? { iconUrl } : {}),
-    };
-  });
-}
-
-function projectHeaderConfig(value: unknown): z.infer<typeof headerConfigSchema> {
-  const root = presentationRecord(value);
-  const topBar = presentationRecord(root.topBar);
-  const logo = presentationRecord(root.logo);
-  const favicon = presentationRecord(root.favicon);
-  const contact = presentationRecord(root.contact);
-  const width = headerLogoWidthSchema.safeParse(logo.width);
-  return {
-    topBar: {
-      text: presentationText(topBar.text, SITE_PRESENTATION_TEXT_MAX_LENGTH),
-      isEnabled: topBar.isEnabled === true,
-    },
-    logo: {
-      src: presentationText(logo.src, SITE_PRESENTATION_URL_MAX_LENGTH),
-      alt: presentationText(logo.alt, 200),
-      width: width.success ? width.data : HEADER_LOGO_WIDTH_DEFAULT,
-    },
-    favicon: {
-      src: presentationText(favicon.src, SITE_PRESENTATION_URL_MAX_LENGTH),
-      alt: presentationText(favicon.alt, 200),
-    },
-    contact: {
-      phone: presentationText(contact.phone, 64),
-      text: presentationText(contact.text, 200),
-      isEnabled: contact.isEnabled === true,
-    },
-    social: projectSocialLinks(root.social),
-  };
-}
-
-const headerDocumentSchema = z.object({
-  config: headerConfigSchema,
-  revision: z.number().int().nonnegative(),
-});
-
-const getHeaderRoute = createRoute({
-  method: "get",
-  path: "/header",
-  operationId: "dashboard.settings_header.get_header",
-  tags: ["Admin - Settings"],
-  summary: "Get bounded header configuration and revision",
-  responses: {
-    200: {
-      description: "Header configuration",
-      content: {
-        "application/json": { schema: successEnvelope(headerDocumentSchema) },
-      },
-    },
-    ...errorResponses,
-  },
-});
-
-app.openapi(getHeaderRoute, async (c) => {
-  const settings = await getGeneralSettings(c.get("db"));
-  const config = projectHeaderConfig(settings.headerConfig);
-  return ok(c, { config, revision: settings.revisions.header });
-});
-
-const saveHeaderSchema = headerConfigSchema.extend({
-  expectedRevision: z.number().int().nonnegative(),
-});
-
-const saveHeaderRoute = createRoute({
-  method: "post",
-  path: "/header",
-  operationId: "dashboard.settings_header.header",
-  tags: ["Admin - Settings"],
-  summary: "Save header configuration",
-  request: {
-    body: {
-      required: true,
-      content: { "application/json": { schema: saveHeaderSchema } },
-    },
-  },
-  responses: {
-    200: {
-      description: "Header saved",
-      content: {
-        "application/json": {
-          schema: successEnvelope(
-            z.object({
-              revision: z.number().int().positive(),
-            }),
-          ),
-        },
-      },
-    },
-    409: conflictResponse,
-    ...errorResponses,
-  },
-});
-
-app.openapi(saveHeaderRoute, async (c) => {
-  const db = c.get("db");
-  const { expectedRevision, ...validatedConfig } = c.req.valid("json");
-  const saved = await saveHeaderConfig(
-    db,
-    validatedConfig as unknown as Record<string, unknown>,
-    expectedRevision,
-  );
-
-  return ok(c, saved);
-});
-
-// ─────────────────────────────────────────
-// FOOTER
-// ─────────────────────────────────────────
-const footerConfigSchema = z.object({
-  logo: z.object({
-    src: z.string().max(SITE_PRESENTATION_URL_MAX_LENGTH),
-    alt: z.string().max(200),
-  }),
-  tagline: z.string().max(SITE_PRESENTATION_TEXT_MAX_LENGTH).optional().default(""),
-  description: z.string().max(SITE_PRESENTATION_TEXT_MAX_LENGTH).optional().default(""),
-  copyrightText: z.string().max(SITE_PRESENTATION_TEXT_MAX_LENGTH).optional().default(""),
-  social: z.array(socialLinkSchema).max(SITE_PRESENTATION_SOCIAL_MAX_COUNT),
-});
-
-function projectFooterConfig(value: unknown): z.infer<typeof footerConfigSchema> {
-  const root = presentationRecord(value);
-  const logo = presentationRecord(root.logo);
-  return {
-    logo: {
-      src: presentationText(logo.src, SITE_PRESENTATION_URL_MAX_LENGTH),
-      alt: presentationText(logo.alt, 200),
-    },
-    tagline: presentationText(root.tagline, SITE_PRESENTATION_TEXT_MAX_LENGTH),
-    description: presentationText(
-      root.description,
-      SITE_PRESENTATION_TEXT_MAX_LENGTH,
-    ),
-    copyrightText: presentationText(
-      root.copyrightText,
-      SITE_PRESENTATION_TEXT_MAX_LENGTH,
-      "Your store",
-    ),
-    social: projectSocialLinks(root.social),
-  };
-}
-
-const footerDocumentSchema = z.object({
-  config: footerConfigSchema,
-  revision: z.number().int().nonnegative(),
-});
-
-const getFooterRoute = createRoute({
-  method: "get",
-  path: "/footer",
-  operationId: "dashboard.settings_footer.get_footer",
-  tags: ["Admin - Settings"],
-  summary: "Get bounded footer configuration and revision",
-  responses: {
-    200: {
-      description: "Footer configuration",
-      content: {
-        "application/json": { schema: successEnvelope(footerDocumentSchema) },
-      },
-    },
-    ...errorResponses,
-  },
-});
-
-app.openapi(getFooterRoute, async (c) => {
-  const settings = await getGeneralSettings(c.get("db"));
-  const config = projectFooterConfig(settings.footerConfig);
-  return ok(c, { config, revision: settings.revisions.footer });
-});
-
-const saveFooterSchema = footerConfigSchema.extend({
-  expectedRevision: z.number().int().nonnegative(),
-});
-
-const saveFooterRoute = createRoute({
-  method: "post",
-  path: "/footer",
-  operationId: "dashboard.settings_footer.footer",
-  tags: ["Admin - Settings"],
-  summary: "Save footer configuration",
-  request: {
-    body: {
-      required: true,
-      content: { "application/json": { schema: saveFooterSchema } },
-    },
-  },
-  responses: {
-    200: {
-      description: "Footer saved",
-      content: {
-        "application/json": {
-          schema: successEnvelope(
-            z.object({
-              revision: z.number().int().positive(),
-            }),
-          ),
-        },
-      },
-    },
-    409: conflictResponse,
-    ...errorResponses,
-  },
-});
-
-app.openapi(saveFooterRoute, async (c) => {
-  const db = c.get("db");
-  const { expectedRevision, ...validatedConfig } = c.req.valid("json");
-  const saved = await saveFooterConfig(
-    db,
-    validatedConfig as unknown as Record<string, unknown>,
-    expectedRevision,
-  );
-
-  return ok(c, saved);
-});
-
-// ─────────────────────────────────────────
 // THEME
 // ─────────────────────────────────────────
-
-const getThemeRoute = createRoute({
-  method: "get",
-  path: "/theme",
-  tags: ["Admin - Settings"],
-  summary: "Get theme settings",
-  operationId: "dashboard.theme.get",
-  responses: {
-    200: {
-      description: "Theme settings",
-      content: {
-        "application/json": {
-          schema: successEnvelope(
-            z
-              .object({
-                theme: storefrontThemeDocumentApiSchema,
-                revision: z.number().int().nonnegative(),
-                /** What the theme's fit rules read, as the storefront reads it. */
-                storeShape: storeShapeApiSchema,
-                /** The images the homepage sections name, for the section editor's previews. */
-                sectionMedia: z.array(z.object({
-                  id: z.string(),
-                  url: z.string(),
-                  alt: z.string(),
-                  width: z.number().int().nullable(),
-                  height: z.number().int().nullable(),
-                })),
-              })
-              .passthrough(),
-          ),
-        },
-      },
-    },
-    ...errorResponses,
-  },
-});
-
-app.openapi(getThemeRoute, async (c) => {
-  const db = c.get("db");
-  const [[result, sectionMedia], storeShape] = await Promise.all([
-    getThemeSettings(db).then(async (theme) => [theme, await readHomeSectionMedia(db, theme.theme.pages.home)] as const),
-    readStoreShape(db),
-  ]);
-  return ok(c, { ...result, storeShape, sectionMedia });
-});
-
-const saveThemeSchema = z.object({
-  expectedRevision: z.number().int().nonnegative(),
-  theme: storefrontThemeDocumentApiSchema,
-});
-
-const saveThemeRoute = createRoute({
-  method: "post",
-  path: "/theme",
-  tags: ["Admin - Settings"],
-  summary: "Save theme settings",
-  operationId: "dashboard.theme.save_legacy",
-  request: {
-    body: { content: { "application/json": { schema: saveThemeSchema } } },
-  },
-  responses: {
-    200: {
-      description: "Theme saved",
-      content: {
-        "application/json": {
-          schema: successEnvelope(
-            z.object({
-              theme: storefrontThemeDocumentApiSchema,
-              revision: z.number().int().positive(),
-              message: z.string(),
-            }),
-          ),
-        },
-      },
-    },
-    ...errorResponses,
-  },
-});
-
-app.openapi(saveThemeRoute, async (c) => {
-  const db = c.get("db");
-  const body = c.req.valid("json");
-  const user = c.get("user") as { id?: string } | undefined;
-  const saved = await saveThemeSettings(
-    db,
-    body.theme,
-    body.expectedRevision,
-    user?.id ?? null,
-  );
-
-  return ok(c, {
-    ...saved,
-    message: "Theme settings saved successfully",
-  });
-});
 
 const themeDraftSchema = z.object({
   theme: storefrontThemeDocumentApiSchema,
@@ -622,13 +179,26 @@ const getThemeWorkspaceRoute = createRoute({
   method: "get",
   path: "/theme/workspace",
   tags: ["Admin - Settings"],
-  summary: "Get published storefront style and durable draft",
+  summary: "Get published storefront style, durable draft and what the editor reads",
   operationId: "dashboard.theme.workspace_get",
   responses: {
     200: {
       description: "Theme workspace",
       content: {
-        "application/json": { schema: successEnvelope(themeWorkspaceSchema) },
+        "application/json": {
+          schema: successEnvelope(themeWorkspaceSchema.extend({
+            /** What the theme's fit rules read, as the storefront reads it. */
+            storeShape: storeShapeApiSchema,
+            /** Every image the draft names (brand, hero slides, section images), for the editor's previews. */
+            media: z.array(z.object({
+              id: z.string(),
+              url: z.string(),
+              alt: z.string(),
+              width: z.number().int().nullable(),
+              height: z.number().int().nullable(),
+            })),
+          })),
+        },
       },
     },
     ...errorResponses,
@@ -636,7 +206,13 @@ const getThemeWorkspaceRoute = createRoute({
 });
 
 app.openapi(getThemeWorkspaceRoute, async (c) => {
-  return ok(c, await getThemeWorkspace(c.get("db")));
+  const db = c.get("db");
+  const [[workspace, media], storeShape] = await Promise.all([
+    getThemeWorkspace(db).then(async (workspace) =>
+      [workspace, await readThemeMedia(db, workspace.draft.theme)] as const),
+    readStoreShape(db),
+  ]);
+  return ok(c, { ...workspace, storeShape, media });
 });
 
 const saveThemeDraftSchema = z.object({
@@ -671,42 +247,6 @@ app.openapi(saveThemeDraftRoute, async (c) => {
   return ok(
     c,
     await saveThemeDraft(
-      c.get("db"),
-      body.theme,
-      body.expectedDraftRevision,
-      body.basePublishedRevision,
-      user?.id ?? null,
-    ),
-  );
-});
-
-const rebaseThemeDraftRoute = createRoute({
-  method: "post",
-  path: "/theme/draft/rebase",
-  tags: ["Admin - Settings"],
-  summary:
-    "Rebase a storefront style draft onto the current published revision",
-  operationId: "dashboard.theme.draft_rebase",
-  request: {
-    body: { content: { "application/json": { schema: saveThemeDraftSchema } } },
-  },
-  responses: {
-    200: {
-      description: "Draft rebased",
-      content: {
-        "application/json": { schema: successEnvelope(themeDraftSchema) },
-      },
-    },
-    ...errorResponses,
-  },
-});
-
-app.openapi(rebaseThemeDraftRoute, async (c) => {
-  const body = c.req.valid("json");
-  const user = c.get("user") as { id?: string } | undefined;
-  return ok(
-    c,
-    await rebaseThemeDraft(
       c.get("db"),
       body.theme,
       body.expectedDraftRevision,
@@ -774,7 +314,7 @@ const listThemeVersionsRoute = createRoute({
   operationId: "dashboard.theme.versions_list",
   request: {
     query: z.object({
-      limit: z.coerce.number().int().min(1).max(50).default(20),
+      limit: z.coerce.number().int().min(1).max(THEME_VERSION_HISTORY_LIMIT).default(20),
     }),
   },
   responses: {
@@ -846,7 +386,7 @@ const createThemePreviewRoute = createRoute({
   method: "post",
   path: "/theme/preview-session",
   tags: ["Admin - Settings"],
-  summary: "Create a short-lived exact-draft storefront preview session",
+  summary: "Create a short-lived storefront preview session that follows the saved draft",
   operationId: "dashboard.theme.preview_session_create",
   request: {
     body: {
@@ -1488,103 +1028,6 @@ app.openapi(saveStorefrontUrlRoute, async (c) => {
   const { revision } = await saveStorefrontUrl(c.get("db"), storefrontUrl, c.env.CACHE, { expectedRevision });
 
   return ok(c, { message: "Storefront URL saved successfully", revision });
-});
-
-// ─────────────────────────────────────────
-// HOMEPAGE PRESENTATION
-// ─────────────────────────────────────────
-
-const homepagePresentationConfigSchema = z.object({
-  categoryRail: z.object({
-    enabled: z.boolean(),
-    title: z.string().max(MAX_HOMEPAGE_CATEGORY_RAIL_TITLE_LENGTH),
-    categoryIds: z
-      .array(z.string().min(1).max(128))
-      .max(MAX_HOMEPAGE_CATEGORY_IDS),
-  }),
-  trustStrip: z.object({
-    enabled: z.boolean(),
-  }),
-  homeMode: z.enum(HOMEPAGE_MODES).openapi({
-    description: "`landing` opens the store on one product's landing page (a single-product store); the storefront shows the catalog homepage whenever that product is not buyable.",
-  }),
-  landingProductId: z.string().min(1).max(MAX_HOMEPAGE_LANDING_PRODUCT_ID_LENGTH).nullable().openapi({
-    description: "The product a landing homepage shows; required when homeMode is landing.",
-  }),
-});
-
-const homepagePresentationDocumentSchema = z.object({
-  config: homepagePresentationConfigSchema,
-  revision: z.number().int().nonnegative(),
-});
-
-const getHomepagePresentationRoute = createRoute({
-  method: "get",
-  path: "/homepage-presentation",
-  operationId: "dashboard.settings_homepage_presentation.get_homepage_presentation",
-  tags: ["Admin - Settings"],
-  summary: "Get the ordered homepage category and trust presentation",
-  responses: {
-    200: {
-      description: "Homepage presentation",
-      content: {
-        "application/json": {
-          schema: successEnvelope(homepagePresentationDocumentSchema),
-        },
-      },
-    },
-    ...errorResponses,
-  },
-});
-
-app.openapi(getHomepagePresentationRoute, async (c) => {
-  return ok(c, await getHomepagePresentationSettings(c.get("db")));
-});
-
-const saveHomepagePresentationRoute = createRoute({
-  method: "post",
-  path: "/homepage-presentation",
-  operationId: "dashboard.settings_homepage_presentation.homepage_presentation",
-  tags: ["Admin - Settings"],
-  summary: "Save the ordered homepage category and trust presentation",
-  request: {
-    body: {
-      required: true,
-      content: {
-        "application/json": {
-          schema: homepagePresentationConfigSchema.extend({
-            expectedRevision: z.number().int().nonnegative(),
-            // Omitted keeps the saved home mode and landing product.
-            homeMode: homepagePresentationConfigSchema.shape.homeMode.optional(),
-            landingProductId: homepagePresentationConfigSchema.shape.landingProductId.optional(),
-          }),
-        },
-      },
-    },
-  },
-  responses: {
-    200: {
-      description: "Homepage presentation saved",
-      content: {
-        "application/json": {
-          schema: successEnvelope(homepagePresentationDocumentSchema),
-        },
-      },
-    },
-    409: conflictResponse,
-    ...errorResponses,
-  },
-});
-
-app.openapi(saveHomepagePresentationRoute, async (c) => {
-  const { expectedRevision, ...config } = c.req.valid("json");
-  const saved = await saveHomepagePresentationSettings(
-    c.get("db"),
-    config,
-    expectedRevision,
-  );
-
-  return ok(c, saved);
 });
 
 // ── Allowed Countries ──

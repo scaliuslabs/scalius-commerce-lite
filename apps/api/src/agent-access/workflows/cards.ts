@@ -693,6 +693,8 @@ export const DAILY_OPERATING_SNAPSHOT_WORKFLOW: AgentWorkflowCard = {
                   { pointer: "/createdAt", alias: "createdAt" },
                   { pointer: "/itemCount", alias: "itemCount" },
                   { pointer: "/totalQuantity", alias: "totalQuantity" },
+                  { pointer: "/channel", alias: "channel" },
+                  { pointer: "/channelSource", alias: "channelSource" },
                 ],
               },
               {

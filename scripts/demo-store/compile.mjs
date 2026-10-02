@@ -412,7 +412,6 @@ function collectionCommands(manifest, current) {
       source: collection.source,
       categoryIds: collectionCategories(collection).map((slug) => commandRef(`category:${slug}`)),
       productIds: collectionMembers(collection, manifest).map((product) => commandRef(`${product.logicalKey}:base`)),
-      showOnHomepage: collection.showOnHomepage,
       maxProducts: collection.limit,
       title: collection.name,
       subtitle: "",
@@ -438,25 +437,40 @@ function collectionCommands(manifest, current) {
   });
 }
 
-function heroCommands(manifest, current) {
-  const existingByType = new Map((current.heroes ?? []).map((hero) => [hero.type, hero]));
-  return ["desktop", "mobile"].map((type) => {
-    const existing = existingByType.get(type);
-    const images = manifest.heroes.map((hero) => ({
-      id: stableDraftId("slide_demo", `${hero.logicalKey}:${type}`),
-      url: commandRef(`media:${hero.logicalKey}:${type}`, "url"),
-      title: `${hero.title}. ${hero.copy}`,
-      link: { $routeRef: hero.destination },
-    }));
-    return command(`hero-slider:${type}`, "presentation", existing ? "PUT" : "POST", existing ? `${API}/settings/hero-sliders/${existing.id}` : `${API}/settings/hero-sliders`, {
-      ...(existing ? { expectedRevision: existing.revision } : { type }),
-      images,
-      isActive: existing?.isActive ?? false,
-    }, {
-      dependsOn: manifest.heroes.map((hero) => hero.destination),
-      preconditions: existing ? { expectedRevision: existing.revision } : { sliderTypeAbsent: type },
-    });
-  });
+/**
+ * The homepage is the storefront theme. Each hero becomes a slide of the first
+ * hero section (its desktop image, its mobile image as the phone image) and
+ * the homepage collections the first collections section's collection ids.
+ * `$demoHomepage` is composed by the binder into the published theme read in
+ * the fresh snapshot (`theme-homepage.mjs`), and the draft is saved at the
+ * workspace revisions read there. Saving a draft changes nothing public; the
+ * lifecycle publishes exactly that draft revision last.
+ */
+function themeCommands(manifest) {
+  const theme = {
+    $demoHomepage: {
+      slides: manifest.heroes.map((hero) => ({
+        image: commandRef(`media:${hero.logicalKey}:desktop`),
+        phoneImage: commandRef(`media:${hero.logicalKey}:mobile`),
+        focalPoint: { x: 50, y: 50 },
+        alt: hero.title,
+        heading: hero.title,
+        text: hero.copy,
+        link: { $routeRef: hero.destination },
+      })),
+      collectionIds: manifest.homepageCollections.map((logicalKey) => commandRef(logicalKey)),
+    },
+  };
+  return [command("theme:draft", "presentation", "POST", `${API}/settings/theme/draft`, {
+    theme,
+    expectedDraftRevision: commandRef("current-theme", "draftRevision"),
+    basePublishedRevision: commandRef("current-theme", "publishedRevision"),
+  }, {
+    action: "update",
+    desired: { theme },
+    dependsOn: [...new Set([...manifest.heroes.map((hero) => hero.destination), ...manifest.homepageCollections])],
+    preconditions: { expectedRevision: commandRef("current-theme", "draftRevision") },
+  })];
 }
 
 function publicationCommands(manifest, categoryBaseCommands) {
@@ -485,7 +499,6 @@ export function compileDemoStoreAdminCommands(manifest, { current = {} } = {}) {
     categories: current.categories ?? [],
     productDetails: current.productDetails ?? [],
     collections: current.collections ?? [],
-    heroes: current.heroes ?? current.presentation?.heroes ?? [],
     attributes: current.attributes ?? [],
     resumeSimpleSlugs: current.resumeSimpleSlugs ?? [],
   };
@@ -493,9 +506,9 @@ export function compileDemoStoreAdminCommands(manifest, { current = {} } = {}) {
   const categories = categoryCommands(manifest, normalizedCurrent);
   const products = productCommands(manifest, normalizedCurrent);
   const collections = collectionCommands(manifest, normalizedCurrent);
-  const heroes = heroCommands(manifest, normalizedCurrent);
+  const theme = themeCommands(manifest);
   const publication = publicationCommands(manifest, categories);
-  const commands = [...attributes, ...categories, ...products, ...publication, ...collections, ...heroes];
+  const commands = [...attributes, ...categories, ...products, ...publication, ...collections, ...theme];
   return {
     mode: "compile",
     writesEnabled: false,

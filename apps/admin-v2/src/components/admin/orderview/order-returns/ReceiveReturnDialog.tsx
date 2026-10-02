@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import {
@@ -11,11 +12,18 @@ import {
 } from "~/components/ui/dialog";
 import { NumberInput } from "~/components/ui/number-input";
 import { Label } from "~/components/ui/label";
+import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Textarea } from "~/components/ui/textarea";
 import { formatNumber, useMessages } from "~/i18n";
 import { orderDetailMessages } from "~/i18n/order-detail";
 import { resourceMessages } from "~/i18n/resource";
 import { orderErrorMessage, useReceiveOrderReturn } from "~/lib/api-mutations/orders";
+import { inventoryQueryOptions, type InventoryMovement } from "~/lib/api-query-options/inventory";
+import {
+  hasSeveralLocations,
+  inventoryLocationsQueryOptions,
+  type InventoryLocation,
+} from "~/lib/api-query-options/inventory-locations";
 import {
   StableReturnCommandKey,
   getOutstandingReceiptQuantity,
@@ -59,6 +67,27 @@ export function buildReceiptLines(lines: readonly OrderReturnLineDto[], draft: R
   });
 }
 
+/** The restock choice that sends no location: the API returns units to where they were sent from. */
+export const RESTOCK_WHERE_SENT_FROM = "sent-from";
+
+/**
+ * Where the return's units left from, when that is one active location: the
+ * order's deduct movements name it (as the API resolves a restock without a
+ * location). Null when unknown, mixed or archived.
+ */
+export function returnSentFromLocation(
+  lines: readonly OrderReturnLineDto[],
+  deducts: readonly Pick<InventoryMovement, "variantId" | "locationId">[] | undefined,
+  locations: readonly InventoryLocation[],
+): InventoryLocation | null {
+  const variantIds = new Set(lines.flatMap((line) => (line.inventoryTracked && line.variantId ? [line.variantId] : [])));
+  const ids = new Set((deducts ?? []).flatMap((movement) =>
+    variantIds.has(movement.variantId) && movement.locationId ? [movement.locationId] : []));
+  if (ids.size !== 1) return null;
+  const [id] = ids;
+  return locations.find((location) => location.id === id && location.status === "active") ?? null;
+}
+
 export function ReceiveReturnDialog({
   orderReturn,
   itemsById,
@@ -78,7 +107,27 @@ export function ReceiveReturnDialog({
   const [notes, setNotes] = useState("");
   const mutation = useReceiveOrderReturn();
   const commandKey = useRef(new StableReturnCommandKey(createReturnCommandKey));
+  // With several locations the merchant picks where restocked units go; by
+  // default they go back to where they were sent from.
+  const [restockChoice, setRestockChoice] = useState(RESTOCK_WHERE_SENT_FROM);
+  const { data: locations } = useQuery(inventoryLocationsQueryOptions());
+  const tracked = orderReturn?.lines.some((line) => line.inventoryTracked && getOutstandingReceiptQuantity(line) > 0) ?? false;
+  const pickLocation = tracked && hasSeveralLocations(locations);
+  const deducts = useQuery({
+    ...inventoryQueryOptions({
+      section: "movements",
+      movementOrderId: orderReturn?.orderId ?? "",
+      movementType: "deducted",
+      limit: 100,
+    }),
+    enabled: open && pickLocation && Boolean(orderReturn),
+  }).data?.movements;
   if (!orderReturn) return <Dialog open={false} onOpenChange={onOpenChange} />;
+  const activeLocations = locations?.filter((location) => location.status === "active") ?? [];
+  const sentFrom = pickLocation ? returnSentFromLocation(orderReturn.lines, deducts, activeLocations) : null;
+  const restockLocationId = pickLocation && activeLocations.some((location) => location.id === restockChoice)
+    ? restockChoice
+    : null;
   const lines = buildReceiptLines(orderReturn.lines, draft);
   const received = lines.reduce((sum, line) => sum + line.receivedQuantity, 0);
   const tooMany = orderReturn.lines.some((line) => {
@@ -88,7 +137,13 @@ export function ReceiveReturnDialog({
 
   const submit = () => {
     if (lines.length === 0 || tooMany || mutation.isPending) return;
-    const intent = { expectedVersion: orderReturn.version, notes: notes.trim() || null, lines };
+    const intent = {
+      expectedVersion: orderReturn.version,
+      notes: notes.trim() || null,
+      lines,
+      // Omitted, the API restocks each unit where it was sent from.
+      ...(restockLocationId ? { restockLocationId } : {}),
+    };
     mutation.mutate(
       { orderId: orderReturn.orderId, returnId: orderReturn.id, commandKey: commandKey.current.get("receive", intent), ...intent },
       {
@@ -197,6 +252,30 @@ export function ReceiveReturnDialog({
               );
             })}
           </ul>
+          {pickLocation ? (
+            <div className="space-y-2">
+              <Label htmlFor={`receipt-location-${orderReturn.id}`}>{t("returns.restockAt")}</Label>
+              <SearchableSelect
+                id={`receipt-location-${orderReturn.id}`}
+                triggerClassName="w-full"
+                disabled={mutation.isPending}
+                value={restockLocationId ?? RESTOCK_WHERE_SENT_FROM}
+                onValueChange={setRestockChoice}
+                options={[
+                  {
+                    value: RESTOCK_WHERE_SENT_FROM,
+                    label: sentFrom ? t("returns.restockSentFromNamed", { name: sentFrom.name }) : t("returns.restockSentFrom"),
+                  },
+                  ...activeLocations
+                    .filter((location) => location.id !== sentFrom?.id)
+                    .map((location) => ({
+                      value: location.id,
+                      label: location.isDefault ? t("location.default", { name: location.name }) : location.name,
+                    })),
+                ]}
+              />
+            </div>
+          ) : null}
           <div className="space-y-2">
             <Label htmlFor={`receipt-notes-${orderReturn.id}`}>{t("returns.notes")}</Label>
             <Textarea id={`receipt-notes-${orderReturn.id}`} value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={2000} />

@@ -356,7 +356,8 @@ export async function releaseExpiredReservations(
           ${edge.previousPreorderStock},
           ${edge.newPreorderStock},
           ${edge.preorderStockDelta},
-          unixepoch()
+          unixepoch(),
+          NULL
         FROM ${productVariants}
         WHERE ${productVariants.id} = ${variantId}
           AND ${productVariants.stockVersion} = ${variant.stockVersion}

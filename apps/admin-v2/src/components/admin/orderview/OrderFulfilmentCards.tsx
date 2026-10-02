@@ -45,6 +45,7 @@ import {
 import { useCancelRequestGuard } from "./CancelRequestGuard";
 import { LineProperties } from "./LineProperties";
 import { ManualFulfillmentDialog, type ManualFulfillmentKind } from "./ManualFulfillmentDialog";
+import { OrderFulfillmentLocation } from "./OrderFulfillmentLocation";
 import { returnedQuantities } from "./OrderItemsCard";
 import { BookCourier } from "./ShipmentCard";
 import { DigitalLinesCard } from "./DigitalLinesCard";
@@ -305,6 +306,7 @@ function UnfulfilledCard({ order, group, money, request, onAwaitingPayment }: {
         description={description}
       />
       <CardContent>
+        {!closed && (group.type === "ship" || group.type === "pickup") ? <OrderFulfillmentLocation order={order} /> : null}
         <ul className="divide-y">
           {group.lines.map((line) => <LineRow key={line.item.id} line={line} money={money} order={order} />)}
         </ul>

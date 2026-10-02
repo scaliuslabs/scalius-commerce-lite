@@ -1,10 +1,13 @@
-import { parseNavigationHref } from "./navigation-href";
-import { isPublicMediaUrl } from "./platform-config";
+// How a hero slide is drawn. The slides themselves live in the theme
+// document's hero section (`storefrontHeroSlideSchema` in
+// ./storefront-theme/sections.ts); this file holds the presentation the
+// storefront and the dashboard's crop previews share.
+import {
+  STOREFRONT_DEFAULT_FOCAL_POINT,
+  type StorefrontFocalPoint,
+} from "./storefront-theme/sections";
 
-export const HERO_SLIDE_LIMIT = 12;
-export const HERO_SLIDE_TITLE_LIMIT = 160;
-export const HERO_SLIDE_BUTTON_LABEL_LIMIT = 40;
-export const HERO_SLIDE_URL_LIMIT = 2_048;
+/** The authored banner sizes per viewport: computers and phones. */
 export const HERO_SLIDE_PRESENTATION = {
   desktop: { width: 1_300, height: 500 },
   mobile: { width: 640, height: 300 },
@@ -12,18 +15,16 @@ export const HERO_SLIDE_PRESENTATION = {
 
 export type HeroSlideViewport = keyof typeof HERO_SLIDE_PRESENTATION;
 
-export interface HeroSlideFocalPoint {
-  /** Horizontal position as a percentage of the source image width. */
-  x: number;
-  /** Vertical position as a percentage of the source image height. */
-  y: number;
-}
+/** A focal point: percentages of the image's width (`x`) and height (`y`). */
+export type HeroSlideFocalPoint = StorefrontFocalPoint;
 
-export const HERO_SLIDE_DEFAULT_FOCAL_POINT: Readonly<HeroSlideFocalPoint> = {
-  x: 50,
-  y: 50,
-};
+export const HERO_SLIDE_DEFAULT_FOCAL_POINT: Readonly<HeroSlideFocalPoint> = STOREFRONT_DEFAULT_FOCAL_POINT;
 
+/**
+ * One slide as the storefront draws it on one viewport: the image for that
+ * viewport (a phone slide uses its phone image when it has one) and the
+ * focal point that goes with it.
+ */
 export interface HeroSlide {
   id: string;
   url: string;
@@ -31,165 +32,16 @@ export interface HeroSlide {
   title: string;
   /** Optional words drawn over the banner; empty for artwork that has its own text. */
   heading: string;
-  /** Optional supporting sentence for the wide editorial layout. */
-  supportingText?: string;
+  /** Optional supporting sentence. */
+  supportingText: string;
   /** Optional button over the banner; shown only with a link. */
   buttonLabel: string;
+  /** The slide's link; empty: not a link. */
   link: string;
   focalPoint: HeroSlideFocalPoint;
 }
 
-export type NormalizedHeroSlide = HeroSlide & { supportingText: string };
-
-function optionalText(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
-}
-
-export type HeroSlidesValidationResult =
-  | { ok: true; slides: NormalizedHeroSlide[] }
-  | { ok: false; errors: string[] };
-
-/**
- * A banner image must be a credential-free HTTPS URL. Plain HTTP is accepted
- * only for loopback hosts, so local development media (http://localhost) works.
- */
-export function normalizeHeroSlideImageUrl(value: unknown): string | undefined {
-  if (typeof value !== "string") return undefined;
-  const candidate = value.trim();
-  if (!candidate || candidate.length > HERO_SLIDE_URL_LIMIT) return undefined;
-
-  return isPublicMediaUrl(candidate) ? new URL(candidate).toString() : undefined;
-}
-
-function normalizeFocalCoordinate(value: unknown): number | undefined {
-  if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 100) {
-    return undefined;
-  }
-  return Number(value.toFixed(2));
-}
-
-function normalizeFocalPoint(value: unknown): HeroSlideFocalPoint | undefined {
-  // Existing documents without a merchant choice intentionally keep the
-  // historical center crop until they are edited.
-  if (value === undefined || value === null) {
-    return { ...HERO_SLIDE_DEFAULT_FOCAL_POINT };
-  }
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return undefined;
-  }
-  const row = value as Record<string, unknown>;
-  const x = normalizeFocalCoordinate(row.x);
-  const y = normalizeFocalCoordinate(row.y);
-  return x === undefined || y === undefined ? undefined : { x, y };
-}
-
 /** CSS `object-position` that keeps the merchant focal point in an object-fit: cover crop. */
-export function getHeroSlideObjectPosition(
-  focalPoint: HeroSlideFocalPoint,
-): string {
+export function getHeroSlideObjectPosition(focalPoint: HeroSlideFocalPoint): string {
   return `${focalPoint.x}% ${focalPoint.y}%`;
-}
-
-/**
- * Validates and canonicalizes the complete ordered hero slide document.
- * Empty destinations are stored as an empty string and render as non-links.
- */
-export function validateAndNormalizeHeroSlides(
-  value: unknown,
-): HeroSlidesValidationResult {
-  if (!Array.isArray(value)) {
-    return { ok: false, errors: ["Hero slides must be an array."] };
-  }
-  if (value.length > HERO_SLIDE_LIMIT) {
-    return {
-      ok: false,
-      errors: [`Use at most ${HERO_SLIDE_LIMIT} hero slides.`],
-    };
-  }
-
-  const errors: string[] = [];
-  const slides: NormalizedHeroSlide[] = [];
-  const ids = new Set<string>();
-
-  value.forEach((entry, index) => {
-    const position = index + 1;
-    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
-      errors.push(`Slide ${position} is invalid.`);
-      return;
-    }
-
-    const row = entry as Record<string, unknown>;
-    const id = typeof row.id === "string" ? row.id.trim() : "";
-    if (!/^[A-Za-z0-9_-]{1,80}$/.test(id)) {
-      errors.push(`Slide ${position} needs a stable ID.`);
-    } else if (ids.has(id)) {
-      errors.push(`Slide ${position} repeats another slide ID.`);
-    } else {
-      ids.add(id);
-    }
-
-    const url = normalizeHeroSlideImageUrl(row.url);
-    if (!url) {
-      errors.push(`Slide ${position} image must be a credential-free HTTPS URL (HTTP only on localhost).`);
-    }
-
-    const title = typeof row.title === "string" ? row.title.trim() : "";
-    if (!title) {
-      errors.push(`Slide ${position} needs alt text that describes the image.`);
-    } else if (title.length > HERO_SLIDE_TITLE_LIMIT) {
-      errors.push(
-        `Slide ${position} alt text must be ${HERO_SLIDE_TITLE_LIMIT} characters or fewer.`,
-      );
-    }
-    const heading = optionalText(row.heading);
-    if (heading.length > HERO_SLIDE_TITLE_LIMIT) {
-      errors.push(`Slide ${position} heading must be ${HERO_SLIDE_TITLE_LIMIT} characters or fewer.`);
-    }
-    const supportingText = optionalText(row.supportingText);
-    if (supportingText.length > HERO_SLIDE_TITLE_LIMIT) {
-      errors.push(`Slide ${position} supporting text must be ${HERO_SLIDE_TITLE_LIMIT} characters or fewer.`);
-    }
-    const buttonLabel = optionalText(row.buttonLabel);
-    if (buttonLabel.length > HERO_SLIDE_BUTTON_LABEL_LIMIT) {
-      errors.push(`Slide ${position} button label must be ${HERO_SLIDE_BUTTON_LABEL_LIMIT} characters or fewer.`);
-    }
-
-    const parsedLink = parseNavigationHref(row.link);
-    if (!parsedLink.ok) {
-      errors.push(`Slide ${position} destination: ${parsedLink.reason}`);
-    }
-
-    const focalPoint = normalizeFocalPoint(row.focalPoint);
-    if (!focalPoint) {
-      errors.push(`Slide ${position} focal point must use horizontal and vertical percentages from 0 to 100.`);
-    }
-
-    if (id && url && title && parsedLink.ok && focalPoint) {
-      slides.push({
-        id,
-        url,
-        title,
-        heading,
-        supportingText,
-        buttonLabel,
-        link: parsedLink.href ?? "",
-        focalPoint,
-      });
-    }
-  });
-
-  return errors.length > 0
-    ? { ok: false, errors }
-    : { ok: true, slides };
-}
-
-/** Public projections fail closed when persisted JSON is malformed or unsafe. */
-export function parseStoredHeroSlides(value: unknown): NormalizedHeroSlide[] {
-  if (typeof value !== "string") return [];
-  try {
-    const result = validateAndNormalizeHeroSlides(JSON.parse(value));
-    return result.ok ? result.slides : [];
-  } catch {
-    return [];
-  }
 }

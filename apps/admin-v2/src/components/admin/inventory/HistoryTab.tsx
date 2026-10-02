@@ -10,6 +10,7 @@ import { Button } from "~/components/ui/button";
 import { Skeleton } from "~/components/ui/skeleton";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { inventoryQueryOptions, type InventoryMovement } from "~/lib/api-query-options/inventory";
+import { hasSeveralLocations, inventoryLocationsQueryOptions } from "~/lib/api-query-options/inventory-locations";
 import { adminCalendarDateKey } from "~/lib/admin-time";
 import { withDashboardBasePath } from "~/lib/dashboard-base-path";
 import { formatDateOnly, parseDateOnly } from "~/lib/date-only";
@@ -72,12 +73,14 @@ function counterChanges(movement: InventoryMovement): CounterChange[] {
     : [{ label: "counterStock", previous: movement.previousStock, next: movement.newStock, delta: 0 }];
 }
 
-function MovementDetails({ movement }: { movement: InventoryMovement }) {
+/** `showLocation`: the store has several locations, so where stock moved is part of the line. */
+function MovementDetails({ movement, showLocation }: { movement: InventoryMovement; showLocation: boolean }) {
   const t = useMessages(inventoryMessages);
   const { labels, note } = describeMovementNote(movement);
   const parts = [
     movement.actorType === "system" ? t("automatic") : t("byName", { name: movement.actorName }),
     ...labels.map((label) => t(label)),
+    ...(showLocation && movement.locationName ? [t("movedAt", { location: movement.locationName })] : []),
   ];
   return (
     <p className="truncate text-body text-muted-foreground">
@@ -96,9 +99,11 @@ function MovementDetails({ movement }: { movement: InventoryMovement }) {
 }
 
 interface HistoryTabProps {
-  filters: Pick<InventoryFilters, "q" | "type" | "from" | "to">;
+  filters: Pick<InventoryFilters, "q" | "type" | "from" | "to" | "location">;
   onFiltersChange: InventoryFiltersChange;
 }
+
+const ALL_LOCATIONS = "all";
 
 const DateRangePickerWithPresets = lazy(() =>
   import("~/components/admin/order-list/DateRangePickerWithPresets").then((module) => ({
@@ -139,19 +144,25 @@ export function HistoryTab({ filters, onFiltersChange }: HistoryTabProps) {
   const t = useMessages(inventoryMessages);
   const r = useMessages(resourceMessages);
   const { q: search, type, from: startDate, to: endDate } = filters;
+  // Where stock moved shows (and filters) only once a store has more than one location.
+  const { data: locations } = useQuery(inventoryLocationsQueryOptions(true));
+  const severalLocations = hasSeveralLocations(locations);
+  const locationId = severalLocations && locations?.some((location) => location.id === filters.location)
+    ? filters.location
+    : "";
   const [cursors, setCursors] = useState<string[]>([""]);
   const [exporting, setExporting] = useState(false);
   // Any filter or search change goes back to the first page.
-  useEffect(() => setCursors([""]), [search, type, startDate, endDate]);
+  useEffect(() => setCursors([""]), [search, type, startDate, endDate, locationId]);
 
   const query = useQuery({
-    ...inventoryQueryOptions(movementsQuery(filters, cursors.at(-1))),
+    ...inventoryQueryOptions(movementsQuery({ ...filters, location: locationId }, cursors.at(-1))),
     placeholderData: keepPreviousData,
   });
   const movements = query.data?.movements ?? [];
   const pageInfo = query.data?.pageInfo;
   const nextCursor = pageInfo?.hasMore ? pageInfo.nextCursor : null;
-  const filtered = Boolean(search || startDate || endDate || type !== "all");
+  const filtered = Boolean(search || startDate || endDate || type !== "all" || locationId);
 
   const exportCsv = async () => {
     if (exporting) return;
@@ -163,6 +174,7 @@ export function HistoryTab({ filters, onFiltersChange }: HistoryTabProps) {
         body: JSON.stringify({
           search,
           movementType: type,
+          movementLocationId: locationId || undefined,
           movementStartDate: startDate || undefined,
           movementEndDate: endDate || undefined,
           maxRows: 5_000,
@@ -200,6 +212,22 @@ export function HistoryTab({ filters, onFiltersChange }: HistoryTabProps) {
               options={[{ value: "all", label: t("typeAll") }, ...MOVEMENT_TYPES.map((value) => ({ value, label: t(`type_${value}`) }))]}
             />
             <HistoryDateFilter from={startDate} to={endDate} onChange={onFiltersChange} />
+            {severalLocations ? (
+              <SearchableSelect
+                triggerClassName="w-auto min-w-40"
+                ariaLabel={t("location")}
+                value={locationId || ALL_LOCATIONS}
+                onValueChange={(value) => onFiltersChange({ location: value === ALL_LOCATIONS ? "" : value })}
+                options={[
+                  { value: ALL_LOCATIONS, label: t("allLocations") },
+                  // Archived locations keep their history.
+                  ...(locations ?? []).map((location) => ({
+                    value: location.id,
+                    label: location.status === "archived" ? t("locationArchived", { name: location.name }) : location.name,
+                  })),
+                ]}
+              />
+            ) : null}
           </>
         )}
         actions={(
@@ -234,7 +262,7 @@ export function HistoryTab({ filters, onFiltersChange }: HistoryTabProps) {
                 type="button"
                 variant="outline"
                 className="mt-4"
-                onClick={() => onFiltersChange({ q: "", type: "all", from: "", to: "" })}
+                onClick={() => onFiltersChange({ q: "", type: "all", from: "", to: "", location: "" })}
               >
                 {t("clearFilters")}
               </Button>
@@ -259,7 +287,7 @@ export function HistoryTab({ filters, onFiltersChange }: HistoryTabProps) {
                     </span>
                     <IdText value={movement.variantSku ?? movement.variantId.slice(0, 8)} copy className="text-muted-foreground" />
                   </div>
-                  <MovementDetails movement={movement} />
+                  <MovementDetails movement={movement} showLocation={severalLocations} />
                 </div>
                 <div className="shrink-0 space-y-1 sm:text-right">
                   {counterChanges(movement).map((change) => (

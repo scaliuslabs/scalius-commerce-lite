@@ -1,4 +1,4 @@
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql, type SQL } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import type { Database } from "@scalius/database/client";
 import { adminOrderCreateAttempts, orderEvents, orders, user } from "@scalius/database/schema";
@@ -26,6 +26,7 @@ export const ORDER_EVENT_KINDS = [
     "archived",
     "unarchived",
     "invoice_issued",
+    "fulfillment_location_changed",
 ] as const;
 export type OrderEventKind = (typeof ORDER_EVENT_KINDS)[number];
 
@@ -118,6 +119,36 @@ export async function recordOrderEvent(db: Database, input: RecordOrderEventInpu
             error: error instanceof Error ? error.message : "unknown",
         });
     }
+}
+
+/** The id of the line an action with this request key logs (deterministic, so a repeat adds nothing). */
+export function orderEventIdForRequest(
+    orderId: string,
+    kind: Exclude<OrderEventKind, "placed">,
+    requestKey: string,
+): Promise<string> {
+    return orderEventId(orderId, kind, requestKey);
+}
+
+/**
+ * The timeline line of a change written in the same batch, so the change and
+ * its line commit together. It is inserted only when `landed` holds once the
+ * batch's earlier statements ran (the change took effect); `id` comes from
+ * `orderEventIdForRequest`, so a repeat of the same change adds nothing.
+ */
+export function buildOrderEventInsert(
+    db: Database,
+    input: Omit<RecordOrderEventInput, "requestKey"> & { id: string },
+    landed: SQL,
+) {
+    const id = input.id;
+    const actor = knownStaffId(input.actorId) ?? sql`NULL`;
+    // Columns by position: id, order_id, kind, body, data, actor_id, created_at.
+    return db.insert(orderEvents).select(sql`
+        SELECT ${id}, ${input.orderId}, ${input.kind}, ${input.body ?? null},
+               ${input.data ? JSON.stringify(input.data) : null}, ${actor}, unixepoch()
+        WHERE ${landed}
+    `).onConflictDoNothing({ target: orderEvents.id });
 }
 
 /** A staff comment ("Customer confirmed by phone at 3pm"). A repeated request key returns the first comment. */

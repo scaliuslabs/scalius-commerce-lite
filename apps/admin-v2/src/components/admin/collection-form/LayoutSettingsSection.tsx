@@ -7,7 +7,6 @@ import { FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessa
 import { Input } from "~/components/ui/input";
 import { NumberInput } from "~/components/ui/number-input";
 import { SearchableSelect } from "~/components/ui/searchable-select";
-import { Switch } from "~/components/ui/switch";
 import { useMessages } from "~/i18n";
 import { collectionFormMessages } from "~/i18n/collection-form";
 import type { CollectionFormInput, CollectionFormValues, Product } from "./types";
@@ -21,7 +20,7 @@ interface LayoutSettingsSectionProps {
   onProductDiscovered: (product: Product) => void;
 }
 
-/** The side column: status, then how the collection shows on the homepage. */
+/** The side column: status, then how the collection looks wherever the store shows it. */
 export const LayoutSettingsSection = React.memo(function LayoutSettingsSection({
   form,
   knownProducts,
@@ -29,9 +28,9 @@ export const LayoutSettingsSection = React.memo(function LayoutSettingsSection({
   onProductDiscovered,
 }: LayoutSettingsSectionProps) {
   const t = useMessages(collectionFormMessages);
-  const [name, isActive, showOnHomepage, presentation] = useWatch({
+  const [name, presentation] = useWatch({
     control: form.control,
-    name: ["name", "isActive", "config.showOnHomepage", "presentation"],
+    name: ["name", "presentation"],
   });
   const productName = (id: string) => knownProducts.find((product) => product.id === id)?.name ?? t("loadingName");
 
@@ -68,124 +67,102 @@ export const LayoutSettingsSection = React.memo(function LayoutSettingsSection({
 
       <Card>
         <CardHeader>
-          <CardTitle>{t("homepage")}</CardTitle>
+          <CardTitle>{t("display")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <FormField
             control={form.control}
-            name="config.showOnHomepage"
+            name="presentation"
             render={({ field }) => (
               <FormItem>
-                <div className="flex items-start justify-between gap-3">
-                  <div className="space-y-1">
-                    <FormLabel>{t("showOnHomepage")}</FormLabel>
-                    {field.value && !isActive ? <FormDescription>{t("showsWhenActive")}</FormDescription> : null}
-                  </div>
-                  <FormControl>
-                    <Switch checked={field.value} onCheckedChange={field.onChange} />
-                  </FormControl>
-                </div>
+                <FormLabel>{t("layout")}</FormLabel>
+                <FormControl>
+                  <SearchableSelect
+                    value={field.value} onValueChange={field.onChange}
+                    triggerRef={field.ref}
+                    onBlur={field.onBlur}
+                    triggerClassName="w-full"
+                    options={[{ value: "grid", label: t("grid") }, { value: "carousel", label: t("carousel") }]}
+                  />
+                </FormControl>
               </FormItem>
             )}
           />
-
-          {showOnHomepage ? (
-            <div className="space-y-4 border-t pt-4">
-              <FormField
-                control={form.control}
-                name="presentation"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t("layout")}</FormLabel>
-                    <FormControl>
-                      <SearchableSelect
-                        value={field.value} onValueChange={field.onChange}
-                        triggerRef={field.ref}
-                        onBlur={field.onBlur}
-                        triggerClassName="w-full"
-                        options={[{ value: "grid", label: t("grid") }, { value: "carousel", label: t("carousel") }]}
-                      />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="config.title"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t("heading")}</FormLabel>
-                    <FormControl>
-                      <Input maxLength={120} placeholder={name} {...field} value={field.value ?? ""} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="config.subtitle"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t("subheading")}</FormLabel>
-                    <FormControl>
-                      <Input maxLength={240} {...field} value={field.value ?? ""} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              {presentation === "grid" ? (
-                <FormField
-                  control={form.control}
-                  name="config.featuredProductId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t("featuredProduct")}</FormLabel>
-                      <div className="flex gap-2">
-                        <ProductPickerPopover
-                          triggerLabel={field.value ? productName(field.value) : t("chooseProduct")}
-                          selectedCategoryIds={selectedCategoryIds}
-                          onSelectProduct={(product) => {
-                            onProductDiscovered(product);
-                            field.onChange(product.id);
-                          }}
-                        />
-                        {field.value ? (
-                          <Button type="button" variant="ghost" size="icon" aria-label={t("removeFeatured")} onClick={() => field.onChange(undefined)}>
-                            <X />
-                          </Button>
-                        ) : null}
-                      </div>
-                      <FormDescription>{t("featuredProductHelp")}</FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              ) : null}
-              <FormField
-                control={form.control}
-                name="config.maxProducts"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t("productsShown")}</FormLabel>
-                    <FormControl>
-                      <NumberInput
-                        integer
-                        name={field.name}
-                        ref={field.ref}
-                        onBlur={field.onBlur}
-                        value={field.value}
-                        onValueChange={(value) => field.onChange(value ?? Number.NaN)}
-                      />
-                    </FormControl>
-                    <FormDescription>{t("productsShownHelp")}</FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
+          <FormField
+            control={form.control}
+            name="config.title"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{t("heading")}</FormLabel>
+                <FormControl>
+                  <Input maxLength={120} placeholder={name} {...field} value={field.value ?? ""} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="config.subtitle"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{t("subheading")}</FormLabel>
+                <FormControl>
+                  <Input maxLength={240} {...field} value={field.value ?? ""} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          {presentation === "grid" ? (
+            <FormField
+              control={form.control}
+              name="config.featuredProductId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t("featuredProduct")}</FormLabel>
+                  <div className="flex gap-2">
+                    <ProductPickerPopover
+                      triggerLabel={field.value ? productName(field.value) : t("chooseProduct")}
+                      selectedCategoryIds={selectedCategoryIds}
+                      onSelectProduct={(product) => {
+                        onProductDiscovered(product);
+                        field.onChange(product.id);
+                      }}
+                    />
+                    {field.value ? (
+                      <Button type="button" variant="ghost" size="icon" aria-label={t("removeFeatured")} onClick={() => field.onChange(undefined)}>
+                        <X />
+                      </Button>
+                    ) : null}
+                  </div>
+                  <FormDescription>{t("featuredProductHelp")}</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
           ) : null}
+          <FormField
+            control={form.control}
+            name="config.maxProducts"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{t("productsShown")}</FormLabel>
+                <FormControl>
+                  <NumberInput
+                    integer
+                    name={field.name}
+                    ref={field.ref}
+                    onBlur={field.onBlur}
+                    value={field.value}
+                    onValueChange={(value) => field.onChange(value ?? Number.NaN)}
+                  />
+                </FormControl>
+                <FormDescription>{t("productsShownHelp")}</FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
         </CardContent>
       </Card>
     </div>

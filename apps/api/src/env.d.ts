@@ -179,6 +179,11 @@ interface Env {
   EMAIL?: CloudflareSendEmailBinding;
   /** One-time WebP renditions for non-dashboard uploads (agents, CLI, URL import). */
   IMAGES?: ImagesBinding;
+  // Dynamic Worker loader for sandboxed plugins (Workers Paid). Operator-enabled
+  // and never in the committed Wrangler configs, so Workers Free deploys
+  // unchanged: `pnpm run deploy --plugin-sandbox` (or `pnpm plugin sandbox on`)
+  // adds it to a generated config. Absent, only bundled plugins run.
+  LOADER?: WorkerLoader;
 
   // Producer for the single `jobs` queue (DLQ `jobs-dlq`); routed by payload.type.
   JOBS_QUEUE: Queue;

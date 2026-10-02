@@ -8,6 +8,7 @@ import {
   Hash,
   ArrowRightLeft,
   AlertTriangle,
+  MapPin,
 } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
 import { SearchableSelect } from "~/components/ui/searchable-select";
@@ -62,9 +63,11 @@ export function ManualSheet({
   const [error, setError] = useState<string | null>(null);
   const operationIntentRef = useRef<{ fingerprint: string; key: string } | null>(null);
 
+  // With several locations the sheet counts the scanner's location; reservations stay the SKU's.
+  const onHand = product.locationStock ?? product.stock;
   const newStock = isAbsolute
     ? Number(absoluteValue) || 0
-    : product.stock + adjustment;
+    : onHand + adjustment;
 
   const isLargeAdjustment =
     !isAbsolute && Math.abs(adjustment) > LARGE_THRESHOLD;
@@ -158,13 +161,19 @@ export function ManualSheet({
                   <Hash className="size-3" />
                   {product.sku}
                 </span>
+                {product.location ? (
+                  <span className="flex items-center gap-1">
+                    <MapPin className="size-3" />
+                    {product.location.name}
+                  </span>
+                ) : null}
               </div>
             </div>
           </div>
 
           <dl className="grid grid-cols-3 gap-2 rounded-lg bg-muted px-4 py-3">
             {([
-              ["onHand", product.stock],
+              [product.location ? "onHandHere" : "onHand", onHand],
               ["committed", product.reserved],
               ["available", available],
             ] as const).map(([key, value]) => (
@@ -213,7 +222,7 @@ export function ManualSheet({
               </div>
 
               <div className="flex items-center justify-center gap-3 rounded-lg bg-muted py-3">
-                <span className="text-body text-muted-foreground">{formatNumber(product.stock)}</span>
+                <span className="text-body text-muted-foreground">{formatNumber(onHand)}</span>
                 <span className="text-muted-foreground">→</span>
                 <span className={cn("text-body font-medium tabular-nums", adjustment === 0 && "text-muted-foreground", newStock < 0 && "text-destructive")}>
                   {formatNumber(newStock)}
@@ -240,7 +249,7 @@ export function ManualSheet({
               />
               {absoluteValue !== "" ? (
                 <div className="flex items-center justify-center gap-3 rounded-lg bg-muted py-2 text-body">
-                  <span className="text-muted-foreground">{formatNumber(product.stock)}</span>
+                  <span className="text-muted-foreground">{formatNumber(onHand)}</span>
                   <span className="text-muted-foreground">→</span>
                   <span className="font-medium">{formatNumber(Number(absoluteValue) || 0)}</span>
                 </div>

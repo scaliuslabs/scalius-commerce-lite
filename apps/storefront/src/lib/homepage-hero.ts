@@ -1,9 +1,10 @@
 import {
   HERO_SLIDE_PRESENTATION,
+  type HeroSlide,
   type HeroSlideViewport,
 } from "@scalius/shared/hero-slider";
-import type { StorefrontSectionOf } from "@scalius/shared/storefront-theme";
-import type { HeroSliderImage, HomepageHero } from "./api/storefront";
+import type { StorefrontHeroSlide, StorefrontSectionOf } from "@scalius/shared/storefront-theme";
+import type { HomepageMediaAsset } from "./api/storefront";
 import { mediaImageSrcSet, mediaImageUrl } from "./media-url";
 import { capSizesDensity } from "./responsive-image";
 
@@ -100,19 +101,41 @@ export function heroLeadCandidates(hero: ResolvedHomepageHero, layout: Storefron
 }
 
 export interface ResolvedHomepageHero {
-  desktop: HeroSliderImage[];
-  mobile: HeroSliderImage[];
+  desktop: HeroSlide[];
+  mobile: HeroSlide[];
 }
 
 /**
- * Banner slides per viewport. Phones reuse the desktop banners (cropped
- * around each slide's focal point) when the merchant added no phone banners,
- * so a phone never gets an empty hero while desktop has one.
+ * A hero section's slides as each viewport draws them, from the section's
+ * own slides and the homepage media: computers show each slide's image;
+ * phones its phone image when that resolves (else the same image, cropped
+ * around the phone focal point, else the slide's own). A slide whose image
+ * did not resolve (deleted, not ready) is left out on both.
  */
 export function resolveHomepageHero(
-  hero: HomepageHero | null | undefined,
+  slides: readonly StorefrontHeroSlide[],
+  media: (id: string) => HomepageMediaAsset | null,
 ): ResolvedHomepageHero {
-  const desktop = hero?.desktop?.images ?? [];
-  const mobile = hero?.mobile?.images ?? [];
-  return { desktop, mobile: mobile.length > 0 ? mobile : desktop };
+  const desktop: HeroSlide[] = [];
+  const mobile: HeroSlide[] = [];
+  slides.forEach((slide, index) => {
+    const image = media(slide.image);
+    if (!image) return;
+    const phoneImage = slide.phoneImage ? media(slide.phoneImage) : null;
+    const shared = {
+      title: slide.alt,
+      heading: slide.heading ?? "",
+      supportingText: slide.text ?? "",
+      buttonLabel: slide.buttonLabel ?? "",
+      link: slide.link ?? "",
+    };
+    desktop.push({ id: `${index}-${image.id}`, url: image.url, ...shared, focalPoint: slide.focalPoint });
+    mobile.push({
+      id: `${index}-${(phoneImage ?? image).id}`,
+      url: (phoneImage ?? image).url,
+      ...shared,
+      focalPoint: slide.phoneFocalPoint ?? slide.focalPoint,
+    });
+  });
+  return { desktop, mobile };
 }

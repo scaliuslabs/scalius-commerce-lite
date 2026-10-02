@@ -9,7 +9,7 @@
 // the menu row when `stickyMenuRow` (Star Tech: the category bar stays when
 // the header scrolls away); then #main-header is `display: contents` there
 // and the menu row is the sticky part (HeaderLayout measures it).
-import type { HeaderData, NavigationItem } from "@/lib/api";
+import type { NavigationItem } from "@/lib/api";
 import type {
   StorefrontHeaderRenderer,
   StorefrontNavigationRenderer,
@@ -21,10 +21,10 @@ import {
 } from "@scalius/shared/brand-presentation";
 import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
 import HeaderSearch from "../HeaderSearch.astro";
-import type { HeaderSpec } from "../header-variants";
+import type { HeaderLogo, HeaderSpec } from "../header-variants";
 
 interface Props {
-  headerData: HeaderData;
+  logo: HeaderLogo;
   variantId: string;
   spec: HeaderSpec;
   /** The coarse header facts (`resolved.layout.header`). */
@@ -42,7 +42,7 @@ interface Props {
 }
 
 const {
-  headerData,
+  logo,
   variantId,
   spec,
   headerStyle,
@@ -54,9 +54,9 @@ const {
   phoneDrop,
 } = Astro.props;
 
-const logoWidth = normalizeHeaderLogoWidth(headerData.logo.width);
+const logoWidth = normalizeHeaderLogoWidth(logo.width);
 const mobileLogoWidth = getMobileHeaderLogoWidth(logoWidth);
-const logoSrcSet = mediaImageSrcSet(headerData.logo.src);
+const logoSrcSet = mediaImageSrcSet(logo.src);
 const inlineMenu = hasMenu && menuPlacement === "inline";
 const menuRow = hasMenu && menuPlacement === "row";
 const accountPrefetch = getStorefrontPrefetchAttribute("/account", Astro.url);
@@ -121,12 +121,12 @@ const style = `--hdr-main: ${spec.mainHeight}rem; --hdr-menu: ${spec.menuHeight 
 
       <a href="/" class="hdr-logo">
         {
-          headerData.logo.src ? (
+          logo.src ? (
             <img
-              src={mediaImageUrl(headerData.logo.src, 320)}
+              src={mediaImageUrl(logo.src, 320)}
               srcset={logoSrcSet}
               sizes={logoSrcSet ? `(min-width: 1024px) ${logoWidth}px, ${mobileLogoWidth}px` : undefined}
-              alt={headerData.logo.alt}
+              alt={logo.alt}
               class="hdr-logo-image"
               width={240}
               height={80}
@@ -134,7 +134,7 @@ const style = `--hdr-main: ${spec.mainHeight}rem; --hdr-menu: ${spec.menuHeight 
               decoding="async"
             />
           ) : (
-            <span class="hdr-logo-text">{headerData.logo.alt}</span>
+            <span class="hdr-logo-text">{logo.alt}</span>
           )
         }
       </a>

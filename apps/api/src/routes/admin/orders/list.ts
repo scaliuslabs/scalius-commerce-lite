@@ -16,6 +16,11 @@ import { ok } from "../../../utils/api-response";
 import { paginatedEnvelope, errorResponses } from "../../../schemas/responses";
 import { orderSummarySchema, productSummarySchema } from "../../../schemas/entities";
 import { parseBangladeshDateOnlyBoundary } from "../order-date-filter";
+import {
+    ORDER_CHANNELS,
+    ORDER_CHANNEL_SOURCE_MAX_LENGTH,
+    ORDER_CHANNEL_SOURCE_PATTERN,
+} from "@scalius/shared/order-channel";
 import { commerceCalendarDateKey } from "@scalius/shared/commerce-time";
 import { listPaymentMethodIds } from "@scalius/core/modules/payments";
 import {
@@ -56,6 +61,15 @@ const fulfillmentStatusQuerySchema = z.enum([
 const deliveryMethodQuerySchema = z.enum(ORDER_DELIVERY_METHOD_FILTERS).openapi({
     description: "How the order reaches the buyer: delivery (ships to an address), pickup, or none (nothing physical).",
 });
+
+const channelQuerySchema = z.enum(ORDER_CHANNELS).openapi({
+    description: "Where the order came from: online_store, admin (dashboard), pos, agent (AI agent) or app.",
+});
+
+const channelSourceQuerySchema = z.string()
+    .max(ORDER_CHANNEL_SOURCE_MAX_LENGTH)
+    .regex(ORDER_CHANNEL_SOURCE_PATTERN)
+    .openapi({ description: "A stored source slug, e.g. facebook, whatsapp or walk_in." });
 
 const paymentRecoveryQuerySchema = z.enum([
     "recoverable",
@@ -192,6 +206,8 @@ const listOrdersRoute = createRoute({
             paymentMethod: paymentMethodQuerySchema.optional().openapi({ description: "Filter by payment method" }),
             fulfillmentStatus: fulfillmentStatusQuerySchema.optional().openapi({ description: "Filter by fulfillment status" }),
             deliveryMethod: deliveryMethodQuerySchema.optional(),
+            channel: channelQuerySchema.optional(),
+            channelSource: channelSourceQuerySchema.optional(),
             paymentRecovery: paymentRecoveryQuerySchema.optional().openapi({ description: "Filter by hosted-payment recovery state" }),
             archived: z.enum(["true", "false"]).optional().openapi({ description: "Show archived orders" }),
             sort: z.enum(ORDER_LIST_SORTS).optional().openapi({
@@ -232,6 +248,8 @@ app.openapi(listOrdersRoute, async (c) => {
         paymentMethod: query.paymentMethod,
         fulfillmentStatus: query.fulfillmentStatus,
         deliveryMethod: query.deliveryMethod,
+        channel: query.channel,
+        channelSource: query.channelSource,
         paymentRecovery: query.paymentRecovery,
         showArchived: query.archived === "true",
         sort: effectiveSort,
@@ -265,6 +283,9 @@ const exportOrdersRoute = createRoute({
             paymentStatus: paymentStatusQuerySchema.optional(),
             paymentMethod: paymentMethodQuerySchema.optional(),
             fulfillmentStatus: fulfillmentStatusQuerySchema.optional(),
+            deliveryMethod: deliveryMethodQuerySchema.optional(),
+            channel: channelQuerySchema.optional(),
+            channelSource: channelSourceQuerySchema.optional(),
             paymentRecovery: paymentRecoveryQuerySchema.optional(),
             archived: z.enum(["true", "false"]).optional(),
             sort: z.enum(ORDER_LIST_SORTS).optional(),
@@ -316,6 +337,9 @@ app.openapi(exportOrdersRoute, async (c) => {
             paymentStatus: query.paymentStatus,
             paymentMethod: query.paymentMethod,
             fulfillmentStatus: query.fulfillmentStatus,
+            deliveryMethod: query.deliveryMethod,
+            channel: query.channel,
+            channelSource: query.channelSource,
             paymentRecovery: query.paymentRecovery,
             showArchived: query.archived === "true",
             sort: effectiveSort,

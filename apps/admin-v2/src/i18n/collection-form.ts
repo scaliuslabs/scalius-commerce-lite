@@ -1,6 +1,6 @@
 import { defineMessages } from "./index";
 
-/** The collection editor: title, products, status, homepage and the product picker. */
+/** The collection editor: title, products, status, display and the product picker. */
 export const collectionFormMessages = defineMessages({
   en: {
     title: "Title",
@@ -43,9 +43,7 @@ export const collectionFormMessages = defineMessages({
     draft: "Draft",
     activeHelp: "Customers can see it on your store.",
     draftHelp: "Customers can't see it yet.",
-    homepage: "Homepage",
-    showOnHomepage: "Show on homepage",
-    showsWhenActive: "Appears once the collection is active.",
+    display: "Display",
     layout: "Layout",
     grid: "Grid",
     carousel: "Carousel",
@@ -126,9 +124,7 @@ export const collectionFormMessages = defineMessages({
     draft: "ড্রাফট",
     activeHelp: "কাস্টমাররা স্টোরে এটি দেখতে পাবে।",
     draftHelp: "কাস্টমাররা এখনও এটি দেখতে পাবে না।",
-    homepage: "হোমপেজ",
-    showOnHomepage: "হোমপেজে দেখান",
-    showsWhenActive: "কালেকশন চালু হলে দেখা যাবে।",
+    display: "প্রদর্শন",
     layout: "লেআউট",
     grid: "গ্রিড",
     carousel: "স্লাইডার",

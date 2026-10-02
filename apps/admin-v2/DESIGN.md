@@ -40,6 +40,8 @@ Overlays never cover the top bar or run off screen: popovers, menus, selects and
 
 Choosing one option: use `SearchableSelect` for fixed enums and data-backed lists alike. Pass static `options` for a list already loaded, or `load` + `queryKey` for a large source searched on the server and paged (debounced; the search never goes in the page URL), with `description` for secondary text ("Mirpur-2 · Dhaka"), `group` headings and `clearable`. Its popover uses the shared viewport collision bounds and scrolls only the option list. Delivery addresses always use `LocationPicker` (City → Thana → Area, each level filtered by the one above). NativeSelect and Radix Select are removed: lint rejects their imports and NativeSelect identifiers, plus every raw `<select>`.
 
+Theme document content (Online store → Theme) stores images as media ids and links in canonical form: `MediaField` (preview, Select/Change from Files, Remove) and `LinkField` (typed or browsed, made canonical when the field is left, marked when unusable) in `online-store/SectionEditor.tsx`. Ordered picks inside a section (slides, categories, collections) move with up/down buttons, like the homepage section rows.
+
 ## Status → badge variant
 
 | Kind | `success` | `info` | `warning` | `attention` | `destructive` | `secondary` (neutral) |

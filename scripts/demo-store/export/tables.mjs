@@ -3,7 +3,7 @@
  *
  * A seed bundle is the catalog a fresh deployment needs in order to look like
  * the demo store, and nothing else. The allow-list below is the whole contract:
- * the exporter reads these eighteen tables in this exact order and never opens
+ * the exporter reads these sixteen tables in this exact order and never opens
  * any other table for export. Orders, customers, users, sessions, accounts,
  * settings, discounts, promotions, inventory ledgers, checkout state and the
  * FTS shadow tables are therefore unreachable by construction rather than by a
@@ -62,8 +62,6 @@ export const EXPORTED_TABLES = Object.freeze([
   "product_rich_content",
   "product_content_blocks",
   "product_bundles",
-  "hero_sections",
-  "hero_sliders",
 ]);
 
 /**

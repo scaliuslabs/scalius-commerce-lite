@@ -46,7 +46,6 @@ const DEEP: StoreShape = storeShapeFromFacts({
   hasEmiPlans: true,
   hasDigitalLines: true,
   hasReviews: true,
-  hasQuestions: true,
   hasContentBlocks: true,
 });
 
@@ -117,14 +116,14 @@ describe("fallback resolution", () => {
     const drill = withBlock(base, (blocks) => { blocks.desktopNav = { variant: "drill-in-drawer", settings: {} }; });
     expect(resolve(drill).blocks.desktopNav.variant).toBe("drill-in-drawer");
     // Shelves need a tree or collections; quick-grid needs the quick-add card.
-    const shelves = withBlock(base, (blocks) => { blocks.listing.layout = { variant: "shelves", settings: { maxShelves: 8 } }; });
+    const shelves = withBlock(base, (blocks) => { blocks.listing.layout = { variant: "shelves", settings: { maxShelves: 8, spacing: "standard" } }; });
     expect(resolve(shelves).blocks.listing.layout.variant).toBe("grid");
     const quickGrid = withBlock(base, (blocks) => { blocks.listing.layout = { variant: "quick-grid", settings: {} }; });
     expect(resolve(quickGrid).blocks.listing.layout.variant).toBe("grid");
     const quickGridQuickAdd = withBlock(quickGrid, (blocks) => { blocks.card = { variant: "quick-add", settings: {} }; });
     expect(resolve(quickGridQuickAdd).blocks.listing.layout.variant).toBe("quick-grid");
     // The digital buy box needs digital lines; the directory footer needs categories.
-    const digital = withBlock(base, (blocks) => { blocks.product.buyBox = { variant: "digital", settings: {} }; blocks.footer = { variant: "directory", settings: {} }; });
+    const digital = withBlock(base, (blocks) => { blocks.product.buyBox = { variant: "digital", settings: {} }; blocks.footer = { variant: "directory", settings: { style: "columns", tagline: "", about: "", copyright: "" } }; });
     expect(resolve(digital).blocks.product.buyBox.variant).toBe("classic");
     expect(resolve(digital).blocks.footer.variant).toBe("minimal-columns");
     // Modules and toolbar pieces without data are left out; nothing renders an empty box.
@@ -135,7 +134,7 @@ describe("fallback resolution", () => {
     // Aspect chips read today's facets (the storefront omits them without a
     // multi-value facet); the default listing has no per-page control.
     expect(resolve(storefrontTemplateTheme("marketplace")).blocks.listing.toolbar).toContain("aspect-chips");
-    expect(resolve(base).blocks.listing.toolbar).toEqual(["breadcrumb", "result-count", "sort"]);
+    expect(resolve(base).blocks.listing.toolbar).toEqual(["breadcrumb", "result-count", "sort", "applied-chips"]);
     // Sections whose data is missing are dropped (category tiles need two categories).
     expect(resolvedSpec.pages.home.map((section) => section.type)).not.toContain("category-tiles");
     expect(resolve(storefrontTemplateTheme("marketplace")).pages.home.map((section) => section.type)).toEqual(["hero", "deal-block"]);

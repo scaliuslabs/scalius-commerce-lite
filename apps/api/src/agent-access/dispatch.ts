@@ -8,8 +8,8 @@ import {
   clampAgentResultBytes,
   utf8ByteLength,
 } from "./limits";
-import type { AgentPrincipal } from "./types";
-import { withAgentDispatchPrincipal } from "./dispatch-context";
+import type { AgentAuditInput, AgentPrincipal, OperationPrincipal } from "./types";
+import { withOperationDispatchPrincipal } from "./dispatch-context";
 import {
   AgentArtifactDeliveryError,
   stageAgentArtifact,
@@ -554,13 +554,74 @@ async function hashIdempotencyPrefix(value: string | undefined): Promise<string 
     .slice(0, 12);
 }
 
+/**
+ * What differs between principal kinds when an operation is dispatched: how
+ * authority is re-resolved, how an operation is authorized, the rate-limit
+ * bucket and how the audit row names the actor. Everything else (request
+ * construction, the in-process Hono call, response limits and output
+ * policies) is shared, so agents and plugins can never diverge.
+ */
+export interface OperationDispatchAuthority<P extends OperationPrincipal> {
+  /** Re-resolves relational authority immediately before the dispatch; null when inactive. */
+  refresh(principal: P, env: Env): Promise<P | null>;
+  authorize(principal: P, operation: AgentOperationManifestEntry, env: Env): Promise<boolean>;
+  surface(principal: P): "dashboard" | "storefront";
+  withinRateLimit(principal: P, env: Env): Promise<boolean>;
+  inactive: { code: string; message: string };
+  auditActor(principal: P): Pick<AgentAuditInput, "grantId" | "credentialId" | "ownerUserId" | "resource" | "pluginId">;
+  writeAudit(event: AgentAuditInput, env: Env): Promise<void>;
+}
+
+export interface DispatchOperationOptions<P extends OperationPrincipal> {
+  operation: AgentOperationManifestEntry;
+  input: AgentOperationInput;
+  principal: P;
+  env: Env;
+  ctx: ExecutionContext;
+}
+
+function agentDispatchAuthority(backend: Awaited<ReturnType<typeof loadAgentAccessBackend>>): OperationDispatchAuthority<AgentPrincipal> {
+  return {
+    refresh: (principal, env) => backend.resolvePrincipal(
+      {
+        grantId: principal.grantId,
+        credentialId: principal.credentialId ?? undefined,
+        resource: principal.resource,
+      },
+      env,
+    ),
+    authorize: (principal, operation, env) => backend.authorizeOperation(
+      principal,
+      manifestAuthorizationInput(operation),
+      env,
+    ),
+    surface: (principal) => principal.resource,
+    withinRateLimit: (principal, env) => checkAgentRateLimit(env, `grant:${principal.grantId}`),
+    inactive: { code: "grant_inactive", message: "Agent grant is inactive" },
+    auditActor: (principal) => ({
+      grantId: principal.grantId,
+      credentialId: principal.credentialId,
+      ownerUserId: principal.ownerUserId,
+      resource: principal.resource,
+    }),
+    writeAudit: (event, env) => backend.writeAudit(event, env),
+  };
+}
+
 export async function dispatchAgentOperation(
   options: DispatchAgentOperationOptions,
+): Promise<AgentOperationResult> {
+  return dispatchOperationAs(agentDispatchAuthority(await loadAgentAccessBackend()), options);
+}
+
+/** Dispatches one manifest operation in-process as `principal` (agents and plugins alike). */
+export async function dispatchOperationAs<P extends OperationPrincipal>(
+  authority: OperationDispatchAuthority<P>,
+  options: DispatchOperationOptions<P>,
 ): Promise<AgentOperationResult> {
   const { operation, input, env, ctx } = options;
   const startedAt = Date.now();
   const requestId = crypto.randomUUID();
-  const backend = await loadAgentAccessBackend();
   let principal = options.principal;
   let auditOutcome: "success" | "denied" | "failed" = "failed";
   let auditStatus: number | null = null;
@@ -570,7 +631,7 @@ export async function dispatchAgentOperation(
     if (operation.exposure !== "execute" && operation.exposure !== "continuation") {
       throw new AgentDispatchError("operation_not_executable", "Operation is not executable", 404);
     }
-    if (operation.surface !== principal.resource) {
+    if (operation.surface !== authority.surface(principal)) {
       throw new AgentDispatchError("wrong_resource", "Operation is not available on this resource", 403);
     }
     // Generated-manifest validation is authoritative, but re-check the
@@ -582,39 +643,28 @@ export async function dispatchAgentOperation(
 
     // Search/describe authorization is only advisory. Resolve relational
     // authority again immediately before every actual Hono dispatch.
-    const freshPrincipal = await backend.resolvePrincipal(
-      {
-        grantId: principal.grantId,
-        credentialId: principal.credentialId ?? undefined,
-        resource: principal.resource,
-      },
-      env,
-    );
+    const freshPrincipal = await authority.refresh(principal, env);
     if (!freshPrincipal) {
-      throw new AgentDispatchError("grant_inactive", "Agent grant is inactive", 401);
+      throw new AgentDispatchError(authority.inactive.code, authority.inactive.message, 401);
     }
     principal = freshPrincipal;
-    if (!(await backend.authorizeOperation(
-      principal,
-      manifestAuthorizationInput(operation),
-      env,
-    ))) {
+    if (!(await authority.authorize(principal, operation, env))) {
       throw new AgentDispatchError("operation_forbidden", "Operation is not authorized", 403);
     }
-    if (!(await checkAgentRateLimit(env, `grant:${principal.grantId}`))) {
-      throw new AgentDispatchError("rate_limited", "Agent request rate limit exceeded", 429);
+    if (!(await authority.withinRateLimit(principal, env))) {
+      throw new AgentDispatchError("rate_limited", "Operation rate limit exceeded", 429);
     }
 
     const internalRequest = buildInternalRequest(operation, input, env, requestId);
     const { fetchRuntimeApiApp } = await import("../runtime/fetch-runtime-app");
-    // No bearer/cookie is forwarded. The Worker-created ExecutionContext is
-    // the non-spoofable bridge; Hono auth resolves its verified OAuth props
-    // to a fresh principal instead of accepting a synthetic HTTP header.
+    // No bearer/cookie is forwarded. The Worker-created env carries the
+    // principal on a symbol property; Hono auth resolves it to fresh
+    // authority instead of accepting a synthetic HTTP header.
     let response: Response;
     try {
       response = await fetchRuntimeApiApp(
         internalRequest,
-        withAgentDispatchPrincipal(env, principal),
+        withOperationDispatchPrincipal(env, principal),
         ctx,
       );
     } catch {
@@ -642,6 +692,9 @@ export async function dispatchAgentOperation(
           data: null,
           redacted: true,
         };
+      }
+      if (principal.kind !== "agent") {
+        throw new AgentDispatchError("artifact_unsupported", "Artifact output needs an agent connection", 409);
       }
       const artifact = await stageAgentArtifact(operation, response, principal, env);
       return {
@@ -684,11 +737,8 @@ export async function dispatchAgentOperation(
     throw dispatchError;
   } finally {
     try {
-      await backend.writeAudit({
-        grantId: principal.grantId,
-        credentialId: principal.credentialId,
-        ownerUserId: principal.ownerUserId,
-        resource: principal.resource,
+      await authority.writeAudit({
+        ...authority.auditActor(principal),
         operationId: operation.operationId,
         risk: operation.risk,
         outcome: auditOutcome,

@@ -116,9 +116,11 @@ const {
 const { currentFilters, sortBy, defaultSort, query, limit } = queryState;
 const { resolved } = await currentRequestTheme(Astro.locals);
 const listingPresentation = catalogListingPresentation(resolved, listingTemplate);
-// Star Tech search spends the results width on products; its category pages
-// keep the dense rail. Other merchant filter styles retain their placement.
-const specSearch = resolved.template === "spec-catalogue" && kind === "search" && listingPresentation.filters.style === "sidebar-dense";
+// The listing's page chrome (blocks.listing): band, phone bar, link style.
+const { band: bandStyle, phoneBar, links } = resolved.blocks.listing;
+// A search can spend the results width on products (Star Tech): a sidebar's
+// facets move into the drawer; category pages keep the column.
+const specSearch = kind === "search" && listingPresentation.filters.placement === "sidebar" && listingPresentation.filters.searchPlacement === "drawer";
 const presentation = specSearch
   ? { ...listingPresentation, filters: { ...listingPresentation.filters, placement: "drawer" as const, columnPx: 0 } }
   : listingPresentation;
@@ -129,8 +131,10 @@ const results = kind === "search" && query && resolved.blocks.listing.searchLayo
 const piece = (name: Parameters<typeof presentation.toolbar.has>[0]) => presentation.toolbar.has(name);
 const placement = presentation.filters.placement;
 const drawer = placement === "drawer";
-const boutiqueBar = resolved.template === "boutique" && placement === "bar";
-const massRetailPhoneBar = resolved.template === "mass-retail";
+// Dawn's band: the title alone, then the count and controls over the facet bar.
+const boutiqueBar = bandStyle === "inline" && placement === "bar";
+// Target's phone row: a Filter pill, sort and the quick and popular chips.
+const massRetailPhoneBar = phoneBar === "pill-row";
 
 // Filters beyond the search itself (a search is undone by its chip).
 const refinementCount = countActiveProductListFilters(currentFilters) - (query ? 1 : 0);
@@ -154,9 +158,13 @@ const controls = catalogListingControls({
 });
 const showSort = controls.sort && piece("sort");
 const showFilters = controls.filters;
-const fashionRail = showFilters && resolved.template === "fashion-value" && presentation.filters.style === "sidebar-comfortable";
-const specRail = resolved.template === "spec-catalogue" && (placement === "sidebar" || specSearch);
-const marketplacePhoneFilters = resolved.template === "marketplace" && showFilters;
+// Fabrilife: a ruled rail that scrolls on its own, and the phone row pinned to the bottom.
+const ruledRail = showFilters && placement === "sidebar" && presentation.filters.ruled;
+const bottomPhoneBar = showFilters && phoneBar === "bottom";
+// Star Tech: the breadcrumb above, the title band in the results column beside the facets.
+const specRail = bandStyle === "beside-filters" && (placement === "sidebar" || specSearch);
+// Amazon and Daraz: the phone's chip row, the facets in a split sheet.
+const marketplacePhoneFilters = phoneBar === "split-sheet" && showFilters;
 const sortOptions = [
   ...(defaultSort === "relevance" ? [{ value: "relevance", label: "Best match" }] : []),
   { value: "newest", label: newestLabel },
@@ -182,7 +190,7 @@ const liveChildren = categoryFacet ? new Set(categoryFacet.values.filter(({ coun
 const childPills = piece("subcategory-pills") && subListings.length > 1
   ? subListings.filter((link) => !liveChildren || liveChildren.has(decodeURIComponent(link.href.split("/").at(-1) ?? "")))
   : [];
-const showcaseTabs = resolved.template === "showcase-landing" && kind !== "search";
+const showcaseTabs = links === "tabs" && kind !== "search";
 const searchPills = specRail && kind === "search" && categoryFacet
   ? catalogCategoryFacetLinks(categoryFacet, currentFilters)
       .filter((link) => link.href)
@@ -320,7 +328,7 @@ const visibleBreadcrumb = breadcrumbVisible && Boolean(band.breadcrumb?.length);
         : !marketplacePhoneFilters && !massRetailPhoneBar && ["-mx-1 grid gap-2 rounded-xl p-1", showFilters && showSort ? "grid-cols-2" : "grid-cols-1"],
     ]}
     data-catalog-phone-bar
-    data-catalog-fashion-phone-bar={fashionRail ? "" : undefined}
+    data-catalog-fashion-phone-bar={bottomPhoneBar ? "" : undefined}
   >
     {marketplacePhoneFilters ? (
       <Fragment>
@@ -411,7 +419,7 @@ const visibleBreadcrumb = breadcrumbVisible && Boolean(band.breadcrumb?.length);
 {!phoneChips && <CatalogAspectChips chips={aspectChips} />}
 <CatalogChipLinks label="Popular filters" links={popularFilters} class={massRetailPhoneBar ? "catalog-mass-retail-desktop-chips mb-3 pb-1" : "mb-3 pb-1"} />
 
-<div class:list={["flex flex-col", placement === "sidebar" ? "gap-6 lg:flex-row" : "gap-3"]} data-catalog-layout={placement} data-catalog-kind={kind} data-catalog-rail={fashionRail ? "fashion" : undefined} data-catalog-boutique={boutiqueBar ? "" : undefined}>
+<div class:list={["flex flex-col", placement === "sidebar" ? "gap-6 lg:flex-row" : "gap-3"]} data-catalog-layout={placement} data-catalog-kind={kind} data-catalog-rail={ruledRail ? "fashion" : undefined} data-catalog-boutique={boutiqueBar ? "" : undefined}>
   {showFilters && (
     <aside
       id="filter-section"
@@ -487,7 +495,7 @@ const visibleBreadcrumb = breadcrumbVisible && Boolean(band.breadcrumb?.length);
       </div>
     )}
     <slot name="description" />
-    <AppliedCatalogFilters
+    {piece("applied-chips") && <AppliedCatalogFilters
       facets={filterFacets}
       currentFilters={currentFilters}
       pathname={pathname}
@@ -496,7 +504,7 @@ const visibleBreadcrumb = breadcrumbVisible && Boolean(band.breadcrumb?.length);
       currencySymbol={currencySymbol}
       currencyCode={currencyCode}
       hideSearch={specSearchShowsQuery}
-    />
+    />}
 
     {facetValueChips && (
       <div class="mb-4 flex items-center gap-2 overflow-x-auto pb-1 lg:flex-wrap">
@@ -510,7 +518,7 @@ const visibleBreadcrumb = breadcrumbVisible && Boolean(band.breadcrumb?.length);
     ) : shelves.length > 0 ? (
       <Fragment>
         <div class="product-grid-frame" data-catalog-results={showViewToggle ? "grid" : undefined} data-catalog-view-storage-key={showViewToggle ? shelfViewStorageKey : undefined} data-catalog-shelf-view={showViewToggle ? "" : undefined}>
-          <CatalogShelves shelves={shelves} heritage={resolved.template === "heritage-editorial"} currencySymbol={currencySymbol} currencyCode={currencyCode} />
+          <CatalogShelves shelves={shelves} heritage={presentation.shelfSpacing === "airy"} currencySymbol={currencySymbol} currencyCode={currencyCode} />
         </div>
         {showViewToggle && <script is:inline set:html={shelfRestoreScript} />}
         <CatalogPaging mode="numbered" page={pagination.page} totalPages={pagination.totalPages} total={pagination.total} shown={products.length} limit={limit} getPageUrl={pageUrl} />

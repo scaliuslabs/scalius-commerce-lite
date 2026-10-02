@@ -12,9 +12,13 @@
  *
  * Lookups (parent ids, listing scopes, `where.exists`) are evaluated against
  * the database after the statement committed, which is what a trigger sees
- * for single-statement writes. Multi-statement batches that change a lookup
- * target and the row in one transaction can differ; the cross-check reports
- * such keys as `oracle-only` instead of failing.
+ * for single-statement writes. One exception is read from the statement's own
+ * row log: a product's listing state that a later change of the same
+ * statement deleted (a product delete clears its projections before its
+ * buyer state) was still visible to the earlier change's trigger.
+ * Multi-statement batches that change a lookup target and the row in one
+ * transaction can differ; the cross-check reports such keys as `oracle-only`
+ * instead of failing.
  */
 import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 import { resolveBuyerAvailabilityBand } from "@scalius/shared/buyer-availability";
@@ -41,8 +45,12 @@ function bindable(value: SqlValue): SQLInputValue {
 export class ReferenceOracle {
   constructor(private readonly sqlite: DatabaseSync) {}
 
-  /** Keys advanced by one change, or an empty set for an unregistered table. */
-  keysFor(change: LoggedChange): Set<string> {
+  /**
+   * Keys advanced by one change, or an empty set for an unregistered table.
+   * `statement` is every change of the same statement in execution order,
+   * when the caller has it.
+   */
+  keysFor(change: LoggedChange, statement: readonly LoggedChange[] = [change]): Set<string> {
     const keys = new Set<string>();
     if (!isCacheDepTable(change.table)) return keys;
     const spec: CacheDepTableSpec = CACHE_DEP_TABLES[change.table];
@@ -61,7 +69,7 @@ export class ReferenceOracle {
         if (!image) continue;
         if (!this.whereHolds(rule, image)) continue;
         fired = true;
-        for (const template of rule.keys) for (const key of this.expand(template, image)) keys.add(key);
+        for (const template of rule.keys) for (const key of this.expand(template, image, change, statement)) keys.add(key);
       }
     }
     // `t:<table>` advances with any rule of the table, as the generated
@@ -136,7 +144,12 @@ export class ReferenceOracle {
     return this.band(before, storeDefault) !== this.band(after, storeDefault);
   }
 
-  private expand(template: CacheDepKeyTemplate, image: RowImage): string[] {
+  private expand(
+    template: CacheDepKeyTemplate,
+    image: RowImage,
+    change: LoggedChange,
+    statement: readonly LoggedChange[],
+  ): string[] {
     if ("dep" in template) return [template.dep];
     if ("columns" in template) {
       const parts = template.columns.map((column) => toText(image[column] ?? null));
@@ -172,7 +185,7 @@ export class ReferenceOracle {
       const row = this.sqlite.prepare(
         "SELECT category_id, brand_id FROM product_buyer_state WHERE product_id = ? AND is_public = 1",
       ).get(bindable(productId)) as { category_id: SqlValue; brand_id: SqlValue } | undefined;
-      state = row ?? null;
+      state = row ?? this.publicStateDeletedLater(productId, change, statement);
     }
     if (state === null) return [];
     const prefix = template.scopes;
@@ -190,5 +203,21 @@ export class ReferenceOracle {
     const brandId = toText(state.brand_id);
     if (brandId !== null) keys.push(`${prefix}:brand:${brandId}`);
     return keys;
+  }
+
+  /** The public buyer state a later change of the same statement deleted, as the earlier trigger saw it. */
+  private publicStateDeletedLater(
+    productId: SqlValue,
+    change: LoggedChange,
+    statement: readonly LoggedChange[],
+  ): { category_id: SqlValue; brand_id: SqlValue } | null {
+    const position = statement.indexOf(change);
+    if (position < 0) return null;
+    for (const later of statement.slice(position + 1)) {
+      if (later.op !== "delete" || later.table !== "product_buyer_state" || !later.old) continue;
+      if (!sameValue(later.old.product_id ?? null, productId) || Number(later.old.is_public) !== 1) continue;
+      return { category_id: later.old.category_id ?? null, brand_id: later.old.brand_id ?? null };
+    }
+    return null;
   }
 }

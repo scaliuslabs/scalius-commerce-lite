@@ -79,6 +79,7 @@ export function ScanHistory({ items, onUndo, onClear, onClose }: ScanHistoryProp
                           {formatNumber(item.newStock)}
                         </span>
                       )}
+                      {item.location ? <span>{item.location.name}</span> : null}
                       {item.undoError ? <span className="text-destructive">{item.undoError}</span> : null}
                       {isError ? <span className="text-destructive">{item.reason}</span> : null}
                       <span>{formatDateTime(new Date(item.timestamp), { timeStyle: "short" })}</span>

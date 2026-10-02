@@ -71,6 +71,11 @@ export const scannerMessages = defineMessages({
     noScans: "No scans yet",
     noScansHint: "Scanned items show here.",
     undo: "Undo",
+    location: "Location",
+    locationDefault: "{name} (default)",
+    onHandHere: "On hand here",
+    locationsFailed: "Couldn't load locations. Changes go to the default location.",
+    retry: "Retry",
   },
   bn: {
     appTitle: "স্টক স্ক্যানার",
@@ -141,5 +146,10 @@ export const scannerMessages = defineMessages({
     noScans: "এখনো কোনো স্ক্যান নেই",
     noScansHint: "স্ক্যান করা পণ্য এখানে দেখাবে।",
     undo: "আনডু",
+    location: "লোকেশন",
+    locationDefault: "{name} (ডিফল্ট)",
+    onHandHere: "এখানে হাতে আছে",
+    locationsFailed: "লোকেশন লোড হয়নি। পরিবর্তন ডিফল্ট লোকেশনে যাবে।",
+    retry: "আবার চেষ্টা",
   },
 });

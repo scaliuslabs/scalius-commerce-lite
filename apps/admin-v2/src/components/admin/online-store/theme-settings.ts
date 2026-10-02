@@ -1,17 +1,23 @@
 import {
   STOREFRONT_BANGLA_FONTS,
   STOREFRONT_FONTS,
+  STOREFRONT_PRODUCT_MODULES,
   STOREFRONT_TEMPLATES,
   STOREFRONT_THEME_COLOR_KEYS,
   STOREFRONT_TYPE_PAIRING_SPECS,
   isStorefrontThemeHexColor,
   listStorefrontThemeDocumentContrastProblems,
+  canonicalStorefrontLink,
   resolveStorefrontTheme,
-  storefrontBlockDefault,
+  storefrontBlockSwitch,
+  storefrontBlockValue,
   storefrontTemplateTheme,
+  storefrontThemeLook,
+  storefrontThemeWithContent,
   type ResolvedStorefrontTheme,
   type StoreShape,
   type StorefrontBlockSlot,
+  type StorefrontProductModule,
   type StorefrontTemplateId,
   type StorefrontThemeColorKey,
   type StorefrontThemeDocument,
@@ -128,9 +134,13 @@ export function blockVariant(theme: StorefrontThemeDocument, slot: ThemeBlockSlo
   return slot === "gallery" || slot === "buyBox" ? theme.blocks.product[slot].variant : theme.blocks[slot].variant;
 }
 
-/** The document with a block switched to another variant (at that variant's default settings). */
+/**
+ * The document with a block switched to another variant: the new variant's
+ * defaults, keeping every setting both variants share (the announcement's
+ * words and link, the footer's words).
+ */
 export function setBlockVariant(theme: StorefrontThemeDocument, slot: ThemeBlockSlot, variant: string): StorefrontThemeDocument {
-  const block = storefrontBlockDefault(slot, variant) as never;
+  const block = storefrontBlockSwitch(slot, storefrontBlockValue(theme.blocks, slot), variant) as never;
   const blocks = slot === "gallery" || slot === "buyBox"
     ? { ...theme.blocks, product: { ...theme.blocks.product, [slot]: block } }
     : { ...theme.blocks, [slot]: block };
@@ -213,9 +223,74 @@ export function themeContrastProblems(theme: StorefrontThemeDocument): ContrastP
   return [...byMessage.values()];
 }
 
-/** True while the document cannot be saved: a colour that is not #rrggbb, or text below AA. */
+/** The announcement link as typed: null (none) or canonical, else not usable yet. */
+export function announcementLinkInvalid(theme: StorefrontThemeDocument): boolean {
+  const link = "link" in theme.blocks.topBar.settings ? theme.blocks.topBar.settings.link : null;
+  return link !== null && canonicalStorefrontLink(link) !== link;
+}
+
+/** A one-product homepage without its product. */
+export function homeProductMissing(theme: StorefrontThemeDocument): boolean {
+  return theme.pages.homeMode.kind === "product" && !theme.pages.homeMode.productId;
+}
+
+/**
+ * True while the document cannot be saved: a colour that is not #rrggbb, text
+ * below AA, an announcement link that is not a usable link, or a one-product
+ * homepage without its product. Each field says why.
+ */
 export function themeDraftInvalid(theme: StorefrontThemeDocument): boolean {
-  return !allThemeColorsValid(theme.tokens.colors) || themeContrastProblems(theme).length > 0;
+  return !allThemeColorsValid(theme.tokens.colors)
+    || themeContrastProblems(theme).length > 0
+    || announcementLinkInvalid(theme)
+    || homeProductMissing(theme);
+}
+
+/** DOM ids of the Theme page's own fields, so a rejected save marks them. */
+export const THEME_FIELD_IDS = {
+  logo: "theme-brand-logo",
+  logoWidth: "theme-logo-width",
+  footerLogo: "theme-brand-footer-logo",
+  favicon: "theme-brand-favicon",
+  announcementText: "theme-announcement-text",
+  announcementLink: "theme-announcement-link",
+  footerTagline: "theme-footer-tagline",
+  footerAbout: "theme-footer-about",
+  footerCopyright: "theme-footer-copyright",
+  homeProduct: "theme-home-product",
+} as const;
+
+/** The id of a homepage section's row, which shows a rejected setting of that section. */
+export const themeSectionFieldId = (sectionId: string) => `theme-section-${sectionId}`;
+
+/**
+ * The Theme page control that shows an API issue on a document path
+ * (`brand.logo`, `pages.home.2.settings.slides.0.image`,
+ * `pages.homeMode.productId`, a colour token), with or without the request
+ * body's `theme.` prefix. A section's settings are edited in a dialog, so a
+ * rejected one is marked on that section's row.
+ */
+export function themeFieldForPath(path: string, theme: StorefrontThemeDocument): string | undefined {
+  const at = path.replace(/^theme\./, "");
+  const color = colorFieldForPath(at);
+  if (color) return color;
+  const fixed: Record<string, string> = {
+    "brand.logo": THEME_FIELD_IDS.logo,
+    "brand.logoWidth": THEME_FIELD_IDS.logoWidth,
+    "brand.footerLogo": THEME_FIELD_IDS.footerLogo,
+    "brand.favicon": THEME_FIELD_IDS.favicon,
+    "blocks.topBar.settings.text": THEME_FIELD_IDS.announcementText,
+    "blocks.topBar.settings.link": THEME_FIELD_IDS.announcementLink,
+    "blocks.footer.settings.tagline": THEME_FIELD_IDS.footerTagline,
+    "blocks.footer.settings.about": THEME_FIELD_IDS.footerAbout,
+    "blocks.footer.settings.copyright": THEME_FIELD_IDS.footerCopyright,
+    "pages.homeMode": THEME_FIELD_IDS.homeProduct,
+    "pages.homeMode.productId": THEME_FIELD_IDS.homeProduct,
+  };
+  if (fixed[at]) return fixed[at];
+  const section = /^pages\.home\.(\d+)(?:\.|$)/.exec(at);
+  const id = section ? theme.pages.home[Number(section[1])]?.id : undefined;
+  return id ? themeSectionFieldId(id) : undefined;
 }
 
 function canonical(value: unknown): unknown {
@@ -232,23 +307,38 @@ function same(left: unknown, right: unknown): boolean {
   return JSON.stringify(canonical(left)) === JSON.stringify(canonical(right));
 }
 
-/** Same look: tokens, blocks and pages match, whatever order the saved document lists its keys in. */
-export function sameThemeLook(left: StorefrontThemeDocument, right: StorefrontThemeDocument): boolean {
+function sameLook(left: StorefrontThemeDocument, right: StorefrontThemeDocument): boolean {
   return same(left.tokens, right.tokens) && same(left.blocks, right.blocks) && same(left.pages, right.pages);
+}
+
+/**
+ * Same look: tokens, blocks and sections match once the merchant's content
+ * (logo, words, slides, chosen categories and collections, what `/` shows)
+ * is set aside, whatever order the saved document lists its keys in.
+ */
+export function sameThemeLook(left: StorefrontThemeDocument, right: StorefrontThemeDocument): boolean {
+  return sameLook(storefrontThemeLook(left), storefrontThemeLook(right));
 }
 
 /** Each template's complete document, for previews and matching. */
 export const TEMPLATE_THEMES: ReadonlyArray<{ id: StorefrontTemplateId; theme: StorefrontThemeDocument }> =
   STOREFRONT_TEMPLATES.map(({ id }) => ({ id, theme: storefrontTemplateTheme(id) }));
 
-/** The template whose every choice the theme still matches, if any. */
+const TEMPLATE_LOOKS = TEMPLATE_THEMES.map(({ id, theme }) => ({ id, look: storefrontThemeLook(theme) }));
+
+/** The template whose every choice the theme still matches, if any (its content aside). */
 export function selectedTemplate(theme: StorefrontThemeDocument): StorefrontTemplateId | null {
-  return TEMPLATE_THEMES.find((template) => sameThemeLook(template.theme, theme))?.id ?? null;
+  const look = storefrontThemeLook(theme);
+  return TEMPLATE_LOOKS.find((template) => sameLook(template.look, look))?.id ?? null;
 }
 
-/** A template's complete document: blocks, tokens, colours and homepage sections. */
-export function applyTemplate(id: StorefrontTemplateId): StorefrontThemeDocument {
-  return storefrontTemplateTheme(id);
+/**
+ * A template's look (blocks, tokens, colours and homepage sections) with the
+ * current document's content kept: logo, announcement and footer words, hero
+ * slides, chosen categories and collections, and what `/` shows.
+ */
+export function applyTemplate(id: StorefrontTemplateId, current: StorefrontThemeDocument | null): StorefrontThemeDocument {
+  return storefrontThemeWithContent(storefrontTemplateTheme(id), current);
 }
 
 // ─── Typography ───────────────────────────────────────────────────────────
@@ -311,4 +401,21 @@ export function typePairingPreview(pairing: StorefrontTypePairing): TypePairingP
     body: { family: STOREFRONT_FONTS[spec.body].family, stack: stack(spec.body) },
     bangla: bangla.family,
   };
+}
+
+/** Product page modules a merchant turns on or off on the Theme page (the rest follow the template). */
+export const OPTIONAL_PRODUCT_MODULES = ["frequently-bought-together", "compare-similar", "policies", "recently-viewed"] as const satisfies readonly StorefrontProductModule[];
+const PRODUCT_MODULE_ORDER = Object.keys(STOREFRONT_PRODUCT_MODULES) as StorefrontProductModule[];
+
+/** The module list with `module` on or off; a module turned on joins at its registry place among the others. */
+export function toggleProductModule(
+  below: readonly StorefrontProductModule[],
+  module: StorefrontProductModule,
+  on: boolean,
+): StorefrontProductModule[] {
+  const rest = below.filter((each) => each !== module);
+  if (!on) return rest;
+  const rank = PRODUCT_MODULE_ORDER.indexOf(module);
+  const at = rest.findIndex((each) => PRODUCT_MODULE_ORDER.indexOf(each) > rank);
+  return at < 0 ? [...rest, module] : [...rest.slice(0, at), module, ...rest.slice(at)];
 }

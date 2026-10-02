@@ -2,7 +2,9 @@ import {
   Bell,
   Blocks,
   CreditCard,
+  Database,
   FileText,
+  MapPin,
   Receipt,
   ShoppingCart,
   SlidersHorizontal,
@@ -10,6 +12,7 @@ import {
   Truck,
   UserRound,
   Users,
+  Webhook,
   type LucideIcon,
 } from "lucide-react";
 import { translate } from "~/i18n";
@@ -30,8 +33,11 @@ export const SETTINGS_NAV = [
   { key: "customerAccounts", to: "/admin/settings/customer-accounts", icon: UserRound, group: "customers" },
   { key: "shipping", to: "/admin/settings/shipping", icon: Truck, group: "selling" },
   { key: "taxes", to: "/admin/settings/taxes", icon: Receipt, group: "selling" },
+  { key: "locations", to: "/admin/settings/locations", icon: MapPin, group: "general" },
   { key: "apps", to: "/admin/settings/apps", icon: Blocks, group: "more" },
   { key: "notifications", to: "/admin/settings/notifications", icon: Bell, group: "customers" },
+  { key: "webhooks", to: "/admin/settings/webhooks", icon: Webhook, group: "more" },
+  { key: "customData", to: "/admin/settings/custom-data", icon: Database, group: "more" },
   { key: "policies", to: "/admin/settings/policies", icon: FileText, group: "general" },
   { key: "advanced", to: "/admin/settings/advanced", icon: SlidersHorizontal, group: "more" },
 ] as const satisfies ReadonlyArray<{ key: string; to: string; icon: LucideIcon; group: string }>;

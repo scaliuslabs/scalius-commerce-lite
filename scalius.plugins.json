@@ -1,0 +1,13 @@
+{
+  "$comment": "Plugins compiled into the API Worker (bundled loader). Maintained by `pnpm plugin`; deploy after changing it. `sandbox: true` deploys with the Dynamic Worker loader (Workers Paid).",
+  "version": 1,
+  "sandbox": false,
+  "plugins": [
+    {
+      "id": "scalius.hello",
+      "version": "0.1.0",
+      "source": "plugins/hello",
+      "sha256": "6d68596de8fd52d7714840277316bffe9dc8df14cf86481c807e7bf88bb51bab"
+    }
+  ]
+}

@@ -21,6 +21,7 @@ import {
   readRepeatedPublicQueryValues,
 } from "../utils/public-search-query";
 import { optionalProductCardFacts } from "../schemas/product-card-facts";
+import { storefrontCustomFieldsSchema } from "../schemas/custom-fields";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -85,6 +86,7 @@ const brandDetailSchema = brandSummarySchema.extend({
   noIndex: z.boolean(),
   excludeFromSitemap: z.boolean(),
   listingTemplate: z.string().nullable(),
+  customFields: storefrontCustomFieldsSchema,
   createdAt: z.string().nullable(),
   updatedAt: z.string().nullable(),
 });

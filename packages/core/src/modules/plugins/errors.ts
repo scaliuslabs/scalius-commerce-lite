@@ -1,0 +1,86 @@
+import { AppError } from "../../errors";
+
+/**
+ * Stable, dotted error codes a plugin can branch on (`error.code` inside the
+ * plugin). Part of the versioned plugin API: codes are only ever added.
+ */
+export type PluginErrorCode =
+  | "manifest.invalid"
+  | "manifest.permission_unknown"
+  | "manifest.permission_reserved"
+  | "manifest.custom_field_type"
+  | "manifest.reserved_vendor"
+  | "installation.exists"
+  | "installation.not_found"
+  | "installation.revision_conflict"
+  | "installation.inactive"
+  | "installation.settings_incomplete"
+  | "settings.invalid"
+  | "settings.key_unavailable"
+  | "storage.undeclared_collection"
+  | "storage.invalid_id"
+  | "storage.invalid_record"
+  | "storage.record_too_large"
+  | "storage.invalid_index_value"
+  | "storage.unindexed_query"
+  | "storage.invalid_cursor"
+  | "storage.unique_violation"
+  | "kv.invalid_key"
+  | "kv.value_too_large"
+  | "kv.invalid_ttl"
+  | "api.unknown_operation"
+  | "api.operation_forbidden"
+  | "api.invalid_input"
+  | "http.not_allowed"
+  | "http.invalid_request"
+  | "http.too_many_redirects"
+  | "http.timeout"
+  | "http.failed"
+  | "custom_fields.undeclared"
+  | "custom_fields.invalid"
+  | "messaging.not_allowed"
+  | "messaging.invalid"
+  | "messaging.unavailable"
+  | "rate_limited"
+  | "internal";
+
+const STATUS: Partial<Record<PluginErrorCode, number>> = {
+  "installation.exists": 409,
+  "installation.not_found": 404,
+  "installation.revision_conflict": 409,
+  "installation.inactive": 409,
+  "settings.key_unavailable": 503,
+  "storage.unique_violation": 409,
+  "storage.record_too_large": 413,
+  "kv.value_too_large": 413,
+  "api.unknown_operation": 404,
+  "api.operation_forbidden": 403,
+  "http.not_allowed": 403,
+  "http.timeout": 504,
+  "http.failed": 502,
+  "messaging.not_allowed": 403,
+  "messaging.unavailable": 503,
+  rate_limited: 429,
+  internal: 500,
+};
+
+/** A plugin platform refusal. `pluginCode` crosses the bridge as `[code] message`. */
+export class PluginError extends AppError {
+  readonly pluginCode: PluginErrorCode;
+
+  constructor(code: PluginErrorCode, message: string, details?: unknown) {
+    super(STATUS[code] ?? 400, "PLUGIN_ERROR", message, details === undefined ? { code } : { code, ...asObject(details) });
+    this.name = "PluginError";
+    this.pluginCode = code;
+  }
+}
+
+function asObject(value: unknown): Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : { detail: value };
+}
+
+export function isPluginError(error: unknown): error is PluginError {
+  return error instanceof PluginError;
+}

@@ -105,6 +105,33 @@ describe("worker env check: dependency validation cannot be bypassed", () => {
   });
 });
 
+describe("worker env check: operator-enabled bindings", () => {
+  it("allows the optional Worker Loader in Env but never in a committed config", () => {
+    expect(apps[0].optionalBindings).toEqual(["LOADER"]);
+    expect(runWorkerEnvCheck().errors).toEqual([]);
+    const { errors } = runWorkerEnvCheck({
+      readTextImpl(path) {
+        const text = readFileSync(resolve(root, path), "utf8");
+        if (path !== "apps/api/wrangler.jsonc") return text;
+        return JSON.stringify({ ...readRepoJsonc(path), worker_loaders: [{ binding: "LOADER" }] });
+      },
+    });
+    expect(errors.some((error) => error.includes("LOADER is operator-enabled"))).toBe(true);
+  });
+
+  it("keeps named entrypoints uncached", () => {
+    const { errors } = runWorkerEnvCheck({
+      readTextImpl(path) {
+        const text = readFileSync(resolve(root, path), "utf8");
+        if (path !== "apps/api/wrangler.jsonc") return text;
+        const config = readRepoJsonc(path);
+        return JSON.stringify({ ...config, exports: { ...config.exports, PluginBridge: { type: "worker" } } });
+      },
+    });
+    expect(errors.some((error) => error.includes("keep the PluginBridge entrypoint uncached"))).toBe(true);
+  });
+});
+
 describe("worker env check: Worker version in public cache keys", () => {
   it("binds the version metadata in every committed Worker config", () => {
     for (const app of apps) {

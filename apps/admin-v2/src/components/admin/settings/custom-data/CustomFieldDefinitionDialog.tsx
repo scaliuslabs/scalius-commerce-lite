@@ -1,0 +1,367 @@
+// Add or edit one custom field definition (Settings › Custom data). The key,
+// type and owner are fixed once created; an edit is guarded by the revision
+// the dialog opened with. Validations are checked with the shared codec.
+import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { toast } from "sonner";
+import {
+  CUSTOM_FIELD_MERCHANT_NAMESPACE,
+  CUSTOM_FIELD_SCALAR_TYPES,
+  customFieldBoundKind,
+  customFieldOwnerIsStorefront,
+  customFieldSupportsChoices,
+  customFieldSupportsRegex,
+  isCustomFieldKey,
+  isCustomFieldListType,
+  customFieldItemType,
+  isCustomFieldType,
+  normalizeCustomFieldKey,
+  parseCustomFieldValidations,
+  type CustomFieldOwnerType,
+  type CustomFieldScalarType,
+  type CustomFieldType,
+  type CustomFieldWireValidations,
+} from "@scalius/shared/custom-fields";
+import { DEFAULT_CURRENCY, getDecimalPlaces } from "@scalius/shared/currency";
+import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
+import { useDirtyDialogClose } from "~/components/admin/shared/use-dirty-dialog-close";
+import { Alert, AlertDescription } from "~/components/ui/alert";
+import { Button } from "~/components/ui/button";
+import { Checkbox } from "~/components/ui/checkbox";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "~/components/ui/dialog";
+import { Input } from "~/components/ui/input";
+import { Label } from "~/components/ui/label";
+import { SearchableSelect } from "~/components/ui/searchable-select";
+import { Switch } from "~/components/ui/switch";
+import { Textarea } from "~/components/ui/textarea";
+import { useCurrency } from "~/hooks/use-currency";
+import { useMessages } from "~/i18n";
+import { customFieldMessages, type CustomFieldMessageKey } from "~/i18n/custom-fields";
+import { isAdminApiConflictError, readAdminApiErrorCode } from "~/lib/admin-api-error";
+import { getServerFnError } from "~/lib/api-helpers";
+import { useSaveCustomFieldDefinition, type CustomFieldDefinition } from "~/lib/api-query-options/custom-fields";
+import { localDateTime } from "~/components/admin/custom-fields/custom-field-draft";
+
+/** Scalar types with a list form (all but true/false and JSON). */
+const LISTABLE = new Set<string>(CUSTOM_FIELD_SCALAR_TYPES.filter((type) => type !== "boolean" && type !== "json"));
+
+interface Draft {
+  name: string;
+  key: string;
+  /** The key follows the name until the merchant edits it. */
+  keyEdited: boolean;
+  description: string;
+  itemType: CustomFieldScalarType;
+  list: boolean;
+  storefrontVisible: boolean;
+  min: string;
+  max: string;
+  regex: string;
+  choices: string;
+}
+
+type Errors = Partial<Record<"name" | "key" | "validations", string>>;
+
+function boundDraft(type: CustomFieldType, value: string | number | null | undefined): string {
+  if (value === null || value === undefined) return "";
+  return customFieldItemType(type) === "date_time" && typeof value === "string" ? localDateTime(value) : String(value);
+}
+
+function draftOf(definition: CustomFieldDefinition | null): Draft {
+  return {
+    name: definition?.name ?? "",
+    key: definition?.key ?? "",
+    keyEdited: definition !== null,
+    description: definition?.description ?? "",
+    itemType: definition ? customFieldItemType(definition.type) : "single_line_text",
+    list: definition ? isCustomFieldListType(definition.type) : false,
+    storefrontVisible: definition?.storefrontVisible ?? false,
+    min: definition ? boundDraft(definition.type, definition.validations.min) : "",
+    max: definition ? boundDraft(definition.type, definition.validations.max) : "",
+    regex: definition?.validations.regex ?? "",
+    choices: definition?.validations.choices?.join("\n") ?? "",
+  };
+}
+
+function typeOf(draft: Draft): CustomFieldType {
+  const listed = `list.${draft.itemType}`;
+  return draft.list && isCustomFieldType(listed) ? listed : draft.itemType;
+}
+
+/** The wire validations of a draft (bounds as typed; date-times converted from local time). */
+function validationsOf(draft: Draft): CustomFieldWireValidations {
+  const type = typeOf(draft);
+  const bound = (text: string) => {
+    const value = text.trim();
+    if (!value) return null;
+    if (customFieldItemType(type) === "date_time") {
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? value : date.toISOString();
+    }
+    return value;
+  };
+  const kind = customFieldBoundKind(type);
+  const choices = draft.choices.split("\n").map((choice) => choice.trim()).filter(Boolean);
+  return {
+    min: kind ? bound(draft.min) : null,
+    max: kind ? bound(draft.max) : null,
+    regex: customFieldSupportsRegex(type) && draft.regex.trim() ? draft.regex.trim() : null,
+    choices: customFieldSupportsChoices(type) && choices.length > 0 ? choices : null,
+  };
+}
+
+export function CustomFieldDefinitionDialog({ ownerType, definition, open, onOpenChange }: {
+  ownerType: CustomFieldOwnerType;
+  /** null adds a field. */
+  definition: CustomFieldDefinition | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const t = useMessages(customFieldMessages);
+  const currencyCode = useCurrency().code ?? DEFAULT_CURRENCY.code;
+  const context = useMemo(() => ({ decimalPlaces: getDecimalPlaces(currencyCode), currencyCode }), [currencyCode]);
+  const [draft, setDraft] = useState<Draft>(() => draftOf(definition));
+  const [errors, setErrors] = useState<Errors>({});
+  const save = useSaveCustomFieldDefinition();
+  const reset = save.reset;
+
+  useEffect(() => {
+    if (!open) return;
+    setDraft(draftOf(definition));
+    setErrors({});
+    reset();
+  }, [open, definition, reset]);
+
+  const dirty = JSON.stringify(draft) !== JSON.stringify(draftOf(definition));
+  const { requestClose, discardDialog } = useDirtyDialogClose({ dirty, busy: save.isPending, onClose: () => onOpenChange(false) });
+  const set = <K extends keyof Draft>(key: K, value: Draft[K]) => {
+    setDraft((current) => {
+      const next = { ...current, [key]: value };
+      if (key === "name" && !current.keyEdited) next.key = normalizeCustomFieldKey(String(value)) ?? "";
+      return next;
+    });
+    setErrors({});
+  };
+
+  const type = typeOf(draft);
+  const boundKind = customFieldBoundKind(type);
+  const storefrontAllowed = customFieldOwnerIsStorefront(ownerType);
+  const creating = definition === null;
+
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (save.isPending) return;
+    const found: Errors = {};
+    const name = draft.name.trim();
+    if (!name) found.name = t("nameRequired");
+    if (creating && !isCustomFieldKey(draft.key.trim())) found.key = t("keyInvalid");
+    const validations = validationsOf(draft);
+    const checked = parseCustomFieldValidations(type, validations, context);
+    if (!checked.ok) found.validations = t("issue.invalid_validation");
+    if (Object.keys(found).length > 0) {
+      setErrors(found);
+      const first = (["name", "key", "validations"] as const).find((field) => found[field]);
+      if (first) document.getElementById(`custom-field-definition-${first}`)?.focus();
+      return;
+    }
+    const description = draft.description.trim() || null;
+    const onSuccess = () => {
+      toast.success(t(creating ? "created" : "saved"));
+      onOpenChange(false);
+    };
+    if (creating) {
+      save.mutate({
+        id: null,
+        body: {
+          ownerType,
+          name,
+          key: draft.key.trim(),
+          description,
+          type,
+          validations,
+          storefrontVisible: storefrontAllowed && draft.storefrontVisible,
+        },
+      }, { onSuccess });
+    } else {
+      save.mutate({
+        id: definition.id,
+        body: {
+          expectedRevision: definition.revision,
+          name,
+          description,
+          validations,
+          ...(storefrontAllowed ? { storefrontVisible: draft.storefrontVisible } : {}),
+        },
+      }, { onSuccess });
+    }
+  };
+
+  const keyTaken = save.error !== null && readAdminApiErrorCode(save.error) === "CUSTOM_FIELD_KEY_TAKEN";
+  const serverError = save.error && !keyTaken
+    ? isAdminApiConflictError(save.error) ? t("conflict") : getServerFnError(save.error, t("saveFailed"))
+    : null;
+  const keyError = errors.key ?? (keyTaken ? t("keyTaken") : undefined);
+  const binding = `${definition?.namespace ?? CUSTOM_FIELD_MERCHANT_NAMESPACE}.${draft.key || "key"}`;
+  const boundInput = (side: "min" | "max") => {
+    const id = `custom-field-definition-${side}`;
+    const label = boundKind === "length" ? (side === "min" ? "minLength" : "maxLength") : (side === "min" ? "minValue" : "maxValue");
+    const item = customFieldItemType(type);
+    const inputType = boundKind === "length" ? "text" : item === "date" ? "date" : item === "date_time" ? "datetime-local" : "text";
+    return (
+      <div className="space-y-1.5">
+        <Label htmlFor={id}>{t(label)}</Label>
+        <Input
+          id={id}
+          type={inputType}
+          inputMode={boundKind === "length" || item === "integer" ? "numeric" : item === "decimal" || item === "money" ? "decimal" : undefined}
+          value={draft[side]}
+          aria-invalid={errors.validations ? true : undefined}
+          onChange={(event) => set(side, event.target.value)}
+        />
+      </div>
+    );
+  };
+
+  return (
+    <>
+      <Dialog open={open} onOpenChange={(next) => (next ? onOpenChange(true) : requestClose())}>
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>{creating ? t("addTitle", { owner: t(`ownerOne.${ownerType}` as CustomFieldMessageKey) }) : t("editTitle")}</DialogTitle>
+          </DialogHeader>
+          <form id="custom-field-definition-form" method="post" noValidate className="space-y-4" onSubmit={submit}>
+            {serverError ? <Alert variant="destructive"><AlertDescription>{serverError}</AlertDescription></Alert> : null}
+            <div className="space-y-1.5">
+              <Label htmlFor="custom-field-definition-name">{t("name")}</Label>
+              <Input
+                id="custom-field-definition-name"
+                value={draft.name}
+                maxLength={80}
+                aria-invalid={errors.name ? true : undefined}
+                aria-describedby={errors.name ? "custom-field-definition-name-note" : undefined}
+                onChange={(event) => set("name", event.target.value)}
+              />
+              {errors.name ? <p id="custom-field-definition-name-note" className="text-body text-destructive">{errors.name}</p> : null}
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="custom-field-definition-key">{t("key")}</Label>
+              <Input
+                id="custom-field-definition-key"
+                value={draft.key}
+                maxLength={64}
+                disabled={!creating}
+                autoComplete="off"
+                spellCheck={false}
+                aria-invalid={keyError ? true : undefined}
+                aria-describedby="custom-field-definition-key-note"
+                onChange={(event) => {
+                  setDraft((current) => ({ ...current, key: event.target.value, keyEdited: true }));
+                  setErrors({});
+                }}
+              />
+              <p id="custom-field-definition-key-note" className={keyError ? "text-body text-destructive" : "text-body text-muted-foreground"}>
+                {keyError ?? t("keyHelp", { binding })}
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="custom-field-definition-description">{t("fieldDescription")}</Label>
+              <Input
+                id="custom-field-definition-description"
+                value={draft.description}
+                maxLength={300}
+                onChange={(event) => set("description", event.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="custom-field-definition-type">{t("type")}</Label>
+              <SearchableSelect
+                id="custom-field-definition-type"
+                triggerClassName="w-full"
+                value={draft.itemType}
+                disabled={!creating}
+                onValueChange={(value) => {
+                  const next = CUSTOM_FIELD_SCALAR_TYPES.find((item) => item === value);
+                  if (!next) return;
+                  setDraft((current) => ({ ...current, itemType: next, list: LISTABLE.has(next) && current.list, min: "", max: "", regex: "", choices: "" }));
+                  setErrors({});
+                }}
+                options={CUSTOM_FIELD_SCALAR_TYPES.map((item) => ({ value: item, label: t(`type.${item}` as CustomFieldMessageKey) }))}
+              />
+              {creating ? null : <p className="text-body text-muted-foreground">{t("typeFixed")}</p>}
+            </div>
+            {LISTABLE.has(draft.itemType) ? (
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="custom-field-definition-list"
+                  checked={draft.list}
+                  disabled={!creating}
+                  onCheckedChange={(value) => set("list", value === true)}
+                />
+                <Label htmlFor="custom-field-definition-list">{t("list")}</Label>
+              </div>
+            ) : null}
+            <div className="flex items-start justify-between gap-3">
+              <div className="space-y-1">
+                <Label htmlFor="custom-field-definition-storefront">{t("storefrontVisible")}</Label>
+                <p className="text-body text-muted-foreground">{storefrontAllowed ? t("storefrontHelp") : t("storefrontNever")}</p>
+              </div>
+              <Switch
+                id="custom-field-definition-storefront"
+                checked={storefrontAllowed && draft.storefrontVisible}
+                disabled={!storefrontAllowed}
+                onCheckedChange={(value) => set("storefrontVisible", value)}
+              />
+            </div>
+            {boundKind || customFieldSupportsRegex(type) || customFieldSupportsChoices(type) ? (
+              <fieldset className="space-y-4 border-t pt-4">
+                <legend className="sr-only">{t("validations")}</legend>
+                <h3 className="text-heading-sm">{t("validations")}</h3>
+                {boundKind ? (
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    {boundInput("min")}
+                    {boundInput("max")}
+                  </div>
+                ) : null}
+                {customFieldSupportsRegex(type) ? (
+                  <div className="space-y-1.5">
+                    <Label htmlFor="custom-field-definition-regex">{t("regex")}</Label>
+                    <Input
+                      id="custom-field-definition-regex"
+                      value={draft.regex}
+                      maxLength={200}
+                      autoComplete="off"
+                      spellCheck={false}
+                      aria-describedby="custom-field-definition-regex-note"
+                      onChange={(event) => set("regex", event.target.value)}
+                    />
+                    <p id="custom-field-definition-regex-note" className="text-body text-muted-foreground">{t("regexHelp")}</p>
+                  </div>
+                ) : null}
+                {customFieldSupportsChoices(type) ? (
+                  <div className="space-y-1.5">
+                    <Label htmlFor="custom-field-definition-choices">{t("choices")}</Label>
+                    <Textarea
+                      id="custom-field-definition-choices"
+                      rows={3}
+                      value={draft.choices}
+                      aria-describedby="custom-field-definition-choices-note"
+                      onChange={(event) => set("choices", event.target.value)}
+                    />
+                    <p id="custom-field-definition-choices-note" className="text-body text-muted-foreground">{t("choicesHelp")}</p>
+                  </div>
+                ) : null}
+                {errors.validations ? (
+                  <p id="custom-field-definition-validations" tabIndex={-1} className="text-body text-destructive">{errors.validations}</p>
+                ) : null}
+              </fieldset>
+            ) : null}
+          </form>
+          <DialogFooter>
+            <Button type="button" variant="outline" disabled={save.isPending} onClick={requestClose}>{t("cancel")}</Button>
+            <Button type="submit" form="custom-field-definition-form" loading={save.isPending}>{t(creating ? "create" : "save")}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <ConfirmDialog {...discardDialog} />
+    </>
+  );
+}

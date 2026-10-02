@@ -11,7 +11,7 @@ import {
 import { productVariantBarcodeIdentityEquals } from "../products/variant-identity";
 import { operationalSkuRowPredicate } from "../products/public-eligibility";
 import { variantOptionLabelSql } from "../products/option-model";
-import { storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../products/money";
+import { storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../settings/store-money";
 import { fromMinor } from "@scalius/shared/money";
 import { executeInventoryOperation } from "./inventory-operations";
 import {
@@ -24,14 +24,12 @@ export interface StockAdjustResult {
   previousStock: number;
   newStock: number;
   delta: number;
+  locationId?: string;
+  locationPreviousStock?: number;
+  locationNewStock?: number;
 }
 
-export interface StockSetResult {
-  variantId: string;
-  previousStock: number;
-  newStock: number;
-  delta: number;
-}
+export type StockSetResult = StockAdjustResult;
 
 /**
  * Adjust stock by a relative delta (positive = add, negative = remove).
@@ -44,6 +42,7 @@ export async function adjustStock(
   operationKey: string,
   reason?: string,
   adminUserId?: string,
+  locationId?: string,
 ): Promise<StockAdjustResult> {
   return executeInventoryOperation(db, {
     operationKey,
@@ -53,12 +52,13 @@ export async function adjustStock(
     mode: "relative",
     delta: adjustment,
     reason: reason?.trim() || "Scanner adjustment",
+    ...(locationId ? { locationId } : {}),
   }, adminUserId);
 }
 
 /**
- * Set stock to an absolute value (for stocktaking/reconciliation).
- * Calculates the delta from the current stock and records a movement.
+ * Set the counted stock at a location (the default when omitted): the
+ * delta from that location's on-hand is recorded as one movement.
  */
 export async function setStock(
   db: Database,
@@ -67,6 +67,7 @@ export async function setStock(
   operationKey: string,
   reason?: string,
   adminUserId?: string,
+  locationId?: string,
 ): Promise<StockSetResult> {
   return executeInventoryOperation(db, {
     operationKey,
@@ -76,6 +77,7 @@ export async function setStock(
     mode: "stocktake",
     newStock: newStockValue,
     reason: reason?.trim() || "Stocktake",
+    ...(locationId ? { locationId } : {}),
   }, adminUserId);
 }
 

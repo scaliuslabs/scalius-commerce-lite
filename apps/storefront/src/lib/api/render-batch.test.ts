@@ -33,10 +33,16 @@ function envelope(data: unknown): string {
 /** Minimal bodies for each public read a page makes. */
 function bodyFor(path: string): { status: number; body: string } {
   if (path === "/api/v1/storefront/layout") {
-    return { status: 200, body: envelope({ header: {}, footer: {}, navigation: [], analytics: [], platform: { apiUrl: "https://api.example.test" } }) };
+    return { status: 200, body: envelope({ footerMenus: [], brand: { logo: null, footerLogo: null, favicon: null }, navigation: [], analytics: [], platform: { apiUrl: "https://api.example.test" } }) };
   }
   if (path === "/api/v1/storefront/homepage") {
-    return { status: 200, body: envelope({ seo: {}, hero: {}, collections: [], presentation: { trustStrip: { enabled: true } } }) };
+    return {
+      status: 200,
+      body: envelope({
+        seo: {},
+        sections: { lists: [], media: [], brands: [], promotions: [], categories: [], collections: [], homeProduct: null },
+      }),
+    };
   }
   if (path.startsWith("/api/v1/products/missing")) return { status: 404, body: JSON.stringify({ success: false }) };
   if (path.startsWith("/api/v1/products/")) {
@@ -133,7 +139,7 @@ describe("page render API budget", () => {
       const config = getCheckoutConfig();
       const { layoutData, pageData } = await loadPageWithLayout(() => getHomepageData());
       expect(layoutData).not.toBeNull();
-      expect(pageData?.presentation.trustStrip.enabled).toBe(true);
+      expect(pageData?.sections.homeProduct).toBeNull();
       await Promise.all([shipping, config]);
     });
 

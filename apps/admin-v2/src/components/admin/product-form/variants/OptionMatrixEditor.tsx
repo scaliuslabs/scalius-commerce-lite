@@ -1,5 +1,5 @@
 import React from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, Plus, Trash2, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,12 @@ import { getServerFnError } from "@/lib/api-helpers";
 import { readApiFieldIssues } from "@/lib/api-field-errors";
 import { readProductRevisionConflict, type ProductRevisionConflict } from "@/lib/admin-api-error";
 import { queryKeys } from "@/lib/query-keys";
+import {
+  hasSeveralLocations,
+  inventoryLocationKeys,
+  inventoryLocationsQueryOptions,
+  productInventoryLevelsQueryOptions,
+} from "@/lib/api-query-options/inventory-locations";
 import { SaveNotCompleted } from "../../shared/SaveBar";
 import { ConfirmDialog } from "../../shared/ConfirmDialog";
 import { readSkuTaken } from "../hooks/useProductSubmit";
@@ -60,7 +66,7 @@ import {
   withFulfilmentMode,
 } from "./option-matrix-editor-model";
 import { constrainSkuForKind, productKindRules, useProductKindRules } from "../product-kind-rules";
-import { barcodePatch, Field, InventoryQuantityInput, type IssueFor } from "./variant-fields";
+import { barcodePatch, Field, InventoryQuantityInput, type IssueFor, type StockElsewhere } from "./variant-fields";
 import { VariantTable } from "./VariantTable";
 
 const MAX_AXES = MAX_PRODUCT_OPTION_AXES;
@@ -190,6 +196,43 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
     () => new Map(savedVariants.map((variant) => [variant.id, variant.reservedStock])),
     [savedVariants],
   );
+  // Several locations: quantities here are the default location's (where editor
+  // edits are booked); units elsewhere show as a read-only breakdown per SKU.
+  const { data: locations } = useQuery(inventoryLocationsQueryOptions());
+  const severalLocations = kindRules.showInventory && hasSeveralLocations(locations);
+  const homeLocation = severalLocations ? locations?.find((location) => location.isDefault) ?? null : null;
+  const { data: productLevels } = useQuery({
+    ...productInventoryLevelsQueryOptions(productId ?? ""),
+    enabled: Boolean(productId) && severalLocations,
+  });
+  const stockElsewhere = React.useMemo(() => {
+    const byVariant = new Map<string, StockElsewhere>();
+    if (!homeLocation || !productLevels || !locations) return byVariant;
+    const order = new Map(locations.map((location, index) => [location.id, index]));
+    const locationName = new Map(locations.map((location) => [location.id, location.name]));
+    const levelsByVariant = new Map<string, typeof productLevels.levels>();
+    for (const level of productLevels.levels) {
+      levelsByVariant.set(level.variantId, [...(levelsByVariant.get(level.variantId) ?? []), level]);
+    }
+    for (const [variantId, levels] of levelsByVariant) {
+      const units = levels.reduce((total, level) => total + (level.locationId === homeLocation.id ? 0 : level.onHand), 0);
+      if (units === 0) continue;
+      const breakdown = [...levels]
+        .sort((a, b) => (order.get(a.locationId) ?? Infinity) - (order.get(b.locationId) ?? Infinity))
+        .map((level) => t("stockAtLocation", { location: locationName.get(level.locationId) ?? level.locationId, count: formatNumber(level.onHand) }))
+        .join(" · ");
+      const places = levels
+        .filter((level) => level.locationId !== homeLocation.id)
+        .map((level) => locationName.get(level.locationId) ?? level.locationId)
+        .join(", ");
+      byVariant.set(variantId, { units, breakdown, places });
+    }
+    return byVariant;
+    // `t` only words the breakdown.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [homeLocation, locations, productLevels]);
+  const quantityLabel = homeLocation ? t("quantityAt", { location: homeLocation.name }) : undefined;
+  const elsewhereOf = React.useCallback((variantId: string | undefined) => (variantId ? stockElsewhere.get(variantId)?.units ?? 0 : 0), [stockElsewhere]);
   const valueLabel = new Map(options.flatMap((option) => option.values.map((value) => [value.id, value.value] as const)));
   const nameOf = (variant: DraftVariant) => variant.selectedOptionValueIds.map((id) => valueLabel.get(id)).join(" / ");
 
@@ -208,9 +251,29 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
   // A product without options sells one hidden SKU; edit its inventory directly.
   const simpleMode = options.length === 0 && savedOptions.length === 0 && (!productId || Boolean(defaultSku));
   const simpleCommitted = defaultSku?.reservedStock ?? 0;
-  const draftIssue = !simpleMode
+  // The fields edit the default location: they can't go below zero there, and a simple
+  // product's units at other locations can't be split into options (the server refuses).
+  const simpleElsewhere = elsewhereOf(defaultSku?.id);
+  const locationIssue: DraftIssue | null = !homeLocation ? null
+    : simpleMode
+      ? shownSimpleSku.trackInventory && shownSimpleSku.stock - simpleElsewhere < 0
+        ? { message: t("issueQuantityWhole"), field: "stock" }
+        : null
+      : simpleConversion && simpleElsewhere > 0
+        ? {
+            message: t("issueStockElsewhere", {
+              count: formatNumber(simpleElsewhere),
+              locations: stockElsewhere.get(defaultSku!.id)!.places,
+              home: homeLocation.name,
+            }),
+          }
+        : (() => {
+            const below = shownVariants.find((variant) => variant.trackInventory && variant.stock - elsewhereOf(variant.id) < 0);
+            return below ? { message: t("issueQuantityWhole"), variantId: below.id, field: "stock" as const } : null;
+          })();
+  const draftIssue = locationIssue ?? (!simpleMode
     ? matrixIssue
-    : dirty || !productId ? getSimpleSkuIssue(shownSimpleSku, simpleCommitted, Boolean(productId)) : null;
+    : dirty || !productId ? getSimpleSkuIssue(shownSimpleSku, simpleCommitted, Boolean(productId)) : null);
   const lineFor = (issue: DraftIssue) => {
     const variant = issue.variantId ? variants.find((row) => row.id === issue.variantId) : undefined;
     return variant ? `${nameOf(variant)}: ${issue.message}` : simpleMode && issue.field ? `${t("inventory")}: ${issue.message}` : issue.message;
@@ -376,6 +439,33 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
     [options, variants],
   );
 
+  // The table shows (and edits) the default location's quantity: the draft keeps
+  // each SKU's total, so a save books exactly the edited difference there.
+  // One shifted row per draft row while the levels stay the same, so an edit re-renders only its row.
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- new levels start a new cache
+  const shifted = React.useMemo(() => new WeakMap<DraftVariant, DraftVariant>(), [stockElsewhere]);
+  const tableVariants = React.useMemo(() => stockElsewhere.size === 0 ? shownVariants : shownVariants.map((variant) => {
+    const units = stockElsewhere.get(variant.id)?.units ?? 0;
+    if (units === 0 || !variant.trackInventory) return variant;
+    let row = shifted.get(variant);
+    if (!row) {
+      row = { ...variant, stock: variant.stock - units };
+      shifted.set(variant, row);
+    }
+    return row;
+  }), [shifted, shownVariants, stockElsewhere]);
+  const changeTableVariants = React.useCallback((
+    ids: ReadonlySet<string>,
+    patch: Partial<DraftVariant> | ((variant: DraftVariant) => Partial<DraftVariant>),
+  ) => {
+    if (stockElsewhere.size === 0) return updateVariants(ids, patch);
+    updateVariants(ids, (variant) => {
+      const units = stockElsewhere.get(variant.id)?.units ?? 0;
+      const next = typeof patch === "function" ? patch({ ...variant, stock: variant.stock - units }) : patch;
+      return units === 0 || next.stock === undefined || !Number.isFinite(next.stock) ? next : { ...next, stock: next.stock + units };
+    });
+  }, [stockElsewhere, updateVariants]);
+
   const mutation = useMutation({
     mutationFn: (revisionOverride?: number) => simpleMode && defaultSku
       ? apiData(putApiV1AdminProductsByIdVariantsByVariantId({
@@ -424,6 +514,7 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
         queryClient.invalidateQueries({ queryKey: queryKeys.products.stats() }),
         queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all }),
         queryClient.invalidateQueries({ queryKey: queryKeys.inventory.list() }),
+        queryClient.invalidateQueries({ queryKey: inventoryLocationKeys.productLevels(productId!) }),
         queryClient.invalidateQueries({
           queryKey: queryKeys.products.detail(productId!),
         }),
@@ -498,15 +589,16 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
           ) : null}
           <div className="grid gap-3 sm:grid-cols-2">
             {shownSimpleSku.trackInventory ? (
-              <Field label={t("quantity")} error={issueFor(undefined, "stock")}>
+              <Field label={quantityLabel ?? t("quantity")} error={issueFor(undefined, "stock")}>
                 {(invalid) => (
                   <InventoryQuantityInput
-                    ariaLabel={t("quantity")}
+                    ariaLabel={quantityLabel ?? t("quantity")}
                     invalid={invalid}
-                    value={simpleSku.stock}
+                    value={simpleSku.stock - simpleElsewhere}
                     committed={simpleCommitted}
+                    elsewhere={defaultSku ? stockElsewhere.get(defaultSku.id) : undefined}
                     onChange={(stock) => {
-                      updateSimple({ stock });
+                      updateSimple({ stock: Number.isFinite(stock) ? stock + simpleElsewhere : stock });
                       setSimpleStockEdited(true);
                     }}
                   />
@@ -618,7 +710,7 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
       {variants.length ? (
         <VariantTable
           options={options}
-          variants={shownVariants}
+          variants={tableVariants}
           images={stableImages}
           productName={productName}
           nameOf={nameOf}
@@ -626,7 +718,7 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
           reveal={shownIssue?.variantId ? { variantId: shownIssue.variantId, nonce: revealNonce } : null}
           expandedId={expandedId}
           onExpandedChange={setExpandedId}
-          onChangeMany={updateVariants}
+          onChangeMany={changeTableVariants}
           onRemove={(ids) => confirmRemoval(
             t("stopSellingTitle", { count: ids.size }),
             variants.filter((variant) => ids.has(variant.id)),
@@ -638,6 +730,8 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
           committedByVariantId={committedByVariantId}
           printingDisabled={!productId || dirty}
           fulfilmentColumn={fulfilmentMode === "mixed"}
+          quantityLabel={quantityLabel}
+          stockElsewhere={stockElsewhere}
         />
       ) : options.length > 0 && !combinationsPending ? (
         <p className="text-body text-muted-foreground">{t("addOptionValues")}</p>

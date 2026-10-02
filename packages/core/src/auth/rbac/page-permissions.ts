@@ -31,8 +31,11 @@ const APPS_PAGE_PERMISSIONS = [
 ] as const;
 const SETTINGS_PAGE_PERMISSIONS = [
   PERMISSIONS.SETTINGS_GENERAL_VIEW,
+  PERMISSIONS.WEBHOOKS_VIEW,
   PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT,
   PERMISSIONS.TAXES_VIEW,
+  // Locations are inventory records: whoever can see stock can see where it is.
+  PERMISSIONS.PRODUCTS_VIEW,
   ...TEAM_PAGE_PERMISSIONS,
   ...SHIPPING_PAGE_PERMISSIONS,
   ...APPS_PAGE_PERMISSIONS,
@@ -91,9 +94,6 @@ const PAGE_PERMISSION_MAP: Record<string, PagePermissionConfig> = {
   "/admin/online-store/navigation": {
     permission: PERMISSIONS.SETTINGS_HEADER_EDIT,
   },
-  "/admin/online-store/banners": {
-    permission: PERMISSIONS.SETTINGS_HEADER_EDIT,
-  },
   "/admin/online-store/preferences": {
     permission: PERMISSIONS.SETTINGS_GENERAL_VIEW,
   },
@@ -131,6 +131,7 @@ const PAGE_PERMISSION_MAP: Record<string, PagePermissionConfig> = {
     permission: PERMISSIONS.SETTINGS_DELIVERY_LOCATIONS_VIEW,
   },
   "/admin/settings/taxes": { permission: PERMISSIONS.TAXES_VIEW },
+  "/admin/settings/locations": { permission: PERMISSIONS.PRODUCTS_VIEW },
   "/admin/settings/notifications": {
     anyOf: [
       PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT,
@@ -138,8 +139,10 @@ const PAGE_PERMISSION_MAP: Record<string, PagePermissionConfig> = {
     ],
   },
   "/admin/settings/policies": { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+  "/admin/settings/custom-data": { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
   "/admin/settings/warranty-policies": { permission: PERMISSIONS.PRODUCTS_EDIT },
   "/admin/settings/apps": { anyOf: [...APPS_PAGE_PERMISSIONS] },
+  "/admin/settings/webhooks": { permission: PERMISSIONS.WEBHOOKS_VIEW },
   "/admin/settings/customer-accounts": {
     permission: PERMISSIONS.SETTINGS_GENERAL_VIEW,
   },

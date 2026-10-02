@@ -74,6 +74,7 @@ const returnReceiptSchema = z.object({
     actorType: z.string(),
     actorId: z.string().nullable(),
     inventoryMovementId: z.string().nullable(),
+    restockLocationId: z.string().nullable().openapi({ description: "Location the restocked units went to; null when nothing was restocked." }),
     notes: z.string().nullable(),
     createdAt: z.coerce.date(),
 });

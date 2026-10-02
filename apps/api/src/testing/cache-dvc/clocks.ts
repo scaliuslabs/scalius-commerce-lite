@@ -60,7 +60,7 @@ export class ReferenceClock implements DvcClock {
     const changes = this.log.drain();
     if (changes.length === 0) return this.seq;
     const keys = new Set<string>();
-    for (const change of changes) for (const key of this.oracle.keysFor(change)) keys.add(key);
+    for (const change of changes) for (const key of this.oracle.keysFor(change, changes)) keys.add(key);
     if (keys.size === 0) return this.seq;
     this.seq += 1;
     for (const key of keys) this.deps.set(key, this.seq);
@@ -72,7 +72,7 @@ export class ReferenceClock implements DvcClock {
   /** Keys the oracle derives for these changes (no clock effect). */
   keysFor(changes: readonly LoggedChange[]): Set<string> {
     const keys = new Set<string>();
-    for (const change of changes) for (const key of this.oracle.keysFor(change)) keys.add(key);
+    for (const change of changes) for (const key of this.oracle.keysFor(change, changes)) keys.add(key);
     return keys;
   }
 

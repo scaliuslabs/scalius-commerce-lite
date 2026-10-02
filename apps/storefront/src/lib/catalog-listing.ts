@@ -54,6 +54,10 @@ export interface CatalogFilterPresentation {
   styleVars: string;
   /** The desktop column width in px beside the results (0 without a column): card image sizes subtract it. */
   columnPx: number;
+  /** A search's facets with a sidebar style: the column, or a drawer so the results take the width (Star Tech). */
+  searchPlacement: "same" | "drawer";
+  /** A sidebar's groups as one flat list ruled by hairlines (Fabrilife). */
+  ruled: boolean;
 }
 
 export interface CatalogListingPresentation {
@@ -65,6 +69,8 @@ export interface CatalogListingPresentation {
   shelves: boolean;
   /** Shelves on one landing (the layout's own setting, 8 by default). */
   maxShelves: number;
+  /** The shelf track: the density's gap, or Aarong's airy track (two across on phones, 40px gaps). */
+  shelfSpacing: "standard" | "airy";
   toolbar: ReadonlySet<StorefrontListingToolbarPiece>;
   phoneLayout: ResolvedListing["phoneLayout"];
   paging: ResolvedListing["paging"];
@@ -96,6 +102,7 @@ function filterStyleVars(spec: StorefrontListingFilterSpec): string {
 function filterPresentation(
   style: StorefrontListingFilterStyle,
   openByDefault: boolean,
+  theme: Pick<ResolvedListing["filters"], "searchPlacement" | "ruled">,
   spec: StorefrontListingFilterSpec = STOREFRONT_LISTING_FILTER_SPECS[style],
 ): CatalogFilterPresentation {
   return {
@@ -106,6 +113,8 @@ function filterPresentation(
     barFacets: spec.barFacets ?? 0,
     styleVars: filterStyleVars(spec),
     columnPx: spec.placement === "sidebar" ? spec.column ?? SIDEBAR_FALLBACK_COLUMN_PX : 0,
+    searchPlacement: theme.searchPlacement,
+    ruled: theme.ruled,
   };
 }
 
@@ -128,7 +137,7 @@ export function catalogListingPresentation(
   let layout: CatalogListingLayout = isLayout(listing.layout.variant) ? listing.layout.variant : "grid";
   let settings = listing.layout.settings;
   // The theme's style with the template's own numbers (Daraz's 190px column, 18px rows).
-  let filters = filterPresentation(listing.filters.style, listing.filters.openByDefault, listing.filters.spec);
+  let filters = filterPresentation(listing.filters.style, listing.filters.openByDefault, listing.filters, listing.filters.spec);
   const own = listingTemplate?.trim() ?? "";
   if (isLayout(own) && own !== layout) {
     const fits = failedFitConditions(STOREFRONT_LISTING_VARIANTS[own].requires, {
@@ -140,13 +149,14 @@ export function catalogListingPresentation(
       settings = STOREFRONT_LISTING_VARIANTS[own].defaults;
     }
   } else if (isFilterStyle(own)) {
-    filters = filterPresentation(own, STOREFRONT_LISTING_FILTER_SPECS[own].placement === "sidebar" || listing.filters.openByDefault);
+    filters = filterPresentation(own, STOREFRONT_LISTING_FILTER_SPECS[own].placement === "sidebar" || listing.filters.openByDefault, listing.filters);
   }
   const maxShelves = Number((settings as { maxShelves?: unknown }).maxShelves ?? 8);
   return {
     layout,
     ...LAYOUTS[layout],
     maxShelves: Number.isInteger(maxShelves) && maxShelves > 0 ? maxShelves : 8,
+    shelfSpacing: (settings as { spacing?: unknown }).spacing === "airy" ? "airy" : "standard",
     filters,
     toolbar: new Set(listing.toolbar),
     phoneLayout: listing.phoneLayout,

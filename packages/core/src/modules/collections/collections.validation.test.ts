@@ -17,12 +17,12 @@ describe("collection validation", () => {
         expect(parsed).toEqual({ expectedVersion: 3, config: { title: "New heading" } });
     });
 
-    it("keeps homepage placement independent and defaults new collections off", () => {
+    it("drops a homepage placement: the theme's collections section picks the collections", () => {
         const update = updateCollectionSchema.parse({
             expectedVersion: 3,
             config: { showOnHomepage: true },
         });
-        expect(update).toEqual({ expectedVersion: 3, config: { showOnHomepage: true } });
+        expect(update).toEqual({ expectedVersion: 3, config: {} });
 
         const created = createCollectionSchema.parse({
             name: "Private landing collection",
@@ -30,7 +30,7 @@ describe("collection validation", () => {
             isActive: false,
             config: { source: "manual" },
         });
-        expect(created.config.showOnHomepage).toBe(false);
+        expect(created.config).not.toHaveProperty("showOnHomepage");
     });
 
     it("normalizes bounded storefront and search copy", () => {

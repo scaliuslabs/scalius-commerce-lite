@@ -1,7 +1,7 @@
 // Strict dependency coverage of the public content and settings reads
-// (CACHE-DESIGN.md section 9, slice S3b): the layout, homepage, CMS pages,
-// the cart shell (checkout config, checkout copy, shipping, locations), hero,
-// SEO, header, footer and navigation. Each route renders in-process on the
+// (CACHE-DESIGN.md section 9, slice S3b): the layout (with the theme's brand
+// images), the homepage (from the theme alone), CMS pages, the cart shell
+// (checkout config, checkout copy, shipping, locations), SEO and navigation. Each route renders in-process on the
 // migrated schema inside a strict dependency scope, so a table read without a
 // precise declared key fails here instead of falling back to `t:<table>`.
 // The same harness checks that those payloads are deterministic and carry no
@@ -22,6 +22,7 @@ import {
   saveNavigationPlacement,
 } from "@scalius/core/modules/navigation";
 import { CACHE_DEP_ENTRY_KEY_BUDGET } from "@scalius/shared/cache-deps";
+import { storefrontTemplateTheme, type StorefrontSection } from "@scalius/shared/storefront-theme";
 import { fetchRuntimeApiApp } from "./runtime/fetch-runtime-app";
 
 const FUTURE_PUBLISH_AT = Math.floor(Date.now() / 1000) + 86_400;
@@ -38,9 +39,8 @@ const SEED = `
     VALUES ('v_linen', 'p_linen', 'LIN-1', 250000, 5, 0, 1, 1);
   INSERT INTO media (id, filename, kind, object_key, size, mime_type, status, width, height, variant_width) VALUES
     ('media_hero', 'hero.jpg', 'image', 'media/hero.jpg', 1, 'image/jpeg', 'ready', 1600, 600, 1600),
-    ('media_banner', 'banner.jpg', 'image', 'media/banner.jpg', 1, 'image/jpeg', 'ready', 1200, 400, NULL);
-  INSERT INTO hero_sliders (id, type, images) VALUES
-    ('hero_desktop', 'desktop', '[{"id":"s1","url":"https://media.shop.test/media/hero.jpg","title":"Eid","link":"/"}]');
+    ('media_banner', 'banner.jpg', 'image', 'media/banner.jpg', 1, 'image/jpeg', 'ready', 1200, 400, NULL),
+    ('media_logo', 'logo.png', 'image', 'media/logo.png', 1, 'image/png', 'ready', 400, 400, 400);
   INSERT INTO pages (id, title, slug, content, is_published) VALUES ('pg_about', 'About', 'about', '<p>x</p>', 1);
   INSERT INTO pages (id, title, slug, content, is_published) VALUES ('pg_refund', 'Refunds', 'refunds', '<p>r</p>', 1);
   INSERT INTO pages (id, title, slug, content, is_published, published_at) VALUES
@@ -54,27 +54,38 @@ const SEED = `
     VALUES ('an_1', 'Tag', 'custom', 1, 0, '<script>window.x=1</script>', 'head');
   INSERT INTO checkout_languages (id, name, code, language_data, field_visibility, is_active, is_default)
     VALUES ('cl_bn', 'Bangla', 'bn', '{}', '{}', 1, 1);
-  ${document("header", {
-    topBar: { text: "Eid sale", isEnabled: true },
-    logo: { src: "https://media.shop.test/logo.png", alt: "Shop" },
-    social: [{ platform: "facebook", url: "https://facebook.com/shop" }, { platform: "instagram", url: "https://instagram.com/shop" }],
-  })}
-  ${document("footer", {
-    tagline: "Since 2001",
-    social: [{ platform: "facebook", url: "https://facebook.com/shop" }],
+  ${document("business", {
+    companyName: "Shop",
+    socialLinks: [{ id: "fb", label: "Facebook", url: "https://facebook.com/shop" }, { id: "ig", label: "Instagram", url: "https://instagram.com/shop" }],
   })}
   ${document("policies", { refund: "pg_refund", privacy: "pg_soon" })}
-  ${document("homepage", {
-    categoryRail: { enabled: true, title: "Shop by category", categoryIds: ["cat_panjabi", "cat_draft"] },
-    homeMode: "landing",
-    landingProductId: "p_linen",
-  })}
   ${document("platform", {
     storefrontUrl: "https://shop.test",
     apiUrl: "https://api.shop.test",
     mediaUrl: "https://media.shop.test",
   })}
 `;
+
+/**
+ * The published theme: the logo, an announcement, footer words, a hero slide,
+ * category tiles (one draft category among them) and a product homepage.
+ */
+function seededTheme(): string {
+  const theme = storefrontTemplateTheme("department-mall");
+  theme.brand = { ...theme.brand, logo: "media_logo" };
+  theme.blocks.topBar = { variant: "announcement", settings: { text: "Eid sale", link: "/collections/eid" } };
+  theme.pages.homeMode = { kind: "product", productId: "p_linen" };
+  theme.pages.home = theme.pages.home.map((section): StorefrontSection => {
+    if (section.type === "hero") {
+      return { ...section, settings: { ...section.settings, slides: [{ image: "media_hero", focalPoint: { x: 50, y: 50 }, alt: "Eid", link: "/" }] } };
+    }
+    if (section.type === "category-tiles") {
+      return { ...section, settings: { ...section.settings, categoryIds: ["cat_panjabi", "cat_draft"] } };
+    }
+    return section;
+  });
+  return JSON.stringify(theme).replace(/'/g, "''");
+}
 
 /** Every public content and settings read of this slice. */
 const ROUTES = [
@@ -96,11 +107,7 @@ const ROUTES = [
   "/api/v1/pages/pg_about",
   "/api/v1/articles",
   "/api/v1/articles/slug/post",
-  "/api/v1/hero/sliders?type=desktop",
-  "/api/v1/hero/sliders/hero_desktop",
   "/api/v1/seo",
-  "/api/v1/header",
-  "/api/v1/footer",
   "/api/v1/navigation",
   "/api/v1/analytics/configurations",
   "/api/v1/platform",
@@ -108,8 +115,6 @@ const ROUTES = [
 
 /** Payloads buyers get that must carry no row revision or update time. */
 const NO_INTERNAL_FIELD_ROUTES = [
-  "/api/v1/hero/sliders?type=desktop",
-  "/api/v1/hero/sliders/hero_desktop",
   "/api/v1/checkout-languages/active",
   "/api/v1/shipping-methods",
 ];
@@ -177,6 +182,7 @@ beforeAll(async () => {
   sqlite = harness.sqlite;
   db = harness.db;
   sqlite.exec(SEED);
+  sqlite.exec(`INSERT INTO theme_settings (id, colors, revision) VALUES ('default', '${seededTheme()}', 1)`);
   await rebuildCatalogProjections(db);
   menuIds = await seedNavigation();
   env = {
@@ -222,19 +228,21 @@ describe("strict dependency coverage of public content and settings reads", () =
       expect(dependencies.coarseTables, route).toEqual([]);
       expect(dependencies.collapsedKinds, route).toEqual([]);
       expect(dependencies.uncacheable, route).toEqual([]);
-      expect(dependencies.keys.filter((key) => key.startsWith("t:")), route).toEqual([]);
+      // The layout's store shape declares `t:product_content_blocks` on purpose
+      // (storefront-theme.md, Store shape: block edits are rare merchant writes).
+      expect(dependencies.keys.filter((key) => key.startsWith("t:") && key !== "t:product_content_blocks"), route).toEqual([]);
       expect(dependencies.keys.length, route).toBeLessThanOrEqual(CACHE_DEP_ENTRY_KEY_BUDGET);
       report[route] = dependencies.keys.length;
     }
     console.info("[CacheDeps] S3b key counts", JSON.stringify(report));
   }, 120_000);
 
-  it("declares the layout's settings documents, content rows and the tracked Platform row", async () => {
+  it("declares the layout's settings documents, content rows, brand images and the tracked Platform row", async () => {
     const { body, dependencies } = await render("/api/v1/storefront/layout");
     expect(dependencies.keys).toEqual(expect.arrayContaining([
-      "set:header:document",
-      "set:footer:document",
+      "set:business:document",
       "set:policies:document",
+      "m:media_logo",
       "set:platform:document",
       "an",
       "theme",
@@ -252,9 +260,32 @@ describe("strict dependency coverage of public content and settings reads", () =
     ]));
     // The scheduled privacy page switches the policy list at its publish time.
     expect(dependencies.validUntil).toBe(FUTURE_PUBLISH_AT * 1000);
+    expect(dependencies.keys).not.toContain("set:header:document");
     const layout = JSON.parse(body).data;
     expect(layout.platform.storefrontUrl).toBe("https://shop.test");
     expect(layout.policies.map((policy: { kind: string }) => policy.kind)).toEqual(["refund"]);
+    expect(layout).not.toHaveProperty("header");
+    expect(layout).not.toHaveProperty("footer");
+    expect(layout.brand.logo).toMatchObject({ id: "media_logo", url: "https://media.shop.test/media/logo.png/400.webp" });
+    expect(layout.brand.favicon).toBeNull();
+    expect(layout.business.socialLinks.map((link: { id: string }) => link.id)).toEqual(["fb", "ig"]);
+    expect(layout.theme.blocks.topBar.settings.text).toBe("Eid sale");
+  });
+
+  it("keeps the layout precise when the theme names no brand image", async () => {
+    const stored = (sqlite.prepare("SELECT colors FROM theme_settings WHERE id = 'default'").get() as { colors: string }).colors;
+    try {
+      const theme = JSON.parse(stored);
+      theme.brand.logo = null;
+      sqlite.prepare("UPDATE theme_settings SET colors = ? WHERE id = 'default'").run(JSON.stringify(theme));
+      const { body, dependencies } = await render("/api/v1/storefront/layout");
+      expect(dependencies.coarseTables).toEqual([]);
+      expect(dependencies.keys).toContain("m:none");
+      expect(dependencies.keys).not.toContain("m:media_logo");
+      expect(JSON.parse(body).data.brand.logo).toBeNull();
+    } finally {
+      sqlite.prepare("UPDATE theme_settings SET colors = ? WHERE id = 'default'").run(stored);
+    }
   });
 
   it("reads the Platform settings from the tracked row only inside a scope", async () => {
@@ -268,12 +299,10 @@ describe("strict dependency coverage of public content and settings reads", () =
       .toBe("https://stale-kv.test");
   });
 
-  it("declares the homepage's hero, rail categories, landing product and media", async () => {
+  it("declares the homepage's slide images, tile categories and home product from the theme alone", async () => {
     const { body, dependencies } = await render("/api/v1/storefront/homepage");
     expect(dependencies.keys).toEqual(expect.arrayContaining([
-      "set:homepage:document",
       "set:seo:document",
-      "hero",
       "theme",
       "col:*",
       "c:cat_panjabi",
@@ -281,11 +310,37 @@ describe("strict dependency coverage of public content and settings reads", () =
       "p:p_linen",
       "m:media_hero",
     ]));
+    expect(dependencies.keys.some((key) => key.startsWith("set:homepage") || key === "hero")).toBe(false);
     const home = JSON.parse(body).data;
-    expect(home.presentation.homeMode).toBe("landing");
-    expect(home.presentation.categoryRail.categories.map((category: { id: string }) => category.id)).toEqual(["cat_panjabi"]);
-    // The hero slide points at the published rendition of its media row.
-    expect(home.hero.desktop.images[0].url).toBe("https://media.shop.test/media/hero.jpg/1600.webp");
+    expect(home).not.toHaveProperty("hero");
+    expect(home).not.toHaveProperty("presentation");
+    expect(home.sections.homeProduct).toEqual({ id: "p_linen", slug: "linen-panjabi" });
+    // Only the published category of the tiles shows; the draft one is a dependency.
+    expect(home.sections.categories.map((category: { id: string }) => category.id)).toEqual(["cat_panjabi"]);
+    // The slide's image is the published rendition of its media row.
+    expect(home.sections.media.find((asset: { id: string }) => asset.id === "media_hero").url)
+      .toBe("https://media.shop.test/media/hero.jpg/1600.webp");
+  });
+
+  it("advances the published theme's key, not a slide image's, when a published slide is edited", async () => {
+    const seq = (dep: string) => (sqlite.prepare("SELECT seq FROM cache_dep WHERE dep = ?").get(dep) as { seq: number } | undefined)?.seq ?? 0;
+    const before = { theme: seq("theme"), hero: seq("m:media_hero"), banner: seq("m:media_banner") };
+    const stored = (sqlite.prepare("SELECT colors FROM theme_settings WHERE id = 'default'").get() as { colors: string }).colors;
+    const theme = JSON.parse(stored);
+    const hero = theme.pages.home.find((section: { type: string }) => section.type === "hero");
+    hero.settings.slides[0] = { ...hero.settings.slides[0], image: "media_banner", heading: "Now 30% off" };
+    sqlite.prepare("UPDATE theme_settings SET colors = ?, revision = revision + 1 WHERE id = 'default'").run(JSON.stringify(theme));
+    expect(seq("theme")).toBeGreaterThan(before.theme);
+    expect(seq("m:media_hero")).toBe(before.hero);
+    expect(seq("m:media_banner")).toBe(before.banner);
+    const { body, dependencies } = await render("/api/v1/storefront/homepage");
+    expect(dependencies.keys).toContain("m:media_banner");
+    expect(dependencies.keys).not.toContain("m:media_hero");
+    expect(JSON.parse(body).data.sections.media.map((asset: { id: string }) => asset.id)).toContain("media_banner");
+    // A change of the image itself advances its own key, which the homepage now declares.
+    sqlite.exec("UPDATE media SET alt_text = 'Sale' WHERE id = 'media_banner'");
+    expect(seq("m:media_banner")).toBeGreaterThan(before.banner);
+    sqlite.prepare("UPDATE theme_settings SET colors = ? WHERE id = 'default'").run(stored);
   });
 
   it("bounds a missing CMS page by its scheduled publication and any page change", async () => {
@@ -308,16 +363,11 @@ describe("strict dependency coverage of public content and settings reads", () =
 
 describe("public content payloads", () => {
   it("render byte-identical twice from the same data", async () => {
-    for (const route of ["/api/v1/storefront/layout", "/api/v1/header", "/api/v1/footer", "/api/v1/storefront/homepage"]) {
+    for (const route of ["/api/v1/storefront/layout", "/api/v1/storefront/homepage"]) {
       const first = await render(route);
       const second = await render(route);
       expect(second.body, route).toBe(first.body);
     }
-    const header = JSON.parse((await render("/api/v1/header")).body).data;
-    expect(header.header.social.map((link: { id: string }) => link.id)).toEqual([
-      expect.stringMatching(/^social_0_[a-z0-9]+$/),
-      expect.stringMatching(/^social_1_[a-z0-9]+$/),
-    ]);
   });
 
   it("omit editor revisions and permit only tracked public update times", async () => {

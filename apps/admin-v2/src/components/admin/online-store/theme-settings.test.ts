@@ -11,8 +11,10 @@ import {
   storefrontTemplateTheme,
   storefrontThemeDocumentSchema,
   type StorefrontSection,
+  type StorefrontThemeDocument,
 } from "@scalius/shared/storefront-theme";
 import {
+  OPTIONAL_PRODUCT_MODULES,
   applyTemplate,
   blockFallback,
   blockVariant,
@@ -30,9 +32,41 @@ import {
   templateTypeTokens,
   themeContrastProblems,
   themeDraftInvalid,
+  themeFieldForPath,
+  toggleProductModule,
   typePairingPreview,
   typeTokensAreTemplateDefault,
 } from "./theme-settings";
+
+const SLIDE = { image: "media_slide", focalPoint: { x: 40, y: 60 }, alt: "Honey jars", heading: "Eid sale", link: "/collections/sale" };
+
+/** A theme with the merchant's content filled in: logo, words, slides, categories and a one-product homepage. */
+function withContent(theme: StorefrontThemeDocument): StorefrontThemeDocument {
+  return {
+    ...theme,
+    brand: { logo: "media_logo", logoWidth: 160, footerLogo: null, favicon: "media_icon" },
+    blocks: {
+      ...theme.blocks,
+      // The template's own bar (an announcement where it has none), with the merchant's words.
+      topBar: {
+        variant: theme.blocks.topBar.variant === "none" ? "announcement" : theme.blocks.topBar.variant,
+        settings: { text: "Free delivery in Dhaka", link: "/collections/sale" },
+      },
+      footer: {
+        ...theme.blocks.footer,
+        settings: { ...theme.blocks.footer.settings, tagline: "Pure honey", about: "From the Sundarbans.", copyright: "Mou Ghor" },
+      },
+    } as StorefrontThemeDocument["blocks"],
+    pages: {
+      homeMode: { kind: "product", productId: "prod_honey" },
+      home: theme.pages.home.map((section) => {
+        if (section.type === "hero") return { ...section, settings: { ...section.settings, slides: [SLIDE] } };
+        if (section.type === "category-tiles") return { ...section, settings: { ...section.settings, categoryIds: ["cat_honey", "cat_ghee"] } };
+        return section;
+      }),
+    },
+  };
+}
 
 const richText: StorefrontSection = {
   id: "story",
@@ -74,9 +108,28 @@ describe("templates", () => {
   });
 
   it("selecting a template sets the whole document, a valid one", () => {
-    const applied = applyTemplate("heritage-editorial");
+    const applied = applyTemplate("heritage-editorial", DEFAULT_STOREFRONT_THEME);
     expect(applied).toEqual(storefrontTemplateTheme("heritage-editorial"));
     expect(storefrontThemeDocumentSchema.safeParse(applied).success).toBe(true);
+  });
+
+  it("keeps the merchant's content when another template replaces the look", () => {
+    const current = withContent(storefrontTemplateTheme("department-mall"));
+    const applied = applyTemplate("fashion-value", current);
+    expect(selectedTemplate(applied)).toBe("fashion-value");
+    expect(applied.blocks.header).toEqual(storefrontTemplateTheme("fashion-value").blocks.header);
+    expect(applied.brand).toEqual(current.brand);
+    expect(applied.pages.homeMode).toEqual({ kind: "product", productId: "prod_honey" });
+    expect(applied.blocks.footer.settings).toMatchObject({ tagline: "Pure honey", about: "From the Sundarbans.", copyright: "Mou Ghor" });
+    const hero = applied.pages.home.find((section) => section.type === "hero");
+    expect(hero?.type === "hero" && hero.settings.slides).toEqual([SLIDE]);
+    const tiles = applied.pages.home.find((section) => section.type === "category-tiles");
+    expect(tiles?.type === "category-tiles" && tiles.settings.categoryIds).toEqual(["cat_honey", "cat_ghee"]);
+    expect(storefrontThemeDocumentSchema.safeParse(applied).success).toBe(true);
+  });
+
+  it("filled-in content never makes a template custom", () => {
+    expect(selectedTemplate(withContent(storefrontTemplateTheme("department-mall")))).toBe("department-mall");
   });
 
   it("lets a merchant change the purchase panel without changing the gallery", () => {
@@ -104,7 +157,7 @@ describe("templates", () => {
     const applied = storefrontTemplateTheme("boutique");
     const changed = [
       { ...applied, tokens: { ...applied.tokens, density: "compact" as const } },
-      { ...applied, pages: { home: moveSection(applied.pages.home, "newsletter", -1) } },
+      { ...applied, pages: { ...applied.pages, home: moveSection(applied.pages.home, "testimonials", -1) } },
       setThemeColor(applied, "background", "#fafafa"),
       setBlockVariant(applied, "desktopNav", "mega-panel"),
       setBlockVariant(applied, "gallery", "classic"),
@@ -114,6 +167,16 @@ describe("templates", () => {
       expect(theme.template).toBe("boutique");
       expect(storefrontThemeDocumentSchema.safeParse(theme).success).toBe(true);
     }
+  });
+
+  it("keeps the announcement's and footer's words when the bar or footer changes", () => {
+    const theme = withContent(DEFAULT_STOREFRONT_THEME);
+    expect(theme.blocks.topBar.variant).toBe("utility");
+    const banner = setBlockVariant(theme, "topBar", "app-banner");
+    expect(banner.blocks.topBar).toEqual({ variant: "app-banner", settings: { text: "Free delivery in Dhaka", link: "/collections/sale" } });
+    expect(setBlockVariant(banner, "topBar", "none").blocks.topBar).toEqual({ variant: "none", settings: {} });
+    const footer = setBlockVariant(theme, "footer", "brand-black");
+    expect(footer.blocks.footer.settings).toEqual({ tagline: "Pure honey", about: "From the Sundarbans.", copyright: "Mou Ghor" });
   });
 
   it("switches a block to another variant at its default settings", () => {
@@ -205,6 +268,26 @@ describe("theme colors", () => {
     expect(themeDraftInvalid(theme)).toBe(true);
   });
 
+  it("blocks saving an announcement link that is not usable, and a one-product homepage without its product", () => {
+    const theme = withContent(DEFAULT_STOREFRONT_THEME);
+    expect(themeDraftInvalid(theme)).toBe(false);
+    const typed = { ...theme, blocks: { ...theme.blocks, topBar: { variant: "announcement", settings: { text: "Sale", link: "sale page" } } } } as StorefrontThemeDocument;
+    expect(themeDraftInvalid(typed)).toBe(true);
+    expect(themeDraftInvalid({ ...theme, pages: { ...theme.pages, homeMode: { kind: "product", productId: "" } } })).toBe(true);
+  });
+
+  it("marks the Theme page control behind a rejected document path", () => {
+    const theme = withContent(DEFAULT_STOREFRONT_THEME);
+    const hero = theme.pages.home.findIndex((section) => section.type === "hero");
+    expect(themeFieldForPath("brand.logo", theme)).toBe("theme-brand-logo");
+    expect(themeFieldForPath("theme.brand.favicon", theme)).toBe("theme-brand-favicon");
+    expect(themeFieldForPath("pages.homeMode.productId", theme)).toBe("theme-home-product");
+    expect(themeFieldForPath(`pages.home.${hero}.settings.slides.0.image`, theme)).toBe("theme-section-hero");
+    expect(themeFieldForPath("blocks.topBar.settings.link", theme)).toBe("theme-announcement-link");
+    expect(themeFieldForPath("tokens.colors.primary", theme)).toBe("theme-color-buttons");
+    expect(themeFieldForPath("pages.home.99.settings.title", theme)).toBeUndefined();
+  });
+
   it("marks the field behind a rejected colour token", () => {
     expect(colorFieldForPath("theme.tokens.colors.primary-foreground")).toBe("theme-color-button-text");
     expect(colorFieldForPath("theme.tokens.colors.card")).toBe("theme-color-background");
@@ -253,5 +336,22 @@ describe("typography", () => {
     const reset = resetTypeTokens(changed);
     expect(reset).toEqual(theme);
     expect(selectedTemplate(reset)).toBe("heritage-editorial");
+  });
+});
+
+describe("product page modules on the Theme page", () => {
+  it("turns an optional module on at its registry place and off again", () => {
+    const below = storefrontTemplateTheme("department-mall").blocks.product.below;
+    expect(below).toEqual(["description", "reviews", "related"]);
+    const bundled = toggleProductModule(below, "frequently-bought-together", true);
+    expect(bundled).toEqual(["frequently-bought-together", "description", "reviews", "related"]);
+    const everything = OPTIONAL_PRODUCT_MODULES.reduce((list, module) => toggleProductModule(list, module, true), below);
+    expect(everything).toEqual(["frequently-bought-together", "description", "compare-similar", "reviews", "policies", "related", "recently-viewed"]);
+    expect(toggleProductModule(everything, "policies", false)).not.toContain("policies");
+    // Turning a present module on again keeps one copy.
+    expect(toggleProductModule(bundled, "frequently-bought-together", true).filter((each) => each === "frequently-bought-together")).toHaveLength(1);
+    const theme = storefrontTemplateTheme("department-mall");
+    theme.blocks.product.below = everything;
+    expect(storefrontThemeDocumentSchema.safeParse(theme).success).toBe(true);
   });
 });

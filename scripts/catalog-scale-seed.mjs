@@ -430,8 +430,8 @@ tx(() => {
   for (let index = 0; index < COLLECTIONS; index += 1) {
     const dynamic = index % 2 === 1;
     const config = dynamic
-      ? { source: "dynamic", categoryIds: sample(publishedCategories, int(1, 12)).map((category) => category.id), productIds: [], showOnHomepage: index < 10, maxProducts: int(8, 24), title: `Top picks ${index}`, subtitle: "" }
-      : { source: "manual", categoryIds: [], productIds: sample(liveProducts, int(8, 90)).map((row) => row.id), showOnHomepage: index < 10, maxProducts: int(8, 24), title: `Featured ${index}`, subtitle: "" };
+      ? { source: "dynamic", categoryIds: sample(publishedCategories, int(1, 12)).map((category) => category.id), productIds: [], maxProducts: int(8, 24), title: `Top picks ${index}`, subtitle: "" }
+      : { source: "manual", categoryIds: [], productIds: sample(liveProducts, int(8, 90)).map((row) => row.id), maxProducts: int(8, 24), title: `Featured ${index}`, subtitle: "" };
     const createdAt = NOW - (400 - index) * DAY;
     insCollection.run(`col_scale_${pad(index, 3)}`, `${dynamic ? "Best of" : "Featured"} ${pick(FAMILIES).name} ${index}`, null,
       index % 3 === 0 ? "carousel" : "grid", JSON.stringify(config), index, createdAt, createdAt);

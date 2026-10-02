@@ -6,7 +6,14 @@ import {
   type InventoryCounterState,
   type InventoryLedgerPool,
 } from "./ledger-v2";
+import { defaultInventoryLocationIdSql } from "./locations";
 
+/**
+ * One guarded ledger-v2 `adjusted` movement. A movement that changes physical
+ * stock books it at `locationId`, or at the default location when none is
+ * named (product-editor edits, licence-key pools); one that does not leaves
+ * the location null.
+ */
 export function buildStockMovementClaim(
   db: Database,
   params: {
@@ -18,6 +25,7 @@ export function buildStockMovementClaim(
     after: InventoryCounterState;
     notes: string;
     adminUserId?: string;
+    locationId?: string;
   },
 ) {
   const edge = buildInventoryLedgerV2Edge({
@@ -25,6 +33,11 @@ export function buildStockMovementClaim(
     before: params.before,
     after: params.after,
   });
+  const location = edge.stockDelta === 0
+    ? sql`NULL`
+    : params.locationId
+      ? sql`${params.locationId}`
+      : defaultInventoryLocationIdSql();
   return db
     .insert(inventoryMovements)
     .select(sql`
@@ -50,7 +63,8 @@ export function buildStockMovementClaim(
         ${edge.previousPreorderStock},
         ${edge.newPreorderStock},
         ${edge.preorderStockDelta},
-        unixepoch()
+        unixepoch(),
+        ${location}
       FROM ${productVariants}
       WHERE ${productVariants.id} = ${params.variantId}
         AND ${productVariants.stockVersion} = ${edge.stockVersionBefore}

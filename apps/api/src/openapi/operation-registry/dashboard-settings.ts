@@ -172,21 +172,6 @@ export const DASHBOARD_SETTINGS_OPERATIONS = {
     reason:
       "Legacy dashboard-prefix mount of storefront abandoned-checkout snapshot persistence; no merchant UI invokes it, and agents must use protected context and cart operations rather than manufacture browser recovery snapshots.",
   },
-  "dashboard.settings_footer.footer": {
-    revision: "required",
-    limits: { request: 65_536, response: 8_192 },
-  },
-  "dashboard.settings_footer.get_footer": { limits: { request: 16_384 } },
-  "dashboard.settings_header.get_header": { limits: { request: 16_384 } },
-  "dashboard.settings_header.header": {
-    revision: "required",
-    limits: { request: 65_536, response: 8_192 },
-  },
-  "dashboard.settings_homepage_presentation.get_homepage_presentation": { limits: { request: 16_384, response: 8_192 } },
-  "dashboard.settings_homepage_presentation.homepage_presentation": {
-    revision: "required",
-    limits: { request: 16_384, response: 8_192 },
-  },
   "dashboard.settings_sms.get_sms": {
     risk: "security",
     limits: { request: 16_384, response: 8_192 },
@@ -219,12 +204,6 @@ export const DASHBOARD_SETTINGS_OPERATIONS = {
     revision: "required",
     risk: "security",
     limits: { request: 16_384, response: 8_192 },
-  },
-  "dashboard.settings.general_get": {
-    exposure: "excluded",
-    limits: { request: 16_384 },
-    reason:
-      "Legacy aggregate of independently managed header and footer documents; excluded until those documents are exposed as bounded semantic read projections.",
   },
   "dashboard.settings.media_delivery_get": { limits: { request: 16_384, response: 16_384 } },
   "dashboard.settings.media_delivery_update": { revision: "required", limits: { request: 16_384, response: 16_384 } },

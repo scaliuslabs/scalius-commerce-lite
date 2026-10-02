@@ -43,17 +43,30 @@ export function Field({ label, help, error, children }: {
   );
 }
 
-export function InventoryQuantityInput({ value, committed, onChange, ariaLabel, invalid = false, cell }: {
+/** A SKU's units at locations other than the default, which the quantity field does not edit. */
+export interface StockElsewhere {
+  units: number;
+  /** "Main location 10 · Banani store 5": the SKU's on-hand at each location holding some. */
+  breakdown: string;
+  /** "Banani store, Uttara store": the other locations holding units. */
+  places: string;
+}
+
+export function InventoryQuantityInput({ value, committed, onChange, ariaLabel, invalid = false, cell, elsewhere }: {
   /** Marks the field for the table's arrow-key navigation (see VariantTable). */
   cell?: string;
+  /** With several locations: the default location's on-hand (the SKU's otherwise). */
   value: number;
   committed: number;
   onChange: (value: number) => void;
   ariaLabel?: string;
   invalid?: boolean;
+  /** Stores with several locations: the units held elsewhere, and the per-location breakdown. */
+  elsewhere?: StockElsewhere;
 }) {
   const t = useMessages(productMessages);
-  const available = Math.max(0, value - committed);
+  // Orders reserve from the SKU as a whole, wherever its units are.
+  const available = Math.max(0, value + (elsewhere?.units ?? 0) - committed);
   return (
     <div className="space-y-1">
       <NumberInput
@@ -66,9 +79,12 @@ export function InventoryQuantityInput({ value, committed, onChange, ariaLabel, 
         onValueChange={(next) => onChange(next ?? Number.NaN)}
       />
       {committed > 0 && Number.isFinite(value) ? (
-        <p className="text-right text-body text-muted-foreground tabular-nums" title={t("inOpenOrders", { onHand: value, committed })}>
+        <p className="text-right text-body text-muted-foreground tabular-nums" title={t("inOpenOrders", { onHand: value + (elsewhere?.units ?? 0), committed })}>
           {t("availableToSell", { count: available })}
         </p>
+      ) : null}
+      {elsewhere?.breakdown ? (
+        <p className="text-right text-body text-muted-foreground tabular-nums">{elsewhere.breakdown}</p>
       ) : null}
     </div>
   );

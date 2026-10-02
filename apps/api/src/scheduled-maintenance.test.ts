@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => {
     failStaleQueuedPaymentWebhookEvents: vi.fn(),
     backfillMissingMediaVariants: vi.fn(),
     enqueueMediaVariantsBacklog: vi.fn(),
+    runScheduledEventMaintenance: vi.fn(),
   };
 });
 
@@ -97,6 +98,10 @@ vi.mock("@scalius/core/modules/media", () => ({
 
 vi.mock("./utils/order-notification-queue", () => ({
   enqueueOrderRefundNotificationForOrder: mocks.enqueueOrderRefundNotificationForOrder,
+}));
+
+vi.mock("./events/dispatch", () => ({
+  runScheduledEventMaintenance: mocks.runScheduledEventMaintenance,
 }));
 
 vi.mock("./utils/webhook-idempotency", () => ({
@@ -183,6 +188,11 @@ describe("runScheduledMaintenance", () => {
       failed: 0,
       skipped: 0,
       staleQueued: 0,
+    });
+    mocks.runScheduledEventMaintenance.mockResolvedValue({
+      events: { scanned: 0, enqueued: 0, settledWithoutSubscribers: 0, failed: 0, skipped: 0 },
+      deliveries: { scanned: 0, enqueued: 0, failed: 0, skipped: 0 },
+      pruned: { events: 0, deliveries: 0 },
     });
     mocks.flushPendingMetaPurchaseOutbox.mockResolvedValue({
       scanned: 0,
@@ -634,6 +644,15 @@ describe("runScheduledMaintenance", () => {
     expect(mocks.backfillMissingMediaVariants).toHaveBeenCalledTimes(1);
   });
 
+  it("runs the event outbox backstop (due events, webhook retries, retention) after the refund sweeps", async () => {
+    const env = createEnv();
+    await runScheduledMaintenance(env, createExecutionContext());
+    expect(mocks.runScheduledEventMaintenance).toHaveBeenCalledWith(mocks.db, env);
+    // Refund reconciliation writes refunds whose events this run should hand over.
+    expect(mocks.reconcileExternalRefundWebhooks.mock.invocationCallOrder[0])
+      .toBeLessThan(mocks.runScheduledEventMaintenance.mock.invocationCallOrder[0]!);
+  });
+
   it("runs the time-budgeted rendition backfill last, after every commerce sweep", async () => {
     const env = { ...createEnv(), IMAGES: { info: vi.fn() } } as unknown as Env;
 
@@ -646,6 +665,7 @@ describe("runScheduledMaintenance", () => {
       mocks.reconcileDueRefundAttempts,
       mocks.cleanupExpiredCustomerSessions,
       mocks.pruneExpiredIdentityHandoffEvents,
+      mocks.runScheduledEventMaintenance,
     ]) {
       expect(sweep.mock.invocationCallOrder[0]).toBeLessThan(backfillOrder);
     }

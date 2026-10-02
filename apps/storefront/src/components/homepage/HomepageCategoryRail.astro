@@ -1,24 +1,26 @@
 ---
+// The photo category tiles (CategoryTiles' `photo` and `photo-grid` styles):
+// a scrolling rail of portrait photos, or Aarong's department grid.
 import { mediaImageSrcSet, mediaImageUrl } from "@/lib/media-url";
-import type { HomepageData } from "@/lib/api/storefront";
-
-type CategoryRail = HomepageData["presentation"]["categoryRail"];
+import type { HomepageCategory } from "@/lib/api/storefront";
 
 interface Props {
-  rail: CategoryRail;
+  title: string;
+  categories: HomepageCategory[];
+  /** The heading's id (one per section). */
+  headingId: string;
   heritage?: boolean;
 }
 
-const { rail, heritage = false } = Astro.props;
-const categories = rail.enabled ? rail.categories : [];
+const { title, categories, headingId, heritage = false } = Astro.props;
 ---
 
 {categories.length > 0 && (
-  <section class="w-full py-3 md:py-7" aria-labelledby="homepage-category-rail-title">
+  <section class="w-full py-3 md:py-7" aria-labelledby={headingId}>
     <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
       <div class="mb-3 flex items-end justify-between md:mb-4">
-        <h2 id="homepage-category-rail-title" class="section-heading text-foreground">
-          {rail.title}
+        <h2 id={headingId} class="section-heading text-foreground">
+          {title}
         </h2>
         {!heritage && <span class="hidden text-xs text-muted-foreground sm:block">Explore by department</span>}
       </div>

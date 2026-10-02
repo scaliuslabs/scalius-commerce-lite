@@ -26,7 +26,7 @@ import {
 } from "../products/media";
 import { categoryScope, declareProductCards, deps } from "./declare-deps";
 import { publicProductHasBuyerResolvableSku } from "../products/public-eligibility";
-import { storeDecimalPlacesFromCode } from "../products/money";
+import { storeDecimalPlacesFromCode } from "../settings/store-money";
 import { resolveProductCardFacts, selectProductCardFactRows, type ProductCardFactRow } from "./card-facts";
 import { publicCategoryConditions, publishedCategoryIdExists } from "../categories/categories.publication";
 import {

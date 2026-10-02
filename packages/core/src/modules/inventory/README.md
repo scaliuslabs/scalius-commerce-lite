@@ -22,6 +22,42 @@ request hash and committed result in the same D1 batch as the ledger-v2 claim
 and counter CAS. Exact retries replay; changed-payload key reuse is a conflict.
 There is no pre-commit pending row.
 
+## Locations (commerce hook H1)
+
+Physical stock is held at `inventory_locations`; exactly one active location
+is the default (migration 0102 creates `loc_default`, "Main location").
+`inventory_levels` (SKU × location `on_hand`) is trigger-maintained only:
+
+- every ledger-v2 movement with a non-zero `stock_delta` must name an active
+  `location_id` (`INVENTORY_LOCATION_REQUIRED`), and a removal needs the units
+  there (`INVENTORY_LEVEL_SHORTFALL`; the `on_hand >= 0` CHECK is the backstop),
+  so the whole batch aborts;
+- receipts upsert the level, removals lower it, a compensating movement delete
+  reverses it, and a v2 movement's location/delta never change;
+- a SKU inserted with stock (seeds, imports) books it at the default location.
+
+So for every SKU, `sum(inventory_levels.on_hand) = product_variants.stock`
+(`locations.d1.test.ts` folds random sequences to prove it). Reservations and
+releases stay location-agnostic (`location_id` null). Deducts leave from the
+order's `fulfillment_location_id` (the default when null); restores return to
+the location of the generation's deduct movement (the order's location, then
+the default, when that one is archived), or to a return receipt's
+`restockLocationId`. Manual adjustments, stocktakes and scanner writes take an
+optional `locationId` (the default when omitted) that is part of the operation
+request hash; a stocktake counts that location. Product-editor stock edits and
+licence-key pools move stock at the default location: with several locations
+the editor shows and edits the default location's quantity (a SKU total minus
+its units elsewhere, read for the whole product with `getProductInventoryLevels`)
+and lists the rest per location read-only. Converting a simple product to
+options is refused while its SKU holds units at a non-default location
+(`assertSimpleConversionStockAtDefaultLocation`): those units cannot be
+assigned to a combination, and the matrix books its quantities at the default.
+Movement history and its CSV carry the location (`locationId` filter, a
+`Location` column). Changing an order's location logs a
+`fulfillment_location_changed` timeline line in the same batch. A location can
+be archived only when it is not the default, holds no units and no open order
+is set to ship from it.
+
 ## Inventory Lifecycle / State Machine
 
 Stock follows a clear lifecycle driven by order status transitions. The order-level `inventoryAction` column (`orders.inventory_action`) tracks which phase each order is in.
@@ -64,7 +100,7 @@ Stock follows a clear lifecycle driven by order status transitions. The order-le
                                    │
               ┌────────────────────┼────────────────────┐
               │                    │                     │
-     deductStock()        releaseReservation()    [orphan cleanup cron]
+     claimed deduct       releaseReservation()    [orphan cleanup cron]
      [order shipped]      [cancel/payment fail]   releaseExpiredReservations()
      stock -= qty         reservedStock -= qty    reservedStock -= qty
      reservedStock -= qty stockVersion += 1       stockVersion += 1
@@ -139,8 +175,7 @@ The function is **idempotent** -- a same-pool "released" movement excludes that 
 | `index.ts`                 | Barrel re-exports for all public API                                                               |
 | `types.ts`                 | `StockOperationResult`, `ReservationEntry`, `MovementEntry` interfaces                             |
 | `reserve.ts`               | `reserveStock()` -- single variant CAS reservation; `reserveMultiple()` -- sequential with rollback; `reserveStockBatch()` -- strict D1 batch movement-claim + counter reservation with CAS verification and rollback |
-| `deduct.ts`                | `deductStock()` -- single variant CAS deduction; `deductMultiple()` -- sequential with rollback via `restoreDeductedStock()` |
-| `restore.ts`               | `restoreDeductedStock()` -- restores deducted stock for a single variant (regular: increments `stock`, preorder: restores `preorderStock`, backorder: no-op); `restoreDeductedMultiple()` -- sequential restore with low stock alert check |
+| `locations.ts`             | Inventory locations (hook H1): location records (list, create, update, archive, unarchive, set default), the location a stock movement resolves to, `assertInventoryLocationCovers()` shortfall pre-check, per-SKU level reads and the level/location trigger error mapping |
 | `release.ts`               | `releaseReservation()` -- single variant (no CAS, safe to apply unconditionally with MAX(0,...)); `releaseMultiple()` -- best-effort, continues on individual failures, checks low stock alerts after release |
 | `expiry.ts`                | `releaseExpiredReservations()` -- bounded cron sweep; `ExpiryResult` interface                     |
 | `movements.ts`             | `recordMovement()` -- best-effort audit log insert (errors logged, not thrown)                      |
@@ -272,7 +307,7 @@ Transition preparation and low-stock projection refreshes use at most four concu
 
 ### Restore
 
-`restoreDeductedStock()` -- Restores stock after a post-shipment cancellation or return. For regular pool: increments `stock` (undoes the deduction). For preorder pool: restores `preorderStock`. For backorder pool: no-op on stock counters (backorder never decremented physical stock). `restoreDeductedMultiple()` processes sequentially and checks low stock alerts after each restore.
+Restores run through the claimed transition engine (status-driven cancel/return, or `applyClaimedInventoryEntryBatch()` for return receipts). For regular pool: increments `stock` (undoes the deduction) at the location the units left from, or at the receipt's restock location. For preorder pool: restores `preorderStock`. For backorder pool: no-op on stock counters (backorder never decremented physical stock).
 
 ### adjustInventory (InventoryService)
 
@@ -285,5 +320,5 @@ Transition preparation and low-stock projection refreshes use at most four concu
 
 ## Known Gaps
 
-- The legacy sequential reserve/deduct/release/restore exports remain for compatibility, but no production order, checkout, payment, or fulfillment caller uses them. Do not add new callers; remove the exports only with an explicit package-contract decision.
+- The legacy sequential reserve/release exports remain for compatibility, but no production order, checkout, payment, or fulfillment caller uses them. Do not add new callers. The legacy deduct/restore helpers were removed (H1): they moved physical stock without a ledger-v2 movement, so the location levels could not follow.
 - Version-1 legacy movements predate complete counter snapshots and cannot be folded before the v2 boundary. Production diagnostics must report that boundary rather than claiming historical reconstruction.

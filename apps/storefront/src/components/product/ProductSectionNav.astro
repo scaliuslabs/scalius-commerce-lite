@@ -1,15 +1,22 @@
 ---
-// Marketplace phone navigation stays at the top while the product's real
-// below-fold sections pass underneath it. Every link remains a native anchor.
+// The product page's anchor bar (theme `product.sticky`: `phoneTop` and
+// `desktop` `anchor-bar`): Top, Details, Explore and Reviews stay pinned
+// under the header while the product's real below-fold sections pass
+// underneath (Amazon and Daraz on phones, Star Tech on computers). Every
+// link remains a native anchor; the script only marks the current section.
 import { ChevronUp } from "lucide-react";
 
 interface Props {
   detailsId?: string | null;
   exploreId?: string | null;
   reviewsId?: string | null;
+  /** Pinned on phones and tablets (below 64rem). */
+  phone?: boolean;
+  /** Pinned on computers (from 64rem). */
+  desktop?: boolean;
 }
 
-const { detailsId = null, exploreId = null, reviewsId = null } = Astro.props;
+const { detailsId = null, exploreId = null, reviewsId = null, phone = true, desktop = false } = Astro.props;
 const links = [
   detailsId && { id: detailsId, label: "Details" },
   exploreId && { id: exploreId, label: "Explore" },
@@ -17,11 +24,16 @@ const links = [
 ].filter((link): link is { id: string; label: string } => Boolean(link));
 ---
 
-{links.length > 0 && (
+{links.length > 0 && (phone || desktop) && (
   <nav
     data-product-section-nav
+    data-section-nav-phone={phone ? "" : undefined}
+    data-section-nav-desktop={desktop ? "" : undefined}
     aria-label="Product sections"
-    class="sticky top-0 z-40 flex h-[52px] border-b border-border bg-background shadow-[0_3px_8px_-5px_rgb(0_0_0/0.35)] lg:hidden"
+    class:list={[
+      "sticky top-[var(--header-height,0px)] z-40 h-[52px] border-b border-border bg-background shadow-[0_3px_8px_-5px_rgb(0_0_0/0.35)]",
+      phone && desktop ? "flex" : phone ? "flex lg:hidden" : "hidden lg:flex",
+    ]}
   >
     <a href="#product-container" class="flex w-[72px] shrink-0 flex-col items-center justify-center bg-muted/50 text-sm leading-tight text-foreground">
       <ChevronUp className="h-4 w-4" aria-hidden="true" />
@@ -43,9 +55,22 @@ const links = [
     border-bottom-color: var(--primary);
     color: var(--primary);
   }
+  /* Sections land below the pinned bar (and the header above it). */
   @media (max-width: 63.999rem) {
-    #product-container[data-marketplace-pdp] :is([data-product-module], #reviews, #related-products) {
-      scroll-margin-top: 3.75rem;
+    #product-container:has([data-section-nav-phone]) :is([data-product-module], #reviews, #related-products) {
+      scroll-margin-top: calc(var(--header-height, 0px) + 3.75rem);
+    }
+  }
+  @media (min-width: 64rem) {
+    [data-product-section-nav][data-section-nav-desktop] {
+      padding-inline: max(0px, calc((100% - 80rem) / 2));
+    }
+    [data-product-section-nav][data-section-nav-desktop] > a {
+      flex: 0 0 auto;
+      padding-inline: 1.25rem;
+    }
+    #product-container:has([data-section-nav-desktop]) :is([data-product-module], #reviews, #related-products) {
+      scroll-margin-top: calc(var(--header-height, 0px) + 3.75rem);
     }
   }
 </style>

@@ -24,12 +24,8 @@ import { AppError, NotFoundError, ConflictError, ValidationError } from "@scaliu
 import { safeBatch, type Database } from "@scalius/database/client";
 import type { BatchItem } from "drizzle-orm/batch";
 import { defaultProductSkuValues } from "../public-eligibility";
-import {
-    catalogPriceColumns,
-    storeCurrencyCodeSql,
-    storeCurrencyFromCode,
-    storeDecimalPlacesFromCode,
-} from "../money";
+import { catalogPriceColumns } from "../money";
+import { storeCurrencyCodeSql, storeCurrencyFromCode, storeDecimalPlacesFromCode } from "../../settings/store-money";
 import { readStoreCurrency, toStoreMinor } from "../../settings/store-money";
 import { percentToBps } from "@scalius/shared/money";
 import {

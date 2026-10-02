@@ -111,7 +111,8 @@ async function rejects(client: Client, sql: string, pattern: RegExp): Promise<vo
 describe.runIf(postgresUrl)("Wave B PostgreSQL sidecars", () => {
   it("upgrade a pre-0095 schema to exactly the fresh schema", async () => {
     const [fresh, before] = await Promise.all([
-      compileCanonicalPostgresSchema(),
+      // Fresh through 0098 only: later migrations have their own sidecar tests.
+      compileCanonicalPostgresSchema({ beforeMigration: "0099_" }),
       compileCanonicalPostgresSchema({ beforeMigration: "0095_" }),
     ]);
     const freshDatabase = await database(fresh.sql);

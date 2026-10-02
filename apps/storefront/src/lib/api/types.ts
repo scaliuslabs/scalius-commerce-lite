@@ -19,13 +19,10 @@ import type {
   GetApiV1CollectionsResponse as GetCollectionsResponse,
   GetApiV1CollectionsByIdResponse as GetCollectionsByIdResponse,
   GetApiV1SearchResponse as GetSearchResponse,
-  GetApiV1HeaderResponse as GetHeaderResponse,
-  GetApiV1FooterResponse as GetFooterResponse,
   GetApiV1NavigationResponse as GetNavigationResponse,
   GetApiV1PagesResponse as GetPagesResponse,
   GetApiV1PagesSlugBySlugResponse as GetPagesSlugBySlugResponse,
   GetApiV1SeoResponse as GetSeoResponse,
-  GetApiV1HeroSlidersResponse as GetHeroSlidersResponse,
   GetApiV1CheckoutLanguagesActiveResponse as GetCheckoutLanguagesActiveResponse,
   PostApiV1DiscountsValidateResponse as PostDiscountsValidateResponse,
   GetApiV1AnalyticsConfigurationsResponse as GetAnalyticsConfigurationsResponse,
@@ -53,13 +50,10 @@ export type {
   GetCollectionsResponse,
   GetCollectionsByIdResponse,
   GetSearchResponse,
-  GetHeaderResponse,
-  GetFooterResponse,
   GetNavigationResponse,
   GetPagesResponse,
   GetPagesSlugBySlugResponse,
   GetSeoResponse,
-  GetHeroSlidersResponse,
   GetCheckoutLanguagesActiveResponse,
   PostDiscountsValidateResponse,
   GetAnalyticsConfigurationsResponse,
@@ -238,6 +232,18 @@ export interface ProductCardFacts {
   delivery: { free: true } | { free: false; feeFrom: number } | null;
 }
 
+/**
+ * A storefront-visible custom field (COMMERCE-HOOKS H4): `namespace.key` is the
+ * stable binding; `value` is JSON per `type` (money in decimal major units).
+ */
+export interface StorefrontCustomField {
+  namespace: string;
+  key: string;
+  name: string;
+  type: string;
+  value: unknown;
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -306,6 +312,8 @@ export interface Product {
   contentBlockMedia?: ProductPageBlockMedia[];
   /** Product page only: the warranty policy's current terms; null without one. */
   warranty?: ProductWarranty | null;
+  /** Product page only: storefront-visible custom fields, in the merchant's order. */
+  customFields?: StorefrontCustomField[];
 }
 
 export type ProductPageContentBlock = import("@scalius/api-client/types").ProductPageContentBlock;
@@ -395,6 +403,8 @@ export interface ProductBuyGetOffer {
 
 export interface ProductVariant {
   id: string;
+  /** Product page only: this SKU's storefront-visible custom fields. */
+  customFields?: StorefrontCustomField[];
   productId: string;
   optionCombinationKey: string | null;
   imageId: string | null;
@@ -441,6 +451,8 @@ export interface ProductMedia {
 
 export interface Category {
   id: string;
+  /** Category page only: storefront-visible custom fields. */
+  customFields?: StorefrontCustomField[];
   name: string;
   slug: string;
   description: string | null;
@@ -491,6 +503,8 @@ export interface BrandLogo {
 /** A published brand (`/brands/<slug>`). */
 export interface Brand extends ProductBrand {
   canonicalPath: string | null;
+  /** Brand page only: storefront-visible custom fields. */
+  customFields?: StorefrontCustomField[];
   logo: BrandLogo | null;
   description: string | null;
   metaTitle: string | null;
@@ -550,6 +564,8 @@ export interface Collection {
 
 export interface CollectionWithProducts extends Collection {
   description: string | null;
+  /** Storefront-visible custom fields. */
+  customFields?: StorefrontCustomField[];
   content: string | null;
   metaTitle: string | null;
   metaDescription: string | null;
@@ -582,6 +598,8 @@ export interface PageFeaturedImage {
 
 export interface Page {
   id: string;
+  /** CMS page detail only: storefront-visible custom fields. */
+  customFields?: StorefrontCustomField[];
   contentType: "page" | "article";
   title: string;
   slug: string;
@@ -618,72 +636,22 @@ export interface NavigationItem {
   subMenu?: NavigationItem[];
 }
 
-// Flat navigation item - for normalized API response
-export interface FlatNavigationItem {
-  id: string;
-  title: string;
-  href: string | null;
-  openInNewTab?: boolean;
-  parentId: string | null;
-  childIds: string[];
-  depth: number;
-  sortOrder: number;
-}
+/** A footer menu link (a navigation item: nested links in `subMenu`). */
+export type FooterMenuLink = NavigationItem;
 
-// Recursive Footer Menu Link - supports nested subMenu
-export interface FooterMenuLink {
-  id?: string;
-  title: string;
-  href?: string;
-  openInNewTab?: boolean;
-  subMenu?: FooterMenuLink[];
-}
-
-// Footer Menu - supports both nested (links) and flat (items/rootIds) structures
+/** A footer menu (Online store -> Navigation), as the layout read's `footerMenus` carries it. */
 export interface FooterMenu {
   id: string;
   title: string;
-  // Nested format (legacy/converted)
-  links?: FooterMenuLink[];
-  // Flat format (new backend response)
-  items?: Record<string, FlatNavigationItem>;
-  rootIds?: string[];
+  links: FooterMenuLink[];
 }
 
-// Social Link - supports custom labels and icons
+/** A social profile from Settings -> Store (Business settings own them). */
 export interface SocialLink {
-  id?: string;
+  id: string;
   label: string;
   url: string;
   iconUrl?: string;
-  // Legacy fields for backwards compatibility
-  platform?: string;
-  icon?: string;
-}
-
-export interface HeaderData {
-  topBar: {
-    text: string;
-    isEnabled?: boolean;
-  };
-  logo: { src: string; alt: string; width?: number };
-  favicon?: { src: string; alt: string };
-  contact: {
-    phone: string;
-    text: string;
-    isEnabled?: boolean;
-  };
-  social: SocialLink[];
-}
-
-export interface FooterData {
-  logo: { src: string; alt: string };
-  favicon?: { src: string; alt: string };
-  tagline: string;
-  copyrightText: string;
-  description?: string;
-  menus: FooterMenu[];
-  social: SocialLink[];
 }
 
 export interface SeoSettings {

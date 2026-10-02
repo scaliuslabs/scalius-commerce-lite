@@ -32,6 +32,9 @@ describe("demo-store admin snapshot reads", () => {
         await Promise.resolve();
         inFlight -= 1;
         if (path === "/api/v1/admin/auth/account-security") return { isSuperAdmin: true };
+        if (path === "/api/v1/admin/settings/theme/workspace") {
+          return { published: { theme: {}, revision: 1 }, draft: { theme: {}, revision: 0, basePublishedRevision: 1 }, storeShape: {}, media: [] };
+        }
         return collectionBody(path);
       },
     };
@@ -41,11 +44,16 @@ describe("demo-store admin snapshot reads", () => {
       products: [],
       collections: [],
       heroes: [],
-    })).resolves.toMatchObject({ auth: { authenticated: true, isSuperAdmin: true } });
+    })).resolves.toMatchObject({
+      auth: { authenticated: true, isSuperAdmin: true },
+      presentation: { theme: { published: { revision: 1 }, draft: { revision: 0, basePublishedRevision: 1 } } },
+    });
 
     const collectionsPath = paths.find((path) => path.startsWith("/api/v1/admin/collections?"));
     expect(collectionsPath).toContain("sort=updatedAt");
     expect(collectionsPath).not.toContain("sort=createdAt");
     expect(maxInFlight).toBe(1);
+    // The homepage is the theme: no hero-slider or retired settings documents are read.
+    expect(paths.filter((path) => path.startsWith("/api/v1/admin/settings/"))).toEqual(["/api/v1/admin/settings/theme/workspace"]);
   });
 });

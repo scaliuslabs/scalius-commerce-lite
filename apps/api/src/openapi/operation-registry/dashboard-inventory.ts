@@ -35,4 +35,12 @@ export const DASHBOARD_INVENTORY_OPERATIONS = {
   "dashboard.inventory.set_stock": { idempotency: "required" },
   "dashboard.inventory.set_alert_level": {},
   "dashboard.inventory.set_default_alert_level": {},
+  "dashboard.inventory.levels": {},
+  "dashboard.inventory.product_levels": {},
+  "dashboard.inventory_locations.list": {},
+  "dashboard.inventory_locations.create": {},
+  "dashboard.inventory_locations.update": { revision: "required" },
+  "dashboard.inventory_locations.archive": { risk: "destructive" },
+  "dashboard.inventory_locations.unarchive": {},
+  "dashboard.inventory_locations.set_default": {},
 } satisfies Record<string, OperationRegistryEntry>;

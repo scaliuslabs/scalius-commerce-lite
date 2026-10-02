@@ -2,9 +2,6 @@ import { createRuntimeApiApp } from "./base-app";
 import { checkoutRoutes } from "../routes/checkout";
 import { checkoutGiftCardRoutes } from "../routes/checkout-gift-cards";
 import { publicCheckoutLanguageRoutes } from "../routes/checkout-languages";
-import { footerRoutes } from "../routes/footer";
-import { headerRoutes } from "../routes/header";
-import { heroRoutes } from "../routes/hero";
 import { locationRoutes } from "../routes/locations";
 import { navigationRoutes } from "../routes/navigation";
 import { seoRoutes } from "../routes/seo";
@@ -19,10 +16,7 @@ app.get("/", (c) => c.json({
   version: process.env.npm_package_version || "1.0.0",
   environment: process.env.NODE_ENV || "development",
 }));
-app.route("/hero", heroRoutes);
-app.route("/header", headerRoutes);
 app.route("/navigation", navigationRoutes);
-app.route("/footer", footerRoutes);
 app.route("/storefront", storefrontRoutes);
 app.route("/platform", platformRoutes);
 // Checkout settings are a public read every storefront render batches with

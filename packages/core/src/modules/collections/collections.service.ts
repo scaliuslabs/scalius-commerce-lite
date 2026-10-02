@@ -38,10 +38,7 @@ import {
 } from "./collection-config";
 import { ftsMatch } from "../../search/fts5";
 import { fromMinor } from "@scalius/shared/money";
-import {
-    storeCurrencyCodeSql,
-    storeDecimalPlacesFromCode,
-} from "../products/money";
+import { storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../settings/store-money";
 import { getStorefrontCollectionProducts, storefrontCollectionVisibleCountQuery } from "../catalog/listing";
 import { resolveProductCardFacts, selectProductCardFactRows, type ProductCardFactRow } from "../catalog/card-facts";
 import {
@@ -66,6 +63,11 @@ import { truthfulUpdatedAt } from "../../utils/truthful-updated-at";
 import { categoryScope } from "@scalius/shared/cache-deps";
 import { deps } from "../../cache-deps";
 import { declareProductCards, declareRequestedProducts } from "../catalog";
+import {
+    presentStorefrontCustomFields,
+    selectStorefrontCustomFieldRows,
+    type StorefrontCustomFieldRow,
+} from "../custom-fields/custom-fields.storefront";
 
 /**
  * What a collection's product set depends on beyond the cards shown: a
@@ -966,15 +968,20 @@ export async function getPublicCollectionCatalog(
 ) {
     // The row (found or not: a collection can be activated or restored).
     if (/^[\x21-\x7e]{1,200}$/.test(id)) deps.collection(id);
-    const collection = await db
-        .select()
-        .from(collections)
-        .where(and(
-            eq(collections.id, id),
-            eq(collections.isActive, true),
-            isNull(collections.deletedAt),
-        ))
-        .get();
+    // The row and its storefront-visible custom fields: one round trip.
+    const [collectionRows, customFieldRows] = await db.batch([
+        db
+            .select()
+            .from(collections)
+            .where(and(
+                eq(collections.id, id),
+                eq(collections.isActive, true),
+                isNull(collections.deletedAt),
+            ))
+            .limit(1),
+        selectStorefrontCustomFieldRows(db, "collection", id),
+    ] as never) as unknown as [Array<typeof collections.$inferSelect>, StorefrontCustomFieldRow[]];
+    const collection = collectionRows[0];
     if (!collection) return null;
 
     const config = normalizeCollectionConfig(collection.config);
@@ -1023,7 +1030,7 @@ export async function getPublicCollectionCatalog(
     const featuredProducts = await enrichProductsWithMedia(db, featuredRows);
 
     return {
-        collection: { ...collection, config },
+        collection: { ...collection, config, customFields: presentStorefrontCustomFields(customFieldRows) },
         categories: membership.categoryIds
             .map((categoryId) => categoryById.get(categoryId))
             .filter((category): category is { id: string; name: string; slug: string } => (

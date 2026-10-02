@@ -932,6 +932,7 @@ export class DvcHarness {
           this.stats.mutations += 1;
           this.remember(mutation.description);
           wrote = true;
+          if ((mutation.statements ?? 1) > 1) singleStatement = false;
         } else {
           this.stats.mutationsRefused += 1;
         }
@@ -959,7 +960,7 @@ export class DvcHarness {
       }
     } else if (kind === "json") {
       const target = this.rng.pick([
-        ["settings", "value"], ["theme_settings", "colors"], ["collections", "config"], ["hero_sliders", "images"],
+        ["settings", "value"], ["theme_settings", "colors"], ["collections", "config"],
         ["promotion_effects", "config"], ["checkout_languages", "language_data"], ["analytics", "config"], ["product_content_blocks", "settings"],
       ] as const);
       const mutation = this.mutator.update(target[0], target[1]);
@@ -1099,7 +1100,7 @@ export class DvcHarness {
         this.stats.mutations += 1;
         this.stats.writes += 1;
         this.remember(`sweep ${mutation.description}`);
-        if (this.clock.name === "triggers") await this.crossCheckTriggers(this.rowLog.since(before), triggerBefore, true);
+        if (this.clock.name === "triggers") await this.crossCheckTriggers(this.rowLog.since(before), triggerBefore, (mutation.statements ?? 1) === 1);
         this.now += 250;
         await this.verifyParts(false);
         this.absorbCoverage();

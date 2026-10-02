@@ -5,6 +5,11 @@ import { orderFormMessages, type OrderFormMessageKey } from "~/i18n/order-form";
 import type { BuyerPriceRange } from "~/lib/format-utils";
 import type { FulfillmentKind } from "@scalius/shared/fulfilment";
 import type { CustomizationSchema, LinePropertyInput, ResolvedLineProperty } from "@scalius/shared/line-properties";
+import {
+  ORDER_CHANNEL_SOURCE_MAX_LENGTH,
+  ORDER_CHANNEL_SOURCE_PRESETS,
+  normalizeOrderChannelSource,
+} from "@scalius/shared/order-channel";
 import { orderNeedsAddress } from "./order-line-properties";
 
 export interface Product {
@@ -76,6 +81,23 @@ export interface OrderFormProps {
   amendShipsNothing?: boolean;
   /** Amend only: the order's saved delivery method. */
   savedShippingMethod?: { id: string; name: string; kind?: "delivery" | "pickup" | null } | null;
+}
+
+/** The Sales channel picker: a preset source, or "other" with the merchant's own name for it. */
+export const ORDER_SOURCE_CHOICES = [...ORDER_CHANNEL_SOURCE_PRESETS, "other"] as const;
+export type OrderSourceChoice = (typeof ORDER_SOURCE_CHOICES)[number];
+
+/**
+ * What a new order sends as `channelSource`: the preset, the typed name
+ * (the server stores it as a slug), or nothing.
+ */
+export function orderChannelSourceInput(values: {
+  sourceChoice?: OrderSourceChoice | null;
+  sourceName?: string;
+}): string | null {
+  if (!values.sourceChoice) return null;
+  if (values.sourceChoice !== "other") return values.sourceChoice;
+  return values.sourceName?.trim() || null;
 }
 
 /** Validation messages are read when validation runs, so they follow the dashboard language. */
@@ -167,7 +189,22 @@ export const orderFormSchema = z.object({
   shippingMethodId: z.string().nullable().optional(),
   /** The picked method's kind: a pickup needs no address. Null for a custom charge (delivery). */
   shippingMethodKind: z.enum(["delivery", "pickup"]).nullable().optional(),
+  /** New orders: where the order came in (Sales channel card); none by default. */
+  sourceChoice: z.enum(ORDER_SOURCE_CHOICES).nullable().optional(),
+  /** The name typed for an "Other" source. */
+  sourceName: z.string().optional(),
 }).superRefine((values, context) => {
+  if (values.sourceChoice === "other") {
+    const name = values.sourceName?.trim() ?? "";
+    const message = !name
+      ? "sourceRequired"
+      : name.length > ORDER_CHANNEL_SOURCE_MAX_LENGTH
+        ? "sourceTooLong"
+        : normalizeOrderChannelSource(name) === null ? "sourceInvalid" : null;
+    if (message) {
+      context.addIssue({ code: "custom", path: ["sourceName"], message: translate(orderFormMessages, message) });
+    }
+  }
   // A pickup order or one with nothing physical has no delivery address (Wave A §2.7).
   if (!orderNeedsAddress(values)) return;
   const address = values.shippingAddress.trim();

@@ -17,8 +17,6 @@ export * from "./products";
 export * from "./categories";
 export * from "./brands";
 export * from "./collections";
-export * from "./header";
-export * from "./footer";
 export * from "./navigation";
 export * from "./pages";
 export * from "./orders";

@@ -29,6 +29,7 @@ import type { BatchItem } from "drizzle-orm/batch";
 import { calculateCustomerStats } from "@scalius/shared/customer-utils";
 import { fromMinor } from "@scalius/shared/money";
 import { unixToDate } from "@scalius/shared/utils";
+import type { OrderChannel } from "@scalius/shared/order-channel";
 import type {
     OrderListItem,
     OrderPaymentRecoverySummary,
@@ -419,6 +420,8 @@ export function buildShipmentRecoverySummary(
 export interface OrderListFactsRow {
     orderNumber: number | null;
     archivedAt: Date | null;
+    channel: OrderChannel;
+    channelSource: string | null;
     openRequestType: string | null;
     codStatus: string | null;
     codDeliveryAttempts: number | null;
@@ -430,15 +433,18 @@ export interface OrderListFactsRow {
 }
 
 /**
- * Per-order facts the list and detail both show: the open customer request,
- * the cash-on-delivery state, and the value of received returns versus what
- * was already refunded (the "refund owed" amount, ORD-05).
+ * Per-order facts the list and detail both show: where the order came from,
+ * the open customer request, the cash-on-delivery state, and the value of
+ * received returns versus what was already refunded (the "refund owed"
+ * amount, ORD-05).
  */
 export function orderListFactsSelection() {
     const outerOrderId = sql`${orders.id}`;
     return {
         orderNumber: orders.orderNumber,
         archivedAt: orders.archivedAt,
+        channel: orders.channel,
+        channelSource: orders.channelSource,
         requiresShipping: orders.requiresShipping,
         shippingMethodKind: orders.shippingMethodKind,
         pickupReadyAt: orders.pickupReadyAt,
@@ -486,6 +492,8 @@ export function presentOrderListFacts(order: OrderListFactsRow & {
     return {
         orderNumber: order.orderNumber,
         archivedAt: unixToDate(order.archivedAt),
+        channel: order.channel,
+        channelSource: order.channelSource,
         openRequestType: order.openRequestType as OrderListItem["openRequestType"],
         cod: order.paymentMethod === PaymentMethod.COD && order.codStatus
             ? { status: order.codStatus, deliveryAttempts: order.codDeliveryAttempts ?? 0 }

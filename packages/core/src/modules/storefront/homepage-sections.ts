@@ -1,13 +1,23 @@
 // What the homepage sections read besides product lists, each planned as
 // one statement of the homepage's second D1 batch (storefront.service.ts):
-// section images by media id and the deal countdowns' promotions.
+// section images by media id (hero slides included) and the deal
+// countdowns' promotions; and the theme's brand images, which the layout
+// batch reads through the published theme row.
 // Product lists and the brand wall are catalog reads
 // (catalog/home-lists.ts and catalog/home-brands.ts).
-import { media, promotions } from "@scalius/database/schema";
+import { media, promotions, themeSettings } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import type { safeBatch } from "@scalius/database/client";
 import { and, eq, inArray, isNotNull, isNull, notInArray, sql } from "drizzle-orm";
-import { homeSectionRequests, type StorefrontSection } from "@scalius/shared/storefront-theme";
+import {
+  EMPTY_STOREFRONT_BRAND_ASSETS,
+  storefrontBrandAssets,
+  storefrontThemeBrandMediaIds,
+  storefrontThemeMediaIds,
+  type StorefrontBrandAssets,
+  type StorefrontThemeBrand,
+  type StorefrontThemeDocument,
+} from "@scalius/shared/storefront-theme";
 import { getCurrentMediaUrl } from "../../integrations/storage";
 import { deps } from "../../cache-deps";
 
@@ -21,6 +31,37 @@ export interface HomeMediaAsset {
     height: number | null;
 }
 
+interface HomeMediaRow {
+    id: string;
+    kind: string;
+    objectKey: string;
+    variantWidth: number | null;
+    altText: string | null;
+    width: number | null;
+    height: number | null;
+}
+
+const homeMediaColumns = {
+    id: media.id,
+    kind: media.kind,
+    objectKey: media.objectKey,
+    variantWidth: media.variantWidth,
+    altText: media.altText,
+    width: media.width,
+    height: media.height,
+};
+
+/** Images only (never a video), at their published rendition's URL. */
+function homeMediaAssets(rows: readonly HomeMediaRow[]): HomeMediaAsset[] {
+    return rows.filter((row) => row.kind === "image").map((row) => ({
+        id: row.id,
+        url: getCurrentMediaUrl(row.objectKey, row.variantWidth),
+        alt: row.altText?.trim() ?? "",
+        width: row.width,
+        height: row.height,
+    }));
+}
+
 /** One statement for the section images: ready (or trashed) images only, never videos. */
 export function planHomeMedia(db: Database, mediaIds: readonly string[]): {
     statements: BatchStatement[];
@@ -32,15 +73,7 @@ export function planHomeMedia(db: Database, mediaIds: readonly string[]): {
     // WHERE, SQLite drives the lookup from the kind index and reads every
     // image in the library (75k rows at 30k products). Kind is checked on the
     // few rows found instead; status is NOT IN for the same reason.
-    const statement = db.select({
-        id: media.id,
-        kind: media.kind,
-        objectKey: media.objectKey,
-        variantWidth: media.variantWidth,
-        altText: media.altText,
-        width: media.width,
-        height: media.height,
-    }).from(media).where(and(
+    const statement = db.select(homeMediaColumns).from(media).where(and(
         sql`${media.id} IN (SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(mediaIds)}))`,
         // Ready or trashed: a trashed image keeps serving where it is used.
         notInArray(media.status, ["deleting", "deleted"]),
@@ -48,28 +81,60 @@ export function planHomeMedia(db: Database, mediaIds: readonly string[]): {
     return {
         statements: [statement],
         resolve(results, offset) {
-            const rows = (results[offset] as Array<{
-                id: string;
-                kind: string;
-                objectKey: string;
-                variantWidth: number | null;
-                altText: string | null;
-                width: number | null;
-                height: number | null;
-            }>).filter((row) => row.kind === "image");
-            const byId = new Map(rows.map((row) => [row.id, row]));
-            return mediaIds.flatMap((id) => {
-                const row = byId.get(id);
-                return row ? [{
-                    id: row.id,
-                    url: getCurrentMediaUrl(row.objectKey, row.variantWidth),
-                    alt: row.altText?.trim() ?? "",
-                    width: row.width,
-                    height: row.height,
-                }] : [];
-            });
+            const byId = new Map(homeMediaAssets(results[offset] as HomeMediaRow[]).map((asset) => [asset.id, asset]));
+            return mediaIds.flatMap((id) => byId.get(id) ?? []);
         },
     };
+}
+
+const BRAND_MEDIA_PATHS = ["$.brand.logo", "$.brand.footerLogo", "$.brand.favicon"] as const;
+/** Media ids are generated (`media_...`); this one names no row. */
+const NO_BRAND_MEDIA_ID = "none";
+
+/** The brand media ids a stored theme row names, read leniently for the read's dependencies. */
+function storedBrandMediaIds(value: string | null | undefined): string[] {
+    try {
+        const brand = (JSON.parse(value ?? "null") as { brand?: Record<string, unknown> } | null)?.brand ?? {};
+        return [...new Set(["logo", "footerLogo", "favicon"].map((key) => brand[key]).filter((id): id is string => typeof id === "string" && id !== ""))];
+    } catch {
+        return [];
+    }
+}
+
+/**
+ * One statement for the published theme's brand images (logo, footer logo,
+ * tab icon), joined in the layout batch through the stored theme row, so the
+ * layout needs no second round trip. `resolve` takes the stored row and the
+ * document the layout renders (the default when the row is unreadable).
+ */
+export function planPublishedThemeBrandMedia(db: Database) {
+    const brandIds = sql.join(BRAND_MEDIA_PATHS.map((path) => sql`
+        SELECT json_extract(${themeSettings.colors}, ${path}) FROM ${themeSettings} WHERE ${themeSettings.id} = 'default'`), sql` UNION ALL `);
+    const statement = db.select(homeMediaColumns).from(media).where(and(
+        sql`${media.id} IN (${brandIds})`,
+        notInArray(media.status, ["deleting", "deleted"]),
+    ));
+    return {
+        statement,
+        resolve(rows: unknown, storedTheme: string | null | undefined, brand: StorefrontThemeBrand): StorefrontBrandAssets {
+            // Every id the stored row names: its m:<id> advances when the image
+            // changes, so the layout follows a new rendition or a deletion. A
+            // row that names none matched no media row, and the theme key
+            // already covers that: `m:none` (no media row has that id, so it
+            // never advances) records the read as covered, not coarse.
+            const ids = storedBrandMediaIds(storedTheme);
+            deps.mediaItems(ids.length > 0 ? ids : [NO_BRAND_MEDIA_ID]);
+            return storefrontBrandAssets(brand, homeMediaAssets(rows as HomeMediaRow[]));
+        },
+    };
+}
+
+/** A theme's brand images (a preview's draft), in one read. */
+export async function readThemeBrandAssets(db: Database, brand: StorefrontThemeBrand): Promise<StorefrontBrandAssets> {
+    const ids = storefrontThemeBrandMediaIds(brand);
+    if (ids.length === 0) return EMPTY_STOREFRONT_BRAND_ASSETS;
+    const plan = planHomeMedia(db, ids);
+    return storefrontBrandAssets(brand, plan.resolve([await plan.statements[0]!], 0));
 }
 
 /** A running promotion's real end, for a deal countdown. */
@@ -126,11 +191,11 @@ export function planHomePromotions(db: Database, ids: readonly string[], now = D
 }
 
 /**
- * The images a theme's homepage sections name, for the dashboard's section
- * editor previews (the same capped id set and rules the storefront reads).
+ * Every image a theme names (brand, hero slides, section photos), for the
+ * dashboard's previews (the same rules the storefront reads, uncapped).
  */
-export async function readHomeSectionMedia(db: Database, sections: readonly StorefrontSection[]): Promise<HomeMediaAsset[]> {
-    const plan = planHomeMedia(db, homeSectionRequests(sections).mediaIds);
+export async function readThemeMedia(db: Database, theme: StorefrontThemeDocument): Promise<HomeMediaAsset[]> {
+    const plan = planHomeMedia(db, storefrontThemeMediaIds(theme));
     const [statement] = plan.statements;
     if (!statement) return [];
     return plan.resolve([await statement], 0);

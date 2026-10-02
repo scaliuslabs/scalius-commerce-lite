@@ -9,6 +9,12 @@ function equal(left, right) {
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
+function canonical(value) {
+  if (Array.isArray(value)) return value.map(canonical);
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonical(value[key])]));
+}
+
 function comparableList(rows, fields) {
   return (rows ?? [])
     .map((row) => Object.fromEntries(fields.map((field) => [field, row?.[field] ?? null])))
@@ -119,9 +125,10 @@ export function createApplyRuntime(readClient) {
         if (command.identity.id) return readClient.get(`/api/v1/admin/collections/${encodeURIComponent(command.identity.id)}`, command.logicalKey);
         return exactFromList(command, "/api/v1/admin/collections", "name", "collections");
       }
-      if (command.logicalKey.startsWith("hero-slider:")) {
-        const heroes = await readClient.get("/api/v1/admin/settings/hero-sliders", command.logicalKey);
-        return heroes.find((hero) => hero.id === command.identity.id || hero.type === command.identity.type) ?? null;
+      if (command.logicalKey === "theme:draft" || command.logicalKey === "theme:publish") {
+        const workspace = await readClient.get("/api/v1/admin/settings/theme/workspace", command.logicalKey);
+        const side = command.logicalKey === "theme:draft" ? workspace.draft : workspace.published;
+        return { id: "theme", revision: side.revision, theme: side.theme };
       }
       throw new Error(`No resolver for ${command.logicalKey}.`);
     },
@@ -159,11 +166,9 @@ export function createApplyRuntime(readClient) {
         ])
           && equal(unwrapConfig(current.config), command.body.config);
       }
-      if (command.logicalKey.startsWith("hero-slider:")) {
-        if (command.body.images === undefined) return current.isActive === command.body.isActive;
-        return current.type === (command.body.type ?? command.desired.type)
-          && equal(current.images, command.body.images)
-          && current.isActive === command.body.isActive;
+      if (command.logicalKey === "theme:draft" || command.logicalKey === "theme:publish") {
+        // Revision 0 is the unsaved default, never a saved draft or publication.
+        return current.revision > 0 && equal(canonical(current.theme), canonical(command.desired.theme));
       }
       return false;
     },

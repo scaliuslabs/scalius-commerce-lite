@@ -12,6 +12,7 @@ import { formatDateTime, useMessages } from "~/i18n";
 import {
   deliveryMethodLabel,
   fulfillmentStatusLabel,
+  orderChannelLabel,
   orderMessages,
   orderStatusLabel,
   paymentMethodLabel,
@@ -27,6 +28,7 @@ import {
   PAYMENT_METHODS,
   PAYMENT_RECOVERY_STATES,
   PAYMENT_STATUSES,
+  SALES_CHANNELS,
   type OrderListSearch,
 } from "./order-list-search";
 
@@ -218,6 +220,12 @@ export function OrderListToolbar({
               onChange={(value) =>
                 filter({ deliveryMethod: value as OrderListSearch["deliveryMethod"] })}
               options={DELIVERY_METHODS.map((method) => ({ value: method, label: deliveryMethodLabel(to, method) }))}
+            />
+            <FilterSelect
+              label={t("salesChannel")}
+              value={search.channel}
+              onChange={(value) => filter({ channel: value as OrderListSearch["channel"] })}
+              options={SALES_CHANNELS.map((channel) => ({ value: channel, label: orderChannelLabel(to, channel) }))}
             />
             <FilterSelect
               label={t("onlinePayment")}

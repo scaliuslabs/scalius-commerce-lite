@@ -1,19 +1,35 @@
 /**
- * What every footer variant reads, computed once: identity, contact facts,
- * menus (flat API menus nested, "Track your order" placed), the policy links
- * no menu already carries, and social links. Variants choose structure only.
+ * What every footer variant reads, computed once: the footer block's words
+ * (tagline, about, the name after ©), the theme's footer logo, identity and
+ * contact facts (Business settings), menus ("Track your order" placed), the
+ * policy links no menu already carries, and social links. Variants choose
+ * structure only.
  */
-import type { FooterData, FooterMenu, FooterMenuLink, SocialLink } from "@/lib/api";
+import type { FooterMenu, FooterMenuLink, SocialLink } from "@/lib/api";
+import type { StorefrontBrandAsset } from "@scalius/shared/storefront-theme";
 import { mediaImageUrl } from "@/lib/media-url";
-import { optimizeRichContentImages } from "@/lib/rich-content-media";
-import { sanitizeHtml } from "@scalius/shared/html-sanitize";
-import { applyStorefrontPrefetchPolicyToHtml } from "@/lib/prefetch-policy";
 import { telHref, whatsappHref } from "@/lib/store-identity";
 import { placeTrackOrderLink } from "@/lib/footer-links";
 import type { StorefrontBusinessInfo } from "@/lib/commerce-structured-data";
 
+/** The words every footer variant's settings carry (plain text). */
+export interface FooterWords {
+  tagline: string;
+  about: string;
+  copyright: string;
+}
+
+/** The footer block's words from its resolved settings (missing ones read as empty). */
+export function footerWords(settings: Record<string, unknown>): FooterWords {
+  const text = (value: unknown) => (typeof value === "string" ? value.trim() : "");
+  return { tagline: text(settings.tagline), about: text(settings.about), copyright: text(settings.copyright) };
+}
+
 export interface FooterInput {
-  footerData: FooterData;
+  words: FooterWords;
+  /** The theme's footer logo; null: the store name in text. */
+  logo: StorefrontBrandAsset | null;
+  menus: FooterMenu[];
   storeName: string | null;
   storePhone: string | null;
   social: SocialLink[];
@@ -21,10 +37,9 @@ export interface FooterInput {
   business: StorefrontBusinessInfo | null | undefined;
 }
 
-export type FooterNestedMenu = FooterMenu & { links: FooterMenuLink[] };
-
 export interface FooterModel {
-  logo: { src: string; alt: string };
+  /** The footer logo's image (`src` "" without one: the store name in text). */
+  logo: { src: string };
   brandName: string;
   storePhone: string | null;
   phoneHref: string | null;
@@ -34,10 +49,11 @@ export interface FooterModel {
   /** Anything to contact: a contact block without it is left out, not shown empty. */
   hasContactDetails: boolean;
   tagline: string;
-  description: string;
-  descriptionHtml: string;
+  /** The about text's paragraphs (plain text: blank lines separate them). */
+  about: string[];
+  /** The name after ©: the footer's own words, else the store name. */
   copyrightName: string;
-  menus: FooterNestedMenu[];
+  menus: FooterMenu[];
   trackOrderInBottomRow: boolean;
   /** Policy pages (payment gateways require them visible) no menu already links. */
   policyLinks: Array<{ title: string; href: string }>;
@@ -46,33 +62,17 @@ export interface FooterModel {
   social: Array<SocialLink & { optimizedIconUrl: string | null }>;
 }
 
-/** Flat API menus (items + rootIds) as nested links; nested menus pass through. */
-export function nestedFooterLinks(menu: FooterMenu): FooterMenuLink[] {
-  if (menu.links && Array.isArray(menu.links) && menu.links.length > 0) return menu.links;
-  if (!menu.items || !menu.rootIds) return [];
-  const items = menu.items;
-  const build = (ids: string[], seen: Set<string>): FooterMenuLink[] =>
-    ids
-      .map((id) => {
-        const item = items[id];
-        if (!item || seen.has(id)) return null;
-        const link: FooterMenuLink = {
-          id: item.id,
-          title: item.title,
-          href: item.href || "#",
-          openInNewTab: item.openInNewTab,
-        };
-        if (item.childIds && item.childIds.length > 0) link.subMenu = build(item.childIds, new Set([...seen, id]));
-        return link;
-      })
-      .filter((link): link is FooterMenuLink => link !== null);
-  return build(menu.rootIds, new Set());
+/** Plain text as paragraphs: blank lines separate them. */
+function paragraphs(text: string): string[] {
+  return text
+    .split(/\n\s*\n/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean);
 }
 
-export function footerModel(input: FooterInput, url: URL): FooterModel {
-  const { footerData, storeName, storePhone, social, policies, business } = input;
-  const logo = footerData?.logo || { src: "", alt: "" };
-  const brandName = storeName || logo.alt || footerData?.copyrightText || "";
+export function footerModel(input: FooterInput): FooterModel {
+  const { words, logo, storeName, storePhone, social, policies, business } = input;
+  const brandName = storeName || "";
   const phoneHref = telHref(storePhone);
   const chatHref = whatsappHref(storePhone);
   const storeEmail = business?.email?.trim() || null;
@@ -80,9 +80,8 @@ export function footerModel(input: FooterInput, url: URL): FooterModel {
     .map((part) => part?.trim())
     .filter(Boolean)
     .join(", ");
-  const description = footerData?.description || "";
   const { menus, inBottomRow } = placeTrackOrderLink(
-    (footerData?.menus || []).map((menu): FooterNestedMenu => ({ ...menu, links: nestedFooterLinks(menu) })),
+    input.menus.map((menu): FooterMenu => ({ ...menu, links: Array.isArray(menu.links) ? menu.links : [] })),
     "Track your order",
   );
   const linkedHrefs = new Set(menus.flatMap((menu) => menu.links.map((link) => (link.href ?? "").replace(/\/+$/, ""))));
@@ -90,7 +89,7 @@ export function footerModel(input: FooterInput, url: URL): FooterModel {
     .map((policy) => ({ title: policy.title, href: policy.path }))
     .filter((link) => !linkedHrefs.has(link.href));
   return {
-    logo,
+    logo: { src: logo?.url ?? "" },
     brandName,
     storePhone,
     phoneHref,
@@ -98,10 +97,10 @@ export function footerModel(input: FooterInput, url: URL): FooterModel {
     storeEmail,
     storeAddress,
     hasContactDetails: Boolean(phoneHref || chatHref || storeEmail || storeAddress),
-    tagline: footerData?.tagline || "",
-    description,
-    descriptionHtml: applyStorefrontPrefetchPolicyToHtml(optimizeRichContentImages(sanitizeHtml(description)), url),
-    copyrightName: storeName || footerData?.copyrightText || "",
+    tagline: words.tagline,
+    about: paragraphs(words.about),
+    // The line ends with its own ". All rights reserved.": a name ending in "." (Ltd.) keeps one dot.
+    copyrightName: (words.copyright || brandName).replace(/\.+$/, ""),
     menus,
     trackOrderInBottomRow: inBottomRow,
     policyLinks,
@@ -119,7 +118,7 @@ export function footerModel(input: FooterInput, url: URL): FooterModel {
 }
 
 /** The directory footer's links: each menu's links and their children, capped overall (about 60 curated links). */
-export function directoryLinks(menus: FooterNestedMenu[], max = 60): Array<{ title: string; links: FooterMenuLink[] }> {
+export function directoryLinks(menus: FooterMenu[], max = 60): Array<{ title: string; links: FooterMenuLink[] }> {
   let left = max;
   return menus
     .map((menu) => {

@@ -18,11 +18,8 @@ import {
 import { and, eq, sql } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import type { BuyerAvailabilityBand } from "@scalius/shared/buyer-availability";
-import {
-    presentBuyerPricing,
-    storeCurrencyCodeSql,
-    storeDecimalPlacesFromCode,
-} from "../products/money";
+import { presentBuyerPricing } from "../products/money";
+import { storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../settings/store-money";
 import { loadProductMediaProjections, resolveProductCardImages } from "../products/media";
 import {
     buyerState,

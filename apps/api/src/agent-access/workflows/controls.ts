@@ -402,9 +402,7 @@ export const AGENT_WORKFLOW_CONTROLS = [
       "dashboard.content.list",
       "dashboard.navigation.placements_manifest",
       "dashboard.navigation.menus_list",
-      "dashboard.settings_header.get_header",
-      "dashboard.settings_homepage_presentation.get_homepage_presentation",
-      "dashboard.hero_sliders.list",
+      "dashboard.theme.workspace_get",
     ],
     forbiddenOperationIds: [
       "dashboard.products.create",
@@ -422,9 +420,9 @@ export const AGENT_WORKFLOW_CONTROLS = [
     rules: [
       "Do not substitute product, category, attribute, inventory, or global SEO writes for page-scoped campaign work.",
       "Explain that CMS pages accept sanitized HTML, not semantic hero, collection, or FAQ blocks.",
-      "Ask whether an untyped HTML page and desktop/mobile hero-slide fallback are acceptable.",
+      "Ask whether an untyped HTML page is acceptable; the announcement and hero slides are theme draft changes the merchant previews and publishes.",
       "Require exact page SEO, media, menu placement, announcement, hero images, order, and publish facts.",
-      "Keep theme and unrelated layout unchanged; perform discovery reads only until the reviewed facts are confirmed.",
+      "Keep the published theme and unrelated layout unchanged; perform discovery reads only until the reviewed facts are confirmed.",
     ],
   },
   {

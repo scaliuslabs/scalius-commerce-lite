@@ -11,7 +11,8 @@
 //   4. the 400 categories reshaped into a 25/125/125/125 four-level tree with
 //      long and Bangla names; the 300 brands as brand entities;
 //   5. three video products (video first with a poster, video second, a raw
-//      27 MB video with no poster), two hero sliders, the five scale menus;
+//      27 MB video with no poster), the five scale menus, and the homepage in
+//      the published theme (hero slides, category tiles, collections);
 //   6. three isolated apparel, grocery, and home-goods PDP fixtures (one
 //      product per category; dense listing checks still use the scale catalog);
 //   7. the catalogue projections (migration 0091's statements).
@@ -52,7 +53,7 @@ export async function syncPlatform(db, ports) {
   db.prepare(platformSyncSql(origins(ports))).all();
 }
 
-/** Give every template's home page the same real, published category rail. */
+/** The homepage's category tiles: the first 12 published roots, each with a real photo. */
 export function seedHomepageCategories(db, mediaUrl) {
   const categories = db.prepare("SELECT id, image_url FROM categories WHERE status = 'published' AND deleted_at IS NULL AND parent_id IS NULL ORDER BY id LIMIT 12").all();
   const image = db.prepare(`SELECT m.object_key, m.variant_width FROM products AS p INDEXED BY products_category_id_idx
@@ -68,15 +69,45 @@ export function seedHomepageCategories(db, mediaUrl) {
       const match = image.get(category.id);
       if (match) update.run(`${base}/${match.object_key}/${match.variant_width}.webp`, category.id);
     }
-    db.prepare(`INSERT OR REPLACE INTO settings (id, key, value, type, category, revision)
-      VALUES ('set_fid_homepage', 'document', ?, 'json', 'homepage', 1)`).run(JSON.stringify({
-      categoryRail: { enabled: categories.length > 0, title: "Shop by category", categoryIds: categories.map((category) => category.id) },
-      trustStrip: { enabled: false },
-      homeMode: "catalog",
-      landingProductId: null,
-    }));
   });
   return categories.map((category) => category.id);
+}
+
+/**
+ * Every template's homepage content, in the published theme (the one place
+ * it lives): the wide hero banners as slides (the square ones as the first
+ * slides' phone images), the category tiles' categories and the first eight
+ * active collections. Media ids carry no host. lib/theme.mjs `applyTheme`
+ * carries this content into each template it applies, as choosing a template
+ * in the dashboard does.
+ */
+export function seedHomepageTheme(db, theme, { categoryIds }) {
+  const banners = db.prepare("SELECT id, width, height FROM media WHERE id GLOB 'med_fid_h*' AND kind = 'image' ORDER BY id").all();
+  const square = banners.filter((m) => m.width === m.height);
+  const slides = banners.filter((m) => m.width > m.height).map((m, i) => ({
+    image: m.id,
+    ...(square[i] ? { phoneImage: square[i].id } : {}),
+    focalPoint: { x: 50, y: 50 },
+    alt: `Mega sale banner ${i + 1}`,
+    link: "/search?q=laptop",
+  }));
+  const collectionIds = db.prepare("SELECT id FROM collections WHERE is_active = 1 AND deleted_at IS NULL ORDER BY sort_order, id LIMIT 8").all().map((row) => row.id);
+  const content = { hero: { slides }, "category-tiles": { title: "Shop by category", categoryIds }, collections: { collectionIds } };
+  const placed = new Set();
+  const home = theme.pages.home.map((section) => {
+    if (placed.has(section.type) || !content[section.type]) return section;
+    placed.add(section.type);
+    return { ...section, settings: { ...section.settings, ...content[section.type] } };
+  });
+  const missing = Object.keys(content).filter((type) => !placed.has(type));
+  if (missing.length) throw new Error(`the base theme has no ${missing.join(", ")} section`);
+  const now = Math.floor(Date.now() / 1000);
+  tx(db, () => {
+    db.prepare("INSERT INTO theme_settings (id, colors, revision, created_at, updated_at) VALUES ('default', ?, 1, ?, ?) ON CONFLICT(id) DO UPDATE SET colors = excluded.colors, revision = theme_settings.revision + 1, updated_at = excluded.updated_at")
+      .run(JSON.stringify({ ...theme, pages: { ...theme.pages, home } }), now, now);
+    db.prepare("DELETE FROM theme_settings_drafts WHERE id = 'default'").run();
+  });
+  return { slides, categoryIds, collectionIds };
 }
 
 /** Small non-electronics fixtures for theme PDPs; the scale catalogue remains intact. */
@@ -181,7 +212,7 @@ export function seedReferenceProducts(db, mediaUrl) {
   });
 }
 
-function shapeStore(stateDir, pool, ports, log) {
+function shapeStore(stateDir, pool, ports, log, theme) {
   const db = openDb(stateDir);
   const q = (sql, ...a) => db.prepare(sql).all(...a);
   const run = (sql, ...a) => db.prepare(sql).run(...a);
@@ -286,20 +317,14 @@ function shapeStore(stateDir, pool, ports, log) {
     Object.assign(video, { pdpvideo: `/products/${a.slug}`, pdpvideo2nd: `/products/${b.slug}`, pdprawvideo: `/products/${c.slug}` });
   }
 
-  // Hero sliders (desktop: three wide banners; mobile: two squares).
-  const media = origins(ports).mediaUrl;
+  // Hero banners (three wide, two square) as Files images; the theme names them by id.
   tx(db, () => {
     for (const h of pool.heroes.filter((m) => m.key.startsWith("h"))) {
       run("INSERT OR REPLACE INTO media (id, filename, kind, object_key, size, mime_type, width, height, variant_width, status, created_at, updated_at) VALUES (?, ?, 'image', ?, ?, 'image/jpeg', ?, ?, ?, 'ready', ?, ?)", `med_fid_${h.key.slice(0, 4)}`, h.key, `media/pool/${h.key}`, h.size, h.w, h.h, h.master, now, now);
     }
-    const url = (h) => `${media}/media/pool/${h.key}/${h.master}.webp`;
-    const heroes = pool.heroes.filter((m) => m.key.startsWith("h"));
-    const d = heroes.filter((m) => m.w > m.h).map((h, i) => ({ id: `s${i}`, url: url(h), title: `Mega sale banner ${i + 1}`, heading: "", buttonLabel: "", link: "/search?q=laptop", focalPoint: { x: 50, y: 50 } }));
-    const m = heroes.filter((x) => x.w === x.h).map((h, i) => ({ id: `m${i}`, url: url(h), title: `Mobile banner ${i + 1}`, heading: "", buttonLabel: "", link: "/search?q=phone", focalPoint: { x: 50, y: 50 } }));
-    db.exec("DELETE FROM hero_sliders");
-    run("INSERT INTO hero_sliders (id, type, images, is_active, created_at, updated_at) VALUES ('slider_fid_d', 'desktop', ?, 1, ?, ?)", JSON.stringify(d), now, now);
-    run("INSERT INTO hero_sliders (id, type, images, is_active, created_at, updated_at) VALUES ('slider_fid_m', 'mobile', ?, 1, ?, ?)", JSON.stringify(m), now, now);
   });
+  const homepage = seedHomepageTheme(db, theme, { categoryIds: featuredCategories });
+  log(`  homepage theme: ${homepage.slides.length} slides, ${homepage.categoryIds.length} categories, ${homepage.collectionIds.length} collections`);
 
   fillProjections(db);
   // Units sold in the last 30 days, as the nightly refresh computes them
@@ -373,7 +398,10 @@ export async function seedLarge({ stateDir, ports, log = console.log }) {
   const pool = await generatePool(poolDir, { log });
   pool.dir = poolDir;
   step("store shape");
-  const pages = shapeStore(stateDir, pool, ports, log);
+  // A fresh store's theme; the checks apply each template over it, keeping its homepage content.
+  const { themeModules } = await import("./lib/theme.mjs");
+  const theme = structuredClone((await themeModules()).T.DEFAULT_STOREFRONT_THEME);
+  const pages = shapeStore(stateDir, pool, ports, log, theme);
   step("menus");
   seedMenus(stateDir, { log });
   const db = openDb(stateDir);

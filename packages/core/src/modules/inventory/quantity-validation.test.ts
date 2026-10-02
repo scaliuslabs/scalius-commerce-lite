@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Database } from "@scalius/database/client";
-import { deductMultiple, deductStock } from "./deduct";
 import {
   releaseMultiple,
   releaseReservation,
@@ -22,8 +21,6 @@ const quantityMutations: Array<[string, QuantityMutation]> = [
   ["reserveStock", (db, quantity) => reserveStock(db, "variant_1", quantity)],
   ["reserveMultiple", (db, quantity) => reserveMultiple(db, [{ variantId: "variant_1", quantity }])],
   ["reserveStockBatch", (db, quantity) => reserveStockBatch(db, [{ variantId: "variant_1", quantity }])],
-  ["deductStock", (db, quantity) => deductStock(db, "variant_1", quantity)],
-  ["deductMultiple", (db, quantity) => deductMultiple(db, [{ variantId: "variant_1", quantity }])],
   ["releaseReservation", (db, quantity) => releaseReservation(db, "variant_1", quantity)],
   ["releaseMultiple", (db, quantity) => releaseMultiple(db, [{ variantId: "variant_1", quantity }])],
   [
@@ -60,13 +57,6 @@ describe("inventory mutation quantity validation", () => {
     [
       "reserveStockBatch",
       (db: Database) => reserveStockBatch(db, [
-        { variantId: "variant_1", quantity: 1 },
-        { variantId: "variant_2", quantity: 0 },
-      ]),
-    ],
-    [
-      "deductMultiple",
-      (db: Database) => deductMultiple(db, [
         { variantId: "variant_1", quantity: 1 },
         { variantId: "variant_2", quantity: 0 },
       ]),

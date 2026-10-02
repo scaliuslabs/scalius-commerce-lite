@@ -16,7 +16,8 @@ import DrillDrawer from "./DrillDrawer.astro";
 
 interface Props {
   navigation: NavigationItem[];
-  contact: { phone: string; text: string };
+  /** The store's support phone (Business settings): the drawer's call card. */
+  phone: string | null;
   social?: SocialLink[];
   /** Id base: `${id}-panel`, `${id}-overlay`, `${id}-close`. */
   id?: string;
@@ -32,7 +33,7 @@ interface Props {
 
 const {
   navigation = [],
-  contact,
+  phone,
   social = [],
   id = "mobile-menu",
   tree = "accordion",
@@ -47,7 +48,7 @@ const menuHasTrackOrder = (function has(list: NavigationItem[]): boolean {
     return href === "/track-order" || /^track (your )?order$/i.test(item.title.trim()) || has(item.subMenu ?? []);
   });
 })(navigation);
-const phoneHref = telHref(contact.phone);
+const phoneHref = telHref(phone);
 const phoneOnly = screens === "phone";
 const navId = id === "mobile-menu" ? "mobile-nav-container" : `${id}-nav`;
 ---
@@ -80,11 +81,14 @@ const navId = id === "mobile-menu" ? "mobile-nav-container" : `${id}-nav`;
     class="flex items-center justify-between px-5 py-3 border-b border-border shrink-0 bg-card shadow-[0_1px_2px_rgba(0,0,0,0.03)] z-10"
   >
     <h2 class="text-base font-bold tracking-tight text-foreground">{title}</h2>
+    {/* JS-only; without JavaScript the layout's <noscript> rule hides every
+        [data-drawer-close] and the link below clears the :target instead. */}
     <button
       id={`${id}-close`}
       type="button"
       class="-mr-3 flex h-11 w-11 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground active:scale-95"
       aria-label="Close menu"
+      data-drawer-close
     >
       <X className="h-5 w-5 stroke-[1.5]" />
     </button>
@@ -96,7 +100,6 @@ const navId = id === "mobile-menu" ? "mobile-nav-container" : `${id}-nav`;
       >
         <X className="h-5 w-5 stroke-[1.5]" />
       </a>
-      <style>{`#${id}-close { display: none !important; }`}</style>
     </noscript>
   </div>
 
@@ -139,7 +142,7 @@ const navId = id === "mobile-menu" ? "mobile-nav-container" : `${id}-nav`;
         <div class="mt-4 flex flex-wrap gap-2 border-t border-border px-3 pt-4">
           {social.map((item) => {
             if (!item.url) return null;
-            const displayTitle = item.label || item.platform || "Social";
+            const displayTitle = item.label || "Social";
             const href = item.url.startsWith("http")
               ? item.url
               : `https://${item.url}`;
@@ -201,7 +204,7 @@ const navId = id === "mobile-menu" ? "mobile-nav-container" : `${id}-nav`;
               Call support
             </p>
             <p class="text-sm font-bold text-foreground tracking-tight truncate">
-              {contact.phone}
+              {phone}
             </p>
           </div>
           <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground" />

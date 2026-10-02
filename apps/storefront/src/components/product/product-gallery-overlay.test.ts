@@ -27,7 +27,9 @@ describe("product gallery zoom dialog", () => {
     const rootRule = gallery.match(/#product-gallery\s*\{([^}]*)\}/)?.[1] ?? "";
     expect(rootRule).not.toMatch(TRAPS_FIXED);
     const rootTag = gallery.match(/<div\s+id="product-gallery"[\s\S]*?>/)?.[0] ?? "";
-    expect(rootTag).not.toMatch(/style=/);
+    // Custom properties on the root are fine; nothing on it may trap the dialog.
+    expect(rootTag).toContain('id="product-gallery"');
+    expect(rootTag).not.toMatch(TRAPS_FIXED);
     const layoutRules = layout.match(/<style>([\s\S]*)<\/style>/)?.[1] ?? "";
     expect(layoutRules).not.toMatch(TRAPS_FIXED);
   });

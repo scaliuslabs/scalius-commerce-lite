@@ -83,7 +83,6 @@ export const ADMIN_NAV: readonly NavItem[] = [
     children: [
       { key: "theme", to: "/admin/online-store/theme" },
       { key: "navigation", to: "/admin/online-store/navigation" },
-      { key: "homepageBanners", to: "/admin/online-store/banners" },
       { key: "preferences", to: "/admin/online-store/preferences" },
     ],
   },

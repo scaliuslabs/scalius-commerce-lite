@@ -135,6 +135,41 @@ export async function runCacheDepScenario(driver: CacheDepDriver): Promise<void>
     .toEqual(["lm:all", "lm:brand:brd_xbrand01", "lm:cat:cat_other", "p:p1", "t:product_buyer_state"]);
   await driver.exec("UPDATE product_buyer_state SET is_public = 0 WHERE product_id = 'p1'");
 
+  // Custom fields (H4): a value reaches buyers only through a storefront-visible
+  // definition, as a fact of its owner; a visible definition is `cf:<owner type>`.
+  const definition = (id: string, ownerType: string, key: string, visible: 0 | 1) =>
+    `INSERT INTO custom_field_definitions (id, owner_type, namespace, key, name, type, storefront_visible) VALUES ('${id}', '${ownerType}', 'custom', '${key}', 'Field ${key}', 'single_line_text', ${visible})`;
+  const value = (definitionId: string, ownerType: string, ownerId: string, text: string) =>
+    `INSERT INTO custom_field_values (definition_id, owner_type, owner_id, value) VALUES ('${definitionId}', '${ownerType}', '${ownerId}', '${text}')`;
+  expect(await bumped(driver, definition("cfd_hidden01", "product", "cost_note", 0))).toEqual([]);
+  expect(await bumped(driver, value("cfd_hidden01", "product", "p1", "internal"))).toEqual([]);
+  expect(await bumped(driver, definition("cfd_visible1", "product", "care_guide", 1))).toEqual(["cf:product", "t:custom_field_definitions"]);
+  expect(await bumped(driver, value("cfd_visible1", "product", "p1", "Hand wash"))).toEqual(["p:p1", "t:custom_field_values"]);
+  expect(await bumped(driver, "UPDATE custom_field_values SET value = 'Dry clean' WHERE definition_id = 'cfd_visible1'"))
+    .toEqual(["p:p1", "t:custom_field_values"]);
+  expect(await bumped(driver, "UPDATE custom_field_values SET updated_at = updated_at + 1 WHERE definition_id = 'cfd_visible1'")).toEqual([]);
+  // A SKU's value is its product's fact.
+  expect(await bumped(driver, definition("cfd_variant1", "variant", "fit", 1))).toEqual(["cf:variant", "t:custom_field_definitions"]);
+  expect(await bumped(driver, value("cfd_variant1", "variant", "v1", "Slim"))).toEqual(["p:p1", "t:custom_field_values"]);
+  // A category's value advances the category's own keys.
+  expect(await bumped(driver, definition("cfd_category", "category", "banner_note", 1))).toEqual(["cf:category", "t:custom_field_definitions"]);
+  expect(await bumped(driver, value("cfd_category", "category", "cat_leaf", "Eid"))).toEqual(["c:*", "c:cat_leaf", "t:custom_field_values"]);
+  // Customer and order fields can never be visible.
+  await expect(driver.exec(definition("cfd_customer", "customer", "vip", 1))).rejects.toThrow();
+  // Hiding a definition advances its owner type (the old image); then its edits are invisible.
+  expect(await bumped(driver, "UPDATE custom_field_definitions SET storefront_visible = 0 WHERE id = 'cfd_visible1'"))
+    .toEqual(["cf:product", "t:custom_field_definitions"]);
+  expect(await bumped(driver, "UPDATE custom_field_definitions SET name = 'Care' WHERE id = 'cfd_visible1'")).toEqual([]);
+  expect(await bumped(driver, "UPDATE custom_field_values SET value = 'Spot clean' WHERE definition_id = 'cfd_visible1'")).toEqual([]);
+  // Validations, description and revision are never shown to buyers.
+  expect(await bumped(driver, "UPDATE custom_field_definitions SET validations = '{\"max\":\"10\"}', description = 'x', revision = revision + 1 WHERE id = 'cfd_category'")).toEqual([]);
+  // Deleting a visible definition advances its owner type; its values go with it.
+  expect(await bumped(driver, "DELETE FROM custom_field_definitions WHERE id = 'cfd_category'"))
+    .toEqual(["cf:category", "t:custom_field_definitions"]);
+  expect(await driver.rows("SELECT owner_id FROM custom_field_values WHERE definition_id = 'cfd_category'")).toEqual([]);
+  // A value's owner type is its definition's (composite foreign key).
+  await expect(driver.exec(value("cfd_variant1", "product", "p1", "x"))).rejects.toThrow();
+
   // Coarse (a rebuild batch): only `store`.
   expect(await bumped(driver, [
     "UPDATE cache_clock SET coarse = 1 WHERE id = 1",
@@ -147,4 +182,6 @@ export async function runCacheDepScenario(driver: CacheDepDriver): Promise<void>
   const removed = await bumped(driver, "DELETE FROM products WHERE id = 'p1'");
   expect(removed).toEqual(expect.arrayContaining(["p:p1", "srch", "t:products", "t:product_variants"]));
   expect(removed).not.toContain("t:product_buyer_state"); // it was no longer public
+  // A permanently deleted product takes its own and its SKUs' custom field values.
+  expect(await driver.rows("SELECT owner_id FROM custom_field_values WHERE owner_id IN ('p1', 'v1')")).toEqual([]);
 }

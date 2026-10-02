@@ -28,12 +28,18 @@ import ProductSpecTable from "@/components/product/modules/ProductSpecTable.astr
 import ProductFeatureList from "@/components/product/modules/ProductFeatureList.astro";
 import ProductContentBlocks from "@/components/product/modules/ProductContentBlocks.astro";
 import ProductWarrantyModule from "@/components/product/modules/ProductWarrantyModule.astro";
+import ProductBoughtTogether from "@/components/product/modules/ProductBoughtTogether.astro";
+import ProductCompareSimilar from "@/components/product/modules/ProductCompareSimilar.astro";
+import ProductPolicies from "@/components/product/modules/ProductPolicies.astro";
+import ProductRecentlyViewed from "@/components/product/modules/ProductRecentlyViewed.astro";
 import ProductDetails from "@/components/product/ProductDetails.astro";
 import {
   KEY_ATTRIBUTES_MAX,
   buyBoxFeatures,
+  compareSimilarProducts,
   descriptionInInfoColumn,
   featuresPlacement,
+  frequentlyBoughtTogether,
   productPageModules,
   publicSpecificationRows,
   renderedContentBlocks,
@@ -145,11 +151,26 @@ const buyBoxShowsEmi = themeLayout.buyBox.emi;
 
 // Modules the product has data for, in the template's order (a module with
 // nothing to show is left out); the description stays in the buy box on
-// classic and Dawn.
+// classic and Dawn. Every module reads data this page already has.
+const boughtTogether = frequentlyBoughtTogether(recommendations);
+const similarProducts = compareSimilarProducts({ id: product.id, categoryId: category?.id ?? product.categoryId ?? null }, recommendations);
+const storePolicies = layoutData.policies ?? [];
 const pageModules = productPageModules(resolvedTheme.blocks.product.below, product, {
   look: buyBoxLook,
   hasRelated: recommendations.products.length > 0,
+  boughtTogether: boughtTogether.length,
+  similar: similarProducts.length,
+  policies: storePolicies.length,
 });
+// The related list leaves out what the bundle strip already shows; what is
+// left is not all co-purchases, so it reads "You might also like".
+const relatedRecommendations = pageModules.includes("frequently-bought-together")
+  ? {
+      reason: "similar" as const,
+      products: recommendations.products.filter((item) => !boughtTogether.some((shown) => shown.id === item.id)),
+    }
+  : recommendations;
+const sticky = resolvedTheme.blocks.product.sticky;
 const detailAnchorIds: Record<string, string> = {
   "about-bullets": "about",
   "key-attributes": "highlights",
@@ -158,7 +179,7 @@ const detailAnchorIds: Record<string, string> = {
   "content-blocks": "content",
 };
 const detailAnchorId = pageModules.map((module) => detailAnchorIds[module]).find(Boolean) ?? null;
-const exploreAnchorId = pageModules.includes("related") ? "related-products" : null;
+const exploreAnchorId = pageModules.includes("related") && relatedRecommendations.products.length > 0 ? "related-products" : null;
 const reviewsAnchorId = pageModules.includes("reviews") && readProductReviews(product.reviews) ? "reviews" : null;
 const detailsInBuyBox = descriptionInInfoColumn(buyBoxLook);
 const featuresAt = featuresPlacement(pageModules, buyBoxLook);
@@ -668,7 +689,6 @@ const productCategoryAnalytics = productCategory
     data-product-discount-amount={String(product.discountAmount || 0)}
     data-currency-decimal-places={String(currencyDecimalPlaces)}
     data-product-free-delivery={product.freeDelivery.toString()}
-    data-marketplace-pdp={buyBoxLook?.facts === "column" ? "" : undefined}
     data-product-has-variants={product.hasVariants.toString()}
     data-fb-product-details={JSON.stringify({
       id: product.id,
@@ -760,15 +780,48 @@ const productCategoryAnalytics = productCategory
       </ProductPageLayout>
     </section>
 
-    {resolvedTheme.blocks.product.sticky.phoneBottom === "buy-bar" && <StickyBuyBar productName={product.name} />}
+    <StickyBuyBar productName={product.name} phone={sticky.phoneBottom === "buy-bar"} desktop={sticky.desktop === "product-bar"} />
 
-    {buyBoxLook?.facts === "column" && (
-      <ProductSectionNav detailsId={detailAnchorId} exploreId={exploreAnchorId} reviewsId={reviewsAnchorId} />
-    )}
+    <ProductSectionNav
+      detailsId={detailAnchorId}
+      exploreId={exploreAnchorId}
+      reviewsId={reviewsAnchorId}
+      phone={sticky.phoneTop === "anchor-bar"}
+      desktop={sticky.desktop === "anchor-bar"}
+    />
 
     {/* The template's modules below the fold, in its order. */}
     {pageModules.map((module) => {
       switch (module) {
+        case "frequently-bought-together":
+          return (
+            <ProductBoughtTogether
+              title="Frequently bought together"
+              current={{
+                name: product.name,
+                imageUrl: primaryImageUrl,
+                price: buyerDisplayedPrice,
+                startingAt: buyerPricePresentation.isStartingAt,
+              }}
+              products={boughtTogether}
+              currencySymbol={currencySymbol}
+              currencyCode={currencyCode}
+            />
+          );
+        case "compare-similar":
+          return (
+            <ProductCompareSimilar
+              title="Compare with similar items"
+              productId={product.id}
+              products={similarProducts}
+              currencySymbol={currencySymbol}
+              currencyCode={currencyCode}
+            />
+          );
+        case "policies":
+          return <ProductPolicies title="Store policies" policies={storePolicies} />;
+        case "recently-viewed":
+          return <ProductRecentlyViewed title="Recently viewed" slug={product.slug} />;
         case "description":
           return (
             <ProductModule id="description">
@@ -811,7 +864,7 @@ const productCategoryAnalytics = productCategory
         case "related":
           return (
             <RelatedProducts
-              recommendations={recommendations}
+              recommendations={relatedRecommendations}
               currencySymbol={currencySymbol}
               currencyCode={currencyCode}
             />

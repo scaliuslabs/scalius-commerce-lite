@@ -33,17 +33,19 @@ describe("product page template", () => {
     expect(requestTheme.theme).toEqual(storefrontTemplateTheme("department-mall"));
   });
 
-  it("renders saved content despite a stale store shape, with inherited or assigned templates", () => {
+  it("keeps content blocks to stores whose shape has them, and to products that carry them", () => {
     const boutique = storefrontTemplateTheme("boutique");
-    const inherited = { theme: boutique, resolved: resolveStorefrontTheme(boutique, EMPTY_STORE_SHAPE) };
     const product = {
       contentBlocks: [{ id: "video", type: "video", version: 1, settings: {
         heading: "Demo", source: { kind: "media", mediaId: "m_video" },
       } }],
     } as Product;
-    expect(inherited.resolved.blocks.product.below).not.toContain("content-blocks");
+    // Core's store shape counts public products' rendered blocks (hasContentBlocks).
+    expect(resolveStorefrontTheme(boutique, EMPTY_STORE_SHAPE).blocks.product.below).not.toContain("content-blocks");
+    const shape = { ...EMPTY_STORE_SHAPE, hasContentBlocks: true };
+    const inherited = { theme: boutique, resolved: resolveStorefrontTheme(boutique, shape) };
     for (const pageTemplate of [null, "boutique"]) {
-      const resolved = resolveProductPageTheme(inherited, { ...product, pageTemplate }, EMPTY_STORE_SHAPE);
+      const resolved = resolveProductPageTheme(inherited, { pageTemplate }, shape);
       expect(resolved.blocks.product.below).toContain("content-blocks");
       expect(productPageModules(resolved.blocks.product.below, product, {
         look: resolved.layout.buyBox.look, hasRelated: false,

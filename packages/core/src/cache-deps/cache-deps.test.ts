@@ -223,9 +223,10 @@ describe("coverage fallback", { timeout: 30_000 }, () => {
   });
 
   it("an explicit t:<table> covers its table", () => {
-    const resolution = resolveCacheDependencies({ declared: [cacheDep.table("hero_sliders")], tables: ["hero_sliders"] });
+    const resolution = resolveCacheDependencies({ declared: [cacheDep.table("analytics")], tables: ["analytics"] });
     expect(resolution.coarseTables).toEqual([]);
-    expect(resolution.keys).toEqual(["store", "t:hero_sliders"]);
+    expect(resolution.unregisteredTables).toEqual([]);
+    expect(resolution.keys).toEqual(["store", "t:analytics"]);
   });
 
   it("projection reads require hard keys and never impose an age limit", async () => {

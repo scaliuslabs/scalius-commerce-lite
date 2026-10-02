@@ -1,3 +1,5 @@
+import { demoThemeBlocker } from "../theme-homepage.mjs";
+
 const API = "/api/v1/admin";
 
 export const DEMO_APPLY_PHASE_ORDER = Object.freeze([
@@ -6,14 +8,13 @@ export const DEMO_APPLY_PHASE_ORDER = Object.freeze([
   "stage_categories",
   "stage_products",
   "stage_collections",
-  "stage_heroes",
+  "stage_theme",
   "activate_products",
   "publish_categories",
   "activate_collections",
   "activate_promotions",
-  "publish_theme",
   "publish_navigation",
-  "activate_heroes",
+  "publish_theme",
 ]);
 
 function reference(logicalKey, field = "id") {
@@ -93,25 +94,22 @@ function collectionActivationCommand(collection, stage, current) {
   };
 }
 
-function heroActivationCommand(stage, current) {
-  const type = stage.logicalKey.slice("hero-slider:".length);
-  const path = current?.id
-    ? `${API}/settings/hero-sliders/${current.id}`
-    : `${API}/settings/hero-sliders/{sliderId}`;
+/** Publishes exactly the staged draft revision over the live revision read. */
+function themePublishCommand(stage) {
   return {
-    id: `${stage.id}:activate`,
-    logicalKey: `${stage.logicalKey}:activate`,
-    phase: "activate_heroes",
-    method: "PUT",
-    path,
-    ...(current?.id ? {} : { pathBindings: { sliderId: reference(stage.logicalKey) } }),
+    id: `${stage.id}:publish`,
+    logicalKey: "theme:publish",
+    phase: "publish_theme",
+    method: "POST",
+    path: `${API}/settings/theme/publish`,
+    action: "update",
     body: {
-      expectedRevision: reference(stage.logicalKey, "revision"),
-      isActive: true,
+      expectedPublishedRevision: reference("current-theme", "publishedRevision"),
+      expectedDraftRevision: reference(stage.logicalKey, "revision"),
     },
+    desired: stage.desired,
     dependsOn: [stage.logicalKey],
-    preconditions: { expectedRevision: reference(stage.logicalKey, "revision") },
-    identity: { type },
+    preconditions: { expectedRevision: reference("current-theme", "publishedRevision") },
   };
 }
 
@@ -129,7 +127,6 @@ export function buildDemoApplyLifecycle({
   const phases = new Map(DEMO_APPLY_PHASE_ORDER.map((name) => [name, phaseRecord(name)]));
   const currentProducts = exactBy(snapshot.productDetails, "slug", "Product");
   const currentCollections = exactBy(snapshot.collections, "name", "Collection");
-  const currentHeroes = exactBy(snapshot.presentation?.heroes ?? snapshot.heroes, "type", "Hero slider");
 
   for (const command of compiled.commands.filter((item) => item.phase === "vocabulary")) {
     phases.get("stage_vocabulary").commands.push(cloneCommand(command, { phase: "stage_vocabulary" }));
@@ -197,29 +194,21 @@ export function buildDemoApplyLifecycle({
     phases.get("activate_collections").commands.push(collectionActivationCommand(collection, stage, current));
   }
 
-  for (const command of compiled.commands.filter((item) => item.phase === "presentation")) {
-    const type = command.logicalKey.slice("hero-slider:".length);
-    const current = currentHeroes.get(type);
-    let stage = cloneCommand(command, {
-      phase: "stage_heroes",
-      body: { ...command.body, isActive: false },
-    });
-    if (current?.isActive === true) {
-      const quarantineKey = `${command.logicalKey}:quarantine`;
-      phases.get("quarantine").commands.push({
-        id: `${command.id}:quarantine`, logicalKey: quarantineKey, phase: "quarantine",
-        method: "PUT", path: `${API}/settings/hero-sliders/${current.id}`,
-        body: { expectedRevision: current.revision, isActive: false },
-        preconditions: { expectedRevision: current.revision }, dependsOn: [],
-      });
-      stage = cloneCommand(stage, {
-        body: { ...stage.body, expectedRevision: reference(quarantineKey, "revision") },
-        preconditions: { expectedRevision: reference(quarantineKey, "revision") },
-        dependsOn: [quarantineKey, ...(stage.dependsOn ?? [])],
-      });
-    }
-    phases.get("stage_heroes").commands.push(stage);
-    phases.get("activate_heroes").commands.push(heroActivationCommand(stage, current));
+  // The homepage lives in the storefront theme. A saved draft is not public,
+  // so staging needs no quarantine: the draft is saved after the catalog is
+  // staged and published last, once every slide destination and homepage
+  // collection resolves publicly. A draft with the merchant's unpublished
+  // changes blocks the whole apply before any write.
+  const themeDraft = findCommand(compiled.commands, "theme:draft");
+  if (!themeDraft) throw new Error("Theme draft command is missing.");
+  const themeBlocker = demoThemeBlocker(snapshot.presentation?.theme);
+  if (themeBlocker) {
+    requireBlocked(phases.get("stage_theme"), themeBlocker.code, themeBlocker.message);
+    requireBlocked(phases.get("publish_theme"), themeBlocker.code, themeBlocker.message);
+  } else {
+    const stage = cloneCommand(themeDraft, { phase: "stage_theme" });
+    phases.get("stage_theme").commands.push(stage);
+    phases.get("publish_theme").commands.push(themePublishCommand(stage));
   }
 
   if (publicationIntent.promotions?.length) {
@@ -230,22 +219,6 @@ export function buildDemoApplyLifecycle({
     );
   } else {
     phases.get("activate_promotions").state = "skipped";
-  }
-
-  if (publicationIntent.theme) {
-    const revision = snapshot.presentation?.theme?.revision;
-    if (!Number.isSafeInteger(revision) || revision < 0) {
-      requireBlocked(phases.get("publish_theme"), "THEME_REVISION_MISSING", "Theme publication requires the current saved revision.");
-    } else {
-      phases.get("publish_theme").commands.push({
-        id: "theme:publish", logicalKey: "theme:publish", phase: "publish_theme",
-        method: "POST", path: `${API}/settings/theme`,
-        body: { expectedRevision: revision, colors: publicationIntent.theme.colors },
-        preconditions: { expectedRevision: revision }, dependsOn: [],
-      });
-    }
-  } else {
-    phases.get("publish_theme").state = "skipped";
   }
 
   if (publicationIntent.navigation?.header || publicationIntent.navigation?.footer) {

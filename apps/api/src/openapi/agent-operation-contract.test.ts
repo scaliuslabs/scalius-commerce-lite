@@ -233,8 +233,6 @@ describe("agent operation contract", () => {
       "storefront.locations.areas",
       "storefront.products.search_legacy",
       "storefront.attributes.category_id_alias",
-      "storefront.layout.header_alias",
-      "storefront.layout.footer_alias",
     ]) {
       expect(byId(manifest, operationId)).toMatchObject({
         exposure: "excluded",

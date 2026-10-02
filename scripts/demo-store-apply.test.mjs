@@ -133,10 +133,25 @@ function completeSnapshot(report) {
     media: report.assets,
     attributes: [{ id: "attr_brand", slug: "brand", name: "Brand", filterable: true }],
     collections: demoStoreManifest.collections.map((collection, index) => ({ id: `col_${index}`, name: collection.name, version: 2, presentation: collection.presentation, isActive: false })),
-    presentation: {
-      general: {}, theme: { colors: {}, revision: 2 },
-      heroes: ["desktop", "mobile"].map((type) => ({ id: `slider_${type}`, type, revision: 2, images: [], isActive: false })),
+    presentation: { theme: themeWorkspace() },
+  };
+}
+
+function themeWorkspace() {
+  const theme = {
+    version: 6,
+    template: "department-mall",
+    pages: {
+      home: [
+        { id: "hero", type: "hero", version: 1, settings: { layout: "contained-banners", slides: [] } },
+        { id: "collections", type: "collections", version: 1, settings: { carousel: "large", collectionIds: [] } },
+      ],
+      homeMode: { kind: "sections" },
     },
+  };
+  return {
+    published: { theme, revision: 2 },
+    draft: { theme, revision: 0, basePublishedRevision: 2 },
   };
 }
 
@@ -383,7 +398,6 @@ describe("apply orchestration", () => {
         ? snapshot.productDetails.find((item) => item.id === command.identity.id)
           ?? snapshot.categories.find((item) => item.id === command.identity.id)
           ?? snapshot.collections.find((item) => item.id === command.identity.id)
-          ?? snapshot.presentation.heroes.find((item) => item.id === command.identity.id)
         : null;
       return {
         logicalKey: command.logicalKey,
@@ -412,6 +426,36 @@ describe("apply orchestration", () => {
     expect(seen.some((item) => item.command.logicalKey === "product:halo-arc-table-lamp:matrix")).toBe(true);
     expect(seen.some((item) => item.command.phase === "activation" || item.command.phase === "publication")).toBe(false);
     expect(seen.every((item) => !JSON.stringify(item.command).includes('"$ref"'))).toBe(true);
+    const theme = seen.find((item) => item.command.logicalKey === "theme:draft").command;
+    expect(theme).toMatchObject({
+      path: "/api/v1/admin/settings/theme/draft",
+      expectedRevision: 0,
+      body: { expectedDraftRevision: 0, basePublishedRevision: 2 },
+    });
+    const [hero, collections] = theme.body.theme.pages.home;
+    expect(hero.settings.slides.map((slide) => slide.link)).toEqual(["/collections/col_0", "/categories/home-living", "/categories/bags-carry"]);
+    expect(hero.settings.slides.every((slide) => slide.image.startsWith("media_demo_") && slide.phoneImage.startsWith("media_demo_"))).toBe(true);
+    expect(collections.settings.collectionIds).toEqual(["col_0", "col_1", "col_2"]);
+  });
+
+  it("refuses a theme draft holding the merchant's unpublished changes before any write", async () => {
+    const report = readinessReport();
+    const snapshot = completeSnapshot(report);
+    snapshot.presentation.theme.draft = {
+      theme: { ...snapshot.presentation.theme.published.theme, template: "boutique" },
+      revision: 3,
+      basePublishedRevision: 2,
+    };
+    const executeCommand = vi.fn();
+    await expect(runRevisionSafeApply({
+      manifest: demoStoreManifest,
+      readinessReport: report,
+      authorization: { confirmed: true, intentFingerprint: demoApplyIntentFingerprint(demoStoreManifest) },
+      readSnapshot: vi.fn().mockResolvedValue(snapshot),
+      executeCommand,
+      now: () => new Date("2026-07-13T03:01:00.000Z"),
+    })).rejects.toThrow(/unpublished changes/);
+    expect(executeCommand).not.toHaveBeenCalled();
   });
 });
 
@@ -423,7 +467,7 @@ describe("guarded apply exposure", () => {
     const snapshot = remoteSnapshot(report);
     const permissions = [
       "attributes.create", "categories.create", "categories.edit", "collections.create",
-      "collections.edit", "products.create", "products.edit", "settings.header.edit",
+      "collections.edit", "products.create", "products.edit", "settings.general.edit",
     ];
     const readClient = { get: vi.fn().mockResolvedValue({ isSuperAdmin: false, permissions }) };
     const lifecycleRunner = vi.fn().mockResolvedValue({

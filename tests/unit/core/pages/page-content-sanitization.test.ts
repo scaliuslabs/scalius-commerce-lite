@@ -28,7 +28,8 @@ const pageRecord = {
 
 describe("page content sanitization", () => {
   it("sanitizes legacy public page content on read", async () => {
-    const db = createMockDb({ selectResult: pageRecord });
+    // The public read batches the page row with its storefront custom fields.
+    const db = createMockDb({ selectResult: pageRecord, batchResults: [[pageRecord], []] });
 
     const page = await getPublicPageBySlug(db as any, "landing");
 

@@ -8,13 +8,16 @@ import { translate } from "~/i18n";
 import { inventoryMessages } from "~/i18n/inventory";
 import { resourceMessages } from "~/i18n/resource";
 
-const mocks = vi.hoisted(() => ({ list: vi.fn() }));
+const mocks = vi.hoisted(() => ({ list: vi.fn(), locations: vi.fn() }));
 
 vi.mock("@tanstack/react-router", () => ({
   Link: ({ children }: { children: ReactNode }) => <a href="/admin">{children}</a>,
 }));
 vi.mock("~/lib/api", () => ({ apiData: (call: Promise<unknown>) => call }));
-vi.mock("@scalius/api-client/sdk", () => ({ getApiV1AdminInventory: mocks.list }));
+vi.mock("@scalius/api-client/sdk", () => ({
+  getApiV1AdminInventory: mocks.list,
+  getApiV1AdminInventoryLocations: mocks.locations,
+}));
 
 import { HistoryTab } from "./HistoryTab";
 import { INVENTORY_SEARCH_DEFAULTS, type InventoryFilters } from "./inventory-search";
@@ -38,6 +41,7 @@ describe("inventory history search", () => {
   let root: Root;
 
   beforeEach(() => {
+    mocks.locations.mockResolvedValue({ locations: [] });
     mocks.list.mockImplementation(async ({ query }: { query: { search?: string } }) => ({
       movements: query.search
         ? [movement("m1", "Simple saree", "SAREE")]
@@ -79,5 +83,32 @@ describe("inventory history search", () => {
     expect(search.value).toBe("");
     expect(mocks.list).toHaveBeenLastCalledWith({ query: expect.objectContaining({ search: undefined }) });
     expect(host.textContent).toContain("Cotton panjabi");
+  });
+
+  it("filters by location and names where stock moved once a store has several", async () => {
+    const location = (id: string, name: string, isDefault: boolean, status = "active") => ({ id, name, isDefault, status });
+    mocks.locations.mockResolvedValue({
+      locations: [location("loc_default", "Main location", true), location("loc_branch", "Banani store", false), location("loc_old", "Old depot", false, "archived")],
+    });
+    mocks.list.mockImplementation(async () => ({
+      movements: [{ ...movement("m3", "Simple saree", "SAREE"), ledgerVersion: 2, stockDelta: -3, locationId: "loc_branch", locationName: "Banani store" }],
+      pageInfo: { limit: 50, hasMore: false, nextCursor: null },
+    }));
+    function LocationPage() {
+      const [filters, setFilters] = useState<InventoryFilters>({ ...INVENTORY_SEARCH_DEFAULTS, section: "movements", q: "", location: "loc_branch" });
+      return <HistoryTab filters={filters} onFiltersChange={(patch) => setFilters((current) => ({ ...current, ...patch }))} />;
+    }
+    await act(async () => {
+      root.render(
+        <QueryClientProvider client={new QueryClient()}>
+          <LocationPage />
+        </QueryClientProvider>,
+      );
+    });
+    await settle();
+
+    expect(mocks.list).toHaveBeenLastCalledWith({ query: expect.objectContaining({ movementLocationId: "loc_branch" }) });
+    expect(host.textContent).toContain(translate(inventoryMessages, "movedAt", { location: "Banani store" }));
+    expect(host.querySelector(`[aria-label="${translate(inventoryMessages, "location")}"]`)).not.toBeNull();
   });
 });

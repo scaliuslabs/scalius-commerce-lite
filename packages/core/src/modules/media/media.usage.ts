@@ -2,7 +2,6 @@ import {
     brands,
     categories,
     collections,
-    heroSliders,
     media,
     orderItems,
     pages,
@@ -10,11 +9,13 @@ import {
     productMedia,
     products,
     settings,
+    themeSettings,
+    themeSettingsDrafts,
     user,
 } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import { sql, type SQL, type SQLWrapper } from "drizzle-orm";
-import { businessDocument, footerDocument, headerDocument, seoDocument } from "../settings/documents";
+import { businessDocument, seoDocument } from "../settings/documents";
 import { SETTINGS_DOCUMENT_ROW_KEY } from "../settings/settings-store";
 
 /**
@@ -29,10 +30,9 @@ export const MEDIA_USAGE_KINDS = [
     "brand",
     "page",
     "article",
-    "banner",
     "theme",
-    "navigation",
     "invoice",
+    "social_link",
     "social_image",
     "video_cover",
     "staff_photo",
@@ -62,8 +62,6 @@ const MAX_USAGE_IDS = 100;
 /** D1 rejects a compound SELECT with more than five terms. */
 const D1_COMPOUND_SELECT_TERMS = 5;
 
-const headerKey = headerDocument.key;
-const footerKey = footerDocument.key;
 const hasMediaUrl = (body: SQL) => sql`instr(${body}, 'media/') > 0`;
 const trashedFlag = (column: SQLWrapper) => sql`CASE WHEN ${column} IS NULL THEN 0 ELSE 1 END`;
 const jsonPart = (path: string) => sql`coalesce(json_extract(${settings.value}, ${path}), '')`;
@@ -75,19 +73,13 @@ const documentRows = (...categories: string[]) => sql`${settings.key} = ${SETTIN
  * Every free-text surface that can embed a media URL, each one SELECT of
  * (kind, ref_id, name, trashed, body), aliased so any of them can lead a
  * group. Rows without any media URL are skipped before the per-file
- * substring match. Header/footer documents only keep
- * their allowed keys, so logo+favicon (theme) and the rest (navigation) cover
- * the whole document.
+ * substring match. The theme names files by id (`themeNamesMedia`).
  */
 function textReferenceSources(): SQL[] {
     const categoryBody = sql`coalesce(${categories.imageUrl}, '') || ' ' || coalesce(${categories.content}, '')`;
     const collectionBody = sql`coalesce(${collections.content}, '')`;
     const pageBody = sql`coalesce(${pages.featuredImage}, '') || ' ' || ${pages.content}`;
     const productBody = sql`coalesce(${products.description}, '')`;
-    const headerTheme = sql`${jsonPart("$.logo")} || ' ' || ${jsonPart("$.favicon")}`;
-    const headerNavigation = sql`${jsonPart("$.topBar")} || ' ' || ${jsonPart("$.contact")} || ' ' || ${jsonPart("$.social")}`;
-    const footerTheme = jsonPart("$.logo");
-    const footerNavigation = sql`${jsonPart("$.tagline")} || ' ' || ${jsonPart("$.description")} || ' ' || ${jsonPart("$.copyrightText")} || ' ' || ${jsonPart("$.social")}`;
     const userImage = sql`coalesce(${user.image}, '')`;
     return [
         sql`SELECT 'product' AS kind, ${products.id} AS ref_id, ${products.name} AS name,
@@ -104,15 +96,9 @@ function textReferenceSources(): SQL[] {
         sql`SELECT CASE WHEN ${pages.contentType} = 'article' THEN 'article' ELSE 'page' END AS kind,
                 ${pages.id} AS ref_id, ${pages.title} AS name, ${trashedFlag(pages.deletedAt)} AS trashed, ${pageBody} AS body
             FROM ${pages} WHERE ${hasMediaUrl(pageBody)}`,
-        sql`SELECT 'banner' AS kind, '' AS ref_id, NULL AS name, 0 AS trashed, ${heroSliders.images} AS body
-            FROM ${heroSliders} WHERE ${hasMediaUrl(sql`${heroSliders.images}`)}`,
-        sql`SELECT 'theme' AS kind, '' AS ref_id, NULL AS name, 0 AS trashed,
-                CASE WHEN ${settings.category} = ${headerKey} THEN ${headerTheme} ELSE ${footerTheme} END AS body
-            FROM ${settings} WHERE ${documentRows(headerKey, footerKey)}`,
-        sql`SELECT 'navigation' AS kind, '' AS ref_id, NULL AS name, 0 AS trashed,
-                CASE WHEN ${settings.category} = ${headerKey} THEN ${headerNavigation} ELSE ${footerNavigation} END AS body
-            FROM ${settings} WHERE ${documentRows(headerKey, footerKey)}`,
-        sql`SELECT 'invoice' AS kind, '' AS ref_id, NULL AS name, 0 AS trashed, ${settings.value} AS body
+        sql`SELECT 'invoice' AS kind, '' AS ref_id, NULL AS name, 0 AS trashed, ${jsonPart("$.invoiceLogoUrl")} AS body
+            FROM ${settings} WHERE ${documentRows(businessDocument.key)}`,
+        sql`SELECT 'social_link' AS kind, '' AS ref_id, NULL AS name, 0 AS trashed, ${jsonPart("$.socialLinks")} AS body
             FROM ${settings} WHERE ${documentRows(businessDocument.key)}`,
         sql`SELECT 'social_image' AS kind, '' AS ref_id, NULL AS name, 0 AS trashed, ${jsonPart("$.socialImage")} AS body
             FROM ${settings} WHERE ${documentRows(seoDocument.key)}`,
@@ -142,6 +128,17 @@ const idSet = (ids: readonly string[]) =>
 const blockNamesMedia = (mediaId: SQL) =>
     sql`instr(${productContentBlocks.settings}, '"' || ${mediaId} || '"') > 0`;
 
+/**
+ * The published theme and its draft name files by id (brand logo and tab
+ * icon, hero slides, section images) as JSON string values, matched the
+ * same exact-quoted way. Version history is not a place: restoring an old
+ * version whose image is gone shows the slot empty.
+ */
+const themeNamesMedia = (mediaId: SQL) => sql`(
+    EXISTS (SELECT 1 FROM ${themeSettings} WHERE instr(${themeSettings.colors}, '"' || ${mediaId} || '"') > 0)
+    OR EXISTS (SELECT 1 FROM ${themeSettingsDrafts} WHERE instr(${themeSettingsDrafts.theme}, '"' || ${mediaId} || '"') > 0)
+)`;
+
 type UsageRow = { media_id: string; kind: MediaUsageKind; ref_id: string; name: string | null; trashed: number };
 
 /**
@@ -169,7 +166,11 @@ async function loadUsageRows(db: Database, ids: readonly string[]): Promise<Usag
         FROM ${media} AS block_file
         INNER JOIN ${productContentBlocks} ON ${blockNamesMedia(sql`block_file.id`)}
         INNER JOIN ${products} ON ${products.id} = ${productContentBlocks.productId}
-        WHERE block_file.id IN ${idSet(ids)}`);
+        WHERE block_file.id IN ${idSet(ids)}
+        UNION ALL
+        SELECT theme_file.id, 'theme', '', NULL, 0
+        FROM ${media} AS theme_file
+        WHERE theme_file.id IN ${idSet(ids)} AND ${themeNamesMedia(sql`theme_file.id`)}`);
     for (const group of textReferenceGroups()) {
         rows.push(...await db.all<UsageRow>(sql`
             SELECT k.id AS media_id, t.kind AS kind, t.ref_id AS ref_id, t.name AS name, t.trashed AS trashed
@@ -245,7 +246,8 @@ export async function loadMediaUsage(db: Database, id: string): Promise<MediaUsa
 
 /**
  * Atomic guard for the permanent-delete claim: no product photo, video cover,
- * brand logo, order snapshot or saved text surface may still point at the file.
+ * brand logo, theme (published or draft), order snapshot or saved text
+ * surface may still point at the file.
  */
 export function noMediaUsage(id: string, objectKey: string): SQL {
     const textGuards = textReferenceGroups().map((group) => sql`NOT EXISTS (
@@ -261,5 +263,5 @@ export function noMediaUsage(id: string, objectKey: string): SQL {
         SELECT 1 FROM ${brands} WHERE ${brands.logoMediaId} = ${id}
     ) AND NOT EXISTS (
         SELECT 1 FROM ${productContentBlocks} WHERE ${blockNamesMedia(sql`${id}`)}
-    ) AND ${sql.join(textGuards, sql` AND `)}`;
+    ) AND NOT ${themeNamesMedia(sql`${id}`)} AND ${sql.join(textGuards, sql` AND `)}`;
 }

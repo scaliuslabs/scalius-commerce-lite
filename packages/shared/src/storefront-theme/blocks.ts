@@ -23,6 +23,7 @@ import {
   has,
   type FitCondition,
 } from "./fit";
+import { storefrontLinkSchema } from "./links";
 import type { StorefrontImageFit, StorefrontThemeSurface } from "./tokens";
 
 // ─── Primitives ───────────────────────────────────────────────────────────
@@ -525,20 +526,34 @@ function buyBox(look: StorefrontBuyBoxLook | null, settings: { emi?: boolean; wh
 
 // ─── Registries ───────────────────────────────────────────────────────────
 
+/** The longest announcement a top bar carries (one line on a phone at 14px is about 45 characters). */
+export const STOREFRONT_ANNOUNCEMENT_MAX_LENGTH = 160;
+
 /**
- * Above the header (36-50px); its text is the announcement in Header
- * settings. `renders` says whether a bar can show at all.
+ * The announcement every bar but `none` carries: its words and an optional
+ * link (a navigation-safe href). Empty words show no announcement; the
+ * utility bar still shows its call, track order and account links.
+ */
+const announcement = {
+  text: z.string().trim().max(STOREFRONT_ANNOUNCEMENT_MAX_LENGTH),
+  link: storefrontLinkSchema.nullable(),
+};
+const NO_ANNOUNCEMENT = { text: "", link: null };
+
+/**
+ * Above the header (36-50px). `none` is the off switch: there is no other.
+ * `renders` says whether a bar can show at all.
  */
 export const STOREFRONT_TOP_BAR_VARIANTS = {
   none: variant({ renders: false }),
   // Dawn, Fabrilife: one centred line.
-  announcement: variant({ renders: true }),
+  announcement: variant({ settings: announcement, defaults: NO_ANNOUNCEMENT, renders: true }),
   // Game Ghor, Target: the announcement at the start; call, track order and
   // account at the end. Computers only (phones reach them in the menu).
-  utility: variant({ contrastPairs: [["foreground", "muted"]], renders: true }),
+  utility: variant({ settings: announcement, defaults: NO_ANNOUNCEMENT, contrastPairs: [["foreground", "muted"]], renders: true }),
   // Apple Gadgets, Amazon: a dismissible phone-only banner (60px) carrying
   // the announcement until the store has an app to link.
-  "app-banner": variant({ renders: true }),
+  "app-banner": variant({ settings: announcement, defaults: NO_ANNOUNCEMENT, renders: true }),
 };
 
 export const STOREFRONT_HEADER_VARIANTS = {
@@ -547,24 +562,14 @@ export const STOREFRONT_HEADER_VARIANTS = {
   "showcase-simple": variant({ renders: "centered" }),
   // Fabrilife/Aarong: uppercase departments, filled search, icon-over-label utilities.
   // The filled search fields paint ink on the muted surface.
-  "fashion-department": variant({
-    settings: { subBrandRow: z.boolean() },
-    defaults: { subBrandRow: false },
-    contrastPairs: [["foreground", "muted"]],
-    renders: "classic",
-  }),
+  "fashion-department": variant({ contrastPairs: [["foreground", "muted"]], renders: "classic" }),
   "heritage-nav": variant({ contrastPairs: [["foreground", "muted"]], renders: "classic" }),
   // Star Tech: dark row with a 580px search, light category row that stays.
   "spec-two-row": variant({ contrastPairs: [["foreground", "muted"]], renders: "marketplace" }),
   // Apple Gadgets: dark row, pill search, round icons, category row.
   "tech-rounded": variant({ renders: "marketplace" }),
-  // Amazon/Daraz: department-scoped search, trending queries.
-  "marketplace-search": variant({
-    settings: { trendingQueries: z.boolean() },
-    defaults: { trendingQueries: true },
-    contrastPairs: [["foreground", "muted"]],
-    renders: "marketplace",
-  }),
+  // Amazon/Daraz: department-scoped search.
+  "marketplace-search": variant({ contrastPairs: [["foreground", "muted"]], renders: "marketplace" }),
   // eBay: light utility and category rows, search scoped at the right.
   "marketplace-light": variant({ renders: "marketplace" }),
   // Game Ghor: big logo, search with a category select, cart with its total.
@@ -613,9 +618,22 @@ export const STOREFRONT_DESKTOP_NAV_VARIANTS = {
 
 export const STOREFRONT_MOBILE_TABS = ["home", "categories", "offers", "search", "compare", "cart", "account"] as const;
 
+/**
+ * A drawer's rows: `standard` (90vw wide, 44px rows), or Amazon's `tall`
+ * rows (80vw wide, 52px rows on phones and tablets).
+ */
+export const STOREFRONT_DRAWER_ROWS = ["standard", "tall"] as const;
+export type StorefrontDrawerRows = (typeof STOREFRONT_DRAWER_ROWS)[number];
+
 export const STOREFRONT_MOBILE_NAV_VARIANTS = {
   "accordion-drawer": variant({ renders: "drawer" }),
-  "drill-in-drawer": variant({ renders: "drawer" }),
+  // Amazon: one level at a time; `rows` sets the drawer's geometry (both
+  // drawers the header renders use it).
+  "drill-in-drawer": variant({
+    settings: { rows: z.enum(STOREFRONT_DRAWER_ROWS) },
+    defaults: { rows: "standard" },
+    renders: "drawer",
+  }),
   // 56-61px, 4-5 items; cart and account move from the header to the tabs.
   "bottom-tabs": variant({
     settings: {
@@ -784,9 +802,11 @@ export const STOREFRONT_LISTING_VARIANTS = {
   // One result per row with its facts (Amazon search, Target and eBay phones).
   list: variant({ renders: "classic" }),
   // Aarong: one shelf per sub-category (or collection), capped at 8 x 10 items.
+  // `spacing: airy` is Aarong's own track: two items across on phones and a
+  // 40px gap from 640px; `standard` follows the density's gap.
   shelves: variant({
-    settings: { maxShelves: z.number().int().min(1).max(8) },
-    defaults: { maxShelves: 8 },
+    settings: { maxShelves: z.number().int().min(1).max(8), spacing: z.enum(["standard", "airy"]) },
+    defaults: { maxShelves: 8, spacing: "standard" },
     requires: [anyOf(atLeast("categoryDepth", 2), has("hasCollections"))],
     fallback: "grid",
     renders: "classic",
@@ -810,13 +830,16 @@ export type StorefrontListingFilterStyle = (typeof STOREFRONT_LISTING_FILTER_STY
 export const STOREFRONT_LISTING_FILTER_GROUPS = ["category", "availability", "price", "rating", "brand", "other"] as const;
 export type StorefrontListingFilterGroup = (typeof STOREFRONT_LISTING_FILTER_GROUPS)[number];
 
-/** The merchant editor's starting order; an unset order keeps the renderer's exact template arrangement. */
-export function storefrontListingFilterDefaultOrder(template: string, style: StorefrontListingFilterStyle): StorefrontListingFilterGroup[] {
-  if (style === "sidebar-dense") return template === "spec-catalogue"
-    ? ["price", "availability", "rating", "brand", "other", "category"]
-    : ["availability", "rating", "brand", "other", "price", "category"];
+/**
+ * A filter style's own arrangement, as the editor's starting order. An unset
+ * `order` renders the style's reference arrangement exactly (the dense
+ * column puts price after the first two specs, Amazon's interleave, which an
+ * order of whole groups cannot say); a template that starts elsewhere sets
+ * its `order` (Star Tech and Apple Gadgets put price first).
+ */
+export function storefrontListingFilterDefaultOrder(style: StorefrontListingFilterStyle): StorefrontListingFilterGroup[] {
+  if (style === "sidebar-dense") return ["availability", "rating", "brand", "other", "price", "category"];
   if (style === "bar-dropdowns") return ["availability", "price", "rating", "brand", "other", "category"];
-  if (template === "rounded-tech" && style === "sidebar-comfortable") return ["price", "availability", "rating", "brand", "other", "category"];
   return ["category", "price", "availability", "rating", "brand", "other"];
 }
 
@@ -883,6 +906,17 @@ export const storefrontListingFiltersSchema = z.object({
   rowPitch: filterNumber(STOREFRONT_LISTING_FILTER_BOUNDS.rowPitch),
   /** Facet value label size in px, over the style's. */
   label: filterNumber(STOREFRONT_LISTING_FILTER_BOUNDS.label),
+  /**
+   * Where a search's facets live when the style is a sidebar: `same` keeps
+   * the column; `drawer` (Star Tech) gives the results the full width (up to
+   * five columns) and opens the facets from a Filters button.
+   */
+  searchPlacement: z.enum(["same", "drawer"]),
+  /**
+   * A sidebar's facet groups as one flat list ruled by hairlines that
+   * scrolls on its own (Fabrilife), instead of the style's own groups.
+   */
+  ruled: z.boolean(),
 }).strict().refine(
   (filters) => !(filters.style === "bar-dropdowns" && filters.openByDefault),
   { message: "Filter dropdowns open on demand.", path: ["openByDefault"] },
@@ -953,6 +987,8 @@ export const STOREFRONT_LISTING_TOOLBAR = {
   "result-count": { requires: [] },
   sort: { requires: [] },
   "per-page": { requires: [] },
+  // The buyer's refinements as removable chips over the results (each also
+  // undoes from the filter form, so a listing without them stays usable).
   "applied-chips": { requires: [] },
   "grid-list-toggle": { requires: [] },
 } as const satisfies Record<string, { requires: readonly FitCondition[] }>;
@@ -960,6 +996,36 @@ export const STOREFRONT_LISTING_TOOLBAR = {
 export const STOREFRONT_LISTING_PHONE_LAYOUTS = ["grid", "list-row"] as const;
 /** Load more and infinite paging keep crawlable `?page=n` URLs. */
 export const STOREFRONT_LISTING_PAGING = ["numbered", "load-more", "infinite"] as const;
+/** What search results start as: the category layout, or their own cards or rows (Amazon's rows). */
+export const STOREFRONT_LISTING_SEARCH_LAYOUTS = ["same", "grid", "list"] as const;
+/** Where a listing's short description sits: above the results, or with the guide below them. */
+export const STOREFRONT_LISTING_DESCRIPTION_PLACEMENTS = ["above", "below"] as const;
+/** The listing page's background: the page colour (Dawn) or a muted wash behind the cards. */
+export const STOREFRONT_LISTING_SURFACES = ["page", "muted"] as const;
+/** Side gutters: inset (16-32px), or Aarong's flush results (8px on phones, the container's edge on computers). */
+export const STOREFRONT_LISTING_GUTTERS = ["inset", "flush"] as const;
+/**
+ * The title band (breadcrumb, h1, count, sort and view): `standard` above
+ * the facets and results; `inline` (Dawn) the title alone, then the count
+ * and controls on one line over a facet bar; `beside-filters` (Star Tech)
+ * the breadcrumb above and the band in the results column beside a filter
+ * column. `inline` needs the bar placement and `beside-filters` a sidebar
+ * (or a search whose facets moved to the drawer); otherwise `standard`.
+ */
+export const STOREFRONT_LISTING_BANDS = ["standard", "inline", "beside-filters"] as const;
+/**
+ * The phone row of Filters, Sort and the view switch:
+ * - `standard`: buttons, or one scrolling chip row when facet chips or the view switch join it;
+ * - `pill-row` (Target): a Filter pill, sort and the quick and popular filter chips on one scrolling row;
+ * - `split-sheet` (Amazon, Daraz): an icon Filters button, sort and quick filters, with the facets
+ *   opening as a split sheet (facet names at the left, values at the right);
+ * - `bottom` (Fabrilife): the row pinned to the bottom of the screen while the results scroll.
+ */
+export const STOREFRONT_LISTING_PHONE_BARS = ["standard", "pill-row", "split-sheet", "bottom"] as const;
+/** Sub-listing links over the results: chips, or one tab strip that starts with "All" (outside search). */
+export const STOREFRONT_LISTING_LINK_STYLES = ["chips", "tabs"] as const;
+/** Most result columns on computers; null keeps the density's (the card may cap it too). */
+export const STOREFRONT_LISTING_MAX_COLUMNS = { min: 3, max: 6 } as const;
 
 const gallery = (spec: StorefrontGalleryRenderer) => variant({ renders: spec });
 
@@ -1041,7 +1107,16 @@ export const STOREFRONT_BUY_BOX_VARIANTS = {
  * module this product has no data for, so nothing renders an empty box.
  * `reviews` needs no published review: its zero state carries "Write a
  * review", so a store's first review can be written. `spec-table` needs no
- * key spec: any attribute value is a specification row.
+ * key spec: any attribute value is a specification row. Each module's data
+ * is already in the product page's batch (or, for `recently-viewed`, in
+ * this browser):
+ * - `frequently-bought-together`: the recommendations when they are mostly
+ *   real co-purchases (the co-bought products rank first);
+ * - `compare-similar`: recommended products of the same category, beside
+ *   this one, with a link into `/compare` (key specs side by side);
+ * - `policies`: the store's published policy pages;
+ * - `recently-viewed`: this browser's list (nothing without JavaScript).
+ * Customer questions wait for a question model and are not a module yet.
  */
 export const STOREFRONT_PRODUCT_MODULES = {
   "frequently-bought-together": { requires: [] },
@@ -1052,33 +1127,84 @@ export const STOREFRONT_PRODUCT_MODULES = {
   "content-blocks": { requires: [has("hasContentBlocks")] },
   "compare-similar": { requires: [has("hasKeySpecs")] },
   warranty: { requires: [] },
-  questions: { requires: [has("hasQuestions")] },
   reviews: { requires: [] },
   policies: { requires: [] },
   related: { requires: [] },
   "recently-viewed": { requires: [] },
 } as const satisfies Record<string, { requires: readonly FitCondition[] }>;
 
-/** One sticky element at the top and one at the bottom on phones (mix rule 6). */
+/**
+ * Content-block types the product page renders (outside the description
+ * tabs). Core's store shape counts only these (`hasContentBlocks`), so the
+ * `content-blocks` module fits exactly when a public product can show one.
+ */
+export const STOREFRONT_RENDERED_CONTENT_BLOCK_TYPES = ["rich-text", "feature-list", "faq", "video", "statement"] as const;
+
+/**
+ * Sticky bars on the product page; at most one at the top and one at the
+ * bottom on phones (mix rule 6):
+ * - `phoneTop: anchor-bar` (Amazon, Daraz): Top, Details, Explore and
+ *   Reviews links pinned under the header while the sections pass;
+ * - `phoneBottom: buy-bar`: the price and Add to cart once the buy buttons
+ *   scroll away;
+ * - `desktop: anchor-bar` (Star Tech): the same section links pinned under
+ *   the header on computers; `product-bar` (Target): the product's name,
+ *   price and Add to cart pinned under the header once the buy buttons
+ *   scroll away. Stacked and image-grid galleries keep their details column
+ *   sticky whatever this says (that is their layout).
+ */
 export const STOREFRONT_PRODUCT_STICKY = {
   phoneTop: ["none", "anchor-bar"],
   phoneBottom: ["none", "buy-bar"],
-  desktop: ["none", "anchor-bar", "product-bar", "info-column", "side-rail"],
+  desktop: ["none", "anchor-bar", "product-bar"],
 } as const;
+
+/** Footer words: limits of the tagline, the about text and the name after ©. */
+export const STOREFRONT_FOOTER_TEXT_LIMITS = { tagline: 160, about: 1_000, copyright: 120 } as const;
+
+/**
+ * The words every footer carries, whichever variant draws them: a tagline
+ * under the logo, a plain-text about paragraph (blank lines separate
+ * paragraphs) and the name after "©" (empty: the store name). Store
+ * identity (name, phone, email, address, social profiles) is Settings ->
+ * Store, never here.
+ */
+const footerContent = {
+  tagline: z.string().trim().max(STOREFRONT_FOOTER_TEXT_LIMITS.tagline),
+  about: z.string().trim().max(STOREFRONT_FOOTER_TEXT_LIMITS.about),
+  copyright: z.string().trim().max(STOREFRONT_FOOTER_TEXT_LIMITS.copyright),
+};
+const NO_FOOTER_CONTENT = { tagline: "", about: "", copyright: "" };
 
 export const STOREFRONT_FOOTER_VARIANTS = {
   // Dawn: quick links, info, email signup, payment icons.
-  "minimal-columns": variant({ renders: "columns" }),
+  "minimal-columns": variant({ settings: footerContent, defaults: NO_FOOTER_CONTENT, renders: "columns" }),
   // Star Tech: the header's dark colour, a large phone-number card.
-  "support-dark": variant({ renders: "contact" }),
+  "support-dark": variant({ settings: footerContent, defaults: NO_FOOTER_CONTENT, renders: "contact" }),
   // Apple Gadgets: branches and policy columns.
-  "brand-black": variant({ renders: "contact" }),
+  "brand-black": variant({ settings: footerContent, defaults: NO_FOOTER_CONTENT, renders: "contact" }),
   // Fabrilife: policy links, newsletter, hotline, app badges.
-  "newsletter-grey": variant({ contrastPairs: [["foreground", "muted"]], renders: "compact" }),
+  "newsletter-grey": variant({ settings: footerContent, defaults: NO_FOOTER_CONTENT, contrastPairs: [["foreground", "muted"]], renders: "compact" }),
   // Daraz/Amazon: a curated directory of categories (about 60 links).
-  directory: variant({ requires: [atLeast("topCategoryCount", 8)], fallback: "minimal-columns", renders: "columns" }),
+  // `style: bands` is Amazon's: "Back to top", a narrow centred directory with
+  // the store's identity, and a deeper band for the bottom row, all in the
+  // header's tone (its AA pair is in the base set; the deeper and raised
+  // bands are derived from it with the same or better contrast, tokens.ts).
+  directory: variant({
+    settings: { style: z.enum(["columns", "bands"]), ...footerContent },
+    defaults: { style: "columns", ...NO_FOOTER_CONTENT },
+    requires: [atLeast("topCategoryCount", 8)],
+    fallback: "minimal-columns",
+    renders: "columns",
+  }),
   // Game Ghor: three columns of small product lists.
-  "product-widgets": variant({ requires: [atLeast("productCount", 6)], fallback: "minimal-columns", renders: "columns" }),
+  "product-widgets": variant({
+    settings: footerContent,
+    defaults: NO_FOOTER_CONTENT,
+    requires: [atLeast("productCount", 6)],
+    fallback: "minimal-columns",
+    renders: "columns",
+  }),
 };
 
 /**
@@ -1148,15 +1274,23 @@ export const storefrontThemeBlocksSchema = z.object({
   listing: z.object({
     layout: blockSchema(STOREFRONT_LISTING_VARIANTS),
     /** Search can follow the category layout or start in its own card/list view. */
-    searchLayout: z.enum(["same", "grid", "list"]).optional(),
+    searchLayout: z.enum(STOREFRONT_LISTING_SEARCH_LAYOUTS),
     /** Place the short category, collection or brand description around the product results. */
-    descriptionPlacement: z.enum(["above", "below"]).optional(),
+    descriptionPlacement: z.enum(STOREFRONT_LISTING_DESCRIPTION_PLACEMENTS),
     /** Where the facets live and whether their groups start open. */
     filters: storefrontListingFiltersSchema,
     toolbar: uniqueList(toolbarIds, toolbarIds.length, "toolbar piece"),
     /** `list-row` on phones is a listing choice, never a card choice (mix rule 2). */
     phoneLayout: z.enum(STOREFRONT_LISTING_PHONE_LAYOUTS),
     paging: z.enum(STOREFRONT_LISTING_PAGING),
+    surface: z.enum(STOREFRONT_LISTING_SURFACES),
+    gutter: z.enum(STOREFRONT_LISTING_GUTTERS),
+    band: z.enum(STOREFRONT_LISTING_BANDS),
+    phoneBar: z.enum(STOREFRONT_LISTING_PHONE_BARS),
+    links: z.enum(STOREFRONT_LISTING_LINK_STYLES),
+    /** The `category-banner` piece on phones too (Apple Gadgets shows it on computers only). */
+    phoneBanner: z.boolean(),
+    maxColumns: z.number().int().min(STOREFRONT_LISTING_MAX_COLUMNS.min).max(STOREFRONT_LISTING_MAX_COLUMNS.max).nullable(),
   }).strict(),
   product: z.object({
     gallery: blockSchema(STOREFRONT_GALLERY_VARIANTS),
@@ -1187,4 +1321,26 @@ export function storefrontBlockValue(
 /** A slot's variant with its default settings. */
 export function storefrontBlockDefault(slot: StorefrontBlockSlot, id: string): { variant: string; settings: Record<string, unknown> } {
   return { variant: id, settings: structuredClone(storefrontVariantSpec(slot, id).defaults) as Record<string, unknown> };
+}
+
+/**
+ * A slot switched to another variant, keeping every setting the new variant
+ * also declares with a value it accepts (the announcement's words and link,
+ * the footer's words), so changing a bar or a footer, or a fallback the
+ * resolver picks, never drops what the merchant wrote. The rest are the new
+ * variant's defaults.
+ */
+export function storefrontBlockSwitch(
+  slot: StorefrontBlockSlot,
+  from: { variant: string; settings: Record<string, unknown> },
+  id: string,
+): { variant: string; settings: Record<string, unknown> } {
+  const next = storefrontBlockDefault(slot, id);
+  const spec = storefrontVariantSpec(slot, id);
+  for (const key of Object.keys(next.settings)) {
+    if (!(key in from.settings)) continue;
+    const candidate = { ...next.settings, [key]: structuredClone(from.settings[key]) };
+    if (spec.settings.safeParse(candidate).success) next.settings = candidate;
+  }
+  return next;
 }

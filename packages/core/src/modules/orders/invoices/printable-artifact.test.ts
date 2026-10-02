@@ -15,7 +15,7 @@ function invoice(): InvoiceDocument {
       companyName: "Scalius <Store>", legalName: "", addressLine1: "Road 1",
       addressLine2: "", city: "Dhaka", stateRegion: "", postalCode: "", country: "BD",
       phone: "0123", email: "merchant@example.com", taxId: "", invoicePrefix: "INV",
-      invoiceFooterText: "Thank you", invoiceLogoUrl: "https://example.com/private-logo.png",
+      invoiceFooterText: "Thank you", invoiceLogoUrl: "https://example.com/private-logo.png", socialLinks: [],
     },
     order: {
       id: "ord_1", version: 1, customerName: "Buyer <script>", customerPhone: "01700",

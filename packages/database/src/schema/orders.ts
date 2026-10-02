@@ -10,7 +10,7 @@ import { sql } from "drizzle-orm";
 import { customers } from "./customers";
 import { products, productVariants } from "./products";
 import { media } from "./media";
-import { inventoryMovements } from "./inventory";
+import { inventoryLocations, inventoryMovements } from "./inventory";
 import { UNIX_NOW } from "./shared";
 import { user } from "./auth";
 import { conversations } from "./conversations";
@@ -25,6 +25,9 @@ import {
     CodStatus,
     PaymentPlanStatus,
 } from "./enums";
+
+/** Mirrors `ORDER_CHANNELS` in `@scalius/shared/order-channel` (a test keeps them equal). */
+export const ORDER_CHANNEL_VALUES = ["online_store", "admin", "pos", "agent", "app"] as const;
 
 export const orders = sqliteTable("orders", {
     id: text("id").primaryKey(),
@@ -92,6 +95,14 @@ export const orders = sqliteTable("orders", {
     /** Valid: regular | preorder | backorder (see InventoryPool enum) */
     inventoryPool: text("inventory_pool").notNull().default(InventoryPool.REGULAR),
     inventoryAction: text("inventory_action").notNull().default("none"),
+    /**
+     * Where this order's physical stock is deducted from (and, absent a deduct
+     * movement, restored to). Null means the store's default location. It can
+     * change only before anything has left: no stock deducted and no active
+     * ship/pickup fulfilment.
+     */
+    fulfillmentLocationId: text("fulfillment_location_id")
+        .references(() => inventoryLocations.id, { onDelete: "restrict" }),
     shipmentClaimId: text("shipment_claim_id"),
     shipmentClaimExpiresAt: integer("shipment_claim_expires_at", { mode: "timestamp" }),
     expectedDelivery: text("expected_delivery"),
@@ -110,11 +121,26 @@ export const orders = sqliteTable("orders", {
     /** Legacy lifecycle cleanup marker used by abandoned/incomplete-order cleanup. */
     deletedAt: integer("deleted_at", { mode: "timestamp" }),
     invoiceNumber: integer("invoice_number"),
+    /**
+     * Where the order came from (COMMERCE-HOOKS H2), set once by the creating
+     * path: `online_store` (storefront checkout), `admin` (dashboard), `agent`
+     * (a buyer agent's checkout), later `pos` and `app`. It never changes
+     * after insert (trigger `orders_channel_immutable`).
+     */
+    channel: text("channel", { enum: ORDER_CHANNEL_VALUES }).notNull().default("online_store"),
+    /** Merchant label within the channel (`facebook`, `walk_in`, a plugin id): a lowercase slug of at most 64. */
+    channelSource: text("channel_source"),
 }, (table) => [
     check("orders_requires_shipping_check", sql`${table.requiresShipping} IN (0, 1)`),
     check(
         "orders_shipping_method_kind_check",
         sql`${table.shippingMethodKind} IS NULL OR ${table.shippingMethodKind} IN ('delivery', 'pickup')`,
+    ),
+    // Column checks added by 0103 (ALTER TABLE ADD ... CHECK), not a rebuild.
+    check("orders_channel_check", sql`${table.channel} IN ('online_store', 'admin', 'pos', 'agent', 'app')`),
+    check(
+        "orders_channel_source_shape",
+        sql`${table.channelSource} IS NULL OR (length(${table.channelSource}) BETWEEN 1 AND 64 AND ${table.channelSource} = lower(trim(${table.channelSource})))`,
     ),
     // Triggers orders_shipping_address_required_{insert,update} require the
     // address, city and zone whenever requires_shipping = 1.
@@ -165,6 +191,10 @@ export const orders = sqliteTable("orders", {
     index("orders_shipment_claim_idx")
         .on(table.shipmentClaimId, table.shipmentClaimExpiresAt)
         .where(sql`${table.shipmentClaimId} IS NOT NULL`),
+    index("orders_fulfillment_location_idx")
+        .on(table.fulfillmentLocationId, table.inventoryAction)
+        .where(sql`${table.fulfillmentLocationId} IS NOT NULL`),
+    index("orders_channel_list_idx").on(table.deletedAt, table.channel, table.updatedAt),
 ]);
 
 export const checkoutAttempts = sqliteTable("checkout_attempts", {
@@ -565,6 +595,12 @@ export const orderReturnReceiptLines = sqliteTable("order_return_receipt_lines",
         .references(() => inventoryMovements.id, { onDelete: "restrict" }),
     notes: text("notes"),
     createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(UNIX_NOW),
+    /**
+     * Where restocked units went (set exactly when `restock_quantity` > 0).
+     * Keep it the last column: receipt lines are inserted by position.
+     */
+    restockLocationId: text("restock_location_id")
+        .references(() => inventoryLocations.id, { onDelete: "restrict" }),
 }, (table) => [
     uniqueIndex("order_return_receipt_lines_command_line_unique").on(table.commandId, table.returnLineId),
     index("order_return_receipt_lines_return_created_idx").on(table.returnId, table.createdAt),

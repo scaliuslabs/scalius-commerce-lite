@@ -59,8 +59,11 @@ describe("quantity tiers beside the price", () => {
 describe("product page purchase aids", () => {
   const page = read("../../pages/products/[slug].astro");
 
-  it("mounts the phone buy bar only from the product's resolved sticky choice", () => {
-    expect(page).toContain('resolvedTheme.blocks.product.sticky.phoneBottom === "buy-bar" && <StickyBuyBar productName={product.name} />');
+  it("mounts the buy bars and anchor bars only from the product's resolved sticky choices", () => {
+    expect(page).toContain("const sticky = resolvedTheme.blocks.product.sticky;");
+    expect(page).toContain('<StickyBuyBar productName={product.name} phone={sticky.phoneBottom === "buy-bar"} desktop={sticky.desktop === "product-bar"} />');
+    expect(page).toContain('phone={sticky.phoneTop === "anchor-bar"}');
+    expect(page).toContain('desktop={sticky.desktop === "anchor-bar"}');
     expect(page).not.toMatch(/^\s*<StickyBuyBar productName=\{product\.name\} \/>/m);
   });
 

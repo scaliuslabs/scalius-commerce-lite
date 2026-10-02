@@ -51,11 +51,16 @@ const countLabel = hero.countLabel === undefined
 const breadcrumb = kind === "search" ? null : [{ label: "Home", href: "/" }, ...(hero.breadcrumb ?? [])];
 const description = hero.description && hasRenderableHtmlContent(hero.description) ? hero.description : null;
 const guide = content && hasRenderableHtmlContent(content.html) ? content : null;
-const descriptionAbove = resolved.blocks.listing.descriptionPlacement === "above";
+const { descriptionPlacement, surface, gutter, phoneBanner } = resolved.blocks.listing;
+const descriptionAbove = descriptionPlacement === "above";
+// The page behind the results (Dawn: the page colour) and its side gutters
+// (Aarong: flush to the container, 8px on phones).
+const SURFACE_CLASS: Record<typeof surface, string> = { page: "bg-background", muted: "bg-muted/30" };
+const GUTTER_CLASS: Record<typeof gutter, string> = { inset: "px-4 lg:px-8", flush: "px-2 lg:px-0" };
 ---
 
-<div class:list={["min-h-screen", resolved.template === "boutique" ? "bg-background" : "bg-muted/30"]} {...data}>
-  <div class:list={["mx-auto max-w-7xl pb-8 pt-1 sm:px-6", resolved.template === "heritage-editorial" ? "px-2 lg:px-0" : "px-4 lg:px-8"]}>
+<div class:list={["min-h-screen", SURFACE_CLASS[surface]]} {...data}>
+  <div class:list={["mx-auto max-w-7xl pb-8 pt-1 sm:px-6", GUTTER_CLASS[gutter]]}>
     {banner && (
       <img
         src={banner.src}
@@ -68,7 +73,7 @@ const descriptionAbove = resolved.blocks.listing.descriptionPlacement === "above
         fetchpriority="high"
         decoding="async"
         data-catalog-banner
-        class:list={["mt-3 aspect-[3/1] w-full rounded-2xl bg-muted object-cover sm:aspect-[1344/296]", resolved.template === "rounded-tech" && "hidden sm:block"]}
+        class:list={["mt-3 aspect-[3/1] w-full rounded-2xl bg-muted object-cover sm:aspect-[1344/296]", !phoneBanner && "hidden sm:block"]}
       />
     )}
     <slot name="intro" />

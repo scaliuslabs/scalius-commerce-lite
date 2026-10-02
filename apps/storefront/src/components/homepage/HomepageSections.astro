@@ -7,7 +7,11 @@
 import type { StorefrontSection } from "@scalius/shared/storefront-theme";
 import {
   dealEndsAt,
+  homepageCategoryTiles,
+  homepageCategoryTilesTitle,
+  homepageCollections,
   homepageCollectionsFallback,
+  homepageHero,
   homepageMedia,
   homepageMosaicTiles,
   homepagePhoneSections,
@@ -88,10 +92,11 @@ const money = { currencySymbol, currencyCode };
         {section.type === "hero" && (
           <section class:list={["w-full", section.settings.layout === "wide-editorial" && "md:mb-5"]}>
             <Hero
-              hero={content.hero}
+              hero={homepageHero(section, content)}
               priority={lead}
               phonePriority={lead && !phoneHeroAfterCategories}
               layout={section.settings.layout}
+              phoneHeight={section.settings.phoneHeight ?? "screen"}
               sideBanners={(section.settings.sideBanners ?? []).flatMap((banner) => {
                 const asset = homepageMedia(content, banner.mediaId);
                 return asset ? [{ asset, alt: banner.alt, href: banner.href }] : [];
@@ -103,12 +108,19 @@ const money = { currencySymbol, currencyCode };
 
         {section.type === "usp-strip" && <UspStrip section={section} deliveryFacts={content.deliveryFacts} />}
 
-        {section.type === "category-tiles" && <CategoryTiles section={section} rail={content.categoryRail} />}
+        {section.type === "category-tiles" && (
+          <CategoryTiles
+            section={section}
+            title={homepageCategoryTilesTitle(section)}
+            categories={homepageCategoryTiles(section, content)}
+          />
+        )}
 
         {section.type === "collections" && (
           <CollectionsSection
-            collections={content.collections}
-            fallbackProducts={homepageCollectionsFallback(content)}
+            section={section}
+            collections={homepageCollections(section, content)}
+            fallbackProducts={homepageCollectionsFallback(section, content)}
             lead={lead}
             {...money}
           />

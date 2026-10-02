@@ -28,10 +28,6 @@ import {
   normalizeSeoReturnPolicySettings,
   type SeoReturnPolicySettings,
 } from "@scalius/shared/seo-return-policy";
-import {
-  sanitizeHomepagePresentationConfig,
-  type HomepagePresentationConfig,
-} from "@scalius/shared/homepage-presentation";
 import { emiSettingsSchema, type EmiSettings } from "@scalius/shared/emi";
 import {
   NOTIFICATION_TYPES,
@@ -174,8 +170,33 @@ export const mediaDocument = defineSettingsDocument<MediaOptimizationSettings>({
 });
 
 // ─────────────────────────────────────────
-// Store details: business identity, invoice defaults, currency, countries.
+// Store details: business identity (the one source of the store's name,
+// phone, email, address and social profiles on every buyer surface),
+// invoice defaults, currency, countries.
 // ─────────────────────────────────────────
+
+/** Social profiles a store lists (header, footer, mobile menu). */
+export const BUSINESS_SOCIAL_LINKS_MAX = 8;
+
+export interface BusinessSocialLink {
+  id: string;
+  label: string;
+  /** An https URL without credentials. */
+  url: string;
+  /** Optional icon image (a public media URL). */
+  iconUrl?: string;
+}
+
+/** Stored links that are not usable (a non-https URL, no id) read as absent. */
+const businessSocialLinksSchema = z.array(z.unknown()).catch([]).transform((links) =>
+  links.flatMap((value): BusinessSocialLink[] => {
+    const link = asRecord(value);
+    const id = typeof link.id === "string" ? link.id.trim() : "";
+    const url = typeof link.url === "string" ? link.url.trim() : "";
+    if (!id || !url) return [];
+    const iconUrl = typeof link.iconUrl === "string" && link.iconUrl.trim() ? link.iconUrl.trim() : undefined;
+    return [{ id, label: typeof link.label === "string" ? link.label.trim() : "", url, ...(iconUrl ? { iconUrl } : {}) }];
+  }).slice(0, BUSINESS_SOCIAL_LINKS_MAX));
 
 export interface BusinessInfo {
   companyName: string;
@@ -192,6 +213,7 @@ export interface BusinessInfo {
   invoicePrefix: string;
   invoiceFooterText: string;
   invoiceLogoUrl: string;
+  socialLinks: BusinessSocialLink[];
 }
 
 export const businessDocument = defineSettingsDocument<BusinessInfo>({
@@ -211,7 +233,8 @@ export const businessDocument = defineSettingsDocument<BusinessInfo>({
     invoicePrefix: z.string(),
     invoiceFooterText: z.string(),
     invoiceLogoUrl: z.string(),
-  }),
+    socialLinks: businessSocialLinksSchema,
+  }) as unknown as z.ZodType<BusinessInfo>,
   defaults: {
     companyName: "",
     legalName: "",
@@ -227,6 +250,7 @@ export const businessDocument = defineSettingsDocument<BusinessInfo>({
     invoicePrefix: "INV",
     invoiceFooterText: "",
     invoiceLogoUrl: "",
+    socialLinks: [],
   },
 });
 
@@ -458,47 +482,6 @@ export const policiesDocument = defineSettingsDocument<StorePolicies>({
 });
 
 // ─────────────────────────────────────────
-// Online store presentation: header, footer and homepage are JSON documents
-// edited with optimistic revisions; SEO/discovery policy.
-// ─────────────────────────────────────────
-
-const SITE_PRESENTATION_KEYS = {
-  header: new Set(["topBar", "logo", "favicon", "contact", "social"]),
-  footer: new Set(["logo", "tagline", "description", "copyrightText", "social"]),
-} as const;
-
-export type SitePresentationSection = keyof typeof SITE_PRESENTATION_KEYS;
-
-/** Navigation is its own versioned authority and never lives in these documents. */
-export function stripEmbeddedNavigation(
-  section: SitePresentationSection,
-  config: JsonRecord,
-): JsonRecord {
-  const allowedKeys = SITE_PRESENTATION_KEYS[section];
-  return Object.fromEntries(Object.entries(config).filter(([key]) => allowedKeys.has(key)));
-}
-
-function presentationDocument(section: SitePresentationSection) {
-  return defineSettingsDocument<JsonRecord>({
-    key: section,
-    schema: z.preprocess((value) => stripEmbeddedNavigation(section, asRecord(value)), jsonRecord),
-    defaults: {},
-  });
-}
-
-export const headerDocument = presentationDocument("header");
-export const footerDocument = presentationDocument("footer");
-
-export const homepageDocument = defineSettingsDocument<HomepagePresentationConfig>({
-  key: "homepage",
-  schema: z.preprocess(
-    sanitizeHomepagePresentationConfig,
-    jsonRecord,
-  ) as unknown as z.ZodType<HomepagePresentationConfig>,
-  defaults: sanitizeHomepagePresentationConfig(null),
-});
-
-// ─────────────────────────────────────────
 // EMI plans: the "EMI on card payment, from X/month" line on eligible
 // products. Informational only (no checkout EMI until a gateway supports it);
 // off by default and shown only once the merchant enters plans. A stored
@@ -510,6 +493,11 @@ export const emiDocument = defineSettingsDocument<EmiSettings>({
   schema: emiSettingsSchema,
   defaults: { enabled: false, plans: [] },
 });
+
+// ─────────────────────────────────────────
+// SEO/discovery policy. The look (logo, announcement, footer words, homepage
+// sections) is the storefront theme document, never a settings document.
+// ─────────────────────────────────────────
 
 export interface SeoSettings {
   homepageTitle: string;
@@ -866,9 +854,6 @@ export const SETTINGS_DOCUMENTS = [
   customerAuthDocument,
   customerRequestsDocument,
   policiesDocument,
-  headerDocument,
-  footerDocument,
-  homepageDocument,
   emiDocument,
   seoDocument,
   notificationsDocument,

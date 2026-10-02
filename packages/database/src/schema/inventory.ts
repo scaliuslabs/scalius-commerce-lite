@@ -1,11 +1,88 @@
 // src/db/schema/inventory.ts
-// Inventory tracking tables: inventoryMovements, productLowStockAlerts.
+// Inventory tracking tables: inventoryLocations, inventoryLevels,
+// inventoryMovements, inventoryOperations, productLowStockAlerts.
 
-import { sqliteTable, text, integer, index, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, index, uniqueIndex, check, primaryKey } from "drizzle-orm/sqlite-core";
 import type { InferSelectModel } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { products, productVariants } from "./products";
 import { UNIX_NOW } from "./shared";
 import { AlertStatus } from "./enums";
+
+export const INVENTORY_LOCATION_KINDS = ["warehouse", "store", "other"] as const;
+export type InventoryLocationKind = (typeof INVENTORY_LOCATION_KINDS)[number];
+export const INVENTORY_LOCATION_STATUSES = ["active", "archived"] as const;
+export type InventoryLocationStatus = (typeof INVENTORY_LOCATION_STATUSES)[number];
+/** Created by migration 0102; the store's default location until the merchant picks another. */
+export const DEFAULT_INVENTORY_LOCATION_ID = "loc_default";
+
+/**
+ * Where physical stock is held. Exactly one active location is the default
+ * (partial unique index plus the default-is-active check): stock that moves
+ * without an explicit location moves there. Locations are archived, never
+ * deleted, so movements and orders keep pointing at them.
+ */
+export const inventoryLocations = sqliteTable("inventory_locations", {
+    id: text("id").primaryKey(),
+    name: text("name").notNull(),
+    /** Short merchant code; unique by `lower(trim(code))`. */
+    code: text("code").notNull(),
+    kind: text("kind", { enum: INVENTORY_LOCATION_KINDS }).notNull().default("warehouse"),
+    addressLine1: text("address_line1"),
+    addressLine2: text("address_line2"),
+    city: text("city"),
+    postalCode: text("postal_code"),
+    countryCode: text("country_code").notNull().default("BD"),
+    phone: text("phone"),
+    isDefault: integer("is_default", { mode: "boolean" }).notNull().default(false),
+    status: text("status", { enum: INVENTORY_LOCATION_STATUSES }).notNull().default("active"),
+    position: integer("position").notNull().default(0),
+    version: integer("version").notNull().default(1),
+    createdAt: integer("created_at", { mode: "timestamp" })
+        .notNull()
+        .default(UNIX_NOW),
+    updatedAt: integer("updated_at", { mode: "timestamp" })
+        .notNull()
+        .default(UNIX_NOW),
+}, (table) => [
+    uniqueIndex("inventory_locations_code_unique").on(sql`lower(trim(${table.code}))`),
+    uniqueIndex("inventory_locations_default_unique")
+        .on(table.isDefault)
+        .where(sql`${table.isDefault} = 1`),
+    index("inventory_locations_status_position_idx").on(table.status, table.position),
+    check("inventory_locations_name_length", sql`length(trim(${table.name})) BETWEEN 1 AND 80`),
+    check("inventory_locations_code_length", sql`length(trim(${table.code})) BETWEEN 1 AND 24`),
+    check("inventory_locations_kind_check", sql`${table.kind} IN ('warehouse', 'store', 'other')`),
+    check("inventory_locations_status_check", sql`${table.status} IN ('active', 'archived')`),
+    check("inventory_locations_default_active", sql`${table.isDefault} = 0 OR ${table.status} = 'active'`),
+    check("inventory_locations_version_positive", sql`${table.version} >= 1`),
+]);
+
+/**
+ * On-hand units of one SKU at one location. Trigger-maintained only (like
+ * `category_closure`): every ledger-v2 movement with a stock delta books it
+ * at its location, a compensating movement delete reverses it, and a SKU
+ * inserted with stock books that stock at the default location. Application
+ * code never writes it. For every SKU, the levels sum to
+ * `product_variants.stock`; the CHECK makes a shipment from a location
+ * without the units abort its whole batch.
+ */
+export const inventoryLevels = sqliteTable("inventory_levels", {
+    variantId: text("variant_id")
+        .notNull()
+        .references(() => productVariants.id, { onDelete: "cascade" }),
+    locationId: text("location_id")
+        .notNull()
+        .references(() => inventoryLocations.id, { onDelete: "restrict" }),
+    onHand: integer("on_hand").notNull().default(0),
+    updatedAt: integer("updated_at", { mode: "timestamp" })
+        .notNull()
+        .default(UNIX_NOW),
+}, (table) => [
+    primaryKey({ columns: [table.variantId, table.locationId] }),
+    index("inventory_levels_location_idx").on(table.locationId, table.onHand),
+    check("inventory_levels_on_hand_nonnegative", sql`${table.onHand} >= 0`),
+]);
 
 /**
  * Audit log for all stock movements.
@@ -42,6 +119,15 @@ export const inventoryMovements = sqliteTable("inventory_movements", {
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
         .default(UNIX_NOW),
+    /**
+     * Where physical stock moved. Required (trigger) on every v2 movement
+     * whose `stock_delta` is not zero; reservations and releases leave it
+     * null. Deducts and restores carry it even for pools that move no
+     * physical stock, so a restore can find where its units left from.
+     * Keep it the last column: movement claims insert by position.
+     */
+    locationId: text("location_id")
+        .references(() => inventoryLocations.id, { onDelete: "restrict" }),
 }, (table) => [
     index("inventory_movements_variant_idx").on(table.variantId),
     index("inventory_movements_order_idx").on(table.orderId),
@@ -120,6 +206,8 @@ export const productLowStockAlerts = sqliteTable("product_low_stock_alerts", {
     index("pls_alerts_status_idx").on(table.alertStatus),
 ]);
 
+export type InventoryLocation = InferSelectModel<typeof inventoryLocations>;
+export type InventoryLevel = InferSelectModel<typeof inventoryLevels>;
 export type InventoryMovement = InferSelectModel<typeof inventoryMovements>;
 export type InventoryOperation = InferSelectModel<typeof inventoryOperations>;
 export type ProductLowStockAlert = InferSelectModel<typeof productLowStockAlerts>;

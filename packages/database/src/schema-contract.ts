@@ -22,8 +22,8 @@ export const DATABASE_SCHEMA_LEGACY_BASELINE = {
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA = {
-  version: 101,
-  name: "0101_cache_ordering_dependencies",
+  version: 106,
+  name: "0106_theme_document_v6",
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
@@ -286,6 +286,31 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
     version: 101,
     name: "0101_cache_ordering_dependencies",
     sourceSha256: "0928892cb6b70b1f25af79fc03d293d0ad28634617c0fce0d0eb79be8c276e7a",
+  },
+  {
+    version: 102,
+    name: "0102_inventory_locations",
+    sourceSha256: "1f73c0787bbccbb214b024e342655975a60ee81f75321d8d21bdd33eca52e22f",
+  },
+  {
+    version: 103,
+    name: "0103_order_channel_event_outbox",
+    sourceSha256: "aea0cc76afe248d854897da514a934d53b9aca0c2c5f1753b6902cd136c9d14b",
+  },
+  {
+    version: 104,
+    name: "0104_custom_fields",
+    sourceSha256: "cd82986061df2a502c2140d43e2d817cee190f26052352825b2751d910e9b2b1",
+  },
+  {
+    version: 105,
+    name: "0105_plugin_runtime",
+    sourceSha256: "779873f178ae9054a4f80c99ec75a6d0e38ae9e77e95ec7b07dd924c85397033",
+  },
+  {
+    version: 106,
+    name: "0106_theme_document_v6",
+    sourceSha256: "4a5b61c81ae7d43f42eb0df4a36ab3d80af1dd3feab350a5af3d0f3da34eef50",
   },
 ] as const;
 

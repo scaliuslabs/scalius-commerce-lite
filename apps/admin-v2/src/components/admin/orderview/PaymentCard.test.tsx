@@ -41,7 +41,7 @@ const en = orderDetailMessages.en;
 const bn = orderDetailMessages.bn;
 
 const order: Order = {
-  id: "order_history", version: 1, customerName: "Test buyer", customerPhone: "+8801700000000",
+  id: "order_history", version: 1, channel: "online_store", channelSource: null, customerName: "Test buyer", customerPhone: "+8801700000000",
   customerEmail: null, shippingAddress: "Test address", city: "Dhaka", zone: "Central Road",
   area: null, notes: null, discountAmount: 0, shippingCharge: 0, status: "incomplete",
   createdAt: 1_783_000_000, updatedAt: 1_783_000_000, items: [], totalAmount: 1800,

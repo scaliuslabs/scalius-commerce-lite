@@ -715,6 +715,41 @@
       "when": 1790300032000,
       "tag": "0101_cache_ordering_dependencies",
       "breakpoints": true
+    },
+    {
+      "idx": 102,
+      "version": "6",
+      "when": 1790300033000,
+      "tag": "0102_inventory_locations",
+      "breakpoints": true
+    },
+    {
+      "idx": 103,
+      "version": "6",
+      "when": 1790904699508,
+      "tag": "0103_order_channel_event_outbox",
+      "breakpoints": true
+    },
+    {
+      "idx": 104,
+      "version": "6",
+      "when": 1790907283107,
+      "tag": "0104_custom_fields",
+      "breakpoints": true
+    },
+    {
+      "idx": 105,
+      "version": "6",
+      "when": 1790908236945,
+      "tag": "0105_plugin_runtime",
+      "breakpoints": true
+    },
+    {
+      "idx": 106,
+      "version": "6",
+      "when": 1790908237945,
+      "tag": "0106_theme_document_v6",
+      "breakpoints": true
     }
   ]
 }

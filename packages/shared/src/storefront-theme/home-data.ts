@@ -1,18 +1,24 @@
-// What the homepage sections read: product lists by source, media by id,
-// the brand wall's brands and the deal countdowns' promotions, derived from
-// the section list. The API reads exactly these, for the published theme in
-// the homepage batch part and for a preview's stored draft on the
-// token-verified preview route; callers never name reads. The storefront
-// looks each section's data up by the same keys, so the two cannot drift
-// apart.
+// What the homepage sections read: product lists by source, media by id
+// (hero slides included), the category tiles' categories, the collections
+// section's collections, the brand wall's brands, the deal countdowns'
+// promotions and the product a product homepage opens on, derived from the
+// page. The API reads exactly these, for the published theme in the homepage
+// batch part and for a preview's stored draft on the token-verified preview
+// route; callers never name reads. The storefront looks each section's data
+// up by the same keys, so the two cannot drift apart.
+import type { StorefrontHomeMode } from "./document";
 import type { StorefrontProductSource, StorefrontSection } from "./sections";
 
 /** Most products one source feeds (a 6x6 grid). */
 export const HOME_PRODUCT_LIST_LIMIT = 36;
 /** Distinct product sources one homepage reads; later sources render nothing. */
 export const HOME_MAX_PRODUCT_LISTS = 8;
-/** Images (banners, lookbook and editorial photos, side banners, cards, mosaic tiles) one homepage reads. */
-export const HOME_MAX_MEDIA = 24;
+/** Images (hero slides, banners, lookbook and editorial photos, side banners, cards, mosaic tiles) one homepage reads. */
+export const HOME_MAX_MEDIA = 40;
+/** Categories the category tiles of one homepage read, all sections together. */
+export const HOME_MAX_CATEGORIES = 24;
+/** Collections the collections sections of one homepage read, all sections together. */
+export const HOME_MAX_COLLECTIONS = 8;
 /** A deal block's cards (Daraz shows 6 per row). */
 export const HOME_DEAL_LIMIT = 12;
 /** A lookbook's thumbnails: 4x2 at most, the last one "View more" when there is more (Fabrilife). */
@@ -34,10 +40,16 @@ export interface HomeProductListRequest {
 export interface HomeSectionRequests {
   lists: HomeProductListRequest[];
   mediaIds: string[];
+  /** The category tiles' categories, in document order. */
+  categoryIds: string[];
+  /** The collections sections' collections, in document order. */
+  collectionIds: string[];
   /** How many brands the brand wall reads (0: no brand wall). */
   brandLimit: number;
   /** The promotions whose real end times deal countdowns count to. */
   promotionIds: string[];
+  /** The product a product homepage opens on (null: the sections). */
+  homeProductId: string | null;
 }
 
 /** One key per source: `newest`, `on-sale`, `popular`, `collection:<id>`, `category:<id>`. */
@@ -75,9 +87,12 @@ export function homeSectionProductLists(section: StorefrontSection): Array<{ sou
 export function homeSectionMediaIds(section: StorefrontSection): string[] {
   switch (section.type) {
     case "hero":
-      return section.settings.layout === "contained-banners"
-        ? (section.settings.sideBanners ?? []).map((banner) => banner.mediaId)
-        : [];
+      return [
+        ...section.settings.slides.flatMap((slide) => slide.phoneImage ? [slide.image, slide.phoneImage] : [slide.image]),
+        ...(section.settings.layout === "contained-banners"
+          ? (section.settings.sideBanners ?? []).map((banner) => banner.mediaId)
+          : []),
+      ];
     case "banner":
     case "lookbook":
       return section.settings.mediaId ? [section.settings.mediaId] : [];
@@ -93,14 +108,31 @@ export function homeSectionMediaIds(section: StorefrontSection): string[] {
 }
 
 /**
- * Everything the sections read, in document order: one list per source
- * (the largest limit any section asks of it), each image once, the brand
- * wall's brands and the deal promotions, all capped so a homepage costs the
- * same bounded batch however it is built.
+ * Whether the sections show the store's delivery facts (a delivery-facts
+ * strip, or the facts panel beside an app-panel hero), so the storefront
+ * reads shipping and checkout settings only when one does.
  */
-export function homeSectionRequests(sections: readonly StorefrontSection[]): HomeSectionRequests {
+export function homeSectionsShowDeliveryFacts(sections: readonly StorefrontSection[]): boolean {
+  return sections.some((section) =>
+    (section.type === "usp-strip" && section.settings.source.kind === "delivery-facts")
+    || (section.type === "hero" && section.settings.layout === "app-panel"));
+}
+
+/**
+ * Everything the page reads, in document order: one list per source (the
+ * largest limit any section asks of it), each image, category and
+ * collection once, the brand wall's brands, the deal promotions and a
+ * product homepage's product, all capped so a homepage costs the same
+ * bounded batch however it is built.
+ */
+export function homeSectionRequests(
+  sections: readonly StorefrontSection[],
+  homeMode: StorefrontHomeMode = { kind: "sections" },
+): HomeSectionRequests {
   const lists = new Map<string, HomeProductListRequest>();
   const mediaIds = new Set<string>();
+  const categoryIds = new Set<string>();
+  const collectionIds = new Set<string>();
   const promotionIds = new Set<string>();
   let brandLimit = 0;
   for (const section of sections) {
@@ -114,16 +146,32 @@ export function homeSectionRequests(sections: readonly StorefrontSection[]): Hom
     for (const id of homeSectionMediaIds(section)) {
       if (mediaIds.size < HOME_MAX_MEDIA) mediaIds.add(id);
     }
+    if (section.type === "category-tiles") {
+      for (const id of section.settings.categoryIds) if (categoryIds.size < HOME_MAX_CATEGORIES) categoryIds.add(id);
+    }
+    if (section.type === "collections") {
+      for (const id of section.settings.collectionIds) if (collectionIds.size < HOME_MAX_COLLECTIONS) collectionIds.add(id);
+    }
     if (section.type === "brand-wall") brandLimit = HOME_BRAND_LIMIT;
     if (section.type === "deal-block" && section.settings.promotionId && promotionIds.size < HOME_MAX_PROMOTIONS) {
       promotionIds.add(section.settings.promotionId);
     }
   }
-  return { lists: [...lists.values()], mediaIds: [...mediaIds], brandLimit, promotionIds: [...promotionIds] };
+  return {
+    lists: [...lists.values()],
+    mediaIds: [...mediaIds],
+    categoryIds: [...categoryIds],
+    collectionIds: [...collectionIds],
+    brandLimit,
+    promotionIds: [...promotionIds],
+    homeProductId: homeMode.kind === "product" ? homeMode.productId : null,
+  };
 }
 
-/** Whether the sections read anything at all (a preview with none skips the database). */
+/** Whether the page reads anything at all (a preview with none skips the database). */
 export function homeSectionRequestsEmpty(requests: HomeSectionRequests): boolean {
   return requests.lists.length === 0 && requests.mediaIds.length === 0
-    && requests.brandLimit === 0 && requests.promotionIds.length === 0;
+    && requests.categoryIds.length === 0 && requests.collectionIds.length === 0
+    && requests.brandLimit === 0 && requests.promotionIds.length === 0
+    && requests.homeProductId === null;
 }

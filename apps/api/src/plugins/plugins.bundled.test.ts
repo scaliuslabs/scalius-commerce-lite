@@ -1,0 +1,113 @@
+// The reference plugin (scalius.hello) end to end through the bundled loader
+// on the real migrated schema: its event handler calls an /api/v1 operation
+// through the plugin principal (the real admin app and RBAC), writes storage
+// and KV, its routes, cron job, lifecycle hook and checkout function run, and
+// its log lines land masked in the plugin log.
+import type { DatabaseSync } from "node:sqlite";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import type { Database } from "@scalius/database/client";
+import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
+import {
+  getPluginKv,
+  getPluginRecord,
+  listPluginLogs,
+  requirePluginInstallation,
+  type PluginInstallation,
+} from "@scalius/core/modules/plugins";
+import { BUNDLED_PLUGINS } from "./bundled.gen";
+import { PluginHost } from "./host";
+import { runPluginFunctions } from "./functions";
+import { installHello, pluginTestCtx, pluginTestEnv, testCart as cart } from "./testing/fixtures";
+import helloModule from "../../../../plugins/hello/src/index";
+
+describe("scalius.hello through the bundled loader", () => {
+  let sqlite: DatabaseSync;
+  let db: Database;
+  let binding: D1Database;
+  let installation: PluginInstallation;
+
+  beforeEach(async () => {
+    ({ sqlite, db, binding } = createSqliteD1Database());
+    installation = await installHello(db, sqlite);
+    sqlite.prepare(`INSERT INTO orders (id, customer_name, customer_phone, shipping_address, city, zone, status)
+      VALUES ('ord_hello1', 'Rahim', '+8801711111111', 'House 1', 'city_1', 'zone_1', 'confirmed')`).run();
+  });
+  afterEach(() => sqlite.close());
+
+  it("bundles the same version and fingerprint the lockfile records", () => {
+    expect(BUNDLED_PLUGINS["scalius.hello"]).toMatchObject({ version: "0.1.0", sha256: expect.stringMatching(/^[0-9a-f]{64}$/) });
+    expect(helloModule.manifest.id).toBe("scalius.hello");
+  });
+
+  it("handles order.paid: calls dashboard.orders.get as the plugin, writes storage and KV, logs masked", async () => {
+    const host = new PluginHost({ env: pluginTestEnv(binding), ctx: pluginTestCtx(), db });
+    const outcome = await host.invokeEvent(installation, {
+      id: "evt_1",
+      topic: "order.paid",
+      apiVersion: "2026-10",
+      occurredAt: "2026-10-01T10:00:00.000Z",
+      resource: { type: "order", id: "ord_hello1" },
+      facts: { orderId: "ord_hello1" },
+    });
+    expect(outcome).toEqual({ ok: true, value: null, error: null });
+    expect(await getPluginRecord(db, "scalius.hello", "greetings", "ord_hello1")).toEqual({
+      orderId: "ord_hello1",
+      kind: "paid",
+      createdAt: Date.parse("2026-10-01T10:00:00.000Z"),
+      greeting: "Salam",
+      orderStatus: "confirmed",
+    });
+    expect(await getPluginKv(db, "scalius.hello", "paid_count")).toBe(1);
+    const logs = await listPluginLogs(db, "scalius.hello");
+    expect(logs).toEqual([expect.objectContaining({ level: "info", source: "event:order.paid", message: "Greeted a paid order", fields: { orderId: "ord_hello1", apiStatus: 200 } })]);
+    const audit = sqlite.prepare("SELECT plugin_id, grant_id, owner_user_id, operation_id, outcome, http_status FROM agent_audit_events").all();
+    expect(audit).toEqual([{ plugin_id: "scalius.hello", grant_id: null, owner_user_id: "owner", operation_id: "dashboard.orders.get", outcome: "success", http_status: 200 }]);
+  });
+
+  it("serves its admin and public routes and runs its cron job and lifecycle hook", async () => {
+    const host = new PluginHost({ env: pluginTestEnv(binding), ctx: pluginTestCtx(), db });
+    const request = { method: "GET", subpath: "", query: { name: "Karim" }, headers: {}, body: null, rawBody: null, staffId: null };
+    const greet = await host.invokeRoute(installation, "public", "greet", request);
+    expect(greet).toEqual({ ok: true, value: { status: 200, headers: {}, body: { message: "Salam, Karim!", visits: 1 } }, error: null });
+    expect((await host.invokeRoute(installation, "public", "greet", request)).value?.body).toMatchObject({ visits: 2 });
+
+    const now = Date.parse("2026-10-02T00:00:00.000Z");
+    sqlite.prepare("INSERT INTO plugin_records (plugin_id, collection, id, data_json) VALUES ('scalius.hello', 'greetings', 'seed', '{}')").run();
+    const { putPluginRecord } = await import("@scalius/core/modules/plugins");
+    const declaration = installation.manifest.storage.greetings!;
+    await putPluginRecord(db, "scalius.hello", "greetings", declaration, "old", { orderId: "old", kind: "paid", createdAt: now - 40 * 86_400_000 });
+    await putPluginRecord(db, "scalius.hello", "greetings", declaration, "new", { orderId: "new", kind: "paid", createdAt: now - 86_400_000 });
+    const dashboard = await host.invokeRoute(installation, "admin", "dashboard", { ...request, query: {} });
+    expect(dashboard.value?.body).toMatchObject({ type: "page", children: [{ type: "stat", label: "Greeted orders", value: 3 }, { type: "stat", label: "Paid events", value: 0 }, expect.anything()] });
+
+    expect(await host.invokeCron(installation, "tidy", new Date(now).toISOString())).toEqual({ ok: true, value: null, error: null });
+    expect(await getPluginRecord(db, "scalius.hello", "greetings", "old")).toBeNull();
+    expect(await getPluginRecord(db, "scalius.hello", "greetings", "new")).not.toBeNull();
+
+    expect((await host.invokeLifecycle(installation, "activate")).ok).toBe(true);
+    const messages = (await listPluginLogs(db, "scalius.hello")).map((line) => `${line.source} ${line.message}`);
+    expect(messages).toEqual(expect.arrayContaining(["cron:tidy Tidied old greetings", "lifecycle:activate Hello is active"]));
+  });
+
+  it("runs its checkout.discounts function with its settings and returns nothing below the minimum", async () => {
+    const env = pluginTestEnv(binding);
+    const results = await runPluginFunctions("checkout.discounts", { cart: cart(150_000) }, env, pluginTestCtx(), { db });
+    expect(results).toEqual([{
+      pluginId: "scalius.hello",
+      priority: 100,
+      output: { discounts: [{ title: "Salam discount", target: { kind: "order" }, value: { type: "percentage", percent: 15 } }] },
+    }]);
+    expect(await runPluginFunctions("checkout.discounts", { cart: cart(50_000) }, env, pluginTestCtx(), { db }))
+      .toEqual([{ pluginId: "scalius.hello", priority: 100, output: { discounts: [] } }]);
+  });
+
+  it("refuses to run code that is not the installed version and marks the plugin failed", async () => {
+    sqlite.prepare("UPDATE plugin_installations SET bundle_sha256 = ? WHERE plugin_id = 'scalius.hello'").run("f".repeat(64));
+    const stale = await requirePluginInstallation(db, "scalius.hello");
+    const host = new PluginHost({ env: pluginTestEnv(binding), ctx: pluginTestCtx(), db });
+    const outcome = await host.invokeCron(stale, "tidy", new Date().toISOString());
+    expect(outcome.ok).toBe(false);
+    expect(outcome.error).toMatch(/update the installation/);
+    expect((await requirePluginInstallation(db, "scalius.hello")).status).toBe("failed");
+  });
+});

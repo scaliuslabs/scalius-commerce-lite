@@ -17,12 +17,34 @@ const mocks = vi.hoisted(() => ({
   acknowledgeLowStockAlert: vi.fn(),
   setLowStockThreshold: vi.fn(),
   setDefaultLowStockThreshold: vi.fn(),
-
+  listInventoryLocations: vi.fn(),
+  createInventoryLocation: vi.fn(),
+  updateInventoryLocation: vi.fn(),
+  archiveInventoryLocation: vi.fn(),
+  unarchiveInventoryLocation: vi.fn(),
+  setDefaultInventoryLocation: vi.fn(),
+  getVariantInventoryLevels: vi.fn(),
+  getProductInventoryLevels: vi.fn(),
+  readLocationOnHand: vi.fn(),
+  resolveActiveInventoryLocation: vi.fn(),
 }));
 
 vi.mock("@scalius/core/modules/inventory", async () => {
   const { z } = await import("@hono/zod-openapi");
+  const locations = await vi.importActual<typeof import("@scalius/core/modules/inventory")>("@scalius/core/modules/inventory");
   return {
+    listInventoryLocations: mocks.listInventoryLocations,
+    createInventoryLocation: mocks.createInventoryLocation,
+    updateInventoryLocation: mocks.updateInventoryLocation,
+    archiveInventoryLocation: mocks.archiveInventoryLocation,
+    unarchiveInventoryLocation: mocks.unarchiveInventoryLocation,
+    setDefaultInventoryLocation: mocks.setDefaultInventoryLocation,
+    getVariantInventoryLevels: mocks.getVariantInventoryLevels,
+    getProductInventoryLevels: mocks.getProductInventoryLevels,
+    readLocationOnHand: mocks.readLocationOnHand,
+    resolveActiveInventoryLocation: mocks.resolveActiveInventoryLocation,
+    inventoryLocationInputSchema: locations.inventoryLocationInputSchema,
+    updateInventoryLocationSchema: locations.updateInventoryLocationSchema,
     getInventoryOverview: mocks.getInventoryOverview,
     getInventoryLabelVariants: mocks.getInventoryLabelVariants,
     buildInventoryLabelArtifact: mocks.buildInventoryLabelArtifact,
@@ -48,6 +70,7 @@ vi.mock("@scalius/core/modules/inventory", async () => {
       reason: z.enum(["received", "correction", "damage", "theft", "return", "other"]),
       notes: z.string().optional(),
       pool: z.enum(["stock", "preorderStock"]).optional().default("stock"),
+      locationId: z.string().min(1).optional(),
     }).superRefine((value, context) => {
       if ((value.reason === "received" || value.reason === "return") && value.delta < 0) {
         context.addIssue({ code: "custom", path: ["reason"], message: "positive adjustment required" });
@@ -699,5 +722,166 @@ describe("admin inventory write behavior", () => {
 
     expect(response.status).toBe(400);
     expect(mocks.getInventoryOverview).not.toHaveBeenCalled();
+  });
+});
+
+describe("admin inventory locations", () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  const location = {
+    id: "loc_branch",
+    name: "Branch",
+    code: "BR",
+    kind: "store",
+    addressLine1: null,
+    addressLine2: null,
+    city: "Chattogram",
+    postalCode: null,
+    countryCode: "BD",
+    phone: null,
+    isDefault: false,
+    status: "active",
+    position: 1,
+    version: 1,
+    onHand: 0,
+    stockedSkus: 0,
+    createdAt: "2026-10-02T00:00:00.000Z",
+    updatedAt: "2026-10-02T00:00:00.000Z",
+  };
+
+  it("lists active locations, and archived ones only when asked", async () => {
+    const { app, db, env } = createTestApp();
+    mocks.listInventoryLocations.mockResolvedValue([location]);
+
+    const active = await app.request("/api/v1/admin/inventory/locations", {}, env);
+    const everything = await app.request("/api/v1/admin/inventory/locations?includeArchived=true", {}, env);
+
+    expect(active.status).toBe(200);
+    await expect(active.json()).resolves.toMatchObject({ success: true, data: { locations: [{ id: "loc_branch" }] } });
+    expect(everything.status).toBe(200);
+    expect(mocks.listInventoryLocations.mock.calls).toEqual([
+      [db, { includeArchived: false }],
+      [db, { includeArchived: true }],
+    ]);
+  });
+
+  it("creates a location and rejects an invalid code before writing", async () => {
+    const { app, db, env } = createTestApp();
+    mocks.createInventoryLocation.mockResolvedValue(location);
+
+    const created = await postJson(app, env, "/locations", { name: "Branch", code: "BR", kind: "store", city: "Chattogram" });
+    const invalid = await postJson(app, env, "/locations", { name: "Branch", code: "has space" });
+
+    expect(created.status).toBe(200);
+    expect(mocks.createInventoryLocation).toHaveBeenCalledTimes(1);
+    expect(mocks.createInventoryLocation).toHaveBeenCalledWith(db, expect.objectContaining({ name: "Branch", code: "BR", kind: "store" }));
+    expect(invalid.status).toBe(400);
+  });
+
+  it("edits a location against its version and surfaces archive conflicts", async () => {
+    const { app, db, env } = createTestApp();
+    const { ConflictError } = await import("@scalius/core/errors");
+    mocks.updateInventoryLocation.mockResolvedValue({ ...location, name: "CTG", version: 2 });
+    mocks.archiveInventoryLocation.mockRejectedValue(new ConflictError("Branch still holds 3 units. Move or adjust that stock to zero first."));
+    mocks.setDefaultInventoryLocation.mockResolvedValue({ ...location, isDefault: true });
+
+    const updated = await app.request("/api/v1/admin/inventory/locations/loc_branch", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "CTG", code: "BR", expectedVersion: 1 }),
+    }, env);
+    const missingVersion = await app.request("/api/v1/admin/inventory/locations/loc_branch", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "CTG", code: "BR" }),
+    }, env);
+    const archived = await postJson(app, env, "/locations/loc_branch/archive", {});
+    const madeDefault = await postJson(app, env, "/locations/loc_branch/default", {});
+
+    expect(updated.status).toBe(200);
+    expect(mocks.updateInventoryLocation).toHaveBeenCalledWith(db, "loc_branch", expect.objectContaining({ expectedVersion: 1 }));
+    expect(missingVersion.status).toBe(400);
+    expect(archived.status).toBe(409);
+    expect(madeDefault.status).toBe(200);
+    expect(mocks.setDefaultInventoryLocation).toHaveBeenCalledWith(db, "loc_branch");
+  });
+
+  it("reads one SKU's per-location levels", async () => {
+    const { app, db, env } = createTestApp();
+    mocks.getVariantInventoryLevels.mockResolvedValue({
+      variantId: "var_1",
+      stock: 5,
+      reservedStock: 0,
+      levels: [{ locationId: "loc_default", name: "Main location", code: "MAIN", isDefault: true, status: "active", onHand: 5 }],
+    });
+
+    const response = await app.request("/api/v1/admin/inventory/var_1/levels", {}, env);
+
+    expect(response.status).toBe(200);
+    expect(mocks.getVariantInventoryLevels).toHaveBeenCalledWith(db, "var_1");
+  });
+
+  it("forwards the location of a manual adjustment, a scanner count and the variant list", async () => {
+    const { app, env } = createTestApp();
+    mocks.getInventoryOverview.mockResolvedValue({ variants: [], pagination: { page: 1, limit: 50, total: 0, totalPages: 0 } });
+
+    await postJson(app, env, "/var_1/adjust", { operationKey: "invop_api_location_001", delta: 2, reason: "received", locationId: "loc_branch" });
+    await postJson(app, env, "/stock-set", { operationKey: "invop_api_location_002", variantId: "var_1", newStock: 4, locationId: "loc_branch" });
+    await app.request("/api/v1/admin/inventory?section=variants&locationId=loc_branch", {}, env);
+
+    expect(mocks.adjustInventory).toHaveBeenCalledWith(expect.anything(), "var_1", expect.objectContaining({ locationId: "loc_branch" }), "user_1");
+    expect(mocks.setStock).toHaveBeenCalledWith(expect.anything(), "var_1", 4, "invop_api_location_002", undefined, "user_1", "loc_branch");
+    expect(mocks.getInventoryOverview).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ locationId: "loc_branch" }));
+  });
+
+  it("reads a product's SKU levels in one call", async () => {
+    const { app, db, env } = createTestApp();
+    mocks.getProductInventoryLevels.mockResolvedValue({
+      productId: "prod_1",
+      levels: [{ variantId: "var_1", locationId: "loc_default", onHand: 5 }],
+    });
+
+    const response = await app.request("/api/v1/admin/inventory/levels?productId=prod_1", {}, env);
+
+    expect(response.status).toBe(200);
+    expect(mocks.getProductInventoryLevels).toHaveBeenCalledWith(db, "prod_1");
+    expect((await app.request("/api/v1/admin/inventory/levels", {}, env)).status).toBe(400);
+  });
+
+  it("filters and exports movement history by location", async () => {
+    const { app, env } = createTestApp();
+
+    await app.request("/api/v1/admin/inventory?section=movements&movementLocationId=loc_branch", {}, env);
+    await postJson(app, env, "/movements/export", { movementLocationId: "loc_branch", maxRows: 10 });
+
+    expect(mocks.getInventoryOverview).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ section: "movements", movementLocationId: "loc_branch" }),
+    );
+    expect(mocks.buildInventoryMovementCsvArtifact).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ locationId: "loc_branch", maxRows: 10 }),
+    );
+  });
+
+  it("gives the scanner a scanned SKU's on-hand at the location it counts", async () => {
+    const { app, db, env } = createTestApp();
+    mocks.lookupByBarcodeOrSku.mockResolvedValue({
+      variant: { id: "var_1", sku: "SKU-1", optionLabel: null, price: 10, stock: 7, reservedStock: 1, available: 6, barcode: null, barcodeType: null, lowStockThreshold: null },
+      product: { id: "prod_1", name: "Kurta", slug: "kurta", price: 10, isActive: true, imageUrl: null, imageMediaId: null },
+    });
+    mocks.resolveActiveInventoryLocation.mockResolvedValue({ id: "loc_branch", name: "Branch" });
+    mocks.readLocationOnHand.mockResolvedValue(new Map([["var_1", 3]]));
+
+    const at = await app.request("/api/v1/admin/inventory/scanner/lookup?code=SKU-1&locationId=loc_branch", {}, env);
+    const anywhere = await app.request("/api/v1/admin/inventory/scanner/lookup?code=SKU-1", {}, env);
+
+    expect(at.status).toBe(200);
+    expect(((await at.json()) as { data: { variant: { locationOnHand: number | null } } }).data.variant.locationOnHand).toBe(3);
+    expect(mocks.resolveActiveInventoryLocation).toHaveBeenCalledWith(db, "loc_branch");
+    expect(mocks.readLocationOnHand).toHaveBeenCalledWith(db, "loc_branch", ["var_1"]);
+    expect(((await anywhere.json()) as { data: { variant: { locationOnHand: number | null } } }).data.variant.locationOnHand).toBeNull();
   });
 });

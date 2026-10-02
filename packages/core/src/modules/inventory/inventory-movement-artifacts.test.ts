@@ -42,6 +42,8 @@ function movement(overrides: Record<string, unknown> = {}) {
     createdAt: 1_720_000_000,
     variantSku: "=SKU-FORMULA",
     productName: "Product One",
+    locationId: "loc_branch",
+    locationName: "@Branch",
     ...overrides,
   };
 }
@@ -66,6 +68,7 @@ describe("inventory movement CSV artifacts", () => {
       search: "SKU",
       movementType: "adjusted",
       orderId: "ord_1",
+      locationId: "loc_branch",
       startDate,
       endDate,
       maxRows: 2,
@@ -75,7 +78,9 @@ describe("inventory movement CSV artifacts", () => {
     expect(artifact.body).toContain('"\'+warehouse note"');
     expect(artifact.body).toContain('"Admin One"');
     // Orders by the number merchants know them by, not the internal id.
-    expect(artifact.body).toContain('"Product One","#1073"');
+    // Where the stock moved sits beside the order, formula-safe like every merchant text.
+    expect(artifact.body).toContain('"Product One","#1073","\'@Branch"');
+    expect(artifact.body.split("\n")[0]).toContain('"Order","Location","Actor"');
     expect(artifact.body).not.toContain("ord_1");
     expect(artifact.byteLength).toBe(new TextEncoder().encode(artifact.body).byteLength);
     expect(artifact.rowCount).toBe(2);
@@ -84,6 +89,7 @@ describe("inventory movement CSV artifacts", () => {
       search: "SKU",
       movementType: "adjusted",
       orderId: "ord_1",
+      locationId: "loc_branch",
       startDate,
       endDate,
       cursor: undefined,

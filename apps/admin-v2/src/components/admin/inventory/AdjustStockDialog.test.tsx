@@ -7,6 +7,7 @@ import { translate } from "~/i18n";
 import { inventoryMessages } from "~/i18n/inventory";
 import { AdminApiResponseError } from "~/lib/admin-api-error";
 import type { InventoryVariant } from "~/lib/api-query-options/inventory";
+import type { InventoryLocation } from "~/lib/api-query-options/inventory-locations";
 
 const mocks = vi.hoisted(() => ({
   adjust: vi.fn(),
@@ -129,5 +130,95 @@ describe("adjust stock dialog", () => {
     await type("inventory-alert-level", "1000001");
     expect(document.body.textContent).toContain(t("alertLevelInvalid"));
     expect(apply().disabled).toBe(true);
+  });
+});
+
+describe("adjust stock dialog locations", () => {
+  let host: HTMLDivElement;
+  let root: Root;
+
+  const location = (id: string, name: string, isDefault: boolean) => ({
+    id, name, code: id.toUpperCase(), kind: "warehouse", addressLine1: null, addressLine2: null, city: null,
+    postalCode: null, countryCode: "BD", phone: null, isDefault, status: "active", position: 0, version: 1,
+    onHand: 0, stockedSkus: 0, createdAt: "", updatedAt: "",
+  }) as InventoryLocation;
+  const main = location("loc_main", "Main warehouse", true);
+  const branch = location("loc_branch", "Chattogram branch", false);
+  const levels = {
+    variantId: "var_1",
+    stock: 13,
+    reservedStock: 0,
+    levels: [
+      { locationId: "loc_main", name: "Main warehouse", code: "MAIN", isDefault: true, status: "active" as const, onHand: 10 },
+      { locationId: "loc_branch", name: "Chattogram branch", code: "BR", isDefault: false, status: "active" as const, onHand: 3 },
+    ],
+  };
+
+  async function render(props: Partial<Parameters<typeof AdjustStockDialog>[0]>) {
+    await act(async () => {
+      root.render(<AdjustStockDialog variant={variant} open onClose={() => undefined} onSaved={() => undefined} {...props} />);
+    });
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+  });
+
+  afterEach(() => {
+    act(() => root.unmount());
+    host.remove();
+  });
+
+  async function setAmount(value: string) {
+    const input = document.getElementById("inventory-adjustment-amount") as HTMLInputElement;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  }
+  async function submit() {
+    await act(async () => {
+      document.getElementById("inventory-adjustment-form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+  }
+
+  it("hides the location select for a store with one location and sends no location", async () => {
+    mocks.adjust.mockResolvedValue({});
+    await render({ locations: [main] });
+    expect(document.getElementById("inventory-adjustment-location")).toBeNull();
+    expect(document.body.textContent).toContain(t("onHand"));
+
+    await setAmount("2");
+    await submit();
+    expect(mocks.adjust).toHaveBeenCalledWith(expect.objectContaining({
+      body: expect.not.objectContaining({ locationId: expect.anything() }),
+    }));
+  });
+
+  it("shows the location select with several locations and changes stock at the chosen one", async () => {
+    mocks.adjust.mockResolvedValue({});
+    await render({ locations: [main, branch], levels, initialLocationId: "loc_branch" });
+    expect(document.getElementById("inventory-adjustment-location")?.textContent).toBe("Chattogram branch");
+    expect(document.body.textContent).toContain(t("onHandHere"));
+
+    // The branch holds 3: removing 4 there would go below zero.
+    await setAmount("-4");
+    expect(document.body.textContent).toContain(t("belowZero"));
+    await setAmount("-2");
+    await submit();
+    expect(mocks.adjust).toHaveBeenCalledWith(expect.objectContaining({
+      body: expect.objectContaining({ delta: -2, locationId: "loc_branch" }),
+    }));
+  });
+
+  it("waits for the location's level before applying a stock change", async () => {
+    await render({ locations: [main, branch] });
+    await setAmount("1");
+    const apply = [...document.querySelectorAll("button")].find((button) => button.textContent === t("apply"))!;
+    expect(apply.disabled).toBe(true);
+    expect(document.body.textContent).toContain(t("loading"));
   });
 });

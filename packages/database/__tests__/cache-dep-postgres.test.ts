@@ -84,7 +84,8 @@ async function catalog(client: Client) {
 describe.runIf(postgresUrl)("0100 cache dependencies on PostgreSQL", () => {
   it("upgrades an 0099 schema to exactly the fresh 0101 schema", async () => {
     const [fresh, before] = await Promise.all([
-      compileCanonicalPostgresSchema(),
+      // Fresh through 0101 only: later migrations have their own sidecar tests.
+      compileCanonicalPostgresSchema({ beforeMigration: "0102_" }),
       compileCanonicalPostgresSchema({ beforeMigration: "0100_" }),
     ]);
     const freshDatabase = await database(fresh.sql);

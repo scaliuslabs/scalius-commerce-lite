@@ -52,7 +52,7 @@ describe("theme preview continuation route", () => {
   it("exchanges a body-only code through service auth, sets HttpOnly state, and redirects cleanly", async () => {
     mocks.apiFetch.mockResolvedValue(new Response(JSON.stringify({
       success: true,
-      data: { token: TOKEN, draftRevision: 3, basePublishedRevision: 2 },
+      data: { token: TOKEN, expiresAt: "2026-10-02T00:30:00.000Z" },
     }), { status: 200, headers: { "Content-Type": "application/json" } }));
 
     const response = await POST(context());

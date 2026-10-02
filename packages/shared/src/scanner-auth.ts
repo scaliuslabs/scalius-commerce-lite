@@ -12,6 +12,8 @@ export interface ScannerSessionPayload {
 
 const SCANNER_API_ALLOWLIST = new Set([
   "GET /api/v1/admin/inventory/scanner/lookup",
+  // The location picker: where the scanner counts and adjusts stock.
+  "GET /api/v1/admin/inventory/locations",
   "POST /api/v1/admin/inventory/stock-adjust",
   "POST /api/v1/admin/inventory/stock-set",
 ]);

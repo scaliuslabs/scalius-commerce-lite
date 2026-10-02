@@ -185,6 +185,13 @@ export const PERMISSIONS = {
   AGENT_ACCESS_MANAGE: "agent_access.manage",
 
   // =============================================
+  // Webhooks (2 permissions) - SUPER ADMIN DEFAULT
+  // Endpoints receive order, customer and product data: same trust as agents.
+  // =============================================
+  WEBHOOKS_VIEW: "webhooks.view",
+  WEBHOOKS_MANAGE: "webhooks.manage",
+
+  // =============================================
   // Dashboard (2 permissions)
   // =============================================
   DASHBOARD_VIEW: "dashboard.view",
@@ -1002,6 +1009,26 @@ export const PERMISSION_METADATA: Record<
     displayName: "Manage Agent Access",
     description: "Create, approve, rotate, narrow, and revoke agent connections",
     resource: "agent_access",
+    action: "manage",
+    category: "Settings",
+    isSensitive: true,
+  },
+
+  // Webhooks
+  [PERMISSIONS.WEBHOOKS_VIEW]: {
+    name: PERMISSIONS.WEBHOOKS_VIEW,
+    displayName: "View Webhooks",
+    description: "View webhook endpoints, their deliveries and recent store events",
+    resource: "webhooks",
+    action: "view",
+    category: "Settings",
+    isSensitive: true,
+  },
+  [PERMISSIONS.WEBHOOKS_MANAGE]: {
+    name: PERMISSIONS.WEBHOOKS_MANAGE,
+    displayName: "Manage Webhooks",
+    description: "Create, edit, test, rotate secrets of, retry and delete webhook endpoints",
+    resource: "webhooks",
     action: "manage",
     category: "Settings",
     isSensitive: true,

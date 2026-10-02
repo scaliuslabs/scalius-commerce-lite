@@ -11,7 +11,7 @@ import { UnauthorizedError, ForbiddenError } from "../utils/api-error";
 import { getBearerToken, parseAgentCredential } from "../agent-access/pat";
 import { resolveAgentPrincipalFromBearer, resolveAgentPrincipalFromGrant } from "../agent-access/principal";
 import type { AgentPrincipal } from "../agent-access/types";
-import { getAgentDispatchPrincipal } from "../agent-access/dispatch-context";
+import { getAgentDispatchPrincipal, getPluginDispatchPrincipal } from "../agent-access/dispatch-context";
 import { isAgentRiskAllowed } from "../agent-access/types";
 import {
     enforceAgentRateLimit,
@@ -277,6 +277,21 @@ export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
         throw new ForbiddenError(
             "Internal agent dispatch cannot be combined with request credentials",
         );
+    }
+
+    // An installed plugin calling an operation in-process (plugins/api-call.ts):
+    // fresh plugin authority, plugin-available operations only, route RBAC.
+    const pluginDispatch = getPluginDispatchPrincipal(c.env);
+    if (pluginDispatch) {
+        if (cookieHeader?.trim() || c.req.header("Authorization")?.trim() || agentPrincipal) {
+            throw new ForbiddenError(
+                "Internal plugin dispatch cannot be combined with request credentials",
+            );
+        }
+        const { authorizePluginAdminRequest } = await import("../plugins/admin-request");
+        await authorizePluginAdminRequest(c, pluginDispatch);
+        await next();
+        return;
     }
 
     // Agent and browser/scanner credentials are different principal classes.

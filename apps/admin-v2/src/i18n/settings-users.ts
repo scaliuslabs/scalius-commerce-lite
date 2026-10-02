@@ -304,6 +304,8 @@ export const permissionMessages = defineMessages<PermissionName>({
     "taxes.manage": "Edit taxes",
     "agent_access.view": "View AI assistant access",
     "agent_access.manage": "Manage AI assistant access",
+    "webhooks.view": "View webhooks",
+    "webhooks.manage": "Create, change and test webhooks",
 
     "team.view": "View staff",
     "team.manage": "Add, suspend and remove staff",
@@ -401,6 +403,8 @@ export const permissionMessages = defineMessages<PermissionName>({
     "taxes.manage": "ট্যাক্স এডিট করা",
     "agent_access.view": "AI সহকারীর অ্যাক্সেস দেখা",
     "agent_access.manage": "AI সহকারীর অ্যাক্সেস সামলানো",
+    "webhooks.view": "ওয়েবহুক দেখা",
+    "webhooks.manage": "ওয়েবহুক তৈরি, বদল ও টেস্ট করা",
 
     "team.view": "স্টাফ দেখা",
     "team.manage": "স্টাফ যোগ, সাসপেন্ড ও বাদ দেওয়া",

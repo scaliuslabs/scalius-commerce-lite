@@ -22,13 +22,8 @@ import {
     publicProductHasBuyerResolvableSku,
     normalizeDefaultSkuOptions,
 } from "../products/public-eligibility";
-import {
-    catalogDiscountedPrice,
-    presentCatalogPrice,
-    storeCurrencyCodeSql,
-    storeCurrencyFromCode,
-    storeDecimalPlacesFromCode,
-} from "../products/money";
+import { catalogDiscountedPrice, presentCatalogPrice } from "../products/money";
+import { storeCurrencyCodeSql, storeCurrencyFromCode, storeDecimalPlacesFromCode } from "../settings/store-money";
 import { loadProductOptions, loadVariantSelectedOptions } from "../products/option-model";
 import { publicCategoryConditions } from "../categories/categories.publication";
 import { publicBrandJoinCondition } from "../brands/brands.storefront";
@@ -60,6 +55,13 @@ import {
     type ProductRecommendations,
 } from "./recommendations";
 import { declareProductGallery, deps } from "./declare-deps";
+import {
+    groupStorefrontCustomFields,
+    presentStorefrontCustomFields,
+    selectStorefrontCustomFieldRows,
+    selectStorefrontVariantCustomFieldRows,
+    type StorefrontCustomFieldRow,
+} from "../custom-fields/custom-fields.storefront";
 
 // ─────────────────────────────────────────
 // Private helpers
@@ -229,16 +231,26 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
         .orderBy(productVariants.createdAt, productVariants.id)
         .all();
 
-    // Content blocks (page order) and active bundle tiers: one round trip in
-    // the second wave, where the legacy rich-content read used to be.
+    // Content blocks (page order), active bundle tiers and the storefront-visible
+    // custom fields of the product and its SKUs: one round trip in the second
+    // wave, where the legacy rich-content read used to be.
     const contentPromise = db.batch([
         selectProductPageContentBlockRows(db, product.id),
         selectActiveProductBundleRows(db, [product.id]),
+        selectStorefrontCustomFieldRows(db, "product", product.id),
+        selectStorefrontVariantCustomFieldRows(db, product.id),
     ] as never).then((results) => {
-        const [blockRows, bundleRows] = results as unknown as [ProductPageContentBlockRow[], ProductBundleRow[]];
+        const [blockRows, bundleRows, productFieldRows, variantFieldRows] = results as unknown as [
+            ProductPageContentBlockRow[],
+            ProductBundleRow[],
+            StorefrontCustomFieldRow[],
+            StorefrontCustomFieldRow[],
+        ];
         return {
             blocks: resolveProductPageContentBlocks(blockRows),
             bundles: productBundleTiersByProduct(bundleRows).get(product.id) ?? [],
+            customFields: presentStorefrontCustomFields(productFieldRows),
+            variantCustomFields: groupStorefrontCustomFields(variantFieldRows),
         };
     });
     // Files the blocks show: a third-wave read, only when a block names one.
@@ -372,6 +384,8 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
             imageUrl: variantImage?.url ?? null,
             imageMediaId: variantImage?.mediaId ?? null,
             selectedOptions: selectedOptionMap.get(variant.id) ?? [],
+            /** Storefront-visible custom fields of this SKU, in definition order. */
+            customFields: content.variantCustomFields.get(variant.id) ?? [],
             createdAt: unixToDate(v.createdAt)?.toISOString() || null,
             deletedAt: v.deletedAt ? unixToDate(v.deletedAt)?.toISOString() : null,
         };
@@ -409,6 +423,8 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
             contentBlockMedia: blockMedia satisfies ProductPageBlockMedia[],
             /** Active quantity tiers, priced by checkout exactly as shown. */
             bundles: content.bundles.map((tier) => presentProductBundleTier(tier, decimalPlaces)),
+            /** Storefront-visible custom fields, in definition order (money in decimal major units). */
+            customFields: content.customFields,
             /** Published reviews (summary and the first page); null when the store's reviews are off. */
             reviews,
             /** The product's warranty policy (its current terms); null without one. */

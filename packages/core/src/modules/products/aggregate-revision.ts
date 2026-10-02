@@ -10,6 +10,11 @@ import { eq, sql, type SQL } from "drizzle-orm";
 import { AppError, ConflictError } from "@scalius/core/errors";
 import { catalogProjectionRefreshStatements } from "./catalog-projections";
 import { buildGiftCardProductRulesGuard, rethrowGiftCardProductRuleViolation } from "./gift-card-rules";
+import {
+    inventoryLocationErrorFrom,
+    isInventoryLevelShortfallError,
+    isInventoryLocationRequiredError,
+} from "../inventory/locations";
 
 export const PRODUCT_AGGREGATE_REVISION_CONFLICT =
     "PRODUCT_AGGREGATE_REVISION_CONFLICT";
@@ -189,6 +194,11 @@ export async function executeProductAggregateMutationBatch(
         };
     } catch (error) {
         rethrowGiftCardProductRuleViolation(error);
+        // Editor stock edits apply at the default location; it may hold
+        // fewer units than the edit removes when stock sits elsewhere.
+        if (isInventoryLevelShortfallError(error) || isInventoryLocationRequiredError(error)) {
+            throw inventoryLocationErrorFrom(error, "The default location");
+        }
         return rethrowProductAggregateRevisionConflictIfStale(
             db,
             productId,

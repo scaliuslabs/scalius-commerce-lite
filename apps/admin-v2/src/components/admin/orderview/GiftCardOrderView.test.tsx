@@ -44,7 +44,7 @@ const tenderCard = { id: "gc_a", last4: "7K2Q", storeCredit: false };
 const creditCard = { id: "gc_b", last4: "AB12", storeCredit: true };
 
 const baseOrder: Order = {
-  id: "order_1", version: 1, customerName: "Rahim", customerPhone: "+8801700000000",
+  id: "order_1", version: 1, channel: "online_store", channelSource: null, customerName: "Rahim", customerPhone: "+8801700000000",
   customerEmail: "rahim@example.com", shippingAddress: "Test address", city: "Dhaka", zone: "Central Road",
   area: null, notes: null, discountAmount: 0, shippingCharge: 0, status: "delivered",
   createdAt: 1_783_000_000, updatedAt: 1_783_000_000, items: [], totalAmount: 1800,

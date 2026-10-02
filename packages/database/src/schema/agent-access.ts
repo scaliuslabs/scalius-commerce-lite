@@ -562,6 +562,11 @@ export const agentAuditEvents = sqliteTable("agent_audit_events", {
     ownerUserId: text("owner_user_id")
         .references(() => user.id, { onDelete: "set null" }),
     resource: text("resource", { enum: ["dashboard", "storefront"] }),
+    /**
+     * The plugin that called the operation (plugin principals carry no grant).
+     * Plain text, not a foreign key, so the audit trail outlives an uninstall.
+     */
+    pluginId: text("plugin_id"),
     operationId: text("operation_id").notNull(),
     risk: text("risk", {
         enum: ["read", "write", "destructive", "financial", "security"],
@@ -583,6 +588,9 @@ export const agentAuditEvents = sqliteTable("agent_audit_events", {
         .on(table.credentialId, table.createdAt),
     index("agent_audit_events_owner_created_idx").on(table.ownerUserId, table.createdAt),
     index("agent_audit_events_operation_created_idx").on(table.operationId, table.createdAt),
+    index("agent_audit_events_plugin_created_idx")
+        .on(table.pluginId, table.createdAt)
+        .where(sql`${table.pluginId} IS NOT NULL`),
     index("agent_audit_events_outcome_created_idx").on(table.outcome, table.createdAt),
     index("agent_audit_events_created_idx").on(table.createdAt),
     check("agent_audit_events_id_shape", agentIdCheck(table.id, "aae_")),

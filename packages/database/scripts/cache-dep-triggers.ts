@@ -33,6 +33,7 @@ import { compileSqliteDdlForPostgres } from "./postgres-schema";
 import {
   CACHE_DEP_TABLES,
   type CacheDepKeyTemplate,
+  type CacheDepKind,
   type CacheDepRule,
   type CacheDepTableSpec,
 } from "../../shared/src/cache-deps";
@@ -48,6 +49,52 @@ export const CACHE_DEP_PROJECTION_MIGRATION = {
   name: "0101_cache_ordering_dependencies",
 } as const;
 const PROJECTION_TABLES = new Set(["product_recommendations", "product_sales_stats", "orders", "order_items"]);
+
+/**
+ * Tables registered after 0101 whose triggers a later, hand-assembled
+ * migration installs; that migration must contain each generated statement
+ * verbatim (`__tests__/custom-fields-migration.test.ts`).
+ */
+export const CACHE_DEP_LATER_TABLES: Readonly<Record<string, string>> = {
+  custom_field_definitions: "0104_custom_fields",
+  custom_field_values: "0104_custom_fields",
+};
+const isBaselineTable = (table: string) => !PROJECTION_TABLES.has(table) && !(table in CACHE_DEP_LATER_TABLES);
+
+export interface RetiredCacheDepTable {
+  /** The registry table it followed, so deployed 0100 renders byte for byte. */
+  readonly after: string;
+  /** The migration that drops the table (and, on PostgreSQL, its trigger functions). */
+  readonly droppedIn: string;
+  /** Its columns as 0100 saw them (the table is gone from the schema). */
+  readonly columns: readonly string[];
+  readonly spec: CacheDepTableSpec;
+}
+
+/**
+ * Tables deployed 0100 installed triggers for that the registry no longer
+ * has. 0100 is immutable, so its renderer keeps each frozen spec at its old
+ * registry position; the table's own migration drops it (SQLite drops its
+ * triggers with it; the PostgreSQL sidecar also drops the trigger
+ * functions, `retiredCacheDepFunctionDrops`).
+ */
+export const CACHE_DEP_RETIRED_TABLES: Readonly<Record<string, RetiredCacheDepTable>> = {
+  // The homepage hero lives in the theme document's hero section now.
+  hero_sliders: {
+    after: "pages",
+    droppedIn: "0106_theme_document_v6",
+    columns: ["id", "type", "images", "is_active", "revision", "created_at", "updated_at", "deleted_at"],
+    spec: {
+      kinds: ["hero" as CacheDepKind],
+      noise: ["revision", "updated_at"],
+      rules: [
+        { name: "ins", event: "insert", image: "new", keys: [{ dep: "hero" }] },
+        { name: "del", event: "delete", image: "old", keys: [{ dep: "hero" }] },
+        { name: "upd", event: "update", image: "new", changed: "visible", keys: [{ dep: "hero" }] },
+      ],
+    },
+  },
+};
 
 const BREAKPOINT = "--> statement-breakpoint";
 
@@ -168,6 +215,10 @@ for (const value of Object.values(schema)) {
   } catch {
     // Not a table (relations, enums, helpers).
   }
+}
+
+for (const [table, retired] of Object.entries(CACHE_DEP_RETIRED_TABLES)) {
+  if (!tableColumns.has(table)) tableColumns.set(table, [...retired.columns]);
 }
 
 function columnsOf(table: string): string[] {
@@ -401,11 +452,24 @@ function postgresTrigger(table: string, spec: CacheDepTableSpec, rule: CacheDepR
   ].join("\n");
 }
 
-/** Every per-table trigger, in registry order. */
-export function generateCacheDepTriggers(): GeneratedCacheDepTrigger[] {
+/** The registry's tables in order, each retired table at its old position when asked for. */
+function registryTables(withRetired: boolean): Array<[string, CacheDepTableSpec]> {
+  const tables: Array<[string, CacheDepTableSpec]> = [];
+  for (const [table, spec] of Object.entries(CACHE_DEP_TABLES) as Array<[string, CacheDepTableSpec]>) {
+    tables.push([table, spec]);
+    if (!withRetired) continue;
+    for (const [retired, frozen] of Object.entries(CACHE_DEP_RETIRED_TABLES)) {
+      if (frozen.after === table) tables.push([retired, frozen.spec]);
+    }
+  }
+  return tables;
+}
+
+/** Every per-table trigger, in registry order (with `withRetired`, deployed 0100's retired tables too). */
+export function generateCacheDepTriggers(options: { withRetired?: boolean } = {}): GeneratedCacheDepTrigger[] {
   const triggers: GeneratedCacheDepTrigger[] = [];
   const names = new Set<string>();
-  for (const [table, spec] of Object.entries(CACHE_DEP_TABLES) as Array<[string, CacheDepTableSpec]>) {
+  for (const [table, spec] of registryTables(options.withRetired === true)) {
     columnsOf(table);
     for (const column of spec.noise) assertColumn(table, column);
     for (const rule of spec.rules) {
@@ -428,7 +492,22 @@ export function generateCacheDepTriggers(): GeneratedCacheDepTrigger[] {
 }
 
 const generated = generateCacheDepTriggers();
-const postgresByName = new Map(generated.map((trigger) => [trigger.name, trigger.postgres]));
+const generatedWithRetired = generateCacheDepTriggers({ withRetired: true });
+const postgresByName = new Map(generatedWithRetired.map((trigger) => [trigger.name, trigger.postgres]));
+
+/** The trigger names a retired table's drop removes (its SQLite triggers go with the table). */
+export function retiredCacheDepTriggerNames(migration?: string): string[] {
+  return generatedWithRetired
+    .filter((trigger) => trigger.table in CACHE_DEP_RETIRED_TABLES
+      && (migration === undefined || CACHE_DEP_RETIRED_TABLES[trigger.table]!.droppedIn === migration))
+    .map((trigger) => trigger.name);
+}
+
+/** PostgreSQL statements dropping the trigger functions of the tables `migration` drops. */
+export function retiredCacheDepFunctionDrops(migration: string): string[] {
+  return retiredCacheDepTriggerNames(migration)
+    .map((name) => `DROP FUNCTION IF EXISTS scalius_compat.${postgres.id(`${name}_fn`)}()`);
+}
 
 /**
  * The PostgreSQL form of a generated SQLite trigger, for the canonical
@@ -451,7 +530,7 @@ function sourceSha256(statements: readonly string[]): string {
 
 /** Both migration files, byte for byte. */
 export function renderCacheDepMigration(): { sqlite: string; postgres: string } {
-  const baseline = generated.filter((trigger) => !PROJECTION_TABLES.has(trigger.table));
+  const baseline = generatedWithRetired.filter((trigger) => isBaselineTable(trigger.table));
   const sqliteBody = [...TABLES_SQLITE, ...CLOCK_TRIGGERS_SQLITE, ...baseline.map((trigger) => trigger.sqlite)];
   const sqliteStatements = sqliteBody.map((statement, index) => `${index === 0 ? `${HEADER}\n` : ""}${statement};`);
   const sha = sourceSha256(sqliteStatements);
@@ -490,6 +569,11 @@ export function renderCacheDepProjectionMigration(): { sqlite: string; postgres:
       `INSERT INTO "scalius_schema_migrations" ("version", "name", "source_sha256") VALUES (${version}, '${name}', '${sha}');`].join(`\n${BREAKPOINT}\n`) + "\n",
   };
 }
+/** The generated triggers a later migration (by name) installs, in registry order. */
+export function cacheDepTriggersForMigration(name: string): GeneratedCacheDepTrigger[] {
+  return generated.filter((trigger) => CACHE_DEP_LATER_TABLES[trigger.table] === name);
+}
+
 export const CACHE_DEP_PROJECTION_MIGRATION_PATHS = {
   sqlite: fileURLToPath(new URL(`../migrations/${CACHE_DEP_PROJECTION_MIGRATION.name}.sql`, import.meta.url)),
   postgres: fileURLToPath(new URL(`../migrations/postgres/${CACHE_DEP_PROJECTION_MIGRATION.name}.sql`, import.meta.url)),

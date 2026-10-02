@@ -15,6 +15,7 @@ import {
 import {
   currentRequestTheme,
   readStoreShape,
+  readStorefrontBrandAssets,
   readStorefrontTheme,
   requestThemeFor,
   resolveRequestTheme,
@@ -60,8 +61,8 @@ describe("request theme", () => {
     const fromApi = JSON.parse(JSON.stringify({ theme, storeShape: SHAPE })) as { theme: unknown; storeShape: unknown };
     const resolved = await resolveRequestTheme({ request: request(), locals: {} }, fromApi);
     expect(resolved.resolved).toEqual(resolveStorefrontTheme(theme, SHAPE));
-    // A 900-SKU catalogue gets a header with a visible search.
-    expect(resolved.resolved.blocks.header).toMatchObject({ variant: "fashion-department", requested: "boutique-inline" });
+    // Boutique keeps its own header at any catalogue size.
+    expect(resolved.resolved.blocks.header).toMatchObject({ variant: "boutique-inline" });
     expect(requestThemeFor(theme, SHAPE).resolved).toEqual(resolved.resolved);
   });
 
@@ -90,10 +91,62 @@ describe("request theme", () => {
     expect(resolved.theme).toBe(DEFAULT_STOREFRONT_THEME);
   });
 
+  it("carries the published theme's brand images, and the draft's under a preview", async () => {
+    const published = { ...storefrontTemplateTheme("boutique"), brand: { logo: "med_logo", logoWidth: 160, footerLogo: "med_footer", favicon: null } };
+    const brand = {
+      logo: { id: "med_logo", url: "https://cdn.test/logo.png", alt: "Logo", width: 320, height: 80 },
+      footerLogo: { id: "med_footer", url: "https://cdn.test/footer.png", alt: "", width: null, height: null },
+      favicon: null,
+    };
+    const live = await resolveRequestTheme({ request: request(), locals: {} }, { theme: published, storeShape: SHAPE, brand });
+    expect(live.brand).toEqual(brand);
+    expect(live.resolved.brand.logoWidth).toBe(160);
+
+    const draft = { ...storefrontTemplateTheme("boutique"), brand: { logo: "med_draft", logoWidth: 120, footerLogo: null, favicon: "med_icon" } };
+    const draftBrand = {
+      logo: { id: "med_draft", url: "https://cdn.test/draft.png", alt: "", width: 200, height: 50 },
+      footerLogo: null,
+      favicon: { id: "med_icon", url: "https://cdn.test/icon.png", alt: "", width: 64, height: 64 },
+    };
+    resolveThemePreview.mockResolvedValue({ theme: draft, brand: draftBrand });
+    const preview = await resolveRequestTheme({ request: request(previewCookie), locals: {} }, { theme: published, storeShape: SHAPE, brand });
+    expect(preview.brand).toEqual(draftBrand);
+
+    // An invalid draft renders the default theme, which names no images.
+    resolveThemePreview.mockResolvedValue({ theme: { ...draft, version: 5 }, brand: draftBrand });
+    const invalid = await resolveRequestTheme({ request: request(previewCookie), locals: {} }, { theme: published, storeShape: SHAPE, brand });
+    expect(invalid.theme).toBe(DEFAULT_STOREFRONT_THEME);
+    expect(invalid.brand).toEqual({ logo: null, footerLogo: null, favicon: null });
+  });
+
   it("falls back to defaults when nothing resolved the theme (e.g. no Layout)", async () => {
     const fallback = await currentRequestTheme({});
     expect(fallback.theme).toBe(DEFAULT_STOREFRONT_THEME);
     expect(fallback.layout.density).toBe(DEFAULT_STOREFRONT_THEME.tokens.density);
+  });
+});
+
+describe("readStorefrontBrandAssets", () => {
+  const named = { logo: "med_logo", logoWidth: 180, footerLogo: "med_footer", favicon: "med_icon" };
+
+  it("keeps only the images the document names, with a usable URL", () => {
+    expect(readStorefrontBrandAssets({
+      logo: { id: "med_logo", url: " https://cdn.test/logo.png ", alt: "Logo", width: 300, height: -1 },
+      // Another document's image never stands in.
+      footerLogo: { id: "med_other", url: "https://cdn.test/other.png", alt: "", width: null, height: null },
+      favicon: { id: "med_icon", url: "", alt: "", width: 64, height: 64 },
+    }, named)).toEqual({
+      logo: { id: "med_logo", url: "https://cdn.test/logo.png", alt: "Logo", width: 300, height: null },
+      footerLogo: null,
+      favicon: null,
+    });
+    expect(readStorefrontBrandAssets({ logo: { id: "med_logo", url: "https://cdn.test/logo.png" } }, { ...named, logo: null }).logo).toBeNull();
+  });
+
+  it("reads anything that is not brand assets as no images", () => {
+    for (const value of [undefined, null, "logo", 42, []]) {
+      expect(readStorefrontBrandAssets(value, named)).toEqual({ logo: null, footerLogo: null, favicon: null });
+    }
   });
 });
 
@@ -106,8 +159,9 @@ describe("readStorefrontTheme", () => {
       pages: {
         home: [
           { id: "story", type: "editorial" as const, version: 1 as const, settings: { layout: "rich-text" as const, heading: "Our story", body: "Made in Dhaka." } },
-          { id: "hero", type: "hero" as const, version: 1 as const, settings: { layout: "split" as const } },
+          { id: "hero", type: "hero" as const, version: 1 as const, settings: { layout: "split" as const, slides: [] } },
         ],
+        homeMode: { kind: "sections" as const },
       },
     };
     expect(readStorefrontTheme(withStory)).toEqual(withStory);
@@ -126,7 +180,7 @@ describe("readStorefrontTheme", () => {
       { ...template, layout: { header: "classic" } },
       { ...template, tokens: { ...template.tokens, density: "tiny" } },
       // Unreadable text: fails the AA contrast rule.
-      { ...template, tokens: { ...template.tokens, colors: { ...template.tokens.colors, foreground: "#0a0a0a" } } },
+      { ...template, tokens: { ...template.tokens, colors: { ...template.tokens.colors, foreground: template.tokens.colors.background } } },
     ];
     for (const value of invalid) {
       expect(readStorefrontTheme(value)).toBe(DEFAULT_STOREFRONT_THEME);

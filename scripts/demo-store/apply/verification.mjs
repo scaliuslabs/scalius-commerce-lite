@@ -75,21 +75,22 @@ export function assertCompleteRemoteMediaReadiness(manifest, report, snapshot) {
 
 function finalVerificationIntents(lifecycle) {
   const ready = lifecycle.phases.filter((phase) => phase.state === "ready").flatMap((phase) => phase.commands);
-  const categoryStatus = new Map(ready.filter((command) => command.logicalKey.endsWith(":publish"))
+  const categoryPublication = (command) => /^category:[^:]+:publish$/u.test(command.logicalKey);
+  const categoryStatus = new Map(ready.filter(categoryPublication)
     .map((command) => [command.logicalKey.replace(/:publish$/u, ""), command.body.status]));
   const productActivations = new Map(ready.filter((command) => command.logicalKey.startsWith("product:") && command.logicalKey.endsWith(":activate"))
     .map((command) => [command.logicalKey.replace(/:activate$/u, ":base"), command]));
   const collectionActivations = new Set(ready.filter((command) => command.logicalKey.startsWith("collection:") && command.logicalKey.endsWith(":activate"))
     .map((command) => command.logicalKey.replace(/:activate$/u, "")));
-  const heroActivations = new Set(ready.filter((command) => command.logicalKey.startsWith("hero-slider:") && command.logicalKey.endsWith(":activate"))
-    .map((command) => command.logicalKey.replace(/:activate$/u, "")));
   const result = [];
+  // The theme's draft and published sides are each verified: publication
+  // leaves the draft equal to the live theme.
   for (const command of ready) {
-    if (command.phase === "quarantine" || command.logicalKey.endsWith(":publish") || command.logicalKey.endsWith(":activate")) continue;
+    if (command.phase === "quarantine" || categoryPublication(command) || command.logicalKey.endsWith(":activate")) continue;
     if (productActivations.has(command.logicalKey)) continue;
     let body = command.body;
     if (categoryStatus.has(command.logicalKey)) body = { ...body, status: categoryStatus.get(command.logicalKey) };
-    if (collectionActivations.has(command.logicalKey) || heroActivations.has(command.logicalKey)) body = { ...body, isActive: true };
+    if (collectionActivations.has(command.logicalKey)) body = { ...body, isActive: true };
     result.push({ ...command, body });
   }
   result.push(...productActivations.values());

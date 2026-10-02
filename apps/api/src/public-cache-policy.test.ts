@@ -20,7 +20,6 @@ describe("public API cache policy", () => {
     "/api/v1/storefront/pages/slug/about",
     "/api/v1/checkout/config",
     "/api/v1/checkout-languages/active",
-    "/api/v1/hero/sliders?type=mobile",
   ])("caches the anonymous public read %s", (path) => {
     expect(getPublicApiCachePolicy(new Request(`https://api.example.com${path}`)))
       .toEqual({ canonicalUrl: `https://api.example.com${path}` });
@@ -35,8 +34,10 @@ describe("public API cache policy", () => {
     ["GET", "/api/v1/products", { Cookie: "cs_tok=secret" }],
     ["GET", "/api/v1/products", { Authorization: "Bearer secret" }],
     ["GET", "/api/v1/products", { "X-API-Token": "secret" }],
-    ["GET", "/api/v1/hero/sliders", {}],
-    ["GET", "/api/v1/hero/sliders?type=tablet", {}],
+    // The hero is the theme's homepage section; these routes are gone.
+    ["GET", "/api/v1/hero/sliders?type=mobile", {}],
+    ["GET", "/api/v1/header", {}],
+    ["GET", "/api/v1/footer", {}],
     ["GET", "/api/v1/products?__cg=forged", {}],
     ["GET", "/api/v1/products?__cv=forged", {}],
   ])("never caches %s %s", (method, path, headers) => {

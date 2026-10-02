@@ -1,0 +1,198 @@
+// The sandbox loader in workerd: the reference plugin (scalius.hello), packed
+// exactly as `pnpm plugin build` packs it, runs in its own Dynamic Worker
+// (Miniflare `workerLoaders`) with no network of its own, reaching the
+// platform only through the real PluginBridge entrypoint over RPC. The same
+// behaviour as the bundled loader: storage, KV, the /api/v1 call as the plugin
+// principal, routes, cron and the checkout function. Plus what only a sandbox
+// can prove: direct fetch is impossible and a tampered bundle never loads.
+import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import type { DatabaseSync } from "node:sqlite";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+import { Miniflare, convertV4MiniflareOptions } from "miniflare";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import type { Database } from "@scalius/database/client";
+import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
+import {
+  activatePlugin,
+  getPluginKv,
+  getPluginRecord,
+  installPlugin,
+  listPluginLogs,
+  requirePluginInstallation,
+  writePluginSettings,
+} from "@scalius/core/modules/plugins";
+import { PLUGIN_API_VERSION } from "@scalius/shared/plugins";
+import { packPlugin } from "../../../../scripts/plugin-build.mjs";
+import { pluginBundleKey } from "./loaders/sandbox";
+import { PLUGIN_TEST_CREDENTIAL_KEY, testCart } from "./testing/fixtures";
+
+const apiDir = resolve(import.meta.dirname, "../..");
+const HARNESS = resolve(import.meta.dirname, "testing/sandbox-harness.worker.ts");
+const COMPATIBILITY_DATE = "2026-07-30";
+const COMPATIBILITY_FLAGS = ["nodejs_compat", "disable_nodejs_process_v2"];
+
+/** A plugin written without the SDK, probing what a sandbox must forbid. */
+const PROBE_CODE = `export default {
+  manifest: { id: "acme.probe", version: "1.0.0" },
+  routes: { public: { probe: async (request, ctx) => {
+    const outcome = {};
+    try { await fetch("https://example.com/"); outcome.fetch = "reached"; } catch (error) { outcome.fetch = String(error && error.message || error).slice(0, 80); }
+    try { await ctx.http.fetch("https://evil.example/"); outcome.http = "reached"; } catch (error) { outcome.http = error.code; }
+    outcome.globals = typeof process === "undefined" ? "none" : "process";
+    return { body: outcome };
+  } } },
+};
+`;
+
+function sha256(text: string): string {
+  return createHash("sha256").update(text).digest("hex");
+}
+
+describe("plugins in the sandbox loader (Miniflare workerLoaders)", () => {
+  let sqlite: DatabaseSync;
+  let db: Database;
+  let mf: Miniflare;
+  let workdir: string;
+  let helloSha: string;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- JSON from the harness, asserted field by field
+  async function send(command: Record<string, unknown>): Promise<any> {
+    const response = await mf.dispatchFetch("http://harness/", { method: "POST", body: JSON.stringify(command) });
+    if (!response.ok) throw new Error(`harness ${response.status}: ${await response.text()}`);
+    return response.json();
+  }
+
+  beforeAll(async () => {
+    const created = createSqliteD1Database();
+    ({ sqlite, db } = created);
+    sqlite.prepare("INSERT INTO user (id, name, email, email_verified, role, is_super_admin) VALUES ('owner', 'Owner', 'owner@shop.test', 1, 'admin', 1)").run();
+    sqlite.prepare(`INSERT INTO orders (id, customer_name, customer_phone, shipping_address, city, zone, status)
+      VALUES ('ord_box1', 'Rahim', '+8801711111111', 'House 1', 'city_1', 'zone_1', 'confirmed')`).run();
+
+    // The harness Worker: the real host code, bundled the way the API is.
+    workdir = mkdtempSync(join(tmpdir(), "scalius-plugin-sandbox-"));
+    writeFileSync(join(workdir, "wrangler.json"), JSON.stringify({
+      name: "plugin-sandbox-harness",
+      main: HARNESS,
+      compatibility_date: COMPATIBILITY_DATE,
+      compatibility_flags: COMPATIBILITY_FLAGS,
+    }));
+    execFileSync(join(apiDir, "node_modules/.bin/wrangler"), ["deploy", "--dry-run", "--outdir", join(workdir, "dist"), "--config", join(workdir, "wrangler.json")], {
+      cwd: apiDir,
+      stdio: ["ignore", "ignore", "pipe"],
+      env: { ...process.env, WRANGLER_SEND_METRICS: "false" },
+    });
+
+    const binding = created.binding as unknown as {
+      prepare(sql: string): { bind(...values: unknown[]): { all(): Promise<unknown>; run(): Promise<unknown>; raw(): Promise<unknown> } };
+      batch(statements: unknown[]): Promise<unknown>;
+    };
+    mf = new Miniflare(convertV4MiniflareOptions({
+      modules: true,
+      scriptPath: join(workdir, "dist", "sandbox-harness.worker.js"),
+      // Module names must not climb out of the root (workerd refuses `../` names).
+      modulesRoot: join(workdir, "dist"),
+      compatibilityDate: COMPATIBILITY_DATE,
+      compatibilityFlags: COMPATIBILITY_FLAGS,
+      workerLoaders: { LOADER: {} },
+      r2Buckets: ["BUCKET"],
+      bindings: { CREDENTIAL_ENCRYPTION_KEY: PLUGIN_TEST_CREDENTIAL_KEY },
+      serviceBindings: {
+        DB_PROXY: async (request: Request) => {
+          const body = await request.json() as { op: string; sql: string; params: unknown[]; statements: Array<{ sql: string; params: unknown[] }> };
+          try {
+            if (body.op === "batch") {
+              return Response.json(await binding.batch(body.statements.map((statement) => binding.prepare(statement.sql).bind(...statement.params))));
+            }
+            const statement = binding.prepare(body.sql).bind(...body.params);
+            const result = body.op === "raw" ? await statement.raw() : body.op === "run" ? await statement.run() : await statement.all();
+            return Response.json(result);
+          } catch (error) {
+            return new Response(error instanceof Error ? error.message : String(error), { status: 500 });
+          }
+        },
+      },
+    }) as never);
+
+    // Pack the reference plugin exactly as `pnpm plugin build` does and store it in R2.
+    const packed = await packPlugin("plugins/hello");
+    helloSha = packed.sha256;
+    const bucket = await mf.getR2Bucket("BUCKET");
+    await bucket.put(pluginBundleKey("scalius.hello", "0.1.0", helloSha), packed.code);
+    const installed = await installPlugin(db, { manifest: packed.manifest, source: "registry", bundleSha256: helloSha, actorUserId: "owner" });
+    const configured = await writePluginSettings(db, "scalius.hello", { greeting: "Salam", discount_percent: 20, min_subtotal_minor: 0, api_key: "sandbox-secret" }, {
+      expectedRevision: installed.revision,
+      credentialEncryptionKey: PLUGIN_TEST_CREDENTIAL_KEY,
+    });
+    await activatePlugin(db, "scalius.hello", { actorUserId: "owner", expectedRevision: configured.revision });
+
+    const probeSha = sha256(PROBE_CODE);
+    await bucket.put(pluginBundleKey("acme.probe", "1.0.0", probeSha), PROBE_CODE);
+    await installPlugin(db, {
+      manifest: {
+        id: "acme.probe", name: "Probe", version: "1.0.0", apiVersion: PLUGIN_API_VERSION, description: "Probes the sandbox.",
+        author: { name: "Acme" }, allowedHosts: ["api.acme.example"], routes: { admin: [], public: [{ name: "probe", methods: ["GET"] }], webhooks: [] },
+      },
+      source: "upload",
+      bundleSha256: probeSha,
+      actorUserId: "owner",
+    });
+    await activatePlugin(db, "acme.probe", { actorUserId: "owner", expectedRevision: 1 });
+  }, 180_000);
+
+  afterAll(async () => {
+    await mf?.dispose();
+    sqlite?.close();
+    if (workdir) rmSync(workdir, { recursive: true, force: true });
+  });
+
+  it("handles order.paid in its isolate: the bridge stores, counts and calls dashboard.orders.get as the plugin", async () => {
+    const outcome = await send({
+      action: "event",
+      pluginId: "scalius.hello",
+      event: { id: "evt_box", topic: "order.paid", apiVersion: "2026-10", occurredAt: "2026-10-01T10:00:00.000Z", resource: { type: "order", id: "ord_box1" }, facts: {} },
+    });
+    expect(outcome).toEqual({ ok: true, value: null, error: null });
+    expect(await getPluginRecord(db, "scalius.hello", "greetings", "ord_box1")).toMatchObject({ greeting: "Salam", orderStatus: "confirmed" });
+    expect(await getPluginKv(db, "scalius.hello", "paid_count")).toBe(1);
+    expect(sqlite.prepare("SELECT plugin_id, operation_id, outcome FROM agent_audit_events").all())
+      .toEqual([{ plugin_id: "scalius.hello", operation_id: "dashboard.orders.get", outcome: "success" }]);
+    expect((await listPluginLogs(db, "scalius.hello")).map((line) => line.message)).toContain("Greeted a paid order");
+  });
+
+  it("serves routes, runs cron and the checkout function with the same results as bundled", async () => {
+    const request = { method: "GET", subpath: "", query: { name: "Karim" }, headers: {}, body: null, rawBody: null, staffId: null };
+    expect(await send({ action: "route", pluginId: "scalius.hello", surface: "public", name: "greet", request }))
+      .toEqual({ ok: true, value: { status: 200, headers: {}, body: { message: "Salam, Karim!", visits: 1 } }, error: null });
+    expect((await send({ action: "route", pluginId: "scalius.hello", surface: "admin", name: "dashboard", request: { ...request, query: {} } })).value.body)
+      .toMatchObject({ children: [{ label: "Greeted orders", value: 1 }, { label: "Paid events", value: 1 }, expect.anything()] });
+    expect(await send({ action: "cron", pluginId: "scalius.hello", name: "tidy", scheduledAt: "2027-01-01T00:00:00.000Z" }))
+      .toEqual({ ok: true, value: null, error: null });
+    expect(await getPluginRecord(db, "scalius.hello", "greetings", "ord_box1")).toBeNull();
+    expect(await send({ action: "function", pluginId: "scalius.hello", point: "checkout.discounts", input: { cart: testCart(5000) } }))
+      .toEqual([{ pluginId: "scalius.hello", priority: 100, output: { discounts: [{ title: "Salam discount", target: { kind: "order" }, value: { type: "percentage", percent: 20 } }] } }]);
+  });
+
+  it("gives the isolate no network: direct fetch fails and the bridge refuses undeclared hosts", async () => {
+    const outcome = await send({ action: "route", pluginId: "acme.probe", surface: "public", name: "probe", request: { method: "GET", subpath: "", query: {}, headers: {}, body: null, rawBody: null, staffId: null } });
+    expect(outcome.ok).toBe(true);
+    expect(outcome.value.body.fetch).toMatch(/not permitted to access the internet/);
+    expect(outcome.value.body.http).toBe("http.not_allowed");
+    expect(outcome.value.body.globals).toBe("none");
+  });
+
+  it("never loads a bundle whose bytes do not match the installed SHA-256", async () => {
+    const tampered = "export default { manifest: { id: 'acme.probe', version: '1.0.1' } };";
+    const bucket = await mf.getR2Bucket("BUCKET");
+    const installation = await requirePluginInstallation(db, "acme.probe");
+    sqlite.prepare("UPDATE plugin_installations SET version = '1.0.1', bundle_sha256 = ? WHERE plugin_id = 'acme.probe'").run("9".repeat(64));
+    await bucket.put(pluginBundleKey("acme.probe", "1.0.1", "9".repeat(64)), tampered);
+    const outcome = await send({ action: "route", pluginId: "acme.probe", surface: "public", name: "probe", request: { method: "GET", subpath: "", query: {}, headers: {}, body: null, rawBody: null, staffId: null } });
+    expect(outcome).toMatchObject({ ok: false, error: expect.stringMatching(/does not match its SHA-256/) });
+    expect((await requirePluginInstallation(db, "acme.probe")).status).toBe("failed");
+    expect(installation.status).toBe("active");
+  });
+});

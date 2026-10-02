@@ -57,6 +57,9 @@ export const ORDER_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/orders/*/details": {
     PUT: { permission: PERMISSIONS.ORDERS_EDIT },
   },
+  "/api/v1/admin/orders/*/fulfillment-location": {
+    PUT: { permission: PERMISSIONS.ORDERS_EDIT },
+  },
   "/api/v1/admin/orders/*/timeline": {
     GET: { permission: PERMISSIONS.ORDERS_VIEW },
     POST: { permission: PERMISSIONS.ORDERS_EDIT },

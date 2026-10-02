@@ -206,11 +206,8 @@ export const queryKeys = {
   settings: {
     all: ["settings"] as const,
     byCategory: (category: string) => ["settings", category] as const,
-    general: () => ["settings", "general"] as const,
     storefrontUrl: () => ["settings", "storefront-url"] as const,
     platform: () => ["settings", "platform"] as const,
-    homepagePresentation: () =>
-      ["settings", "homepage-presentation"] as const,
     currency: () => ["settings", "currency"] as const,
     seo: () => ["settings", "seo"] as const,
     security: () => ["settings", "security"] as const,
@@ -227,8 +224,6 @@ export const queryKeys = {
         ? (["settings", "tax-classifications", params] as const)
         : (["settings", "tax-classifications"] as const),
     theme: () => ["settings", "theme"] as const,
-    header: () => ["settings", "header"] as const,
-    footer: () => ["settings", "footer"] as const,
     media: () => ["settings", "media"] as const,
     sms: () => ["settings", "sms"] as const,
     metaConversions: () => ["settings", "meta-conversions"] as const,
@@ -261,7 +256,6 @@ export const queryKeys = {
       params !== undefined
         ? (["settings", "shipping-methods", params] as const)
         : (["settings", "shipping-methods"] as const),
-    heroSliders: () => ["settings", "hero-sliders"] as const,
   },
 
   // ── Setup ────────────────────────────────────────────────────────
@@ -274,5 +268,16 @@ export const queryKeys = {
   firebase: {
     all: ["firebase"] as const,
     config: () => ["firebase", "config"] as const,
+  },
+
+  // ── Webhooks (commerce hook H3) ──────────────────────────────────
+  webhooks: {
+    all: ["webhooks"] as const,
+    list: () => ["webhooks", "list"] as const,
+    /** Without `status`: every status filter of one subscription (for invalidation). */
+    deliveries: (id: string, status?: string) =>
+      status !== undefined
+        ? (["webhooks", "deliveries", id, status] as const)
+        : (["webhooks", "deliveries", id] as const),
   },
 } as const;

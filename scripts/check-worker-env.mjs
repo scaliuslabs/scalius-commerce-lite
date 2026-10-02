@@ -92,6 +92,13 @@ export const apps = [
       // Local development only (apps/api/wrangler.local.jsonc vars).
       "LOCAL_MAILPIT_URL",
     ],
+    // Operator-enabled bindings: declared optional in Env, absent from the
+    // committed configs (Workers Free deploys unchanged) and added only to a
+    // generated deploy/dev config (`pnpm plugin wrangler-config`).
+    optionalBindings: [
+      // Dynamic Worker loader for sandboxed plugins (Workers Paid).
+      "LOADER",
+    ],
   },
   {
     name: "storefront",
@@ -356,6 +363,12 @@ export function runWorkerEnvCheck({ readTextImpl = readText } = {}) {
       config.exports?.PublicApi !== undefined) {
       errors.push(`${configPath} must keep the default API entrypoint uncached and omit PublicApi so every public hit validates dependencies`);
     }
+    // Named entrypoints (the RPC-only PluginBridge) never enable the Workers Cache either.
+    for (const [name, entry] of Object.entries(config.exports ?? {})) {
+      if (name !== "default" && entry?.cache?.enabled !== false) {
+        errors.push(`${configPath} must keep the ${name} entrypoint uncached ("cache": { "enabled": false })`);
+      }
+    }
   }
 
   for (const app of apps) {
@@ -371,7 +384,13 @@ export function runWorkerEnvCheck({ readTextImpl = readText } = {}) {
       }
     }
 
-    const allowed = new Set([...expected, ...app.extraEnv]);
+    const optional = new Set(app.optionalBindings ?? []);
+    for (const name of optional) {
+      if (expected.has(name)) {
+        errors.push(`${app.name}: ${name} is operator-enabled; keep it out of the committed Wrangler configs (pnpm plugin wrangler-config adds it).`);
+      }
+    }
+    const allowed = new Set([...expected, ...app.extraEnv, ...optional]);
     errors.push(...collectDuplicateEnvDeclarations(app, { readTextImpl }));
 
     for (const envPath of app.envFiles) {

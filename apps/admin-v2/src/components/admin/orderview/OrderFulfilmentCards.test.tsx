@@ -9,14 +9,27 @@ import type { Order, OrderFulfillment, OrderItem } from "./types";
 import { OrderFulfilmentCards } from "./OrderFulfilmentCards";
 import { fulfilledGroups, unfulfilledGroups } from "./fulfilment-groups";
 
-const mocks = vi.hoisted(() => ({ canManage: true, ready: vi.fn(), voided: vi.fn(), dialogs: [] as string[] }));
+const mocks = vi.hoisted(() => ({
+  canManage: true,
+  canEdit: true,
+  ready: vi.fn(),
+  voided: vi.fn(),
+  setLocation: vi.fn(),
+  dialogs: [] as string[],
+  locations: [] as Array<{ id: string; name: string; isDefault: boolean; status: string }>,
+}));
 vi.mock("~/hooks/use-order-action-permissions", () => ({
-  useOrderActionPermissions: () => ({ canManageOrderShipments: mocks.canManage, canUpdateOrderCod: true }),
+  useOrderActionPermissions: () => ({ canManageOrderShipments: mocks.canManage, canUpdateOrderCod: true, canEditOrders: mocks.canEdit }),
 }));
 vi.mock("~/lib/api-mutations/orders", () => ({
   orderErrorMessage: (error: Error) => error.message,
   useMarkPickupReady: () => ({ mutate: mocks.ready, isPending: false }),
   useVoidFulfillment: () => ({ mutate: mocks.voided, reset: vi.fn(), isPending: false, isError: false }),
+  useSetOrderFulfillmentLocation: () => ({ mutate: mocks.setLocation, isPending: false }),
+}));
+vi.mock("~/lib/api-query-options/inventory-locations", async (importActual) => ({
+  ...(await importActual<typeof import("~/lib/api-query-options/inventory-locations")>()),
+  inventoryLocationsQueryOptions: () => ({ queryKey: ["inventory-locations", "test"], queryFn: async () => mocks.locations }),
 }));
 vi.mock("~/lib/api-query-options/orders", () => ({
   orderReturnsQueryOptions: (id: string) => ({ queryKey: ["returns", id], queryFn: () => new Promise(() => undefined) }),
@@ -90,7 +103,9 @@ describe("OrderFulfilmentCards", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.canManage = true;
+    mocks.canEdit = true;
     mocks.dialogs = [];
+    mocks.locations = [];
     host = document.createElement("div");
     document.body.append(host);
     root = createRoot(host);
@@ -127,6 +142,35 @@ describe("OrderFulfilmentCards", () => {
     expect(ship.textContent).toContain("Fit: Slim (+৳100.00)");
     await act(async () => button(ship, en["fulfill.submit"])!.click());
     expect(mocks.dialogs).toContain("ship");
+  });
+
+  describe("fulfilment location", () => {
+    const main = { id: "loc_main", name: "Main warehouse", isDefault: true, status: "active" };
+    const branch = { id: "loc_branch", name: "Chattogram branch", isDefault: false, status: "active" };
+    const unshipped = order({
+      items: [line("k1", "Kurta")],
+      editReadiness: { items: { allowed: false, reason: null }, details: { allowed: true, reason: null } },
+      fulfillmentLocation: { id: "loc_main", name: "Main warehouse", explicit: false },
+    });
+    const shipsFrom = en["location.shipsFrom"].replace("{name}", "Main warehouse");
+
+    it("stays out of the way while the store has one location", async () => {
+      mocks.locations = [main];
+      await render(unshipped);
+      await act(async () => undefined);
+      expect(card("unfulfilled-ship")!.textContent).not.toContain(shipsFrom);
+    });
+
+    it("names where the order ships from and offers a change until anything has left", async () => {
+      mocks.locations = [main, branch];
+      await render(unshipped);
+      await vi.waitFor(() => expect(card("unfulfilled-ship")!.textContent).toContain(shipsFrom));
+      expect(button(card("unfulfilled-ship")!, en["location.change"])).toBeDefined();
+
+      await render({ ...unshipped, editReadiness: { items: { allowed: false, reason: "shipped" }, details: { allowed: false, reason: "shipped" } } });
+      expect(card("unfulfilled-ship")!.textContent).toContain(shipsFrom);
+      expect(button(card("unfulfilled-ship")!, en["location.change"])).toBeUndefined();
+    });
   });
 
   it("offers no hand-over actions to staff without shipment permission", async () => {

@@ -676,12 +676,12 @@ describe("API Worker trusted front proxy", () => {
       timestamp,
       proto: "https",
       host: "shop.example.com",
-      pathname: "/api/v1/hero",
+      pathname: "/api/v1/navigation",
       clientIp: "203.0.113.9",
     });
 
     // POST keeps the request out of the public cache lane so the route family sees it.
-    const signed = await fetchThroughWorker(new Request("https://internal.workers.dev/api/v1/hero", {
+    const signed = await fetchThroughWorker(new Request("https://internal.workers.dev/api/v1/navigation", {
       method: "POST",
       headers: {
         "X-Forwarded-Host": "shop.example.com",
@@ -692,11 +692,11 @@ describe("API Worker trusted front proxy", () => {
       },
     }));
     expect(signed.response.status).toBe(200);
-    expect(signed.seen[0]?.url).toBe("https://shop.example.com/api/v1/hero");
+    expect(signed.seen[0]?.url).toBe("https://shop.example.com/api/v1/navigation");
     expect(signed.seen[0]?.headers.get("cf-connecting-ip")).toBe("203.0.113.9");
     expect(signed.seen[0]?.headers.has(FRONT_PROXY_SIGNATURE_HEADER)).toBe(false);
 
-    const forged = await fetchThroughWorker(new Request("https://internal.workers.dev/api/v1/hero", {
+    const forged = await fetchThroughWorker(new Request("https://internal.workers.dev/api/v1/navigation", {
       method: "POST",
       headers: {
         "X-Forwarded-Host": "evil.example.com",
@@ -706,13 +706,13 @@ describe("API Worker trusted front proxy", () => {
         [FRONT_PROXY_SIGNATURE_HEADER]: signature,
       },
     }));
-    expect(forged.seen[0]?.url).toBe("https://internal.workers.dev/api/v1/hero");
+    expect(forged.seen[0]?.url).toBe("https://internal.workers.dev/api/v1/navigation");
     expect(forged.seen[0]?.headers.get("cf-connecting-ip")).toBe("10.0.0.1");
 
-    const unsigned = await fetchThroughWorker(new Request("https://internal.workers.dev/api/v1/hero", {
+    const unsigned = await fetchThroughWorker(new Request("https://internal.workers.dev/api/v1/navigation", {
       method: "POST",
       headers: { "X-Forwarded-Host": "evil.example.com", "X-Forwarded-Proto": "https" },
     }));
-    expect(unsigned.seen[0]?.url).toBe("https://internal.workers.dev/api/v1/hero");
+    expect(unsigned.seen[0]?.url).toBe("https://internal.workers.dev/api/v1/navigation");
   });
 });

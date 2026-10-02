@@ -647,6 +647,10 @@ function createTransitionDb(options: TransitionDbOptions = {}) {
                 ? null
                 : { inventoryAction: options.currentActionAfterMiss };
             }
+            // The default inventory location (migration 0102 creates it).
+            if ("id" in projection && "name" in projection && Object.keys(projection).length === 2) {
+              return { id: "loc_default", name: "Main location" };
+            }
             return null;
           }),
           all: vi.fn(async () => {
@@ -655,6 +659,10 @@ function createTransitionDb(options: TransitionDbOptions = {}) {
             }
             if ("variantId" in projection && "quantity" in projection) {
               return options.items ?? [TRANSITION_ITEM];
+            }
+            // Levels at the fulfilment location: enough for every line.
+            if ("variantId" in projection && "onHand" in projection) {
+              return (options.items ?? [TRANSITION_ITEM]).map((item) => ({ variantId: item.variantId, onHand: 1_000 }));
             }
             return [];
           }),

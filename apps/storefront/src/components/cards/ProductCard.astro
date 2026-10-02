@@ -17,8 +17,7 @@ import {
   type ProductGridContext,
   type ProductGridPhoneLayout,
 } from "@/lib/product-card-layout";
-import { CARD_IMAGE_DIMENSIONS, CARD_PHOTO_INSET, productCardModel, type ProductCardProduct } from "./card-model";
-import { capSizesDensity, scaleSizes } from "@/lib/responsive-image";
+import { CARD_IMAGE_DIMENSIONS, CARD_PHOTO_INSET, CARD_PHOTO_MAX_PX, cardPhotoSizes, productCardModel, type ProductCardProduct } from "./card-model";
 import StandardCard from "./variants/standard.astro";
 import AnatomyCard from "./variants/anatomy.astro";
 
@@ -97,9 +96,11 @@ const slotSizes = sizesOverride ?? productCardImageSizes(grid, containerWidth, c
 // margin, and DPR 3 phones fetch about 2x pixels, so a card photo is never
 // much wider than drawn.
 const inset = variant === "standard" ? 0 : CARD_PHOTO_INSET[variant] ?? 0;
-// Mall photos have a fixed 170px CSS cap even when the surrounding tile grows.
-const sizes = variant === "standard" ? slotSizes : capSizesDensity(variant === "mall" ? "170px" : scaleSizes(slotSizes, 1 - 2 * inset));
-const imageMaxWidth = variant === "mall" ? 340 : sizesOverride ? undefined : Math.ceil(
+// A fixed-width photo (the mall's) is that wide whatever the tile; the card
+// CSS draws the same number.
+const photoMaxPx = variant === "standard" ? undefined : CARD_PHOTO_MAX_PX[variant];
+const sizes = cardPhotoSizes(variant, slotSizes);
+const imageMaxWidth = photoMaxPx ? photoMaxPx * 2 : sizesOverride ? undefined : Math.ceil(
   productCardImageMaxCssWidth(grid, containerWidth, context, phoneLayout, maxColumns, filterColumnPx)
   * (variant === "standard" ? 3 : 2) * (1 - 2 * inset),
 );
@@ -130,6 +131,7 @@ const dimensions = variant === "standard"
       ratio={ratio}
       dimensions={dimensions}
       inset={inset}
+      photoMaxPx={photoMaxPx}
       productId={product.id}
       showBuyNow={resolved.blocks.card.variant === "quick-add" && resolved.blocks.card.settings.showBuyNow === true}
       sizes={sizes}

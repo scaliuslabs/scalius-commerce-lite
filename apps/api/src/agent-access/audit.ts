@@ -58,6 +58,7 @@ export async function writeAgentAuditEvent(
   const auditInsert = db.insert(agentAuditEvents).values({
     id: input.eventId ?? `aae_${nanoid(20)}`,
     grantId: input.grantId,
+    pluginId: input.pluginId ?? null,
     credentialId: input.credentialId ?? null,
     ownerUserId: input.ownerUserId ?? null,
     resource: input.resource ?? null,

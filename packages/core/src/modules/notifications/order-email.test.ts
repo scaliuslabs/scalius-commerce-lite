@@ -149,14 +149,19 @@ describe("customer order email composition and delivery", () => {
     expect(email.visible).not.toMatch(/Subtotal|Delivery address|Track your order|Cash on delivery/);
   });
 
-  it("brands the email with an absolute header logo, else the store name, and falls back to the legal name", async () => {
-    setDocument("header", { logo: { src: "https://cdn.example.test/media/logo.png/320.webp", alt: "" } });
+  it("brands the email with the published theme's logo (its original upload), else the store name, and falls back to the legal name", async () => {
+    setDocument("platform", { mediaUrl: "https://cdn.example.test" });
+    sqlite.exec(`INSERT INTO media (id, filename, kind, object_key, size, mime_type, status, variant_width)
+      VALUES ('media_logo', 'logo.png', 'image', 'media/logo.png', 1, 'image/png', 'ready', 320)`);
+    sqlite.prepare("INSERT INTO theme_settings (id, colors, revision) VALUES ('default', ?, 1)")
+      .run(JSON.stringify({ version: 6, brand: { logo: "media_logo", logoWidth: 180, footerLogo: null, favicon: null } }));
     await send();
     expect(message().html).toMatch(/<img src="https:\/\/cdn\.example\.test\/media\/logo\.png" alt="River &amp; Loom"/);
 
     transport.sendEmail.mockClear();
     sqlite.exec("DELETE FROM notification_delivery_receipts");
-    setDocument("header", { logo: { src: "/media/logo.png" } });
+    // A theme without a logo: the store name.
+    sqlite.exec("UPDATE theme_settings SET colors = '{\"version\":6,\"brand\":{\"logo\":null}}'");
     setDocument("business", { companyName: "", legalName: "River and Loom Ltd" });
     await send();
     const email = message();

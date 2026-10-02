@@ -26,13 +26,8 @@ import {
     normalizeDefaultSkuOptions,
 } from "../products/public-eligibility";
 import { buildBuyerCatalogPricingProjection } from "../products/buyer-projection";
-import {
-    catalogDiscountedPrice,
-    presentCatalogPrice,
-    storeCurrencyCodeSql,
-    storeCurrencyFromCode,
-    storeDecimalPlacesFromCode,
-} from "../products/money";
+import { catalogDiscountedPrice, presentCatalogPrice } from "../products/money";
+import { storeCurrencyCodeSql, storeCurrencyFromCode, storeDecimalPlacesFromCode } from "../settings/store-money";
 import { loadProductOptions, loadVariantSelectedOptions } from "../products/option-model";
 import { publicCategoryConditions } from "../categories/categories.publication";
 import { publicBrandJoinCondition } from "../brands/brands.storefront";

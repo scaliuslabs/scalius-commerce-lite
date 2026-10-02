@@ -3,6 +3,11 @@ import { formatPhoneForProvider } from "@scalius/shared/customer-utils";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { formatMoney } from "@scalius/shared/currency";
 import { fromMinor } from "@scalius/shared/money";
+import {
+  isOrderChannelSourcePreset,
+  type OrderChannel,
+  type OrderChannelSourcePreset,
+} from "@scalius/shared/order-channel";
 import { formatOrderLinePropertiesText, parseOrderLineProperties } from "./line-presentation";
 
 export const ORDER_CSV_ARTIFACT_MAX_BYTES = 16 * 1024 * 1024;
@@ -149,6 +154,20 @@ const PAYMENT_METHOD_LABELS: Record<string, string> = {
   stripe: "Card (Stripe)",
   sslcommerz: "SSLCommerz",
 };
+const CHANNEL_LABELS: Record<OrderChannel, string> = {
+  online_store: "Online store",
+  admin: "Dashboard",
+  pos: "POS",
+  agent: "AI agent",
+  app: "App",
+};
+const CHANNEL_SOURCE_LABELS: Record<OrderChannelSourcePreset, string> = {
+  facebook: "Facebook",
+  instagram: "Instagram",
+  whatsapp: "WhatsApp",
+  phone: "Phone",
+  walk_in: "Walk-in",
+};
 const COD_STATUS_LABELS: Record<string, string> = {
   pending: "To collect",
   collected: "Collected",
@@ -229,6 +248,9 @@ export interface OrderCsvRow {
   courierName: string | null;
   trackingId: string | null;
   notes: string | null;
+  /** Where the order came from, and the merchant's source label within it. */
+  channel: OrderChannel;
+  channelSource: string | null;
   lines: OrderCsvLine[];
 }
 
@@ -267,7 +289,15 @@ function orderColumns(order: OrderCsvRow): unknown[] {
     label(FULFILLMENT_STATUS_LABELS, order.fulfillmentStatus),
     order.courierName,
     order.trackingId,
+    CHANNEL_LABELS[order.channel],
+    channelSourceLabel(order.channelSource),
   ];
+}
+
+/** A preset reads as its name ("Walk-in"); the merchant's own source as they saved it. */
+function channelSourceLabel(source: string | null): string {
+  if (!source) return "";
+  return isOrderChannelSourcePreset(source) ? CHANNEL_SOURCE_LABELS[source] : source;
 }
 
 /**
@@ -289,6 +319,7 @@ function amountReceived(order: OrderCsvRow): number {
 const ORDER_HEADERS = [
   "Order", "Date", "Customer", "Phone", "Email", "Address", "Area", "Thana", "City",
   "Delivery method", "Status", "Payment", "Payment method", "Delivery", "Courier", "Tracking",
+  "Channel", "Source",
 ];
 
 /**

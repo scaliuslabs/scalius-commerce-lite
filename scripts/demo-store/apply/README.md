@@ -7,40 +7,54 @@ Apply is an interactive operator command, never unattended CI automation.
 ## Phase contract
 
 The fixed order is quarantine, create-only vocabulary reconciliation,
-category/product/collection/hero staging,
-product activation, category publication, collection activation, promotion
-activation, Theme publication, Header/Footer navigation publication, and hero
-activation. A phase may be `ready`, `skipped`, or `blocked`; a blocked phase is
-never bypassed by the orchestrator.
+category/product/collection staging, theme staging (the homepage saved as the
+theme draft), product activation, category publication, collection
+activation, promotion activation, Header/Footer navigation publication, and
+theme publication. A phase may be `ready`, `skipped`, or `blocked`; a blocked
+phase is never bypassed by the orchestrator, and any blocked phase refuses the
+whole apply before its first write.
 
 - Demo-owned non-retained products are staged inactive and always receive an
   activation command, including products found inactive after an interrupted
   earlier run. Retained Rider and Halo preserve their lifecycle and operational
   SKU authority.
-- The older staged-only executor now refuses any active non-retained product,
-  collection, or hero instead of updating a public resource without first
-  running this quarantine lifecycle.
-- Existing active collections and heroes are revision-deactivated before their
-  desired configuration is staged. They reactivate only after catalog
-  publication dependencies have completed.
+- The older staged-only executor now refuses any active non-retained product
+  or collection instead of updating a public resource without first running
+  this quarantine lifecycle.
+- Existing active collections are revision-deactivated before their desired
+  configuration is staged. They reactivate only after catalog publication
+  dependencies have completed.
 - Product/SKU offers in the manifest are product aggregate facts and finish
   before product activation. Standalone discount-code promotions remain
   blocked because the current discount authority has no monotonic revision.
-- Theme may publish only with its saved revision. Header/Footer navigation is
-  an explicit blocked phase until each document has a monotonic revision and
-  every write requires `expectedRevision`.
+- The homepage is the storefront theme. The manifest's heroes become the
+  first hero section's slides (desktop image, mobile image as the phone image,
+  the title as alt text and heading, the copy as text, the destination route
+  as link) and `homepageCollections` the first collections section's
+  collection ids; the rest of the published theme is carried over unchanged
+  (`../theme-homepage.mjs`). Stage saves that document as the shared draft at
+  the workspace revisions read (`POST /settings/theme/draft`); a draft is not
+  public, so no quarantine is needed. Publication publishes exactly that
+  draft revision over the live revision read (`POST /settings/theme/publish`);
+  both need `settings.general.edit`. A draft holding any other unpublished
+  change (the merchant's work), a draft not based on the live revision, or a
+  theme without a hero and a collections section blocks the apply. A draft
+  that differs only in the demo slides and collections (an interrupted run)
+  is adopted.
+- Header/Footer navigation is an explicit blocked phase until each document
+  has a monotonic revision and every write requires `expectedRevision`.
 - Brand vocabulary is created only when the exact slug is absent. An existing
   non-filterable or renamed Brand is a blocked unversioned conflict, never an
   automatic overwrite.
-- Heroes activate last because every category/collection destination must
-  already resolve publicly.
+- The theme publishes last because every slide destination and homepage
+  collection must already resolve publicly.
 
 ## Authorization and resume
 
 Authorization hashes the complete validated manifest plus the complete
 publication intent with stable key ordering. Prices, descriptions, offers,
-collections, heroes, Theme, and navigation therefore cannot change after the
-operator confirms the run.
+collections, heroes, homepage collections, and navigation therefore cannot
+change after the operator confirms the run.
 
 Resume records use schema version 2 and contain only safe resource identity and
 monotonic authority (`aggregateRevision`, `revision`, or `version`). Restoration
@@ -84,6 +98,7 @@ untouched for a separate reviewed decision.
 
 Header/Footer navigation and standalone promotion writes remain excluded until
 those authorities have monotonic CAS. The checked-in CLI publication intent is
-empty, so Theme publication is skipped too. Remote Media staging must reach a
+empty; the theme phases always run because the homepage is manifest content.
+Remote Media staging must reach a
 complete upload-bridge report before apply can pass its first authenticated
 gate. Do not weaken these exclusions to complete a demo run.

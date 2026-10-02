@@ -8,12 +8,13 @@ import { REFERENCE_MENUS } from "../menus.mjs";
 let modules;
 export async function themeModules() {
   if (!modules) {
-    const [T, D, B] = await Promise.all([
+    const [T, D, B, C] = await Promise.all([
       importTs("packages/shared/src/storefront-theme/templates.ts"),
       importTs("packages/shared/src/storefront-theme/document.ts"),
       importTs("packages/shared/src/storefront-theme/blocks.ts"),
+      importTs("packages/shared/src/storefront-theme/content.ts"),
     ]);
-    modules = { T, D, B };
+    modules = { T, D, B, C };
   }
   return modules;
 }
@@ -72,15 +73,27 @@ export async function variantNames() {
   };
 }
 
-/** Writes tracked theme/menu rows, then outwaits the frontier freshness window. */
+/**
+ * Writes tracked theme/menu rows, then outwaits the frontier freshness window.
+ * The stored theme's content (the seeded hero slides, category tiles and
+ * homepage collections) carries into the new template, as choosing a template
+ * in the dashboard keeps it.
+ */
 export async function applyTheme({ db }, template, { sets = {}, menu = null } = {}) {
   // Reference captures use the merchant menu as their navigation source; the
   // large category tree belongs to the scale checks, not fashion/pantry shots.
   const referenceMenu = Object.values(REFERENCE_MENUS).includes(menu);
-  const doc = await buildThemeDocument(template, { ...(referenceMenu ? { "blocks.navigation.source": "menu" } : {}), ...sets });
+  const look = await buildThemeDocument(template, { ...(referenceMenu ? { "blocks.navigation.source": "menu" } : {}), ...sets });
+  const { C, D } = await themeModules();
+  const stored = D.parseStoredStorefrontThemeDocument(db.prepare("SELECT colors FROM theme_settings WHERE id = 'default'").get()?.colors);
+  const doc = stored ? C.storefrontThemeWithContent(look, stored) : look;
   const now = Math.floor(Date.now() / 1000);
   tx(db, () => {
     db.prepare("INSERT INTO theme_settings (id, colors, revision, created_at, updated_at) VALUES ('default', ?, 1, ?, ?) ON CONFLICT(id) DO UPDATE SET colors = excluded.colors, revision = theme_settings.revision + 1, updated_at = excluded.updated_at").run(JSON.stringify(doc), now, now);
+    // A draft based on the replaced live theme could never publish again
+    // (publish requires the draft's base to be the live revision): drop it so
+    // the dashboard starts its next draft from this theme.
+    db.prepare("DELETE FROM theme_settings_drafts WHERE id = 'default'").run();
     if (menu) db.prepare("UPDATE navigation_placements SET menu_id = ?, is_enabled = 1, revision = revision + 1, updated_at = ? WHERE surface = 'header'").run(menu, now);
   });
   const seq = db.prepare("SELECT seq FROM cache_clock WHERE id = 1").get().seq;

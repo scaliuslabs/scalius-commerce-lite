@@ -4,14 +4,66 @@
 // the store (`requires`) or that has nothing to show renders nothing.
 import { z } from "zod";
 import { atLeast, type FitCondition } from "./fit";
+import { storefrontLinkSchema } from "./links";
 
 const sectionIdSchema = z.string().regex(/^[a-z0-9][a-z0-9_-]{0,39}$/);
+
+/** How `category-tiles` draws the categories (see the section's comment). */
+export const STOREFRONT_CATEGORY_TILE_STYLES = ["photo", "photo-grid", "round", "round-small", "round-row", "icons", "quad", "square"] as const;
+export type StorefrontCategoryTileStyle = (typeof STOREFRONT_CATEGORY_TILE_STYLES)[number];
+
+/** Categories a tile style needs to render: one for the photo styles (today's rail), two for the denser ones. */
+export function storefrontCategoryTilesMinimum(style: StorefrontCategoryTileStyle): 1 | 2 {
+  return style === "photo" || style === "photo-grid" ? 1 : 2;
+}
 const title = z.string().trim().max(80);
 const heading = z.string().trim().max(120);
 const recordId = z.string().trim().min(1).max(64);
 const mediaId = recordId.nullable();
 /** A same-store path or an https URL. */
 const href = z.string().trim().max(300).regex(/^(\/(?!\/)\S*|https:\/\/\S+)$/, "Use a store path or an https:// link.");
+/** Ids a section names (categories, collections): unique, in the merchant's order. */
+const idList = (max: number, what: string) =>
+  z.array(recordId).max(max).refine((ids) => new Set(ids).size === ids.length, `Each ${what} appears once.`);
+
+/** Slides one hero holds (each a computer image and an optional phone image). */
+export const STOREFRONT_HERO_SLIDE_LIMIT = 10;
+/** Categories one category-tiles section shows. */
+export const STOREFRONT_CATEGORY_TILES_LIMIT = 12;
+/** Collections one collections section shows, each a row of its products. */
+export const STOREFRONT_COLLECTIONS_LIMIT = 8;
+export const STOREFRONT_HERO_SLIDE_TEXT_LIMITS = { alt: 160, heading: 160, text: 160, buttonLabel: 40 } as const;
+
+/**
+ * Where a photo's subject is, as percentages of its width (`x`) and height
+ * (`y`): a cropped banner keeps that point in frame.
+ */
+export const storefrontFocalPointSchema = z.object({
+  x: z.number().min(0).max(100),
+  y: z.number().min(0).max(100),
+}).strict();
+export type StorefrontFocalPoint = z.infer<typeof storefrontFocalPointSchema>;
+export const STOREFRONT_DEFAULT_FOCAL_POINT: Readonly<StorefrontFocalPoint> = Object.freeze({ x: 50, y: 50 });
+
+/**
+ * One hero slide: its computer image (also the phone image unless
+ * `phoneImage` names one), each with its own focal point, the alt text
+ * (what the image shows; never drawn over it), optional words over the
+ * image and a link (a navigation-safe href; null: the slide is not a link).
+ * The button shows only with a link.
+ */
+export const storefrontHeroSlideSchema = z.object({
+  image: recordId,
+  phoneImage: recordId.optional(),
+  focalPoint: storefrontFocalPointSchema,
+  phoneFocalPoint: storefrontFocalPointSchema.optional(),
+  alt: z.string().trim().min(1).max(STOREFRONT_HERO_SLIDE_TEXT_LIMITS.alt),
+  heading: z.string().trim().max(STOREFRONT_HERO_SLIDE_TEXT_LIMITS.heading).optional(),
+  text: z.string().trim().max(STOREFRONT_HERO_SLIDE_TEXT_LIMITS.text).optional(),
+  buttonLabel: z.string().trim().max(STOREFRONT_HERO_SLIDE_TEXT_LIMITS.buttonLabel).optional(),
+  link: storefrontLinkSchema.nullable(),
+}).strict();
+export type StorefrontHeroSlide = z.infer<typeof storefrontHeroSlideSchema>;
 
 /** Where a product rail, grid or deal takes its products from. */
 export const storefrontProductSourceSchema = z.discriminatedUnion("kind", [
@@ -50,6 +102,8 @@ export const STOREFRONT_SECTION_REGISTRY = {
       // Fabrilife full-bleed 2.6:1; Star Tech contained + 2 side banners;
       // Daraz + app panel; Dawn split; Amazon story cards; Aarong full-screen phone; eBay wide editorial.
       layout: z.enum(["full-bleed", "contained-banners", "app-panel", "split", "story-cards", "full-screen", "wide-editorial"]),
+      /** The slides, in order. A hero without one renders nothing. */
+      slides: z.array(storefrontHeroSlideSchema).max(STOREFRONT_HERO_SLIDE_LIMIT),
       /** Keep the desktop order, but let category tiles lead on phones. */
       phonePlacement: z.enum(["after-categories"]).optional(),
       /**
@@ -64,9 +118,16 @@ export const STOREFRONT_SECTION_REGISTRY = {
         alt: z.string().trim().max(160),
         href: href.nullable(),
       }).strict()).max(2).optional(),
+      /**
+       * `full-screen` on phones: the first screen (`screen`, the default), or
+       * Aarong's `compact` 65svh frame (23-35rem) when the phone banners carry
+       * no words, so a photo-only banner does not take the whole screen.
+       */
+      phoneHeight: z.enum(["screen", "compact"]).optional(),
     }).strict(),
-    defaults: { layout: "full-bleed" },
+    defaults: { layout: "full-bleed", slides: [] },
   }),
+  /** Delivery facts or the merchant's points. The section's presence is its switch. */
   "usp-strip": section({
     type: "usp-strip",
     settings: z.object({
@@ -82,17 +143,40 @@ export const STOREFRONT_SECTION_REGISTRY = {
     }).strict(),
     defaults: { style: "icons", source: { kind: "delivery-facts" } },
   }),
+  /**
+   * The categories the merchant picks (`categoryIds`, in order; published
+   * ones show) under its title (empty: "Shop by category"). `photo` is a
+   * scrolling rail of portrait photos (a grid from 640px); `photo-grid`
+   * Aarong's department grid (two to four across); `round` a grid of round
+   * photos (3 to 8 across); `round-small` Apple Gadgets' 56px circles;
+   * `round-row` Target's round photos in one scrolling row on phones;
+   * `icons` Star Tech's icon grid; `quad` Amazon's cards of four; `square`
+   * eBay's gallery.
+   */
   "category-tiles": section({
     type: "category-tiles",
-    settings: z.object({ style: z.enum(["icons", "round", "photo", "quad", "square"]) }).strict(),
-    defaults: { style: "photo" },
+    settings: z.object({
+      style: z.enum(STOREFRONT_CATEGORY_TILE_STYLES),
+      title,
+      categoryIds: idList(STOREFRONT_CATEGORY_TILES_LIMIT, "category"),
+    }).strict(),
+    defaults: { style: "photo", title: "", categoryIds: [] },
     requires: [atLeast("topCategoryCount", 2)],
   }),
-  /** The collections the merchant puts on the homepage, each in its own presentation. */
+  /**
+   * The collections the merchant picks (`collectionIds`, in order; active
+   * ones with products show), each in its own presentation. Without one,
+   * the section shows the newest products. A carousel collection's cards are
+   * `large` (1.4 cards on a phone, 3 to 5 across) or Apple Gadgets'
+   * `compact` shelf (2.3 on a phone, up to 5.3 across).
+   */
   collections: section({
     type: "collections",
-    settings: z.object({}).strict(),
-    defaults: {},
+    settings: z.object({
+      carousel: z.enum(["large", "compact"]),
+      collectionIds: idList(STOREFRONT_COLLECTIONS_LIMIT, "collection"),
+    }).strict(),
+    defaults: { carousel: "large", collectionIds: [] },
   }),
   "product-rail": section({
     type: "product-rail",
@@ -121,8 +205,6 @@ export const STOREFRONT_SECTION_REGISTRY = {
       title,
       source: storefrontProductSourceSchema,
       promotionId: recordId.nullable().optional(),
-      /** Retired: never read (the countdown is the promotion's end). Dropped at the next document version. */
-      endsAt: z.iso.datetime().nullable().optional(),
     }).strict(),
     defaults: { title: "", source: { kind: "on-sale" }, promotionId: null },
   }),
@@ -176,10 +258,15 @@ export const STOREFRONT_SECTION_REGISTRY = {
     }).strict(),
     defaults: { tiles: [] },
   }),
+  /**
+   * A lifestyle photo beside a grid of the list's products: `tall` fills the
+   * height of the grid beside it (2:3 columns); `square` is Fabrilife's
+   * square photo in a 1:2 split.
+   */
   lookbook: section({
     type: "lookbook",
-    settings: z.object({ title, mediaId, source: storefrontProductSourceSchema }).strict(),
-    defaults: { title: "", mediaId: null, source: { kind: "newest" } },
+    settings: z.object({ title, mediaId, source: storefrontProductSourceSchema, photo: z.enum(["tall", "square"]) }).strict(),
+    defaults: { title: "", mediaId: null, source: { kind: "newest" }, photo: "tall" },
   }),
   /**
    * One campaign banner. Consecutive banners with the same `two-up` or
@@ -350,6 +437,10 @@ function filled(...values: Array<string | null | undefined>): boolean {
  */
 export function storefrontSectionNeedsContent(each: StorefrontSection): boolean {
   switch (each.type) {
+    case "hero":
+      return each.settings.slides.length === 0;
+    case "category-tiles":
+      return each.settings.categoryIds.length < storefrontCategoryTilesMinimum(each.settings.style);
     case "usp-strip":
       return each.settings.source.kind === "custom" && each.settings.source.items.length === 0;
     case "banner":

@@ -1,5 +1,6 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import {
+    BUSINESS_SOCIAL_LINKS_MAX,
     getBusinessSettingsDocument,
     saveBusinessSettings,
     type BusinessInfo,
@@ -25,20 +26,30 @@ const BUSINESS_FIELD_LIMITS = {
     invoicePrefix: 32,
     invoiceFooterText: 4_000,
     invoiceLogoUrl: 2_048,
-} as const satisfies Record<keyof BusinessInfo, number>;
+} as const satisfies Record<Exclude<keyof BusinessInfo, "socialLinks">, number>;
 
 function projectBusinessSettings(settings: BusinessInfo): BusinessInfo {
-    return Object.fromEntries(
-        Object.entries(BUSINESS_FIELD_LIMITS).map(([key, maximumLength]) => [
-            key,
-            settings[key as keyof BusinessInfo].slice(0, maximumLength),
-        ]),
-    ) as unknown as BusinessInfo;
+    return {
+        ...Object.fromEntries(
+            Object.entries(BUSINESS_FIELD_LIMITS).map(([key, maximumLength]) => [
+                key,
+                (settings[key as keyof typeof BUSINESS_FIELD_LIMITS] ?? "").slice(0, maximumLength),
+            ]),
+        ),
+        socialLinks: settings.socialLinks.slice(0, BUSINESS_SOCIAL_LINKS_MAX),
+    } as BusinessInfo;
 }
 
 // ─────────────────────────────────────────
 // Schemas
 // ─────────────────────────────────────────
+
+const socialLinkSchema = z.object({
+    id: z.string().min(1).max(128),
+    label: z.string().max(200),
+    url: z.string().max(2_048).openapi({ description: "The profile's https:// address (no credentials)." }),
+    iconUrl: z.string().max(2_048).optional().openapi({ description: "An icon image from Files." }),
+});
 
 const businessInfoSchema = z.object({
     companyName: z.string().max(BUSINESS_FIELD_LIMITS.companyName),
@@ -55,6 +66,8 @@ const businessInfoSchema = z.object({
     invoicePrefix: z.string().max(BUSINESS_FIELD_LIMITS.invoicePrefix),
     invoiceFooterText: z.string().max(BUSINESS_FIELD_LIMITS.invoiceFooterText),
     invoiceLogoUrl: z.string().max(BUSINESS_FIELD_LIMITS.invoiceLogoUrl),
+    /** The store's social profiles, in order: the storefront header, footer and mobile menu list these. */
+    socialLinks: z.array(socialLinkSchema).max(BUSINESS_SOCIAL_LINKS_MAX),
 });
 
 const businessDocumentSchema = businessInfoSchema.extend({

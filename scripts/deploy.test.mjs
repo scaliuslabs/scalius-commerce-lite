@@ -244,6 +244,7 @@ describe("deploy target wiring", () => {
     expect(getDistSecretCommands(["api", "storefront"]).map(({ cmd }) => cmd)).toEqual([
       "node scripts/check-dist-secrets.mjs apps/admin-v2 apps/api apps/storefront",
       "node scripts/check-build-canaries.mjs admin-v2 api storefront",
+      "node scripts/check-api-bundle.mjs --dist apps/api/dist",
     ]);
     expect(() => getDistSecretCommands(["removed-worker"])).toThrow("Unknown deploy target: removed-worker");
   });

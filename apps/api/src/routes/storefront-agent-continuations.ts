@@ -128,8 +128,6 @@ const exchangeThemePreviewRoute = createRoute({
         "application/json": {
           schema: successEnvelope(z.object({
             token: z.string().length(52).regex(/^tpv_[A-Za-z0-9_-]{48}$/),
-            draftRevision: z.number().int().positive(),
-            basePublishedRevision: z.number().int().nonnegative(),
             expiresAt: z.any(),
           })),
         },
@@ -144,12 +142,7 @@ app.openapi(exchangeThemePreviewRoute, async (c) => {
     c.get("db"),
     c.req.valid("json").continuationCode,
   );
-  return ok(c, {
-    token: preview.token,
-    draftRevision: preview.draftRevision,
-    basePublishedRevision: preview.basePublishedRevision,
-    expiresAt: preview.expiresAt,
-  });
+  return ok(c, { token: preview.token, expiresAt: preview.expiresAt });
 });
 
 const claimContinuationBootstrapRoute = createRoute({

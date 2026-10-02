@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 import { storefrontSectionDefault, type StorefrontSection } from "@scalius/shared/storefront-theme";
 import {
   dealEndsAt,
+  homepageCategoryTiles,
+  homepageCategoryTilesTitle,
+  homepageCollections,
   homepageCollectionsFallback,
   homepageContent,
   homepageLeadSection,
@@ -17,23 +20,29 @@ const product = (id: string) => ({ id, name: id, slug: id }) as never;
 const section = (type: StorefrontSection["type"], id: string, settings: Record<string, unknown> = {}) =>
   ({ ...storefrontSectionDefault(type, id), settings: { ...storefrontSectionDefault(type, id).settings, ...settings } }) as StorefrontSection;
 
+const category = (id: string, imageUrl: string | null = null) =>
+  ({ id, name: `Category ${id}`, slug: `category-${id}`, description: null, imageUrl, canonicalPath: null });
+const collection = (id: string, presentation: "grid" | "carousel", products: unknown[]) =>
+  ({ id, name: `Collection ${id}`, presentation, config: {}, products, featuredProduct: null }) as never;
+
 function content(overrides: Partial<HomepageContent> = {}): HomepageContent {
   return {
     ...homepageContent({
-      hero: { desktop: null, mobile: null },
-      collections: [],
-      presentation: { categoryRail: { enabled: false, title: "", categories: [] }, trustStrip: { enabled: false } },
-      sections: {
-        lists: [
-          { key: "newest", products: Array.from({ length: 12 }, (_, index) => product(`n${index}`)), category: null, collection: null },
-          { key: "popular", products: [product("hit")], category: null, collection: null },
-          { key: "category:cat", products: [product("c1")], category: { id: "cat", name: "Tea", slug: "tea", canonicalPath: "/categories/green-tea" }, collection: null },
-          { key: "category:gone", products: [product("x")], category: null, collection: null },
-          { key: "collection:col", products: [product("k1")], category: null, collection: { id: "col", title: "Eid edit" } },
-        ],
-        media: [{ id: "m1", url: "https://cdn.test/m1.jpg", alt: "Eid", width: 10, height: 10 }],
-      },
-    } as never, []),
+      lists: [
+        { key: "newest", products: Array.from({ length: 12 }, (_, index) => product(`n${index}`)), category: null, collection: null },
+        { key: "popular", products: [product("hit")], category: null, collection: null },
+        { key: "category:cat", products: [product("c1")], category: { id: "cat", name: "Tea", slug: "tea", canonicalPath: "/categories/green-tea" }, collection: null },
+        { key: "category:gone", products: [product("x")], category: null, collection: null },
+        { key: "collection:col", products: [product("k1")], category: null, collection: { id: "col", title: "Eid edit" } },
+      ] as never,
+      media: [{ id: "m1", url: "https://cdn.test/m1.jpg", alt: "Eid", width: 10, height: 10 }],
+      categories: [category("c1", "https://cdn.test/c1.jpg"), category("c2"), category("c3")],
+      collections: [
+        collection("col-grid", "grid", [product("g1")]),
+        collection("col-rail", "carousel", [product("r1")]),
+        collection("col-empty", "carousel", []),
+      ],
+    }, []),
     ...overrides,
   };
 }
@@ -53,33 +62,53 @@ describe("homepage section products", () => {
     // Products of a category that is no longer public never show under a made-up title.
     expect(homepageSectionProducts(section("product-rail", "e", { title: "Tea", source: { kind: "category", categoryId: "gone" }, limit: 4 }), content())).toBeNull();
     // A source the read did not return renders nothing.
-    expect(homepageSectionProducts(section("deal-block", "f", { title: "", source: { kind: "on-sale" }, endsAt: null }), content())).toBeNull();
+    expect(homepageSectionProducts(section("deal-block", "f", { title: "", source: { kind: "on-sale" } }), content())).toBeNull();
   });
 
-  it("shows the newest products for a collections section only without homepage collections", () => {
-    expect(homepageCollectionsFallback(content())).toHaveLength(8);
-    expect(homepageCollectionsFallback(content({ collections: [{ id: "c", presentation: "grid", products: [product("p")] } as never] }))).toEqual([]);
+  it("shows a collections section's own collections in its order, and the newest products without one that shows products", () => {
+    const named = section("collections", "c", { collectionIds: ["col-rail", "gone", "col-empty", "col-grid"] }) as never;
+    expect(homepageCollections(named, content()).map((each) => each.id)).toEqual(["col-rail", "col-grid"]);
+    expect(homepageCollectionsFallback(named, content())).toEqual([]);
+    const empty = section("collections", "c", { collectionIds: ["col-empty", "gone"] }) as never;
+    expect(homepageCollections(empty, content())).toEqual([]);
+    expect(homepageCollectionsFallback(empty, content())).toHaveLength(8);
+    expect(homepageCollectionsFallback(section("collections", "c") as never, content())).toHaveLength(8);
+    expect(homepageSectionRenders(empty, content({ lists: new Map() }))).toBe(false);
+  });
+
+  it("shows a category-tiles section's own categories in its order under its title", () => {
+    const tiles = section("category-tiles", "t", { style: "round", title: "  ", categoryIds: ["c3", "gone", "c1"] }) as never;
+    expect(homepageCategoryTiles(tiles, content()).map((each) => each.id)).toEqual(["c3", "c1"]);
+    expect(homepageCategoryTilesTitle(tiles)).toBe("Shop by category");
+    expect(homepageCategoryTilesTitle(section("category-tiles", "t", { title: " Departments " }) as never)).toBe("Departments");
+    expect(homepageSectionRenders(tiles, content())).toBe(true);
+    // The denser styles need two public categories; the photo rail needs one.
+    expect(homepageSectionRenders(section("category-tiles", "t", { style: "round", categoryIds: ["c1", "gone"] }), content())).toBe(false);
+    expect(homepageSectionRenders(section("category-tiles", "t", { style: "photo", categoryIds: ["c1", "gone"] }), content())).toBe(true);
   });
 });
 
 describe("homepage section rules", () => {
   it("moves a visible banner after category tiles only for phones when the merchant chooses it", () => {
-    const hero = section("hero", "hero", { phonePlacement: "after-categories" });
-    const categories = section("category-tiles", "tiles", { style: "photo" });
+    const slides = [{ image: "m1", focalPoint: { x: 50, y: 50 }, alt: "Eid", link: null }];
+    const hero = section("hero", "hero", { phonePlacement: "after-categories", slides });
+    const categories = section("category-tiles", "tiles", { style: "photo", categoryIds: ["c1"] });
     const sections = [hero, section("usp-strip", "notice"), categories];
-    const shown = content({
-      hero: { desktop: [{ url: "https://cdn.test/hero.jpg" } as never], mobile: [] },
-      categoryRail: { enabled: true, title: "Categories", categories: [{ id: "c", name: "Tea", slug: "tea", imageUrl: "https://cdn.test/tea.jpg" }] } as never,
-    });
+    const shown = content();
     expect(homepagePhoneSections(sections, shown).map((each) => each.id)).toEqual(["notice", "tiles", "hero"]);
     expect(homepageLeadSection(homepagePhoneSections(sections, shown), shown, true)?.id).toBe("tiles");
-    expect(homepagePhoneSections(sections, content())).toBe(sections);
+    // Without a resolvable slide the hero shows nothing, so nothing moves.
+    expect(homepagePhoneSections(sections, content({ media: new Map() }))).toBe(sections);
     expect(homepagePhoneSections([categories, hero], shown)).toEqual([categories, hero]);
   });
 
   it("renders a section only with data", () => {
     const empty = content({ lists: new Map(), media: new Map() });
     expect(homepageSectionRenders(section("hero", "h"), empty)).toBe(false);
+    // A hero renders while one of its slides' images resolves.
+    const slides = [{ image: "gone", focalPoint: { x: 50, y: 50 }, alt: "Gone", link: null }, { image: "m1", focalPoint: { x: 50, y: 50 }, alt: "Eid", link: null }];
+    expect(homepageSectionRenders(section("hero", "h", { slides }), content())).toBe(true);
+    expect(homepageSectionRenders(section("hero", "h", { slides }), empty)).toBe(false);
     expect(homepageSectionRenders(section("usp-strip", "u"), empty)).toBe(false);
     expect(homepageSectionRenders(section("usp-strip", "u", { style: "ticker", source: { kind: "custom", items: [{ title: "Open on Friday", detail: "" }] } }), empty)).toBe(true);
     expect(homepageSectionRenders(section("banner", "b", { mediaId: "missing" }), empty)).toBe(false);

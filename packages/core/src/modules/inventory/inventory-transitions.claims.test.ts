@@ -14,6 +14,15 @@ vi.mock("./alerts", () => ({
     checkAndAlertLowStock: alertMocks.checkAndAlertLowStock,
 }));
 
+// One location that covers every removal; the D1 tests cover real levels.
+vi.mock("./locations", async (importActual) => ({
+    ...(await importActual<typeof import("./locations")>()),
+    resolveOrderFulfillmentLocation: vi.fn(async () => ({ id: "loc_default", name: "Main location" })),
+    resolveActiveInventoryLocation: vi.fn(async () => ({ id: "loc_default", name: "Main location" })),
+    assertInventoryLocationCovers: vi.fn(async () => undefined),
+    selectActiveInventoryLocationIds: vi.fn(async (_db: unknown, ids: string[]) => new Set(ids)),
+}));
+
 async function claimedMovementId(input: {
     claimKey: string;
     orderId: string;

@@ -27,7 +27,7 @@ const order: OrderCsvRow = {
   paymentStatus: "partially_refunded", paymentMethod: "cod", fulfillmentStatus: "complete",
   subtotalAmount: 2400, shippingCharge: 80, discountAmount: 0, totalAmount: 2480, paidAmount: 1980,
   refundedAmount: 500, balanceDue: 0, codStatus: "collected", courierName: "Steadfast", trackingId: "SF123",
-  notes: null,
+  notes: null, channel: "admin", channelSource: "walk_in",
   lines: [
     { productName: "Kurta", variantLabel: "M", quantity: 2, unitPrice: 800, lineTotal: 1600 },
     { productName: "Panjabi", variantLabel: null, quantity: 1, unitPrice: 800, lineTotal: 800 },
@@ -57,6 +57,21 @@ describe("order CSV artifacts", () => {
     expect(csv.split("\n")).toHaveLength(2);
     expect(csv).not.toContain("undefined");
     expect(csv).not.toMatch(/Recovery/);
+  });
+
+  it.each([
+    ["a storefront", { channel: "online_store", channelSource: null }, '"Online store",""'],
+    ["a walk-in dashboard", { channel: "admin", channelSource: "walk_in" }, '"Dashboard","Walk-in"'],
+    ["a custom-source dashboard", { channel: "admin", channelSource: "phesbuk_pej" }, '"Dashboard","phesbuk_pej"'],
+    ["an AI agent", { channel: "agent", channelSource: null }, '"AI agent",""'],
+  ] as const)("names the channel and source of %s order after the tracking column", (_case, facts, cells) => {
+    for (const format of ["summary", "items"] as const) {
+      const builder = createOrdersCsvArtifactBuilder(format);
+      builder.append({ ...order, ...facts });
+      const [header, row] = builder.finish().chunks.join("").split("\n");
+      expect(header).toContain('"Courier","Tracking","Channel","Source"');
+      expect(row).toContain(`"Steadfast","SF123",${cells}`);
+    }
   });
 
   it("writes one row per item with order money only on the first line", () => {

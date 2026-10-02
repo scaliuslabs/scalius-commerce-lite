@@ -22,6 +22,17 @@ vi.mock("./alerts", () => ({
   checkAndAlertLowStock: vi.fn(),
 }));
 
+// One location holds all of the SKU's stock, so its on-hand is the SKU's
+// stock; the D1 tests cover real levels.
+vi.mock("./locations", async (importActual) => ({
+  ...(await importActual<typeof import("./locations")>()),
+  resolveActiveInventoryLocation: vi.fn(async () => ({ id: "loc_default", name: "Main location" })),
+  readLocationOnHand: vi.fn(async (db: { select: () => { from: (table: unknown) => { where: () => { get: () => Promise<{ stock: number } | null> } } } }, _locationId: string, variantIds: string[]) => {
+    const variant = await db.select().from(undefined).where().get();
+    return new Map(variantIds.map((id) => [id, variant?.stock ?? 0]));
+  }),
+}));
+
 const mediaMocks = vi.hoisted(() => ({
   loadProductMediaProjections: vi.fn(async () => new Map()),
   resolveSkuImageRepresentation: vi.fn<(
@@ -208,6 +219,9 @@ describe("stock adjustment ledger", () => {
       previousStock: 5,
       newStock: 12,
       delta: 7,
+      locationId: "loc_default",
+      locationPreviousStock: 5,
+      locationNewStock: 12,
     });
     expect(batchCalls).toHaveLength(1);
     expect(batchCalls[0]?.[0]).toMatchObject({
@@ -238,7 +252,7 @@ describe("stock adjustment ledger", () => {
         "damaged",
         "admin_1",
       ),
-    ).rejects.toThrow(/resulting stock must be greater than or equal to zero/);
+    ).rejects.toThrow(/Main location has \d+ on hand, so at most \d+ can be removed there/);
 
     expect(batchCalls).toHaveLength(0);
     expect(checkAndAlertLowStock).not.toHaveBeenCalled();

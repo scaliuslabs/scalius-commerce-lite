@@ -9,6 +9,7 @@ import { refreshProductRecommendations, refreshProductSalesStats } from "@scaliu
 import {
   STOREFRONT_SECTION_TYPES,
   storefrontSectionDefault,
+  storefrontThemeDocumentSchema,
   storefrontTemplateTheme,
   type StorefrontSection,
 } from "@scalius/shared/storefront-theme";
@@ -73,10 +74,11 @@ const SEED = `
 
 /**
  * The home page is measured on a store that uses **every section type**:
- * banners with original uploads (the rendition lookup), a homepage grid and
- * carousel collection (manual and dynamic), the category rail, and a theme
- * whose sections read every product source (newest, on sale, popular, a
- * category, a collection) and every kind of section image.
+ * hero slides (with a phone image), a grid and a carousel collection (manual
+ * and dynamic) picked by the collections section, category tiles, a product
+ * homepage's product, and a theme whose sections read every product source
+ * (newest, on sale, popular, a category, a collection) and every kind of
+ * section image.
  */
 function everySectionTheme() {
   const theme = storefrontTemplateTheme("department-mall");
@@ -87,22 +89,32 @@ function everySectionTheme() {
     if (at >= 0 && id === type) sections[at] = section;
     else sections.push(section);
   };
-  set("hero", { layout: "contained-banners", sideBanners: [{ mediaId: "media_side", alt: "Side", href: "/sale" }] });
+  set("hero", {
+    layout: "contained-banners",
+    slides: [
+      { image: "media_hero", phoneImage: "media_side", focalPoint: { x: 50, y: 50 }, alt: "Eid", link: "/sale" },
+      { image: "media_side", focalPoint: { x: 50, y: 50 }, alt: "Side", link: null },
+    ],
+    sideBanners: [{ mediaId: "media_side", alt: "Side", href: "/sale" }],
+  });
+  set("category-tiles", { style: "photo", title: "", categoryIds: ["cat_panjabi"] });
+  set("collections", { carousel: "large", collectionIds: ["col_grid", "col_rail"] });
   set("product-rail", { title: "", source: { kind: "popular" }, limit: 12 });
   set("product-grid", { title: "", source: { kind: "category", categoryId: "cat_panjabi" }, columns: 4, rows: 2 });
   set("deal-block", { title: "", source: { kind: "on-sale" }, promotionId: "promo_deal" });
   set("product-tabs", { title: "", limit: 8, tabs: [{ label: "", source: { kind: "newest" } }, { label: "", source: { kind: "popular" } }] });
   set("shop-by", { title: "", cards: [{ mediaId: "media_banner", title: "Eid", href: "/eid" }] });
   set("banner-mosaic", { tiles: [{ mediaId: "media_story", alt: "", href: null }, { mediaId: "media_look", alt: "", href: null }] });
-  set("lookbook", { title: "", mediaId: "media_look", source: { kind: "collection", collectionId: "col_grid" } });
+  set("lookbook", { title: "", mediaId: "media_look", source: { kind: "collection", collectionId: "col_grid" }, photo: "tall" });
   set("banner", { layout: "two-up", heading: "Eid", text: "", mediaId: "media_banner", cta: null });
   set("editorial", { layout: "image-with-text", heading: "Story", body: "Woven by hand.", mediaId: "media_story", imageSide: "end" });
   set("product-rail", { title: "", source: { kind: "newest" }, limit: 8 }, "rail-newest");
   theme.pages.home = sections;
+  // The product homepage's product rides in the second batch too.
+  theme.pages.homeMode = { kind: "product", productId: "p_linen" };
   return theme;
 }
 
-const slide = (id: string, key: string) => ({ id, url: `https://media.test/${key}`, title: id, heading: "", buttonLabel: "", link: "", focalPoint: { x: 50, y: 50 } });
 const HOME_SEED = `
   INSERT INTO media (id, filename, kind, object_key, size, mime_type, status, width, height, variant_width) VALUES
     ('media_hero', 'hero.jpg', 'image', 'media/hero.jpg', 1, 'image/jpeg', 'ready', 1600, 600, 1600),
@@ -110,18 +122,13 @@ const HOME_SEED = `
     ('media_look', 'look.jpg', 'image', 'media/look.jpg', 1, 'image/jpeg', 'ready', 800, 800, 800),
     ('media_banner', 'banner.jpg', 'image', 'media/banner.jpg', 1, 'image/jpeg', 'ready', 1600, 500, 1600),
     ('media_story', 'story.jpg', 'image', 'media/story.jpg', 1, 'image/jpeg', 'ready', 1200, 900, 1200);
-  INSERT INTO hero_sliders (id, type, images) VALUES
-    ('hero_desktop', 'desktop', '${JSON.stringify([slide("d1", "media/hero.jpg"), slide("d2", "media/side.jpg")])}'),
-    ('hero_mobile', 'mobile', '${JSON.stringify([slide("m1", "media/hero.jpg")])}');
   UPDATE products SET discount_type = 'percentage', discount_bps = 1000 WHERE id = 'p_cotton';
   INSERT INTO brands (id, name, slug, status, logo_media_id) VALUES ('brd_aarong01', 'Aarong', 'aarong', 'published', 'media_look');
   UPDATE products SET brand_id = 'brd_aarong01' WHERE id = 'p_linen';
   INSERT INTO promotions (id, name, method, status, ends_at) VALUES ('promo_deal', 'Eid deal', 'automatic', 'active', unixepoch() + 86400);
   INSERT INTO collections (id, name, presentation, config, sort_order) VALUES
-    ('col_grid', 'Best sellers', 'grid', '{"source":"manual","productIds":["p_linen","p_cotton"],"showOnHomepage":true,"featuredProductId":"p_linen","maxProducts":8}', 0),
-    ('col_rail', 'Panjabi', 'carousel', '{"source":"dynamic","categoryIds":["cat_panjabi"],"showOnHomepage":true,"maxProducts":12}', 1);
-  INSERT INTO settings (id, key, value, category, type) VALUES
-    ('set_homepage', 'document', '{"categoryRail":{"enabled":true,"title":"Shop by category","categoryIds":["cat_panjabi"]},"trustStrip":{"enabled":true}}', 'homepage', 'json');
+    ('col_grid', 'Best sellers', 'grid', '{"source":"manual","productIds":["p_linen","p_cotton"],"featuredProductId":"p_linen","maxProducts":8}', 0),
+    ('col_rail', 'Panjabi', 'carousel', '{"source":"dynamic","categoryIds":["cat_panjabi"],"maxProducts":12}', 1);
   INSERT INTO orders (id, customer_name, customer_phone, shipping_address, city, zone, status, created_at, updated_at) VALUES
     ('o_1', 'A', '01700000001', 'Road', 'city', 'zone', 'delivered', unixepoch(), unixepoch()),
     ('o_2', 'B', '01700000002', 'Road', 'city', 'zone', 'pending', unixepoch(), unixepoch());
@@ -305,8 +312,18 @@ describe("storefront page render D1 budget", () => {
   it("measures the home page on a store whose sections all have data", async () => {
     const theme = everySectionTheme();
     expect(new Set(theme.pages.home.map((section) => section.type))).toEqual(new Set(STOREFRONT_SECTION_TYPES));
+    // The seeded theme is a valid document (an invalid one would render the default theme).
+    expect(storefrontThemeDocumentSchema.safeParse(theme).error?.issues ?? []).toEqual([]);
     const { bodies } = await renderPage("home");
-    const homepage = (bodies[1] as { data: { sections: { lists: Array<{ key: string; products: unknown[] }>; media: unknown[]; brands: unknown[]; promotions: unknown[] }; collections: unknown[]; hero: { desktop: { images: Array<{ url: string }> } } } }).data;
+    const homepage = (bodies[1] as { data: { sections: {
+      lists: Array<{ key: string; products: unknown[] }>;
+      media: Array<{ id: string; url: string }>;
+      brands: unknown[];
+      promotions: unknown[];
+      categories: Array<{ id: string }>;
+      collections: Array<{ id: string }>;
+      homeProduct: { id: string; slug: string } | null;
+    } } }).data;
     const filled = Object.fromEntries(homepage.sections.lists.map((list) => [list.key, list.products.length]));
     expect(filled).toMatchObject({
       newest: 2,
@@ -315,13 +332,15 @@ describe("storefront page render D1 budget", () => {
       "category:cat_panjabi": 2,
       "collection:col_grid": 2,
     });
-    expect(homepage.sections.media).toHaveLength(4);
+    expect(homepage.sections.media).toHaveLength(5);
     // The brand wall and the deal countdown ride in the same second batch.
     expect(homepage.sections.brands).toEqual([expect.objectContaining({ id: "brd_aarong01", name: "Aarong", logo: expect.objectContaining({ mediaId: "media_look" }) })]);
     expect(homepage.sections.promotions).toEqual([{ id: "promo_deal", endsAt: expect.any(String) }]);
-    expect(homepage.collections).toHaveLength(2);
-    // The banner's original upload was pointed at its rendition in the same batch.
-    expect(homepage.hero.desktop.images[0]!.url).toBe("https://media.test/media/hero.jpg/1600.webp");
+    expect(homepage.sections.collections.map((collection) => collection.id)).toEqual(["col_grid", "col_rail"]);
+    expect(homepage.sections.categories.map((category) => category.id)).toEqual(["cat_panjabi"]);
+    expect(homepage.sections.homeProduct).toMatchObject({ id: "p_linen" });
+    // A slide's image is its media row's published rendition.
+    expect(homepage.sections.media.find((asset) => asset.id === "media_hero")!.url).toMatch(/media\/hero\.jpg\/1600\.webp$/);
   });
 
   it("measures the product page with its tabs, content blocks, bundle tiers and EMI line", async () => {

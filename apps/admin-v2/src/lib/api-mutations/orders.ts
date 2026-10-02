@@ -32,6 +32,7 @@ import {
   postApiV1AdminOrdersByIdShipmentsByShipmentIdResolveUnknownLookup,
   postApiV1AdminOrdersByIdTimeline,
   putApiV1AdminOrdersByIdDetails,
+  putApiV1AdminOrdersByIdFulfillmentLocation,
   putApiV1AdminOrdersByIdStatus,
   putApiV1AdminOrdersByIdSupportRequestsByRequestIdStatus,
 } from "@scalius/api-client/sdk";
@@ -338,6 +339,20 @@ export function useVoidFulfillment() {
       toast.success(msg("toast.fulfillmentVoided"));
     },
     onError: (err, variables) => void onOrderError(queryClient, variables.orderId, err, { banner: false, refresh: true }),
+  });
+}
+
+/** Where an unshipped order's stock leaves from (an active location, or null for the default). */
+export function useSetOrderFulfillmentLocation() {
+  const queryClient = useQueryClient();
+  return useSingleFlightMutation({
+    mutationFn: ({ orderId, locationId, expectedVersion }: { orderId: string; locationId: string | null; expectedVersion: number }) =>
+      apiData(putApiV1AdminOrdersByIdFulfillmentLocation({ path: { id: orderId }, body: { locationId, expectedVersion } })),
+    onSuccess: (_data, variables) => {
+      invalidateOrder(queryClient, variables.orderId);
+      toast.success(msg("toast.fulfillmentLocationChanged"));
+    },
+    onError: (err, variables) => void onOrderError(queryClient, variables.orderId, err, { banner: true, refresh: true }),
   });
 }
 

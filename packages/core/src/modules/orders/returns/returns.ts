@@ -103,6 +103,8 @@ export interface OrderReturnReceiptView {
   actorType: string;
   actorId: string | null;
   inventoryMovementId: string | null;
+  /** Where restocked units went; null when nothing was restocked. */
+  restockLocationId: string | null;
   notes: string | null;
   createdAt: Date;
 }
@@ -289,6 +291,7 @@ const returnReceiptFields = {
   actorType: orderReturnReceiptLines.actorType,
   actorId: orderReturnReceiptLines.actorId,
   inventoryMovementId: orderReturnReceiptLines.inventoryMovementId,
+  restockLocationId: orderReturnReceiptLines.restockLocationId,
   notes: orderReturnReceiptLines.notes,
   createdAt: orderReturnReceiptLines.createdAt,
 };
@@ -1006,6 +1009,7 @@ export async function receiveOrderReturn(
   }
 
   const movementByLineId = new Map<string, string | null>();
+  const restockLocationByLineId = new Map<string, string | null>();
   const availabilityTransitionVariantIds = new Set<string>();
   const inventoryPool = context.order.inventoryPool === "preorder"
     || context.order.inventoryPool === "backorder"
@@ -1021,8 +1025,10 @@ export async function receiveOrderReturn(
       claimKey: `return-receipt:v1:${returnId}:${input.commandKey}:${line.id}`,
       pool: inventoryPool,
       createdBy: receiptActor.id ?? null,
+      locationId: input.restockLocationId ?? null,
     });
     movementByLineId.set(line.id, impact.movementIds[0] ?? null);
+    restockLocationByLineId.set(line.id, impact.locationIdByVariant[line.variantId!] ?? null);
     for (const variantId of impact.availabilityTransitionVariantIds) {
       availabilityTransitionVariantIds.add(variantId);
     }
@@ -1086,6 +1092,7 @@ export async function receiveOrderReturn(
         inventoryMovementId: sql<string | null>`${movementByLineId.get(line.id) ?? null}`.as("inventory_movement_id"),
         notes: sql<string | null>`${receipt.notes ?? null}`.as("notes"),
         createdAt: sql<Date>`unixepoch()`.as("created_at"),
+        restockLocationId: sql<string | null>`${restockLocationByLineId.get(line.id) ?? null}`.as("restock_location_id"),
       })
         .from(orderReturnLines)
         .innerJoin(orderReturns, eq(orderReturns.id, orderReturnLines.returnId))

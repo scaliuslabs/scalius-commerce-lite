@@ -18,6 +18,7 @@ import type { ReservationEntry } from "../../inventory";
 import { sql, eq } from "drizzle-orm";
 import { guestRecordForPhone } from "../../customers/customer-identity";
 import { generateOrderId } from "@scalius/shared/order-utils";
+import { normalizeOrderChannelSource } from "@scalius/shared/order-channel";
 import { nanoid } from "nanoid";
 import type { CreateOrderInput } from "../validation";
 import { ValidationError, ConflictError, ServiceUnavailableError } from "@scalius/core/errors";
@@ -280,6 +281,9 @@ export async function createOrder(
             status: OrderStatus.CONFIRMED,
             customerId,
             inventoryAction: reservationEntries.length > 0 ? "reserved" : "none",
+            // Staff-created; the source says where it came in (facebook, walk_in, …).
+            channel: "admin",
+            channelSource: normalizeOrderChannelSource(data.channelSource),
             version: 1,
             createdAt: sql`unixepoch()`,
             updatedAt: sql`unixepoch()`,

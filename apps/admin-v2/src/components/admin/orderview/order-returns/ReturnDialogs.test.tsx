@@ -1,21 +1,35 @@
 // @vitest-environment happy-dom
 
-import { act } from "react";
+import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { orderDetailMessages } from "~/i18n/order-detail";
 import type { OrderReturnDto } from "~/lib/order-return-workflow";
 import type { Order, OrderItem } from "../types";
 import { ApproveReturnDialog } from "./ApproveReturnDialog";
 import { CreateReturnDialog } from "./CreateReturnDialog";
+import { OrderReturnRow } from "./OrderReturnRow";
 import { ReceiveReturnDialog } from "./ReceiveReturnDialog";
 
-const mocks = vi.hoisted(() => ({ approve: vi.fn(), receive: vi.fn(), create: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  approve: vi.fn(),
+  receive: vi.fn(),
+  create: vi.fn(),
+  locations: vi.fn(),
+  inventory: vi.fn(),
+}));
+vi.mock("~/lib/api", () => ({ apiData: (call: Promise<unknown>) => call }));
+vi.mock("@scalius/api-client/sdk", () => ({
+  getApiV1AdminInventoryLocations: mocks.locations,
+  getApiV1AdminInventory: mocks.inventory,
+}));
 vi.mock("~/lib/api-mutations/orders", () => ({
   orderErrorMessage: (error: Error) => error.message,
   useCreateOrderReturn: () => ({ mutate: mocks.create, isPending: false }),
   useApproveOrderReturn: () => ({ mutate: mocks.approve, isPending: false }),
   useReceiveOrderReturn: () => ({ mutate: mocks.receive, isPending: false }),
+  useReconcileOrderReturn: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -34,6 +48,10 @@ const orderReturn = {
   receipts: [],
 } as unknown as OrderReturnDto;
 const itemsById = new Map([[item.id, item]]);
+const location = (id: string, name: string, isDefault: boolean) => ({ id, name, isDefault, status: "active" });
+/** The receive dialog reads the store's locations (and where the units were sent from). */
+const withQueries = (node: ReactNode) => <QueryClientProvider client={new QueryClient()}>{node}</QueryClientProvider>;
+const settle = () => act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
 
 function setNumber(input: HTMLInputElement, value: string) {
   const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
@@ -47,6 +65,8 @@ describe("return dialogs", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.locations.mockResolvedValue({ locations: [location("loc_default", "Main location", true)] });
+    mocks.inventory.mockResolvedValue({ movements: [], pageInfo: { limit: 100, hasMore: false, nextCursor: null } });
     host = document.createElement("div");
     document.body.append(host);
     root = createRoot(host);
@@ -63,7 +83,7 @@ describe("return dialogs", () => {
 
   it("splits every received unit into restocked and damaged", async () => {
     await act(async () => root.render(
-      <ReceiveReturnDialog orderReturn={orderReturn} itemsById={itemsById} open onOpenChange={() => undefined} />,
+      withQueries(<ReceiveReturnDialog orderReturn={orderReturn} itemsById={itemsById} open onOpenChange={() => undefined} />),
     ));
     const name = "Shirt · M";
     await act(async () => setNumber(input(en["returns.receivedQty"].replace("{name}", name)), "3"));
@@ -73,6 +93,48 @@ describe("return dialogs", () => {
     const [payload] = mocks.receive.mock.calls[0]!;
     expect(payload.expectedVersion).toBe(4);
     expect(payload.lines).toEqual([{ lineId: "line_1", receivedQuantity: 3, restockQuantity: 1, damagedQuantity: 2 }]);
+    // One location: nothing to choose, and the API restocks where the units were sent from.
+    expect(document.body.textContent).not.toContain(en["returns.restockAt"]);
+    expect(payload).not.toHaveProperty("restockLocationId");
+  });
+
+  it("restocks where the units were sent from by default, or at a location the merchant picks", async () => {
+    mocks.locations.mockResolvedValue({
+      locations: [location("loc_default", "Main location", true), location("loc_branch", "Banani store", false)],
+    });
+    mocks.inventory.mockResolvedValue({
+      movements: [{ id: "move_1", variantId: "v1", type: "deducted", locationId: "loc_branch", locationName: "Banani store" }],
+      pageInfo: { limit: 100, hasMore: false, nextCursor: null },
+    });
+    const returned = {
+      ...orderReturn,
+      lines: [{ ...orderReturn.lines[0]!, variantId: "v1" }],
+    } as OrderReturnDto;
+    await act(async () => root.render(
+      withQueries(<ReceiveReturnDialog orderReturn={returned} itemsById={itemsById} open onOpenChange={() => undefined} />),
+    ));
+    await settle();
+    await settle();
+
+    expect(mocks.inventory).toHaveBeenCalledWith({
+      query: expect.objectContaining({ section: "movements", movementOrderId: "ord_1", movementType: "deducted" }),
+    });
+    const trigger = document.getElementById("receipt-location-ret_1")!;
+    expect(trigger.textContent).toBe(en["returns.restockSentFromNamed"].replace("{name}", "Banani store"));
+
+    // The default omits the location: the API resolves it per unit.
+    await act(async () => button(en["returns.receiveCount"].replace("{count}", "3")).click());
+    expect(mocks.receive.mock.calls[0]![0]).not.toHaveProperty("restockLocationId");
+
+    await act(async () => trigger.click());
+    const options = [...document.body.querySelectorAll<HTMLButtonElement>('[role="option"]')];
+    expect(options.map((option) => option.textContent)).toEqual([
+      en["returns.restockSentFromNamed"].replace("{name}", "Banani store"),
+      en["location.default"].replace("{name}", "Main location"),
+    ]);
+    await act(async () => options[1]!.click());
+    await act(async () => button(en["returns.receiveCount"].replace("{count}", "3")).click());
+    expect(mocks.receive.mock.calls[1]![0]).toMatchObject({ restockLocationId: "loc_default" });
   });
 
   it("expects every approved unit back in stock, and flags more than expected instead of changing it", async () => {
@@ -81,7 +143,7 @@ describe("return dialogs", () => {
       lines: [{ ...orderReturn.lines[0]!, receivedQuantity: 1, restockQuantity: 1 }],
     } as OrderReturnDto;
     await act(async () => root.render(
-      <ReceiveReturnDialog orderReturn={partlyReceived} itemsById={itemsById} open onOpenChange={() => undefined} />,
+      withQueries(<ReceiveReturnDialog orderReturn={partlyReceived} itemsById={itemsById} open onOpenChange={() => undefined} />),
     ));
     const name = "Shirt · M";
     const received = input(en["returns.receivedQty"].replace("{name}", name));
@@ -114,7 +176,7 @@ describe("return dialogs", () => {
       lines: [{ ...orderReturn.lines[0]!, inventoryTracked: false }],
     } as OrderReturnDto;
     await act(async () => root.render(
-      <ReceiveReturnDialog orderReturn={untracked} itemsById={itemsById} open onOpenChange={() => undefined} />,
+      withQueries(<ReceiveReturnDialog orderReturn={untracked} itemsById={itemsById} open onOpenChange={() => undefined} />),
     ));
     const name = "Shirt · M";
     expect(document.querySelector(`input[aria-label="${en["returns.restockQty"].replace("{name}", name)}"]`)).toBeNull();
@@ -155,5 +217,26 @@ describe("return dialogs", () => {
     const [payload] = mocks.approve.mock.calls[0]!;
     expect(payload.lines).toEqual([{ lineId: "line_1", approvedQuantity: 2, rejectedQuantity: 1 }]);
     expect(JSON.stringify(payload)).not.toMatch(/restock|damaged|received/i);
+  });
+
+  it("names where a receipt's units went back into stock once a store has several locations", async () => {
+    mocks.locations.mockResolvedValue({
+      locations: [location("loc_default", "Main location", true), location("loc_branch", "Banani store", false)],
+    });
+    const received = {
+      ...orderReturn,
+      status: "completed",
+      createdAt: new Date("2026-10-01T10:00:00Z"),
+      receipts: [{
+        id: "rcpt_1", returnLineId: "line_1", receivedQuantity: 3, restockQuantity: 2, damagedQuantity: 1,
+        restockLocationId: "loc_branch", createdAt: new Date("2026-10-02T10:00:00Z"),
+      }],
+    } as unknown as OrderReturnDto;
+    await act(async () => root.render(withQueries(
+      <ul><OrderReturnRow orderReturn={received} itemsById={itemsById} canManage={false} onAction={() => undefined} /></ul>,
+    )));
+    await settle();
+
+    expect(document.body.textContent).toContain(en["returns.restockedAt"].replace("{location}", "Banani store"));
   });
 });

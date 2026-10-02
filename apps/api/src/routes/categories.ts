@@ -23,6 +23,7 @@ import {
   readRepeatedPublicQueryValues,
 } from "../utils/public-search-query";
 import { optionalProductCardFacts } from "../schemas/product-card-facts";
+import { storefrontCustomFieldsSchema } from "../schemas/custom-fields";
 // Create an OpenAPIHono app for category routes
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -119,6 +120,7 @@ const categoryBreadcrumbItemSchema = categoryLinkSchema.extend({
 const storefrontCategoryDetailSchema = storefrontCategorySchema.extend({
   content: z.string().nullable(),
   listingTemplate: z.string().nullable(),
+  customFields: storefrontCustomFieldsSchema,
   children: z.array(categoryChildSchema).max(CATEGORY_CHILDREN_LIMIT)
     .openapi({ description: "Published sub-categories, name order (sub-category pills and shelves)." }),
   breadcrumb: z.array(categoryBreadcrumbItemSchema).max(4)
@@ -534,6 +536,7 @@ app.openapi(getCategoryProductsRoute, async (c) => {
     listingTemplate: category.listingTemplate,
     children: category.children,
     breadcrumb: category.breadcrumb,
+    customFields: category.customFields,
     createdAt: category.createdAt,
   };
 

@@ -1,4 +1,4 @@
-import type { ProductVariant, ShippingMethod } from "@/lib/api/types";
+import type { ProductVariant, ShippingMethod, SocialLink } from "@/lib/api/types";
 import { productFulfilment, splitDeliveryRates } from "@/lib/delivery-facts";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import { htmlToPlainText } from "@scalius/shared/html-sanitize";
@@ -15,6 +15,8 @@ export interface StorefrontBusinessInfo {
   phone?: string | null;
   email?: string | null;
   taxId?: string | null;
+  /** The store's social profiles (Settings -> Store): the only social source. */
+  socialLinks?: SocialLink[] | null;
 }
 
 export interface StorefrontSocialLink {

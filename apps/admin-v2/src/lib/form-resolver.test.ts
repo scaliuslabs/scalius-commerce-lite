@@ -25,7 +25,6 @@ describe("admin form resolvers", () => {
           source: "manual",
           categoryIds: [],
           productIds: [],
-          showOnHomepage: false,
           maxProducts: 12,
         },
       },

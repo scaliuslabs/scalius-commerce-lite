@@ -3,7 +3,7 @@
 // All query logic lives in src/modules/storefront/storefront.service.ts.
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { getHomepageData, getLayoutData, getPageRenderData } from "@scalius/core/modules/storefront";
+import { getHomepageData, getLayoutData, getPageRenderData, readThemeBrandAssets } from "@scalius/core/modules/storefront";
 import { resolveThemePreviewSession } from "@scalius/core/modules/settings";
 import { CATEGORY_NAVIGATION_LAYOUT_NODES } from "@scalius/core/modules/navigation";
 import { EMPTY_PLATFORM_CONFIG } from "@scalius/shared/platform-config";
@@ -11,12 +11,13 @@ import { PRODUCT_PAGE_COPY_KEYS, type ProductPageCopyKey } from "@scalius/shared
 import { NotFoundError, ValidationError } from "../utils/api-error";
 import {
   HOME_BRAND_LIMIT,
+  HOME_MAX_CATEGORIES,
+  HOME_MAX_COLLECTIONS,
   HOME_MAX_MEDIA,
   HOME_MAX_PRODUCT_LISTS,
   HOME_MAX_PROMOTIONS,
   HOME_PRODUCT_LIST_LIMIT,
   homeSectionRequests,
-  homeSectionRequestsEmpty,
 } from "@scalius/shared/storefront-theme";
 import { readWorkerVersion } from "@scalius/shared/cache-generation";
 import {
@@ -44,9 +45,9 @@ const MAX_BATCH_PART_RENDERS = 4;
 
 import { ok } from "../utils/api-response";
 import { successEnvelope, errorResponses } from "../schemas/responses";
-import { publicPageSchema } from "../schemas/entities";
 import { storeShapeApiSchema, storefrontThemeDocumentApiSchema } from "../schemas/storefront-theme";
 import { optionalProductCardFacts } from "../schemas/product-card-facts";
+import { publicPageDetailSchema } from "../schemas/custom-fields";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 const storefrontProductCardSchema = z.object({
@@ -82,21 +83,6 @@ const collectionConfigSchema = z.object({
   maxProducts: z.number().int().min(1).max(24),
   title: z.string(),
   subtitle: z.string(),
-});
-const heroSlideSchema = z.object({
-  id: z.string(),
-  url: z.string(),
-  title: z.string(),
-  link: z.string(),
-  focalPoint: z.object({
-    x: z.number().min(0).max(100),
-    y: z.number().min(0).max(100),
-  }),
-});
-const heroSliderSchema = z.object({
-  id: z.string(),
-  type: z.string(),
-  images: z.array(heroSlideSchema).max(12),
 });
 const homepageProductListSchema = z.object({
   /** `storefrontProductSourceKey(source)`: newest, on-sale, popular, collection:<id>, category:<id>. */
@@ -138,15 +124,26 @@ const homepagePromotionSchema = z.object({
   id: z.string(),
   endsAt: z.string(),
 });
-const homepageDataSchema = z.object({
-  seo: z.object({
-    homepageTitle: z.string().nullable(),
-    homepageMetaDescription: z.string().nullable(),
-  }),
-  hero: z.object({
-    desktop: heroSliderSchema.nullable(),
-    mobile: heroSliderSchema.nullable(),
-  }),
+/**
+ * What the theme's homepage shows, read from the theme alone
+ * (`homeSectionRequests(theme.pages.home, theme.pages.homeMode)` in
+ * @scalius/shared/storefront-theme): one product list per source (each
+ * section takes its first N), the images (hero slides included), the
+ * category tiles' categories, the collections sections' collections, the
+ * brand wall's brands, the deal promotions and a product homepage's product.
+ */
+const homepageSectionsSchema = z.object({
+  lists: z.array(homepageProductListSchema).max(HOME_MAX_PRODUCT_LISTS),
+  media: z.array(homepageMediaSchema).max(HOME_MAX_MEDIA),
+  brands: z.array(homepageBrandSchema).max(HOME_BRAND_LIMIT),
+  promotions: z.array(homepagePromotionSchema).max(HOME_MAX_PROMOTIONS),
+  /** The category tiles' categories that are published, in the sections' order. */
+  categories: z.array(storefrontCategoryCardSchema.extend({
+    description: z.string().nullable(),
+    imageUrl: z.string().nullable(),
+    canonicalPath: z.string().nullable(),
+  })).max(HOME_MAX_CATEGORIES),
+  /** The collections sections' collections that are active and have products, in the sections' order. */
   collections: z.array(z.object({
     id: z.string(),
     name: z.string(),
@@ -157,36 +154,17 @@ const homepageDataSchema = z.object({
     categories: z.array(storefrontCategoryCardSchema),
     products: z.array(storefrontProductCardSchema).max(24),
     featuredProduct: storefrontProductCardSchema.nullable(),
-  })),
-  presentation: z.object({
-    categoryRail: z.object({
-      enabled: z.boolean(),
-      title: z.string(),
-      categories: z.array(storefrontCategoryCardSchema.extend({
-        description: z.string().nullable(),
-        imageUrl: z.string().nullable(),
-        canonicalPath: z.string().nullable(),
-      })).max(12),
-    }),
-    trustStrip: z.object({
-      enabled: z.boolean(),
-    }),
-    homeMode: z.enum(["catalog", "landing"]).openapi({
-      description: "`landing` opens the store on `landingProduct`'s landing page; it is `catalog` whenever that product is not public.",
-    }),
-    landingProduct: z.object({ id: z.string(), slug: z.string() }).nullable(),
+  })).max(HOME_MAX_COLLECTIONS),
+  homeProduct: z.object({ id: z.string(), slug: z.string() }).nullable().openapi({
+    description: "A product homepage's product while it is public (the storefront answers `/` with a redirect to its page); null for a sections homepage or a product that is not public.",
   }),
-  /**
-   * What the theme's homepage sections show: one product list per source
-   * (each section takes its first N) and the section images, in request
-   * order (`homeSectionRequests` in @scalius/shared/storefront-theme).
-   */
-  sections: z.object({
-    lists: z.array(homepageProductListSchema).max(HOME_MAX_PRODUCT_LISTS),
-    media: z.array(homepageMediaSchema).max(HOME_MAX_MEDIA),
-    brands: z.array(homepageBrandSchema).max(HOME_BRAND_LIMIT),
-    promotions: z.array(homepagePromotionSchema).max(HOME_MAX_PROMOTIONS),
+});
+const homepageDataSchema = z.object({
+  seo: z.object({
+    homepageTitle: z.string().nullable(),
+    homepageMetaDescription: z.string().nullable(),
   }),
+  sections: homepageSectionsSchema,
 });
 type HomepageData = z.infer<typeof homepageDataSchema>;
 
@@ -209,25 +187,18 @@ const socialLinkSchema = z.object({
   url: z.string(),
   iconUrl: z.string().optional(),
 });
-const headerSchema = z.object({
-  topBar: z.object({ text: z.string(), isEnabled: z.boolean() }),
-  logo: z.object({ src: z.string(), alt: z.string(), width: z.number().int() }),
-  favicon: z.object({ src: z.string(), alt: z.string() }),
-  contact: z.object({ phone: z.string(), text: z.string(), isEnabled: z.boolean() }),
-  social: z.array(socialLinkSchema),
-});
-const footerSchema = z.object({
-  logo: z.object({ src: z.string(), alt: z.string() }),
-  favicon: z.object({ src: z.string(), alt: z.string() }),
-  tagline: z.string(),
-  description: z.string(),
-  copyrightText: z.string(),
-  menus: z.array(z.object({
-    id: z.string(),
-    title: z.string(),
-    links: z.array(navigationItemSchema),
-  })),
-  social: z.array(socialLinkSchema),
+const brandAssetSchema = z.object({
+  id: z.string(),
+  url: z.string(),
+  alt: z.string(),
+  width: z.number().int().nullable(),
+  height: z.number().int().nullable(),
+}).nullable();
+/** A theme's brand images resolved (ready or trashed images; null when unset or gone). */
+const brandAssetsSchema = z.object({
+  logo: brandAssetSchema,
+  footerLogo: brandAssetSchema,
+  favicon: brandAssetSchema,
 });
 const discoverySchema = z.object({
   feeds: z.object({
@@ -255,7 +226,6 @@ const layoutDataSchema = z.object({
     config: z.string(),
     location: z.string(),
   })),
-  header: headerSchema,
   navigation: z.array(navigationItemSchema),
   /**
    * The reachable category tree (published, every ancestor published, leading
@@ -273,13 +243,21 @@ const layoutDataSchema = z.object({
     })).max(CATEGORY_NAVIGATION_LAYOUT_NODES),
     truncated: z.boolean(),
   }),
-  footer: footerSchema,
+  /** The footer columns: the menus placed in Navigation, in order. */
+  footerMenus: z.array(z.object({
+    id: z.string(),
+    title: z.string(),
+    links: z.array(navigationItemSchema),
+  })),
   currency: z.object({
     code: z.string(),
     symbol: z.string(),
-    usdExchangeRate: z.number().positive(),
+    /** ISO 4217 decimal places: prices on the wire are major units at this precision. */
+    decimalPlaces: z.number().int().min(0).max(3),
   }),
   theme: storefrontThemeDocumentApiSchema,
+  /** The published theme's brand images (logo, footer logo, tab icon). A preview carries its draft's own. */
+  brand: brandAssetsSchema,
   storeShape: storeShapeApiSchema,
   media: z.object({
     canonicalCdnUrl: z.string(),
@@ -298,6 +276,8 @@ const layoutDataSchema = z.object({
     phone: z.string(),
     email: z.string(),
     taxId: z.string(),
+    /** The store's social profiles: the only social links the storefront shows. */
+    socialLinks: z.array(socialLinkSchema),
   }),
   seo: z.object({
     discovery: discoverySchema,
@@ -342,7 +322,7 @@ const homepageRoute = createRoute({
   path: "/homepage",
   operationId: "storefront.homepage.get",
   tags: ["Storefront"],
-  summary: "Get consolidated homepage data (SEO, hero, collections, categories, and policy facts)",
+  summary: "Get the published theme's homepage data (SEO and what its sections show)",
   description:
     "Takes no parameters: a query string is rejected, so the generation-cached read has exactly one cache entry and callers cannot choose which products it reads.",
   responses: {
@@ -378,7 +358,7 @@ const pageBySlugRoute = createRoute({
     200: {
       description: "Page render data",
       content: { "application/json": { schema: successEnvelope(z.object({
-        page: publicPageSchema,
+        page: publicPageDetailSchema,
       })) } },
     },
     404: errorResponses[404],
@@ -400,7 +380,7 @@ const layoutRoute = createRoute({
   path: "/layout",
   operationId: "storefront.layout.get",
   tags: ["Storefront"],
-  summary: "Get consolidated layout data (analytics, header, navigation, footer, currency, theme)",
+  summary: "Get consolidated layout data (analytics, navigation, footer menus, currency, theme and its brand images, business identity)",
   responses: {
     200: {
       description: "Layout data",
@@ -537,7 +517,7 @@ const resolveThemePreviewRoute = createRoute({
   method: "post",
   path: "/theme-preview/resolve",
   tags: ["Storefront"],
-  summary: "Resolve a short-lived storefront theme preview cookie",
+  summary: "Resolve a short-lived storefront theme preview cookie to the current saved draft",
   operationId: "system.storefront_theme_preview.resolve",
   request: {
     body: {
@@ -552,9 +532,10 @@ const resolveThemePreviewRoute = createRoute({
   },
   responses: {
     200: {
-      description: "Preview theme snapshot",
+      description: "The saved draft as it is now, with its brand images",
       content: { "application/json": { schema: successEnvelope(z.object({
         theme: storefrontThemeDocumentApiSchema,
+        brand: brandAssetsSchema,
         draftRevision: z.number().int().positive(),
         basePublishedRevision: z.number().int().nonnegative(),
         expiresAt: z.any(),
@@ -568,12 +549,10 @@ const resolveThemePreviewRoute = createRoute({
 app.openapi(resolveThemePreviewRoute, async (c) => {
   c.header("Cache-Control", "private, no-cache, no-store, must-revalidate");
   c.header("Referrer-Policy", "no-referrer");
-  const preview = await resolveThemePreviewSession(
-    c.get("db"),
-    c.req.valid("json").token,
-  );
+  const db = c.get("db");
+  const preview = await resolveThemePreviewSession(db, c.req.valid("json").token);
   if (!preview) throw new NotFoundError("Theme preview is unavailable or expired");
-  return ok(c, preview);
+  return ok(c, { ...preview, brand: await readThemeBrandAssets(db, preview.theme.brand) });
 });
 
 // POST /storefront/theme-preview/homepage — the draft's homepage section data
@@ -583,7 +562,7 @@ const themePreviewHomepageRoute = createRoute({
   tags: ["Storefront"],
   summary: "Read the homepage section data of a theme preview's draft",
   description:
-    "The product lists, images, brands and deal promotions the draft theme's homepage sections show, for the storefront preview behind a live preview cookie. The reads come from the stored draft, never from the caller, and the answer is private and never cached.",
+    "What the draft theme's homepage shows (product lists, images and hero slides, category tiles, collections, brands, deal promotions and a product homepage's product), for the storefront preview behind a live preview cookie. The reads come from the current saved draft, never from the caller, and the answer is private and never cached.",
   operationId: "system.storefront_theme_preview.homepage",
   request: {
     body: {
@@ -599,7 +578,7 @@ const themePreviewHomepageRoute = createRoute({
   responses: {
     200: {
       description: "The draft's homepage section data",
-      content: { "application/json": { schema: successEnvelope(homepageDataSchema.shape.sections) } },
+      content: { "application/json": { schema: successEnvelope(homepageSectionsSchema) } },
     },
     404: errorResponses[404],
     500: errorResponses[500],
@@ -612,10 +591,8 @@ app.openapi(themePreviewHomepageRoute, async (c) => {
   const db = c.get("db");
   const preview = await resolveThemePreviewSession(db, c.req.valid("json").token);
   if (!preview) throw new NotFoundError("Theme preview is unavailable or expired");
-  const requests = homeSectionRequests(preview.theme.pages.home);
-  const data = homeSectionRequestsEmpty(requests)
-    ? { lists: [], media: [], brands: [], promotions: [] }
-    : (await getHomepageData(db, { requests, sectionsOnly: true })).sections;
+  const requests = homeSectionRequests(preview.theme.pages.home, preview.theme.pages.homeMode);
+  const data = (await getHomepageData(db, { requests })).sections;
   return ok(c, data as unknown as HomepageData["sections"]);
 });
 

@@ -19,6 +19,7 @@ import { updateOrderStatusFromShipment } from "./tracking";
 // Keep the real provider, delivery service, claims and database; inventory is a separate boundary.
 vi.mock("../inventory/inventory-transitions", () => ({
   applyInventoryForStatusChangeWithImpact: vi.fn(),
+  assertOrderStockCoverable: vi.fn(async () => undefined),
 }));
 
 type Outcome = "network" | "invalid-json" | "http-502" | "missing-id" | "http-408" | "http-409" | "http-429" | "rejected" | "success";

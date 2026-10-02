@@ -47,6 +47,7 @@ import {
     isProductAggregateRevisionConflict,
 } from "./aggregate-revision";
 import { buildStockMovementClaim } from "../inventory/stock-movement-claims";
+import { getDefaultInventoryLocation, readVariantStockAwayFromDefault } from "../inventory/locations";
 import { editableFulfillmentKindSchema } from "./customization-schema";
 
 const optionValueInputSchema = z.object({
@@ -427,6 +428,34 @@ export function assertOptionMatrixStockAllocation(
     }
 }
 
+/**
+ * Adding options moves a simple product's units onto its new option SKUs at
+ * the default location: the matrix counts one quantity per combination and
+ * books it there. Units the simple SKU holds at another location cannot be
+ * assigned to a combination (nobody said which ones they are) and must not
+ * silently move or vanish, so the conversion is refused until they are moved
+ * to the default location or counted to zero. Every level change is a
+ * ledger-v2 movement that bumps the SKU's stock version, so the default-SKU
+ * version guard in the conversion batch keeps this true until it commits.
+ */
+export async function assertSimpleConversionStockAtDefaultLocation(
+    db: Database,
+    defaultSkuId: string,
+): Promise<void> {
+    const away = await readVariantStockAwayFromDefault(db, defaultSkuId);
+    if (away.length === 0) return;
+    const home = await getDefaultInventoryLocation(db);
+    const units = away.reduce((total, level) => total + level.onHand, 0);
+    const named = away.slice(0, 3).map((level) => level.name);
+    const places = away.length > 3
+        ? `${named.join(", ")} and ${away.length - 3} more location${away.length - 3 === 1 ? "" : "s"}`
+        : named.length > 1 ? `${named.slice(0, -1).join(", ")} and ${named.at(-1)}` : named[0]!;
+    throw new ConflictError(
+        `${places} still hold${away.length === 1 ? "s" : ""} ${units} unit${units === 1 ? "" : "s"} of this product. `
+            + `Options start with all stock at ${home.name}: move those units there or count them to zero in Inventory, then add options.`,
+    );
+}
+
 /** Preserve physical stock when a topology edit replaces old combinations. */
 export function assertOptionMatrixReplacementStockAllocation(
     retiringVariants: readonly Pick<StockAllocationVariant, "stock" | "trackInventory">[],
@@ -692,6 +721,9 @@ export async function saveProductOptionMatrix(
     }
 
     assertOptionMatrixStockAllocation(existingVariants, normalizedVariants);
+    if (wasSimple && defaultSku && defaultSku.stock > 0) {
+        await assertSimpleConversionStockAtDefaultLocation(db, defaultSku.id);
+    }
 
     const statements = [];
     const submittedDefinitionIds = new Set<string>();

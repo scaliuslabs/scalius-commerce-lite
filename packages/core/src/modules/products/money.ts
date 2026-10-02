@@ -13,7 +13,13 @@ import {
 } from "@scalius/shared/currency";
 import { currencyDocument } from "../settings/documents";
 import { getCurrencyConfig } from "../settings/settings.service";
-import { toStoreMinor, type StoreCurrency } from "../settings/store-money";
+import {
+    storeCurrencyCodeSql,
+    storeCurrencyFromCode,
+    storeDecimalPlacesFromCode,
+    toStoreMinor,
+    type StoreCurrency,
+} from "../settings/store-money";
 import { SETTINGS_DOCUMENT_ROW_KEY } from "../settings/settings-store";
 import { deps } from "../../cache-deps";
 import type { BuyerCatalogPricingProjection } from "./buyer-projection";
@@ -27,29 +33,6 @@ export interface CatalogPriceMinor {
 
 export async function readStoreDecimalPlaces(db: Database): Promise<number> {
     return (await getCurrencyConfig(db)).decimalPlaces;
-}
-
-/**
- * The saved store currency code as a scalar subquery, so a bounded read can
- * carry its own precision without an extra statement.
- */
-export function storeCurrencyCodeSql() {
-    // A statement carrying this subquery reads the currency document.
-    deps.settings(currencyDocument.key, SETTINGS_DOCUMENT_ROW_KEY);
-    return sql<string | null>`(
-        SELECT CASE WHEN json_valid(${settings.value}) THEN json_extract(${settings.value}, '$.currencyCode') END
-        FROM ${settings}
-        WHERE ${settings.category} = ${currencyDocument.key} AND ${settings.key} = ${SETTINGS_DOCUMENT_ROW_KEY}
-    )`;
-}
-
-/** Mirrors `currencyDocument`: a missing or unsupported code means the default currency. */
-export function storeCurrencyFromCode(code: unknown): string {
-    return normalizeSupportedCurrencyCode(code) ?? DEFAULT_CURRENCY.code;
-}
-
-export function storeDecimalPlacesFromCode(code: unknown): number {
-    return getDecimalPlaces(storeCurrencyFromCode(code));
 }
 
 const DEFAULT_MINOR_SCALE = 10 ** getDecimalPlaces(DEFAULT_CURRENCY.code);

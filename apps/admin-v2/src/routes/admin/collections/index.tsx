@@ -92,7 +92,6 @@ function CollectionsPage() {
             {config.source === "dynamic"
               ? config.categoryIds.length === 1 ? t("autoOneCategory") : t("autoFromCategories", { count: config.categoryIds.length })
               : config.productIds.length === 1 ? t("productCountOne") : t("productCount", { count: config.productIds.length })}
-            {config.showOnHomepage ? ` · ${t("onHomepage")}` : ""}
           </span>
         );
       },

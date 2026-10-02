@@ -24,7 +24,7 @@ describe("demo-store admin command compiler", () => {
     expect(first.summary.byPhase.vocabulary).toBe(1);
     expect(first.summary.byPhase.categories).toBe(5);
     expect(first.summary.byPhase.collections).toBe(5);
-    expect(first.summary.byPhase.presentation).toBe(2);
+    expect(first.summary.byPhase.presentation).toBe(1);
     expect(first.retainedResources).toHaveLength(2);
     expect(new Set(first.commands.map((item) => item.id)).size).toBe(first.commands.length);
   });
@@ -139,33 +139,60 @@ describe("demo-store admin command compiler", () => {
     });
   });
 
-  it("compiles sections, collection membership, heroes, and revision preconditions", () => {
+  it("compiles sections, collection membership, and revision preconditions", () => {
     const current = {
       categories: [{ id: "cat_footwear", slug: "footwear", revision: 7, status: "published" }],
       collections: [{ id: "col_new", name: "New & Noteworthy", version: 3 }],
-      heroes: [{ id: "hero_desktop", type: "desktop", revision: 4 }],
     };
     const compiled = compileDemoStoreAdminCommands(demoStoreManifest, { current });
     const footwear = findCommand(compiled, "category:footwear");
     const newCollection = findCommand(compiled, "collection:new-noteworthy");
-    const desktopHero = findCommand(compiled, "hero-slider:desktop");
     const rider = findCommand(compiled, "product:rider-court-trainers:base");
 
     expect(footwear.preconditions.expectedRevision).toBe(7);
     expect(newCollection.preconditions.expectedVersion).toBe(3);
     expect(newCollection.body.config.productIds).toHaveLength(12);
-    expect(newCollection.body.config.showOnHomepage).toBe(true);
     expect(newCollection.body.config.productIds.every((reference) => reference.$ref.endsWith(":base"))).toBe(true);
+    // Homepage placement is the theme's collections section, never collection config.
+    expect(compiled.commands.filter((item) => item.phase === "collections").every((item) => !("showOnHomepage" in item.body.config))).toBe(true);
     expect(findCommand(compiled, "collection:weekend-ready").body.config.productIds).toHaveLength(8);
-    expect(findCommand(compiled, "collection:weekend-ready").body.config.showOnHomepage).toBe(false);
     expect(findCommand(compiled, "collection:offers-worth-opening").body.config.productIds).toHaveLength(12);
-    expect(desktopHero.body.expectedRevision).toBe(4);
-    expect(desktopHero.body.images).toHaveLength(3);
-    expect(desktopHero.body.images.every((slide) => slide.url.$ref.endsWith(":desktop"))).toBe(true);
     expect(newCollection.body.isActive).toBe(false);
-    expect(desktopHero.body.isActive).toBe(false);
     expect(rider.body.additionalInfo).toHaveLength(3);
     expect(rider.body.additionalInfo.every((section) => section.id.$ref.startsWith("current-section:"))).toBe(true);
+  });
+
+  it("compiles the heroes and homepage collections into one theme draft", () => {
+    const compiled = compileDemoStoreAdminCommands(demoStoreManifest);
+    const theme = findCommand(compiled, "theme:draft");
+    const draftRevision = { $ref: "current-theme", field: "draftRevision" };
+
+    expect(compiled.commands.filter((item) => item.phase === "presentation")).toEqual([theme]);
+    expect(theme).toMatchObject({
+      method: "POST",
+      path: "/api/v1/admin/settings/theme/draft",
+      action: "update",
+      body: {
+        expectedDraftRevision: draftRevision,
+        basePublishedRevision: { $ref: "current-theme", field: "publishedRevision" },
+      },
+      preconditions: { expectedRevision: draftRevision },
+      desired: { theme: theme.body.theme },
+    });
+    expect(theme.body.theme.$demoHomepage).toEqual({
+      slides: demoStoreManifest.heroes.map((hero) => ({
+        image: { $ref: `media:${hero.logicalKey}:desktop`, field: "id" },
+        phoneImage: { $ref: `media:${hero.logicalKey}:mobile`, field: "id" },
+        focalPoint: { x: 50, y: 50 },
+        alt: hero.title,
+        heading: hero.title,
+        text: hero.copy,
+        link: { $routeRef: hero.destination },
+      })),
+      collectionIds: ["collection:new-noteworthy", "collection:everyday-carry", "collection:home-refresh"]
+        .map((logicalKey) => ({ $ref: logicalKey, field: "id" })),
+    });
+    expect(theme.dependsOn).toEqual(expect.arrayContaining(["collection:new-noteworthy", "category:home-living", "collection:home-refresh"]));
   });
 
   it("fails closed on retained identity conflicts", () => {

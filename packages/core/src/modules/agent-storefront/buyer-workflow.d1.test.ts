@@ -104,6 +104,9 @@ describe("agent storefront checkout submission on D1 storage", () => {
       .toEqual({ revision: 3, cart_json: "[]" });
     expect(sqlite.prepare("SELECT order_id, authority_kind FROM agent_storefront_order_grants").get())
       .toEqual({ order_id: result.response.orderId, authority_kind: "created" });
+    // A buyer agent's checkout is its own sales channel (COMMERCE-HOOKS H2).
+    expect(sqlite.prepare("SELECT channel, channel_source FROM orders WHERE id = ?").get(result.response.orderId))
+      .toEqual({ channel: "agent", channel_source: null });
   });
 
   it("assigns a signed-in buyer's order to the account while delivering to another phone", async () => {

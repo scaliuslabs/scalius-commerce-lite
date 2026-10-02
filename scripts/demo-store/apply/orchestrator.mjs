@@ -19,10 +19,7 @@ function supersedingCompletionKey(phase, logicalKey) {
     const collection = logicalKey.match(/^(collection:[^:]+)(?::quarantine)?$/u);
     if (collection) return `${collection[1]}:activate`;
   }
-  if (["quarantine", "stage_heroes"].includes(phase)) {
-    const hero = logicalKey.match(/^(hero-slider:[^:]+)(?::quarantine)?$/u);
-    if (hero) return `${hero[1]}:activate`;
-  }
+  if (phase === "stage_theme" && logicalKey === "theme:draft") return "theme:publish";
   if (phase === "stage_categories") {
     const category = logicalKey.match(/^(category:[^:]+)$/u);
     if (category) return `${category[1]}:publish`;

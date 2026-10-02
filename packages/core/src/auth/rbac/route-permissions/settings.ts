@@ -50,20 +50,10 @@ export const SETTINGS_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/taxes/preview": {
     POST: { permission: PERMISSIONS.TAXES_VIEW },
   },
-  "/api/v1/admin/settings/general": {
-    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
-  },
-  "/api/v1/admin/settings/theme": {
-    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
-    POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
-  },
   "/api/v1/admin/settings/theme/workspace": {
     GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
   },
   "/api/v1/admin/settings/theme/draft": {
-    POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
-  },
-  "/api/v1/admin/settings/theme/draft/rebase": {
     POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
   },
   "/api/v1/admin/settings/theme/publish": {
@@ -142,16 +132,6 @@ export const SETTINGS_ROUTE_PERMISSIONS: RoutePermissionMap = {
     GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
     POST: { permission: PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT },
   },
-  "/api/v1/admin/settings/header": {
-    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
-    PUT: { permission: PERMISSIONS.SETTINGS_HEADER_EDIT },
-    POST: { permission: PERMISSIONS.SETTINGS_HEADER_EDIT },
-  },
-  "/api/v1/admin/settings/footer": {
-    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
-    PUT: { permission: PERMISSIONS.SETTINGS_FOOTER_EDIT },
-    POST: { permission: PERMISSIONS.SETTINGS_FOOTER_EDIT },
-  },
   "/api/v1/admin/settings/seo": {
     GET: { anyOf: ANY_STAFF },
     PUT: { permission: PERMISSIONS.SETTINGS_SEO_EDIT },
@@ -180,19 +160,6 @@ export const SETTINGS_ROUTE_PERMISSIONS: RoutePermissionMap = {
     GET: { anyOf: ANY_STAFF },
     PUT: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
     POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
-  },
-  "/api/v1/admin/settings/homepage-presentation": {
-    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
-    POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
-  },
-  "/api/v1/admin/settings/hero-sliders": {
-    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
-    POST: { permission: PERMISSIONS.SETTINGS_HEADER_EDIT },
-  },
-  "/api/v1/admin/settings/hero-sliders/*": {
-    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
-    PUT: { permission: PERMISSIONS.SETTINGS_HEADER_EDIT },
-    DELETE: { permission: PERMISSIONS.SETTINGS_HEADER_EDIT },
   },
   "/api/v1/admin/settings/delivery-locations": {
     GET: { permission: PERMISSIONS.SETTINGS_DELIVERY_LOCATIONS_VIEW },

@@ -8,6 +8,7 @@ import { z } from "@hono/zod-openapi";
 import { PRODUCT_CONDITION_VALUES } from "@scalius/shared/product-condition";
 import { categoryStatusSchema } from "@scalius/shared/category-publication";
 import { ORDER_SHIPMENT_RECOVERY_REASONS } from "@scalius/core/modules/orders/browser";
+import { ORDER_CHANNELS, ORDER_CHANNEL_SOURCE_MAX_LENGTH } from "@scalius/shared/order-channel";
 import {
   nullableTimestampSchema,
   optionalNullableTimestampSchema,
@@ -299,6 +300,12 @@ export const orderEditReadinessSchema = z.object({
 const orderListFactsShape = {
   orderNumber: z.number().int().nullable().openapi({ description: "Sequential store order number, shown as #1001." }),
   archivedAt: nullableTimestampSchema,
+  channel: z.enum(ORDER_CHANNELS).openapi({
+    description: "Where the order came from, set once when it was created: online_store (storefront checkout), admin (staff in the dashboard), pos, agent (a buyer's AI agent) or app.",
+  }),
+  channelSource: z.string().max(ORDER_CHANNEL_SOURCE_MAX_LENGTH).nullable().openapi({
+    description: "Where it came in within the channel, as a lowercase slug: facebook, instagram, whatsapp, phone, walk_in, the merchant's own label, or an app id.",
+  }),
   openRequestType: z.enum(["cancel_pre_shipment", "return", "refund"]).nullable(),
   cod: z.object({ status: z.string(), deliveryAttempts: z.number().int() }).nullable(),
   refundDue: z.number().openapi({ description: "Value of received returns not refunded yet." }),
@@ -500,6 +507,14 @@ export const orderDetailSchema = z.object({
   activeRefundOperation: activeRefundOperationSchema.nullable(),
   ...orderListFactsShape,
   editReadiness: orderEditReadinessSchema,
+  /** The order's own fulfilment location; null means the store default. */
+  fulfillmentLocationId: z.string().nullable(),
+  /** Where the order's stock leaves from (its own location or the default); changeable while editReadiness.details allows. */
+  fulfillmentLocation: z.object({
+    id: z.string(),
+    name: z.string(),
+    explicit: z.boolean(),
+  }).nullable(),
   supportRequests: z.array(orderSupportRequestSchema),
   pickup: orderPickupSchema.nullable(),
   /** Every fulfilment in the ledger (sent, picked up, performed), voided ones included. */

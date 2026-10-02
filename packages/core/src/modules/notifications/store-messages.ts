@@ -1,14 +1,14 @@
 // Store identity for buyer and staff messages (name, logo, language) and the
 // one-time-code message built from it.
-import type { Database } from "@scalius/database/client";
-import { checkoutLanguages } from "@scalius/database/schema";
+import { safeBatch, type Database } from "@scalius/database/client";
+import { checkoutLanguages, media, themeSettings } from "@scalius/database/schema";
 import { checkoutLanguageBaseCode } from "@scalius/shared/checkout-language";
 import { escapeHtml } from "@scalius/shared/html-escape";
-import { mediaOriginalUrl } from "@scalius/shared/media-variants";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { normalizeStorefrontOrigin } from "@scalius/shared/storefront-url";
-import { and, eq, isNull } from "drizzle-orm";
-import { businessDocument, headerDocument, platformDocument, type BusinessInfo } from "../settings/documents";
+import { and, eq, isNull, notInArray, sql } from "drizzle-orm";
+import { getCurrentPublicMediaUrl } from "../../integrations/storage";
+import { businessDocument, platformDocument, type BusinessInfo } from "../settings/documents";
 import { selectSettingsDocuments } from "../settings/settings-store";
 import { MESSAGE_COPY, type MessageLanguage } from "./message-copy";
 import { storeHeaderHtml, type EmailStore } from "./notification-templates";
@@ -55,21 +55,35 @@ export async function readStoreLanguage(db: Database): Promise<MessageLanguage> 
   return checkoutLanguageBaseCode(activeLanguage?.code) === "bn" ? "bn" : "en";
 }
 
+/**
+ * The published theme's logo as its original upload (mail clients get the
+ * file as uploaded, not a WebP rendition); null without a logo.
+ */
+function selectPublishedLogo(db: Database) {
+  return db.select({ objectKey: media.objectKey, kind: media.kind }).from(media).where(and(
+    sql`${media.id} = (SELECT json_extract(${themeSettings.colors}, '$.brand.logo') FROM ${themeSettings} WHERE ${themeSettings.id} = 'default')`,
+    notInArray(media.status, ["deleting", "deleted"]),
+  )).limit(1);
+}
+
 export async function readStoreIdentity(db: Database): Promise<StoreIdentity> {
-  const [rows, language] = await Promise.all([
-    selectSettingsDocuments(db, [businessDocument, headerDocument, platformDocument]),
+  const [[rows, logoRows], language] = await Promise.all([
+    safeBatch(db, [
+      selectSettingsDocuments(db, [businessDocument, platformDocument]),
+      selectPublishedLogo(db),
+    ]),
     readStoreLanguage(db),
   ]);
-  const [business, header, platform] = await Promise.all([
-    businessDocument.fromRows(rows),
-    headerDocument.fromRows(rows),
-    platformDocument.fromRows(rows),
+  const [business, platform] = await Promise.all([
+    businessDocument.fromRows(rows as Awaited<ReturnType<typeof selectSettingsDocuments>>),
+    platformDocument.fromRows(rows as Awaited<ReturnType<typeof selectSettingsDocuments>>),
   ]);
-  const logo = header.value.logo as { src?: unknown } | undefined;
+  const logo = (logoRows as Array<{ objectKey: string; kind: string }>).find((row) => row.kind === "image");
   const name = storeDisplayName(business.value, platform.value.storefrontUrl);
   return {
     name,
-    logoUrl: typeof logo?.src === "string" ? absoluteHttpUrl(mediaOriginalUrl(logo.src.trim())) : null,
+    // Messages leave the request (queues, cron): the Platform media URL makes the logo absolute.
+    logoUrl: logo ? absoluteHttpUrl(getCurrentPublicMediaUrl(logo.objectKey, platform.value.mediaUrl.trim() || undefined)) : null,
     language,
     business: business.value,
     nameFromAddress: name !== null && !storeDisplayName(business.value, ""),

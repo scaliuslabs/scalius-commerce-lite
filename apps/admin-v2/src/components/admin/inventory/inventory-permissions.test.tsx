@@ -85,7 +85,7 @@ describe("inventory actions follow stock permissions", () => {
 
   it.each([true, false])("variants: Adjust is shown only with stock permission (%s)", async (canEdit) => {
     mocks.canEdit = canEdit;
-    await render(<VariantsTab filters={{ q: "", stock: "all" }} onFiltersChange={() => undefined} onSelectionChange={() => undefined} />);
+    await render(<VariantsTab filters={{ q: "", stock: "all", location: "" }} onFiltersChange={() => undefined} onSelectionChange={() => undefined} />);
     const button = adjustButton();
     if (canEdit) {
       expect(button?.disabled).toBe(false);

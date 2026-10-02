@@ -65,7 +65,8 @@ describe("storefront private cache policy", () => {
       "private, no-cache, no-store, must-revalidate",
     );
     await expect(response.json()).resolves.toMatchObject({
-      data: { draftRevision: 7, theme: storefrontTemplateTheme("marketplace") },
+      // The draft's brand images ride along (none named here, so no read).
+      data: { draftRevision: 7, theme: storefrontTemplateTheme("marketplace"), brand: { logo: null, footerLogo: null, favicon: null } },
     });
     expect(mocks.resolveThemePreviewSession).toHaveBeenCalledWith({}, token);
   });
@@ -144,7 +145,7 @@ describe("storefront private cache policy", () => {
     // The reads come from the stored draft, never from the caller.
     const [, options] = vi.mocked(getHomepageData).mock.calls[0]!;
     expect(options?.requests?.lists.map((list) => list.key)).toEqual(["on-sale", "newest"]);
-    expect(options?.sectionsOnly).toBe(true);
+    expect(options?.requests?.homeProductId).toBeNull();
 
     mocks.resolveThemePreviewSession.mockResolvedValue(null);
     const expired = await createTestApp().request("/api/v1/storefront/theme-preview/homepage", {

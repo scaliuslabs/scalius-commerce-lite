@@ -28,6 +28,8 @@ describe("order list response projection", () => {
         areaName: null,
         itemCount: 1,
         totalQuantity: 1,
+        channel: "admin",
+        channelSource: "facebook",
         latestShipment: {
           id: "shipment_1",
           providerId: null,
@@ -83,6 +85,8 @@ describe("order list response projection", () => {
       id: "order_1",
       createdAt: "2026-08-16T00:00:00.000Z",
       updatedAt: "2026-08-16T01:00:00.000Z",
+      channel: "admin",
+      channelSource: "facebook",
     });
     expect(result.orders[0]).not.toHaveProperty("shipmentClaimId");
     expect(result.orders[0]).not.toHaveProperty("shipmentClaimExpiresAt");

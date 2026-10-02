@@ -70,8 +70,6 @@ export const CACHE_DEP_KINDS = [
   "theme",
   /** `nav:<menuId>`, `nav:*`: published menus and placements. */
   "nav",
-  /** `hero`: hero sliders. */
-  "hero",
   /** `ship`: shipping methods and delivery zones. */
   "ship",
   /** `loc`: delivery locations. */
@@ -84,6 +82,8 @@ export const CACHE_DEP_KINDS = [
   "promo",
   /** `an`: analytics snippets. */
   "an",
+  /** `cf:<ownerType>`: the storefront-visible custom field definitions of an owner type. */
+  "cf",
   /** `t:<table>`: coarse fallback, any buyer-visible change of the table. */
   "t",
   /** `store`: everything (dashboard "clear cache", catalogue-wide rebuilds). */
@@ -140,7 +140,6 @@ export const cacheDep = {
   theme: () => "theme",
   navigation: (menuId: string) => `nav:${menuId}`,
   anyNavigation: () => `nav:${CACHE_DEP_ANY}`,
-  hero: () => "hero",
   shipping: () => "ship",
   locations: () => "loc",
   tax: () => "tax",
@@ -148,6 +147,8 @@ export const cacheDep = {
   promotion: (promotionId: string) => `promo:${promotionId}`,
   anyPromotion: () => `promo:${CACHE_DEP_ANY}`,
   analytics: () => "an",
+  /** Storefront-visible custom field definitions of one owner type (`product`, `variant`, …). */
+  customFieldDefinitions: (ownerType: string) => `cf:${ownerType}`,
   table: (table: string) => `t:${table}`,
   store: () => "store",
 } as const;
@@ -168,7 +169,7 @@ const KEY_PATTERN = /^[\x21-\x7e]{1,512}$/;
 export function isCacheDep(dep: string): boolean {
   const kind = cacheDepKind(dep);
   if (kind === null || !KEY_PATTERN.test(dep)) return false;
-  const constant = kind === "srch" || kind === "theme" || kind === "hero" || kind === "ship"
+  const constant = kind === "srch" || kind === "theme" || kind === "ship"
     || kind === "loc" || kind === "tax" || kind === "lang" || kind === "an" || kind === "store"
     || kind === "popular" || kind === "recommendation-signals";
   return constant ? dep === kind : dep.length > kind.length + 1;
@@ -569,7 +570,6 @@ const CACHE_DEP_TABLE_RULES = {
 
   // --- Content, layout and settings ---------------------------------------------
   pages: { kinds: ["pg", "lm"], noise: ["revision", "updated_at"], rules: [...everyChange(own("pg")), lastmod(own("pg"))] },
-  hero_sliders: { kinds: ["hero"], noise: ["revision", "updated_at"], rules: everyChange([{ dep: "hero" }]) },
   settings: {
     kinds: ["set"],
     noise: ["revision", "updated_at"],
@@ -639,6 +639,37 @@ const CACHE_DEP_TABLE_RULES = {
       keys: [{ prefix: "promo:", columns: ["promotion_id"] }],
     })),
   },
+  // --- Custom fields (COMMERCE-HOOKS H4) ----------------------------------------
+  custom_field_definitions: {
+    kinds: ["cf"],
+    noise: ["description", "validations", "revision", "created_at", "updated_at"],
+    note: "Public reads output a storefront-visible definition's identity, name, type and position beside its values, so a change of a visible definition (or one turning visible or hidden, through the old-image companion) advances `cf:<owner_type>`, which every reader of custom fields declares. Deleting one cascades to its values, whose own triggers then find no visible definition: this key covers them.",
+    rules: everyChange([{ prefix: "cf:", columns: ["owner_type"] }])
+      .map((rule): CacheDepRule => ({ ...rule, where: { equals: { storefront_visible: 1 } } })),
+  },
+  custom_field_values: {
+    kinds: ["p", "c", "col", "b", "pg"],
+    noise: ["updated_at"],
+    note: "A value reaches buyers only through a storefront-visible definition, on its owner's page: the owner's own keys (a SKU's value its product's). Customer and order values never do.",
+    rules: (
+      [
+        ["product", [p("owner_id")]],
+        ["variant", [{ prefix: "p:", lookup: { table: "product_variants", select: "product_id", key: "id", column: "owner_id" } }]],
+        ["category", own("c", "owner_id")],
+        ["collection", own("col", "owner_id")],
+        ["brand", own("b", "owner_id")],
+        ["page", own("pg", "owner_id")],
+      ] as const
+    ).flatMap(([ownerType, keys]) => everyChange(keys).map((rule): CacheDepRule => ({
+      ...rule,
+      name: `${ownerType}_${rule.name}`,
+      where: {
+        equals: { owner_type: ownerType },
+        exists: "SELECT 1 FROM custom_field_definitions AS cf_definition WHERE cf_definition.id = R.definition_id AND cf_definition.storefront_visible = 1",
+      },
+    }))),
+  },
+
   product_recommendations: {
     kinds: ["rec"], noise: ["computed_at"],
     rules: everyChange([{ prefix: "rec:", columns: ["product_id"] }]),
@@ -712,13 +743,14 @@ export const CACHE_DEP_EXEMPT_TABLES: Readonly<Record<string, string>> = {
   scalius_schema_migrations: "Schema ledger; a release changes the Worker version, which is in every cache key.",
   inventory_movements: DERIVED_STOCK,
   inventory_operations: DERIVED_STOCK,
+  inventory_levels: DERIVED_STOCK,
+  inventory_locations: "Where physical stock is held; buyers see SKU availability bands, never locations.",
   product_low_stock_alerts: DERIVED_STOCK,
   // Drafts and history.
   theme_settings_drafts: DRAFTS,
   theme_settings_versions: DRAFTS,
   theme_preview_sessions: DRAFTS,
   navigation_menu_items: DRAFTS,
-  hero_sections: "Legacy hero configuration; public reads use hero_sliders.",
   media_folders: "Dashboard organisation of media; never shown to buyers.",
   media_upload_sessions: PRIVATE,
   media_upload_parts: PRIVATE,
@@ -766,6 +798,15 @@ export const CACHE_DEP_EXEMPT_TABLES: Readonly<Record<string, string>> = {
   meta_capi_purchase_outbox: PRIVATE,
   notification_outbox: PRIVATE,
   notification_delivery_receipts: PRIVATE,
+  event_outbox: PRIVATE,
+  webhook_subscriptions: PRIVATE,
+  webhook_event_deliveries: PRIVATE,
+  // Plugin runtime (P1). Storefront plugin surfaces declare their own keys when they ship.
+  plugin_installations: PRIVATE,
+  plugin_registrations: PRIVATE,
+  plugin_records: PRIVATE,
+  plugin_kv: PRIVATE,
+  plugin_log_entries: PRIVATE,
   user: PRIVATE,
   session: PRIVATE,
   account: PRIVATE,

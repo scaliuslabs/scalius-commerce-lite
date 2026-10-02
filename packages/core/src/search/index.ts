@@ -13,11 +13,8 @@ import {
   quickAddEligibleSql,
 } from "../modules/products/buyer-projection";
 import { publicCategoryConditions } from "../modules/categories/categories.publication";
-import {
-  storeCurrencyCodeSql,
-  storeDecimalPlacesFromCode,
-  storeDecimalToMinorSql,
-} from "../modules/products/money";
+import { storeDecimalToMinorSql } from "../modules/products/money";
+import { storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../modules/settings/store-money";
 import { fromMinor } from "@scalius/shared/money";
 import { getCurrentMediaUrl } from "../integrations/storage";
 import { suggestSearchCorrection } from "./correct";

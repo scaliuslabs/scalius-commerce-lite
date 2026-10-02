@@ -29,6 +29,9 @@ describe("scanner auth helpers", () => {
     expect(isAllowedScannerApiRequest("/api/v1/admin/inventory/scanner/lookup", "GET")).toBe(true);
     expect(isAllowedScannerApiRequest("/admin/inventory/stock-adjust", "POST")).toBe(true);
     expect(isAllowedScannerApiRequest("/admin/inventory/stock-set", "POST")).toBe(true);
+    expect(isAllowedScannerApiRequest("/api/v1/admin/inventory/locations", "GET")).toBe(true);
+    expect(isAllowedScannerApiRequest("/api/v1/admin/inventory/locations", "POST")).toBe(false);
+    expect(isAllowedScannerApiRequest("/api/v1/admin/inventory/locations/loc_1/archive", "POST")).toBe(false);
     expect(isAllowedScannerApiRequest("/api/v1/admin/inventory/variant_1/adjust", "POST")).toBe(false);
     expect(isAllowedScannerApiRequest("/api/v1/admin/inventory", "GET")).toBe(false);
   });

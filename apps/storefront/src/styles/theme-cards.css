@@ -9,8 +9,9 @@
  * The standard card follows the theme's tokens (radius, surface, photo ratio
  * and fit) and stays pixel-identical. Every other card carries its own look
  * as custom properties on its root (anatomy.astro: --pc-ratio, --pc-fit,
- * --pc-radius, --pc-title-*, --pc-price-*, from STOREFRONT_CARD_LOOKS) and
- * is drawn below per `data-card-variant`, after its reference site.
+ * --pc-radius, --pc-title-*, --pc-price-*, from STOREFRONT_CARD_LOOKS; the
+ * photo's --pc-inset and --pc-photo-max, from card-model.ts) and is drawn
+ * below per `data-card-variant`, after its reference site.
  */
 
 /* Product cards: the surface language per Style. Card corners follow the
@@ -1100,9 +1101,10 @@
   aspect-ratio: 1;
 }
 
+/* --pc-photo-max: CARD_PHOTO_MAX_PX, the width the image `sizes` name. */
 .site-root .product-card[data-card-variant="mall"] .product-card-photo {
   display: block;
-  width: min(10.625rem, 100%);
+  width: min(var(--pc-photo-max), 100%);
   padding: 0;
   margin-inline: auto;
 }

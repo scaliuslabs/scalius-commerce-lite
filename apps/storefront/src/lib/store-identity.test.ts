@@ -16,10 +16,10 @@ describe("store identity", () => {
     expect(resolveStoreName(undefined)).toBeNull();
   });
 
-  it("prefers the Business settings phone over the header field", () => {
-    expect(resolveStorePhone({ phone: "01774452222" }, "01600608630")).toBe("01774452222");
-    expect(resolveStorePhone({ phone: " " }, "01600608630")).toBe("01600608630");
-    expect(resolveStorePhone(null, "")).toBeNull();
+  it("reads the support phone from Business settings only", () => {
+    expect(resolveStorePhone({ phone: " 01774452222 " })).toBe("01774452222");
+    expect(resolveStorePhone({ phone: " " })).toBeNull();
+    expect(resolveStorePhone(null)).toBeNull();
   });
 
   it("applies one `Page | Store` title template and never a second brand", () => {
@@ -50,18 +50,14 @@ describe("store identity", () => {
     expect(whatsappHref("")).toBeNull();
   });
 
-  it("merges header and footer socials into one set and fixes numberless WhatsApp links", () => {
+  it("keeps the Business settings profiles once each and fixes numberless WhatsApp links", () => {
     const links = resolveStoreSocialLinks(
       [
-        [
-          { label: "Facebook", url: "facebook.com/store" },
-          { label: "WhatsApp", url: "https://web.whatsapp.com/" },
-        ],
-        [
-          { label: "Facebook", url: "https://facebook.com/store/" },
-          { label: "YouTube", url: "https://youtube.com/@store" },
-          { label: "Chat", url: "https://wa.me/8801711111111" },
-        ],
+        { id: "fb", label: "Facebook", url: "facebook.com/store" },
+        { id: "wa", label: "WhatsApp", url: "https://web.whatsapp.com/" },
+        { id: "fb-2", label: "Facebook", url: "https://facebook.com/store/" },
+        { id: "yt", label: "YouTube", url: "https://youtube.com/@store" },
+        { id: "chat", label: "Chat", url: "https://wa.me/8801711111111" },
       ],
       "01600608630",
     );
@@ -74,6 +70,7 @@ describe("store identity", () => {
   });
 
   it("drops a numberless WhatsApp link when the store has no phone", () => {
-    expect(resolveStoreSocialLinks([[{ label: "WhatsApp", url: "https://web.whatsapp.com" }]], null)).toEqual([]);
+    expect(resolveStoreSocialLinks([{ id: "wa", label: "WhatsApp", url: "https://web.whatsapp.com" }], null)).toEqual([]);
+    expect(resolveStoreSocialLinks(undefined, "01600608630")).toEqual([]);
   });
 });

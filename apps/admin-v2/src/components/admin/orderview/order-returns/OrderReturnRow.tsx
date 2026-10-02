@@ -1,8 +1,10 @@
+import { useQuery } from "@tanstack/react-query";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { useMessages } from "~/i18n";
 import { orderDetailMessages } from "~/i18n/order-detail";
 import { useReconcileOrderReturn } from "~/lib/api-mutations/orders";
+import { hasSeveralLocations, inventoryLocationsQueryOptions } from "~/lib/api-query-options/inventory-locations";
 import { getOutstandingReceiptQuantity, type OrderReturnDto } from "~/lib/order-return-workflow";
 import { formatOrderTimestamp } from "../formatters";
 import { statusBadgeVariant } from "../status-badges";
@@ -33,6 +35,12 @@ export function OrderReturnRow({
     && orderReturn.lines.some((line) => getOutstandingReceiptQuantity(line) > 0);
   const trackedLineIds = new Set(orderReturn.lines.filter((line) => line.inventoryTracked).map((line) => line.id));
   const courierReturn = orderReturn.source === "cod_return_to_sender";
+  // A store with several locations sees where each receipt's units went back into stock.
+  const restocked = orderReturn.receipts.some((receipt) => receipt.restockQuantity > 0 && receipt.restockLocationId);
+  const { data: locations } = useQuery({ ...inventoryLocationsQueryOptions(true), enabled: restocked });
+  const locationName = (id: string | null) => (id && hasSeveralLocations(locations)
+    ? locations?.find((location) => location.id === id)?.name ?? null
+    : null);
 
   return (
     <li className="space-y-2 py-3">
@@ -102,17 +110,21 @@ export function OrderReturnRow({
       </ul>
       {orderReturn.receipts.length > 0 ? (
         <ul className="space-y-1 text-muted-foreground">
-          {orderReturn.receipts.map((receipt) => (
-            <li key={receipt.id}>
-              {formatOrderTimestamp(receipt.createdAt)} · {trackedLineIds.has(receipt.returnLineId)
-                ? t("returns.receipt", {
-                    received: receipt.receivedQuantity,
-                    restocked: receipt.restockQuantity,
-                    damaged: receipt.damagedQuantity,
-                  })
-                : t("returns.qtyReceived", { count: receipt.receivedQuantity })}
-            </li>
-          ))}
+          {orderReturn.receipts.map((receipt) => {
+            const restockedAt = receipt.restockQuantity > 0 ? locationName(receipt.restockLocationId) : null;
+            return (
+              <li key={receipt.id}>
+                {formatOrderTimestamp(receipt.createdAt)} · {trackedLineIds.has(receipt.returnLineId)
+                  ? t("returns.receipt", {
+                      received: receipt.receivedQuantity,
+                      restocked: receipt.restockQuantity,
+                      damaged: receipt.damagedQuantity,
+                    })
+                  : t("returns.qtyReceived", { count: receipt.receivedQuantity })}
+                {restockedAt ? ` · ${t("returns.restockedAt", { location: restockedAt })}` : null}
+              </li>
+            );
+          })}
         </ul>
       ) : null}
       {orderReturn.notes ? <p className="text-muted-foreground">{orderReturn.notes}</p> : null}

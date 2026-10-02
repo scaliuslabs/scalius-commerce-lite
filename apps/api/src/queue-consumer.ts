@@ -16,6 +16,7 @@
 //   auth.send_otp    → inline below (WhatsApp + email; SMS providers TBD)
 //   media.render_variants → core media renderMissingMediaVariants (delayed after upload)
 //   catalog.recommendations.refresh / catalog.projections.rebuild → ./utils/catalog-jobs.ts
+//   events.dispatch / webhooks.deliver → ./events/dispatch.ts (event outbox id / delivery id only)
 //
 // TODO: When 5-6 SMS providers are implemented, extract auth.send_otp to
 //       src/modules/notifications/otp.handler.ts
@@ -93,6 +94,7 @@ import {
   type PaymentWebhookDlqEvidence,
 } from "./utils/webhook-idempotency";
 import type { PaymentEventQueueMessage } from "./routes/payment/payment-events";
+import type { EventsQueueMessage } from "@scalius/core/modules/events";
 
 type PaymentConfirmationResult = Awaited<ReturnType<typeof processPaymentConfirmed>>;
 type PaymentWebhookCompletionStatus = "processed" | "manual_reconciliation";
@@ -309,7 +311,23 @@ export async function handleQueueBatch(
   }
 
   logQueueBatchCompleted(batchContext, acked, retried);
+
+  // Payment events and automatic fulfilment write orders, payments,
+  // fulfilments and stock: hand the event rows they produced to the queue
+  // now. Other jobs write no evented table; the scheduled sweep is the
+  // backstop either way.
+  if (batch.messages.some((msg) => EVENT_WRITING_MESSAGE_TYPES.has(String((msg.body as { type?: unknown }).type)))) {
+    const flush = import("./events/flush")
+      .then(({ flushEventsAfterWrite }) => flushEventsAfterWrite(db, env))
+      .catch((error: unknown) => {
+        console.warn("[Queue] Event outbox flush failed; the scheduled sweep retries:", error instanceof Error ? error.message : "unknown error");
+      });
+    if (executionCtx && typeof executionCtx.waitUntil === "function") executionCtx.waitUntil(flush);
+    else await flush;
+  }
 }
+
+const EVENT_WRITING_MESSAGE_TYPES: ReadonlySet<string> = new Set(["payment.event", "order.auto_fulfil"]);
 
 /**
  * `jobs-dlq` consumer: a message that exhausted its retries is archived into
@@ -365,6 +383,17 @@ async function archiveJobsDlqMessage(
   }
   if (payload.type === "auth.send_otp") {
     return (await archiveAuthOtpDlqMessage(msg as Message<AuthOtpQueueMessage>, db, env)).status;
+  }
+  if (payload.type === "events.dispatch") {
+    const { deadLetterEventFromQueue } = await import("@scalius/core/modules/events");
+    const marked = await deadLetterEventFromQueue(db, payload.eventId, `events_dlq_terminal: queue message ${msg.id} exhausted after ${msg.attempts} attempts`);
+    return marked ? "event_dead_lettered" : "event_settled";
+  }
+  if (payload.type === "webhooks.deliver") {
+    // The delivery row owns its retries: release it to the scheduled flush.
+    const { releaseWebhookDeliveryFromQueue } = await import("@scalius/core/modules/events");
+    const released = await releaseWebhookDeliveryFromQueue(db, payload.deliveryId, `webhooks_dlq_terminal: queue message ${msg.id} exhausted after ${msg.attempts} attempts`);
+    return released ? "delivery_released" : "delivery_settled";
   }
   return "ignored";
 }
@@ -759,6 +788,17 @@ async function processQueueMessage(
       break;
     }
 
+    // ── Event outbox and webhooks (COMMERCE-HOOKS H3) ─────────────────────
+    // Ids only. Delivery failures retry from their own rows (backoff); only
+    // infrastructure errors throw for a queue retry.
+
+    case "events.dispatch":
+    case "webhooks.deliver": {
+      const { processEventsQueueMessage } = await import("./events/dispatch");
+      await processEventsQueueMessage(payload, db, env);
+      break;
+    }
+
     default: {
       const messageType = (payload as Record<string, unknown>).type;
       console.warn("[Queue] Unsupported message type:", messageType);
@@ -778,7 +818,8 @@ export type QueueBody =
   | NotificationQueueMessage
   | MediaVariantsQueueMessage
   | CatalogQueueMessage
-  | OrderAutoFulfilQueueMessage;
+  | OrderAutoFulfilQueueMessage
+  | EventsQueueMessage;
 type PaymentOnlyQueueMessage = Extract<PaymentQueueMessage, { type: `payment.${string}` }>;
 
 function isPaymentQueuePayload(payload: QueueBody): payload is PaymentOnlyQueueMessage {

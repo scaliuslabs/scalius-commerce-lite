@@ -303,10 +303,9 @@ async function main() {
     }
     const store = JSON.parse(readFileSync(join(stateDir, STORE_FILE), "utf8"));
     if (["api", "storefront", "admin", "media"].some((k) => store.ports?.[k] !== opts.ports[k])) {
-      // Hero banner URLs and the Platform document carry the stack's origins.
+      // The Platform document carries the stack's origins (theme slides name media ids, no host).
       const d = openDb(stateDir);
       const { syncPlatform } = await import("./seed-large.mjs");
-      d.prepare("UPDATE hero_sliders SET images = replace(images, ?, ?)").run(`http://localhost:${store.ports.media}/`, `http://localhost:${opts.ports.media}/`);
       d.prepare("DELETE FROM settings WHERE category = 'platform'").run();
       await syncPlatform(d, opts.ports);
       d.close();

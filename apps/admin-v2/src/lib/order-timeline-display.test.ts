@@ -63,4 +63,12 @@ describe("order timeline wording", () => {
     expect(describe_("return_received", { received: 2, restocked: 2, damaged: 0 }).text).toBe("Returned items received (2)");
     expect(describe_("parcel_returned", { quantity: 2 }).text).toBe("Parcel came back: 2 items are unsent again");
   });
+
+  it("names where the order ships from now and where it shipped from before", () => {
+    expect(describe_("fulfillment_location_changed", { fromName: "Main location", toName: "Banani store" })).toEqual({
+      text: "Set to ship from Banani store",
+      detail: "Was Main location",
+    });
+    expect(describe_("fulfillment_location_changed", { fromName: "Main location", toName: "Main location" }).detail).toBeNull();
+  });
 });

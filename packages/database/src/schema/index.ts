@@ -30,3 +30,6 @@ export * from "./reviews";
 export * from "./digital";
 export * from "./gift-cards";
 export * from "./warranty";
+export * from "./events";
+export * from "./custom-fields";
+export * from "./plugins";

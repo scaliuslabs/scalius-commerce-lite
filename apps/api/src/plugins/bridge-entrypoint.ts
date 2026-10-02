@@ -1,0 +1,135 @@
+// `PluginBridge`: the bridge as a WorkerEntrypoint, re-exported by the Worker
+// entry (src/worker.ts) so the sandbox loader can bind it through
+// `ctx.exports.PluginBridge({ props })`. Props are set by the host per
+// invocation; a sandboxed plugin holds only the resulting stub. The methods
+// delegate to the same `PluginBridgeHost` the bundled loader calls
+// in-process. Lazily loaded: importing this module loads no host code.
+
+import { WorkerEntrypoint } from "cloudflare:workers";
+import type { PluginApiResult, PluginStorageQuery } from "@scalius/plugin-sdk";
+import type { PluginStorageQueryResult } from "@scalius/core/modules/plugins";
+import type {
+  PluginBridgeApi,
+  PluginBridgeEnvironment,
+  PluginBridgeProps,
+  PluginHttpInit,
+  PluginHttpResult,
+} from "./bridge";
+
+const PLUGIN_ID = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?$/;
+
+function requireProps(props: unknown): PluginBridgeProps {
+  const candidate = props as Partial<PluginBridgeProps> | undefined;
+  if (
+    !candidate ||
+    typeof candidate.pluginId !== "string" ||
+    !PLUGIN_ID.test(candidate.pluginId) ||
+    typeof candidate.version !== "string" ||
+    typeof candidate.authority !== "object" ||
+    candidate.authority === null
+  ) {
+    throw new Error("[internal] The plugin bridge was bound without an installation.");
+  }
+  return candidate as PluginBridgeProps;
+}
+
+/** The bridge's database and env for one invocation (the request's own bindings). */
+async function workerEnvironment(env: Env, ctx: ExecutionContext): Promise<PluginBridgeEnvironment> {
+  const { getDb } = await import("@scalius/database/client");
+  let composed: Promise<Env> | null = null;
+  const db = getDb(env);
+  return {
+    env,
+    ctx,
+    db: () => db,
+    composedEnv: () => {
+      composed ??= import("../runtime/runtime-env").then(({ composeApiRuntimeEnv }) => composeApiRuntimeEnv(env));
+      return composed;
+    },
+  };
+}
+
+/**
+ * Only the capability methods below are RPC-callable. Everything else lives in
+ * instance fields or `#private` members, which Workers RPC never exposes: a
+ * plugin holding the stub cannot reach the env, the database or the props.
+ */
+export class PluginBridge extends WorkerEntrypoint<Env, PluginBridgeProps> implements PluginBridgeApi {
+  #hostInstance: Promise<PluginBridgeApi> | null = null;
+
+  /** An instance field, not a method, so it is never RPC-callable; the sandbox test harness replaces it. */
+  protected readonly environment: () => Promise<PluginBridgeEnvironment> = () => workerEnvironment(this.env, this.ctx);
+
+  #host(): Promise<PluginBridgeApi> {
+    this.#hostInstance ??= (async () => {
+      const props = requireProps(this.ctx.props);
+      const [{ PluginBridgeHost }, environment] = await Promise.all([import("./bridge"), this.environment()]);
+      return new PluginBridgeHost(props, environment);
+    })();
+    return this.#hostInstance;
+  }
+
+  async apiCall(operationId: string, input?: unknown): Promise<PluginApiResult> {
+    return (await this.#host()).apiCall(operationId, input);
+  }
+
+  async storageGet(collection: string, id: string): Promise<Record<string, unknown> | null> {
+    return (await this.#host()).storageGet(collection, id);
+  }
+
+  async storagePut(collection: string, id: string, record: unknown): Promise<void> {
+    return (await this.#host()).storagePut(collection, id, record);
+  }
+
+  async storageDelete(collection: string, id: string): Promise<boolean> {
+    return (await this.#host()).storageDelete(collection, id);
+  }
+
+  async storageQuery(collection: string, query?: PluginStorageQuery): Promise<PluginStorageQueryResult> {
+    return (await this.#host()).storageQuery(collection, query);
+  }
+
+  async storageCount(collection: string, where?: PluginStorageQuery["where"]): Promise<number> {
+    return (await this.#host()).storageCount(collection, where);
+  }
+
+  async kvGet(key: string): Promise<unknown> {
+    return (await this.#host()).kvGet(key);
+  }
+
+  async kvSet(key: string, value: unknown, options?: { ttlSeconds?: number }): Promise<void> {
+    return (await this.#host()).kvSet(key, value, options);
+  }
+
+  async kvDelete(key: string): Promise<void> {
+    return (await this.#host()).kvDelete(key);
+  }
+
+  async kvList(prefix?: string): Promise<string[]> {
+    return (await this.#host()).kvList(prefix);
+  }
+
+  async httpFetch(url: string, init?: PluginHttpInit): Promise<PluginHttpResult> {
+    return (await this.#host()).httpFetch(url, init);
+  }
+
+  async customFieldsGet(ownerType: string, ownerId: string): Promise<Record<string, unknown>> {
+    return (await this.#host()).customFieldsGet(ownerType, ownerId);
+  }
+
+  async customFieldsSet(ownerType: string, ownerId: string, values: Record<string, unknown>): Promise<void> {
+    return (await this.#host()).customFieldsSet(ownerType, ownerId, values);
+  }
+
+  async messagingEmail(input: Parameters<PluginBridgeApi["messagingEmail"]>[0]): Promise<{ queued: boolean }> {
+    return (await this.#host()).messagingEmail(input);
+  }
+
+  async messagingSms(input: Parameters<PluginBridgeApi["messagingSms"]>[0]): Promise<{ queued: boolean }> {
+    return (await this.#host()).messagingSms(input);
+  }
+
+  async messagingNotifyStaff(input: Parameters<PluginBridgeApi["messagingNotifyStaff"]>[0]): Promise<void> {
+    return (await this.#host()).messagingNotifyStaff(input);
+  }
+}

@@ -22,6 +22,19 @@ describe("order list search", () => {
     expect(orderViewUpdates("ready_for_pickup")).toMatchObject({ view: "ready_for_pickup", deliveryMethod: undefined });
   });
 
+  it("filters by sales channel and counts it, dropping unknown channels", () => {
+    const search = validateOrderSearch({ channel: "admin" });
+    expect(search.channel).toBe("admin");
+    expect(orderListQuery(search, "").channel).toBe("admin");
+    expect(countOrderFilters(search)).toBe(1);
+    expect(orderListQuery(base, "").channel).toBeUndefined();
+    for (const channel of ["online_store", "admin", "pos", "agent", "app"]) {
+      expect(validateOrderSearch({ channel }).channel).toBe(channel);
+    }
+    expect(validateOrderSearch({ channel: "dashboard" }).channel).toBeUndefined();
+    expect(orderViewUpdates("unpaid")).toMatchObject({ view: "unpaid", channel: undefined });
+  });
+
   it("defaults to newest first and keeps unknown tabs, filters and any search term out", () => {
     const search = validateOrderSearch({
       view: "everything",

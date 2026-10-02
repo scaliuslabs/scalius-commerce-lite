@@ -1,7 +1,12 @@
 ---
+// The cart and checkout header: the theme's logo (the request theme, so a
+// draft preview shows its own) with the store name as its alt text, or the
+// store name in text.
 import type { LayoutData } from "@/lib/api";
 import { mediaImageUrl } from "@/lib/media-url";
 import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
+import { resolveRequestTheme } from "@/lib/storefront-theme-context";
+import { resolveStoreName } from "@/lib/store-identity";
 
 interface Props {
   layoutData: LayoutData | null;
@@ -9,12 +14,9 @@ interface Props {
 }
 
 const { layoutData, copy } = Astro.props;
-const logo = layoutData?.header?.logo ?? { src: "", alt: "" };
-const merchantName =
-  layoutData?.business?.companyName?.trim()
-  || layoutData?.business?.legalName?.trim()
-  || logo.alt?.trim()
-  || copy.pageTitle;
+const { brand } = await resolveRequestTheme(Astro, layoutData);
+const logoSrc = brand.logo?.url ?? "";
+const merchantName = resolveStoreName(layoutData?.business) || copy.pageTitle;
 ---
 
 <header class="border-b border-border bg-background">
@@ -26,10 +28,10 @@ const merchantName =
       aria-label={copy.homeAriaLabel}
     >
       {
-        logo.src ? (
+        logoSrc ? (
           <img
-            src={mediaImageUrl(logo.src, 320)}
-            alt={logo.alt || merchantName}
+            src={mediaImageUrl(logoSrc, 320)}
+            alt={merchantName}
             width="120"
             height="48"
             class="h-8 w-auto max-w-40 object-contain sm:h-9 sm:max-w-48"

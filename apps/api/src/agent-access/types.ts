@@ -19,6 +19,27 @@ export interface AgentPrincipal {
   expiresAt: Date;
 }
 
+/**
+ * An installed plugin calling `/api/v1` operations through the same dispatch
+ * and admin authorization path as agents (apps/api/src/plugins/authority.ts).
+ * Its authority is the installation's approved grant intersected with the
+ * live, plugin-grantable RBAC catalog; route writes are recorded as the Super
+ * Admin who approved that grant, audit rows name the plugin.
+ */
+export interface PluginPrincipal {
+  kind: "plugin";
+  pluginId: string;
+  version: string;
+  pluginName: string;
+  /** The approving Super Admin: the acting user of every route write. */
+  actorUserId: string;
+  permissions: Set<string>;
+  riskCeiling: AgentRisk;
+}
+
+/** Every non-human principal the operation dispatcher serves. */
+export type OperationPrincipal = AgentPrincipal | PluginPrincipal;
+
 export interface AgentOAuthProps {
   grantId: string;
   credentialId?: string;
@@ -84,6 +105,8 @@ export interface AgentManifestAuthorizationInput {
 export interface AgentAuditInput {
   eventId?: string;
   grantId: string | null;
+  /** Set for plugin principals, which carry no grant. */
+  pluginId?: string | null;
   credentialId?: string | null;
   ownerUserId?: string | null;
   resource?: AgentResource | null;

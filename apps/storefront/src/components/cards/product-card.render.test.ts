@@ -7,6 +7,7 @@
  * title, every optional fact, and facts at zero. Layout on real viewports
  * needs a browser; this checks the markup each anatomy promises.
  */
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Window } from "happy-dom";
@@ -25,7 +26,7 @@ import {
   type StorefrontThemeDocument,
 } from "@scalius/shared/storefront-theme";
 import { requestThemeFor } from "@/lib/storefront-theme-context";
-import { CARD_IMAGE_DIMENSIONS, KEY_SPECS_MAX } from "./card-model";
+import { CARD_IMAGE_DIMENSIONS, CARD_PHOTO_MAX_PX, KEY_SPECS_MAX } from "./card-model";
 
 // ─── Harness ──────────────────────────────────────────────────────────────
 
@@ -626,7 +627,19 @@ describe("product card matrix", () => {
     expect(onSale.getAttribute("style")).toContain("--pc-price-d:20px");
     expect(onSale.getAttribute("style")).toContain("--pc-price-w:400");
     expect(onSale.querySelector(".product-card-name")?.classList.contains("line-clamp-2")).toBe(true);
-    expect(onSale.querySelector(".product-card-photo")?.getAttribute("sizes")).toContain("170px");
+    // One number for the drawn photo and its `sizes`: the CSS caps the photo
+    // at the --pc-photo-max the card sets from CARD_PHOTO_MAX_PX.
+    const photoMax = CARD_PHOTO_MAX_PX.mall;
+    expect(photoMax).toBe(170);
+    expect(onSale.getAttribute("style")).toContain(`--pc-photo-max:${photoMax}px`);
+    expect(onSale.querySelector(".product-card-photo")?.getAttribute("sizes")).toMatch(new RegExp(`(^|\\s)${photoMax}px$`));
+    const css = readFileSync(new URL("../../styles/theme-cards.css", import.meta.url), "utf8");
+    expect(css).toMatch(
+      /\.product-card\[data-card-variant="mall"\] \.product-card-photo \{[^}]*width: min\(var\(--pc-photo-max\), 100%\);/,
+    );
+    // Only the fixed-width card sets it.
+    const spec = await renderCards(themeWith("spec", {}));
+    expect(spec.onSale.getAttribute("style")).not.toContain("--pc-photo-max");
   });
 
   it("asks for options on a spec card only when a SKU choice is required", async () => {

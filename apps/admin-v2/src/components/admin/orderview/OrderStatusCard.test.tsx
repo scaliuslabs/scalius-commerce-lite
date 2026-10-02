@@ -68,6 +68,16 @@ describe("OrderStatusCard", () => {
     await act(async () => option!.click());
   }
 
+  it.each([
+    ["online_store", null, "From Online store"],
+    ["agent", null, "From AI agent"],
+    ["admin", "walk_in", "From Dashboard · Walk-in"],
+    ["admin", "daraz_shop", "From Dashboard · daraz_shop"],
+  ] as const)("says where a %s order (source %s) came from", async (channel, channelSource, text) => {
+    await act(async () => root.render(<OrderStatusCard order={{ ...order, channel, channelSource }} />));
+    expect(host.textContent).toContain(text);
+  });
+
   it("changes forward statuses in one step", async () => {
     await act(async () => root.render(<OrderStatusCard order={order} />));
     await chooseStatus(o["status.confirmed"]);

@@ -292,15 +292,18 @@ describe("route permissions", () => {
     )).toEqual({ permission: PERMISSIONS.SETTINGS_GENERAL_EDIT });
   });
 
-  it("separates homepage presentation reads from mutations", () => {
-    expect(getRoutePermission(
+  it("keeps the look on the theme routes: no header, footer, homepage or hero settings routes remain", () => {
+    for (const path of [
       "/api/v1/admin/settings/homepage-presentation",
-      "GET",
-    )).toEqual({ permission: PERMISSIONS.SETTINGS_GENERAL_VIEW });
-    expect(getRoutePermission(
-      "/api/v1/admin/settings/homepage-presentation",
-      "POST",
-    )).toEqual({ permission: PERMISSIONS.SETTINGS_GENERAL_EDIT });
+      "/api/v1/admin/settings/header",
+      "/api/v1/admin/settings/footer",
+      "/api/v1/admin/settings/general",
+      "/api/v1/admin/settings/hero-sliders",
+    ]) {
+      expect(getRoutePermission(path, "GET"), path).toBeNull();
+    }
+    expect(getRoutePermission("/api/v1/admin/settings/theme/draft", "POST"))
+      .toEqual({ permission: PERMISSIONS.SETTINGS_GENERAL_EDIT });
   });
 
   it("separates checkout flow reads from versioned mutations", () => {
@@ -327,7 +330,7 @@ describe("route permissions", () => {
       expect(allowed([], path)).toBe(false);
     }
     expect(allowed(orderClerk, "/api/v1/admin/settings/business")).toBe(false);
-    expect(allowed(orderClerk, "/api/v1/admin/settings/general")).toBe(false);
+    expect(allowed(orderClerk, "/api/v1/admin/settings/theme/workspace")).toBe(false);
   });
 
   it("opens exactly the reads a view-only product page needs", () => {

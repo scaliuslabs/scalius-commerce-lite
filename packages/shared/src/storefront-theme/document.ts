@@ -1,6 +1,7 @@
-// The storefront theme document (version 5): the template it is based on,
-// the tokens, one variant per block (plus the shared navigation source and
-// the listing's filter style) and the page sections. The dashboard
+// The storefront theme document (version 6): the template it is based on
+// (a label: no renderer reads it), the tokens, one variant per block (plus
+// the shared navigation source, the listing's filter style and page chrome)
+// and the page sections. The dashboard
 // and a future builder write it; the storefront renders it. Contract:
 // ../storefront-theme.md. `storefrontThemeDocumentSchema` is the only way in.
 import { z } from "zod";
@@ -22,10 +23,11 @@ import {
   type StorefrontBlockSlot,
   type StorefrontThemeBlocks,
 } from "./blocks";
+import { storefrontThemeBrandSchema } from "./brand";
 import { storefrontSectionListSchema } from "./sections";
 import { buildStorefrontTokenCss, storefrontThemeTokensSchema, type StorefrontThemeTokens } from "./tokens";
 
-export const STOREFRONT_THEME_DOCUMENT_VERSION = 5 as const;
+export const STOREFRONT_THEME_DOCUMENT_VERSION = 6 as const;
 
 /** Templates are named by archetype, never by the site they were measured on. */
 export const STOREFRONT_TEMPLATE_IDS = [
@@ -89,12 +91,30 @@ export function storefrontContrastRoleToken(
   return role;
 }
 
+/**
+ * What `/` shows: the homepage sections, or one product's page (a single
+ * product store, the BD F-commerce shape). `product` answers `/` with a
+ * redirect to that product's own URL (its canonical), so the page has one
+ * address; while the product is not public, `/` renders the sections.
+ */
+export const storefrontHomeModeSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("sections") }).strict(),
+  z.object({ kind: z.literal("product"), productId: z.string().trim().min(1).max(64) }).strict(),
+]);
+export type StorefrontHomeMode = z.infer<typeof storefrontHomeModeSchema>;
+
 /** The complete, strict theme document schema. Writes and reads both use it. */
 export const storefrontThemeDocumentSchema = z.object({
   version: z.literal(STOREFRONT_THEME_DOCUMENT_VERSION),
-  /** The template the document is based on; it stays when blocks or tokens change. */
+  /**
+   * The template the document is based on; it stays when blocks or tokens
+   * change. A label only: every behaviour is a block, setting or token, so
+   * blocks from any template (or a builder) mix freely.
+   */
   template: z.enum(STOREFRONT_TEMPLATE_IDS),
   tokens: storefrontThemeTokensSchema,
+  /** The logo, its width, the footer logo and the tab icon (media ids). */
+  brand: storefrontThemeBrandSchema,
   blocks: storefrontThemeBlocksSchema,
   /**
    * Page sections. Only the homepage has sections today; a landing page
@@ -103,6 +123,8 @@ export const storefrontThemeDocumentSchema = z.object({
    */
   pages: z.object({
     home: storefrontSectionListSchema,
+    /** What `/` shows: the sections, or one product's page. */
+    homeMode: storefrontHomeModeSchema,
   }).strict(),
 }).strict().superRefine((document, context) => {
   for (const { text, surface, ratio } of listStorefrontThemeDocumentContrastProblems(document)) {

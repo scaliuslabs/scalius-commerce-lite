@@ -68,7 +68,6 @@ const savedCollection: Partial<CollectionFormValues> = {
     categoryIds: [],
     productIds: ["prod_panjabi", "prod_sari"],
     featuredProductId: "prod_featured",
-    showOnHomepage: true,
     maxProducts: 8,
     title: "Eid picks",
     subtitle: "",
@@ -229,7 +228,6 @@ describe("CollectionForm", () => {
         source: "manual",
         productIds: ["prod_sari", "prod_panjabi"],
         featuredProductId: "prod_featured",
-        showOnHomepage: true,
       },
     });
     await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith("Collection saved"));
@@ -415,13 +413,11 @@ describe("CollectionForm", () => {
     expect(host.textContent).toContain("2 categories (max 90)");
   });
 
-  it("shows homepage options once the collection is on the homepage", async () => {
+  it("shows its display options and says nothing about the homepage (the theme picks collections)", async () => {
     await render({ defaultValues: { name: "Gifts" } });
-    expect(host.textContent).not.toContain("Products shown");
-
-    await click(host.querySelector<HTMLButtonElement>('button[role="switch"]')!);
-    await waitFor(() => expect(host.textContent).toContain("Products shown"));
-    expect(host.textContent).toContain("Appears once the collection is active.");
+    expect(host.textContent).toContain("Display");
+    expect(host.textContent).toContain("Products shown");
+    expect(host.textContent).not.toMatch(/homepage/i);
     expect(field("Heading").placeholder).toBe("Gifts");
     expect(host.textContent).toContain("Featured product");
 

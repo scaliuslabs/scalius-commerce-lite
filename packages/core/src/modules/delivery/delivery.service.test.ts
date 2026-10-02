@@ -16,6 +16,12 @@ vi.mock("./factory", () => ({
   createProvider: mocks.createProvider,
 }));
 
+// The fake database serves only the shipment reads; the location stock
+// pre-check is covered by the fulfilment ledger D1 tests.
+vi.mock("../inventory/inventory-transitions", () => ({
+  assertOrderStockCoverable: async () => undefined,
+}));
+
 import {
   checkShipmentStatus,
   createShipment,

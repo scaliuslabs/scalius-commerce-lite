@@ -4,7 +4,9 @@ import { STOREFRONT_GALLERY_VARIANTS } from "@scalius/shared/storefront-theme";
 
 import {
   GALLERY_IMAGE_WIDTHS,
+  PORTRAIT_GALLERY_MAX_PX,
   productGalleryMainSlot,
+  productGalleryPortraitMaxPx,
   productGalleryThumbnailSlot,
   type ProductGalleryLayout,
 } from "./gallery-images";
@@ -63,7 +65,9 @@ function renderedMainWidth(
   if (layout.gallery === "stacked") return content - 345 - 40;
   if (layout.gallery === "grid") return (content - (xl ? 480 : 400) - 40 - 8) / 2;
   const span = xl ? 6 * column + 5 * 40 : 7 * column + 6 * 40;
-  const galleryWidth = layout.stageRatio === 0.75 ? Math.min(span, 404) : span;
+  // ProductGallery's CSS cap (--gallery-portrait-max) is this same number.
+  const portraitMax = productGalleryPortraitMaxPx(layout);
+  const galleryWidth = portraitMax === null ? span : Math.min(span, portraitMax);
   if (!railBeside) return galleryWidth;
   return galleryWidth - (layout.thumbnailSize === null ? (xl ? 100 : 80) + 20 : layout.thumbnailSize + 12);
 }
@@ -110,9 +114,16 @@ describe("product gallery image slots", () => {
 
   it("advertises the capped portrait width to the gallery and its LCP preload", () => {
     const { sizes } = productGalleryMainSlot(GALLERY.portrait, true);
+    expect(PORTRAIT_GALLERY_MAX_PX).toBe(404);
     expect(evaluateSizes(sizes, 390)).toBe(366);
-    expect(evaluateSizes(sizes, 1440)).toBe(404);
-    expect(evaluateSizes(sizes, 1440, 2)).toBe(404);
+    expect(evaluateSizes(sizes, 1440)).toBe(PORTRAIT_GALLERY_MAX_PX);
+    expect(evaluateSizes(sizes, 1440, 2)).toBe(PORTRAIT_GALLERY_MAX_PX);
+  });
+
+  it("caps only the portrait stage, with the one width its CSS and sizes share", () => {
+    for (const [name, layout] of layouts) {
+      expect(productGalleryPortraitMaxPx(layout), name).toBe(layout.stageRatio === 0.75 ? PORTRAIT_GALLERY_MAX_PX : null);
+    }
   });
 
   it("sizes thumbnails to their rail and caps their srcset at 296w", () => {

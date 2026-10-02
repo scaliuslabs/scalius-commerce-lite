@@ -97,6 +97,7 @@ setRuntimeImageCdnPolicy(layoutData?.media);
 const {
   theme: storefrontTheme,
   layout: themeLayout,
+  brand: themeBrand,
   previewToken: themePreviewToken,
   preview: themePreview,
 } = await resolveRequestTheme(Astro, layoutData);
@@ -138,27 +139,11 @@ const showNavigationSidebar =
   (navigationData.length > 0 || (categoryTree?.nodes.length ?? 0) > 0);
 const showMobileTabs = !hideHeader && themeLayout.mobileNavigation === "tabs";
 
-// Provide sensible defaults if API fails to prevent blank header/footer
-const headerData = layoutData?.header ?? {
-  topBar: { text: "", isEnabled: false },
-  logo: { src: "", alt: "Store" },
-  favicon: { src: "/favicon.svg", alt: "" },
-  contact: { phone: "", text: "", isEnabled: false },
-  social: [],
-};
-
-const footerData = layoutData?.footer ?? {
-  logo: { src: "", alt: "Store" },
-  favicon: { src: "/favicon.svg", alt: "" },
-  tagline: "",
-  description: "",
-  copyrightText: "Your Store",
-  menus: [],
-  social: [],
-};
-
-const faviconUrl = headerData?.favicon?.src
-  ? mediaImageUrl(headerData.favicon.src, 160)
+// The theme's brand images (the draft's under a preview): the tab icon, the
+// header logo that also stands in for a missing share image and schema logo.
+const brandLogoUrl = themeBrand.logo?.url ?? "";
+const faviconUrl = themeBrand.favicon?.url
+  ? mediaImageUrl(themeBrand.favicon.url, 160)
   : "/favicon.svg";
 
 // --- SEO: store name, Organization JSON-LD, WebSite JSON-LD (per SEO-05, SEO-06) ---
@@ -169,11 +154,8 @@ const storeSchemaName = resolveStoreName(businessInfo);
 const storefrontUrl = getAbsoluteStorefrontSeoBaseUrl();
 const storeDisplayName = resolveStoreDisplayName(businessInfo, storefrontUrl);
 const documentTitle = buildDocumentTitle(title, storeDisplayName);
-const storePhone = resolveStorePhone(businessInfo, headerData.contact.phone);
-const storeSocial = resolveStoreSocialLinks(
-  [headerData.social, footerData.social],
-  storePhone,
-);
+const storePhone = resolveStorePhone(businessInfo);
+const storeSocial = resolveStoreSocialLinks(businessInfo?.socialLinks, storePhone);
 // Open Graph locale from the document language and the store's country.
 const ogLocale = `${documentLanguage}_${
   /^(bangladesh|bd)$/i.test(businessInfo?.country?.trim() ?? "") ? "BD" : "US"
@@ -184,9 +166,9 @@ const merchantReturnPolicyJsonLd = buildMerchantReturnPolicyJsonLd({
   fallbackCountry: businessInfo?.country,
 });
 
-// Organization JSON-LD — only emit when we have a logo (per SEO-05)
-const logoUrl = headerData.logo.src
-  ? toAbsoluteStorefrontSeoUrl(mediaImageUrl(headerData.logo.src, 480))
+// Organization JSON-LD — only emit when we have a logo (per SEO-05): the theme's logo.
+const logoUrl = brandLogoUrl
+  ? toAbsoluteStorefrontSeoUrl(mediaImageUrl(brandLogoUrl, 480))
   : null;
 
 const onlineStoreJsonLd =
@@ -195,7 +177,7 @@ const onlineStoreJsonLd =
         storefrontUrl,
         logoUrl,
         business: businessInfo,
-        social: footerData.social,
+        social: storeSocial,
         returnPolicy: merchantReturnPolicyJsonLd,
       })
     : null;
@@ -224,13 +206,13 @@ const websiteJsonLd =
 
 // Every page shares an image: its own, else the store social image from
 // Preferences, else the page's fallback (first banner/content image), else
-// the store logo.
+// the theme's logo.
 const socialImage = layoutData?.seo?.socialImage;
 const absoluteOgImageUrl = toAbsoluteStorefrontSeoUrl(
   ogImage ||
     (socialImage ? resolveStoreShareImage({ socialImage }) : null) ||
     fallbackOgImage ||
-    resolveStoreShareImage({ logo: headerData.logo.src }) ||
+    resolveStoreShareImage({ logo: brandLogoUrl }) ||
     undefined,
 );
 
@@ -354,10 +336,12 @@ if (!window.$RefreshReg$) {
         fallback, so text never shifts. */}
     <ThemeFonts pairing={storefrontTheme.tokens.typography} />
 
-    {/* Without JavaScript the phone menu and search buttons open nothing; each
-        header renders a <noscript> link in their place (the drawer's :target,
-        /search), so the dead buttons are hidden instead of shown twice. */}
-    <noscript><style is:inline>#mobile-menu-toggle,#mobile-search-toggle{display:none!important}</style></noscript>
+    {/* Without JavaScript the phone menu and search buttons and the drawers'
+        close buttons do nothing; each renders a <noscript> link in its place
+        (the drawer's :target, /search, "#"), so the dead buttons are hidden
+        instead of shown twice. Astro never evaluates expressions inside
+        <style>, so this rule stays static. */}
+    <noscript><style is:inline>#mobile-menu-toggle,#mobile-search-toggle,[data-drawer-close]{display:none!important}</style></noscript>
 
     <!-- Runtime API URL, CDN domain, and currency for client-side JS (the per-request platform context is not available to Vite client bundles) -->
     <script is:inline set:html={runtimeGlobalsScript} />
@@ -441,14 +425,12 @@ if (!window.$RefreshReg$) {
       {
         !hideHeader && (
           <Header
-            headerData={headerData}
             navigation={navigationData}
             categoryTree={categoryTree}
             storeName={storeDisplayName}
             storePhone={storePhone}
             social={storeSocial}
             variant={themeLayout.header}
-            showTopBar={themeLayout.topBar}
             navigationStyle={themeLayout.navigation}
             mobileNavigation={showMobileTabs ? "tabs" : "drawer"}
           />
@@ -468,7 +450,7 @@ if (!window.$RefreshReg$) {
       !hideFooter && (
         <div class="storefront-deferred-region">
           <Footer
-            footerData={footerData}
+            menus={layoutData?.footerMenus ?? []}
             storeName={storeDisplayName}
             storePhone={storePhone}
             social={storeSocial}

@@ -1,4 +1,5 @@
 import { stableDraftId } from "./compile.mjs";
+import { assertDemoThemeWorkspace, themeWithDemoHomepage } from "./theme-homepage.mjs";
 
 function exactMap(rows, key, label) {
   const map = new Map();
@@ -86,12 +87,6 @@ export function createApplyBinder({ manifest, readiness, snapshot, outputs = new
         key,
       );
     }
-    const heroStage = key.match(/^hero-slider:([^:]+)$/u);
-    if (heroStage) {
-      const current = (snapshot.presentation?.heroes ?? snapshot.heroes ?? [])
-        .find((hero) => hero.type === heroStage[1]);
-      return freshestAuthority(outputs.get(key), current, "revision", key);
-    }
     return null;
   }
 
@@ -100,6 +95,14 @@ export function createApplyBinder({ manifest, readiness, snapshot, outputs = new
     const staged = stageAuthority(key);
     if (staged) return fieldValue(staged, reference.field);
     if (outputs.has(key)) return fieldValue(outputs.get(key), reference.field);
+    if (key === "current-theme") {
+      // The theme workspace read in the snapshot, refused when its draft holds
+      // the merchant's unpublished changes.
+      const workspace = assertDemoThemeWorkspace(snapshot.presentation?.theme);
+      if (reference.field === "draftRevision") return workspace.draft.revision;
+      if (reference.field === "publishedRevision") return workspace.published.revision;
+      throw new Error(`Theme reference field is unresolved: ${reference.field}.`);
+    }
     if (key === "attribute:brand") {
       if (!brand) throw new Error("The filterable Brand attribute must exist before product apply.");
       return fieldValue(brand, reference.field);
@@ -210,6 +213,10 @@ export function createApplyBinder({ manifest, readiness, snapshot, outputs = new
     if (Array.isArray(value)) return value.map(bindValue);
     if (!value || typeof value !== "object") return value;
     if (typeof value.$ref === "string") return resolveReference(value);
+    if (value.$demoHomepage) {
+      const workspace = assertDemoThemeWorkspace(snapshot.presentation?.theme);
+      return themeWithDemoHomepage(workspace.published.theme, bindValue(value.$demoHomepage));
+    }
     if (typeof value.$routeRef === "string") {
       const destination = value.$routeRef;
       if (destination.startsWith("category:")) return `/categories/${destination.slice("category:".length)}`;
@@ -256,12 +263,9 @@ export function createApplyBinder({ manifest, readiness, snapshot, outputs = new
       const current = context.collectionsByName.get(collection.name);
       return { identity: { name: collection.name, ...(current?.id ? { id: current.id } : {}) }, desired: { name: collection.name } };
     }
-    if (command.logicalKey.startsWith("hero-slider:")) {
-      const type = command.logicalKey
-        .slice("hero-slider:".length)
-        .replace(/:(?:quarantine|activate)$/u, "");
-      const current = (snapshot.presentation?.heroes ?? snapshot.heroes ?? []).find((hero) => hero.type === type);
-      return { identity: { type, ...(current?.id ? { id: current.id } : {}) }, desired: { type } };
+    if (command.logicalKey === "theme:draft" || command.logicalKey === "theme:publish") {
+      // One shared theme: its draft and published revisions are the authority.
+      return { identity: { id: "theme" }, desired: bindValue(command.desired) };
     }
     throw new Error(`Execution metadata is unresolved: ${command.logicalKey}.`);
   }
@@ -284,7 +288,7 @@ export function createApplyBinder({ manifest, readiness, snapshot, outputs = new
         path,
         body,
         preconditions,
-        action: command.method === "POST" ? "create" : "update",
+        action: command.action ?? (command.method === "POST" ? "create" : "update"),
         expectedRevision,
         ...metadata,
       };

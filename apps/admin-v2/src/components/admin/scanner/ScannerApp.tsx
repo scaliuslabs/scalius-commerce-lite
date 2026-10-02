@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { useWebHaptics } from "web-haptics/react";
 import {
   Menu,
@@ -16,6 +16,7 @@ import { ScanFlash, type FlashState } from "./ScanFlash";
 import { ScanHistory } from "./ScanHistory";
 import { LastScanBar } from "./LastScanBar";
 import {
+  getApiV1AdminInventoryLocations,
   getApiV1AdminInventoryScannerLookup,
   postApiV1AdminInventoryStockAdjust,
   postApiV1AdminInventoryStockSet,
@@ -24,10 +25,17 @@ import { apiData } from "@/lib/api";
 import { AdminApiResponseError, isAdminApiNotFoundError } from "@/lib/admin-api-error";
 import { withDashboardBasePath } from "@/lib/dashboard-base-path";
 import { Label } from "~/components/ui/label";
+import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Switch } from "~/components/ui/switch";
 import { cn } from "@scalius/shared/utils";
 import { formatDateTime, formatNumber, translate, useMessages } from "~/i18n";
 import { scannerMessages } from "~/i18n/scanner";
+import {
+  pickScannerLocation,
+  readRememberedScannerLocation,
+  rememberScannerLocation,
+  type ScannerLocation,
+} from "./scanner-location";
 
 export type ScannerMode = "quick-receive" | "quick-deduct" | "manual";
 
@@ -38,6 +46,9 @@ const MODE_LABEL = { "quick-receive": "modeReceive", "quick-deduct": "modeDeduct
 const tr = (key: keyof typeof scannerMessages.en, vars?: Record<string, string | number>) =>
   translate(scannerMessages, key, vars);
 
+/** Where a scan counts stock: a location of a store with several, else null (one location holds everything). */
+export type ScanLocation = Pick<ScannerLocation, "id" | "name"> | null;
+
 export interface ScannedProduct {
   productName: string;
   variantId: string;
@@ -45,6 +56,9 @@ export interface ScannedProduct {
   barcode: string;
   stock: number;
   reserved: number;
+  /** The location the scan counts at, and the SKU's on-hand there. */
+  location: ScanLocation;
+  locationStock: number | null;
   productImage: string | null;
   optionLabel: string | null;
   weight: number | null;
@@ -63,9 +77,12 @@ export interface ScanResult {
   } | null;
   action: "add" | "deduct" | "set" | "error";
   quantity: number;
+  /** On hand before and after: at `location` when the store has several. */
   oldStock: number;
   newStock: number;
   reason: string;
+  /** Where the change happened; an undo reverses it there. */
+  location?: ScanLocation;
   undoError?: string;
 }
 
@@ -143,7 +160,16 @@ const adjustStock = (body: {
   variantId: string;
   adjustment: number;
   reason: string;
-}) => withOneRetry(() => apiData(postApiV1AdminInventoryStockAdjust({ body })));
+}, location: ScanLocation) => withOneRetry(() => apiData(postApiV1AdminInventoryStockAdjust({
+  // A store with one location names none: the API uses the default.
+  body: { ...body, ...(location ? { locationId: location.id } : {}) },
+})));
+
+/** The on-hand a change result reports: the location's when one was named. */
+function resultStock(data: { newStock?: unknown; locationNewStock?: unknown }, location: ScanLocation): number | null {
+  const value = location ? data.locationNewStock : data.newStock;
+  return typeof value === "number" ? value : null;
+}
 
 export function ScannerApp({ token }: ScannerAppProps) {
   const t = useMessages(scannerMessages);
@@ -218,6 +244,35 @@ export function ScannerApp({ token }: ScannerAppProps) {
   const [manualBarcode, setManualBarcode] = useState("");
   const [cameraPaused, setCameraPaused] = useState(false);
 
+  // Locations: a store with several picks where this device counts (remembered per device).
+  const [locations, setLocations] = useState<ScannerLocation[] | null>(null);
+  const [locationsFailed, setLocationsFailed] = useState(false);
+  const [locationId, setLocationId] = useState<string | null>(null);
+  const location = useMemo<ScanLocation>(() => {
+    const chosen = (locations?.length ?? 0) > 1 ? locations?.find((candidate) => candidate.id === locationId) : null;
+    return chosen ? { id: chosen.id, name: chosen.name } : null;
+  }, [locationId, locations]);
+  const loadLocations = useCallback(() => {
+    setLocationsFailed(false);
+    apiData(getApiV1AdminInventoryLocations({ query: { includeArchived: "false" } }))
+      .then(({ locations: rows }) => {
+        const active = rows
+          .filter((row) => row.status === "active")
+          .map(({ id, name, isDefault }) => ({ id, name, isDefault }));
+        setLocations(active);
+        setLocationId(pickScannerLocation(active, readRememberedScannerLocation())?.id ?? null);
+      })
+      .catch(() => setLocationsFailed(true));
+  }, []);
+  useEffect(() => {
+    if (authState === "ready") loadLocations();
+  }, [authState, loadLocations]);
+  const chooseLocation = useCallback((id: string) => {
+    if (!locations?.some((candidate) => candidate.id === id)) return;
+    setLocationId(id);
+    rememberScannerLocation(id);
+  }, [locations]);
+
   // Settings
   const [defaultQuantity, setDefaultQuantity] = useState(1);
   const [soundEnabled, setSoundEnabled] = useState(true);
@@ -252,8 +307,10 @@ export function ScannerApp({ token }: ScannerAppProps) {
 
   // ---- Barcode lookup ----
   const lookupBarcode = useCallback(
-    async (code: string): Promise<ScannedProduct | null> => {
-      const raw = await apiData(getApiV1AdminInventoryScannerLookup({ query: { code } }))
+    async (code: string, at: ScanLocation): Promise<ScannedProduct | null> => {
+      const raw = await apiData(getApiV1AdminInventoryScannerLookup({
+        query: { code, ...(at ? { locationId: at.id } : {}) },
+      }))
         .catch((error: unknown) => {
           if (isAdminApiNotFoundError(error)) return null;
           throw error;
@@ -269,6 +326,8 @@ export function ScannerApp({ token }: ScannerAppProps) {
         barcode: v.barcode ?? "",
         stock: v.stock ?? 0,
         reserved: v.reservedStock ?? 0,
+        location: at,
+        locationStock: at ? v.locationOnHand ?? 0 : null,
         productImage: p.imageUrl ?? null,
         optionLabel: v.optionLabel ?? null,
         weight: null,
@@ -280,7 +339,7 @@ export function ScannerApp({ token }: ScannerAppProps) {
   // ---- Quick mode stock adjust (fire-and-forget with optimistic feedback) ----
   const quickAdjust = useCallback(
     async (product: ScannedProduct, quantity: number) => {
-      const oldStock = product.stock;
+      const oldStock = product.locationStock ?? product.stock;
       const newStock = oldStock + quantity;
       const isAdd = quantity > 0;
 
@@ -301,6 +360,7 @@ export function ScannerApp({ token }: ScannerAppProps) {
         oldStock,
         newStock,
         reason: isAdd ? "Quick Receive" : "Quick Deduct",
+        location: product.location,
       };
 
       setLastResult(result);
@@ -323,7 +383,7 @@ export function ScannerApp({ token }: ScannerAppProps) {
           variantId: product.variantId,
           adjustment: quantity,
           reason: isAdd ? "Quick Receive" : "Quick Deduct",
-        });
+        }, product.location);
       } catch {
         setHistory((prev) =>
           prev.map((r) =>
@@ -343,7 +403,8 @@ export function ScannerApp({ token }: ScannerAppProps) {
       beep("scan");
 
       try {
-        const product = await lookupBarcode(code);
+        // The location chosen when the code was read is where this scan counts.
+        const product = await lookupBarcode(code, location);
 
         if (!product) {
           // Not found
@@ -402,7 +463,7 @@ export function ScannerApp({ token }: ScannerAppProps) {
         setHistory((prev) => [errorResult, ...prev].slice(0, 50));
       }
     },
-    [mode, lookupBarcode, quickAdjust, defaultQuantity, showFlash, beep, haptic],
+    [mode, location, lookupBarcode, quickAdjust, defaultQuantity, showFlash, beep, haptic],
   );
 
   // ---- Manual mode submit ----
@@ -416,17 +477,17 @@ export function ScannerApp({ token }: ScannerAppProps) {
       product: ScannedProduct;
     }) => {
       const { variantId, adjustment, reason, isAbsolute, operationKey, product } = opts;
+      const at = product.location;
 
       try {
-        const data: { newStock?: unknown } = isAbsolute
+        const data: { newStock?: unknown; locationNewStock?: unknown } = isAbsolute
           ? await withOneRetry(() => apiData(postApiV1AdminInventoryStockSet({
-              body: { operationKey, variantId, newStock: adjustment, reason },
+              // A count is the units at the location being counted.
+              body: { operationKey, variantId, newStock: adjustment, reason, ...(at ? { locationId: at.id } : {}) },
             })))
-          : await adjustStock({ operationKey, variantId, adjustment, reason });
-        const newStock = typeof data.newStock === "number"
-          ? data.newStock
-          : isAbsolute ? adjustment : product.stock + adjustment;
-        const oldStock = product.stock;
+          : await adjustStock({ operationKey, variantId, adjustment, reason }, at);
+        const oldStock = product.locationStock ?? product.stock;
+        const newStock = resultStock(data, at) ?? (isAbsolute ? adjustment : oldStock + adjustment);
 
         const result: ScanResult = {
           id: nextId(),
@@ -444,6 +505,7 @@ export function ScannerApp({ token }: ScannerAppProps) {
           oldStock,
           newStock,
           reason,
+          location: at,
         };
 
         setLastResult(result);
@@ -495,7 +557,7 @@ export function ScannerApp({ token }: ScannerAppProps) {
           variantId: item.product.variantId,
           adjustment: item.oldStock - item.newStock,
           reason: "Undo scanner adjustment",
-        });
+        }, item.location ?? null);
         undoOperationKeysRef.current.delete(item.id);
 
         haptic("medium");
@@ -624,6 +686,28 @@ export function ScannerApp({ token }: ScannerAppProps) {
           </button>
         ))}
       </div>
+
+      {location && locations ? (
+        <div className="shrink-0 bg-card px-3 pb-2">
+          <SearchableSelect
+            triggerClassName="w-full"
+            ariaLabel={t("location")}
+            value={location.id}
+            onValueChange={chooseLocation}
+            options={locations.map((candidate) => ({
+              value: candidate.id,
+              label: candidate.isDefault ? t("locationDefault", { name: candidate.name }) : candidate.name,
+            }))}
+          />
+        </div>
+      ) : locationsFailed ? (
+        <div role="alert" className="flex shrink-0 items-center justify-between gap-2 bg-destructive/10 px-3 py-2 text-body text-destructive">
+          <span>{t("locationsFailed")}</span>
+          <button type="button" onClick={loadLocations} className="flex h-11 shrink-0 items-center rounded-lg px-3 font-medium active:bg-accent">
+            {t("retry")}
+          </button>
+        </div>
+      ) : null}
 
       <div className="relative min-h-0 flex-1">
         <BarcodeScanner onScan={handleScan} isActive={isCameraActive} showTorchButton />

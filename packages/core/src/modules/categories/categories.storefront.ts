@@ -7,6 +7,11 @@ import type { Database } from "@scalius/database/client";
 import { publicCategoryConditions } from "./categories.publication";
 import { deps } from "../../cache-deps";
 import {
+    presentStorefrontCustomFields,
+    selectStorefrontCustomFieldRows,
+    type StorefrontCustomFieldRow,
+} from "../custom-fields/custom-fields.storefront";
+import {
     publicCategoryTreeContextQueries,
     type CategoryBreadcrumbItem,
     type PublicCategoryChild,
@@ -144,7 +149,7 @@ export async function getPublicCategorySummaries(
 export async function getPublicCategoryBySlug(db: Database, slug: string) {
     deps.anyCategory();
     const tree = publicCategoryTreeContextQueries(db, slug, STOREFRONT_CATEGORY_PAGE_CHILD_LIMIT);
-    const [rows, children, breadcrumb] = await db.batch([
+    const [rows, children, breadcrumb, customFieldRows] = await db.batch([
         db
             .select({
                 id: categories.id,
@@ -169,6 +174,11 @@ export async function getPublicCategoryBySlug(db: Database, slug: string) {
             .limit(1),
         tree.children,
         tree.breadcrumb,
+        selectStorefrontCustomFieldRows(db, "category", sql`(
+            SELECT ${categories.id} FROM ${categories}
+            WHERE ${and(eq(categories.slug, slug), ...publicCategoryConditions())}
+            LIMIT 1
+        )`),
     ]);
     const category = rows[0];
     if (!category) return null;
@@ -176,6 +186,8 @@ export async function getPublicCategoryBySlug(db: Database, slug: string) {
     return {
         ...category,
         depth: Number(category.depth),
+        /** Storefront-visible custom fields, in the merchant's order. */
+        customFields: presentStorefrontCustomFields(customFieldRows as StorefrontCustomFieldRow[]),
         children: children as PublicCategoryChild[],
         breadcrumb: (breadcrumb as CategoryBreadcrumbItem[]).map((item) => ({ ...item, depth: Number(item.depth) })),
         createdAt: category.createdAt ? new Date(category.createdAt * 1000).toISOString() : null,

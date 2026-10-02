@@ -7,6 +7,7 @@ import { cors } from "hono/cors";
 import { errorResponseFromError, logApiError } from "../utils/api-response";
 import { RateLimitError } from "../utils/api-error";
 import { withTrackedPlatformEnv } from "./runtime-env";
+import { eventDispatchMiddleware } from "../middleware/event-dispatch";
 import {
   getRequestCorrelation,
   requestCorrelationMiddleware,
@@ -67,6 +68,10 @@ function configureApiApp(app: Hono<{ Bindings: Env }>): void {
       () => next(),
     );
   });
+
+  // A mutating request that wrote an evented table hands its outbox rows to
+  // the queue after the response (COMMERCE-HOOKS H3).
+  app.use("*", eventDispatchMiddleware);
 
   app.use("*", async (c, next) => {
     const origin = c.req.header("Origin");

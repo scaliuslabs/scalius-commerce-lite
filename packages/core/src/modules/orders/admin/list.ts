@@ -19,6 +19,7 @@ import { sql, desc, eq, inArray, notInArray, type SQL } from "drizzle-orm";
 import { ftsMatch, isFts5SearchEnabled, sanitizeFtsQuery } from "../../../search/fts5";
 import { fromMinor } from "@scalius/shared/money";
 import { unixToDate } from "@scalius/shared/utils";
+import type { OrderChannel } from "@scalius/shared/order-channel";
 import type { OrderPaymentRecoveryFilter, OrderShipmentSummary } from "../types";
 import { orderNumberSearchCondition } from "../number";
 import { buildPhoneSearchTerms, isEmailSearch, isLikelyPhoneSearch } from "../search";
@@ -235,6 +236,10 @@ export async function listOrders(db: Database, options: {
     paymentRecovery?: OrderPaymentRecoveryFilter;
     view?: OrderListView;
     deliveryMethod?: OrderDeliveryMethodFilter;
+    /** Where the order came from (`orders_channel_list_idx`). */
+    channel?: OrderChannel;
+    /** A stored source slug (`facebook`, `walk_in`, …). */
+    channelSource?: string;
     openRequest?: boolean;
     /** Exactly these orders (an export of a page or a selection). */
     ids?: string[];
@@ -257,6 +262,8 @@ export async function listOrders(db: Database, options: {
         fulfillmentStatus,
         paymentRecovery,
         deliveryMethod,
+        channel,
+        channelSource,
         page: rawPage = 1,
         limit: rawLimit = 10,
         showArchived = false,
@@ -345,6 +352,14 @@ export async function listOrders(db: Database, options: {
 
     if (deliveryMethod) {
         whereConditions.push(orderDeliveryMethodCondition(deliveryMethod));
+    }
+
+    if (channel) {
+        whereConditions.push(sql`${orders.channel} = ${channel}`);
+    }
+
+    if (channelSource) {
+        whereConditions.push(sql`${orders.channelSource} = ${channelSource}`);
     }
 
     if (paymentRecovery) {

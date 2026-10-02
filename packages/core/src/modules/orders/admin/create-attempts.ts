@@ -4,6 +4,7 @@ import { adminOrderCreateAttempts } from "@scalius/database/schema";
 import { and, eq, isNull, lte, or, sql } from "drizzle-orm";
 import { AppError, ServiceUnavailableError } from "@scalius/core/errors";
 import { generateOrderId } from "@scalius/shared/order-utils";
+import { normalizeOrderChannelSource } from "@scalius/shared/order-channel";
 import type { CreateOrderInput } from "../validation";
 
 export interface AdminOrderCreateAttemptIdentity {
@@ -366,6 +367,8 @@ function isStaleProcessingAttempt(
 }
 
 function normalizeAdminOrderCreateRequest(input: CreateOrderInput): Record<string, unknown> {
+  // The stored source: "Facebook" and "facebook" are the same request.
+  const channelSource = normalizeOrderChannelSource(input.channelSource);
   return {
     version: 2,
     customerName: input.customerName.trim(),
@@ -388,6 +391,7 @@ function normalizeAdminOrderCreateRequest(input: CreateOrderInput): Record<strin
         : {}),
     })),
     ...(input.shippingMethodId ? { shippingMethodId: input.shippingMethodId } : {}),
+    ...(channelSource ? { channelSource } : {}),
     discountAmount: input.discountAmount == null ? null : normalizeAmount(input.discountAmount),
     shippingCharge: normalizeAmount(input.shippingCharge),
   };

@@ -3,7 +3,6 @@ export interface NormalizedCollectionConfig {
     categoryIds: string[];
     productIds: string[];
     featuredProductId?: string;
-    showOnHomepage: boolean;
     maxProducts: number;
     title: string;
     subtitle: string;
@@ -25,7 +24,6 @@ export const DEFAULT_COLLECTION_CONFIG: NormalizedCollectionConfig = {
     source: "manual",
     categoryIds: [],
     productIds: [],
-    showOnHomepage: false,
     maxProducts: 8,
     title: "",
     subtitle: "",
@@ -111,7 +109,6 @@ export function normalizeCollectionConfig(value: unknown): NormalizedCollectionC
         categoryIds,
         productIds,
         featuredProductId: optionalString(config.featuredProductId),
-        showOnHomepage: config.showOnHomepage === true,
         maxProducts: normalizeMaxProducts(config.maxProducts),
         title: textValue(config.title, 120),
         subtitle: textValue(config.subtitle, 240),

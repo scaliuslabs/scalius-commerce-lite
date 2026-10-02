@@ -6,8 +6,7 @@ const MUTATION_PERMISSIONS = Object.freeze([
   { method: ["PUT", "PATCH"], path: /^\/api\/v1\/admin\/products\//u, permission: "products.edit" },
   { method: "POST", path: /^\/api\/v1\/admin\/collections$/u, permission: "collections.create" },
   { method: ["PUT", "PATCH"], path: /^\/api\/v1\/admin\/collections\//u, permission: "collections.edit" },
-  { method: "POST", path: /^\/api\/v1\/admin\/settings\/theme$/u, permission: "settings.general.edit" },
-  { method: ["POST", "PUT"], path: /^\/api\/v1\/admin\/settings\/hero-sliders(?:\/|$)/u, permission: "settings.header.edit" },
+  { method: "POST", path: /^\/api\/v1\/admin\/settings\/theme\/(?:draft|publish)$/u, permission: "settings.general.edit" },
 ]);
 
 function methodMatches(rule, method) {

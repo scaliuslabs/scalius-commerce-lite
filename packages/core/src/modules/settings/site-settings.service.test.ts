@@ -3,14 +3,16 @@ import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { ConflictError, ValidationError } from "@scalius/core/errors";
 import { DEFAULT_SEO_DISCOVERY_SETTINGS } from "@scalius/shared/seo-discovery";
 
+import { DEFAULT_STOREFRONT_THEME, type StorefrontThemeDocument } from "@scalius/shared/storefront-theme";
+
 import {
   getCurrencySettings,
-  getGeneralSettings,
   getSeoSettings,
   saveCurrencySettings,
-  saveHeaderConfig,
   saveSeoSettings,
+  saveThemeDraft,
 } from "./site-settings.service";
+import { getBusinessSettings, saveBusinessSettings } from "./business-settings.service";
 
 function storeDocument(sqlite: ReturnType<typeof createSqliteD1Database>["sqlite"], category: string, value: string) {
   sqlite.prepare("INSERT INTO settings (id, key, value, type, category) VALUES (?, 'document', ?, 'json', ?)")
@@ -21,51 +23,91 @@ function documentCount(sqlite: ReturnType<typeof createSqliteD1Database>["sqlite
   return Number((sqlite.prepare("SELECT count(*) AS count FROM settings WHERE category = ?").get(category) as { count: number }).count);
 }
 
-describe("general site settings", () => {
-  it("returns only header and footer presentation fields", async () => {
-    const { db, sqlite } = createSqliteD1Database();
-    storeDocument(sqlite, "header", JSON.stringify({
-      topBar: { text: "Free delivery", isEnabled: true },
-      navigation: [{ id: "returns", target: { type: "internal_path", path: "/returns" } }],
-    }));
-    storeDocument(sqlite, "footer", JSON.stringify({
-      tagline: "Thoughtful goods",
-      menus: [{ id: "legacy-menu", links: [] }],
-    }));
+/** The default theme with a logo, one hero slide and a product homepage. */
+function themeNaming(ids: { logo?: string; slide?: string; product?: string; link?: string | null }): StorefrontThemeDocument {
+  const theme = structuredClone(DEFAULT_STOREFRONT_THEME) as StorefrontThemeDocument;
+  theme.brand = { ...theme.brand, logo: ids.logo ?? null };
+  if (ids.product) theme.pages.homeMode = { kind: "product", productId: ids.product };
+  theme.pages.home = theme.pages.home.map((section) => section.type === "hero" && ids.slide
+    ? { ...section, settings: { ...section.settings, slides: [{ image: ids.slide, focalPoint: { x: 50, y: 50 }, alt: "Eid", link: ids.link ?? null }] } }
+    : section);
+  return theme;
+}
 
-    await expect(getGeneralSettings(db)).resolves.toMatchObject({
-      headerConfig: { topBar: { text: "Free delivery", isEnabled: true } },
-      footerConfig: { tagline: "Thoughtful goods" },
-      revisions: { header: 1, footer: 1 },
-      navigationReadiness: {
-        header: { status: "ready", issues: [] },
-        footer: { status: "ready", issues: [] },
-      },
-    });
+function seedFiles(sqlite: ReturnType<typeof createSqliteD1Database>["sqlite"]) {
+  sqlite.exec(`
+    INSERT INTO media (id, filename, kind, object_key, size, mime_type, status, trashed_at, deleted_at) VALUES
+      ('media_logo', 'logo.png', 'image', 'media/logo.png', 1, 'image/png', 'ready', NULL, NULL),
+      ('media_old', 'old.png', 'image', 'media/old.png', 1, 'image/png', 'trashed', unixepoch(), NULL),
+      ('media_gone', 'gone.png', 'image', 'media/gone.png', 1, 'image/png', 'deleted', unixepoch(), unixepoch()),
+      ('media_clip', 'clip.mp4', 'video', 'media/clip.mp4', 1, 'video/mp4', 'ready', NULL, NULL);
+    INSERT INTO products (id, name, price_minor, slug) VALUES ('prod_live', 'Live', 1000, 'live'), ('prod_trash', 'Trash', 1000, 'trash');
+    UPDATE products SET deleted_at = unixepoch() WHERE id = 'prod_trash';
+  `);
+}
+
+describe("theme draft references", () => {
+  const heroIndex = DEFAULT_STOREFRONT_THEME.pages.home.findIndex((section) => section.type === "hero");
+
+  it("saves a draft whose images are images in Files (trashed ones keep serving) and whose home product exists", async () => {
+    const { db, sqlite } = createSqliteD1Database();
+    seedFiles(sqlite);
+    const draft = await saveThemeDraft(db, themeNaming({ logo: "media_logo", slide: "media_old", product: "prod_live" }), 0, 0);
+    expect(draft.theme.brand.logo).toBe("media_logo");
+    expect(draft.theme.pages.homeMode).toEqual({ kind: "product", productId: "prod_live" });
   });
 
-  it("isolates a malformed presentation document", async () => {
-    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+  it("rejects missing, deleted or non-image media and a trashed home product, each at its document path", async () => {
     const { db, sqlite } = createSqliteD1Database();
-    storeDocument(sqlite, "header", "{not-json");
-    storeDocument(sqlite, "footer", JSON.stringify({ description: "Support when you need it" }));
-
-    await expect(getGeneralSettings(db)).resolves.toMatchObject({
-      headerConfig: {},
-      footerConfig: { description: "Support when you need it" },
-    });
+    seedFiles(sqlite);
+    const failure = await saveThemeDraft(
+      db,
+      themeNaming({ logo: "media_missing", slide: "media_clip", product: "prod_trash" }),
+      0,
+      0,
+    ).catch((error: unknown) => error);
+    expect(failure).toBeInstanceOf(ValidationError);
+    expect((failure as ValidationError).details).toEqual([
+      { path: "brand.logo", message: expect.stringContaining("not in Files") },
+      { path: `pages.home.${heroIndex}.settings.slides.0.image`, message: expect.stringContaining("not in Files") },
+      { path: "pages.homeMode.productId", message: expect.stringContaining("unavailable or in trash") },
+    ]);
+    await expect(saveThemeDraft(db, themeNaming({ logo: "media_gone" }), 0, 0)).rejects.toBeInstanceOf(ValidationError);
+    expect(documentCount(sqlite, "theme")).toBe(0);
+    expect(sqlite.prepare("SELECT count(*) AS count FROM theme_settings_drafts").get()).toEqual({ count: 0 });
   });
 
-  it("strips embedded navigation and unknown keys before writing header settings", async () => {
+  it("rejects unsafe slide links before anything is read", async () => {
     const { db, sqlite } = createSqliteD1Database();
-    await saveHeaderConfig(db, {
-      topBar: { text: "Hello", isEnabled: true },
-      navigation: [{ id: "home" }],
-      unknown: "value",
-    }, 0);
+    seedFiles(sqlite);
+    for (const link of ["javascript:alert(1)", "http://example.com", "//evil.example"]) {
+      await expect(saveThemeDraft(db, themeNaming({ slide: "media_logo", link }), 0, 0), link)
+        .rejects.toBeInstanceOf(ValidationError);
+    }
+    await expect(saveThemeDraft(db, themeNaming({ slide: "media_logo", link: "https://example.com/eid" }), 0, 0))
+      .resolves.toMatchObject({ revision: 1 });
+  });
+});
 
-    const row = sqlite.prepare("SELECT value FROM settings WHERE category = 'header'").get() as { value: string };
-    expect(JSON.parse(row.value)).toEqual({ topBar: { text: "Hello", isEnabled: true } });
+describe("store social profiles", () => {
+  it("saves https profiles in order and rejects unsafe ones against their field", async () => {
+    const { db } = createSqliteD1Database();
+    const saved = await saveBusinessSettings(db, {
+      socialLinks: [
+        { id: "fb", label: " Facebook ", url: "https://facebook.com/shop" },
+        { id: "ig", label: "Instagram", url: "https://instagram.com/shop" },
+      ],
+    });
+    expect(saved.value.socialLinks).toEqual([
+      { id: "fb", label: "Facebook", url: "https://facebook.com/shop" },
+      { id: "ig", label: "Instagram", url: "https://instagram.com/shop" },
+    ]);
+    const failure = await saveBusinessSettings(db, {
+      socialLinks: [{ id: "bad", label: "Bad", url: "javascript:alert(1)" }],
+    }, { expectedRevision: saved.revision }).catch((error: unknown) => error);
+    expect(failure).toBeInstanceOf(ValidationError);
+    expect(JSON.stringify((failure as ValidationError).details)).toContain("socialLinks");
+    expect((await getBusinessSettings(db)).socialLinks).toHaveLength(2);
   });
 });
 

@@ -1,10 +1,15 @@
-import type { AgentPrincipal } from "./types";
+import type { AgentPrincipal, OperationPrincipal, PluginPrincipal } from "./types";
 
-const AGENT_DISPATCH_PRINCIPAL = Symbol("scalius.agent-dispatch-principal");
+// The in-process dispatch principal rides on a non-enumerable symbol property
+// of the Worker-created env: no HTTP header, cookie or body can forge it.
+const OPERATION_DISPATCH_PRINCIPAL = Symbol("scalius.operation-dispatch-principal");
 
-type InternalAgentEnv = Env & {
-  [AGENT_DISPATCH_PRINCIPAL]?: AgentPrincipal;
+type InternalDispatchEnv = Env & {
+  [OPERATION_DISPATCH_PRINCIPAL]?: OperationPrincipal;
 };
+
+const RISKS = ["read", "write", "destructive", "financial", "security"];
+const PLUGIN_ID = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?$/;
 
 function isAgentPrincipal(value: unknown): value is AgentPrincipal {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
@@ -23,9 +28,7 @@ function isAgentPrincipal(value: unknown): value is AgentPrincipal {
       principal.preset === "full" || principal.preset === "custom") &&
     principal.permissions instanceof Set &&
     [...principal.permissions].every((permission) => typeof permission === "string") &&
-    ["read", "write", "destructive", "financial", "security"].includes(
-      principal.riskCeiling ?? "",
-    ) &&
+    RISKS.includes(principal.riskCeiling ?? "") &&
     typeof principal.authorityRevision === "number" &&
     Number.isSafeInteger(principal.authorityRevision) &&
     principal.authorityRevision > 0 &&
@@ -34,13 +37,36 @@ function isAgentPrincipal(value: unknown): value is AgentPrincipal {
   );
 }
 
-export function withAgentDispatchPrincipal(env: Env, principal: AgentPrincipal): Env {
-  if (!isAgentPrincipal(principal)) throw new TypeError("Agent dispatch principal is invalid");
+function isPluginPrincipal(value: unknown): value is PluginPrincipal {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const principal = value as Partial<PluginPrincipal>;
+  return (
+    principal.kind === "plugin" &&
+    PLUGIN_ID.test(principal.pluginId ?? "") &&
+    typeof principal.version === "string" &&
+    principal.version.length > 0 &&
+    principal.version.length <= 80 &&
+    typeof principal.pluginName === "string" &&
+    typeof principal.actorUserId === "string" &&
+    /^[\x21-\x7E]{1,160}$/.test(principal.actorUserId) &&
+    principal.permissions instanceof Set &&
+    [...principal.permissions].every((permission) => typeof permission === "string") &&
+    // A plugin never holds security authority.
+    RISKS.includes(principal.riskCeiling ?? "") &&
+    principal.riskCeiling !== "security"
+  );
+}
+
+/** A copy of `env` carrying the principal an in-process operation dispatch acts as. */
+export function withOperationDispatchPrincipal(env: Env, principal: OperationPrincipal): Env {
+  if (!isAgentPrincipal(principal) && !isPluginPrincipal(principal)) {
+    throw new TypeError("Operation dispatch principal is invalid");
+  }
   const wrapped = Object.create(
     Object.getPrototypeOf(env),
     Object.getOwnPropertyDescriptors(env),
-  ) as InternalAgentEnv;
-  Object.defineProperty(wrapped, AGENT_DISPATCH_PRINCIPAL, {
+  ) as InternalDispatchEnv;
+  Object.defineProperty(wrapped, OPERATION_DISPATCH_PRINCIPAL, {
     configurable: false,
     enumerable: false,
     writable: false,
@@ -49,7 +75,17 @@ export function withAgentDispatchPrincipal(env: Env, principal: AgentPrincipal):
   return wrapped;
 }
 
+export function withAgentDispatchPrincipal(env: Env, principal: AgentPrincipal): Env {
+  if (!isAgentPrincipal(principal)) throw new TypeError("Agent dispatch principal is invalid");
+  return withOperationDispatchPrincipal(env, principal);
+}
+
 export function getAgentDispatchPrincipal(env: Env): AgentPrincipal | null {
-  const principal = (env as InternalAgentEnv)[AGENT_DISPATCH_PRINCIPAL];
+  const principal = (env as InternalDispatchEnv)[OPERATION_DISPATCH_PRINCIPAL];
   return isAgentPrincipal(principal) ? principal : null;
+}
+
+export function getPluginDispatchPrincipal(env: Env): PluginPrincipal | null {
+  const principal = (env as InternalDispatchEnv)[OPERATION_DISPATCH_PRINCIPAL];
+  return isPluginPrincipal(principal) ? principal : null;
 }

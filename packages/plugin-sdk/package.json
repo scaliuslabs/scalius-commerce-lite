@@ -1,0 +1,28 @@
+{
+  "name": "@scalius/plugin-sdk",
+  "version": "0.1.0",
+  "description": "Build Scalius Commerce plugins: one format for sandboxed (Workers Paid) and bundled (Workers Free) installs",
+  "private": true,
+  "type": "module",
+  "license": "AGPL-3.0-only",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts",
+    "./manifest": "./src/manifest.ts",
+    "./runtime": "./src/runtime.ts",
+    "./testing": "./src/testing.ts"
+  },
+  "scripts": {
+    "lint": "eslint src/",
+    "test": "vitest run",
+    "typecheck": "../../node_modules/typescript7/bin/tsc --noEmit"
+  },
+  "dependencies": {
+    "@scalius/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260831.1",
+    "@scalius/tsconfig": "workspace:*",
+    "vitest": "^4.1.11"
+  }
+}

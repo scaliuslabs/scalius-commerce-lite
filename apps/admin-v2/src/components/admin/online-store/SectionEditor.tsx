@@ -1,13 +1,25 @@
-import { useState, type ReactNode } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { ImageIcon, Pencil, Trash2 } from "lucide-react";
+import { useState, type CSSProperties, type ReactNode } from "react";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { ArrowDown, ArrowUp, ImageIcon, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import { getApiV1AdminCollections } from "@scalius/api-client/sdk";
+import { HERO_SLIDE_PRESENTATION, getHeroSlideObjectPosition, type HeroSlideViewport } from "@scalius/shared/hero-slider";
 import { mediaImageUrl } from "@scalius/shared/media-variants";
 import {
+  STOREFRONT_CATEGORY_TILE_STYLES,
+  STOREFRONT_CATEGORY_TILES_LIMIT,
+  STOREFRONT_COLLECTIONS_LIMIT,
+  STOREFRONT_DEFAULT_FOCAL_POINT,
+  STOREFRONT_HERO_SLIDE_LIMIT,
+  STOREFRONT_HERO_SLIDE_TEXT_LIMITS,
   STOREFRONT_MAX_SECTIONS,
   STOREFRONT_SECTION_REGISTRY,
+  canonicalStorefrontLink,
+  storefrontCategoryTilesMinimum,
   storefrontSectionDefault,
   storefrontSectionNeedsContent,
+  type StorefrontFocalPoint,
+  type StorefrontHeroSlide,
   type StorefrontProductSource,
   type StorefrontSection,
   type StorefrontSectionOf,
@@ -26,8 +38,9 @@ import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { SearchableSelect, type SearchableSelectLoader } from "~/components/ui/searchable-select";
 import { Textarea } from "~/components/ui/textarea";
-import { MediaManager } from "~/components/admin/media-manager";
+import { MediaManager, type MediaFile } from "~/components/admin/media-manager";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
+import { useServerFieldError } from "~/components/admin/shared/SaveBar";
 import { useDirtyDialogClose } from "~/components/admin/shared/use-dirty-dialog-close";
 import { apiData } from "~/lib/api";
 import { categoryFormOptionsQueryOptions } from "~/lib/api-query-options/categories";
@@ -35,17 +48,31 @@ import { collectionsByIdsQueryOptions } from "~/lib/api-query-options/collection
 import { discountsQueryOptions } from "~/lib/api-query-options/discounts";
 import { formatDateTime, formatNumber, useMessages } from "~/i18n";
 import { onlineStoreMessages } from "~/i18n/online-store";
+import { HeroFocalPointEditor } from "./HeroFocalPointEditor";
+import { NavigationResourcePicker } from "./NavigationResourcePicker";
 import { HomepageOrder } from "./ThemeChoices";
+import { themeSectionFieldId } from "./theme-settings";
 
 type MessageKey = keyof (typeof onlineStoreMessages)["en"];
 type Section = StorefrontSection;
 type Settings<Type extends StorefrontSectionType> = StorefrontSectionOf<Type>["settings"];
 
-/** An image the section editor can preview: the saved sections' images plus this session's picks. */
+/** An image the Theme page can preview: the draft's images (the workspace's `media`) plus this session's picks. */
 export interface SectionMediaPreview {
   id: string;
   url: string;
   alt: string;
+}
+
+const mediaPreview = (file: MediaFile): SectionMediaPreview => ({ id: file.id, url: file.url, alt: file.altText?.trim() ?? "" });
+
+/** Previews by media id: the given images, then any picked from Files in this session. */
+export function useMediaPreviews(media: readonly SectionMediaPreview[]) {
+  const [picked, setPicked] = useState<ReadonlyMap<string, SectionMediaPreview>>(new Map());
+  return {
+    previews: new Map([...media.map((each) => [each.id, each] as const), ...picked]) as ReadonlyMap<string, SectionMediaPreview>,
+    remember: (image: SectionMediaPreview) => setPicked((current) => new Map(current).set(image.id, image)),
+  };
 }
 
 /** Section types with a settings form here. The rest show store data only. */
@@ -53,6 +80,7 @@ const EDITABLE = new Set<StorefrontSectionType>([
   "hero",
   "usp-strip",
   "category-tiles",
+  "collections",
   "product-rail",
   "product-grid",
   "deal-block",
@@ -112,7 +140,7 @@ export function sectionErrors(section: Section): Map<string, { key: MessageKey; 
       errors.set(path, { key: "fieldCount", values: { count: Number(issue.minimum) } });
     } else if (issue.code === "too_big") {
       errors.set(path, { key: "fieldTooLong" });
-    } else if (issue.code === "invalid_format" || /\.href$|^href$/.test(path)) {
+    } else if (issue.code === "invalid_format" || /(?:^|\.)(?:href|link)$/.test(path)) {
       errors.set(path, { key: "linkInvalid" });
     } else {
       errors.set(path, { key: "fieldRequired" });
@@ -140,24 +168,97 @@ function Field({ id, label, help, error, children }: {
   );
 }
 
-function TextField({ id, label, help, value, onChange, error, multiline = false }: {
+function TextField({ id, label, help, value, onChange, error, maxLength, multiline = false }: {
   id: string;
   label: ReactNode;
   help?: ReactNode;
   value: string;
   onChange: (value: string) => void;
   error?: string;
+  maxLength?: number;
   multiline?: boolean;
 }) {
   const invalid = error ? { "aria-invalid": true, "aria-describedby": `${id}-note` } : {};
   return (
     <Field id={id} label={label} help={help} error={error}>
       {multiline ? (
-        <Textarea id={id} value={value} rows={6} onChange={(event) => onChange(event.target.value)} {...invalid} />
+        <Textarea id={id} value={value} rows={6} maxLength={maxLength} onChange={(event) => onChange(event.target.value)} {...invalid} />
       ) : (
-        <Input id={id} value={value} onChange={(event) => onChange(event.target.value)} {...invalid} />
+        <Input id={id} value={value} maxLength={maxLength} onChange={(event) => onChange(event.target.value)} {...invalid} />
       )}
     </Field>
+  );
+}
+
+/**
+ * A link a theme document stores (an announcement, a hero slide): typed or
+ * browsed, written in its canonical form when the field is left. Text that is
+ * not a usable link stays as typed and is marked.
+ */
+export function LinkField({ id, label, help, value, onChange, error }: {
+  id: string;
+  label: ReactNode;
+  help?: ReactNode;
+  value: string | null;
+  onChange: (link: string | null) => void;
+  error?: string;
+}) {
+  const t = useMessages(onlineStoreMessages);
+  const [left, setLeft] = useState(false);
+  const server = useServerFieldError(id);
+  const text = value ?? "";
+  const unusable = text.trim() !== "" && canonicalStorefrontLink(text) !== text;
+  const shown = error ?? server.error ?? (unusable && (left || server.revealed) ? t("linkInvalid") : undefined);
+  const note = shown ?? help;
+  const change = (next: string | null) => {
+    server.clear();
+    onChange(next);
+  };
+  return (
+    <div className="space-y-1.5">
+      <Label htmlFor={id}>{label}</Label>
+      <div className="flex gap-2">
+        <Input
+          id={id}
+          value={text}
+          inputMode="url"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+          placeholder={t("linkPlaceholder")}
+          aria-invalid={shown ? true : undefined}
+          aria-describedby={note ? `${id}-note` : undefined}
+          onChange={(event) => change(event.target.value === "" ? null : event.target.value)}
+          onBlur={() => {
+            setLeft(true);
+            if (!text.trim()) {
+              if (value !== null) change(null);
+              return;
+            }
+            const canonical = canonicalStorefrontLink(text);
+            if (canonical && canonical !== text) change(canonical);
+          }}
+        />
+        <NavigationResourcePicker
+          id={`${id}-browse`}
+          type="collection"
+          types={["collection", "category", "product", "page"]}
+          value=""
+          trigger={
+            <Button type="button" variant="outline" aria-label={t("browseLinks")}>
+              <Search aria-hidden="true" />
+              {t("browse")}
+            </Button>
+          }
+          onValueChange={(option) => change(canonicalStorefrontLink(option.url) ?? option.url)}
+        />
+      </div>
+      {shown ? (
+        <p id={`${id}-note`} role="alert" className="text-body text-destructive">{shown}</p>
+      ) : help ? (
+        <p id={`${id}-note`} className="text-body text-muted-foreground">{help}</p>
+      ) : null}
+    </div>
   );
 }
 
@@ -185,39 +286,447 @@ function ChoiceField<Value extends string | number>({ id, label, help, value, op
 const numbers = (from: number, to: number) =>
   Array.from({ length: to - from + 1 }, (_, index) => ({ value: from + index, label: formatNumber(from + index) }));
 
-/** One image from Files: a preview, then Select or Change. */
-function MediaField({ label, mediaId, previews, onPick, error }: {
+/**
+ * One image from Files, stored as its media id: a preview, Select or Change,
+ * and Remove when `onRemove` is given. A rejected save marks it by `id`.
+ */
+export function MediaField({ id, label, help, mediaId, previews, onPick, onRemove, error, fit = "cover" }: {
+  id: string;
   label: string;
+  help?: ReactNode;
   mediaId: string | null;
   previews: ReadonlyMap<string, SectionMediaPreview>;
   onPick: (image: SectionMediaPreview) => void;
+  onRemove?: () => void;
   error?: string;
+  /** `contain` for logos and icons, which must show whole. */
+  fit?: "cover" | "contain";
 }) {
   const t = useMessages(onlineStoreMessages);
+  const server = useServerFieldError(id);
+  const shown = error ?? server.error;
   const preview = mediaId ? previews.get(mediaId) : undefined;
   return (
-    <div className="flex items-center gap-3">
+    <div id={id} role="group" aria-labelledby={`${id}-label`} className="flex items-center gap-3">
       <div className="grid h-16 w-24 shrink-0 place-items-center overflow-clip rounded-lg border bg-muted">
         {preview ? (
-          <img src={mediaImageUrl(preview.url, 320)} alt="" className="size-full object-cover" />
+          <img
+            src={mediaImageUrl(preview.url, 320)}
+            alt=""
+            className={fit === "contain" ? "max-h-full max-w-full object-contain" : "size-full object-cover"}
+          />
         ) : (
           <ImageIcon className="size-5 text-muted-foreground" aria-hidden="true" />
         )}
       </div>
       <div className="min-w-0 flex-1 space-y-1">
-        <p className="text-body font-medium">{label}</p>
+        <p id={`${id}-label`} className="text-body font-medium">{label}</p>
+        {help ? <p className="text-body text-muted-foreground">{help}</p> : null}
+        <div className="flex flex-wrap gap-2">
+          <MediaManager
+            capability="image"
+            onSelect={(file) => {
+              server.clear();
+              onPick(mediaPreview(file));
+            }}
+            trigger={
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                aria-invalid={shown ? true : undefined}
+                aria-describedby={shown ? `${id}-note` : undefined}
+              >
+                {mediaId ? t("changeImage") : t("selectImage")}
+              </Button>
+            }
+          />
+          {mediaId && onRemove ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                server.clear();
+                onRemove();
+              }}
+            >
+              {t("remove")}
+            </Button>
+          ) : null}
+        </div>
+        {shown ? <p id={`${id}-note`} role="alert" className="text-body text-destructive">{shown}</p> : null}
+      </div>
+    </div>
+  );
+}
+
+/** A slide image: the banner's crop on that screen (its focal point kept in frame), Select or Change, the focus point, and Remove when given. */
+function SlideImage({ id, name, label, help, viewport, mediaId, previews, focalPoint, error, onPick, onFocalPoint, onRemove }: {
+  id: string;
+  /** The slide, for the focus button's name ("Slide 2"). */
+  name: string;
+  label: string;
+  help?: string;
+  viewport: HeroSlideViewport;
+  mediaId: string | null;
+  previews: ReadonlyMap<string, SectionMediaPreview>;
+  focalPoint: StorefrontFocalPoint;
+  error?: string;
+  onPick: (image: SectionMediaPreview) => void;
+  onFocalPoint: (focalPoint: StorefrontFocalPoint) => void;
+  onRemove?: () => void;
+}) {
+  const t = useMessages(onlineStoreMessages);
+  const server = useServerFieldError(id);
+  const shown = error ?? server.error;
+  const preview = mediaId ? previews.get(mediaId) : undefined;
+  const { width, height } = HERO_SLIDE_PRESENTATION[viewport];
+  return (
+    <div id={id} role="group" aria-labelledby={`${id}-label`} className="min-w-0 space-y-1.5">
+      <p id={`${id}-label`} className="text-body font-medium">{label}</p>
+      <div
+        // The crop follows the merchant's focus point (runtime values as custom properties).
+        style={{ "--ratio": `${width} / ${height}`, "--focus": getHeroSlideObjectPosition(focalPoint) } as CSSProperties}
+        className="grid aspect-(--ratio) w-full place-items-center overflow-clip rounded-lg border bg-muted"
+      >
+        {preview ? (
+          <img src={mediaImageUrl(preview.url, 640)} alt="" className="size-full object-cover object-(--focus)" loading="lazy" decoding="async" />
+        ) : (
+          <ImageIcon className="size-5 text-muted-foreground" aria-hidden="true" />
+        )}
+      </div>
+      {help ? <p className="text-body text-muted-foreground">{help}</p> : null}
+      <div className="flex flex-wrap gap-2">
         <MediaManager
           capability="image"
-          onSelect={(file) => onPick({ id: file.id, url: file.url, alt: file.altText?.trim() ?? "" })}
+          onSelect={(file) => {
+            server.clear();
+            onPick(mediaPreview(file));
+          }}
           trigger={
-            <Button type="button" variant="outline" size="sm">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              aria-invalid={shown ? true : undefined}
+              aria-describedby={shown ? `${id}-note` : undefined}
+            >
               {mediaId ? t("changeImage") : t("selectImage")}
             </Button>
           }
         />
-        {error ? <p role="alert" className="text-body text-destructive">{error}</p> : null}
+        {preview ? (
+          <HeroFocalPointEditor
+            id={`${id}-focus`}
+            imageUrl={preview.url}
+            label={t("slideImageName", { slide: name, image: label })}
+            focalPoint={focalPoint}
+            onChange={onFocalPoint}
+          />
+        ) : null}
+        {mediaId && onRemove ? (
+          <Button type="button" variant="ghost" size="sm" onClick={onRemove}>{t("remove")}</Button>
+        ) : null}
       </div>
+      {shown ? <p id={`${id}-note`} role="alert" className="text-body text-destructive">{shown}</p> : null}
     </div>
+  );
+}
+
+/** An optional slide text: absent (not an empty string) when cleared. */
+function withSlideText(slide: StorefrontHeroSlide, key: "heading" | "text" | "buttonLabel", value: string): StorefrontHeroSlide {
+  const next = { ...slide };
+  if (value === "") delete next[key];
+  else next[key] = value;
+  return next;
+}
+
+/**
+ * The hero's slides, in order: each a computer image and an optional phone
+ * image (each with its focus point), the alt text, optional words over the
+ * image and a link with its button. Slides are added from Files, several at
+ * once.
+ */
+function SlidesField({ id, slides, previews, onPickMedia, error, onChange }: {
+  id: string;
+  slides: readonly StorefrontHeroSlide[];
+  previews: ReadonlyMap<string, SectionMediaPreview>;
+  onPickMedia: (image: SectionMediaPreview) => void;
+  error: FieldError;
+  onChange: (slides: StorefrontHeroSlide[]) => void;
+}) {
+  const t = useMessages(onlineStoreMessages);
+  const full = slides.length >= STOREFRONT_HERO_SLIDE_LIMIT;
+  const add = (files: MediaFile[]) => {
+    const accepted = files.slice(0, Math.max(0, STOREFRONT_HERO_SLIDE_LIMIT - slides.length));
+    if (accepted.length < files.length) toast.warning(t("slideLimit", { count: STOREFRONT_HERO_SLIDE_LIMIT }));
+    accepted.forEach((file) => onPickMedia(mediaPreview(file)));
+    onChange([
+      ...slides,
+      ...accepted.map((file) => ({
+        image: file.id,
+        focalPoint: { ...STOREFRONT_DEFAULT_FOCAL_POINT },
+        alt: (file.altText?.trim() ?? "").slice(0, STOREFRONT_HERO_SLIDE_TEXT_LIMITS.alt),
+        link: null,
+      })),
+    ]);
+  };
+  const set = (index: number, slide: StorefrontHeroSlide) => onChange(replaceAt(slides, index, slide));
+  const { desktop, mobile } = HERO_SLIDE_PRESENTATION;
+  return (
+    <fieldset className="space-y-3">
+      <legend className="text-body font-medium">{t("heroSlides")}</legend>
+      <p className="text-body text-muted-foreground">
+        {t("heroSlidesHelp", {
+          count: STOREFRONT_HERO_SLIDE_LIMIT,
+          desktop: `${desktop.width} × ${desktop.height}`,
+          phone: `${mobile.width} × ${mobile.height}`,
+        })}
+      </p>
+      {slides.map((slide, index) => {
+        const name = t("slideNumber", { number: index + 1 });
+        const field = (part: string) => `${id}-${index}-${part}`;
+        return (
+          <div key={index} className="space-y-3 border-t border-border pt-3">
+            <div className="flex items-center gap-1">
+              <p className="min-w-0 flex-1 text-heading-sm">{name}</p>
+              <Button type="button" variant="ghost" size="icon-sm" aria-label={t("moveSectionUp", { name })} disabled={index === 0} onClick={() => onChange(moveAt(slides, index, -1))}>
+                <ArrowUp aria-hidden="true" />
+              </Button>
+              <Button type="button" variant="ghost" size="icon-sm" aria-label={t("moveSectionDown", { name })} disabled={index === slides.length - 1} onClick={() => onChange(moveAt(slides, index, 1))}>
+                <ArrowDown aria-hidden="true" />
+              </Button>
+              <Button type="button" variant="ghost" size="icon-sm" aria-label={t("removeItem", { name })} onClick={() => onChange(removeAt(slides, index))}>
+                <Trash2 aria-hidden="true" />
+              </Button>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <SlideImage
+                id={field("image")}
+                name={name}
+                label={t("slideComputerImage")}
+                viewport="desktop"
+                mediaId={slide.image}
+                previews={previews}
+                focalPoint={slide.focalPoint}
+                error={error(`slides.${index}.image`)}
+                onPick={(image) => {
+                  onPickMedia(image);
+                  set(index, { ...slide, image: image.id, alt: slide.alt || image.alt.slice(0, STOREFRONT_HERO_SLIDE_TEXT_LIMITS.alt) });
+                }}
+                onFocalPoint={(focalPoint) => set(index, { ...slide, focalPoint })}
+              />
+              <SlideImage
+                id={field("phone-image")}
+                name={name}
+                label={t("slidePhoneImage")}
+                help={t("slidePhoneImageHelp")}
+                viewport="mobile"
+                mediaId={slide.phoneImage ?? null}
+                previews={previews}
+                focalPoint={slide.phoneFocalPoint ?? STOREFRONT_DEFAULT_FOCAL_POINT}
+                error={error(`slides.${index}.phoneImage`)}
+                onPick={(image) => {
+                  onPickMedia(image);
+                  set(index, { ...slide, phoneImage: image.id, phoneFocalPoint: slide.phoneFocalPoint ?? { ...STOREFRONT_DEFAULT_FOCAL_POINT } });
+                }}
+                onFocalPoint={(phoneFocalPoint) => set(index, { ...slide, phoneFocalPoint })}
+                onRemove={() => {
+                  const { phoneImage: _image, phoneFocalPoint: _focus, ...rest } = slide;
+                  set(index, rest);
+                }}
+              />
+            </div>
+            <TextField
+              id={field("alt")}
+              label={t("slideAlt")}
+              help={t("slideAltHelp")}
+              value={slide.alt}
+              maxLength={STOREFRONT_HERO_SLIDE_TEXT_LIMITS.alt}
+              error={error(`slides.${index}.alt`)}
+              onChange={(alt) => set(index, { ...slide, alt })}
+            />
+            <TextField
+              id={field("heading")}
+              label={t("slideHeading")}
+              help={t("slideHeadingHelp")}
+              value={slide.heading ?? ""}
+              maxLength={STOREFRONT_HERO_SLIDE_TEXT_LIMITS.heading}
+              error={error(`slides.${index}.heading`)}
+              onChange={(heading) => set(index, withSlideText(slide, "heading", heading))}
+            />
+            <TextField
+              id={field("text")}
+              label={t("slideText")}
+              value={slide.text ?? ""}
+              maxLength={STOREFRONT_HERO_SLIDE_TEXT_LIMITS.text}
+              error={error(`slides.${index}.text`)}
+              onChange={(text) => set(index, withSlideText(slide, "text", text))}
+            />
+            <LinkField
+              id={field("link")}
+              label={t("sectionLink")}
+              value={slide.link}
+              error={error(`slides.${index}.link`)}
+              onChange={(link) => set(index, { ...slide, link })}
+            />
+            {slide.link ? (
+              <TextField
+                id={field("button")}
+                label={t("slideButton")}
+                help={t("slideButtonHelp")}
+                value={slide.buttonLabel ?? ""}
+                maxLength={STOREFRONT_HERO_SLIDE_TEXT_LIMITS.buttonLabel}
+                error={error(`slides.${index}.buttonLabel`)}
+                onChange={(buttonLabel) => set(index, withSlideText(slide, "buttonLabel", buttonLabel))}
+              />
+            ) : null}
+          </div>
+        );
+      })}
+      {error("slides") ? <p role="alert" className="text-body text-destructive">{error("slides")}</p> : null}
+      {full ? (
+        <p className="text-body text-muted-foreground">{t("slideLimit", { count: STOREFRONT_HERO_SLIDE_LIMIT })}</p>
+      ) : (
+        <MediaManager
+          capability="image"
+          onSelect={(file) => add([file])}
+          onSelectMultiple={add}
+          trigger={
+            <Button type="button" variant="outline" size="sm">
+              <Plus aria-hidden="true" />
+              {t("addSlides")}
+            </Button>
+          }
+        />
+      )}
+    </fieldset>
+  );
+}
+
+/** Chosen records in order: move up or down, remove, and the control that adds one. */
+function PickList({ label, help, items, onChange, error, children }: {
+  label: string;
+  help: string;
+  items: ReadonlyArray<{ id: string; name: string }>;
+  onChange: (ids: string[]) => void;
+  error?: string;
+  children: ReactNode;
+}) {
+  const t = useMessages(onlineStoreMessages);
+  const ids = items.map((item) => item.id);
+  return (
+    <fieldset className="space-y-2">
+      <legend className="text-body font-medium">{label}</legend>
+      <p className="text-body text-muted-foreground">{help}</p>
+      {items.length > 0 ? (
+        <ol className="divide-y rounded-lg border">
+          {items.map((item, index) => (
+            <li key={item.id} className="flex min-h-11 items-center gap-1 py-1 pr-1 pl-3">
+              <span className="min-w-0 flex-1 truncate text-body">{item.name}</span>
+              <Button type="button" variant="ghost" size="icon-sm" aria-label={t("moveSectionUp", { name: item.name })} disabled={index === 0} onClick={() => onChange(moveAt(ids, index, -1))}>
+                <ArrowUp aria-hidden="true" />
+              </Button>
+              <Button type="button" variant="ghost" size="icon-sm" aria-label={t("moveSectionDown", { name: item.name })} disabled={index === items.length - 1} onClick={() => onChange(moveAt(ids, index, 1))}>
+                <ArrowDown aria-hidden="true" />
+              </Button>
+              <Button type="button" variant="ghost" size="icon-sm" aria-label={t("removeItem", { name: item.name })} onClick={() => onChange(removeAt(ids, index))}>
+                <Trash2 aria-hidden="true" />
+              </Button>
+            </li>
+          ))}
+        </ol>
+      ) : null}
+      {children}
+      {error ? <p role="alert" className="text-body text-destructive">{error}</p> : null}
+    </fieldset>
+  );
+}
+
+/** The categories a category-tiles section shows: published ones, in order. */
+function CategoryPicks({ id, ids, minimum, error, onChange }: {
+  id: string;
+  ids: readonly string[];
+  minimum: number;
+  error?: string;
+  onChange: (ids: string[]) => void;
+}) {
+  const t = useMessages(onlineStoreMessages);
+  const { data } = useQuery(categoryFormOptionsQueryOptions());
+  const categories = data?.categories ?? [];
+  const names = new Map(categories.map((category) => [category.id, category.name]));
+  const full = ids.length >= STOREFRONT_CATEGORY_TILES_LIMIT;
+  return (
+    <PickList
+      label={t("tileCategories")}
+      help={t("tileCategoriesHelp", { count: STOREFRONT_CATEGORY_TILES_LIMIT, minimum })}
+      items={ids.map((each) => ({ id: each, name: names.get(each) ?? (data ? t("unavailableCategory") : t("loading")) }))}
+      onChange={onChange}
+      error={error}
+    >
+      <SearchableSelect
+        id={id}
+        value=""
+        disabled={full}
+        options={categories
+          .filter((category) => category.status === "published" && !ids.includes(category.id))
+          .map((category) => ({ value: category.id, label: category.name }))}
+        onValueChange={(next) => {
+          if (next && !ids.includes(next)) onChange([...ids, next]);
+        }}
+        placeholder={full ? t("categoryLimit", { count: STOREFRONT_CATEGORY_TILES_LIMIT }) : t("addCategory")}
+        searchPlaceholder={t("searchCategories")}
+        emptyMessage={t("noMoreCategories")}
+        ariaLabel={t("addCategory")}
+        triggerClassName="w-full"
+      />
+    </PickList>
+  );
+}
+
+/** The collections a collections section shows, in order. */
+function CollectionPicks({ id, ids, error, onChange }: {
+  id: string;
+  ids: readonly string[];
+  error?: string;
+  onChange: (ids: string[]) => void;
+}) {
+  const t = useMessages(onlineStoreMessages);
+  // Names of collections picked in this session show before the lookup returns.
+  const [picked, setPicked] = useState<Readonly<Record<string, string>>>({});
+  const lookup = useQuery({ ...collectionsByIdsQueryOptions(ids), placeholderData: keepPreviousData });
+  const names = new Map((lookup.data?.collections ?? []).map((collection) => [collection.id, collection.name]));
+  const full = ids.length >= STOREFRONT_COLLECTIONS_LIMIT;
+  return (
+    <PickList
+      label={t("sectionCollections")}
+      help={t("sectionCollectionsHelp", { count: STOREFRONT_COLLECTIONS_LIMIT })}
+      items={ids.map((each) => ({
+        id: each,
+        name: picked[each] ?? names.get(each) ?? (lookup.isSuccess && !lookup.isPlaceholderData ? t("unavailableCollection") : t("loading")),
+      }))}
+      onChange={onChange}
+      error={error}
+    >
+      <SearchableSelect
+        id={id}
+        value=""
+        disabled={full}
+        load={loadCollections}
+        queryKey={["homepage-section-collections"]}
+        onValueChange={(next, option) => {
+          if (!next || ids.includes(next)) return;
+          if (option) setPicked((current) => ({ ...current, [next]: option.label }));
+          onChange([...ids, next]);
+        }}
+        placeholder={full ? t("collectionLimit", { count: STOREFRONT_COLLECTIONS_LIMIT }) : t("addCollection")}
+        searchPlaceholder={t("searchCollections")}
+        emptyMessage={t("noCollections")}
+        ariaLabel={t("addCollection")}
+        triggerClassName="w-full"
+      />
+    </PickList>
   );
 }
 
@@ -404,6 +913,14 @@ function ItemRow({ removeLabel, onRemove, children }: { removeLabel: string; onR
 const replaceAt = <Item,>(items: readonly Item[], index: number, item: Item) =>
   items.map((each, at) => (at === index ? item : each));
 const removeAt = <Item,>(items: readonly Item[], index: number) => items.filter((_, at) => at !== index);
+/** The list with the item at `index` moved one place up (-1) or down (+1); unchanged at either end. */
+const moveAt = <Item,>(items: readonly Item[], index: number, delta: -1 | 1) => {
+  const next = [...items];
+  const to = index + delta;
+  if (to < 0 || to >= next.length) return next;
+  [next[index], next[to]] = [next[to]!, next[index]!];
+  return next;
+};
 
 /** The settings form for one section; `update` replaces its settings. */
 function SettingsForm({ section, update, error, previews, onPickMedia }: {
@@ -448,7 +965,14 @@ function SettingsForm({ section, update, error, previews, onPickMedia }: {
             ] as const)}
             onChange={(value) => update({ ...settings, phonePlacement: value === "same" ? undefined : value })}
           />
-          <p className="text-body text-muted-foreground">{t("heroImagesHelp")}</p>
+          <SlidesField
+            id={id("slide")}
+            slides={settings.slides}
+            previews={previews}
+            onPickMedia={onPickMedia}
+            error={error}
+            onChange={(slides) => update({ ...settings, slides })}
+          />
           {settings.layout === "contained-banners" && (
             <ItemList
               label={t("heroSideBanners")}
@@ -461,6 +985,7 @@ function SettingsForm({ section, update, error, previews, onPickMedia }: {
               {banners.map((banner, index) => (
                 <ItemRow key={index} removeLabel={t("removeSideBanner", { number: index + 1 })} onRemove={() => setBanners(removeAt(banners, index))}>
                   <MediaField
+                    id={id(`side-banner-${index}-image`)}
                     label={t("sideBannerNumber", { number: index + 1 })}
                     mediaId={banner.mediaId || null}
                     previews={previews}
@@ -530,16 +1055,48 @@ function SettingsForm({ section, update, error, previews, onPickMedia }: {
         </>
       );
     }
-    case "category-tiles":
+    case "category-tiles": {
+      const settings = section.settings;
       return (
-        <ChoiceField
-          id={id("style")}
-          label={t("sectionStyle")}
-          value={section.settings.style}
-          options={(["icons", "round", "photo", "quad", "square"] as const).map((value) => ({ value, label: t(`tileStyle_${value}`) }))}
-          onChange={(style) => update({ style })}
-        />
+        <>
+          <ChoiceField
+            id={id("style")}
+            label={t("sectionStyle")}
+            value={settings.style}
+            options={STOREFRONT_CATEGORY_TILE_STYLES.map((value) => ({ value, label: t(`tileStyle_${value}`) }))}
+            onChange={(style) => update({ ...settings, style })}
+          />
+          {titleField(settings, (title) => update({ ...settings, title }), t("tileTitleHelp"))}
+          <CategoryPicks
+            id={id("categories")}
+            ids={settings.categoryIds}
+            minimum={storefrontCategoryTilesMinimum(settings.style)}
+            error={error("categoryIds")}
+            onChange={(categoryIds) => update({ ...settings, categoryIds })}
+          />
+        </>
       );
+    }
+    case "collections": {
+      const settings = section.settings;
+      return (
+        <>
+          <ChoiceField
+            id={id("carousel")}
+            label={t("collectionsCarousel")}
+            value={settings.carousel}
+            options={(["large", "compact"] as const).map((value) => ({ value, label: t(`collectionsCarousel_${value}`) }))}
+            onChange={(carousel) => update({ ...settings, carousel })}
+          />
+          <CollectionPicks
+            id={id("collections")}
+            ids={settings.collectionIds}
+            error={error("collectionIds")}
+            onChange={(collectionIds) => update({ ...settings, collectionIds })}
+          />
+        </>
+      );
+    }
     case "product-rail": {
       const settings = section.settings;
       return (
@@ -564,8 +1121,7 @@ function SettingsForm({ section, update, error, previews, onPickMedia }: {
       );
     }
     case "deal-block": {
-      // The retired typed-in end date is dropped on the first edit.
-      const { endsAt: _retired, ...settings } = section.settings;
+      const settings = section.settings;
       return (
         <>
           {titleField(settings, (title) => update({ ...settings, title }))}
@@ -629,6 +1185,7 @@ function SettingsForm({ section, update, error, previews, onPickMedia }: {
             {settings.cards.map((card, index) => (
               <ItemRow key={index} removeLabel={t("removeCard", { number: index + 1 })} onRemove={() => setCards(removeAt(settings.cards, index))}>
                 <MediaField
+                  id={id(`card-${index}-image`)}
                   label={t("cardNumber", { number: index + 1 })}
                   mediaId={card.mediaId || null}
                   previews={previews}
@@ -670,6 +1227,7 @@ function SettingsForm({ section, update, error, previews, onPickMedia }: {
           {settings.tiles.map((tile, index) => (
             <ItemRow key={index} removeLabel={t("removeTile", { number: index + 1 })} onRemove={() => setTiles(removeAt(settings.tiles, index))}>
               <MediaField
+                id={id(`tile-${index}-image`)}
                 label={t("tileNumber", { number: index + 1 })}
                 mediaId={tile.mediaId || null}
                 previews={previews}
@@ -751,14 +1309,13 @@ function SettingsForm({ section, update, error, previews, onPickMedia }: {
             onChange={(layout) => update({ ...settings, layout })}
           />
           <MediaField
+            id={id("image")}
             label={t("sectionImage")}
             mediaId={settings.mediaId}
             previews={previews}
             onPick={pick((image) => update({ ...settings, mediaId: image.id }))}
+            onRemove={() => update({ ...settings, mediaId: null })}
           />
-          {settings.mediaId ? (
-            <Button type="button" variant="ghost" size="sm" onClick={() => update({ ...settings, mediaId: null })}>{t("remove")}</Button>
-          ) : null}
           <TextField id={id("heading")} label={t("heading")} value={settings.heading} error={error("heading")} onChange={(heading) => update({ ...settings, heading })} />
           <TextField id={id("text")} label={t("sectionBannerText")} value={settings.text} error={error("text")} onChange={(text) => update({ ...settings, text })} />
           <div className="grid gap-3 sm:grid-cols-2">
@@ -784,8 +1341,7 @@ function SettingsForm({ section, update, error, previews, onPickMedia }: {
           {(settings.layout === "rich-text" || settings.layout === "image-with-text") && <TextField id={id("body")} label={t("sectionBannerText")} multiline value={settings.body} error={error("body")} onChange={(body) => update({ ...settings, body })} />}
           {settings.layout === "image-with-text" && (
             <>
-              <MediaField label={t("sectionImage")} mediaId={settings.mediaId} previews={previews} onPick={pick((image) => update({ ...settings, mediaId: image.id }))} error={error("mediaId")} />
-              {settings.mediaId && <Button type="button" variant="ghost" size="sm" onClick={() => update({ ...settings, mediaId: null })}>{t("remove")}</Button>}
+              <MediaField id={id("image")} label={t("sectionImage")} mediaId={settings.mediaId} previews={previews} onPick={pick((image) => update({ ...settings, mediaId: image.id }))} onRemove={() => update({ ...settings, mediaId: null })} error={error("mediaId")} />
               <ChoiceField id={id("image-side")} label={t("editorialImageSide")} value={settings.imageSide} options={(["start", "end"] as const).map((value) => ({ value, label: t(`editorialImageSide_${value}`) }))} onChange={(imageSide) => update({ ...settings, imageSide })} />
             </>
           )}
@@ -840,6 +1396,17 @@ interface Editing {
 }
 
 /**
+ * A section row's note: why it does not show, or what a rejected save said
+ * about its settings (the row stands in for the dialog's fields).
+ */
+function SectionRowNote({ sectionId, note }: { sectionId: string; note?: string }) {
+  const id = themeSectionFieldId(sectionId);
+  const server = useServerFieldError(id);
+  if (server.error) return <span id={id} role="alert" className="block text-destructive">{server.error}</span>;
+  return <span id={id} className={note ? "block text-muted-foreground" : undefined}>{note}</span>;
+}
+
+/**
  * The homepage section editor: the sections in order (move up and down),
  * each with Edit and Remove, plus Add section. Settings open in a dialog and
  * reach the theme draft on Done, so the page's save bar saves them with the
@@ -850,13 +1417,12 @@ export function SectionEditor({ sections, notes, media, onChange }: {
   sections: readonly Section[];
   /** Why a section does not show on the store, by section id (fit rules, not yet built). */
   notes: Readonly<Record<string, string>>;
-  /** The saved sections' images, for previews. */
+  /** The draft's images (the workspace's `media`), for previews. */
   media: readonly SectionMediaPreview[];
   onChange: (sections: Section[]) => void;
 }) {
   const t = useMessages(onlineStoreMessages);
-  const [picked, setPicked] = useState<ReadonlyMap<string, SectionMediaPreview>>(new Map());
-  const previews = new Map([...media.map((each) => [each.id, each] as const), ...picked]);
+  const { previews, remember } = useMediaPreviews(media);
   const [editing, setEditing] = useState<Editing | null>(null);
   const [open, setOpen] = useState(false);
   const [attempted, setAttempted] = useState(false);
@@ -892,9 +1458,9 @@ export function SectionEditor({ sections, notes, media, onChange }: {
       : sections.map((each) => (each.id === next.id ? next : each)));
     setOpen(false);
   };
-  const rowNotes = Object.fromEntries(sections.flatMap((section) => {
-    if (notes[section.id]) return [[section.id, notes[section.id]!]];
-    return storefrontSectionNeedsContent(section) ? [[section.id, t("sectionNeedsContent")]] : [];
+  const rowNotes = Object.fromEntries(sections.map((section) => {
+    const note = notes[section.id] ?? (storefrontSectionNeedsContent(section) ? t("sectionNeedsContent") : undefined);
+    return [section.id, <SectionRowNote sectionId={section.id} note={note} />];
   }));
   const rowNames = Object.fromEntries(sections.flatMap((section) => {
     if (section.type !== "editorial") return [];
@@ -974,7 +1540,7 @@ export function SectionEditor({ sections, notes, media, onChange }: {
                 })}
                 error={error}
                 previews={previews}
-                onPickMedia={(image) => setPicked((current) => new Map(current).set(image.id, image))}
+                onPickMedia={remember}
               />
             ) : null}
             {attempted && errors.size > 0 ? (

@@ -1,3 +1,4 @@
+import { isOrderChannelSourcePreset, type OrderChannel } from "@scalius/shared/order-channel";
 import { defineMessages } from "./index";
 
 /**
@@ -42,6 +43,16 @@ export const orderMessages = defineMessages({
     "delivery.pickup": "Pickup",
     "delivery.none": "No delivery",
     "delivery.readyForPickup": "Ready for pickup",
+    "channel.online_store": "Online store",
+    "channel.admin": "Dashboard",
+    "channel.pos": "POS",
+    "channel.agent": "AI agent",
+    "channel.app": "App",
+    "source.facebook": "Facebook",
+    "source.instagram": "Instagram",
+    "source.whatsapp": "WhatsApp",
+    "source.phone": "Phone",
+    "source.walk_in": "Walk-in",
   },
   bn: {
     "status.pending": "পেন্ডিং",
@@ -79,6 +90,16 @@ export const orderMessages = defineMessages({
     "delivery.pickup": "পিকআপ",
     "delivery.none": "ডেলিভারি নেই",
     "delivery.readyForPickup": "পিকআপের জন্য তৈরি",
+    "channel.online_store": "অনলাইন স্টোর",
+    "channel.admin": "ড্যাশবোর্ড",
+    "channel.pos": "POS",
+    "channel.agent": "AI এজেন্ট",
+    "channel.app": "অ্যাপ",
+    "source.facebook": "ফেসবুক",
+    "source.instagram": "ইনস্টাগ্রাম",
+    "source.whatsapp": "হোয়াটসঅ্যাপ",
+    "source.phone": "ফোন",
+    "source.walk_in": "দোকানে এসে",
   },
 });
 
@@ -102,3 +123,11 @@ export const paymentMethodLabel = (t: Translate, method: string) =>
 /** "Delivery", "Pickup", or "No delivery" (nothing physical: a service). */
 export const deliveryMethodLabel = (t: Translate, method: "delivery" | "pickup" | "none") =>
   t(`delivery.${method}`);
+/** Where the order came from: "Online store", "Dashboard", "AI agent"… */
+export const orderChannelLabel = (t: Translate, channel: OrderChannel) => t(`channel.${channel}`);
+/** A preset source in the dashboard language; the merchant's own source as it was saved. */
+export const orderChannelSourceLabel = (t: Translate, source: string) =>
+  isOrderChannelSourcePreset(source) ? t(`source.${source}`) : source;
+/** "Dashboard · Facebook", or just the channel when the order has no source. */
+export const orderChannelText = (t: Translate, channel: OrderChannel, source: string | null) =>
+  source ? `${orderChannelLabel(t, channel)} · ${orderChannelSourceLabel(t, source)}` : orderChannelLabel(t, channel);

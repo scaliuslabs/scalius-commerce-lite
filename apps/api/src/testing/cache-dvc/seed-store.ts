@@ -3,10 +3,12 @@
  * so the row-mutation generator has a real row to update, clone or delete in
  * each of them: a three-level category tree, brands, simple and optioned
  * products with media, attributes, facets, rich content, bundles, manual and
- * dynamic collections, CMS pages and articles, a published navigation, hero
- * slides, settings documents, a theme using every section type, shipping,
+ * dynamic collections, CMS pages and articles, a published navigation,
+ * settings documents, a theme using every section type (with brand images,
+ * an announcement, footer words, hero slides, category tiles, collections
+ * and a product homepage), shipping,
  * locations, tax, scheduled promotions, checkout languages, analytics,
- * reviews of a delivered order's lines and warranty policies.
+ * reviews of a delivered order's lines, warranty policies and custom fields.
  *
  * Deterministic: fixed ids and a fixed epoch (`DVC_SEED_EPOCH`).
  */
@@ -37,7 +39,8 @@ export const DVC_IDS = {
   promotionBoundaries: [DVC_SEED_EPOCH + 3 * DAY, DVC_SEED_EPOCH + 5 * DAY, DVC_SEED_EPOCH + 9 * DAY, DVC_SEED_EPOCH + 12 * DAY],
 } as const;
 
-function everySectionTheme(): unknown {
+/** The seeded published theme: every section type and every kind of theme content. */
+export function everySectionTheme() {
   const theme = storefrontTemplateTheme("department-mall");
   const sections: StorefrontSection[] = STOREFRONT_SECTION_TYPES.map((type, index) => storefrontSectionDefault(type, `s${index}`));
   const set = (type: string, settings: Record<string, unknown>, id = type) => {
@@ -46,19 +49,32 @@ function everySectionTheme(): unknown {
     if (at >= 0 && id === type) sections[at] = section;
     else sections.push(section);
   };
-  set("hero", { layout: "contained-banners", sideBanners: [{ mediaId: "media_side", alt: "Side", href: "/sale" }] });
+  set("hero", {
+    layout: "contained-banners",
+    slides: [
+      { image: "media_hero", phoneImage: "media_side", focalPoint: { x: 40, y: 60 }, alt: "Eid", heading: "Eid", buttonLabel: "Shop", link: "/collections/col_manual" },
+      { image: "media_banner", focalPoint: { x: 50, y: 50 }, alt: "Banner", link: null },
+    ],
+    sideBanners: [{ mediaId: "media_side", alt: "Side", href: "/sale" }],
+  });
+  // A draft category among the tiles: publishing it later must show it.
+  set("category-tiles", { style: "photo", title: "Shop by category", categoryIds: ["cat_panjabi", "cat_saree", "cat_draft"] });
+  set("collections", { carousel: "large", collectionIds: ["col_manual", "col_dynamic", "col_hidden"] });
   set("product-rail", { title: "", source: { kind: "popular" }, limit: 12 });
   set("product-grid", { title: "", source: { kind: "category", categoryId: "cat_panjabi" }, columns: 4, rows: 2 });
-  set("deal-block", { title: "", source: { kind: "on-sale" }, endsAt: null });
-  set("lookbook", { title: "", mediaId: "media_look", source: { kind: "collection", collectionId: "col_manual" } });
+  set("deal-block", { title: "", source: { kind: "on-sale" } });
+  set("lookbook", { title: "", mediaId: "media_look", source: { kind: "collection", collectionId: "col_manual" }, photo: "tall" });
   set("banner", { layout: "two-up", heading: "Eid", text: "", mediaId: "media_banner", cta: null });
   set("editorial", { layout: "image-with-text", heading: "Story", body: "Woven by hand.", mediaId: "media_story", imageSide: "end" });
   set("product-rail", { title: "", source: { kind: "newest" }, limit: 8 }, "rail-newest");
-  (theme as { pages: { home: StorefrontSection[] } }).pages.home = sections;
+  theme.pages.home = sections;
+  // A product homepage: the homepage read follows the product's buyer state.
+  theme.pages.homeMode = { kind: "product", productId: "p_linen" };
+  theme.brand = { logo: "media_logo", logoWidth: 180, footerLogo: "media_story", favicon: "media_side" };
+  theme.blocks.topBar = { variant: "utility", settings: { text: "Free delivery in Dhaka", link: "/shipping-policy" } };
+  theme.blocks.footer = { ...theme.blocks.footer, settings: { ...theme.blocks.footer.settings, tagline: "Handmade", about: "Since 1978", copyright: "Test Store Ltd" } } as typeof theme.blocks.footer;
   return theme;
 }
-
-const slide = (id: string, key: string) => ({ id, url: `https://media.test/${key}`, title: id, heading: "", buttonLabel: "", link: "", focalPoint: { x: 50, y: 50 } });
 const q = (value: unknown) => `'${(typeof value === "string" ? value : JSON.stringify(value)).replace(/'/g, "''")}'`;
 const T = DVC_SEED_EPOCH;
 
@@ -180,9 +196,9 @@ function seedSql(): string {
     ('cat_panjabi', 'attr_material', 0), ('cat_panjabi', 'attr_weight', 1), ('cat_men', 'attr_material', 0);
 
   INSERT INTO collections (id, name, presentation, config, sort_order, is_active, description, created_at, updated_at) VALUES
-    ('col_manual', 'Best sellers', 'grid', ${q({ source: "manual", productIds: ["p_linen", "p_cotton", "p_saree"], showOnHomepage: true, featuredProductId: "p_linen", maxProducts: 8 })}, 0, 1, 'Our favourites', ${T}, ${T}),
-    ('col_dynamic', 'Panjabi edit', 'carousel', ${q({ source: "dynamic", categoryIds: ["cat_panjabi"], showOnHomepage: true, maxProducts: 12 })}, 1, 1, NULL, ${T}, ${T}),
-    ('col_hidden', 'Hidden', 'grid', ${q({ source: "manual", productIds: ["p_bag"], showOnHomepage: false, maxProducts: 4 })}, 2, 0, NULL, ${T}, ${T});
+    ('col_manual', 'Best sellers', 'grid', ${q({ source: "manual", productIds: ["p_linen", "p_cotton", "p_saree"], featuredProductId: "p_linen", maxProducts: 8 })}, 0, 1, 'Our favourites', ${T}, ${T}),
+    ('col_dynamic', 'Panjabi edit', 'carousel', ${q({ source: "dynamic", categoryIds: ["cat_panjabi"], maxProducts: 12 })}, 1, 1, NULL, ${T}, ${T}),
+    ('col_hidden', 'Hidden', 'grid', ${q({ source: "manual", productIds: ["p_bag"], maxProducts: 4 })}, 2, 0, NULL, ${T}, ${T});
 
   INSERT INTO pages (id, title, slug, content, is_published, published_at, content_type, excerpt, tags, sort_order, created_at, updated_at) VALUES
     ('page_about', 'About us', 'about', '<p>We weave.</p>', 1, ${T - DAY}, 'page', NULL, '[]', 0, ${T}, ${T}),
@@ -204,17 +220,10 @@ function seedSql(): string {
     ('place_header', 'header', 'primary', 0, 'menu_main', NULL, 1),
     ('place_footer', 'footer', 'column', 0, 'menu_footer', 'Company', 1);
 
-  INSERT INTO hero_sliders (id, type, images, is_active) VALUES
-    ('hero_desktop', 'desktop', ${q([slide("d1", "media/hero.jpg"), slide("d2", "media/side.jpg")])}, 1),
-    ('hero_mobile', 'mobile', ${q([slide("m1", "media/hero.jpg")])}, 1);
-
   INSERT INTO settings (id, key, value, type, category) VALUES
     ('set_seo', 'document', ${q({ homepageTitle: "Scalius Test Store", homepageMetaDescription: "Handmade clothing", socialImage: "", discovery: {}, returnPolicy: {} })}, 'json', 'seo'),
-    ('set_business', 'document', ${q({ companyName: "Test Store", legalName: "Test Store Ltd", addressLine1: "Road 1", addressLine2: "", city: "Dhaka", stateRegion: "", postalCode: "1207", country: "Bangladesh", phone: "01700000000", email: "shop@example.com", taxId: "", invoicePrefix: "INV", invoiceFooterText: "", invoiceLogoUrl: "" })}, 'json', 'business'),
+    ('set_business', 'document', ${q({ companyName: "Test Store", legalName: "Test Store Ltd", addressLine1: "Road 1", addressLine2: "", city: "Dhaka", stateRegion: "", postalCode: "1207", country: "Bangladesh", phone: "01700000000", email: "shop@example.com", taxId: "", invoicePrefix: "INV", invoiceFooterText: "", invoiceLogoUrl: "", socialLinks: [{ id: "facebook", label: "Facebook", url: "https://facebook.com/store" }] })}, 'json', 'business'),
     ('set_currency', 'document', ${q({ currencyCode: "BDT", currencySymbol: "৳", usdExchangeRate: "120" })}, 'json', 'currency'),
-    ('set_homepage', 'document', ${q({ categoryRail: { enabled: true, title: "Shop by category", categoryIds: ["cat_panjabi", "cat_saree"] }, trustStrip: { enabled: true } })}, 'json', 'homepage'),
-    ('set_header', 'document', ${q({ logo: { src: "https://media.test/media/logo.png", alt: "Store" }, contact: { phone: "01700000000" } })}, 'json', 'header'),
-    ('set_footer', 'document', ${q({ tagline: "Handmade", description: "Since 1978", copyrightText: "(c) Store", social: [{ platform: "facebook", url: "https://facebook.com/store" }] })}, 'json', 'footer'),
     ('set_checkout', 'document', ${q({ guestCheckoutEnabled: true, checkoutMode: "all", partialPaymentEnabled: false, partialPaymentAmount: 0 })}, 'json', 'checkout'),
     ('set_inventory', 'document', ${q({ defaultLowStockThreshold: 2 })}, 'json', 'inventory'),
     ('set_emi', 'document', ${q({ enabled: true, plans: [{ id: "city-6", provider: "City Bank", months: 6, feeBps: 300, minAmountMinor: 0 }] })}, 'json', 'emi'),
@@ -293,6 +302,30 @@ function seedSql(): string {
     ('lang_bn', 'Bangla', 'bn', 0, 0, ${q({ pageTitle: "চেকআউট" })}, ${q({})});
   INSERT INTO analytics (id, name, type, is_active, use_partytown, config, location) VALUES
     ('an_gtm', 'Tag Manager', 'custom', 1, 0, ${q({ script: "<script>window.dataLayer=[]</script>" })}, 'head');
+
+  -- Custom fields (COMMERCE-HOOKS H4): storefront-visible fields of every public
+  -- owner type, a hidden product field and a customer field buyers never see.
+  INSERT INTO custom_field_definitions (id, owner_type, namespace, key, name, type, validations, storefront_visible, position, created_at, updated_at) VALUES
+    ('cfd_care_0001', 'product', 'custom', 'care_guide', 'Care guide', 'multi_line_text', '{}', 1, 0, ${T}, ${T}),
+    ('cfd_msrp_0001', 'product', 'custom', 'msrp', 'MSRP', 'money', '{}', 1, 1, ${T}, ${T}),
+    ('cfd_cost_0001', 'product', 'custom', 'cost_note', 'Cost note', 'single_line_text', '{}', 0, 2, ${T}, ${T}),
+    ('cfd_fit_00001', 'variant', 'custom', 'fit', 'Fit', 'single_line_text', '{}', 1, 0, ${T}, ${T}),
+    ('cfd_banner_01', 'category', 'custom', 'banner_note', 'Banner note', 'single_line_text', '{}', 1, 0, ${T}, ${T}),
+    ('cfd_season_01', 'collection', 'custom', 'season', 'Season', 'list.single_line_text', '{}', 1, 0, ${T}, ${T}),
+    ('cfd_origin_01', 'brand', 'custom', 'origin', 'Origin', 'single_line_text', '{}', 1, 0, ${T}, ${T}),
+    ('cfd_hero_0001', 'page', 'custom', 'hero_colour', 'Hero colour', 'color', '{}', 1, 0, ${T}, ${T}),
+    ('cfd_vip_00001', 'customer', 'custom', 'vip', 'VIP', 'boolean', '{}', 0, 0, ${T}, ${T});
+  INSERT INTO custom_field_values (definition_id, owner_type, owner_id, value, updated_at) VALUES
+    ('cfd_care_0001', 'product', 'p_linen', 'Hand wash cold.', ${T}),
+    ('cfd_care_0001', 'product', 'p_cotton', 'Machine wash.', ${T}),
+    ('cfd_msrp_0001', 'product', 'p_linen', '300000', ${T}),
+    ('cfd_cost_0001', 'product', 'p_linen', 'Supplier A', ${T}),
+    ('cfd_fit_00001', 'variant', 'v_linen_m', 'Regular', ${T}),
+    ('cfd_banner_01', 'category', 'cat_panjabi', 'Eid edit', ${T}),
+    ('cfd_season_01', 'collection', 'col_manual', '["Eid","Winter"]', ${T}),
+    ('cfd_origin_01', 'brand', 'brd_aarong01', 'Bangladesh', ${T}),
+    ('cfd_hero_0001', 'page', 'page_about', '#aa3300', ${T}),
+    ('cfd_vip_00001', 'customer', 'cus_1', 'true', ${T});
   `;
 }
 

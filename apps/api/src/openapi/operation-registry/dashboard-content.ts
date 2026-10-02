@@ -1,4 +1,4 @@
-// Agent operation registry rows for the dashboard content, media, navigation, hero and theme routes.
+// Agent operation registry rows for the dashboard content, media, navigation and theme routes.
 import type { OperationRegistryEntry } from "./entry";
 
 export const DASHBOARD_CONTENT_OPERATIONS = {
@@ -37,15 +37,6 @@ export const DASHBOARD_CONTENT_OPERATIONS = {
     limits: { response: 16_384 },
   },
   "dashboard.content.update": { revision: "required" },
-  "dashboard.hero_sliders.create": {},
-  "dashboard.hero_sliders.get": {},
-  "dashboard.hero_sliders.list": {},
-  "dashboard.hero_sliders.trash": {
-    risk: "destructive",
-    revision: "required",
-    limits: { response: 16_384 },
-  },
-  "dashboard.hero_sliders.update": { revision: "required" },
   "dashboard.media_folders.create": {},
   "dashboard.media_folders.delete": {
     risk: "destructive",
@@ -95,10 +86,6 @@ export const DASHBOARD_CONTENT_OPERATIONS = {
     exposure: "excluded",
     reason: "Browser-generated renditions from the dashboard; agent uploads get server-generated renditions at completion.",
   },
-  "dashboard.navigation.authority_shadow": {
-    exposure: "excluded",
-    reason: "Internal normalized-authority migration parity report.",
-  },
   "dashboard.navigation.items_create": { revision: "required" },
   "dashboard.navigation.items_delete": {
     risk: "destructive",
@@ -133,9 +120,7 @@ export const DASHBOARD_CONTENT_OPERATIONS = {
   "dashboard.navigation.products_preview_count": { limits: { response: 16_384 } },
   "dashboard.navigation.publications_list": {},
   "dashboard.navigation.resources_search": {},
-  "dashboard.theme.draft_rebase": { revision: "required" },
   "dashboard.theme.draft_save": { revision: "required" },
-  "dashboard.theme.get": {},
   "dashboard.theme.preview_session_create": {
     exposure: "continuation",
     risk: "read",
@@ -151,10 +136,6 @@ export const DASHBOARD_CONTENT_OPERATIONS = {
   },
   "dashboard.theme.publish": { revision: "required" },
   "dashboard.theme.rollback": { revision: "required" },
-  "dashboard.theme.save_legacy": {
-    exposure: "excluded",
-    reason: "Superseded by durable draft, preview, publish, version, and rollback workflow.",
-  },
   "dashboard.theme.versions_list": {},
   "dashboard.theme.workspace_get": {},
 } satisfies Record<string, OperationRegistryEntry>;

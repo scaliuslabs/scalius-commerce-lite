@@ -15,8 +15,10 @@ describe("public API cache routes", () => {
     expect(isPublicApiCacheRoute(url("/api/v1/storefront/layout"))).toBe(true);
     expect(isPublicApiCacheRoute(url("/api/v1/products/linen-shirt"))).toBe(true);
     expect(isPublicApiCacheRoute(url("/api/v1/checkout/config"))).toBe(true);
-    expect(isPublicApiCacheRoute(url("/api/v1/hero/sliders?type=mobile"))).toBe(true);
-    expect(isPublicApiCacheRoute(url("/api/v1/hero/sliders?type=tablet"))).toBe(false);
+    // The hero is the theme's homepage section; header and footer are the layout's.
+    for (const retired of ["/api/v1/hero/sliders?type=mobile", "/api/v1/header", "/api/v1/footer"]) {
+      expect(isPublicApiCacheRoute(url(retired))).toBe(false);
+    }
     expect(isPublicApiCacheRoute(url("/api/v1/storefront/layout/extra"))).toBe(false);
     expect(isPublicApiCacheRoute(url("/api/v1/orders/receipt/order_1"))).toBe(false);
     expect(isPublicApiCacheRoute(url("/api/v1/admin/products"))).toBe(false);

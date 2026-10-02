@@ -8,6 +8,11 @@ import type { Database } from "@scalius/database/client";
 import { and, asc, eq, isNull, notInArray, sql, type SQL, type SQLWrapper } from "drizzle-orm";
 import { getCurrentMediaUrl } from "../../integrations/storage";
 import { deps } from "../../cache-deps";
+import {
+    presentStorefrontCustomFields,
+    selectStorefrontCustomFieldRows,
+    type StorefrontCustomFieldRow,
+} from "../custom-fields/custom-fields.storefront";
 
 export const PUBLIC_BRAND_PAGE_LIMIT = 100;
 /** Brand URLs one sitemap document lists at most (the sitemap protocol allows 50k). */
@@ -83,9 +88,9 @@ function toIso(value: number | null | undefined): string | null {
     return value ? new Date(Number(value) * 1000).toISOString() : null;
 }
 
-/** The brand page's record: published, live, with its logo. */
+/** The brand page's record: published, live, with its logo and storefront-visible custom fields (one round trip). */
 export async function getPublicBrandBySlug(db: Database, slug: string) {
-    const row = await db
+    const [rows, customFieldRows] = await db.batch([db
         .select({
             id: brands.id,
             name: brands.name,
@@ -105,7 +110,12 @@ export async function getPublicBrandBySlug(db: Database, slug: string) {
         .from(brands)
         .leftJoin(media, brandLogoJoinCondition())
         .where(and(eq(brands.slug, slug), ...publicBrandConditions()))
-        .get();
+        .limit(1),
+    selectStorefrontCustomFieldRows(db, "brand", sql`(
+        SELECT ${brands.id} FROM ${brands} WHERE ${and(eq(brands.slug, slug), ...publicBrandConditions())} LIMIT 1
+    )`),
+    ]);
+    const row = rows[0];
     if (!row) {
         // Any brand can take this slug or be published under it.
         deps.anyBrand();
@@ -120,6 +130,8 @@ export async function getPublicBrandBySlug(db: Database, slug: string) {
     return {
         ...brand,
         logo: presentBrandLogo({ logoMediaId, logoObjectKey, logoVariantWidth, logoAltText, logoWidth, logoHeight }, brand.name),
+        /** Storefront-visible custom fields, in the merchant's order. */
+        customFields: presentStorefrontCustomFields(customFieldRows as StorefrontCustomFieldRow[]),
         createdAt: toIso(createdAt),
         updatedAt: toIso(updatedAt),
     };

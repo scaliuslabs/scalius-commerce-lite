@@ -51,6 +51,7 @@ function friendly(issue: ZodIssueLike): string {
 }
 
 function toPath(path: unknown): string | null {
+  if (typeof path === "string") return path.trim() || null;
   if (!Array.isArray(path)) return null;
   return path.map(String).join(".");
 }
@@ -66,9 +67,12 @@ function fromIssues(value: unknown): ApiFieldIssue[] | null {
 
 /**
  * Field-level problems in an API rejection, or null when the error isn't about
- * specific fields. Understands the two shapes our API returns for a 400:
+ * specific fields. Understands the shapes our API returns for a 400:
  * - request validation: `{ error: { name: "ZodError", message: "<JSON issue list>" } }`
  * - service validation: `ValidationError(message, { field })` → `details.field`
+ * - service validation: `ValidationError(message, { issues })` or a bare issue
+ *   list (`[{ path: "brand.logo", message }]`, the theme draft), with array or
+ *   dotted string paths
  */
 export function readApiFieldIssues(error: unknown): ApiFieldIssue[] | null {
   if (!(error instanceof AdminApiResponseError) || (error.status !== 400 && error.status !== 422)) return null;
@@ -80,6 +84,10 @@ export function readApiFieldIssues(error: unknown): ApiFieldIssue[] | null {
     } catch {
       // Not an issue list; fall through.
     }
+  }
+  if (Array.isArray(error.details)) {
+    const listed = fromIssues(error.details);
+    if (listed) return listed;
   }
   const details = error.details as { field?: unknown; issues?: unknown } | undefined;
   if (details && typeof details === "object") {

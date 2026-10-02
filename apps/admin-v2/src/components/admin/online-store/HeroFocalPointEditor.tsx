@@ -16,9 +16,12 @@ import {
 } from "~/components/ui/popover";
 
 interface HeroFocalPointEditorProps {
-  imageId: string;
+  /** Unique on the page: names the range inputs. */
+  id: string;
+  /** The image's URL (any size; a 960px copy is shown). */
   imageUrl: string;
-  imageText: string;
+  /** Names the image in the button's accessible name ("Desktop image of slide 1"). */
+  label: string;
   focalPoint: HeroSlideFocalPoint;
   onChange: (focalPoint: HeroSlideFocalPoint) => void;
 }
@@ -28,9 +31,9 @@ function clampPercent(value: number): number {
 }
 
 export function HeroFocalPointEditor({
-  imageId,
+  id,
   imageUrl,
-  imageText,
+  label,
   focalPoint,
   onChange,
 }: HeroFocalPointEditorProps) {
@@ -53,7 +56,7 @@ export function HeroFocalPointEditor({
           type="button"
           variant="secondary"
           size="sm"
-          aria-label={t("focusFor", { name: imageText || t("thisBanner") })}
+          aria-label={t("focusFor", { name: label })}
         >
           <Crosshair />
           {t("focus")}
@@ -90,9 +93,9 @@ export function HeroFocalPointEditor({
 
         <div className="grid gap-2">
           <div className="flex items-center gap-2">
-            <Label htmlFor={`hero-focus-x-${imageId}`} className="w-24 shrink-0">{t("horizontal")}</Label>
+            <Label htmlFor={`hero-focus-x-${id}`} className="w-24 shrink-0">{t("horizontal")}</Label>
             <input
-              id={`hero-focus-x-${imageId}`}
+              id={`hero-focus-x-${id}`}
               type="range"
               min={0}
               max={100}
@@ -104,9 +107,9 @@ export function HeroFocalPointEditor({
             <span className="w-10 shrink-0 text-right text-body tabular-nums text-muted-foreground">{focalPoint.x}%</span>
           </div>
           <div className="flex items-center gap-2">
-            <Label htmlFor={`hero-focus-y-${imageId}`} className="w-24 shrink-0">{t("vertical")}</Label>
+            <Label htmlFor={`hero-focus-y-${id}`} className="w-24 shrink-0">{t("vertical")}</Label>
             <input
-              id={`hero-focus-y-${imageId}`}
+              id={`hero-focus-y-${id}`}
               type="range"
               min={0}
               max={100}

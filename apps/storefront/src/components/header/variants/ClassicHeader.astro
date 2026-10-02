@@ -5,7 +5,6 @@
 // scroll. Kept pixel-identical to the version 3 classic header.
 import SearchBar from "../../search/SearchBar.astro";
 import { Phone, ShoppingCart, Menu, Search } from "lucide-react";
-import type { HeaderData } from "@/lib/api";
 import type { StorefrontNavigationRenderer } from "@scalius/shared/storefront-theme";
 import { mediaImageSrcSet, mediaImageUrl } from "@/lib/media-url";
 import {
@@ -14,9 +13,12 @@ import {
 } from "@scalius/shared/brand-presentation";
 import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
 import { telHref } from "@/lib/store-identity";
+import type { HeaderLogo } from "../header-variants";
 
 interface Props {
-  headerData: HeaderData;
+  logo: HeaderLogo;
+  /** The store's support phone (Business settings). */
+  phone: string | null;
   variantId: string;
   /** A menu row under the bar (slot `desktop-nav-full`). */
   menuRow: boolean;
@@ -27,15 +29,14 @@ interface Props {
   phoneDrop: string;
 }
 
-const { headerData, variantId, menuRow, navigationStyle, condensedMenu, phoneDrop } = Astro.props;
-const logoWidth = normalizeHeaderLogoWidth(headerData.logo.width);
+const { logo, phone, variantId, menuRow, navigationStyle, condensedMenu, phoneDrop } = Astro.props;
+const logoWidth = normalizeHeaderLogoWidth(logo.width);
 const mobileLogoWidth = getMobileHeaderLogoWidth(logoWidth);
 // Logos without renditions get a plain src (no stray `sizes`).
-const logoSrcSet = mediaImageSrcSet(headerData.logo.src);
+const logoSrcSet = mediaImageSrcSet(logo.src);
 // Social links live in the footer and the phone menu, so the desktop header
 // reaches My Account and the cart in a few tab stops (logo, search, call).
-const phoneHref =
-  headerData.contact.isEnabled !== false ? telHref(headerData.contact.phone) : null;
+const phoneHref = telHref(phone);
 const expandedActionsLgWidth = 0;
 const expandedActionsXlWidth = phoneHref ? 40 : 0;
 ---
@@ -102,12 +103,12 @@ const expandedActionsXlWidth = phoneHref ? 40 : 0;
         {/* The logo's alt text (the store name) is the link's name. */}
         <a href="/" class="block group">
           {
-            headerData.logo.src ? (
+            logo.src ? (
               <img
-                src={mediaImageUrl(headerData.logo.src, 320)}
+                src={mediaImageUrl(logo.src, 320)}
                 srcset={logoSrcSet}
                 sizes={logoSrcSet ? `(min-width: 1024px) ${logoWidth}px, ${mobileLogoWidth}px` : undefined}
-                alt={headerData.logo.alt}
+                alt={logo.alt}
                 class="storefront-header-logo h-auto w-auto max-h-8 lg:max-h-10 object-contain transition-[max-height,transform] duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)] group-hover:scale-[1.02] group-[.is-scrolled]/header:lg:max-h-9"
                 style={`--header-logo-width: ${logoWidth}px; --header-logo-mobile-width: ${mobileLogoWidth}px;`}
                 width={240}
@@ -117,7 +118,7 @@ const expandedActionsXlWidth = phoneHref ? 40 : 0;
               />
             ) : (
               <span class="font-bold text-xl tracking-tight transition-transform duration-300 group-hover:scale-[1.02]">
-                {headerData.logo.alt}
+                {logo.alt}
               </span>
             )
           }
@@ -164,8 +165,8 @@ const expandedActionsXlWidth = phoneHref ? 40 : 0;
                 <a
                   href={phoneHref}
                   class="hidden h-10 w-10 shrink-0 items-center justify-center rounded-full border border-input bg-background text-muted-foreground transition-colors duration-200 hover:border-primary/50 hover:text-foreground xl:flex"
-                  aria-label={`Call ${headerData.contact.phone}`}
-                  title={headerData.contact.phone}
+                  aria-label={`Call ${phone}`}
+                  title={phone ?? undefined}
                 >
                   <Phone className="h-4 w-4 stroke-[1.5]" />
                 </a>

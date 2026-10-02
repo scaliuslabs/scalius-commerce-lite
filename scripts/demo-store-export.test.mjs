@@ -179,14 +179,6 @@ function seedDemoCatalog(database) {
     "INSERT INTO product_bundles (id, product_id, quantity, discount_type, discount_bps, created_at, updated_at) VALUES (?, ?, 2, 'percentage', 1000, ?, ?)",
     "pbd_halo_pair", "prod_halo", FIXED_TIMESTAMP, FIXED_TIMESTAMP,
   );
-  run(
-    "INSERT INTO hero_sections (id, name, type, is_active, config, created_at, updated_at) VALUES (?, ?, ?, 1, ?, ?, ?)",
-    "hero_home", "Home hero", "split", '{"headline":"Light it up"}', FIXED_TIMESTAMP, FIXED_TIMESTAMP,
-  );
-  run(
-    "INSERT INTO hero_sliders (id, type, images, is_active, revision, created_at, updated_at) VALUES (?, 'desktop', ?, 1, 1, ?, ?)",
-    "hs_desktop", '["demo/hero.webp"]', FIXED_TIMESTAMP, FIXED_TIMESTAMP,
-  );
 }
 
 /** Object keys and byte sizes the fixture's ready media rows declare. */
@@ -383,10 +375,8 @@ describe("demo store export bundle", () => {
       product_rich_content: 1,
       product_content_blocks: 1,
       product_bundles: 1,
-      hero_sections: 1,
-      hero_sliders: 1,
     });
-    expect(bundle.rowTotal).toBe(37);
+    expect(bundle.rowTotal).toBe(35);
     expect(bundle.media).toMatchObject({ count: 5, bytesIncluded: false, directory: null });
     expect(bundle.demoStoreContract.matches).toBe(false);
     expect(bundle.artifacts.seedSql.sha256).toBe(sha256File(path.join(testCase.exportDir, "seed.sql")));

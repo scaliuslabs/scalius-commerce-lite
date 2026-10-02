@@ -38,8 +38,6 @@ import {
     type NavigationResourceType,
     type NavigationTargetItem,
 } from "@scalius/shared/navigation-target";
-import { footerDocument, headerDocument } from "../settings/documents";
-import { selectSettingsDocuments } from "../settings/settings-store";
 import {
     buildNavigationHierarchy,
     checksumNavigationPublication,
@@ -64,7 +62,6 @@ import {
     loadNavigationResourceSnapshots,
     resolveNavigationItemsForPublic,
 } from "./navigation.resolver";
-import { parseNavigationConfig } from "./navigation.validation";
 import {
     ftsMatch,
     isFts5SearchEnabled,
@@ -89,15 +86,6 @@ export interface NavigationItemDestination {
     beforeId?: string;
     afterId?: string;
     index?: number;
-}
-
-export interface NavigationAuthorityShadowReport {
-    ready: boolean;
-    legacyMenuCount: number;
-    authorityMenuCount: number;
-    legacyItemCount: number;
-    authorityItemCount: number;
-    mismatches: string[];
 }
 
 function normalizeLimit(value: number | undefined): number {
@@ -1844,145 +1832,6 @@ export async function getNavigationPlacementManifest(db: Database) {
             return [];
         }
     });
-}
-
-interface ExpectedAuthorityItem {
-    id: string;
-    menuId: string;
-    parentId: string | null;
-    position: number;
-    storage: NavigationMenuItemStorage;
-}
-
-function legacyItemStorage(item: NavigationTargetItem): NavigationMenuItemStorage {
-    const label = item.customLabel?.trim() || item.lastKnownLabel?.trim() || "Untitled item";
-    return normalizeNavigationMenuItemInput({
-        label,
-        labelMode: item.labelMode,
-        target: item.target.type === "resource"
-            ? {
-                type: "resource",
-                resourceType: item.target.resourceType,
-                resourceId: item.target.resourceId,
-                query: item.target.query,
-            }
-            : item.target,
-    });
-}
-
-function flattenLegacyItems(
-    menuId: string,
-    items: readonly NavigationTargetItem[],
-    parentSourceId: string | null = null,
-): ExpectedAuthorityItem[] {
-    return items.flatMap((item, index) => {
-        const sourceId = item.id;
-        const id = `${menuId}:${sourceId}`;
-        const row: ExpectedAuthorityItem = {
-            id,
-            menuId,
-            parentId: parentSourceId ? `${menuId}:${parentSourceId}` : null,
-            position: (index + 1) * NAVIGATION_POSITION_GAP,
-            storage: legacyItemStorage(item),
-        };
-        return [row, ...flattenLegacyItems(menuId, item.subMenu ?? [], sourceId)];
-    });
-}
-
-function itemSignature(item: ExpectedAuthorityItem): string {
-    return JSON.stringify({
-        id: item.id,
-        menuId: item.menuId,
-        parentId: item.parentId,
-        position: item.position,
-        ...item.storage,
-    });
-}
-
-export async function getNavigationAuthorityShadowReport(
-    db: Database,
-): Promise<NavigationAuthorityShadowReport> {
-    // The raw rows: pre-authority navigation is still embedded in the stored
-    // documents, which their typed readers deliberately strip.
-    const presentationRows = await selectSettingsDocuments(db, [headerDocument, footerDocument]);
-    const rawPresentation = (key: string) =>
-        JSON.parse(presentationRows.find((row) => row.category === key)?.value ?? "{}") as unknown;
-    const expectedMenus: Array<{ id: string; name: string; handle: string; items: NavigationTargetItem[] }> = [];
-    if (presentationRows.length > 0) {
-        const header = parseNavigationConfig("header", rawPresentation(headerDocument.key));
-        const footer = parseNavigationConfig("footer", rawPresentation(footerDocument.key));
-        const headerItems = Array.isArray(header.navigation)
-            ? header.navigation as NavigationTargetItem[]
-            : [];
-        if (headerItems.length) {
-            expectedMenus.push({
-                id: "menu_legacy_header_primary",
-                name: "Header primary",
-                handle: "header-primary",
-                items: headerItems,
-            });
-        }
-        const footerMenus = Array.isArray(footer.menus) ? footer.menus : [];
-        footerMenus.forEach((value, index) => {
-            const menu = value as { title?: string; links?: NavigationTargetItem[] };
-            expectedMenus.push({
-                id: `menu_legacy_footer_${index}`,
-                name: menu.title?.trim() || `Footer menu ${index + 1}`,
-                handle: `footer-${index + 1}`,
-                items: Array.isArray(menu.links) ? menu.links : [],
-            });
-        });
-    }
-
-    const [actualMenus, actualItems] = await db.batch([
-        db.select({ id: navigationMenus.id, name: navigationMenus.name, handle: navigationMenus.handle })
-            .from(navigationMenus)
-            .where(isNull(navigationMenus.deletedAt))
-            .orderBy(asc(navigationMenus.id)),
-        db.select().from(navigationMenuItems).orderBy(asc(navigationMenuItems.id)),
-    ]);
-    const expectedItems = expectedMenus.flatMap((menu) => flattenLegacyItems(menu.id, menu.items));
-    const actualItemSignatures = new Set(actualItems.map((item) => itemSignature({
-        id: item.id,
-        menuId: item.menuId,
-        parentId: item.parentId,
-        position: item.position,
-        storage: {
-            label: item.label,
-            labelMode: item.labelMode,
-            targetType: item.targetType,
-            targetId: item.targetId,
-            targetValue: item.targetValue,
-            targetQuery: item.targetQuery,
-            openInNewTab: item.openInNewTab,
-            isEnabled: item.isEnabled,
-        },
-    })));
-    const mismatches: string[] = [];
-    const actualMenuById = new Map(actualMenus.map((menu) => [menu.id, menu]));
-    for (const expected of expectedMenus) {
-        const actual = actualMenuById.get(expected.id);
-        if (!actual) mismatches.push(`missing_menu:${expected.id}`);
-        else if (actual.name !== expected.name || actual.handle !== expected.handle) {
-            mismatches.push(`menu_metadata:${expected.id}`);
-        }
-    }
-    for (const expected of expectedItems) {
-        if (!actualItemSignatures.has(itemSignature(expected))) {
-            mismatches.push(`item:${expected.id}`);
-            if (mismatches.length >= 50) break;
-        }
-    }
-    if (actualMenus.length !== expectedMenus.length) mismatches.push("menu_count");
-    if (actualItems.length !== expectedItems.length) mismatches.push("item_count");
-    return {
-        ready: mismatches.length === 0,
-        legacyMenuCount: expectedMenus.length,
-        authorityMenuCount: actualMenus.length,
-        legacyItemCount: expectedItems.length,
-        authorityItemCount: actualItems.length,
-        mismatches,
-    };
 }
 
 export class NavigationAuthorityUnavailableError extends AppError {

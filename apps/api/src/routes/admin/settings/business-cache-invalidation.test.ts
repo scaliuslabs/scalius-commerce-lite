@@ -61,6 +61,7 @@ describe("business settings write behavior", () => {
             invoicePrefix: "INV",
             invoiceFooterText: "f".repeat(100_000),
             invoiceLogoUrl: "https://images.example.com/logo.png",
+            socialLinks: Array.from({ length: 12 }, (_, index) => ({ id: `s${index}`, label: "Facebook", url: `https://facebook.com/shop${index}` })),
             providerSecret: "must-not-project",
         });
         const { app, env } = createTestApp();
@@ -79,6 +80,9 @@ describe("business settings write behavior", () => {
         expect(body.data.invoiceFooterText).toHaveLength(4_000);
         expect(body.data.email).toBe("merchant@example.com");
         expect(body.data.revision).toBe(3);
+        // The store's social profiles, bounded to the eight a store lists.
+        expect(body.data.socialLinks).toHaveLength(8);
+        expect(body.data.socialLinks[0]).toEqual({ id: "s0", label: "Facebook", url: "https://facebook.com/shop0" });
         expect(responseText).not.toContain("must-not-project");
     });
 
@@ -88,7 +92,7 @@ describe("business settings write behavior", () => {
             value: {
                 companyName: "Scalius Demo", legalName: "Scalius Demo Ltd", addressLine1: "", addressLine2: "",
                 city: "", stateRegion: "", postalCode: "", country: "BD", phone: "", email: "", taxId: "",
-                invoicePrefix: "INV", invoiceFooterText: "", invoiceLogoUrl: "",
+                invoicePrefix: "INV", invoiceFooterText: "", invoiceLogoUrl: "", socialLinks: [],
             },
             revision: 2,
         });

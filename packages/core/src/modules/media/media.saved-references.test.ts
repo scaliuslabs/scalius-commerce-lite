@@ -13,10 +13,16 @@ import {
   trashMediaFile,
 } from "./media.service";
 import { withPublicMediaUrl } from "../../integrations/storage";
-import {
-  getGeneralSettings,
-  saveHeaderConfig,
-} from "../settings/site-settings.service";
+import { saveBusinessSettings } from "../settings/business-settings.service";
+import { businessDocument } from "../settings/documents";
+import { publishThemeDraft, saveThemeDraft } from "../settings/site-settings.service";
+import { DEFAULT_STOREFRONT_THEME, type StorefrontThemeDocument } from "@scalius/shared/storefront-theme";
+
+/** The business document's revision (the invoice logo is a saved URL surface). */
+const businessRevision = async (db: Database) => (await businessDocument.readDetailed(db)).revision;
+/** Save a business invoice logo at a revision: a URL-bearing settings write. */
+const saveInvoiceLogo = (db: Database, url: string, revision: number) =>
+  saveBusinessSettings(db, { invoiceLogoUrl: url }, { expectedRevision: revision });
 
 function createBucket() {
   const objects = new Set<string>();
@@ -74,17 +80,11 @@ describe("saved media reference deletion guards", () => {
     return { id, objectKey };
   }
 
-  it("blocks a trashed media item still saved as the header logo without deleting its blob", async () => {
+  it("blocks a trashed media item still saved as the invoice logo without deleting its blob", async () => {
     const file = await seedMedia();
     const storage = createBucket();
     storage.objects.add(file.objectKey);
-    const saved = await saveHeaderConfig(db, {
-      topBar: { enabled: false, text: "" },
-      logo: { src: `https://media.example/${file.objectKey}`, alt: "Logo" },
-      favicon: { src: "", alt: "" },
-      contact: { phone: "", email: "" },
-      social: [],
-    }, 0);
+    const saved = await saveInvoiceLogo(db, `https://media.example/${file.objectKey}`, 0);
     const trashed = await trashMediaFile(db, file.id, 1);
 
     const result = await permanentlyDeleteMediaFile(db, file.id, trashed.version, storage.bucket)
@@ -93,25 +93,23 @@ describe("saved media reference deletion guards", () => {
     expect(result).toBeInstanceOf(MediaDependencyConflictError);
     expect((result as MediaDependencyConflictError).details).toMatchObject({
       count: 1,
-      references: [{ kind: "theme", id: null }],
+      references: [{ kind: "invoice", id: null }],
       orderCount: 0,
     });
 
     expect(storage.deleteCalls).toEqual([]);
     expect(storage.objects.has(file.objectKey)).toBe(true);
     expect(sqlite.prepare("SELECT status FROM media WHERE id = ?").get(file.id)).toMatchObject({ status: "trashed" });
-    expect((await getGeneralSettings(db)).revisions.header).toBe(saved.revision);
+    expect(await businessRevision(db)).toBe(saved.revision);
   });
 
-  it("allows permanent deletion after replacing the saved header reference", async () => {
+  it("allows permanent deletion after replacing the saved invoice logo", async () => {
     const file = await seedMedia();
     const storage = createBucket();
     storage.objects.add(file.objectKey);
-    const saved = await saveHeaderConfig(db, {
-      logo: { src: `https://media.example/${file.objectKey}`, alt: "Logo" },
-    }, 0);
+    const saved = await saveInvoiceLogo(db, `https://media.example/${file.objectKey}`, 0);
     const trashed = await trashMediaFile(db, file.id, 1);
-    await saveHeaderConfig(db, { logo: { src: "", alt: "" } }, saved.revision);
+    await saveInvoiceLogo(db, "", saved.revision);
 
     await expect(
       permanentlyDeleteMediaFile(db, file.id, trashed.version, storage.bucket),
@@ -127,9 +125,7 @@ describe("saved media reference deletion guards", () => {
     storage.objects.add(file.objectKey);
     const trashed = await trashMediaFile(db, file.id, 1);
 
-    await saveHeaderConfig(db, {
-      logo: { src: `https://media.example/media/mediaAsaved_logo.png`, alt: "Different object" },
-    }, 0);
+    await saveInvoiceLogo(db, "https://media.example/media/mediaAsaved_logo.png", 0);
 
     await expect(
       permanentlyDeleteMediaFile(db, file.id, trashed.version, storage.bucket),
@@ -141,14 +137,12 @@ describe("saved media reference deletion guards", () => {
     const file = await seedMedia();
     const storage = createBucket();
     storage.objects.add(file.objectKey);
-    const saved = await saveHeaderConfig(db, { logo: { src: "", alt: "" } }, 0);
+    const saved = await saveInvoiceLogo(db, "", 0);
     const trashed = await trashMediaFile(db, file.id, 1);
 
     const deletion = permanentlyDeleteMediaFile(db, file.id, trashed.version, storage.bucket);
     await Promise.resolve();
-    const writer = saveHeaderConfig(db, {
-      logo: { src: `https://media.example/${file.objectKey}`, alt: "Raced logo" },
-    }, saved.revision);
+    const writer = saveInvoiceLogo(db, `https://media.example/${file.objectKey}`, saved.revision);
     const [deleteResult, writeResult] = await Promise.allSettled([deletion, writer]);
 
     expect(writeResult.status).toBe("fulfilled");
@@ -160,7 +154,7 @@ describe("saved media reference deletion guards", () => {
 
   it("rejects a writer that tries to save a reference after the delete claim", async () => {
     const file = await seedMedia();
-    const saved = await saveHeaderConfig(db, { logo: { src: "", alt: "" } }, 0);
+    const saved = await saveInvoiceLogo(db, "", 0);
     const trashed = await trashMediaFile(db, file.id, 1);
     await db.update(media).set({
       status: "deleting",
@@ -169,10 +163,31 @@ describe("saved media reference deletion guards", () => {
       updatedAt: new Date(),
     }).where(eq(media.id, file.id));
 
-    await expect(saveHeaderConfig(db, {
-      logo: { src: `https://media.example/${file.objectKey}`, alt: "Late logo" },
-    }, saved.revision)).rejects.toThrow();
-    expect((await getGeneralSettings(db)).revisions.header).toBe(saved.revision);
+    await expect(saveInvoiceLogo(db, `https://media.example/${file.objectKey}`, saved.revision)).rejects.toThrow();
+    expect(await businessRevision(db)).toBe(saved.revision);
+  });
+
+  it("blocks deleting an image the published theme or its draft names, until neither does", async () => {
+    const file = await seedMedia();
+    const storage = createBucket();
+    storage.objects.add(file.objectKey);
+    const withLogo: StorefrontThemeDocument = { ...structuredClone(DEFAULT_STOREFRONT_THEME), brand: { ...DEFAULT_STOREFRONT_THEME.brand, logo: file.id } };
+    const draft = await saveThemeDraft(db, withLogo, 0, 0);
+    const published = await publishThemeDraft(db, 0, draft.revision);
+    const trashed = await trashMediaFile(db, file.id, 1);
+
+    const blocked = await permanentlyDeleteMediaFile(db, file.id, trashed.version, storage.bucket).catch((error: unknown) => error);
+    expect(blocked).toBeInstanceOf(MediaDependencyConflictError);
+    expect((blocked as MediaDependencyConflictError).details).toMatchObject({ references: [{ kind: "theme", id: null }] });
+
+    // The draft drops the logo, the published theme still shows it: still blocked.
+    const cleared = await saveThemeDraft(db, structuredClone(DEFAULT_STOREFRONT_THEME) as StorefrontThemeDocument, published.draft.revision, published.published.revision);
+    await expect(permanentlyDeleteMediaFile(db, file.id, trashed.version, storage.bucket))
+      .rejects.toBeInstanceOf(MediaDependencyConflictError);
+
+    await publishThemeDraft(db, published.published.revision, cleared.revision);
+    await expect(permanentlyDeleteMediaFile(db, file.id, trashed.version, storage.bucket)).resolves.toBeUndefined();
+    expect(storage.deleteCalls).toEqual([file.objectKey]);
   });
 });
 
@@ -243,16 +258,14 @@ describe("pre-generated media renditions", () => {
     const storage = createBucket();
     storage.objects.add(file.objectKey);
     await saveMediaVariants(db, file.id, { width: 500, height: 500, files: renditions([144, 172, 206, 247, 296, 355, 426, 500]) }, storage.bucket);
-    const saved = await saveHeaderConfig(db, {
-      logo: { src: `https://media.example/${file.objectKey}/320.webp`, alt: "Logo" },
-    }, 0);
+    const saved = await saveInvoiceLogo(db, `https://media.example/${file.objectKey}/320.webp`, 0);
     const trashed = await trashMediaFile(db, file.id, 1);
 
     await expect(permanentlyDeleteMediaFile(db, file.id, trashed.version, storage.bucket))
       .rejects.toBeInstanceOf(MediaDependencyConflictError);
     expect(storage.deleteCalls).toEqual([]);
 
-    await saveHeaderConfig(db, { logo: { src: "", alt: "" } }, saved.revision);
+    await saveInvoiceLogo(db, "", saved.revision);
     await permanentlyDeleteMediaFile(db, file.id, trashed.version, storage.bucket);
     expect(storage.objects.size).toBe(0);
     expect(storage.deleteCalls).toContain(`${file.objectKey}/500.webp`);

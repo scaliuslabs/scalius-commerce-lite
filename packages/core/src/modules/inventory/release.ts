@@ -783,7 +783,8 @@ function buildReleaseMovementInsert(
         ${claim.previousPreorderStock},
         ${claim.newPreorderStock},
         ${claim.preorderStockDelta},
-        unixepoch()
+        unixepoch(),
+        NULL
       FROM ${productVariants}
       WHERE ${productVariants.id} = ${claim.variantId}
         AND ${productVariants.stockVersion} = ${variant.stockVersion}

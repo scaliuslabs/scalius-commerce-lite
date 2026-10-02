@@ -16,7 +16,9 @@ import { heroLeadCandidates } from "@/lib/homepage-hero";
 import { homepageLandingPath } from "@/lib/homepage-landing";
 import {
   EMPTY_HOMEPAGE_SECTION_DATA,
+  homepageCategoryTiles,
   homepageContent,
+  homepageHero,
   homepageLeadSection,
   homepagePhoneSections,
   homepageSectionRenders,
@@ -29,11 +31,13 @@ import { storefrontDataUnavailableResponse } from "@/lib/storefront-unavailable-
 import { mediaImageSrcSet, mediaImageUrl } from "@/lib/media-url";
 import { MEDIA_DISCOVERY_IMAGE_WIDTH } from "@scalius/shared/media-variants";
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
+import { homeSectionsShowDeliveryFacts } from "@scalius/shared/storefront-theme";
 import { resolveRequestTheme } from "@/lib/storefront-theme-context";
 
-// One batch: layout, homepage (with every section's products and images),
-// and the delivery facts the trust strip shows (read speculatively so the
-// strip adds no second round trip).
+// One batch: layout, homepage (with every section's products, images,
+// categories and collections), and the delivery facts a delivery-facts strip
+// or an app-panel hero shows (read speculatively so they add no second round
+// trip).
 const shippingMethodsPromise = getShippingMethods();
 const checkoutConfigPromise = getCheckoutConfig();
 const { layoutData, pageData: homepageData } = await loadPageWithLayout(() =>
@@ -48,14 +52,27 @@ if (!layoutData || !homepageData) {
   return response;
 }
 
-const landingPath = homepageLandingPath(homepageData.presentation);
+// Theme -> Homepage: the theme document's sections, in order. The homepage
+// read carries the published theme's section data; a dashboard preview of
+// a draft reads its own behind the preview token (a second, private read,
+// only under the preview cookie), so slides, tiles, collections and the
+// product home all preview with the draft.
+const requestTheme = await resolveRequestTheme(Astro, layoutData);
+const homeSections = requestTheme.resolved.pages.home;
+let sectionData = homepageData.sections ?? EMPTY_HOMEPAGE_SECTION_DATA;
+if (requestTheme.preview && requestTheme.previewToken) {
+  sectionData = (await getThemePreviewHomepageSections(requestTheme.previewToken)) ?? EMPTY_HOMEPAGE_SECTION_DATA;
+}
+
+// A product homepage answers `/` with its product's own page while that
+// product is public; otherwise `/` renders the sections.
+const landingPath = homepageLandingPath(requestTheme.resolved.pages.homeMode, sectionData.homeProduct);
 if (landingPath) return Astro.redirect(landingPath, 302);
 
-const seo = homepageData?.seo ?? {
+const seo = homepageData.seo ?? {
   homepageTitle: null as string | null,
   homepageMetaDescription: null as string | null,
 };
-const presentation = homepageData.presentation;
 
 const storeName = resolveStoreDisplayName(
   layoutData.business,
@@ -69,12 +86,14 @@ const homepageHeading = storeName || homepageTitle || "Shop";
 const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
 const currencyCode = layoutData?.currency?.code ?? DEFAULT_CURRENCY.code;
 
-// Delivery facts come from the same live data product pages use.
+// Delivery facts come from the same live data product pages use, read only
+// when a section shows them.
+const showsDeliveryFacts = homeSectionsShowDeliveryFacts(homeSections);
 const [shippingMethods, checkoutConfig] = await Promise.all([
-  presentation.trustStrip.enabled ? shippingMethodsPromise : Promise.resolve(null),
-  presentation.trustStrip.enabled ? checkoutConfigPromise : Promise.resolve(null),
+  showsDeliveryFacts ? shippingMethodsPromise : Promise.resolve(null),
+  showsDeliveryFacts ? checkoutConfigPromise : Promise.resolve(null),
 ]);
-const deliveryFacts = presentation.trustStrip.enabled
+const deliveryFacts = showsDeliveryFacts
   ? buildDeliveryFacts({
       shippingMethods,
       checkoutConfig,
@@ -83,20 +102,7 @@ const deliveryFacts = presentation.trustStrip.enabled
     })
   : [];
 
-// Theme -> Homepage: the theme document's sections, in order. The homepage
-// read carries the published theme's section data; a dashboard preview of
-// a draft reads its own behind the preview token (a second, private read,
-// only under the preview cookie).
-const requestTheme = await resolveRequestTheme(Astro, layoutData);
-const homeSections = requestTheme.resolved.pages.home;
-let sectionData = homepageData.sections ?? EMPTY_HOMEPAGE_SECTION_DATA;
-if (requestTheme.preview && requestTheme.previewToken) {
-  sectionData = (await getThemePreviewHomepageSections(requestTheme.previewToken)) ?? EMPTY_HOMEPAGE_SECTION_DATA;
-}
-const content = homepageContent({ ...homepageData, sections: sectionData }, deliveryFacts);
-const hero = content.hero;
-const firstDesktopHero = hero.desktop[0] ?? null;
-const firstMobileHero = hero.mobile[0] ?? null;
+const content = homepageContent(sectionData, deliveryFacts);
 const leadSection = homepageLeadSection(homeSections, content);
 const phoneSections = homepagePhoneSections(homeSections, content);
 const phoneHeroMoved = phoneSections !== homeSections;
@@ -105,19 +111,31 @@ const phoneLeadSection = phoneHeroMoved ? homepageLeadSection(phoneSections, con
 // candidates the hero's first slide offers, so the preload is the file the
 // banner paints (a phone-sized rendition on phones).
 const heroPreloads = leadSection?.type === "hero" && homepageSectionRenders(leadSection, content)
-  ? heroLeadCandidates(hero, leadSection.settings.layout)
+  ? heroLeadCandidates(homepageHero(leadSection, content), leadSection.settings.layout)
     .filter((candidate) => !phoneHeroMoved || candidate.media !== "(max-width: 767px)")
     .map((candidate) => phoneHeroMoved && candidate.media === "all" ? { ...candidate, media: "(min-width: 768px)" } : candidate)
   : [];
+// The page's share image when the store sets none: the first shown hero's first slide.
+const firstHero = homeSections.find((section) => section.type === "hero" && homepageSectionRenders(section, content));
+const firstHeroSlide = firstHero?.type === "hero" ? homepageHero(firstHero, content).desktop[0] ?? null : null;
 const phoneCategory = phoneLeadSection?.type === "category-tiles"
-  ? content.categoryRail.categories.find((category) => category.imageUrl)
+  ? homepageCategoryTiles(phoneLeadSection, content).find((category) => category.imageUrl)
   : null;
 const phoneCategoryImage = phoneCategory?.imageUrl ?? null;
-const compactRoundCategory = phoneLeadSection?.type === "category-tiles" && phoneLeadSection.settings.style === "round" && requestTheme.resolved.template === "rounded-tech";
-const phoneCategoryWidth = phoneLeadSection?.type === "category-tiles" && phoneLeadSection.settings.style === "photo" ? 480 : compactRoundCategory ? 160 : 320;
-const phoneCategorySizes = phoneLeadSection?.type === "category-tiles" ? {
-  photo: "min(42vw, 176px)", icons: "56px", round: compactRoundCategory ? "56px" : "30vw", square: "30vw", quad: "45vw",
-}[phoneLeadSection.settings.style] : "";
+// The leading tiles' phone photo, at the width and sizes CategoryTiles and
+// HomepageCategoryRail draw it with (the preload must name that file).
+const phoneCategoryStyle = phoneLeadSection?.type === "category-tiles" ? phoneLeadSection.settings.style : null;
+const phoneCategoryWidth = phoneCategoryStyle === "photo" || phoneCategoryStyle === "photo-grid" ? 480 : phoneCategoryStyle === "round-small" ? 160 : 320;
+const phoneCategorySizes = phoneCategoryStyle ? {
+  photo: "min(42vw, 176px)",
+  "photo-grid": "calc((100vw - 2.75rem) / 2)",
+  icons: "56px",
+  round: "30vw",
+  "round-small": "56px",
+  "round-row": "30vw",
+  square: "30vw",
+  quad: "45vw",
+}[phoneCategoryStyle] : "";
 
 // --- SEO: canonical URL for homepage ---
 const canonicalUrl = buildAbsoluteStorefrontSeoUrl("/");
@@ -130,8 +148,8 @@ const canonicalUrl = buildAbsoluteStorefrontSeoUrl("/");
   canonicalUrl={canonicalUrl ?? undefined}
   ogType="website"
   fallbackOgImage={
-    firstDesktopHero || firstMobileHero
-      ? mediaImageUrl((firstDesktopHero ?? firstMobileHero)!.url, MEDIA_DISCOVERY_IMAGE_WIDTH)
+    firstHeroSlide
+      ? mediaImageUrl(firstHeroSlide.url, MEDIA_DISCOVERY_IMAGE_WIDTH)
       : undefined
   }
 >

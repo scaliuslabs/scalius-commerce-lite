@@ -51,8 +51,18 @@ describe("inventory operation companion statements", () => {
 
   it("commits the companions with the stock edge", async () => {
     await expect(operation("licence-import:lki_aaaaaaaaaaaa", 1, [keyInsert("dlk_1", "h1")]))
-      .resolves.toEqual({ variantId: "var_app", previousStock: 2, newStock: 3, delta: 1 });
+      .resolves.toEqual({
+        variantId: "var_app",
+        previousStock: 2,
+        newStock: 3,
+        delta: 1,
+        // A key pool is the variant's stock, held at the default location.
+        locationId: "loc_default",
+        locationPreviousStock: 2,
+        locationNewStock: 3,
+      });
     expect(one("SELECT stock, stock_version FROM product_variants")).toEqual({ stock: 3, stock_version: 5 });
+    expect(one("SELECT location_id, on_hand FROM inventory_levels")).toEqual({ location_id: "loc_default", on_hand: 3 });
     expect(one("SELECT count(*) AS n FROM digital_licence_keys")).toEqual({ n: 1 });
     expect(one("SELECT count(*) AS n FROM inventory_movements")).toEqual({ n: 1 });
   });

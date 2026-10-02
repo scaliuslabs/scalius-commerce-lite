@@ -3,8 +3,10 @@ import { STOREFRONT_BUY_BOX_LOOKS } from "@scalius/shared/storefront-theme";
 import type { Product } from "@/lib/api";
 import {
   buyBoxFeatures,
+  compareSimilarProducts,
   descriptionInInfoColumn,
   featuresPlacement,
+  frequentlyBoughtTogether,
   groupSpecificationRows,
   productPageModules,
   publicSpecificationRows,
@@ -26,6 +28,33 @@ function product(overrides: Partial<Product> = {}): Product {
   } as Product;
 }
 
+const card = (id: string, categoryId: string | null = "cat-phones") => ({ id, slug: id, name: id, categoryId } as Product);
+
+describe("modules from data the page already has", () => {
+  it("bundles only real co-purchases: the first half of an also-bought list, two at most", () => {
+    expect(frequentlyBoughtTogether({ reason: "also_bought", products: [card("a"), card("b"), card("c"), card("d")] }).map((item) => item.id))
+      .toEqual(["a", "b"]);
+    // Two rows, one guaranteed co-bought: only the first.
+    expect(frequentlyBoughtTogether({ reason: "also_bought", products: [card("a"), card("b")] }).map((item) => item.id)).toEqual(["a"]);
+    for (const reason of ["similar", "popular", "new_arrivals"] as const) {
+      expect(frequentlyBoughtTogether({ reason, products: [card("a"), card("b")] })).toEqual([]);
+    }
+  });
+
+  it("compares with recommended products of the same category, three at most", () => {
+    const list = { reason: "similar" as const, products: [card("p1"), card("a"), card("x", "cat-cases"), card("b"), card("c"), card("d")] };
+    expect(compareSimilarProducts({ id: "p1", categoryId: "cat-phones" }, list).map((item) => item.id)).toEqual(["a", "b", "c"]);
+    expect(compareSimilarProducts({ id: "p1", categoryId: null }, list)).toEqual([]);
+  });
+
+  it("renders each new module only with its data; recently viewed always (the browser fills it)", () => {
+    const below = ["frequently-bought-together", "compare-similar", "policies", "recently-viewed"] as const;
+    expect(productPageModules(below, product(), { look: null, hasRelated: false })).toEqual(["recently-viewed"]);
+    expect(productPageModules(below, product(), { look: null, hasRelated: false, boughtTogether: 1, similar: 2, policies: 3 }))
+      .toEqual(["frequently-bought-together", "compare-similar", "policies", "recently-viewed"]);
+  });
+});
+
 describe("product page modules", () => {
   it("keeps classic's order and leaves the description in the buy box", () => {
     const modules = productPageModules(["description", "reviews", "related"], product({ reviews: {} as Product["reviews"] }), {
@@ -43,7 +72,7 @@ describe("product page modules", () => {
   });
 
   it("follows the template list and drops modules this product has no data for", () => {
-    const below = ["about-bullets", "key-attributes", "spec-table", "description", "warranty", "reviews", "questions", "related"] as const;
+    const below = ["about-bullets", "key-attributes", "spec-table", "description", "warranty", "reviews", "related"] as const;
     const look = STOREFRONT_BUY_BOX_LOOKS["marketplace-3col"];
     expect(productPageModules(below, product(), { look, hasRelated: false })).toEqual([
       "about-bullets", "key-attributes", "spec-table", "description",

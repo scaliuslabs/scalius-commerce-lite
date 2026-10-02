@@ -11,7 +11,7 @@ import { formatMoney, getDecimalPlaces } from "@/lib/currency";
 import { formatDiscountBadge } from "@/components/product/lib/pricing-engine";
 import { getProductImageSrcSet, getProductImageUrl, hasProductImage } from "@/lib/product-media";
 import { isUnrenderedMediaOriginal } from "@scalius/shared/media-variants";
-import { capImageSrcSet } from "@/lib/responsive-image";
+import { capImageSrcSet, capSizesDensity, scaleSizes } from "@/lib/responsive-image";
 import { fromMinor, toMinor } from "@scalius/shared/money";
 import { PRODUCT_CONDITION_LABELS } from "@scalius/shared/product-condition";
 import type {
@@ -55,6 +55,28 @@ export const CARD_PHOTO_INSET: Readonly<Record<string, number>> = {
   "quick-add": 0.13,
   detailed: 0.05,
 };
+
+/**
+ * Photos drawn at a fixed CSS width however wide their tile grows (the
+ * department mall's 170px photo). The card CSS caps the photo at it
+ * (`--pc-photo-max`) and the image `sizes` name it, so the rendition always
+ * matches the width actually drawn.
+ */
+export const CARD_PHOTO_MAX_PX: Readonly<Record<string, number>> = {
+  mall: 170,
+};
+
+/**
+ * The image `sizes` of a card's photo in a slot of `slotSizes`: the standard
+ * card keeps the slot as it was; every other card names its fixed photo
+ * width, or the slot shrunk by its photo margin, and caps DPR-3 phones at
+ * about 2x the drawn width.
+ */
+export function cardPhotoSizes(variant: string, slotSizes: string): string {
+  if (variant === "standard") return slotSizes;
+  const maxPx = CARD_PHOTO_MAX_PX[variant];
+  return capSizesDensity(maxPx ? `${maxPx}px` : scaleSizes(slotSizes, 1 - 2 * (CARD_PHOTO_INSET[variant] ?? 0)));
+}
 
 export interface ProductCardFactValues {
   brand: string | null;

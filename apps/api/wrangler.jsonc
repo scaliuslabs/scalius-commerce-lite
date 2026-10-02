@@ -27,7 +27,9 @@
     "enabled": true
   },
   "exports": {
-    "default": { "type": "worker", "cache": { "enabled": false } }
+    "default": { "type": "worker", "cache": { "enabled": false } },
+    // RPC-only plugin bridge (sandboxed plugins, src/plugins/bridge-entrypoint.ts).
+    "PluginBridge": { "type": "worker", "cache": { "enabled": false } }
   },
   // The Worker version isolates dependency-validated entries across deploys.
   "version_metadata": {

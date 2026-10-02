@@ -15,7 +15,6 @@ export type {
   ReservationVariantState,
   ReserveStockBatchResult,
 } from "./reserve";
-export { deductStock, deductMultiple } from "./deduct";
 export {
   releaseReservation,
   releaseMultiple,
@@ -27,7 +26,6 @@ export type {
   PreparedReservedStockReleaseBatch,
   ReleaseReservedStockBatchResult,
 } from "./release";
-export { restoreDeductedStock, restoreDeductedMultiple } from "./restore";
 export { recordMovement } from "./movements";
 export { checkAndAlertLowStock, setLowStockThreshold } from "./alerts";
 export type { LowStockAlertResult } from "./alerts";
@@ -69,3 +67,4 @@ export * from "./inventory-movement-artifacts";
 export { acknowledgeLowStockAlert, setDefaultLowStockThreshold } from "./alerts";
 export { effectiveLowStockThresholdSql } from "./low-stock-policy";
 export { buildStockMovementClaim } from "./stock-movement-claims";
+export * from "./locations";

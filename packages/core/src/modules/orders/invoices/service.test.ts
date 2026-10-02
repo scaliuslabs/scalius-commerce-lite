@@ -86,6 +86,7 @@ const businessInfo = {
   invoicePrefix: "SALE",
   invoiceFooterText: "Thank you",
   invoiceLogoUrl: "https://example.com/logo.png",
+  socialLinks: [],
 };
 
 type StoredInvoice = { id: string; snapshot: string; contentHash: string };

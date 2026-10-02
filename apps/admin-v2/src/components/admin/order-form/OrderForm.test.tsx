@@ -269,9 +269,11 @@ describe("create order on the save bar", () => {
       notes: "Engrave before pickup",
       items: [{ productId: "p_lighter", variantId: "v_lighter", quantity: 1, properties: [{ key: "engraving", value: "Rahim" }] }],
     });
-    // Display-only fields never leave the form.
+    // Display-only fields never leave the form; no source was picked.
     expect(body.items[0]).not.toHaveProperty("propertiesDisplay");
     expect(body.items[0]).not.toHaveProperty("fulfillmentKind");
+    expect(body).not.toHaveProperty("channelSource");
+    expect(body).not.toHaveProperty("sourceChoice");
     expect(state.navigate).toHaveBeenCalledWith({ to: "/admin/orders/$orderId", params: { orderId: "ord_new" } });
     expect(state.toast.success).toHaveBeenCalledWith("Order created");
   });
@@ -297,6 +299,68 @@ describe("create order on the save bar", () => {
     expect(document.body.textContent).toContain("Only 1 of that item is left.");
     expect(field("Notes").value).toBe("Engrave before pickup");
     expect(state.toast.success).not.toHaveBeenCalled();
+  });
+
+  /** Picks a source in the Sales channel card the way staff do: search, then Enter. */
+  async function pickSource(label: string) {
+    const trigger = document.body.querySelector<HTMLButtonElement>("#order-source")!;
+    await act(async () => trigger.click());
+    await act(async () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
+    const search = document.body.querySelector<HTMLInputElement>('[data-slot="searchable-select-content"] input')!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(search, label);
+      search.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => {
+      search.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
+    // The closed list returns focus on a timer; the form may move it on after.
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+  }
+
+  /** The labelled input of the Sales channel card's "Source name". */
+  function sourceNameInput() {
+    const label = Array.from(document.body.querySelectorAll("label")).find((node) => node.textContent === "Source name");
+    return label ? document.getElementById(label.htmlFor) as HTMLInputElement | null : null;
+  }
+
+  it("records where a staff order came in from the Sales channel presets", async () => {
+    await renderCreate(pickup);
+    expect(document.body.textContent).toContain("Sales channel");
+    expect(sourceNameInput()).toBeNull();
+    await pickSource("Walk-in");
+    expect(saveBar()?.textContent).toContain("Unsaved order");
+    await click("Save");
+    expect(state.create).toHaveBeenCalledTimes(1);
+    expect(state.create.mock.calls[0]![0]).toMatchObject({ channelSource: "walk_in" });
+  });
+
+  it("sends the merchant's own source name for Other and asks for one when it is missing", async () => {
+    await renderCreate(pickup);
+    await pickSource("Other");
+    const input = sourceNameInput();
+    expect(input).not.toBeNull();
+    expect(document.activeElement).toBe(input);
+    await click("Save");
+    expect(state.create).not.toHaveBeenCalled();
+    expect(document.body.textContent).toContain("Enter where the order came in");
+
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "  Daraz shop ");
+      input!.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await click("Save");
+    expect(state.create).toHaveBeenCalledTimes(1);
+    expect(state.create.mock.calls[0]![0]).toMatchObject({ channelSource: "Daraz shop" });
+  });
+
+  it("refuses a source name with nothing readable in it", async () => {
+    await renderCreate({ ...pickup, sourceChoice: "other", sourceName: "!!!" });
+    await type("Notes", "Engrave before pickup");
+    await click("Save");
+    expect(state.create).not.toHaveBeenCalled();
+    expect(document.body.textContent).toContain("Use letters or numbers in the source name");
   });
 
   it("creates an order of services with no delivery method and no address", async () => {

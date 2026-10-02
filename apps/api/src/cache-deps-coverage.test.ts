@@ -38,9 +38,8 @@ const SEED = `
   INSERT INTO product_rich_content (id, product_id, title, content, sort_order) VALUES ('prc_care', 'p_linen', 'Care', '<p>Hand wash.</p>', 0);
   INSERT INTO product_bundles (id, product_id, quantity, discount_type, discount_bps) VALUES ('pbd_linen_pair', 'p_linen', 2, 'percentage', 1000);
   INSERT INTO collections (id, name, presentation, config, sort_order) VALUES
-    ('col_grid', 'Best sellers', 'grid', '{"source":"manual","productIds":["p_linen","p_cotton"],"showOnHomepage":true,"maxProducts":8}', 0),
-    ('col_rail', 'Panjabi', 'carousel', '{"source":"dynamic","categoryIds":["cat_panjabi"],"showOnHomepage":true,"maxProducts":12}', 1);
-  INSERT INTO hero_sliders (id, type, images) VALUES ('hero_desktop', 'desktop', '[]');
+    ('col_grid', 'Best sellers', 'grid', '{"source":"manual","productIds":["p_linen","p_cotton"],"maxProducts":8}', 0),
+    ('col_rail', 'Panjabi', 'carousel', '{"source":"dynamic","categoryIds":["cat_panjabi"],"maxProducts":12}', 1);
   INSERT INTO pages (id, title, slug, content, is_published) VALUES ('pg_about', 'About', 'about', '<p>x</p>', 1);
   INSERT INTO pages (id, content_type, title, slug, content, is_published) VALUES ('pg_post', 'article', 'Post', 'post', '<p>x</p>', 1);
   INSERT INTO delivery_locations (id, name, type, parent_id, external_ids, metadata, is_active)
@@ -101,13 +100,9 @@ const URLS = [
   "/api/v1/pages/slug/about",
   "/api/v1/articles",
   "/api/v1/articles/slug/post",
-  "/api/v1/hero/sliders?type=desktop",
-  "/api/v1/hero/sliders/hero_desktop",
   "/api/v1/seo",
-  "/api/v1/header",
   "/api/v1/navigation",
   "/api/v1/navigation/placements",
-  "/api/v1/footer",
 ];
 
 const TABLE_REFERENCE = /\b(?:from|join|into|update)\s+[`"]?([a-z0-9_]+)[`"]?/gi;

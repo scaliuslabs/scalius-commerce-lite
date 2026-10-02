@@ -10,14 +10,11 @@ import { BUILD_ID } from "@/config/build-id";
 import type {
   CollectionWithProducts,
   Product,
-  HeaderData,
-  FooterData,
+  FooterMenu,
   NavigationItem,
   AnalyticsConfig,
-  Category,
 } from "./types";
 import type { SeoDiscoverySettings } from "@scalius/shared/seo-discovery";
-import type { HeroSlide } from "@scalius/shared/hero-slider";
 import type { ProductPageCopy } from "@scalius/shared/checkout-language";
 import type {
   StorefrontBusinessInfo,
@@ -33,43 +30,12 @@ import { apiFetch } from "./transport";
 // HOMEPAGE DATA TYPES
 // =============================================
 
-/** One banner: `title` is image alt text; `heading`/`supportingText`/`buttonLabel` are overlay copy. */
-export type HeroSliderImage = HeroSlide;
-
-export interface HeroSlider {
-  id: string;
-  type: "desktop" | "mobile";
-  images: HeroSliderImage[];
-}
-
-export interface HomepageHero {
-  desktop: HeroSlider | null;
-  mobile: HeroSlider | null;
-}
-
 export interface HomepageData {
   seo: {
     homepageTitle: string | null;
     homepageMetaDescription: string | null;
   };
-  hero: HomepageHero;
-  collections: CollectionWithProducts[];
-  presentation: {
-    homeMode?: "catalog" | "landing";
-    landingProduct?: { id: string; slug: string } | null;
-    categoryRail: {
-      enabled: boolean;
-      title: string;
-      categories: Array<Pick<
-        Category,
-        "id" | "name" | "slug" | "description" | "imageUrl" | "canonicalPath"
-      >>;
-    };
-    trustStrip: {
-      enabled: boolean;
-    };
-  };
-  /** What the theme's homepage sections show (lib/homepage-sections.ts reads it by key). */
+  /** What the published theme's homepage sections show (lib/homepage-sections.ts reads it by key). */
   sections: HomepageSectionData;
 }
 
@@ -111,11 +77,37 @@ export interface HomepagePromotionEnd {
   endsAt: string;
 }
 
+/** A category-tiles category: a published category a section names. */
+export interface HomepageCategory {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  imageUrl: string | null;
+  canonicalPath: string | null;
+}
+
+/** The product a product homepage opens on, while it is public. */
+export interface HomepageProduct {
+  id: string;
+  slug: string;
+}
+
+/**
+ * Everything the theme's homepage sections name (`homeSectionRequests`):
+ * the published theme's in the homepage read, a draft's behind a preview
+ * token. Categories and collections come in the order the sections name
+ * them; ones that are not public (or, for collections, have no products)
+ * are left out.
+ */
 export interface HomepageSectionData {
   lists: HomepageProductList[];
   media: HomepageMediaAsset[];
   brands: HomepageBrand[];
   promotions: HomepagePromotionEnd[];
+  categories: HomepageCategory[];
+  collections: CollectionWithProducts[];
+  homeProduct: HomepageProduct | null;
 }
 
 // =============================================
@@ -125,8 +117,8 @@ export interface HomepageSectionData {
 export interface CurrencyData {
   code: string;
   symbol: string;
-  usdExchangeRate: number;
-  decimalPlaces?: number;
+  /** ISO 4217 decimal places (0 for JPY, 3 for KWD). */
+  decimalPlaces: number;
 }
 
 export interface CategoryNavigationNode {
@@ -146,20 +138,26 @@ export interface CategoryNavigationTree {
 
 export interface LayoutData {
   analytics: AnalyticsConfig[];
-  header: HeaderData;
   navigation: NavigationItem[];
   /**
    * The reachable category tree, flat with parentId, top levels first, cut to
    * the header's link budget (absent from an older API: renders as none).
    */
   categoryTree?: CategoryNavigationTree | null;
-  footer: FooterData;
+  /** The footer menus (Online store -> Navigation), in order. */
+  footerMenus?: FooterMenu[];
   currency?: CurrencyData;
   /**
-   * The published theme document (v5). Untrusted until
+   * The published theme document (v6). Untrusted until
    * `readStorefrontTheme` (lib/storefront-theme-context) validates it.
    */
   theme?: unknown;
+  /**
+   * The published theme's brand images (logo, footer logo, favicon)
+   * resolved (`StorefrontBrandAssets`). Untrusted until
+   * `readStorefrontBrandAssets` (lib/storefront-theme-context) validates it.
+   */
+  brand?: unknown;
   /** The store's shape for the theme fit rules; validated by `readStoreShape`. */
   storeShape?: unknown;
   media?: {
@@ -196,11 +194,16 @@ export interface LayoutData {
 }
 
 export interface ThemePreviewData {
-  /** The draft theme document; validated like the published one. */
+  /**
+   * The saved draft as it is now (the API resolves it on every read, so a
+   * refreshed preview shows the latest Save); validated like the published one.
+   */
   theme: unknown;
   draftRevision: number;
   basePublishedRevision: number;
   expiresAt: string | number;
+  /** The draft's brand images resolved (`StorefrontBrandAssets`); validated like the layout's. */
+  brand?: unknown;
 }
 
 // =============================================
@@ -266,7 +269,7 @@ export function getLayoutData(): Promise<LayoutData | null> {
 
 /**
  * The homepage section data of a theme preview's draft: the API reads what
- * the stored draft's sections name, behind the preview token (private, never
+ * the current saved draft's sections name, behind the preview token (private, never
  * cached). Only rendered under a live dashboard preview cookie; the
  * published homepage comes from its one batch part.
  */

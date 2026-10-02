@@ -86,12 +86,13 @@ describe("demo apply permission and exclusion preflight", () => {
       { method: "PUT", path: "/api/v1/admin/products/{productId}/options/matrix" },
       { method: "POST", path: "/api/v1/admin/collections" },
       { method: "PUT", path: "/api/v1/admin/collections/col_1" },
-      { method: "POST", path: "/api/v1/admin/settings/hero-sliders" },
+      { method: "POST", path: "/api/v1/admin/settings/theme/draft" },
+      { method: "POST", path: "/api/v1/admin/settings/theme/publish" },
     ]);
     const required = requiredPermissionsForLifecycle(plan);
     expect(required).toEqual([
       "attributes.create", "categories.create", "categories.edit", "collections.create",
-      "collections.edit", "products.create", "products.edit", "settings.header.edit",
+      "collections.edit", "products.create", "products.edit", "settings.general.edit",
     ]);
     expect(() => assertApplyPermissions({ isSuperAdmin: false, permissions: required.slice(1) }, plan))
       .toThrow("attributes.create");
@@ -100,6 +101,9 @@ describe("demo apply permission and exclusion preflight", () => {
 
   it("fails closed on unknown mutations and unrevisioned publication intent", () => {
     expect(() => requiredPermissionsForLifecycle(lifecycle([{ method: "DELETE", path: "/api/v1/admin/products/prod_1" }])))
+      .toThrow("No permission preflight rule");
+    // The homepage is the theme: the retired hero-slider routes have no rule.
+    expect(() => requiredPermissionsForLifecycle(lifecycle([{ method: "POST", path: "/api/v1/admin/settings/hero-sliders" }])))
       .toThrow("No permission preflight rule");
     expect(() => assertApplyExclusions({ publicationIntent: { navigation: { header: {} } } }))
       .toThrow("Header/footer publication");

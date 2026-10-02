@@ -20,6 +20,8 @@ import {
 import { markOrderReadyForPickup } from "./pickup";
 import { autoFulfilOrder, listOrdersAwaitingAutoFulfil } from "./auto-fulfil";
 import { FULFILLER_REGISTRY, type FulfillerRegistry } from "./registry";
+import { setOrderFulfillmentLocation } from "../orders/admin/fulfillment-location";
+import { InventoryLocationShortfallError } from "../inventory/locations";
 
 describe("fulfilment ledger", () => {
     let sqlite: DatabaseSync;
@@ -144,6 +146,33 @@ describe("fulfilment ledger", () => {
         expect(last).toMatchObject({ orderStatus: "shipped", isFinalShipment: true, statusChange: { newStatus: "shipped" } });
         expect(one("SELECT stock, reserved_stock FROM product_variants WHERE id = 'v_ship'")).toEqual({ stock: 17, reserved_stock: 0 });
         expect(one("SELECT count(*) AS n FROM order_fulfillments WHERE order_id = ?", id)).toEqual({ n: 2 });
+    });
+
+    it("H1: the last parcel leaves from the order's location, refused before anything is recorded where units are short", async () => {
+        const id = await order();
+        sqlite.exec(`
+            INSERT INTO inventory_locations (id, name, code, kind, is_default, status, position)
+            VALUES ('loc_b', 'Branch', 'BR', 'store', 0, 'active', 1);
+        `);
+        const version = one<{ version: number }>("SELECT version FROM orders WHERE id = ?", id).version;
+        await setOrderFulfillmentLocation(db, id, { locationId: "loc_b", expectedVersion: version });
+
+        await expect(recordOrderFulfilment(db, id, { requestKey: "h1-a", kind: "ship" }, admin))
+            .rejects.toBeInstanceOf(InventoryLocationShortfallError);
+        expect(one("SELECT count(*) AS n FROM order_fulfillments WHERE order_id = ?", id)).toEqual({ n: 0 });
+        expect(one("SELECT status, inventory_action FROM orders WHERE id = ?", id)).toEqual({ status: "confirmed", inventory_action: "reserved" });
+
+        // Back to the default location: the parcel leaves from there.
+        await setOrderFulfillmentLocation(db, id, { locationId: null, expectedVersion: version + 1 });
+        const sent = await recordOrderFulfilment(db, id, { requestKey: "h1-b", kind: "ship" }, admin);
+        expect(sent).toMatchObject({ orderStatus: "shipped" });
+        expect(one("SELECT location_id FROM order_fulfillments WHERE id = ?", sent.fulfillmentId)).toEqual({ location_id: "loc_default" });
+        expect(one("SELECT location_id FROM inventory_movements WHERE order_id = ? AND type = 'deducted'", id)).toEqual({ location_id: "loc_default" });
+        expect(one("SELECT on_hand FROM inventory_levels WHERE variant_id = 'v_ship' AND location_id = 'loc_default'")).toEqual({ on_hand: 17 });
+        // Something has left: the location is fixed now.
+        const current = one<{ version: number }>("SELECT version FROM orders WHERE id = ?", id).version;
+        await expect(setOrderFulfillmentLocation(db, id, { locationId: "loc_b", expectedVersion: current }))
+            .rejects.toThrow(/has been sent/);
     });
 
     it("F7 pickup: ready for pickup, then picked up with the cash at the counter delivers the order", async () => {

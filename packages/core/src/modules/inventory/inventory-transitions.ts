@@ -24,6 +24,16 @@ import {
 } from "./ledger-v2";
 import { mapWithBoundedConcurrency } from "../../utils/bounded-concurrency";
 import { resolveTrackedBuyerAvailabilityBand } from "@scalius/shared/buyer-availability";
+import {
+    assertInventoryLocationCovers,
+    inventoryLocationErrorFrom,
+    isInventoryLevelShortfallError,
+    isInventoryLocationRequiredError,
+    resolveActiveInventoryLocation,
+    resolveOrderFulfillmentLocation,
+    selectActiveInventoryLocationIds,
+    type InventoryLocationRef,
+} from "./locations";
 
 // The set of order statuses that mean "this order is dead / returned"
 const STOCK_RESTORE_STATUSES = new Set(["cancelled", "returned", "refunded"]);
@@ -78,6 +88,12 @@ export interface ClaimedInventoryEntryBatchInput {
     pool: InventoryPoolName;
     /** Operator responsible for this explicit inventory mutation. */
     createdBy?: string | null;
+    /**
+     * Restore only: the active location the units go back to (a return
+     * receipt's restock location). Omitted, units return to the location
+     * they were deducted from.
+     */
+    locationId?: string | null;
 }
 
 interface InventoryTransitionResult {
@@ -92,6 +108,8 @@ type InventoryTransitionOrder = {
     inventoryAction: string;
     inventoryPool: string;
     version: number;
+    /** Where the order's stock leaves from; null = the default location. */
+    fulfillmentLocationId: string | null;
 };
 
 type InventoryVariantState = {
@@ -110,6 +128,8 @@ type InventoryVariantState = {
 export interface ClaimedInventoryEntryBatchImpact {
     movementIds: string[];
     availabilityTransitionVariantIds: string[];
+    /** The location each SKU's units moved at (null for releases). */
+    locationIdByVariant: Record<string, string | null>;
 }
 
 type StrictInventoryTransitionResult = ClaimedInventoryEntryBatchImpact;
@@ -122,6 +142,8 @@ type InventoryTransitionMovementClaim = {
     quantity: number;
     notes: string;
     createdBy: string | null;
+    /** Deducts and restores name where units moved; releases move none. */
+    locationId: string | null;
 } & InventoryLedgerV2EdgeFields;
 
 function buyerCapacity(
@@ -191,6 +213,7 @@ export async function buildInventoryStatements(
             inventoryAction: orders.inventoryAction,
             inventoryPool: orders.inventoryPool,
             version: orders.version,
+            fulfillmentLocationId: orders.fulfillmentLocationId,
         })
         .from(orders)
         .where(eq(orders.id, orderId))
@@ -257,6 +280,34 @@ export async function buildInventoryStatements(
         newAction: currentAction,
         availabilityTransitionVariantIds: [],
     };
+}
+
+/**
+ * Before anything physically leaves for an order (the last parcel, a courier
+ * booking, the last pickup): if that will deduct its reserved regular stock,
+ * refuse now when the order's fulfilment location lacks the units, so nothing
+ * is recorded and the merchant can move stock or change the order's location.
+ * The deduct itself re-checks (and the level CHECK aborts) on a race.
+ */
+export async function assertOrderStockCoverable(db: Database, orderId: string): Promise<void> {
+    const order = await db
+        .select({
+            id: orders.id,
+            status: orders.status,
+            inventoryAction: orders.inventoryAction,
+            inventoryPool: orders.inventoryPool,
+            version: orders.version,
+            fulfillmentLocationId: orders.fulfillmentLocationId,
+        })
+        .from(orders)
+        .where(eq(orders.id, orderId))
+        .get() as InventoryTransitionOrder | undefined;
+    if (!order || order.inventoryAction !== "reserved") return;
+    if (normalizeInventoryPool(order.inventoryPool) !== "regular") return;
+    const entries = mergeTransitionEntriesByVariant(await getOrderInventoryEntries(db, order), "regular");
+    if (entries.length === 0) return;
+    const location = await resolveOrderFulfillmentLocation(db, order.fulfillmentLocationId);
+    await assertInventoryLocationCovers(db, location, entries);
 }
 
 /**
@@ -342,9 +393,16 @@ export async function applyClaimedInventoryEntryBatchWithImpact(
 
     const entries = mergeTransitionEntriesByVariant(input.entries, input.pool);
     if (entries.length === 0) {
-        return { movementIds: [], availabilityTransitionVariantIds: [] };
+        return { movementIds: [], availabilityTransitionVariantIds: [], locationIdByVariant: {} };
+    }
+    if (input.locationId && input.operation !== "restore") {
+        throw new ValidationError("Only a restore can name the location units return to.");
     }
 
+    const order = await db.select({ fulfillmentLocationId: orders.fulfillmentLocationId })
+        .from(orders)
+        .where(eq(orders.id, input.orderId))
+        .get();
     const result = await applyStrictInventoryTransitionMovements(
         db,
         {
@@ -353,11 +411,13 @@ export async function applyClaimedInventoryEntryBatchWithImpact(
             inventoryAction: "",
             inventoryPool: input.pool,
             version: 0,
+            fulfillmentLocationId: order?.fulfillmentLocationId ?? null,
         },
         input.operation,
         entries,
         input.claimKey,
         input.createdBy ?? null,
+        input.locationId ?? null,
     );
     return result;
 }
@@ -478,12 +538,22 @@ async function applyStrictInventoryTransitionMovements(
     entries: ReservationEntry[],
     claimKey?: string,
     createdBy: string | null = null,
+    restockLocationId: string | null = null,
 ): Promise<StrictInventoryTransitionResult> {
     const pool = normalizeInventoryPool(order.inventoryPool);
     const mergedEntries = mergeTransitionEntriesByVariant(entries, pool);
     if (mergedEntries.length === 0) {
-        return { movementIds: [], availabilityTransitionVariantIds: [] };
+        return { movementIds: [], availabilityTransitionVariantIds: [], locationIdByVariant: {} };
     }
+
+    // Deducts leave from the order's location; a regular deduct takes
+    // physical units there, so a shortfall is refused before writing anything.
+    const deductLocation = operation === "deduct"
+        ? await resolveOrderFulfillmentLocation(db, order.fulfillmentLocationId)
+        : null;
+    const restockLocation = operation === "restore" && restockLocationId
+        ? await resolveActiveInventoryLocation(db, restockLocationId)
+        : null;
 
     for (let attempt = 0; attempt < MAX_TRANSITION_RETRIES; attempt++) {
         const variants = await loadTransitionVariantStates(db, order.id, operation, mergedEntries);
@@ -509,7 +579,17 @@ async function applyStrictInventoryTransitionMovements(
             pool,
             claimKey,
             createdBy,
+            deductLocation ?? restockLocation,
         );
+        if (attempt === 0 && deductLocation && pool === "regular") {
+            // A replayed claim already took its units: check only the new ones.
+            const claimed = await selectExistingMovementIds(db, movementClaims.map((claim) => claim.id));
+            await assertInventoryLocationCovers(
+                db,
+                deductLocation,
+                mergedEntries.filter((_entry, index) => !claimed.has(movementClaims[index]!.id)),
+            );
+        }
         const movementQueries = movementClaims.map((claim, index) =>
             buildTransitionMovementInsert(
                 db,
@@ -533,6 +613,11 @@ async function applyStrictInventoryTransitionMovements(
                 ...catalogBuyerStateRefreshStatementsForSkus(db, mergedEntries.map((entry) => entry.variantId)),
             ] as never) as { id: string }[][];
         } catch (err: unknown) {
+            // The whole batch rolled back: a location lacked the units (the
+            // level CHECK) or a movement named no active location.
+            if (isInventoryLevelShortfallError(err) || isInventoryLocationRequiredError(err)) {
+                throw inventoryLocationErrorFrom(err, deductLocation?.name);
+            }
             const duplicateResolved = await resolveDuplicateTransitionMovements(
                 db,
                 order.id,
@@ -549,6 +634,7 @@ async function applyStrictInventoryTransitionMovements(
                     // A conservative purge is rare and keeps replay truthful.
                     availabilityTransitionVariantIds: mergedEntries
                         .map((entry) => entry.variantId),
+                    locationIdByVariant: await committedMovementLocations(db, movementClaims),
                 };
             }
 
@@ -679,6 +765,9 @@ async function applyStrictInventoryTransitionMovements(
         return {
             movementIds: movementClaims.map((claim) => claim.id),
             availabilityTransitionVariantIds,
+            locationIdByVariant: Object.fromEntries(
+                movementClaims.map((claim) => [claim.variantId, claim.locationId]),
+            ),
         };
     }
 
@@ -783,17 +872,29 @@ async function buildTransitionMovementClaims(
     pool: InventoryPoolName,
     claimKey?: string,
     createdBy: string | null = null,
+    namedLocation: InventoryLocationRef | null = null,
 ): Promise<InventoryTransitionMovementClaim[]> {
     const claims: InventoryTransitionMovementClaim[] = [];
+    const contexts = new Map<string, TransitionLedgerContext>();
     for (const entry of entries) {
-        const variant = variants.get(entry.variantId)!;
-        const reservationGeneration = await loadTransitionReservationGeneration(
+        contexts.set(entry.variantId, await loadTransitionLedgerContext(
             db,
             order.id,
             entry.variantId,
             pool,
             operation,
-        );
+        ));
+    }
+    const locationIdByVariant = await resolveTransitionLocations(
+        db,
+        order,
+        operation,
+        contexts,
+        namedLocation,
+    );
+    for (const entry of entries) {
+        const variant = variants.get(entry.variantId)!;
+        const { reservationGeneration } = contexts.get(entry.variantId)!;
         const edge = buildInventoryLedgerV2Edge({
             pool,
             reservationGeneration,
@@ -820,10 +921,95 @@ async function buildTransitionMovementClaims(
             quantity: operation === "release" ? -entry.quantity : entry.quantity,
             notes: getTransitionMovementNotes(order.id, operation, entry.quantity),
             createdBy,
+            locationId: locationIdByVariant.get(entry.variantId) ?? null,
             ...edge,
         });
     }
     return claims;
+}
+
+/**
+ * Where each SKU's units move: a deduct leaves from the order's location; a
+ * restore goes to the named location, else back to where its generation was
+ * deducted from (the order's location when that one is archived or unknown);
+ * a release moves no units.
+ */
+async function resolveTransitionLocations(
+    db: Database,
+    order: InventoryTransitionOrder,
+    operation: StrictMovementOperation,
+    contexts: ReadonlyMap<string, TransitionLedgerContext>,
+    namedLocation: InventoryLocationRef | null,
+): Promise<Map<string, string | null>> {
+    const locations = new Map<string, string | null>();
+    if (operation === "release") {
+        for (const variantId of contexts.keys()) locations.set(variantId, null);
+        return locations;
+    }
+    if (namedLocation) {
+        for (const variantId of contexts.keys()) locations.set(variantId, namedLocation.id);
+        return locations;
+    }
+    if (operation === "deduct") {
+        const location = await resolveOrderFulfillmentLocation(db, order.fulfillmentLocationId);
+        for (const variantId of contexts.keys()) locations.set(variantId, location.id);
+        return locations;
+    }
+    const deducted = [...contexts.values()].flatMap((context) =>
+        context.deductLocationId ? [context.deductLocationId] : []);
+    const active = await selectActiveInventoryLocationIds(db, deducted);
+    let fallback: string | null = null;
+    for (const [variantId, context] of contexts) {
+        if (context.deductLocationId && active.has(context.deductLocationId)) {
+            locations.set(variantId, context.deductLocationId);
+            continue;
+        }
+        fallback ??= await resolveRestoreFallbackLocation(db, order.fulfillmentLocationId);
+        locations.set(variantId, fallback);
+    }
+    return locations;
+}
+
+/** The order's location when it is still active, else the default. */
+async function resolveRestoreFallbackLocation(
+    db: Database,
+    fulfillmentLocationId: string | null,
+): Promise<string> {
+    if (fulfillmentLocationId) {
+        const active = await selectActiveInventoryLocationIds(db, [fulfillmentLocationId]);
+        if (active.has(fulfillmentLocationId)) return fulfillmentLocationId;
+    }
+    return (await resolveActiveInventoryLocation(db, null)).id;
+}
+
+async function selectExistingMovementIds(db: Database, ids: readonly string[]): Promise<Set<string>> {
+    const existing = new Set<string>();
+    // D1 binds at most 100 parameters per statement.
+    for (let index = 0; index < ids.length; index += 90) {
+        const rows = await db.select({ id: inventoryMovements.id })
+            .from(inventoryMovements)
+            .where(inArray(inventoryMovements.id, ids.slice(index, index + 90)))
+            .all();
+        for (const row of rows) existing.add(row.id);
+    }
+    return existing;
+}
+
+async function committedMovementLocations(
+    db: Database,
+    claims: readonly InventoryTransitionMovementClaim[],
+): Promise<Record<string, string | null>> {
+    const locations: Record<string, string | null> = {};
+    for (let index = 0; index < claims.length; index += 90) {
+        const rows = await db.select({
+            variantId: inventoryMovements.variantId,
+            locationId: inventoryMovements.locationId,
+        }).from(inventoryMovements)
+            .where(inArray(inventoryMovements.id, claims.slice(index, index + 90).map((claim) => claim.id)))
+            .all();
+        for (const row of rows) locations[row.variantId] = row.locationId;
+    }
+    return locations;
 }
 
 function buildTransitionMovementInsert(
@@ -863,7 +1049,8 @@ function buildTransitionMovementInsert(
                 ${claim.previousPreorderStock},
                 ${claim.newPreorderStock},
                 ${claim.preorderStockDelta},
-                unixepoch()
+                unixepoch(),
+                ${claim.locationId}
             FROM ${productVariants}
             WHERE ${productVariants.id} = ${claim.variantId}
               AND ${productVariants.stockVersion} = ${variant.stockVersion}
@@ -1085,13 +1272,19 @@ function getTransitionCounterStateAfter(
     return { ...variant, stockVersion: variant.stockVersion + 1 };
 }
 
-async function loadTransitionReservationGeneration(
+type TransitionLedgerContext = {
+    reservationGeneration: number;
+    /** Restore only: where the restored generation's units were deducted from. */
+    deductLocationId: string | null;
+};
+
+async function loadTransitionLedgerContext(
     db: Database,
     orderId: string,
     variantId: string,
     pool: InventoryPoolName,
     operation: StrictMovementOperation,
-): Promise<number> {
+): Promise<TransitionLedgerContext> {
     const rows = await db
         .select({
             id: inventoryMovements.id,
@@ -1112,6 +1305,7 @@ async function loadTransitionReservationGeneration(
             previousPreorderStock: inventoryMovements.previousPreorderStock,
             newPreorderStock: inventoryMovements.newPreorderStock,
             preorderStockDelta: inventoryMovements.preorderStockDelta,
+            locationId: inventoryMovements.locationId,
         })
         .from(inventoryMovements)
         .where(and(
@@ -1124,24 +1318,36 @@ async function loadTransitionReservationGeneration(
 
     const v2Rows = rows.filter((row) => row.ledgerVersion === 2);
     if (v2Rows.length > 0) {
-        const events = v2Rows as InventoryLedgerV2Event[];
+        const events = v2Rows as Array<InventoryLedgerV2Event & { locationId: string | null }>;
         if (operation === "restore") {
-            const restoredGeneration = events
-                .filter((event) =>
-                    event.reservationGeneration != null &&
-                    (
-                        event.type === "deducted"
-                        || event.type === "preorder_deducted"
-                    )
-                )
+            const deducts = events.filter((event) =>
+                event.reservationGeneration != null &&
+                (
+                    event.type === "deducted"
+                    || event.type === "preorder_deducted"
+                ));
+            const restoredGeneration = deducts
                 .reduce((maximum, event) => Math.max(maximum, event.reservationGeneration ?? 0), 0);
-            if (restoredGeneration > 0) return restoredGeneration;
+            if (restoredGeneration > 0) {
+                // The latest deduct of that generation names where its units left from.
+                const deduct = deducts
+                    .filter((event) => event.reservationGeneration === restoredGeneration)
+                    .reduce<(typeof deducts)[number] | null>((latest, event) =>
+                        !latest || (event.stockVersionAfter ?? 0) > (latest.stockVersionAfter ?? 0) ? event : latest, null);
+                return {
+                    reservationGeneration: restoredGeneration,
+                    deductLocationId: deduct?.locationId ?? null,
+                };
+            }
         }
 
         const balances = getReservationGenerationBalances(events, { orderId, variantId, pool });
-        return getActiveReservationGeneration(balances)
-            ?? balances.at(-1)?.generation
-            ?? 1;
+        return {
+            reservationGeneration: getActiveReservationGeneration(balances)
+                ?? balances.at(-1)?.generation
+                ?? 1,
+            deductLocationId: null,
+        };
     }
 
     const legacyGeneration = await loadTransitionMovementGeneration(
@@ -1150,7 +1356,7 @@ async function loadTransitionReservationGeneration(
         variantId,
         operation,
     );
-    return Math.max(1, legacyGeneration);
+    return { reservationGeneration: Math.max(1, legacyGeneration), deductLocationId: null };
 }
 
 function getTransitionMovementType(

@@ -5,6 +5,10 @@
 import { z } from "zod";
 import { phoneNumberSchema } from "@scalius/shared/customer-utils";
 import { LINE_PROPERTY_INPUT_LIMITS } from "@scalius/shared/line-properties";
+import {
+    ORDER_CHANNEL_SOURCE_MAX_LENGTH,
+    normalizeOrderChannelSource,
+} from "@scalius/shared/order-channel";
 
 export const MAX_ORDER_LINE_ITEMS = 99;
 
@@ -69,6 +73,23 @@ const sellableOrderContentSchema = orderBaseContentSchema.extend({
         .max(MAX_ORDER_LINE_ITEMS, `Add at most ${MAX_ORDER_LINE_ITEMS} sellable items`),
 });
 
+/**
+ * Where a staff-created order came in (COMMERCE-HOOKS H2): a preset
+ * (`facebook`, `instagram`, `whatsapp`, `phone`, `walk_in`) or the merchant's
+ * own words, stored as the slug `normalizeOrderChannelSource` makes of them.
+ * Empty means none; text with nothing readable in it is refused.
+ */
+const orderChannelSourceInputSchema = z
+    .string()
+    .max(ORDER_CHANNEL_SOURCE_MAX_LENGTH, `Source must be at most ${ORDER_CHANNEL_SOURCE_MAX_LENGTH} characters`)
+    .refine(
+        (value) => value.trim() === "" || normalizeOrderChannelSource(value) !== null,
+        "Source needs letters or numbers",
+    )
+    .nullable()
+    .optional()
+    .describe("Where the order came in: facebook, instagram, whatsapp, phone, walk_in, or free text (stored as a lowercase slug of at most 64 characters).");
+
 /** Schema for creating a new order (POST /api/orders). */
 export const createOrderSchema = sellableOrderContentSchema.extend({
     requestKey: z.uuid("A valid manual-order request key is required"),
@@ -78,6 +99,7 @@ export const createOrderSchema = sellableOrderContentSchema.extend({
      * may still be edited.
      */
     shippingMethodId: z.string().trim().min(1).max(180).nullable().optional(),
+    channelSource: orderChannelSourceInputSchema,
 });
 
 export type CreateOrderInput = z.infer<typeof createOrderSchema>;

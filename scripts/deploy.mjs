@@ -7,6 +7,8 @@
  *   node scripts/deploy.mjs --only api       # typecheck + build dashboard SPA and API, migrate D1, deploy API
  *   node scripts/deploy.mjs --only storefront # typecheck + build/deploy storefront
  *   node scripts/deploy.mjs --only api --dry-run # typecheck + build + dist checks only
+ *   node scripts/deploy.mjs --only api --plugin-sandbox # also bind the Worker Loader
+ *     (sandboxed plugins, Workers Paid); `pnpm plugin sandbox on` makes it the default
  *   node scripts/deploy.mjs --only api --wrangler-config path/to/wrangler.jsonc
  *     --health-only # isolated custom config: verify deployment + /health, not production bindings
  *   node scripts/deploy.mjs --migrate-only   # apply remote D1 migrations
@@ -40,6 +42,8 @@ import { readFileSync } from "fs";
 import { delimiter, resolve, dirname } from "path";
 import { fileURLToPath, pathToFileURL } from "url";
 import { getArgValue, resolvePnpmExecutable, shellQuote } from "./dev-local-utils.mjs";
+import { readLockfile } from "./plugin-build.mjs";
+import { apiWranglerConfig, pluginSandboxEnabled } from "./plugins.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, "..");
@@ -985,6 +989,12 @@ export function getDistSecretCommands(targets) {
       cmd: `node scripts/check-build-canaries.mjs ${appDirs.map((dir) => dir.replace(/^apps\//, "")).join(" ")}`,
       label: "Prove canary env values never reach a build",
     },
+    ...(targets.includes("api")
+      ? [{
+          cmd: "node scripts/check-api-bundle.mjs --dist apps/api/dist",
+          label: "Verify the API Worker (with bundled plugins) fits the Workers Free size limit",
+        }]
+      : []),
   ];
 }
 
@@ -1047,6 +1057,16 @@ export async function main() {
   const target = local ? "local" : "remote";
   const persistFlag = local ? ` --persist-to ${shellQuote(localPersistPath)}` : "";
   const requestedTarget = validateOnlyTarget();
+  // Sandboxed plugins (Dynamic Workers, Workers Paid): the committed config
+  // never binds the Worker Loader, so a generated config adds it.
+  const pluginSandbox = !migrateOnly && pluginSandboxEnabled(readLockfile(), process.env, args);
+  if (pluginSandbox && customWranglerConfigPath) {
+    console.error("✗ --plugin-sandbox applies to the committed API config; add worker_loaders to the custom --wrangler-config instead.");
+    process.exit(1);
+  }
+  const apiDeployConfigPath = customWranglerConfigPath
+    ?? (pluginSandbox ? apiWranglerConfig({ sandbox: true }) : null);
+  if (pluginSandbox) console.log(`Plugin sandbox on: deploying the API with ${apiDeployConfigPath}`);
   if (customWranglerConfigPath && (requestedTarget !== "api" || migrateOnly)) {
     console.error("✗ --wrangler-config is supported only with --only api deploys.");
     process.exit(1);
@@ -1141,8 +1161,9 @@ export async function main() {
 
       if (requestedTarget === "api") prepareSelectedProviderSchema();
 
-      deployTarget(requestedTarget, customWranglerConfigPath);
-      await verifyPostDeployTarget(requestedTarget, config, customWranglerConfigPath, {
+      const targetConfigPath = requestedTarget === "api" ? apiDeployConfigPath : null;
+      deployTarget(requestedTarget, targetConfigPath);
+      await verifyPostDeployTarget(requestedTarget, config, targetConfigPath, {
         healthOnly,
         deploymentUrls,
       });
@@ -1167,8 +1188,9 @@ export async function main() {
 
     // 4. Deploy both workers
     for (const targetName of deployTargets) {
-      deployTarget(targetName);
-      await verifyPostDeployTarget(targetName, config, null, { deploymentUrls });
+      const targetConfigPath = targetName === "api" ? apiDeployConfigPath : null;
+      deployTarget(targetName, targetConfigPath);
+      await verifyPostDeployTarget(targetName, config, targetConfigPath, { deploymentUrls });
     }
 
     console.log(`\n✓ Deploy complete (${deployTargets.join(" + ")}).`);

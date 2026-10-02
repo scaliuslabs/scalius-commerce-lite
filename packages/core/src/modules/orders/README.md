@@ -33,6 +33,10 @@ Public entries: `index.ts` (the server API) and `browser.ts` (types, the state m
 | `receipts.ts`, `lookup.ts`, `payment-recovery.ts` | receipt proof, order lookup OTP, buyer-verified payment recovery | Guest access to an order |
 | `timeline.ts`, `number.ts`, `money.ts`, `search.ts`, `csv-export.ts`, `archive-policy.ts`, `stale-incomplete.ts` | -- | Timeline, `#1001` numbers, money projections, search parsing, CSV, archive eligibility, stale hosted-payment cleanup |
 
+## Order Channel
+
+`orders.channel` says which surface created the order and never changes after insert (trigger `orders_channel_immutable`): the storefront checkout commit writes `online_store`, or `agent` when the commit carries a buyer agent's storefront context; `createOrder()` writes `admin`. `orders.channel_source` is an optional lowercase slug inside the channel: the dashboard's Sales channel picker sends a preset (`facebook`, `instagram`, `whatsapp`, `phone`, `walk_in`) or free text, which `normalizeOrderChannelSource()` (`@scalius/shared/order-channel`) stores as a slug of at most 64 characters, and which is part of the manual-order request hash. List and detail return both, `listOrders()` filters on `channel` (index `orders_channel_list_idx`) and `channelSource`, and the CSV export ends its order columns with Channel and Source. See `docs/platform/COMMERCE-HOOKS.md` H2.
+
 ## Order State Machine
 
 Three independent status dimensions, each with its own transition map. Exported type `StatusDimension` is `"order" | "payment" | "fulfillment"`.
@@ -189,7 +193,7 @@ Payment events (one `payment.event` message type for every gateway) are handled 
 
 | Method | Path | Handler | Purpose |
 |--------|------|---------|---------|
-| GET | `/` | `listOrders()` | Paginated list with FTS5 search, status/date filters, shipment summary |
+| GET | `/` | `listOrders()` | Paginated list with FTS5 search, status/channel/date filters, shipment summary |
 | POST | `/` | `createOrder()` | Manual order creation with reserve-then-deduct inventory |
 | GET | `/:id` | `getOrderDetails()` | Full order with items, variant info, images |
 | PUT | `/:id/details` | `updateOrderDetails()` | Customer and delivery details before shipment |

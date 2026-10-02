@@ -34,6 +34,7 @@ import {
   type CollectionFormValues,
   type Product,
 } from "./types";
+import { CustomFieldsCard } from "../custom-fields/CustomFieldsCard";
 
 type CollectionFormApi = UseFormReturn<CollectionFormInput, unknown, CollectionFormValues>;
 
@@ -41,7 +42,6 @@ const DEFAULT_CONFIG = {
   source: "manual" as const,
   categoryIds: [] as string[],
   productIds: [] as string[],
-  showOnHomepage: false,
   maxProducts: 8,
   title: "",
   subtitle: "",
@@ -274,6 +274,9 @@ export function CollectionForm({
             moveProduct={moveProduct}
           />
           <CollectionSearchListing form={form} disabled={!canSave} />
+          {isEdit && defaultValues?.id ? (
+            <CustomFieldsCard ownerType="collection" ownerId={defaultValues.id} canEdit={canSave} />
+          ) : null}
         </div>
         <LayoutSettingsSection
           form={form}

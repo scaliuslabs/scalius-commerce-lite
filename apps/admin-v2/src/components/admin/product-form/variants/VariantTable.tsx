@@ -4,7 +4,7 @@
 // fields. Rows are memoised, so typing re-renders only the row being edited.
 import React from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { ChevronDown, ChevronRight, PenLine, Printer, Search, Tag, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Database, PenLine, Printer, Search, Tag, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -25,6 +25,10 @@ import { requiresWholeCashAmounts } from "@scalius/shared/money";
 import { useCurrency } from "@/hooks/use-currency";
 import { formatNumber, useMessages } from "~/i18n";
 import { productMessages } from "~/i18n/products";
+import { customFieldMessages } from "~/i18n/custom-fields";
+import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
+import { usePermissions } from "~/contexts/PermissionContext";
+import { VariantCustomFieldsDialog } from "~/components/admin/custom-fields/CustomFieldsCard";
 import { resourceMessages } from "~/i18n/resource";
 import type { ProductSkuImageChoice } from "~/lib/api-query-options/products";
 import {
@@ -39,7 +43,7 @@ import {
   type VariantGroup,
 } from "./option-matrix-editor-model";
 import { useProductKindRules } from "../product-kind-rules";
-import { AdvancedSkuFields, InventoryQuantityInput, VariantImagePicker, type IssueFor } from "./variant-fields";
+import { AdvancedSkuFields, InventoryQuantityInput, VariantImagePicker, type IssueFor, type StockElsewhere } from "./variant-fields";
 
 /** Phone: select, photo, name, menu (price and quantity below). Wider: one line with every column. */
 const ROW_GRID = "grid grid-cols-[2rem_2.75rem_minmax(0,1fr)_2.25rem] items-center gap-x-2 md:grid-cols-[2rem_2.75rem_minmax(0,1fr)_7.5rem_6rem_2.25rem]";
@@ -99,6 +103,10 @@ export type VariantTableProps = {
   printingDisabled: boolean;
   /** Variants differ in what they are (physical or service): each row picks its own. */
   fulfilmentColumn?: boolean;
+  /** Stores with several locations: the quantity column edits the default location ("Quantity at Main location"). */
+  quantityLabel?: string;
+  /** Stores with several locations: each SKU's units held elsewhere (the rows' quantities exclude them). */
+  stockElsewhere?: ReadonlyMap<string, StockElsewhere>;
 };
 
 /** The latest function behind a stable identity, so memoised rows never re-render for it. */
@@ -222,6 +230,13 @@ export function VariantTable(props: VariantTableProps) {
   }));
   const onPrint = useStableCallback((ids: readonly string[]) =>
     void navigate({ to: "/admin/inventory/labels", search: { variants: ids.join(",") } }));
+  // A saved SKU's custom data, edited in its own dialog (the detail panel unmounts when closed).
+  const canEditProducts = usePermissions().hasPermission(PERMISSIONS.PRODUCTS_EDIT);
+  const [customDataFor, setCustomDataFor] = React.useState<{ id: string; sku: string } | null>(null);
+  const onCustomData = useStableCallback((id: string) => {
+    const variant = variants.find((item) => item.id === id);
+    if (variant) setCustomDataFor({ id, sku: variant.sku || props.nameOf(variant) });
+  });
 
   const visibleIds = filtered.map((variant) => variant.id);
   const selectedCount = selected.size;
@@ -240,16 +255,20 @@ export function VariantTable(props: VariantTableProps) {
       expanded={props.expandedId === variant.id}
       issue={props.issue?.variantId === variant.id ? props.issue : null}
       committed={props.committedByVariantId.get(variant.id) ?? 0}
+      quantityLabel={props.quantityLabel}
+      elsewhere={props.stockElsewhere?.get(variant.id)}
       images={props.images}
       money={money}
       canRemove={canRemoveAny}
       printable={!props.printingDisabled && variant.id.startsWith("var_")}
+      customData={variant.id.startsWith("var_")}
       layout={layout}
       onChange={onChange}
       onSelect={onSelect}
       onToggleExpand={onToggleExpand}
       onRemove={onRemove}
       onPrint={onPrint}
+      onCustomData={onCustomData}
     />
   );
 
@@ -337,7 +356,7 @@ export function VariantTable(props: VariantTableProps) {
                 <span><span className="sr-only">{t("photo")}</span></span>
                 <span className="font-medium">{t("variant")}</span>
                 <span className="hidden font-medium md:block">{t("price")}</span>
-                {layout.quantity ? <span className="hidden font-medium md:block">{t("quantity")}</span> : null}
+                {layout.quantity ? <span className="hidden font-medium md:block">{props.quantityLabel ?? t("quantity")}</span> : null}
                 {kindColumn ? <span className="hidden font-medium md:block">{t("fulfilment")}</span> : null}
                 <span className={layout.actions}><span className="sr-only">{r("actions")}</span></span>
               </>
@@ -386,6 +405,13 @@ export function VariantTable(props: VariantTableProps) {
           {filtered.length === 0 ? <div className="px-3 py-6 text-center text-body text-muted-foreground">{r("noResults")}</div> : null}
         </div>
       )}
+      <VariantCustomFieldsDialog
+        variantId={customDataFor?.id ?? null}
+        sku={customDataFor?.sku ?? ""}
+        canEdit={canEditProducts}
+        open={customDataFor !== null}
+        onOpenChange={(open) => (open ? undefined : setCustomDataFor(null))}
+      />
     </div>
   );
 }
@@ -399,6 +425,8 @@ type VariantRowProps = {
   expanded: boolean;
   issue: DraftIssue | null;
   committed: number;
+  quantityLabel?: string;
+  elsewhere?: StockElsewhere;
   images: ProductSkuImageChoice[];
   money: Money;
   canRemove: boolean;
@@ -409,15 +437,19 @@ type VariantRowProps = {
   onToggleExpand: (id: string) => void;
   onRemove: (id: string) => void;
   onPrint: (ids: readonly string[]) => void;
+  /** A saved SKU: its custom data can be edited. */
+  customData: boolean;
+  onCustomData: (id: string) => void;
 };
 
 const VariantRow = React.memo(function VariantRow({
-  variant, name, label, depth, selected, expanded, issue, committed, images, money, canRemove, printable, layout,
-  onChange, onSelect, onToggleExpand, onRemove, onPrint,
+  variant, name, label, depth, selected, expanded, issue, committed, quantityLabel, elsewhere, images, money, canRemove,
+  printable, customData, layout, onChange, onSelect, onToggleExpand, onRemove, onPrint, onCustomData,
 }: VariantRowProps) {
   const kindColumn = layout.kind;
   const t = useMessages(productMessages);
   const r = useMessages(resourceMessages);
+  const cf = useMessages(customFieldMessages);
   const errorOf = (field: DraftIssue["field"]) => (issue && issue.field === field ? issue.message : undefined);
   const issueFor: IssueFor = (_variantId, field) => errorOf(field);
   const priceError = errorOf("price");
@@ -428,8 +460,9 @@ const VariantRow = React.memo(function VariantRow({
   const actions = React.useMemo<ExtraAction[]>(() => [
     { label: t("editDetails"), icon: PenLine, onClick: () => onToggleExpand(variant.id) },
     ...(printable ? [{ label: t("printLabels"), icon: Printer, onClick: () => onPrint([variant.id]) }] : []),
+    ...(customData ? [{ label: cf("variantAction"), icon: Database, onClick: () => onCustomData(variant.id) }] : []),
     ...(canRemove ? [{ label: t("stopSelling"), icon: Trash2, destructive: true, onClick: () => onRemove(variant.id) }] : []),
-  ], [canRemove, onPrint, onRemove, onToggleExpand, printable, t, variant.id]);
+  ], [canRemove, cf, customData, onCustomData, onPrint, onRemove, onToggleExpand, printable, t, variant.id]);
 
   return (
     <div data-variant-row={variant.id} className={cn(layout.grid, "border-b py-1.5", selected && "bg-muted/50")}>
@@ -485,7 +518,7 @@ const VariantRow = React.memo(function VariantRow({
         </div>
         {layout.quantity ? (
           <div className="min-w-0">
-            <span className="block text-body text-muted-foreground md:hidden">{t("quantity")}</span>
+            <span className="block text-body text-muted-foreground md:hidden">{quantityLabel ?? t("quantity")}</span>
             {variant.trackInventory ? (
               <InventoryQuantityInput
                 cell="stock"
@@ -493,6 +526,7 @@ const VariantRow = React.memo(function VariantRow({
                 invalid={Boolean(stockError)}
                 value={variant.stock}
                 committed={committed}
+                elsewhere={elsewhere}
                 onChange={(stock) => change({ stock })}
               />
             ) : (

@@ -9,6 +9,7 @@ import { sql } from "drizzle-orm";
 import { UNIX_NOW } from "./shared";
 import { orders, orderItems } from "./orders";
 import { deliveryShipments } from "./delivery";
+import { inventoryLocations } from "./inventory";
 
 export const orderFulfillments = sqliteTable("order_fulfillments", {
     id: text("id").primaryKey(),
@@ -29,6 +30,9 @@ export const orderFulfillments = sqliteTable("order_fulfillments", {
     cashCollectedMinor: integer("cash_collected_minor"),
     createdAt: integer("created_at").notNull().default(UNIX_NOW),
     voidedAt: integer("voided_at"),
+    /** Where a ship or pickup fulfilment left from (the order's fulfilment location); null for other kinds. */
+    locationId: text("location_id")
+        .references(() => inventoryLocations.id, { onDelete: "restrict" }),
 }, (table) => [
     uniqueIndex("order_fulfillments_order_request_key_unique").on(table.orderId, table.requestKey),
     index("order_fulfillments_order_created_idx").on(table.orderId, table.createdAt),

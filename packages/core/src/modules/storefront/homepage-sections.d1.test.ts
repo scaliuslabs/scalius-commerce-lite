@@ -2,10 +2,15 @@ import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { safeBatch } from "@scalius/database/client";
 import { describe, expect, it } from "vitest";
 import { rebuildCatalogProjections } from "../products/catalog-projections";
-import { storefrontSectionDefault, type StorefrontSection } from "@scalius/shared/storefront-theme";
+import {
+    DEFAULT_STOREFRONT_THEME,
+    storefrontSectionDefault,
+    type StorefrontSection,
+    type StorefrontThemeDocument,
+} from "@scalius/shared/storefront-theme";
 import { withDependencyScope } from "../../cache-deps";
 import { planHomeBrands } from "../catalog/home-brands";
-import { planHomePromotions, readHomeSectionMedia } from "./homepage-sections";
+import { planHomePromotions, readThemeBrandAssets, readThemeMedia } from "./homepage-sections";
 
 describe("homepage brand wall and deal countdown reads", () => {
     it("counts only to a running promotion's stored end", async () => {
@@ -93,21 +98,41 @@ describe("homepage brand wall and deal countdown reads", () => {
         }
     });
 
-    it("reads the images a theme's sections name, for the dashboard's previews", async () => {
+    it("reads every image a theme names (brand, slides, sections), for the dashboard's previews", async () => {
         const { sqlite, db } = createSqliteD1Database();
         sqlite.exec(`
             INSERT INTO media (id, filename, kind, object_key, size, mime_type, status, width, height, variant_width, alt_text, trashed_at, deleted_at) VALUES
               ('m_card', 'card.jpg', 'image', 'media/card.jpg', 1, 'image/jpeg', 'ready', 800, 800, 800, 'Eid', NULL, NULL),
               ('m_video', 'clip.mp4', 'video', 'media/clip.mp4', 1, 'video/mp4', 'ready', 800, 800, NULL, NULL, NULL, NULL),
-              ('m_gone', 'gone.jpg', 'image', 'media/gone.jpg', 1, 'image/jpeg', 'deleted', 800, 800, 800, NULL, unixepoch(), unixepoch());
+              ('m_gone', 'gone.jpg', 'image', 'media/gone.jpg', 1, 'image/jpeg', 'deleted', 800, 800, 800, NULL, unixepoch(), unixepoch()),
+              ('m_logo', 'logo.png', 'image', 'media/logo.png', 1, 'image/png', 'ready', 400, 400, 400, 'Shop', NULL, NULL),
+              ('m_slide', 'slide.jpg', 'image', 'media/slide.jpg', 1, 'image/jpeg', 'ready', 1600, 600, 1600, NULL, NULL, NULL);
         `);
         const shopBy = storefrontSectionDefault("shop-by", "cards");
         const sections: StorefrontSection[] = [{
             ...shopBy,
             settings: { title: "", cards: ["m_card", "m_video", "m_gone"].map((mediaId) => ({ mediaId, title: mediaId, href: "/sale" })) },
         }];
-        const media = await readHomeSectionMedia(db, sections);
-        expect(media.map((each) => [each.id, each.alt])).toEqual([["m_card", "Eid"]]);
-        expect(await readHomeSectionMedia(db, [])).toEqual([]);
+        const hero = storefrontSectionDefault("hero", "hero");
+        const theme: StorefrontThemeDocument = {
+            ...structuredClone(DEFAULT_STOREFRONT_THEME),
+            brand: { ...DEFAULT_STOREFRONT_THEME.brand, logo: "m_logo", favicon: "m_gone" },
+            pages: {
+                homeMode: { kind: "sections" },
+                home: [
+                    { ...hero, settings: { ...hero.settings, slides: [{ image: "m_slide", phoneImage: "m_video", focalPoint: { x: 50, y: 50 }, alt: "Eid", link: null }] } },
+                    ...sections,
+                ],
+            },
+        };
+        const media = await readThemeMedia(db, theme);
+        // Ready (or trashed) images only: the video and the deleted file are left out.
+        expect(media.map((each) => [each.id, each.alt])).toEqual([["m_logo", "Shop"], ["m_slide", ""], ["m_card", "Eid"]]);
+        expect(await readThemeMedia(db, structuredClone(DEFAULT_STOREFRONT_THEME))).toEqual([]);
+        // A preview's brand: the logo resolves, the deleted tab icon reads as none.
+        const brand = await readThemeBrandAssets(db, theme.brand);
+        expect(brand.logo).toMatchObject({ id: "m_logo", alt: "Shop" });
+        expect(brand.favicon).toBeNull();
+        expect(brand.footerLogo).toBeNull();
     });
 });

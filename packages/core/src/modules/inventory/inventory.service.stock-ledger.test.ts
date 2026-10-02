@@ -18,6 +18,17 @@ vi.mock("./alerts", () => ({
   checkAndAlertLowStock: vi.fn(),
 }));
 
+// One location holds all of the SKU's stock, so its on-hand is the SKU's
+// stock; the D1 tests cover real levels.
+vi.mock("./locations", async (importActual) => ({
+  ...(await importActual<typeof import("./locations")>()),
+  resolveActiveInventoryLocation: vi.fn(async () => ({ id: "loc_default", name: "Main location" })),
+  readLocationOnHand: vi.fn(async (db: { select: () => { from: (table: unknown) => { where: () => { get: () => Promise<{ stock: number } | null> } } } }, _locationId: string, variantIds: string[]) => {
+    const variant = await db.select().from(undefined).where().get();
+    return new Map(variantIds.map((id) => [id, variant?.stock ?? 0]));
+  }),
+}));
+
 type MockStatement = {
   kind: "insert" | "update";
   table: unknown;
@@ -111,6 +122,9 @@ describe("adjustInventory stock ledger", () => {
       previousStock: 9,
       newStock: 6,
       delta: -3,
+      locationId: "loc_default",
+      locationPreviousStock: 9,
+      locationNewStock: 6,
     });
     expect(batchCalls).toHaveLength(1);
     expect(batchCalls[0]?.[0]).toMatchObject({
@@ -176,7 +190,7 @@ describe("adjustInventory stock ledger", () => {
         delta: -3,
         reason: "damage",
       }),
-    ).rejects.toThrow(/resulting stock must be greater than or equal to zero/);
+    ).rejects.toThrow(/Main location has \d+ on hand, so at most \d+ can be removed there/);
     expect(batchCalls).toHaveLength(0);
   });
 });

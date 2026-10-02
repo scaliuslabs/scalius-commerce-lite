@@ -1,15 +1,19 @@
 ---
-// The collections the merchant put on the homepage, each in its own
-// presentation (grid or carousel), in their order. A store without any shows
-// its newest products instead, so a store with products never has a blank
-// homepage. Rounded-tech carousels use the compact product shelf.
+// The collections the section names (its `collectionIds`), each in its own
+// presentation (grid or carousel), in the section's order; only active ones
+// with products arrive. Without one the section shows the newest products
+// instead, so a store with products never has a blank homepage. A
+// carousel's cards are large, or Apple Gadgets' compact shelf
+// (`carousel: compact`).
+import type { StorefrontSectionOf } from "@scalius/shared/storefront-theme";
 import type { CollectionWithProducts, Product } from "@/lib/api";
 import { collectionShowsProducts } from "@/lib/homepage-sections";
-import { currentRequestTheme } from "@/lib/storefront-theme-context";
 import ProductGridSection from "./ProductGridSection.astro";
 import ProductRail from "./ProductRail.astro";
 
 interface Props {
+  section: StorefrontSectionOf<"collections">;
+  /** `homepageCollections(section, content)`: the section's collections that show products. */
   collections: CollectionWithProducts[];
   fallbackProducts: Product[];
   currencySymbol: string;
@@ -18,8 +22,9 @@ interface Props {
   lead: boolean;
 }
 
-const { collections, fallbackProducts, currencySymbol, currencyCode, lead } = Astro.props;
-const shelfCarousel = (await currentRequestTheme(Astro.locals)).resolved.template === "rounded-tech";
+const { section, collections, fallbackProducts, currencySymbol, currencyCode, lead } = Astro.props;
+const RAIL_WIDTH = { large: "collection", compact: "shelf" } as const satisfies Record<typeof section.settings.carousel, "collection" | "shelf">;
+const railWidth = RAIL_WIDTH[section.settings.carousel];
 // Only the first collection that shows products can sit above the fold.
 const firstShownCollectionId = collections.find(collectionShowsProducts)?.id;
 
@@ -48,7 +53,7 @@ const collectionHref = (collection: CollectionWithProducts) => `/collections/${e
     )}
     {collection.presentation === "carousel" && (
       <ProductRail
-        width={shelfCarousel ? "shelf" : "collection"}
+        width={railWidth}
         title={collection.config?.title || collection.name}
         products={collection.products ?? []}
         href={collectionHref(collection)}

@@ -111,10 +111,15 @@ function idScope(column: string): SQL {
 const COLOUR_AXIS = sql.raw(`(axis."standard_mapping" = 'color' OR axis."normalized_name" IN ('color', 'colour', 'colours', 'colors', 'রং'))`);
 /** A size axis by its standard mapping or its name. */
 const SIZE_AXIS = sql.raw(`(axis."standard_mapping" = 'size' OR axis."normalized_name" IN ('size', 'sizes', 'সাইজ'))`);
-/** The option value is sold on a live SKU. */
+/**
+ * The option value is sold on a live SKU of the axis's own product. Scoping to
+ * the product keeps the card's inputs inside its own `p:` key: an assignment
+ * on another product's SKU can never change this card.
+ */
 const VALUE_ON_LIVE_SKU = sql.raw(`EXISTS (
     SELECT 1 FROM "product_variant_option_values" assignment
     INNER JOIN "product_variants" sku ON sku."id" = assignment."variant_id" AND sku."deleted_at" IS NULL
+        AND sku."product_id" = axis."product_id"
     WHERE assignment."option_value_id" = axis_value."id"
 )`);
 

@@ -1,0 +1,38 @@
+---
+// "Compare with similar items" (Star Tech's compare, Target's similar
+// items): up to three recommended products of this product's category in the
+// store's card, and a link that opens the existing comparison page with
+// this product and them side by side (prices and key specifications,
+// /compare). The link carries product ids only, never anything personal.
+import type { Product } from "@/lib/api";
+import ProductCard from "@/components/cards/ProductCard.astro";
+import ProductGrid from "@/components/cards/ProductGrid.astro";
+import ProductModule from "./ProductModule.astro";
+
+interface Props {
+  title: string;
+  productId: string;
+  products: Product[];
+  currencySymbol: string;
+  currencyCode: string;
+}
+
+const { title, productId, products, currencySymbol, currencyCode } = Astro.props;
+const compareHref = `/compare?ids=${[productId, ...products.map((product) => product.id)].map(encodeURIComponent).join(",")}`;
+// theme-foundation.css keeps the product route's `max-w-7xl` at 80rem.
+const PRODUCT_PAGE_CONTAINER_WIDTH = "80rem";
+---
+
+<ProductModule id="compare-similar" title={title}>
+  <ProductGrid>
+    {products.map((product) => (
+      <ProductCard product={product} currencySymbol={currencySymbol} currencyCode={currencyCode} containerWidth={PRODUCT_PAGE_CONTAINER_WIDTH} />
+    ))}
+  </ProductGrid>
+  <a
+    href={compareHref}
+    data-compare-similar-link
+    rel="nofollow"
+    class="mt-4 inline-flex min-h-11 items-center rounded-[var(--theme-button-radius,var(--radius))] border border-border bg-background px-4 text-sm font-semibold text-foreground hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+  >Compare these with this item</a>
+</ProductModule>

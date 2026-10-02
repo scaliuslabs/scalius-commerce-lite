@@ -7,8 +7,10 @@
 // and every surface shows at most `maxTopItems` top entries, the rest behind
 // "More" or "All categories" (/categories). The surfaces share the theme's
 // link budget (`planHeaderNavigation`), so a 1,000-category store drills
-// into its tree instead of dumping it into the HTML.
-import type { CategoryNavigationTree, HeaderData, NavigationItem, SocialLink } from "@/lib/api";
+// into its tree instead of dumping it into the HTML. The logo and its width
+// are the theme's brand (the request theme's resolved logo image); the store
+// name, phone and social profiles are Business settings.
+import type { CategoryNavigationTree, NavigationItem, SocialLink } from "@/lib/api";
 import HeaderLayout from "./HeaderLayout.astro";
 import TopBar from "./TopBar.astro";
 import DesktopNav from "./DesktopNav.astro";
@@ -19,7 +21,7 @@ import DrawerTrigger from "./DrawerTrigger.astro";
 import MobileMenu from "./MobileMenu.astro";
 import MobileTabBar from "./MobileTabBar.astro";
 import PillNav from "./PillNav.astro";
-import { HEADER_LOGO_WIDTH_DEFAULT, normalizeHeaderLogoWidth } from "@scalius/shared/brand-presentation";
+import { normalizeHeaderLogoWidth } from "@scalius/shared/brand-presentation";
 import type {
   STOREFRONT_MOBILE_TABS,
   StorefrontHeaderRenderer,
@@ -27,7 +29,7 @@ import type {
   StorefrontNavigationRenderer,
 } from "@scalius/shared/storefront-theme";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
-import { headerCondense, headerGeometryStyle, headerSpec } from "./header-variants";
+import { headerCondense, headerGeometryStyle, headerSpec, type HeaderLogo } from "./header-variants";
 import {
   countNavigationLinks,
   estimateNavRowFit,
@@ -38,7 +40,6 @@ import {
 } from "./nav-tree";
 
 interface Props {
-  headerData: HeaderData;
   /** The header menu (Online store -> Navigation). */
   navigation: NavigationItem[];
   /** The reachable category tree (layout data), for tree-sourced navigation. */
@@ -49,47 +50,35 @@ interface Props {
   social: SocialLink[];
   /** The coarse renderer facts (`resolved.layout`); the variants come from the resolved theme. */
   variant: StorefrontHeaderRenderer;
-  /** The theme's top bar block can show a bar (its text lives in Header settings). */
-  showTopBar: boolean;
   navigationStyle: StorefrontNavigationRenderer;
   /** Layout's coarse phone fact; the phone menu follows the resolved `mobileNav` variant. */
   mobileNavigation: StorefrontMobileNavigationRenderer;
 }
 
 const {
-  headerData: apiHeaderData,
   navigation: menuItems,
   categoryTree,
   storeName,
   storePhone,
   social,
   variant: headerStyle,
-  showTopBar,
   navigationStyle,
 } = Astro.props;
 
-const { resolved, layout: themeLayout } = await currentRequestTheme(Astro.locals);
+const { resolved, layout: themeLayout, brand } = await currentRequestTheme(Astro.locals);
 const { topBar, header, desktopNav, mobileNav, navigation } = resolved.blocks;
 
-const headerData: HeaderData = {
-  topBar: {
-    text: apiHeaderData?.topBar?.text || "",
-    isEnabled: showTopBar && (apiHeaderData?.topBar?.isEnabled ?? true),
-  },
-  logo: apiHeaderData?.logo?.src
-    ? { ...apiHeaderData.logo, alt: storeName || apiHeaderData.logo.alt || "Store" }
-    : {
-        src: "",
-        alt: storeName || apiHeaderData?.logo?.alt || "Store",
-        width: HEADER_LOGO_WIDTH_DEFAULT,
-      },
-  contact: {
-    phone: storePhone ?? "",
-    text: apiHeaderData?.contact?.text || "",
-    isEnabled: apiHeaderData?.contact?.isEnabled ?? true,
-  },
-  social,
+// The theme's logo with the store name as its alt text (the text logo without one).
+const logo: HeaderLogo = {
+  src: brand.logo?.url ?? "",
+  alt: storeName || "Store",
+  width: normalizeHeaderLogoWidth(resolved.brand.logoWidth),
 };
+// The bar above the header: `none` is its only off switch; the others carry
+// the announcement's words and optional link.
+const topBarSettings = topBar.settings as { text?: unknown; link?: unknown };
+const announcementText = typeof topBarSettings.text === "string" ? topBarSettings.text : "";
+const announcementLink = typeof topBarSettings.link === "string" && topBarSettings.link ? topBarSettings.link : null;
 
 // ── The tree, and which menus render where ─────────────────────────────
 const categoryNodes = categoryTree?.nodes ?? [];
@@ -116,6 +105,9 @@ const phoneTree: "accordion" | "drill" =
 const tabs =
   mobileNav.variant === "bottom-tabs" ? (mobileSettings.tabs as ReadonlyArray<(typeof STOREFRONT_MOBILE_TABS)[number]>) : null;
 const desktopDrill = hasNavigation && desktopKind === "drill-in-drawer";
+// Amazon's drawer geometry (80vw, 52px rows on phones): the phone drawer's
+// `rows` setting, shared by the desktop drawer the header also renders.
+const tallDrawerRows = mobileNav.variant === "drill-in-drawer" && mobileSettings.rows === "tall";
 // One drawer serves both screens when both drill in.
 const sharedDrawer = desktopDrill && phoneTree === "drill";
 const desktopDrawer = sharedDrawer ? "mobile-menu" : "nav-drawer";
@@ -132,7 +124,7 @@ const menuPlacement: "inline" | "row" =
 // ── The link budget, across every surface ──────────────────────────────
 const rowKinds = ["dropdown", "mega-panel", "cascading", "sticky-category-bar"];
 const desktopRendering = desktopMenu && !sharedDrawer;
-const topBarShown = headerData.topBar.isEnabled && topBar.variant !== "none";
+const topBarShown = topBar.variant !== "none";
 // Logo, account, track order, search icon, the drawer's own rows and phone.
 const reserved =
   8 + social.length + (tabs?.length ?? 0) + (topBarShown ? 3 : 0) + (shortcutRow ? 10 : 0) + rowLinks + mallLinks.length;
@@ -169,7 +161,7 @@ const panelsSrc =
 // wrap: it shows what the narrowest desktop (1024px) surely fits, then "All
 // categories". Rows of their own wrap instead.
 const inlineRowPx = spec && menuPlacement === "inline"
-  ? 1024 - 64 - normalizeHeaderLogoWidth(headerData.logo.width) - (spec.search === "icon" ? 44 : 304) -
+  ? 1024 - 64 - logo.width - (spec.search === "icon" ? 44 : 304) -
     (spec.utilities === "icons" ? 100 : 190) - 4 * 24
   : null;
 const noScriptFit = inlineRowPx !== null && plan.allCategories
@@ -202,14 +194,16 @@ const geometryStyle = headerGeometryStyle(headerCondense(spec, { foldsMenuRow: c
 
 <header id="site-header" class="contents" style={geometryStyle} data-header-variant={header.variant} data-desktop-nav={desktopKind} data-mobile-nav-variant={mobileNav.variant} data-nav-source={navigation.source}>
   <TopBar
-    variant={headerData.topBar.isEnabled ? topBar.variant : "none"}
-    text={headerData.topBar.text}
-    storeName={headerData.logo.alt}
-    phone={headerData.contact.isEnabled !== false ? storePhone : null}
+    variant={topBar.variant}
+    text={announcementText}
+    link={announcementLink}
+    storeName={logo.alt}
+    phone={storePhone}
   />
 
   <HeaderLayout
-    headerData={headerData}
+    logo={logo}
+    phone={storePhone}
     variantId={header.variant}
     spec={spec}
     headerStyle={headerStyle}
@@ -301,13 +295,13 @@ const geometryStyle = headerGeometryStyle(headerCondense(spec, { foldsMenuRow: c
 
   <MobileMenu
     navigation={plan.drawer}
-    contact={headerData.contact}
-    social={headerData.social}
+    phone={storePhone}
+    social={social}
     tree={phoneTree}
     screens={sharedDrawer ? "all" : "phone"}
     title={drawerTitle}
     allCategories={plan.drawerAllCategories}
-    marketplace={resolved.template === "marketplace"}
+    marketplace={tallDrawerRows}
   />
 
   {
@@ -315,12 +309,12 @@ const geometryStyle = headerGeometryStyle(headerCondense(spec, { foldsMenuRow: c
       <MobileMenu
         id="nav-drawer"
         navigation={desktopTree}
-        contact={headerData.contact}
+        phone={storePhone}
         tree="drill"
         screens="all"
         title={drawerTitle}
         allCategories={plan.drawerAllCategories}
-        marketplace={resolved.template === "marketplace"}
+        marketplace={tallDrawerRows}
       />
     )
   }

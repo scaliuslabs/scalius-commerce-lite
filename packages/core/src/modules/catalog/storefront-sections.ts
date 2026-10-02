@@ -13,13 +13,8 @@ import {
     productVariants,
     products,
 } from "@scalius/database/schema";
-import {
-    catalogDiscountedPrice,
-    presentCatalogPrice,
-    storeCurrencyCodeSql,
-    storeCurrencyFromCode,
-    storeDecimalPlacesFromCode,
-} from "../products/money";
+import { catalogDiscountedPrice, presentCatalogPrice } from "../products/money";
+import { storeCurrencyCodeSql, storeCurrencyFromCode, storeDecimalPlacesFromCode } from "../settings/store-money";
 import { maskPublicBuyerAvailability } from "@scalius/shared/buyer-availability";
 import { and, asc, count, eq, isNull, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";

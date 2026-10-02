@@ -1,0 +1,539 @@
+// Plugin installations (docs/platform/PLUGINS.md, P1): install, approve and
+// activate, deactivate, update, uninstall, and the merchant's settings. Every
+// write is a compare-and-set on `revision`; the extension-point registrations
+// are rewritten in the same batch as the manifest they derive from.
+
+import type { Database } from "@scalius/database/client";
+import { buildBatchGuard, isBatchGuardError, safeBatch } from "@scalius/database/client";
+import {
+  pluginInstallations,
+  pluginKv,
+  pluginLogEntries,
+  pluginRecords,
+  pluginRegistrations,
+  type PluginInstallationRow,
+  type PluginInstallationSource,
+  type PluginInstallationStatus,
+} from "@scalius/database/schema";
+import { isCustomFieldType } from "@scalius/shared/custom-fields";
+import {
+  FIRST_PARTY_PLUGIN_VENDOR,
+  parsePluginManifest,
+  pluginGrantExpands,
+  pluginGrantKey,
+  pluginGrantRequest,
+  pluginSettingDefaults,
+  validatePluginSettingValues,
+  type PluginGrantRequest,
+  type PluginManifest,
+  type PluginSettingField,
+  type PluginSettingValue,
+  type PluginSettingValues,
+} from "@scalius/shared/plugins";
+import { and, asc, eq, sql } from "drizzle-orm";
+import { PluginError } from "./errors";
+import { isKnownPermission, isPluginGrantablePermission } from "./grants";
+import {
+  derivePluginSettingsKey,
+  isSealedPluginSecret,
+  openPluginSecret,
+  sealPluginSecret,
+} from "./settings-crypto";
+import { reindexPluginCollection } from "./storage";
+
+export interface PluginInstallation {
+  pluginId: string;
+  version: string;
+  source: PluginInstallationSource;
+  bundleSha256: string;
+  manifest: PluginManifest;
+  /** The approved grant; null until a Super Admin approves one. */
+  grant: PluginGrantRequest | null;
+  grantKey: string | null;
+  status: PluginInstallationStatus;
+  failureReason: string | null;
+  /** Stored setting values: secret fields hold `ps1:` ciphertext. */
+  storedSettings: Record<string, unknown>;
+  revision: number;
+  installedBy: string | null;
+  activatedBy: string | null;
+  installedAt: number;
+  activatedAt: number | null;
+  updatedAt: number;
+}
+
+const SHA256 = /^[0-9a-f]{64}$/;
+const MAX_FAILURE_REASON = 500;
+
+function parseJsonObject(value: string | null): Record<string, unknown> | null {
+  if (value === null) return null;
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function stringList(value: unknown): string[] | null {
+  return Array.isArray(value) && value.every((item) => typeof item === "string") ? [...value] : null;
+}
+
+/** A stored grant, or null when absent or malformed (a malformed grant grants nothing). */
+export function parseStoredPluginGrant(value: string | null): PluginGrantRequest | null {
+  const raw = parseJsonObject(value);
+  if (!raw) return null;
+  const lists = ["permissions", "allowedHosts", "events", "functions", "providers", "storefrontScripts", "customFieldOwners"] as const;
+  const parsed: Partial<Record<(typeof lists)[number], string[]>> = {};
+  for (const key of lists) {
+    const list = stringList(raw[key]);
+    if (!list) return null;
+    parsed[key] = list;
+  }
+  if (typeof raw.publicRoutes !== "boolean" || typeof raw.storefrontSurfaces !== "boolean") return null;
+  return {
+    ...(parsed as Record<(typeof lists)[number], string[]>),
+    publicRoutes: raw.publicRoutes,
+    storefrontSurfaces: raw.storefrontSurfaces,
+  } as PluginGrantRequest;
+}
+
+/** A row as the runtime reads it; a manifest that no longer parses yields null (the plugin cannot run). */
+export function toPluginInstallation(row: PluginInstallationRow): PluginInstallation | null {
+  const manifestJson = parseJsonObject(row.manifestJson);
+  const parsed = manifestJson ? parsePluginManifest(manifestJson) : null;
+  if (!parsed?.ok || parsed.manifest.id !== row.pluginId) return null;
+  return {
+    pluginId: row.pluginId,
+    version: row.version,
+    source: row.source,
+    bundleSha256: row.bundleSha256,
+    manifest: parsed.manifest,
+    grant: parseStoredPluginGrant(row.grantJson),
+    grantKey: row.grantKey,
+    status: row.status,
+    failureReason: row.failureReason,
+    storedSettings: parseJsonObject(row.settingsJson) ?? {},
+    revision: row.revision,
+    installedBy: row.installedBy,
+    activatedBy: row.activatedBy,
+    installedAt: row.installedAt,
+    activatedAt: row.activatedAt,
+    updatedAt: row.updatedAt,
+  };
+}
+
+export async function getPluginInstallation(db: Database, pluginId: string): Promise<PluginInstallation | null> {
+  const row = await db.select().from(pluginInstallations).where(eq(pluginInstallations.pluginId, pluginId)).get();
+  return row ? toPluginInstallation(row) : null;
+}
+
+export async function requirePluginInstallation(db: Database, pluginId: string): Promise<PluginInstallation> {
+  const installation = await getPluginInstallation(db, pluginId);
+  if (!installation) throw new PluginError("installation.not_found", `Plugin ${pluginId} is not installed.`);
+  return installation;
+}
+
+export async function listPluginInstallations(db: Database): Promise<PluginInstallation[]> {
+  const rows = await db.select().from(pluginInstallations).orderBy(asc(pluginInstallations.pluginId)).all();
+  return rows.map(toPluginInstallation).filter((installation): installation is PluginInstallation => installation !== null);
+}
+
+// ── Manifest checks beyond the schema ────────────────────────────────────
+
+/** A manifest the store can install: parsed, known permissions only, nothing reserved. */
+export function requireInstallableManifest(value: unknown, source: PluginInstallationSource): PluginManifest {
+  const parsed = parsePluginManifest(value);
+  if (!parsed.ok) {
+    throw new PluginError("manifest.invalid", `The plugin manifest is invalid: ${parsed.issues[0]?.path} ${parsed.issues[0]?.message}`, {
+      issues: parsed.issues,
+    });
+  }
+  const manifest = parsed.manifest;
+  const unknown = manifest.permissions.filter((permission) => !isKnownPermission(permission));
+  if (unknown.length > 0) {
+    throw new PluginError("manifest.permission_unknown", `Unknown permission ${unknown[0]}.`, { permissions: unknown });
+  }
+  const reserved = manifest.permissions.filter((permission) => !isPluginGrantablePermission(permission));
+  if (reserved.length > 0) {
+    throw new PluginError(
+      "manifest.permission_reserved",
+      `Plugins cannot hold ${reserved[0]}: staff, agent access, webhook and plugin management stay with people.`,
+      { permissions: reserved },
+    );
+  }
+  const badType = manifest.customFields.find((field) => !isCustomFieldType(field.type));
+  if (badType) {
+    throw new PluginError("manifest.custom_field_type", `Unknown custom field type ${badType.type}.`);
+  }
+  if (source === "upload" && manifest.id.startsWith(`${FIRST_PARTY_PLUGIN_VENDOR}.`)) {
+    throw new PluginError("manifest.reserved_vendor", `Plugin ids under ${FIRST_PARTY_PLUGIN_VENDOR}.* are reserved for first-party plugins.`);
+  }
+  return manifest;
+}
+
+function registrationRows(pluginId: string, manifest: PluginManifest) {
+  return [
+    ...manifest.events.map((filter) => ({ kind: "event" as const, name: filter, pluginId, priority: 100 })),
+    ...manifest.functions.map((fn) => ({ kind: "function" as const, name: fn.point, pluginId, priority: fn.priority })),
+    ...manifest.cron.map((job) => ({ kind: "cron" as const, name: job.name, pluginId, priority: 100 })),
+  ];
+}
+
+/** Registration inserts, chunked within D1's bound-parameter limit (4 per row). */
+function registrationInserts(db: Database, pluginId: string, manifest: PluginManifest) {
+  const rows = registrationRows(pluginId, manifest);
+  const statements = [];
+  for (let start = 0; start < rows.length; start += 24) {
+    statements.push(db.insert(pluginRegistrations).values(rows.slice(start, start + 24)));
+  }
+  return statements;
+}
+
+function requireSha256(value: string): string {
+  if (!SHA256.test(value)) throw new PluginError("manifest.invalid", "The bundle SHA-256 must be 64 lowercase hex characters.");
+  return value;
+}
+
+function isPrimaryKeyConflict(error: unknown): boolean {
+  for (let current: unknown = error, hops = 0; current && hops < 5; hops += 1) {
+    const message = current instanceof Error ? current.message : String(current);
+    if (/plugin_installations\.plugin_id|plugin_installations_pkey/i.test(message)) return true;
+    current = current instanceof Error ? (current as Error & { cause?: unknown }).cause : undefined;
+  }
+  return false;
+}
+
+const REVISION_GUARD = "PLUGIN_REVISION_CONFLICT";
+
+/** Fails the whole batch unless the installation is still at `expectedRevision`. */
+function revisionGuard(db: Database, pluginId: string, expectedRevision: number) {
+  return buildBatchGuard(
+    db,
+    sql`EXISTS (SELECT 1 FROM ${pluginInstallations} WHERE ${pluginInstallations.pluginId} = ${pluginId} AND ${pluginInstallations.revision} = ${expectedRevision})`,
+    REVISION_GUARD,
+  );
+}
+
+async function requireRevision(
+  db: Database,
+  pluginId: string,
+  expectedRevision: number,
+  updated: Array<{ revision: number }>,
+): Promise<void> {
+  if (updated.length > 0) return;
+  const current = await db.select({ revision: pluginInstallations.revision })
+    .from(pluginInstallations).where(eq(pluginInstallations.pluginId, pluginId)).get();
+  if (!current) throw new PluginError("installation.not_found", `Plugin ${pluginId} is not installed.`);
+  throw new PluginError(
+    "installation.revision_conflict",
+    `Plugin ${pluginId} changed since revision ${expectedRevision}; reload and try again.`,
+    { currentRevision: current.revision },
+  );
+}
+
+// ── Lifecycle ────────────────────────────────────────────────────────────
+
+export interface InstallPluginInput {
+  manifest: unknown;
+  source: PluginInstallationSource;
+  bundleSha256: string;
+  actorUserId?: string | null;
+}
+
+/** Installs (status `installed`, nothing runs yet) with the manifest's setting defaults. */
+export async function installPlugin(db: Database, input: InstallPluginInput): Promise<PluginInstallation> {
+  const manifest = requireInstallableManifest(input.manifest, input.source);
+  const sha256 = requireSha256(input.bundleSha256);
+  if (await getPluginInstallation(db, manifest.id)) {
+    throw new PluginError("installation.exists", `Plugin ${manifest.id} is already installed.`);
+  }
+  try {
+    await safeBatch(db, [
+      db.insert(pluginInstallations).values({
+        pluginId: manifest.id,
+        version: manifest.version,
+        source: input.source,
+        bundleSha256: sha256,
+        manifestJson: JSON.stringify(manifest),
+        status: "installed",
+        settingsJson: JSON.stringify(pluginSettingDefaults(manifest.settings)),
+        revision: 1,
+        installedBy: input.actorUserId ?? null,
+        installedAt: sql`unixepoch()`,
+        updatedAt: sql`unixepoch()`,
+      }),
+      ...registrationInserts(db, manifest.id, manifest),
+    ] as never);
+  } catch (error) {
+    if (isPrimaryKeyConflict(error)) throw new PluginError("installation.exists", `Plugin ${manifest.id} is already installed.`);
+    throw error;
+  }
+  return requirePluginInstallation(db, manifest.id);
+}
+
+function missingRequiredSettings(installation: PluginInstallation): string[] {
+  return installation.manifest.settings
+    .filter((field) => field.required)
+    .filter((field) => {
+      const stored = installation.storedSettings[field.key];
+      return field.type === "secret" ? !isSealedPluginSecret(stored) : stored === undefined || stored === null || stored === "";
+    })
+    .map((field) => field.key);
+}
+
+/**
+ * A Super Admin approves the manifest's grant request and the plugin starts
+ * running. Required settings must be filled first. The caller checks that the
+ * actor is a Super Admin; the actor is recorded as the plugin's acting user.
+ */
+export async function activatePlugin(
+  db: Database,
+  pluginId: string,
+  options: { actorUserId: string; expectedRevision: number },
+): Promise<PluginInstallation> {
+  const installation = await requirePluginInstallation(db, pluginId);
+  const missing = missingRequiredSettings(installation);
+  if (missing.length > 0) {
+    throw new PluginError("installation.settings_incomplete", `Fill in the required settings first: ${missing.join(", ")}.`, { missing });
+  }
+  const grant = pluginGrantRequest(installation.manifest);
+  const updated = await db.update(pluginInstallations).set({
+    status: "active",
+    grantJson: JSON.stringify(grant),
+    grantKey: pluginGrantKey(grant),
+    failureReason: null,
+    activatedBy: options.actorUserId,
+    activatedAt: sql`unixepoch()`,
+    revision: sql`${pluginInstallations.revision} + 1`,
+    updatedAt: sql`unixepoch()`,
+  }).where(and(
+    eq(pluginInstallations.pluginId, pluginId),
+    eq(pluginInstallations.revision, options.expectedRevision),
+  )).returning({ revision: pluginInstallations.revision });
+  await requireRevision(db, pluginId, options.expectedRevision, updated);
+  return requirePluginInstallation(db, pluginId);
+}
+
+export async function deactivatePlugin(
+  db: Database,
+  pluginId: string,
+  options: { expectedRevision: number },
+): Promise<PluginInstallation> {
+  const updated = await db.update(pluginInstallations).set({
+    status: "disabled",
+    revision: sql`${pluginInstallations.revision} + 1`,
+    updatedAt: sql`unixepoch()`,
+  }).where(and(
+    eq(pluginInstallations.pluginId, pluginId),
+    eq(pluginInstallations.revision, options.expectedRevision),
+  )).returning({ revision: pluginInstallations.revision });
+  await requireRevision(db, pluginId, options.expectedRevision, updated);
+  return requirePluginInstallation(db, pluginId);
+}
+
+/**
+ * The host could not load the plugin (missing bundle, hash mismatch,
+ * handlers that disagree with the manifest): it stops running until an
+ * update or re-activation. Runtime throws and timeouts are logged, not this.
+ */
+export async function markPluginFailed(db: Database, pluginId: string, reason: string): Promise<void> {
+  const trimmed = reason.trim().slice(0, MAX_FAILURE_REASON) || "The plugin could not be loaded.";
+  await db.update(pluginInstallations).set({
+    status: "failed",
+    failureReason: trimmed,
+    revision: sql`${pluginInstallations.revision} + 1`,
+    updatedAt: sql`unixepoch()`,
+  }).where(eq(pluginInstallations.pluginId, pluginId));
+}
+
+/** Stored values that are still valid under a new settings schema; new fields take their defaults. */
+function migrateStoredSettings(stored: Record<string, unknown>, schema: readonly PluginSettingField[]): Record<string, unknown> {
+  const next: Record<string, unknown> = { ...pluginSettingDefaults([...schema]) };
+  for (const field of schema) {
+    const value = stored[field.key];
+    if (value === undefined || value === null) continue;
+    if (field.type === "secret") {
+      if (isSealedPluginSecret(value)) next[field.key] = value;
+      continue;
+    }
+    const check = validatePluginSettingValues([{ ...field, required: false }], { [field.key]: value });
+    if (check.ok && check.values[field.key] !== null && check.values[field.key] !== undefined) next[field.key] = check.values[field.key];
+  }
+  return next;
+}
+
+export interface UpdatePluginInput {
+  manifest: unknown;
+  source: PluginInstallationSource;
+  bundleSha256: string;
+  expectedRevision: number;
+}
+
+/**
+ * Replaces the code and manifest. An active plugin whose new grant request
+ * asks for anything not yet approved waits in `installed` for a Super Admin
+ * (the old grant is kept on record); a narrower one stays active. Storage
+ * collections whose index declaration changed are re-indexed.
+ */
+export async function updatePluginInstallation(
+  db: Database,
+  pluginId: string,
+  input: UpdatePluginInput,
+): Promise<PluginInstallation> {
+  const current = await requirePluginInstallation(db, pluginId);
+  const manifest = requireInstallableManifest(input.manifest, input.source);
+  if (manifest.id !== pluginId) throw new PluginError("manifest.invalid", `The manifest is for ${manifest.id}, not ${pluginId}.`);
+  const sha256 = requireSha256(input.bundleSha256);
+  const request = pluginGrantRequest(manifest);
+  const needsApproval = current.status === "active" && (!current.grant || pluginGrantExpands(current.grant, request));
+  const status: PluginInstallationStatus = current.status === "active" ? (needsApproval ? "installed" : "active") : current.status;
+  const grant = current.status === "active" && !needsApproval ? request : current.grant;
+  const settings = migrateStoredSettings(current.storedSettings, manifest.settings);
+
+  try {
+    await safeBatch(db, [
+      revisionGuard(db, pluginId, input.expectedRevision),
+      db.update(pluginInstallations).set({
+        version: manifest.version,
+        source: input.source,
+        bundleSha256: sha256,
+        manifestJson: JSON.stringify(manifest),
+        status,
+        failureReason: null,
+        grantJson: grant ? JSON.stringify(grant) : null,
+        grantKey: grant ? pluginGrantKey(grant) : null,
+        settingsJson: JSON.stringify(settings),
+        revision: sql`${pluginInstallations.revision} + 1`,
+        updatedAt: sql`unixepoch()`,
+      }).where(eq(pluginInstallations.pluginId, pluginId)),
+      db.delete(pluginRegistrations).where(eq(pluginRegistrations.pluginId, pluginId)),
+      ...registrationInserts(db, pluginId, manifest),
+    ] as never);
+  } catch (error) {
+    if (isBatchGuardError(error, REVISION_GUARD)) await requireRevision(db, pluginId, input.expectedRevision, []);
+    throw error;
+  }
+
+  for (const [collection, declaration] of Object.entries(manifest.storage)) {
+    const before = current.manifest.storage[collection];
+    if (before && JSON.stringify(before) === JSON.stringify(declaration)) continue;
+    await reindexPluginCollection(db, pluginId, collection, declaration);
+  }
+  return requirePluginInstallation(db, pluginId);
+}
+
+/** Removes the installation and its logs; records and KV stay unless `keepData` is false. */
+export async function uninstallPlugin(
+  db: Database,
+  pluginId: string,
+  options: { keepData: boolean; expectedRevision: number },
+): Promise<void> {
+  try {
+    await safeBatch(db, [
+      revisionGuard(db, pluginId, options.expectedRevision),
+      db.delete(pluginInstallations).where(eq(pluginInstallations.pluginId, pluginId)),
+      db.delete(pluginLogEntries).where(eq(pluginLogEntries.pluginId, pluginId)),
+      ...(options.keepData ? [] : [
+        db.delete(pluginRecords).where(eq(pluginRecords.pluginId, pluginId)),
+        db.delete(pluginKv).where(eq(pluginKv.pluginId, pluginId)),
+      ]),
+    ] as never);
+  } catch (error) {
+    if (isBatchGuardError(error, REVISION_GUARD)) await requireRevision(db, pluginId, options.expectedRevision, []);
+    throw error;
+  }
+}
+
+// ── Settings ─────────────────────────────────────────────────────────────
+
+/**
+ * Validates a settings write against the manifest schema (full document for
+ * plain fields; an omitted secret keeps its stored value, `null` clears it)
+ * and seals secrets. Plaintext secrets never reach the database.
+ */
+export async function writePluginSettings(
+  db: Database,
+  pluginId: string,
+  values: Record<string, unknown>,
+  options: { expectedRevision: number; credentialEncryptionKey: string | null | undefined },
+): Promise<PluginInstallation> {
+  const installation = await requirePluginInstallation(db, pluginId);
+  const schema = installation.manifest.settings;
+  const secretsSet = new Set(schema
+    .filter((field) => field.type === "secret" && isSealedPluginSecret(installation.storedSettings[field.key]))
+    .map((field) => field.key));
+  const checked = validatePluginSettingValues(schema, values, secretsSet);
+  if (!checked.ok) {
+    throw new PluginError("settings.invalid", checked.errors[0] ? `${checked.errors[0].key}: ${checked.errors[0].message}` : "Invalid settings.", {
+      errors: checked.errors,
+    });
+  }
+  const writesSecret = schema.some((field) => field.type === "secret" && typeof checked.values[field.key] === "string");
+  const key = writesSecret ? await derivePluginSettingsKey(options.credentialEncryptionKey) : null;
+  const next: Record<string, unknown> = {};
+  for (const field of schema) {
+    const value = checked.values[field.key];
+    if (field.type === "secret") {
+      if (typeof value === "string") next[field.key] = await sealPluginSecret(key!, pluginId, field.key, value);
+      else if (value === undefined && secretsSet.has(field.key)) next[field.key] = installation.storedSettings[field.key];
+      continue;
+    }
+    if (value !== undefined && value !== null) next[field.key] = value;
+  }
+  const updated = await db.update(pluginInstallations).set({
+    settingsJson: JSON.stringify(next),
+    revision: sql`${pluginInstallations.revision} + 1`,
+    updatedAt: sql`unixepoch()`,
+  }).where(and(
+    eq(pluginInstallations.pluginId, pluginId),
+    eq(pluginInstallations.revision, options.expectedRevision),
+  )).returning({ revision: pluginInstallations.revision });
+  await requireRevision(db, pluginId, options.expectedRevision, updated);
+  return requirePluginInstallation(db, pluginId);
+}
+
+/** What the dashboard may show: plain values and, for secrets, only whether one is set. */
+export function describePluginSettings(installation: PluginInstallation): {
+  values: PluginSettingValues;
+  secrets: Record<string, boolean>;
+} {
+  const values: PluginSettingValues = {};
+  const secrets: Record<string, boolean> = {};
+  const defaults = pluginSettingDefaults(installation.manifest.settings);
+  for (const field of installation.manifest.settings) {
+    const stored = installation.storedSettings[field.key];
+    if (field.type === "secret") secrets[field.key] = isSealedPluginSecret(stored);
+    else values[field.key] = (stored ?? defaults[field.key] ?? null) as PluginSettingValue;
+  }
+  return { values, secrets };
+}
+
+/**
+ * The settings a handler receives: defaults, stored values and opened
+ * secrets. A secret that cannot be opened (key missing or rotated) reads as
+ * null and is reported so the host can log it; it never fails the call.
+ */
+export async function readPluginRuntimeSettings(
+  installation: PluginInstallation,
+  credentialEncryptionKey: string | null | undefined,
+): Promise<{ values: PluginSettingValues; unreadableSecrets: string[] }> {
+  const { values } = describePluginSettings(installation);
+  const unreadableSecrets: string[] = [];
+  const sealed = installation.manifest.settings.filter((field) =>
+    field.type === "secret" && isSealedPluginSecret(installation.storedSettings[field.key]));
+  for (const field of installation.manifest.settings) {
+    if (field.type === "secret") values[field.key] = null;
+  }
+  if (sealed.length === 0) return { values, unreadableSecrets };
+  const key = await derivePluginSettingsKey(credentialEncryptionKey).catch(() => null);
+  if (!key) return { values, unreadableSecrets: sealed.map((field) => field.key) };
+  for (const field of sealed) {
+    const opened = await openPluginSecret(key, installation.pluginId, field.key, installation.storedSettings[field.key] as string);
+    if (opened === null) unreadableSecrets.push(field.key);
+    else values[field.key] = opened;
+  }
+  return { values, unreadableSecrets };
+}

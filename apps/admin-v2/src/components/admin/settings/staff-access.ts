@@ -36,6 +36,7 @@ const GROUP_BY_RESOURCE: Record<string, PermissionGroup> = {
   settings: "settings",
   taxes: "settings",
   agent_access: "settings",
+  webhooks: "settings",
   team: "staff",
 };
 

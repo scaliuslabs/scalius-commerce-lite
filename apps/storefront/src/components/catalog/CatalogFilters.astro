@@ -131,29 +131,25 @@ const rating: Section[] = ratingRows.length > 0
 const priceSection: Section | null = showPrice
   ? { kind: "price", key: "price", name: "Price", selectedCount: single("minPrice") || single("maxPrice") ? 1 : 0 }
   : null;
-// The order follows the references:
-// - dense column: Star Tech puts price first; Amazon/Daraz put availability,
-//   rating, brand and the first specs before price. Category links come last
-//   (pills or the breadcrumb carry the tree above);
+// The style's reference arrangement (an `order` reorders whole groups):
+// - dense column (Amazon, Daraz): availability, rating, brand and the first
+//   specs before price. Category links come last (pills or the breadcrumb
+//   carry the tree above);
 // - bar (Dawn): availability, price, the rating, then the facets;
-// - Apple Gadgets: price and availability precede specs; category links
-//   follow them because the category tree is already in its navigation;
-// - other comfortable columns and drawers: category links, price,
-//   availability, the rating, then the facets.
+// - comfortable columns and drawers: category links, price, availability,
+//   the rating, then the facets.
+// A template that starts elsewhere states its order (Star Tech and Apple
+// Gadgets put price first).
 const categorySections = facetSections.filter((section) => section.kind === "group" && section.group.kind === "category");
 const brandSections = facetSections.filter((section) => section.kind === "group" && section.group.facets[0]!.kind === "brand");
 const specSections = facetSections.filter((section) => !categorySections.includes(section) && !brandSections.includes(section));
 const price = priceSection ? [priceSection] : [];
 const order = resolved.blocks.listing.filters.order;
 const sections: Section[] = dense
-  ? resolved.template === "spec-catalogue"
-    ? [...price, availabilitySection, ...rating, ...brandSections, ...specSections, ...categorySections]
-    : [availabilitySection, ...rating, ...brandSections, ...specSections.slice(0, 2), ...price, ...specSections.slice(2), ...categorySections]
+  ? [availabilitySection, ...rating, ...brandSections, ...specSections.slice(0, 2), ...price, ...specSections.slice(2), ...categorySections]
   : bar
     ? [availabilitySection, ...price, ...rating, ...brandSections, ...specSections, ...(order ? categorySections : [])]
-    : resolved.template === "rounded-tech" && presentation.style === "sidebar-comfortable"
-      ? [...price, availabilitySection, ...rating, ...brandSections, ...specSections, ...categorySections]
-      : [...categorySections, ...price, availabilitySection, ...rating, ...brandSections, ...specSections];
+    : [...categorySections, ...price, availabilitySection, ...rating, ...brandSections, ...specSections];
 if (order) {
   const groupOf = (section: Section) => section.kind !== "group" ? section.kind
     : section.group.kind === "category" ? "category"

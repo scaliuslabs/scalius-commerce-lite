@@ -96,7 +96,7 @@ const directory = directoryLinks(model.menus);
   {marketplace && (logo.src || brandName) && (
     <div class="directory-identity" data-footer-identity>
       {logo.src ? (
-        <img src={mediaImageUrl(logo.src, 320)} alt={brandName || logo.alt} width="160" height="48" loading="lazy" decoding="async" />
+        <img src={mediaImageUrl(logo.src, 320)} alt={brandName || "Home"} width="160" height="48" loading="lazy" decoding="async" />
       ) : (
         <span>{brandName}</span>
       )}

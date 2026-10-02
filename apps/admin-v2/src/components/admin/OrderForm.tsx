@@ -38,6 +38,7 @@ import {
 } from "@scalius/api-client/sdk";
 import { apiData, type ApiBody, type ApiResult } from "@/lib/api";
 import {
+  orderChannelSourceInput,
   orderFormSchema,
   type OrderFormInput,
   type OrderFormValues,
@@ -46,6 +47,7 @@ import {
 } from "./order-form/types";
 import { OrderFormProvider } from "./order-form/OrderFormContext";
 import { CustomerInfoSection, ORDER_LOCATION_IDS } from "./order-form/CustomerInfoSection";
+import { SalesChannelSection } from "./order-form/SalesChannelSection";
 import { OrderItemsSection } from "./order-form/OrderItemsSection";
 import { SummarySection } from "./order-form/SummarySection";
 import { PRODUCT_SEARCH_INPUT_ID } from "./order-form/ProductSearch";
@@ -98,6 +100,7 @@ const FIELD_ORDER = [
   "zone",
   "area",
   "notes",
+  "sourceName",
 ] as const;
 
 /** No address is sent for a pickup order or one with nothing physical (the server stores none). */
@@ -137,11 +140,14 @@ function lineProperties(item: Pick<OrderItem, "orderItemId" | "properties">) {
 }
 
 function toCreateOrderInput(values: OrderFormValues, requestKey: string): CreateOrderInput {
+  const channelSource = orderChannelSourceInput(values);
   return {
     requestKey,
     ...toOrderBaseContentInput(values),
     // The order keeps the method's name; a custom charge has none.
     ...(values.shippingMethodId ? { shippingMethodId: values.shippingMethodId } : {}),
+    // Where a staff-created order came in (Facebook, walk-in, …); the server stores it as a slug.
+    ...(channelSource ? { channelSource } : {}),
     items: values.items.map((item) => ({
       productId: item.productId,
       variantId: item.variantId,
@@ -242,6 +248,8 @@ function OrderEditor({
       shippingCharge: 0,
       shippingMethodId: null,
       shippingMethodKind: null,
+      sourceChoice: null,
+      sourceName: "",
       ...defaultValues,
     },
   });
@@ -607,6 +615,7 @@ function OrderEditor({
               </div>
               <div className="min-w-0 space-y-4">
                 <CustomerInfoSection />
+                {isEdit ? null : <SalesChannelSection />}
               </div>
             </div>
           </OrderFormProvider>

@@ -4,10 +4,18 @@
 import { z } from "zod";
 import {
   STOREFRONT_THEME_COLOR_KEYS,
+  storefrontHeaderBands,
   storefrontHeaderToneColors,
   type StorefrontThemeColorKey,
   type StorefrontThemeColors,
 } from "./contrast";
+
+/**
+ * The rating colour: the amber every reference paints its stars and review
+ * bars in. Decorative (a rating always carries its number in text), so it is
+ * one constant token rather than a merchant colour.
+ */
+export const STOREFRONT_RATING_COLOR = "#f59e0b";
 
 /**
  * Curated type pairings: heading and body families, weights, tracking and
@@ -370,6 +378,7 @@ export function buildStorefrontTokenCss(tokens: StorefrontThemeTokens): Record<s
   const type = STOREFRONT_TYPE_PAIRING_SPECS[tokens.typography];
   const scale = STOREFRONT_TYPE_SCALE_SPECS[tokens.typeScale];
   const header = storefrontHeaderToneColors(tokens.headerTone, tokens.colors);
+  const bands = storefrontHeaderBands(tokens.headerTone, tokens.colors);
   return {
     ...tokens.colors,
     "theme-font-heading": fontStack(type.heading, type.bangla),
@@ -402,6 +411,9 @@ export function buildStorefrontTokenCss(tokens: StorefrontThemeTokens): Record<s
     "theme-image-fit": tokens.imageFit,
     "theme-header-background": tokens.colors[header.background],
     "theme-header-foreground": tokens.colors[header.foreground],
+    "theme-header-deep": bands.deep,
+    "theme-header-raised": bands.raised,
+    "theme-rating": STOREFRONT_RATING_COLOR,
     "theme-container-width": CONTAINER_TOKENS[tokens.container],
   };
 }

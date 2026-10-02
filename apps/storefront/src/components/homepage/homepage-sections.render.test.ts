@@ -34,7 +34,7 @@ import {
   type HomepageContent,
 } from "@/lib/homepage-sections";
 import { SHELF_CARD_SIZES, productCardImageSizes, productGridSpec } from "@/lib/product-card-layout";
-import { capSizesDensity } from "@/lib/responsive-image";
+import { cardPhotoSizes } from "@/components/cards/card-model";
 
 // ─── Harness ──────────────────────────────────────────────────────────────
 
@@ -156,15 +156,22 @@ function card(index: number, overrides: Record<string, unknown> = {}) {
   };
 }
 
-const slide = (id: string, heading = "") => ({
-  id,
-  url: image(id),
-  title: `Banner ${id}`,
-  heading,
-  buttonLabel: heading ? "Shop now" : "",
-  link: heading ? "/collections/eid" : "",
+/** A hero slide as the theme stores it: media ids, words and a link. */
+const slide = (image: string, options: { phoneImage?: string; heading?: string; link?: string | null } = {}) => ({
+  image,
+  ...(options.phoneImage ? { phoneImage: options.phoneImage } : {}),
   focalPoint: { x: 50, y: 50 },
+  alt: `Banner ${image}`,
+  ...(options.heading ? { heading: options.heading, buttonLabel: "Shop now" } : {}),
+  link: options.link !== undefined ? options.link : options.heading ? "/collections/eid" : null,
 });
+
+/** The hero's slides: three computer images, two of them with their own phone image. */
+const HERO_SLIDES = [
+  slide("d1", { phoneImage: "m1", heading: BANGLA }),
+  slide("d2", { phoneImage: "m2" }),
+  slide("d3"),
+];
 
 const media = (id: string) => ({ id, url: image(id), alt: `Photo ${id}`, width: 1600, height: 1000 });
 
@@ -180,16 +187,16 @@ function store(size: "tiny" | "large"): HomepageContent {
     canonicalPath: null,
   }));
   const list = (key: string, extra: Record<string, unknown> = {}) => [key, { key, products, category: null, collection: null, ...extra }] as const;
+  const collections = [
+    { id: "col-grid", name: "Best sellers", presentation: "grid", config: { maxProducts: 8, title: "", subtitle: "" }, categories: [], products: products.slice(0, 8), featuredProduct: null },
+    { id: "col-rail", name: "New in", presentation: "carousel", config: { maxProducts: 12, title: "", subtitle: "" }, categories: [], products: products.slice(0, 12), featuredProduct: null },
+  ];
+  // The tiny store's hero has one photo (its first slide's, without a phone image); the large one all of them.
+  const heroMedia = size === "tiny" ? ["d1"] : ["d1", "d2", "d3", "m1", "m2"];
   return {
-    hero: {
-      desktop: size === "tiny" ? [slide("d1")] : [slide("d1", BANGLA), slide("d2"), slide("d3")],
-      mobile: size === "tiny" ? [slide("m1")] : [slide("m1", "Eid collection"), slide("m2")],
-    },
-    collections: [
-      { id: "col-grid", name: "Best sellers", presentation: "grid", config: { maxProducts: 8, title: "", subtitle: "" }, categories: [], products: products.slice(0, 8), featuredProduct: null },
-      { id: "col-rail", name: "New in", presentation: "carousel", config: { maxProducts: 12, title: "", subtitle: "" }, categories: [], products: products.slice(0, 12), featuredProduct: null },
-    ] as unknown as HomepageContent["collections"],
-    categoryRail: { enabled: true, title: "Shop by category", categories },
+    collections: new Map(collections.map((collection) => [collection.id, collection])) as unknown as HomepageContent["collections"],
+    categories: new Map(categories.map((category) => [category.id, category])),
+    homeProduct: null,
     deliveryFacts: [
       { kind: "delivery", title: "Delivery ৳60 in Dhaka", detail: "৳120 outside Dhaka" },
       { kind: "cod", title: "Cash on delivery", detail: "Pay when it arrives" },
@@ -201,7 +208,7 @@ function store(size: "tiny" | "large"): HomepageContent {
       list("category:cat-sarees", { category: { id: "cat-sarees", name: "Sarees", slug: "sarees", canonicalPath: null } }),
       list("collection:col-eid", { collection: { id: "col-eid", title: "Eid edit" } }),
     ]) as unknown as HomepageContent["lists"],
-    media: new Map(["m-banner", "m-banner-2", "m-look", "m-story", "m-side-1", "m-side-2", "m-card-1", "m-card-2", "m-tile-1", "m-tile-2", "m-tile-3"]
+    media: new Map([...heroMedia, "m-banner", "m-banner-2", "m-look", "m-story", "m-side-1", "m-side-2", "m-card-1", "m-card-2", "m-tile-1", "m-tile-2", "m-tile-3"]
       .map((id) => [id, media(id)])),
     brands: Array.from({ length: size === "tiny" ? 2 : 6 }, (_, index) => ({
       id: `brd_${index}`,
@@ -215,9 +222,9 @@ function store(size: "tiny" | "large"): HomepageContent {
 }
 
 const EMPTY: HomepageContent = {
-  hero: { desktop: [], mobile: [] },
-  collections: [],
-  categoryRail: { enabled: false, title: "", categories: [] },
+  collections: new Map(),
+  categories: new Map(),
+  homeProduct: null,
   deliveryFacts: [],
   lists: new Map(),
   media: new Map(),
@@ -227,13 +234,19 @@ const EMPTY: HomepageContent = {
 
 const section = <Type extends StorefrontSectionType>(type: Type, id: string, settings: Record<string, unknown> = {}) =>
   ({ ...storefrontSectionDefault(type, id), settings: { ...storefrontSectionDefault(type, id).settings, ...settings } }) as StorefrontSection;
+/** A hero with the fixture slides. */
+const hero = (settings: Record<string, unknown> = {}) => section("hero", "hero", { slides: HERO_SLIDES, ...settings });
+/** Every fixture category, in the large store's order (the tiny store has the first two). */
+const CATEGORY_IDS = Array.from({ length: 12 }, (_, index) => `cat-${index}`);
+const tiles = (settings: Record<string, unknown> = {}) => section("category-tiles", "tiles", { categoryIds: CATEGORY_IDS, ...settings });
+const COLLECTION_IDS = ["col-grid", "col-rail"];
 
 /** Every renderable section type with settings that read the fixtures' data. */
 const EVERY_SECTION: StorefrontSection[] = [
-  section("hero", "hero", { layout: "contained-banners", sideBanners: [{ mediaId: "m-side-1", alt: "Side one", href: "/sale" }, { mediaId: "m-side-2", alt: "", href: null }] }),
+  hero({ layout: "contained-banners", sideBanners: [{ mediaId: "m-side-1", alt: "Side one", href: "/sale" }, { mediaId: "m-side-2", alt: "", href: null }] }),
   section("usp-strip", "usp"),
-  section("category-tiles", "tiles", { style: "round" }),
-  section("collections", "collections"),
+  tiles({ style: "round" }),
+  section("collections", "collections", { collectionIds: COLLECTION_IDS }),
   section("product-rail", "rail", { title: "", source: { kind: "newest" }, limit: 12 }),
   section("product-grid", "grid", { title: BANGLA, source: { kind: "category", categoryId: "cat-sarees" }, columns: 4, rows: 2 }),
   section("deal-block", "deal", { title: "Flash sale", source: { kind: "on-sale" }, promotionId: "promo-eid" }),
@@ -321,8 +334,8 @@ describe("homepage section library", () => {
 
   it("keeps one banner and one category section while putting categories first on phones", async () => {
     const page = await render([
-      section("hero", "hero", { layout: "full-bleed", phonePlacement: "after-categories" }),
-      section("category-tiles", "tiles", { style: "square" }),
+      hero({ layout: "full-bleed", phonePlacement: "after-categories" }),
+      tiles({ style: "square" }),
     ], store("large"));
     const units = [...page.querySelectorAll("[data-home-render-unit]")];
     expect(units.map((unit) => unit.getAttribute("data-section-id"))).toEqual(["hero", "tiles"]);
@@ -336,7 +349,7 @@ describe("homepage section library", () => {
   it.each(["full-bleed", "contained-banners", "app-panel", "split", "story-cards", "full-screen"] as const)(
     "renders the %s hero with the first banner as the only high-priority image",
     async (layout) => {
-      const page = await render([section("hero", "hero", { layout })], store("large"));
+      const page = await render([hero({ layout })], store("large"));
       const high = Array.from(page.querySelectorAll('img[fetchpriority="high"]'));
       expect(high.length).toBeGreaterThan(0);
       expect(high.length).toBeLessThanOrEqual(2); // one per viewport
@@ -360,12 +373,12 @@ describe("homepage section library", () => {
   it("shows side banners only beside a contained hero, and only with their images", async () => {
     const content = store("large");
     const sides = [{ mediaId: "m-side-1", alt: "Side one", href: "/sale" }, { mediaId: "missing", alt: "", href: null }];
-    const page = await render([section("hero", "hero", { layout: "contained-banners", sideBanners: sides })], content);
+    const page = await render([hero({ layout: "contained-banners", sideBanners: sides })], content);
     const banners = page.querySelectorAll("[data-hero-side-banners] img");
     expect(banners).toHaveLength(1);
     expect(banners[0]!.getAttribute("loading")).toBe("lazy");
     expect(page.querySelector('[data-hero-side-banners] a[href="/sale"]')).not.toBeNull();
-    const fullBleed = await render([section("hero", "hero", { layout: "full-bleed", sideBanners: sides })], content);
+    const fullBleed = await render([hero({ layout: "full-bleed", sideBanners: sides })], content);
     expect(fullBleed.querySelector("[data-hero-side-banners]")).toBeNull();
   });
 
@@ -377,7 +390,7 @@ describe("homepage section library", () => {
     const items = Array.from(track.children);
     expect(items).toHaveLength(12);
     expect(items.every((item) => item.className.includes("snap-start"))).toBe(true);
-    expect(track.querySelector("img[sizes]")!.getAttribute("sizes")).toBe(capSizesDensity(SHELF_CARD_SIZES));
+    expect(track.querySelector("img[sizes]")!.getAttribute("sizes")).toBe(cardPhotoSizes(DEFAULT_STOREFRONT_THEME.blocks.card.variant, SHELF_CARD_SIZES));
     // The title says what the list is; "View all" goes to the full listing.
     expect(text(large.querySelector("h2"))).toBe("New arrivals");
     expect(large.querySelector('a[href="/search"]')).not.toBeNull();
@@ -389,30 +402,36 @@ describe("homepage section library", () => {
     expect(tiny.querySelector('a[href^="/search"]')).toBeNull();
   });
 
-  it("sizes rounded-tech collection carousels as shelves without changing collection presentations", async () => {
-    const sections = [section("collections", "collections")];
-    const rounded = await render(sections, store("large"), storefrontTemplateTheme("rounded-tech"));
-    expect(rounded.querySelectorAll(".product-grid")).toHaveLength(1);
-    expect(rounded.querySelectorAll("[data-product-rail-track] .home-shelf-item")).toHaveLength(12);
+  it("sizes compact collection carousels as shelves without changing collection presentations", async () => {
+    // Apple Gadgets' compact shelf is the section's setting, in any template.
+    expect(storefrontTemplateTheme("rounded-tech").pages.home.find((each) => each.type === "collections")?.settings)
+      .toMatchObject({ carousel: "compact" });
+    const compact = [section("collections", "collections", { carousel: "compact", collectionIds: COLLECTION_IDS })];
+    for (const theme of [storefrontTemplateTheme("rounded-tech"), DEFAULT_STOREFRONT_THEME]) {
+      const rounded = await render(compact, store("large"), theme);
+      expect(rounded.querySelectorAll(".product-grid")).toHaveLength(1);
+      expect(rounded.querySelectorAll("[data-product-rail-track] .home-shelf-item")).toHaveLength(12);
+    }
 
-    const classic = await render(sections, store("large"));
+    const classic = await render([section("collections", "collections", { collectionIds: COLLECTION_IDS })], store("large"), storefrontTemplateTheme("rounded-tech"));
     expect(classic.querySelectorAll("[data-product-rail-track] .home-shelf-item")).toHaveLength(0);
     expect(classic.querySelector("[data-product-rail-track] > div")!.className).toContain("w-[72%]");
   });
 
-  it("keeps rounded-tech round categories compact without changing other round layouts", async () => {
-    const sections = [section("category-tiles", "tiles", { style: "round" })];
-    const rounded = await render(sections, store("large"), storefrontTemplateTheme("rounded-tech"));
+  it("draws small and scrolling round categories from the section's style, in any template", async () => {
+    expect(storefrontTemplateTheme("rounded-tech").pages.home.find((each) => each.type === "category-tiles")?.settings).toMatchObject({ style: "round-small" });
+    expect(storefrontTemplateTheme("mass-retail").pages.home.find((each) => each.type === "category-tiles")?.settings).toMatchObject({ style: "round-row" });
+    const rounded = await render([tiles({ style: "round-small" })], store("large"));
     const roundedTile = rounded.querySelector('a[href="/categories/category-1"]')!;
     expect(roundedTile.querySelector("span")!.classList.contains("size-14")).toBe(true);
     expect(roundedTile.querySelector("img")!.getAttribute("sizes")).toBe("56px");
 
-    const classic = await render(sections, store("large"));
+    const classic = await render([tiles({ style: "round" })], store("large"), storefrontTemplateTheme("rounded-tech"));
     const classicTile = classic.querySelector('a[href="/categories/category-1"]')!;
     expect(classicTile.querySelector("span")!.classList.contains("max-w-28")).toBe(true);
     expect(classicTile.querySelector("img")!.getAttribute("sizes")).toBe("(max-width: 639px) 30vw, 112px");
 
-    const retail = await render(sections, store("large"), storefrontTemplateTheme("mass-retail"));
+    const retail = await render([tiles({ style: "round-row" })], store("large"));
     const retailRow = retail.querySelector("[data-home-section='category-tiles'] ul")!;
     expect(retailRow.className).toContain("overflow-x-auto");
     expect(retailRow.className).toContain("md:grid");
@@ -429,7 +448,7 @@ describe("homepage section library", () => {
     const grid = productGridSpec(layout.grid, theme.tokens.imageRatio);
     const container = buildStorefrontThemeTokens(theme)["theme-container-width"]!;
     const capped = productCardImageSizes(grid, container, "grid", "grid", 5);
-    expect(page.querySelector(".product-grid img[sizes]")!.getAttribute("sizes")).toBe(capSizesDensity(capped));
+    expect(page.querySelector(".product-grid img[sizes]")!.getAttribute("sizes")).toBe(cardPhotoSizes(theme.blocks.card.variant, capped));
     expect(text(page.querySelector("h2"))).toBe("Sarees");
     expect(page.querySelector('a[href="/categories/sarees"]')).not.toBeNull();
   });
@@ -447,8 +466,8 @@ describe("homepage section library", () => {
     expect(ended.querySelector("[data-deal-countdown]")).toBeNull();
     expect(ended.querySelector("[data-deal-block]")).not.toBeNull();
     // A typed-in date is never a countdown: only a promotion's end is.
-    const typed = await render([section("deal-block", "deal", { title: "", source: { kind: "on-sale" }, promotionId: null, endsAt: new Date(Date.now() + 3_600_000).toISOString() })], store("large"));
-    expect(typed.querySelector("[data-deal-countdown]")).toBeNull();
+    const none = await render([section("deal-block", "deal", { title: "", source: { kind: "on-sale" }, promotionId: null })], store("large"));
+    expect(none.querySelector("[data-deal-countdown]")).toBeNull();
     const unknown = await render([section("deal-block", "deal", { title: "", source: { kind: "on-sale" }, promotionId: "promo-gone" })], store("large"));
     expect(unknown.querySelector("[data-deal-countdown]")).toBeNull();
   });
@@ -465,15 +484,19 @@ describe("homepage section library", () => {
   });
 
   it("keeps photo-led fashion lookbooks compact without overriding other card choices", async () => {
-    const look = section("lookbook", "look", { mediaId: "m-look", source: { kind: "collection", collectionId: "col-eid" } });
+    // Fabrilife's square photo is the section's setting; the compact grid follows its card.
+    const look = section("lookbook", "look", { mediaId: "m-look", source: { kind: "collection", collectionId: "col-eid" }, photo: "square" });
     const fashion = storefrontTemplateTheme("fashion-value");
+    expect(fashion.pages.home.find((each) => each.type === "lookbook")?.settings).toMatchObject({ photo: "square" });
+    const tall = await render([section("lookbook", "look", { mediaId: "m-look", source: { kind: "collection", collectionId: "col-eid" } })], store("large"), fashion);
+    expect(tall.querySelector("[data-lookbook-compact]")).toBeNull();
     const page = await render([look], store("large"), fashion);
     expect(page.querySelector("[data-lookbook-compact]")).not.toBeNull();
     expect(page.querySelector("figure img")?.className).toContain("aspect-square");
     expect(page.querySelectorAll("[data-lookbook-compact] .product-card-link")).toHaveLength(7);
     expect(page.querySelector("[data-lookbook-compact] .product-card-link")?.textContent).toContain("Product");
 
-    const noPhoto = await render([section("lookbook", "look", { mediaId: "missing", source: { kind: "collection", collectionId: "col-eid" } })], store("large"), fashion);
+    const noPhoto = await render([section("lookbook", "look", { mediaId: "missing", source: { kind: "collection", collectionId: "col-eid" }, photo: "square" })], store("large"), fashion);
     expect(noPhoto.querySelector("[data-lookbook-compact]")).toBeNull();
     const merchantCard = structuredClone(fashion);
     merchantCard.blocks.card.variant = "standard";
@@ -531,44 +554,46 @@ describe("homepage section library", () => {
   });
 
   it("keeps the photo category tiles for one category and the denser styles for two or more", async () => {
-    const one: HomepageContent = { ...store("tiny"), categoryRail: { ...store("tiny").categoryRail, categories: store("tiny").categoryRail.categories.slice(0, 1) } };
+    const one: HomepageContent = { ...store("tiny"), categories: new Map([...store("tiny").categories].slice(0, 1)) };
     for (const style of ["icons", "round", "quad", "square"]) {
-      expect(homepageSectionRenders(section("category-tiles", "tiles", { style }), one)).toBe(false);
+      expect(homepageSectionRenders(tiles({ style }), one)).toBe(false);
     }
-    expect(homepageSectionRenders(section("category-tiles", "tiles", { style: "photo" }), one)).toBe(true);
-    const quad = await render([section("category-tiles", "tiles", { style: "quad" })], store("large"));
+    expect(homepageSectionRenders(tiles({ style: "photo" }), one)).toBe(true);
+    const quad = await render([tiles({ style: "quad" })], store("large"));
     // Twelve categories make three cards of four.
     expect(quad.querySelectorAll("ul > li > ul")).toHaveLength(3);
     // A category without a photo shows its first letter in the same box.
     expect(text(quad.querySelector('a[href="/categories/category-0"] span'))).toBe("C");
-    const square = await render([section("category-tiles", "tiles", { style: "square" })], store("large"));
+    const square = await render([tiles({ style: "square" })], store("large"));
     expect(square.querySelectorAll('a[href^="/categories/"]')).toHaveLength(12);
     expect(square.querySelector('a[href="/categories/category-0"] span')?.classList.contains("aspect-square")).toBe(true);
     expect(text(square.querySelector('a[href="/categories/category-0"] > span:last-child'))).toBe("Category 0");
   });
 
-  it("shows heritage photo departments as a grid while merchant layouts and other templates keep their own shape", async () => {
-    const categories = section("category-tiles", "tiles", { style: "photo" });
-    const heritage = await render([categories], store("large"), storefrontTemplateTheme("heritage-editorial"));
+  it("shows photo departments as a grid while the photo rail and other styles keep their own shape", async () => {
+    expect(storefrontTemplateTheme("heritage-editorial").pages.home.find((each) => each.type === "category-tiles")?.settings).toMatchObject({ style: "photo-grid" });
+    const categories = tiles({ style: "photo" });
+    const heritage = await render([tiles({ style: "photo-grid" })], store("large"));
     const grid = heritage.querySelector("[data-heritage-departments]")!;
     expect(grid.classList.contains("grid-cols-2")).toBe(true);
     expect(grid.querySelectorAll('a[href^="/categories/"]')).toHaveLength(12);
     expect(grid.querySelector('a[href="/categories/category-0"]')!.classList.contains("rounded-[var(--radius)]")).toBe(true);
     expect(grid.querySelector("img")!.getAttribute("sizes")).toContain("/ 2");
 
-    const classic = await render([categories], store("large"));
+    const classic = await render([categories], store("large"), storefrontTemplateTheme("heritage-editorial"));
     expect(classic.querySelector("[data-heritage-departments]")).toBeNull();
     expect(classic.querySelector(".homepage-category-scroll")).not.toBeNull();
-    const merchantRound = await render([section("category-tiles", "tiles", { style: "round" })], store("large"), storefrontTemplateTheme("heritage-editorial"));
+    const merchantRound = await render([tiles({ style: "round" })], store("large"), storefrontTemplateTheme("heritage-editorial"));
     expect(merchantRound.querySelector("[data-heritage-departments]")).toBeNull();
   });
 
-  it("shortens only an image-only heritage phone hero so departments appear sooner", async () => {
-    const fullScreen = [section("hero", "hero", { layout: "full-screen" })];
-    const heritage = storefrontTemplateTheme("heritage-editorial");
-    const linkedBlank = store("tiny");
-    linkedBlank.hero.mobile = linkedBlank.hero.mobile.map((slide) => ({ ...slide, link: "/search?q=phone" }));
-    const imageOnly = await render(fullScreen, linkedBlank, heritage);
+  it("shortens only an image-only compact phone hero so departments appear sooner", async () => {
+    expect(storefrontTemplateTheme("heritage-editorial").pages.home.find((each) => each.type === "hero")?.settings).toMatchObject({ phoneHeight: "compact" });
+    const fullScreen = [hero({ layout: "full-screen", phoneHeight: "compact" })];
+    const heritage = DEFAULT_STOREFRONT_THEME;
+    // A linked photo without words or a button still needs no full screen.
+    const linkedBlank = [hero({ layout: "full-screen", phoneHeight: "compact", slides: [slide("d1", { link: "/search?q=phone" })] })];
+    const imageOnly = await render(linkedBlank, store("tiny"), heritage);
     expect(imageOnly.querySelector('.mobile-carousel[data-carousel-layout="full-screen"]')!.getAttribute("style"))
       .toContain("65svh");
     expect(imageOnly.querySelector('.desktop-carousel[data-carousel-layout="full-screen"]')!.getAttribute("style"))
@@ -577,8 +602,8 @@ describe("homepage section library", () => {
     const promoted = await render(fullScreen, store("large"), heritage);
     expect(promoted.querySelector('.mobile-carousel[data-carousel-layout="full-screen"]')!.getAttribute("style"))
       .toContain("100svh");
-    const otherTemplate = await render(fullScreen, store("tiny"));
-    expect(otherTemplate.querySelector('.mobile-carousel[data-carousel-layout="full-screen"]')!.getAttribute("style"))
+    const screen = await render([hero({ layout: "full-screen" })], store("tiny"), storefrontTemplateTheme("heritage-editorial"));
+    expect(screen.querySelector('.mobile-carousel[data-carousel-layout="full-screen"]')!.getAttribute("style"))
       .toContain("100svh");
   });
 
@@ -640,5 +665,107 @@ describe("homepage section library", () => {
     for (const type of STOREFRONT_SECTION_RENDERERS) {
       expect(storefrontSectionRenderer(storefrontSectionDefault(type, "x"))).toBe(type);
     }
+  });
+});
+
+describe("homepage sections from the theme's own data", () => {
+  const sourceSet = (node: Element | null) => node?.getAttribute("srcset") ?? node?.getAttribute("data-srcset") ?? "";
+
+  it("draws the hero's own slides: computer images on computers, phone images on phones", async () => {
+    const page = await render([hero({ layout: "full-bleed" })], store("large"));
+    const desktop = Array.from(page.querySelectorAll(".desktop-carousel [data-slide-index]"));
+    const phone = Array.from(page.querySelectorAll(".mobile-carousel [data-slide-index]"));
+    expect(desktop).toHaveLength(3);
+    expect(phone).toHaveLength(3);
+    expect(desktop.map((each) => sourceSet(each.querySelector("source")))).toEqual([
+      expect.stringContaining("/media/d1.jpg/"),
+      expect.stringContaining("/media/d2.jpg/"),
+      expect.stringContaining("/media/d3.jpg/"),
+    ]);
+    // A slide without a phone image shows its computer image on phones.
+    expect(phone.map((each) => sourceSet(each.querySelector("source")))).toEqual([
+      expect.stringContaining("/media/m1.jpg/"),
+      expect.stringContaining("/media/m2.jpg/"),
+      expect.stringContaining("/media/d3.jpg/"),
+    ]);
+    expect(desktop[0]!.querySelector("source")!.getAttribute("media")).toBe("(min-width: 768px)");
+    expect(phone[0]!.querySelector("source")!.getAttribute("media")).toBe("(max-width: 767px)");
+    // The alt text is the slide's; the words and the link are drawn over it.
+    expect(desktop[0]!.querySelector("img")!.getAttribute("alt")).toBe("Banner d1");
+    expect(desktop[0]!.querySelector("a")!.getAttribute("href")).toBe("/collections/eid");
+    expect(text(desktop[0])).toContain(BANGLA);
+    expect(desktop[1]!.querySelector("a")).toBeNull();
+  });
+
+  it("crops a phone slide around its phone focal point, on its own image or the computer one", async () => {
+    const slides = [
+      { image: "d1", phoneImage: "m1", focalPoint: { x: 10, y: 20 }, phoneFocalPoint: { x: 80, y: 30 }, alt: "One", link: null },
+      { image: "d2", phoneImage: "deleted", focalPoint: { x: 40, y: 60 }, phoneFocalPoint: { x: 25, y: 75 }, alt: "Two", link: null },
+      { image: "d3", focalPoint: { x: 55, y: 45 }, alt: "Three", link: null },
+    ];
+    const page = await render([hero({ layout: "contained-banners", slides })], store("large"));
+    const position = (selector: string) => Array.from(page.querySelectorAll(`${selector} [data-slide-index] img`))
+      .map((img) => img.getAttribute("style"));
+    expect(position(".desktop-carousel")).toEqual([
+      "object-position: 10% 20%;",
+      "object-position: 40% 60%;",
+      "object-position: 55% 45%;",
+    ]);
+    expect(position(".mobile-carousel")).toEqual([
+      "object-position: 80% 30%;",
+      "object-position: 25% 75%;",
+      "object-position: 55% 45%;",
+    ]);
+    const phoneSources = Array.from(page.querySelectorAll(".mobile-carousel [data-slide-index] source")).map(sourceSet);
+    expect(phoneSources[1]).toContain("/media/d2.jpg/");
+  });
+
+  it("skips slides whose image did not resolve and renders no hero without one", async () => {
+    const tiny = await render([hero({ layout: "full-bleed" })], store("tiny"));
+    expect(tiny.querySelectorAll(".desktop-carousel [data-slide-index]")).toHaveLength(1);
+    expect(tiny.querySelectorAll(".mobile-carousel [data-slide-index]")).toHaveLength(1);
+    expect(sourceSet(tiny.querySelector(".mobile-carousel source"))).toContain("/media/d1.jpg/");
+    const none = await render([hero({ layout: "full-bleed", slides: [slide("gone")] })], store("large"));
+    expect(none.querySelector('[data-home-section="hero"]')).toBeNull();
+  });
+
+  it("draws the category tiles the section names, in its order, under its title", async () => {
+    const named = tiles({ style: "square", title: "", categoryIds: ["cat-4", "cat-missing", "cat-2"] });
+    const page = await render([named], store("large"));
+    expect(Array.from(page.querySelectorAll('[data-home-section="category-tiles"] a')).map((link) => link.getAttribute("href")))
+      .toEqual(["/categories/category-4", "/categories/category-2"]);
+    expect(text(page.querySelector('[data-home-section="category-tiles"] h2'))).toBe("Shop by category");
+    const titled = await render([tiles({ style: "photo", title: "Departments", categoryIds: ["cat-2"] })], store("large"));
+    const heading = titled.querySelector('[data-home-section="category-tiles"] h2')!;
+    expect(text(heading)).toBe("Departments");
+    expect(titled.querySelector('[data-home-section="category-tiles"] section')!.getAttribute("aria-labelledby")).toBe(heading.id);
+    // Two sections, two sets of tiles, unique ids.
+    const twice = await render([
+      tiles({ style: "photo", categoryIds: ["cat-1"] }),
+      { ...tiles({ style: "round", categoryIds: ["cat-3", "cat-5"] }), id: "more-tiles" },
+    ], store("large"));
+    expect(duplicateIds(twice)).toEqual([]);
+    expect(twice.querySelectorAll('[data-home-section="category-tiles"]')).toHaveLength(2);
+  });
+
+  it("shows the collections the section names, in its order, and the newest products without one", async () => {
+    const page = await render([section("collections", "collections", { collectionIds: ["col-rail", "col-missing", "col-grid"] })], store("large"));
+    const headings = Array.from(page.querySelectorAll('[data-home-section="collections"] h2')).map(text);
+    expect(headings).toEqual(["New in", "Best sellers"]);
+    expect(page.querySelector('a[href="/collections/col-rail"]')).not.toBeNull();
+
+    const fallback = await render([section("collections", "collections", { collectionIds: ["col-missing"] })], store("large"));
+    expect(Array.from(fallback.querySelectorAll('[data-home-section="collections"] h2')).map(text)).toEqual(["New arrivals"]);
+    expect(fallback.querySelectorAll(".product-grid > *")).toHaveLength(8);
+    expect(fallback.querySelector('a[href^="/collections/"]')).toBeNull();
+  });
+
+  it("shows the store's delivery facts in a delivery-facts strip and nowhere without one", async () => {
+    const withStrip = await render([section("usp-strip", "usp"), section("product-rail", "rail", { source: { kind: "newest" } })], store("large"));
+    expect(text(withStrip.querySelector('[data-home-section="usp-strip"]'))).toContain("Cash on delivery");
+    const without = await render([section("product-rail", "rail", { source: { kind: "newest" } })], store("large"));
+    expect(text(without.body)).not.toContain("Cash on delivery");
+    // A strip without facts to show renders nothing.
+    expect((await render([section("usp-strip", "usp")], { ...store("large"), deliveryFacts: [] })).querySelector("[data-home-section]")).toBeNull();
   });
 });

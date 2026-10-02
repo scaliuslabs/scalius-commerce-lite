@@ -9,11 +9,8 @@ import {
     publicProductBaseConditions,
     normalizeDefaultSkuOptions,
 } from "../products/public-eligibility";
-import {
-    presentCatalogPrice,
-    storeCurrencyCodeSql,
-    storeDecimalPlacesFromCode,
-} from "../products/money";
+import { presentCatalogPrice } from "../products/money";
+import { storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../settings/store-money";
 import { loadVariantSelectedOptions, type SelectedProductOption } from "../products/option-model";
 import { loadProductMediaProjections } from "../products/media";
 import { productImageMapFromMedia, STOREFRONT_ENRICHMENT_ID_CHUNK_SIZE } from "./shared";

@@ -17,7 +17,7 @@ import {
     serializeOrderLineProperties,
 } from "@scalius/shared/line-properties";
 import { discountedPriceMinor, fromMinor } from "@scalius/shared/money";
-import { storeCurrencyCodeSql, storeCurrencyFromCode } from "../../products/money";
+import { storeCurrencyCodeSql, storeCurrencyFromCode } from "../../settings/store-money";
 import type { QuoteManualOrderInput } from "../validation";
 import { ValidationError } from "@scalius/core/errors";
 import { createOrderCurrencySnapshot, type OrderCurrencySnapshot } from "../../payments/order-currency";

@@ -31,7 +31,12 @@ describe("stacked and grid product pages", () => {
   });
 
   it("centres only the resolved 3:4 portrait stage at Aarong's desktop width", () => {
-    expect(gallery).toContain('data-portrait-stage={layout.stageRatio === 0.75 ? "" : undefined}');
-    expect(gallery).toMatch(/@media \(min-width: 64rem\) \{\s*#product-gallery\[data-portrait-stage\] \{\s*max-width: 404px;\s*justify-self: center;/);
+    // The CSS cap is the number the main photo's `sizes` name
+    // (productGalleryPortraitMaxPx), set on the gallery as a custom property.
+    expect(gallery).toContain("const portraitMaxPx = productGalleryPortraitMaxPx(layout);");
+    expect(gallery).toContain('data-portrait-stage={portraitMaxPx === null ? undefined : ""}');
+    expect(gallery).toContain("style={portraitMaxPx === null ? undefined : `--gallery-portrait-max: ${portraitMaxPx}px;`}");
+    expect(gallery).toMatch(/@media \(min-width: 64rem\) \{\s*#product-gallery\[data-portrait-stage\] \{\s*max-width: var\(--gallery-portrait-max\);\s*justify-self: center;/);
+    expect(gallery).not.toMatch(/\b404px\b/);
   });
 });

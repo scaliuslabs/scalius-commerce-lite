@@ -187,14 +187,13 @@ export const themeSettingsVersions = sqliteTable("theme_settings_versions", {
 ]);
 
 /**
- * Short-lived preview snapshots. Only a SHA-256 token hash is persisted; the
- * bearer token stays in a storefront HttpOnly cookie and request bodies.
+ * Short-lived preview sessions (and their one-time continuations). A session
+ * stores no theme: each preview read resolves the shared draft as it is then.
+ * Only a SHA-256 token hash is persisted; the bearer token stays in a
+ * storefront HttpOnly cookie and request bodies.
  */
 export const themePreviewSessions = sqliteTable("theme_preview_sessions", {
     tokenHash: text("token_hash").primaryKey(),
-    theme: text("theme").notNull(),
-    draftRevision: integer("draft_revision").notNull(),
-    basePublishedRevision: integer("base_published_revision").notNull(),
     expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
     createdBy: text("created_by"),
     createdAt: integer("created_at", { mode: "timestamp" })
@@ -202,14 +201,6 @@ export const themePreviewSessions = sqliteTable("theme_preview_sessions", {
         .default(UNIX_NOW),
 }, (table) => [
     index("theme_preview_sessions_expires_at_idx").on(table.expiresAt),
-    check(
-        "theme_preview_sessions_draft_revision_positive",
-        sql`${table.draftRevision} >= 1`,
-    ),
-    check(
-        "theme_preview_sessions_base_revision_nonnegative",
-        sql`${table.basePublishedRevision} >= 0`,
-    ),
 ]);
 
 export const analytics = sqliteTable("analytics", {

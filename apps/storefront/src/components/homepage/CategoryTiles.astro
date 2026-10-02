@@ -1,29 +1,34 @@
 ---
-// The merchant's homepage categories (Banners -> category rail) as tiles.
+// The categories the section names (its `categoryIds`, in order; only
+// published ones arrive) under its title, as tiles.
 // - photo: the classic store's photo tiles with captions (HomepageCategoryRail).
+// - photo-grid: Aarong's department grid of the same photos, 2 to 4 across.
 // - icons: Star Tech's icon grid, 8 across on computers and 4 on phones.
-// - round: Apple Gadgets' and Target's round images, 8 / 3 across.
+// - round: round images, 8 / 3 across; round-small: Apple Gadgets' 56px
+//   circles; round-row: Target's round images in one scrolling row on phones.
 // - quad: Amazon's cards of four labelled images in a 2x2 grid.
 // - square: eBay's seven-across desktop gallery, three across on phones.
 // A category without a photo shows its first letter on the muted colour,
 // in the same box, so tiles never change size.
 import type { StorefrontSectionOf } from "@scalius/shared/storefront-theme";
-import type { HomepageData } from "@/lib/api/storefront";
+import type { HomepageCategory } from "@/lib/api/storefront";
 import { mediaImageSrcSet, mediaImageUrl } from "@/lib/media-url";
-import { currentRequestTheme } from "@/lib/storefront-theme-context";
 import HomepageCategoryRail from "./HomepageCategoryRail.astro";
 
 interface Props {
   section: StorefrontSectionOf<"category-tiles">;
-  rail: HomepageData["presentation"]["categoryRail"];
+  /** `homepageCategoryTilesTitle(section)`. */
+  title: string;
+  /** `homepageCategoryTiles(section, content)`: the section's categories, in its order. */
+  categories: HomepageCategory[];
 }
 
-const { section, rail } = Astro.props;
+const { section, title, categories } = Astro.props;
 const style = section.settings.style;
-const template = (await currentRequestTheme(Astro.locals)).resolved.template;
-const compactRound = style === "round" && template === "rounded-tech";
-const retailRound = style === "round" && template === "mass-retail";
-const categories = rail.enabled ? rail.categories : [];
+const photo = style === "photo" || style === "photo-grid";
+const round = style === "round" || style === "round-small" || style === "round-row";
+const compactRound = style === "round-small";
+const retailRound = style === "round-row";
 const headingId = `home-${section.id}-title`;
 const hrefOf = (category: (typeof categories)[number]) =>
   category.canonicalPath || `/categories/${encodeURIComponent(category.slug)}`;
@@ -34,12 +39,12 @@ const letter = (name: string) => {
 const quads = Array.from({ length: Math.ceil(categories.length / 4) }, (_, index) => categories.slice(index * 4, index * 4 + 4));
 ---
 
-{style === "photo" && <HomepageCategoryRail rail={rail} heritage={template === "heritage-editorial"} />}
+{photo && <HomepageCategoryRail title={title} categories={categories} headingId={headingId} heritage={style === "photo-grid"} />}
 
-{style !== "photo" && categories.length >= 2 && (
+{!photo && categories.length >= 2 && (
   <section class="home-section w-full" aria-labelledby={headingId}>
     <div class:list={["mx-auto px-4 sm:px-6 lg:px-8", style === "quad" ? "max-w-[100rem]" : style === "square" ? "max-w-[97rem]" : "max-w-7xl"]}>
-      <h2 id={headingId} class="section-heading mb-3 text-foreground md:mb-5">{rail.title}</h2>
+      <h2 id={headingId} class="section-heading mb-3 text-foreground md:mb-5">{title}</h2>
 
       {style === "icons" && (
         <ul class="grid grid-cols-4 gap-2 sm:grid-cols-6 lg:grid-cols-8 md:gap-3">
@@ -60,7 +65,7 @@ const quads = Array.from({ length: Math.ceil(categories.length / 4) }, (_, index
         </ul>
       )}
 
-      {style === "round" && (
+      {round && (
         <ul class:list={[
           retailRound
             ? "flex gap-3 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:grid md:grid-cols-6 md:gap-y-4 lg:grid-cols-8"

@@ -14,7 +14,7 @@
  * carries: the folder the asset sits in, the poster relationships between media
  * rows, the `product_media` attachments, and the variants whose image points at
  * one of those attachments. Assets referenced only from free-form presentation
- * JSON (hero configs, rich content HTML) are not inferred here, because
+ * content (rich content HTML) are not inferred here, because
  * guessing at a reference is worse than not claiming one.
  *
  * When `--media-source-dir` is supplied the exporter also copies the bytes.

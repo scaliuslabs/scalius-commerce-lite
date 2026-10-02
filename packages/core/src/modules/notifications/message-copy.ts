@@ -58,6 +58,8 @@ interface MessageCopy {
     emailSubject: (store: string | null, title: string) => string;
     action: string;
   };
+  /** Staff push when a webhook endpoint is disabled after sustained failure. `host` is the endpoint's host name. */
+  webhookDisabled: { title: string; body: (host: string) => string };
   /** Thread notifications: a reply to the buyer, a new buyer message to staff. `order` is "#1057" or null. */
   conversation: {
     replySubject: (store: string | null, order: string | null) => string;
@@ -144,6 +146,10 @@ const EN: MessageCopy = {
     },
     emailSubject: (store, title) => `${store ? `[${store}] ` : ""}${title}`,
     action: "View order",
+  },
+  webhookDisabled: {
+    title: "Webhook turned off",
+    body: (host) => `Deliveries to ${host} failed for a day, so the webhook was turned off. Fix the endpoint, then turn it back on in Settings → Webhooks.`,
   },
   conversation: {
     replySubject: (store, order) => `${store ?? "The store"} replied${order ? ` about order ${order}` : ""}`,
@@ -233,6 +239,10 @@ const BN: MessageCopy = {
     },
     emailSubject: (store, title) => `${store ? `[${store}] ` : ""}${title}`,
     action: "অর্ডার দেখুন",
+  },
+  webhookDisabled: {
+    title: "ওয়েবহুক বন্ধ করা হয়েছে",
+    body: (host) => `${host}-এ এক দিন ধরে ডেলিভারি ব্যর্থ হয়েছে, তাই ওয়েবহুকটি বন্ধ করা হয়েছে। এন্ডপয়েন্ট ঠিক করে সেটিংস → ওয়েবহুক থেকে আবার চালু করুন।`,
   },
   conversation: {
     replySubject: (store, order) => `${store ?? "স্টোর"} উত্তর দিয়েছে${order ? ` (অর্ডার ${order})` : ""}`,

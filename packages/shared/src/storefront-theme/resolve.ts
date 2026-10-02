@@ -10,7 +10,7 @@ import {
   storefrontListingFilterSpec,
   STOREFRONT_LISTING_TOOLBAR,
   STOREFRONT_PRODUCT_MODULES,
-  storefrontBlockDefault,
+  storefrontBlockSwitch,
   storefrontBlockValue,
   storefrontVariantSpec,
   type StorefrontBlockSlot,
@@ -30,7 +30,8 @@ import {
   type StorefrontProductModule,
   type StorefrontThemeBlocks,
 } from "./blocks";
-import type { StorefrontTemplateId, StorefrontThemeDocument } from "./document";
+import type { StorefrontThemeBrand } from "./brand";
+import type { StorefrontHomeMode, StorefrontTemplateId, StorefrontThemeDocument } from "./document";
 import {
   atLeast,
   failedFitConditions,
@@ -84,6 +85,10 @@ export interface ResolvedStorefrontNavigation extends StorefrontNavigation {
 export interface ResolvedStorefrontListingFilters {
   style: StorefrontListingFilterStyle;
   openByDefault: boolean;
+  /** A search's facets with a sidebar style: the column (`same`) or a drawer. */
+  searchPlacement: StorefrontListingFilters["searchPlacement"];
+  /** A sidebar's groups as one flat, ruled list. */
+  ruled: boolean;
   /** Merchant order, when it replaces the template's original arrangement. */
   order?: StorefrontListingFilters["order"];
   /** The measured facet UI: the style's, with the template's own column, row pitch and label. */
@@ -150,14 +155,11 @@ export interface ResolvedStorefrontTheme {
     desktopNav: ResolvedStorefrontBlock;
     mobileNav: ResolvedStorefrontBlock;
     card: ResolvedStorefrontBlock;
-    listing: {
+    /** The listing's own choices as the document states them, with the layout, filters and toolbar resolved. */
+    listing: Omit<StorefrontThemeBlocks["listing"], "layout" | "filters" | "toolbar"> & {
       layout: ResolvedStorefrontBlock;
       filters: ResolvedStorefrontListingFilters;
       toolbar: StorefrontListingToolbarPiece[];
-      searchLayout: "same" | "grid" | "list";
-      descriptionPlacement: "above" | "below";
-      phoneLayout: StorefrontThemeBlocks["listing"]["phoneLayout"];
-      paging: StorefrontThemeBlocks["listing"]["paging"];
     };
     product: {
       gallery: ResolvedStorefrontBlock;
@@ -167,7 +169,10 @@ export interface ResolvedStorefrontTheme {
     };
     footer: ResolvedStorefrontBlock;
   };
-  pages: { home: StorefrontSection[] };
+  /** The logo, footer logo and tab icon (media ids) and the logo width, as the document states them. */
+  brand: StorefrontThemeBrand;
+  /** The sections that fit the store, and what `/` shows. */
+  pages: { home: StorefrontSection[]; homeMode: StorefrontHomeMode };
   fallbacks: StorefrontThemeFallback[];
   layout: ResolvedStorefrontThemeLayout;
 }
@@ -187,7 +192,8 @@ function resolveBlock(
     const failing = failedFitConditions(spec.requires, context);
     if (failing.length === 0 || spec.fallback === null || seen.has(spec.fallback)) break;
     failed.push(...failing);
-    current = storefrontBlockDefault(slot, spec.fallback);
+    // The fallback keeps the settings it shares (a footer's words survive a directory that does not fit).
+    current = storefrontBlockSwitch(slot, current, spec.fallback);
   }
   if (current.variant !== chosen.variant) {
     fallbacks.push({ kind: "block", key: slot, requested: chosen.variant, resolved: current.variant, failed });
@@ -235,7 +241,15 @@ function resolveFilters(
 ): ResolvedStorefrontListingFilters {
   const failed = failedFitConditions(STOREFRONT_FILTERS_REQUIRE, context);
   if (failed.length > 0) fallbacks.push({ kind: "filters", key: "listing", requested: filters.style, resolved: null, failed });
-  return { style: filters.style, openByDefault: filters.openByDefault, ...(filters.order ? { order: filters.order } : {}), spec: storefrontListingFilterSpec(filters), shown: failed.length === 0 };
+  return {
+    style: filters.style,
+    openByDefault: filters.openByDefault,
+    searchPlacement: filters.searchPlacement,
+    ruled: filters.ruled,
+    ...(filters.order ? { order: filters.order } : {}),
+    spec: storefrontListingFilterSpec(filters),
+    shown: failed.length === 0,
+  };
 }
 
 function keepFitting<Item extends string>(
@@ -307,7 +321,9 @@ export function resolveStorefrontTheme(document: StorefrontThemeDocument, shape:
   const { tokens } = document;
   const { look: ownLook, ...card } = renders<StorefrontCardRenderer>("card", resolved.card);
   const look = resolveStorefrontCardLook(ownLook, tokens);
+  const buyBox = renders<StorefrontBuyBoxRenderer>("buyBox", resolved.buyBox);
   return {
+    // A label only: what the theme is based on. Nothing below reads it.
     template: document.template,
     tokens,
     facts,
@@ -318,11 +334,27 @@ export function resolveStorefrontTheme(document: StorefrontThemeDocument, shape:
       desktopNav: resolved.desktopNav,
       mobileNav: resolved.mobileNav,
       card: resolved.card,
-      listing: { layout: resolved.listing, filters, toolbar, searchLayout: listing.searchLayout ?? (document.template === "marketplace" ? "list" : "same"), descriptionPlacement: listing.descriptionPlacement ?? "below", phoneLayout: listing.phoneLayout, paging: listing.paging },
+      listing: {
+        layout: resolved.listing,
+        filters,
+        toolbar,
+        searchLayout: listing.searchLayout,
+        descriptionPlacement: listing.descriptionPlacement,
+        phoneLayout: listing.phoneLayout,
+        paging: listing.paging,
+        surface: listing.surface,
+        gutter: listing.gutter,
+        band: listing.band,
+        phoneBar: listing.phoneBar,
+        links: listing.links,
+        phoneBanner: listing.phoneBanner,
+        maxColumns: listing.maxColumns,
+      },
       product: { gallery: resolved.gallery, buyBox: resolved.buyBox, below, sticky: product.sticky },
       footer: resolved.footer,
     },
-    pages: { home },
+    brand: document.brand,
+    pages: { home, homeMode: document.pages.homeMode },
     fallbacks,
     layout: {
       topBar: renders<boolean>("topBar", resolved.topBar),
@@ -339,7 +371,8 @@ export function resolveStorefrontTheme(document: StorefrontThemeDocument, shape:
       density: tokens.density,
       grid: STOREFRONT_DENSITY_SPECS[tokens.density],
       productPage: renders<StorefrontGalleryRenderer>("gallery", resolved.gallery),
-      buyBox: renders<StorefrontBuyBoxRenderer>("buyBox", resolved.buyBox),
+      // The EMI line needs the store's EMI plans (Settings -> EMI).
+      buyBox: { ...buyBox, emi: buyBox.emi && facts.hasEmiPlans },
     },
   };
 }

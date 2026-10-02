@@ -34,6 +34,7 @@ import { useMessages } from "~/i18n";
 import { pageFormMessages } from "~/i18n/page-form";
 import { defaultPageScheduleDate, toDateTimeLocalValue, type PagePublicationMode } from "@/lib/page-publication";
 import { toCreatePageInput, toUpdatePageInput } from "@/lib/page-form-input";
+import { CustomFieldsCard } from "./custom-fields/CustomFieldsCard";
 
 interface PageFormProps {
   defaultValues?: Partial<PageFormValues>;
@@ -450,6 +451,9 @@ export function PageForm({ defaultValues, isEdit = false, contentType = "page", 
               )}
             </CardContent>
           </Card>
+          {isEdit && defaultValues?.id && !isArticle ? (
+            <CustomFieldsCard ownerType="page" ownerId={defaultValues.id} canEdit={canSave} />
+          ) : null}
         </div>
       </div>
     </FormContainer>

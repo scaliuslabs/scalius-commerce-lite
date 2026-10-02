@@ -18,6 +18,12 @@ export interface Mutation {
   readonly table: string;
   readonly columns: readonly string[];
   readonly description: string;
+  /**
+   * Statements it ran, when more than one (a delete+insert reinsert): a
+   * trigger of the first statement cannot see rows the second one writes,
+   * so the trigger cross-check treats it as a batch.
+   */
+  readonly statements?: number;
 }
 
 export class MutationCoverage {
@@ -334,7 +340,7 @@ export class RowMutator {
         this.run(`INSERT INTO "${table.name}" (${columns.map((name) => `"${name}"`).join(", ")}) VALUES (${columns.map(() => "?").join(", ")})`,
           columns.map((name) => row[name] ?? null) as SQLInputValue[]);
         this.sqlite.exec("RELEASE dvc_reinsert");
-        const mutation: Mutation = { kind: "insert", table: table.name, columns, description: `DELETE+INSERT ${table.name} ${describeRow(table, row)}` };
+        const mutation: Mutation = { kind: "insert", table: table.name, columns, description: `DELETE+INSERT ${table.name} ${describeRow(table, row)}`, statements: 2 };
         this.coverage.record(mutation);
         return mutation;
       } catch (error) {
@@ -536,6 +542,8 @@ function looksLikeJson(value: string): boolean {
 
 function uniqueVariant(value: string, suffix: string): string {
   if (/^[a-z0-9-]+$/.test(value)) return `${value}-${suffix}`.slice(0, 100);
+  // snake_case identities (custom field keys) stay snake_case.
+  if (/^[a-z][a-z0-9_]*$/.test(value)) return `${value}_${suffix}`.slice(0, 64);
   if (/^[A-Z0-9_-]+$/.test(value)) return `${value}${suffix}`.toUpperCase().slice(0, 50);
   return `${value} ${suffix}`;
 }

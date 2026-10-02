@@ -321,7 +321,7 @@ describe("/buy/[slug]", () => {
 
   it("uses the shared precision-aware pricing authority for quick buy", async () => {
     mocks.getLayoutData.mockResolvedValueOnce({
-      currency: { code: "KWD", symbol: "KD", usdExchangeRate: 1, decimalPlaces: 3 },
+      currency: { code: "KWD", symbol: "KD", decimalPlaces: 3 },
     });
     mocks.getProductBySlug.mockResolvedValueOnce({
       product: {

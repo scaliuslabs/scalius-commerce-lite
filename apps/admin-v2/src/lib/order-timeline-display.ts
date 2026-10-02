@@ -132,6 +132,15 @@ export function describeTimelineEvent(
       return { text: t("timeline.unarchived"), detail: null };
     case "invoice_issued":
       return { text: t("timeline.invoiceIssued", { number: text(data.number) ?? "" }), detail: null };
+    case "fulfillment_location_changed": {
+      // Names as they were when it changed; the order may follow the store default.
+      const to = text(data.toName);
+      const from = text(data.fromName);
+      return {
+        text: to ? t("timeline.locationChanged", { location: to }) : t("timeline.locationChangedUnnamed"),
+        detail: from && from !== to ? t("timeline.locationWas", { location: from }) : null,
+      };
+    }
     default:
       return { text: body ?? "", detail: null };
   }

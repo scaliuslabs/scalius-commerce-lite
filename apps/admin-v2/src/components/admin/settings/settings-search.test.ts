@@ -97,6 +97,12 @@ describe("settings search", () => {
     expect(firstCard("webhook")).toEqual({ page: "payments", card: "paymentMethods" });
   });
 
+  it("finds the Webhooks page by name in both languages and by developer words", () => {
+    expect(searchSettings("webhooks").pages).toEqual(["webhooks"]);
+    expect(searchSettings("ওয়েবহুক").pages).toEqual(["webhooks"]);
+    expect(searchSettings("hmac").cards).toEqual([{ page: "webhooks", card: "webhooks" }]);
+  });
+
   it("keeps everyday matches", () => {
     for (const query of ["cod", "courier", "bkash", "vat", "sms", "কুরিয়ার", "বিকাশ"]) {
       expect(searchSettings(query).cards.length, query).toBeGreaterThan(0);

@@ -1,7 +1,8 @@
 ---
-// The bar above the header (theme block `topBar`). Its text is the
-// announcement in Header settings; a variant without text to show renders
-// nothing rather than an empty strip.
+// The bar above the header (theme block `topBar`; `none` is the only off
+// switch). Every other variant carries the announcement's words and an
+// optional link (its settings); a variant without words to show renders
+// nothing rather than an empty strip, except the utility bar's own links.
 // - announcement: one centred line on the action colour (Dawn 39px).
 // - utility: computers only, 36px on the muted surface; the announcement at
 //   the start, then call, track order and account (Game Ghor 38px, Target).
@@ -15,13 +16,25 @@ import { telHref } from "@/lib/store-identity";
 interface Props {
   variant: string;
   text: string;
+  /** The announcement's link (a canonical navigation-safe href); null: plain words. */
+  link: string | null;
   storeName: string;
   phone: string | null;
 }
 
-const { variant, text: rawText, storeName, phone } = Astro.props;
+const { variant, text: rawText, link, storeName, phone } = Astro.props;
 const text = rawText.trim();
 const phoneHref = telHref(phone);
+const external = Boolean(link?.startsWith("https://"));
+const linkAttributes = link
+  ? {
+      href: link,
+      "data-astro-prefetch": getStorefrontPrefetchAttribute(link, Astro.url),
+      target: external ? "_blank" : undefined,
+      rel: external ? "noopener noreferrer" : undefined,
+      "data-top-bar-link": "",
+    }
+  : null;
 ---
 
 {
@@ -29,7 +42,7 @@ const phoneHref = telHref(phone);
     <div class="relative z-50 bg-primary text-primary-foreground overflow-hidden shrink-0 w-full h-8 sm:h-9 flex items-center justify-center border-b border-white/10">
       <div class="max-w-7xl mx-auto px-4 w-full">
         <p class="text-xs sm:text-[0.8125rem] font-medium text-center tracking-[0.08em] uppercase truncate">
-          {text}
+          {linkAttributes ? <a {...linkAttributes} class="underline-offset-4 hover:underline">{text}</a> : text}
         </p>
       </div>
     </div>
@@ -40,7 +53,9 @@ const phoneHref = telHref(phone);
   variant === "utility" && (
     <div class="top-utility" data-top-bar="utility">
       <div class="top-utility-inner">
-        <p class="top-utility-text">{text}</p>
+        <p class="top-utility-text">
+          {linkAttributes && text ? <a {...linkAttributes}>{text}</a> : text}
+        </p>
         <ul class="top-utility-links">
           {phoneHref && (
             <li>
@@ -74,7 +89,7 @@ const phoneHref = telHref(phone);
         <span class="top-app-banner-mark" aria-hidden="true">{storeName.charAt(0)}</span>
         <p>
           <strong>{storeName}</strong>
-          <span>{text}</span>
+          {linkAttributes ? <a {...linkAttributes}>{text}</a> : <span>{text}</span>}
         </p>
       </div>
     </details>
@@ -154,6 +169,17 @@ const phoneHref = telHref(phone);
     padding-inline: 0.75rem;
     color: inherit;
     white-space: nowrap;
+  }
+
+  .top-utility-text a,
+  .top-app-banner-body p a {
+    color: inherit;
+  }
+
+  .top-utility-text a:hover,
+  .top-app-banner-body p a:hover {
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
   }
 
   .top-utility-links a:hover {
@@ -256,7 +282,8 @@ const phoneHref = telHref(phone);
   }
 
   .top-app-banner-body strong,
-  .top-app-banner-body span {
+  .top-app-banner-body span,
+  .top-app-banner-body p a {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;

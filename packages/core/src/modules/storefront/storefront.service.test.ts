@@ -2,13 +2,20 @@ import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { describe, expect, it, vi } from "vitest";
 import {
   businessDocument,
-  headerDocument,
   metaConversionsDocument,
   securityDocument,
   seoDocument,
 } from "../settings/documents";
-import { DEFAULT_STOREFRONT_THEME, EMPTY_STORE_SHAPE, STORE_SHAPE_COUNT_CAP, storefrontTemplateTheme } from "@scalius/shared/storefront-theme";
-import { saveHomepagePresentationSettings } from "../settings/site-settings.service";
+import {
+  DEFAULT_STOREFRONT_THEME,
+  EMPTY_STORE_SHAPE,
+  STORE_SHAPE_COUNT_CAP,
+  STOREFRONT_SECTION_REGISTRY,
+  storefrontTemplateTheme,
+  type StorefrontSection,
+  type StorefrontThemeDocument,
+} from "@scalius/shared/storefront-theme";
+import type { DatabaseSync } from "node:sqlite";
 import { getHomepageData, getLayoutData } from "./storefront.service";
 import { readStoreShape } from "./store-shape";
 import { rebuildCatalogProjections } from "../products/catalog-projections";
@@ -41,6 +48,20 @@ describe("storefront layout data", () => {
     const fallback = await getLayoutData(createSqliteD1Database().db);
     expect(layout.currency.code).toBe(fallback.currency.code);
     expect(layout.currency.code).not.toBe("ZZZ");
+  });
+
+  // Regression: the payload had no decimalPlaces, so the storefront formatted
+  // JPY with two decimals and UCP scaled its amounts by 100.
+  it.each([
+    ["JPY", "¥", 0],
+    ["KWD", "KD", 3],
+    ["BDT", "৳", 2],
+  ])("carries the ISO 4217 decimal places of %s", async (code, symbol, decimalPlaces) => {
+    const { sqlite, db } = createSqliteD1Database();
+    sqlite.exec(`INSERT INTO settings (id, key, value, category, type)
+      VALUES ('set_currency', 'document', '${JSON.stringify({ currencyCode: code, currencySymbol: symbol, usdExchangeRate: "150" })}', 'currency', 'json')`);
+
+    expect((await getLayoutData(db)).currency).toEqual({ code, symbol, decimalPlaces });
   });
 
   it("renders the published theme whole, or the default whole when the row is unreadable", async () => {
@@ -101,23 +122,40 @@ describe("storefront layout data", () => {
   });
 });
 
+/** Publish a theme with these homepage sections (and home mode) as the stored row. */
+function publishTheme(sqlite: DatabaseSync, home: StorefrontSection[], homeMode: StorefrontThemeDocument["pages"]["homeMode"] = { kind: "sections" }, edit?: (theme: StorefrontThemeDocument) => void) {
+  const theme = storefrontTemplateTheme("boutique");
+  theme.pages = { home, homeMode };
+  edit?.(theme);
+  sqlite.prepare("DELETE FROM theme_settings").run();
+  sqlite.prepare(`INSERT INTO theme_settings (id, colors, revision, created_at, updated_at) VALUES ('default', ?, 1, 1, 1)`)
+    .run(JSON.stringify(theme));
+  return theme;
+}
+
+const section = (value: object) => ({ version: 1, ...value }) as StorefrontSection;
+
 describe("storefront homepage data", () => {
-  it("resolves only collections explicitly placed on the homepage", async () => {
+  it("reads the collections section's collections in its order: active ones with products", async () => {
     const { sqlite, db } = createSqliteD1Database();
     sqlite.exec(`
       INSERT INTO products (id, name, price_minor, slug) VALUES ('p_1', 'Visible', 1000, 'visible');
       INSERT INTO product_variants (id, product_id, sku, price_minor, stock, reserved_stock, is_default, track_inventory)
         VALUES ('v_1', 'p_1', 'VIS-1', 1000, 0, 0, 1, 0);
-      INSERT INTO collections (id, name, presentation, config, sort_order) VALUES
-        ('col_home', 'Home', 'grid', '{"source":"manual","productIds":["p_1"],"showOnHomepage":true}', 0),
-        ('col_hidden', 'Hidden', 'grid', '{"source":"manual","productIds":["p_1"],"showOnHomepage":false}', 1);
+      INSERT INTO collections (id, name, presentation, config, sort_order, is_active) VALUES
+        ('col_a', 'A', 'grid', '{"source":"manual","productIds":["p_1"]}', 0, 1),
+        ('col_b', 'B', 'grid', '{"source":"manual","productIds":["p_1"]}', 1, 1),
+        ('col_off', 'Off', 'grid', '{"source":"manual","productIds":["p_1"]}', 2, 0),
+        ('col_empty', 'Empty', 'grid', '{"source":"manual","productIds":[]}', 3, 1);
     `);
+    await rebuildCatalogProjections(db);
+    publishTheme(sqlite, [section({ id: "c", type: "collections", settings: { carousel: "large", collectionIds: ["col_b", "col_off", "col_empty", "col_a"] } })]);
 
     const homepage = await getHomepageData(db);
-    expect(homepage.collections.map((collection) => collection?.id)).toEqual(["col_home"]);
+    expect(homepage.sections.collections.map((collection) => collection.id)).toEqual(["col_b", "col_a"]);
   });
 
-  it("skips homepage collection product reads when the theme has no collections section", async () => {
+  it("reads no collection products when no collections section names one", async () => {
     let batches = 0;
     const { sqlite, db } = createSqliteD1Database({ beforeBatch: () => { batches += 1; } });
     sqlite.exec(`
@@ -125,42 +163,35 @@ describe("storefront homepage data", () => {
       INSERT INTO product_variants (id, product_id, sku, price_minor, stock, reserved_stock, is_default, track_inventory)
         VALUES ('v_1', 'p_1', 'VIS-1', 1000, 0, 0, 1, 0);
       INSERT INTO collections (id, name, presentation, config)
-        VALUES ('col_home', 'Home', 'grid', '{"source":"manual","productIds":["p_1"],"showOnHomepage":true}');
+        VALUES ('col_home', 'Home', 'grid', '{"source":"manual","productIds":["p_1"]}');
     `);
-    const theme = storefrontTemplateTheme("boutique");
-    theme.pages.home = [{ id: "text", type: "editorial", version: 1, settings: { layout: "rich-text", heading: "Hi", body: "" } }];
-    sqlite.prepare(`INSERT INTO theme_settings (id, colors, revision, created_at, updated_at) VALUES ('default', ?, 1, 1, 1)`)
-      .run(JSON.stringify(theme));
+    await rebuildCatalogProjections(db);
+    publishTheme(sqlite, [section({ id: "text", type: "editorial", settings: { layout: "rich-text", heading: "Hi", body: "" } })]);
+    batches = 0;
 
-    expect((await getHomepageData(db)).collections).toEqual([]);
+    expect((await getHomepageData(db)).sections.collections).toEqual([]);
     expect(batches).toBe(1);
 
-    theme.pages.home = [{ id: "collections", type: "collections", version: 1, settings: {} }];
-    sqlite.prepare("UPDATE theme_settings SET colors = ?").run(JSON.stringify(theme));
+    publishTheme(sqlite, [section({ id: "collections", type: "collections", settings: { ...STOREFRONT_SECTION_REGISTRY.collections.defaults, collectionIds: ["col_home"] } })]);
     batches = 0;
-    expect((await getHomepageData(db)).collections.map((collection) => collection?.id)).toEqual(["col_home"]);
+    expect((await getHomepageData(db)).sections.collections.map((collection) => collection.id)).toEqual(["col_home"]);
     expect(batches).toBe(2);
   });
 
-  it("projects the saved category rail and SEO documents in the homepage batch", async () => {
+  it("reads the category tiles' published categories in the section's order, and the SEO document", async () => {
     const { db, sqlite } = createSqliteD1Database();
     sqlite.exec(`INSERT INTO categories (id, name, slug, status) VALUES
       ('cat_a', 'Tea', 'tea', 'published'),
       ('cat_b', 'Coffee', 'coffee', 'published'),
       ('cat_draft', 'Hidden', 'hidden', 'draft')`);
-    await saveHomepagePresentationSettings(db, {
-      categoryRail: { enabled: true, title: "Shop", categoryIds: ["cat_b", "cat_draft", "cat_a"] },
-      trustStrip: { enabled: false },
-      homeMode: "catalog",
-      landingProductId: null,
-    }, 0);
+    publishTheme(sqlite, [section({ id: "tiles", type: "category-tiles", settings: { style: "round", title: "Shop", categoryIds: ["cat_b", "cat_draft", "cat_a"] } })]);
 
     const unsaved = await getHomepageData(db);
     expect(unsaved.seo).toEqual({
       homepageTitle: null,
       homepageMetaDescription: null,
     });
-    expect(unsaved.presentation.categoryRail.categories.map((category) => category.id)).toEqual(["cat_b", "cat_a"]);
+    expect(unsaved.sections.categories.map((category) => category.id)).toEqual(["cat_b", "cat_a"]);
 
     await seoDocument.write(db, { homepageTitle: "River & Loom" });
     expect((await getHomepageData(db)).seo).toEqual({
@@ -169,7 +200,7 @@ describe("storefront homepage data", () => {
     });
   });
 
-  it("opens on the landing product only while it is public, with no extra round trip", async () => {
+  it("reads a product homepage's product only while it is public, in the same second batch", async () => {
     let batches = 0;
     const { db, sqlite } = createSqliteD1Database({ beforeBatch: () => { batches += 1; } });
     sqlite.exec(`
@@ -178,23 +209,21 @@ describe("storefront homepage data", () => {
         VALUES ('v_honey', 'p_honey', 'HONEY', 90000, 5, 0, 1, 1);
     `);
     await rebuildCatalogProjections(db);
-    const rail = { categoryRail: { enabled: false, title: "", categoryIds: [] }, trustStrip: { enabled: false } };
+    const rail = section({ id: "new", type: "product-rail", settings: { title: "", source: { kind: "newest" }, limit: 4 } });
+    publishTheme(sqlite, [rail]);
     batches = 0;
-    expect((await getHomepageData(db)).presentation).toMatchObject({ homeMode: "catalog", landingProduct: null });
-    const catalogBatches = batches;
+    expect((await getHomepageData(db)).sections.homeProduct).toBeNull();
+    const sectionBatches = batches;
 
-    await saveHomepagePresentationSettings(db, { ...rail, homeMode: "landing", landingProductId: "p_honey" }, 0);
+    publishTheme(sqlite, [rail], { kind: "product", productId: "p_honey" });
     batches = 0;
-    expect((await getHomepageData(db)).presentation).toMatchObject({
-      homeMode: "landing",
-      landingProduct: { id: "p_honey", slug: "sundarbans-honey" },
-    });
-    expect(batches).toBe(catalogBatches);
+    expect((await getHomepageData(db)).sections.homeProduct).toEqual({ id: "p_honey", slug: "sundarbans-honey" });
+    expect(batches).toBe(sectionBatches);
 
-    // A landing product that stops being public falls back to the catalog homepage.
+    // A product that stops being public leaves `/` on the sections.
     sqlite.exec("UPDATE products SET is_active = 0 WHERE id = 'p_honey'");
     await rebuildCatalogProjections(db);
-    expect((await getHomepageData(db)).presentation).toMatchObject({ homeMode: "catalog", landingProduct: null });
+    expect((await getHomepageData(db)).sections.homeProduct).toBeNull();
   });
 
   it("reads the published theme's section lists and images in two batches", async () => {
@@ -225,19 +254,16 @@ describe("storefront homepage data", () => {
         ('o_2', 'B', '01700000002', 'x', 'city', 'zone', 'pending', ${now - 60}, ${now - 60}),
         ('o_3', 'C', '01700000003', 'x', 'city', 'zone', 'cancelled', ${now - 60}, ${now - 60});
     `);
-    const theme = storefrontTemplateTheme("boutique");
-    theme.pages.home = [
-      { id: "new", type: "product-rail", version: 1, settings: { title: "", source: { kind: "newest" }, limit: 4 } },
-      { id: "sale", type: "deal-block", version: 1, settings: { title: "", source: { kind: "on-sale" }, endsAt: null } },
-      { id: "cat", type: "product-grid", version: 1, settings: { title: "", source: { kind: "category", categoryId: "cat_tea" }, columns: 2, rows: 1 } },
-      { id: "draft", type: "product-grid", version: 1, settings: { title: "", source: { kind: "category", categoryId: "cat_draft" }, columns: 2, rows: 1 } },
-      { id: "col", type: "product-rail", version: 1, settings: { title: "", source: { kind: "collection", collectionId: "col_teas" }, limit: 4 } },
-      { id: "pop", type: "product-rail", version: 1, settings: { title: "", source: { kind: "popular" }, limit: 4 } },
-      { id: "banner", type: "banner", version: 1, settings: { layout: "full", heading: "", text: "", mediaId: "m_banner", cta: null } },
-      { id: "gone", type: "banner", version: 1, settings: { layout: "full", heading: "", text: "", mediaId: "m_gone", cta: null } },
-    ];
-    sqlite.prepare(`INSERT INTO theme_settings (id, colors, revision, created_at, updated_at) VALUES ('default', ?, 1, 1, 1)`)
-      .run(JSON.stringify(theme));
+    publishTheme(sqlite, [
+      section({ id: "new", type: "product-rail", settings: { title: "", source: { kind: "newest" }, limit: 4 } }),
+      section({ id: "sale", type: "deal-block", settings: { title: "", source: { kind: "on-sale" } } }),
+      section({ id: "cat", type: "product-grid", settings: { title: "", source: { kind: "category", categoryId: "cat_tea" }, columns: 2, rows: 1 } }),
+      section({ id: "draft", type: "product-grid", settings: { title: "", source: { kind: "category", categoryId: "cat_draft" }, columns: 2, rows: 1 } }),
+      section({ id: "col", type: "product-rail", settings: { title: "", source: { kind: "collection", collectionId: "col_teas" }, limit: 4 } }),
+      section({ id: "pop", type: "product-rail", settings: { title: "", source: { kind: "popular" }, limit: 4 } }),
+      section({ id: "banner", type: "banner", settings: { layout: "full", heading: "", text: "", mediaId: "m_banner", cta: null } }),
+      section({ id: "gone", type: "banner", settings: { layout: "full", heading: "", text: "", mediaId: "m_gone", cta: null } }),
+    ]);
     sqlite.exec(`
       INSERT INTO order_items (id, order_id, product_id, quantity) VALUES
         ('oi_1', 'o_1', 'p_old', 1), ('oi_2', 'o_2', 'p_old', 1), ('oi_3', 'o_3', 'p_mid', 1);
@@ -268,78 +294,86 @@ describe("storefront homepage data", () => {
 
     // A preview names its own reads instead of the published theme's.
     const preview = await getHomepageData(db, {
-      requests: { lists: [{ key: "newest", source: { kind: "newest" }, limit: 1 }], mediaIds: [], brandLimit: 0, promotionIds: [] },
+      requests: {
+        lists: [{ key: "newest", source: { kind: "newest" }, limit: 1 }],
+        mediaIds: [],
+        categoryIds: ["cat_tea"],
+        collectionIds: [],
+        brandLimit: 0,
+        promotionIds: [],
+        homeProductId: null,
+      },
     });
     expect(preview.sections.lists.map((each) => [each.key, each.products.map((product) => product.id)]))
       .toEqual([["newest", ["p_new"]]]);
     expect(preview.sections.media).toEqual([]);
+    expect(preview.sections.categories.map((category) => category.id)).toEqual(["cat_tea"]);
     expect(statements).toBeGreaterThan(0);
   });
 
   it("reads nothing in a second batch when no section needs data", async () => {
     let batches = 0;
     const { db, sqlite } = createSqliteD1Database({ beforeBatch: () => { batches += 1; } });
-    const theme = storefrontTemplateTheme("boutique");
-    theme.pages.home = [{ id: "text", type: "editorial", version: 1, settings: { layout: "rich-text", heading: "Hi", body: "" } }];
-    sqlite.prepare(`INSERT INTO theme_settings (id, colors, revision, created_at, updated_at) VALUES ('default', ?, 1, 1, 1)`)
-      .run(JSON.stringify(theme));
+    publishTheme(sqlite, [section({ id: "text", type: "editorial", settings: { layout: "rich-text", heading: "Hi", body: "" } })]);
     const homepage = await getHomepageData(db);
     expect(batches).toBe(1);
-    expect(homepage.sections).toEqual({ lists: [], media: [], brands: [], promotions: [] });
+    expect(homepage.sections).toEqual({ lists: [], media: [], brands: [], promotions: [], categories: [], collections: [], homeProduct: null });
   });
 
-  it("points hero slides saved with an original upload at its published rendition (R3-MOB-01)", async () => {
+  it("reads hero slide images by media id, at their published rendition, phone images too", async () => {
     const { db, sqlite } = createSqliteD1Database();
-    const slide = (id: string, url: string) => ({ id, url, title: `Banner ${id}`, link: "" });
     sqlite.exec(`
       INSERT INTO media (id, filename, kind, object_key, size, mime_type, variant_width) VALUES
         ('m_a', 'a.webp', 'image', 'media/hero_a.webp', 64000, 'image/webp', 1080),
-        ('m_b', 'b.jpg', 'image', 'media/hero_b.jpg', 64000, 'image/jpeg', NULL);
-      INSERT INTO hero_sliders (id, type, images) VALUES
-        ('hero_d', 'desktop', '${JSON.stringify([
-          slide("a", "https://cdn.example.test/media/hero_a.webp"),
-          slide("b", "https://cdn.example.test/media/hero_b.jpg"),
-        ])}'),
-        ('hero_m', 'mobile', '${JSON.stringify([
-          slide("c", "https://cdn.example.test/media/hero_c.webp/960.webp"),
-          slide("a2", "https://cdn.example.test/media/hero_a.webp"),
-        ])}');
+        ('m_b', 'b.jpg', 'image', 'media/hero_b.jpg', 64000, 'image/jpeg', NULL),
+        ('m_phone', 'p.webp', 'image', 'media/hero_p.webp', 64000, 'image/webp', 960);
     `);
+    publishTheme(sqlite, [section({ id: "hero", type: "hero", settings: { layout: "full-bleed", slides: [
+      { image: "m_a", phoneImage: "m_phone", focalPoint: { x: 50, y: 50 }, alt: "A", link: null },
+      { image: "m_b", focalPoint: { x: 20, y: 80 }, alt: "B", link: "/sale" },
+    ] } })]);
 
-    const { hero } = await getHomepageData(db);
-    expect(hero.desktop?.images.map((image) => image.url)).toEqual([
-      // Renditions exist: the storefront can now derive srcset and a small preload.
-      "https://cdn.example.test/media/hero_a.webp/1080.webp",
+    const { sections } = await getHomepageData(db);
+    expect(sections.media.map((asset) => [asset.id, asset.url])).toEqual([
+      // Renditions exist: the storefront derives srcset and a small preload.
+      ["m_a", expect.stringMatching(/media\/hero_a\.webp\/1080\.webp$/)],
+      ["m_phone", expect.stringMatching(/media\/hero_p\.webp\/960\.webp$/)],
       // No renditions yet: the original stays.
-      "https://cdn.example.test/media/hero_b.jpg",
-    ]);
-    expect(hero.mobile?.images.map((image) => image.url)).toEqual([
-      "https://cdn.example.test/media/hero_c.webp/960.webp",
-      "https://cdn.example.test/media/hero_a.webp/1080.webp",
+      ["m_b", expect.stringMatching(/media\/hero_b\.jpg$/)],
     ]);
   });
 });
 
 describe("storefront layout settings projection", () => {
-  it("uses the configured header branch only once a header document is saved", async () => {
-    const { db } = createSqliteD1Database();
-    expect((await getLayoutData(db)).header).toMatchObject({
-      topBar: { isEnabled: false },
-      contact: { isEnabled: false },
-    });
+  it("serves identity from the business document and brand images from the published theme", async () => {
+    const { db, sqlite } = createSqliteD1Database();
+    const empty = await getLayoutData(db);
+    expect(empty).not.toHaveProperty("header");
+    expect(empty).not.toHaveProperty("footer");
+    expect(empty.brand).toEqual({ logo: null, footerLogo: null, favicon: null });
+    expect(empty.footerMenus).toEqual([]);
 
-    await headerDocument.write(db, { logo: { src: "media/logo.png", alt: "Shop" } });
-    await businessDocument.write(db, { companyName: "Shop Ltd", invoicePrefix: "SL" });
+    sqlite.exec(`INSERT INTO media (id, filename, kind, object_key, size, mime_type, variant_width, alt_text) VALUES
+      ('m_logo', 'logo.png', 'image', 'media/logo.png', 1, 'image/png', 320, 'Shop logo')`);
+    publishTheme(sqlite, [], { kind: "sections" }, (theme) => {
+      theme.brand = { ...theme.brand, logo: "m_logo", favicon: "m_missing" };
+    });
+    await businessDocument.write(db, {
+      companyName: "Shop Ltd",
+      invoicePrefix: "SL",
+      socialLinks: [{ id: "fb", label: "Facebook", url: "https://facebook.com/shop" }],
+    });
     await securityDocument.write(db, { cspAllowedDomains: "https://analytics.example.com" });
 
     const layout = await getLayoutData(db);
-    expect(layout.header).toMatchObject({
-      topBar: { isEnabled: true },
-      logo: { src: "media/logo.png", alt: "Shop" },
-      contact: { isEnabled: true },
-    });
-    expect(layout.business).toMatchObject({ companyName: "Shop Ltd", country: "Bangladesh" });
+    expect(layout.brand.logo).toMatchObject({ id: "m_logo", alt: "Shop logo", url: expect.stringMatching(/media\/logo\.png\/320\.webp$/) });
+    expect(layout.brand.favicon).toBeNull();
+    expect(layout.business).toMatchObject({ companyName: "Shop Ltd", country: "Bangladesh", socialLinks: [{ id: "fb", url: "https://facebook.com/shop" }] });
     expect(layout.business).not.toHaveProperty("invoicePrefix");
     expect(layout.cspAllowedDomains).toBe("https://analytics.example.com");
+
+    // An unreadable stored theme renders the default whole: no brand images.
+    sqlite.prepare("UPDATE theme_settings SET colors = ?").run(JSON.stringify({ version: 6, brand: { logo: "m_logo" } }));
+    expect((await getLayoutData(db)).brand.logo).toBeNull();
   });
 });

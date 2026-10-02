@@ -107,7 +107,6 @@ Some tables use inline enum arrays instead of the centralized enums:
 - `products.discountType`: `["percentage", "flat"]`
 - `productVariants.barcodeType`: `["ean13", "upc", "isbn", "gtin", "custom"]`
 - `collections.presentation`: `["grid", "carousel"]`; membership is canonical `config.source` (`manual` or `dynamic`)
-- `heroSliders.type`: `["desktop", "mobile"]`
 - `deliveryLocations.type`: `["city", "zone", "area"]`
 - `customerHistory.changeType`: `["created", "updated", "deleted"]`
 - `metaConversionsLogs.status`: `["success", "failed"]`
@@ -246,8 +245,6 @@ these indexes without local and remote D1 `EXPLAIN QUERY PLAN` evidence.
 | Table | Purpose |
 |-------|---------|
 | `pages` | CMS pages. Slug, content, published flags/timestamps, featured image, SEO fields |
-| `heroSections` | Legacy hero config. Type and JSON config |
-| `heroSliders` | Revision-guarded desktop/mobile homepage hero documents with one current row per viewport |
 
 ### `system.ts` -- System Domain
 
@@ -291,10 +288,8 @@ These `text()` columns store serialized JSON. Shapes documented from core servic
 
 | Table.Column | Expected Shape |
 |---|---|
-| `collections.config` | `{ source: "manual" | "dynamic", categoryIds: string[], productIds: string[], featuredProductId?: string, showOnHomepage: boolean (default false), maxProducts: number (1-24, default 8), title?: string, subtitle?: string }` |
+| `collections.config` | `{ source: "manual" | "dynamic", categoryIds: string[], productIds: string[], featuredProductId?: string, maxProducts: number (1-24, default 8), title?: string, subtitle?: string }` |
 | `productAttributes.options` | `string[]` (declared via Drizzle `mode: "json"`) |
-| `heroSliders.images` | `{ id: string, url: credential-free HTTPS URL, title: string, link: safe internal/HTTPS destination or "" }[]` (maximum 12, unique IDs) |
-| `heroSections.config` | `string` (JSON, provider-specific hero configuration) |
 | `productContentBlocks.settings` | Strict per-type object (`@scalius/shared/product-content-blocks`), at most 256 KB |
 | `analytics.config` | `string` (raw HTML `<script>` content, may include Partytown attributes) |
 | `deliveryLocations.externalIds` | `{ pathao?: string\|number, steadfast?: string\|number }` (provider name -> external numeric ID) |

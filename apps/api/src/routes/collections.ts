@@ -19,6 +19,7 @@ import {
   readRepeatedPublicQueryValues,
 } from "../utils/public-search-query";
 import { optionalProductCardFacts } from "../schemas/product-card-facts";
+import { storefrontCustomFieldsSchema } from "../schemas/custom-fields";
 
 // Create an OpenAPIHono app for collection routes
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -64,6 +65,7 @@ const storefrontCollectionDetailSchema = storefrontCollectionSchema.omit({ updat
   content: z.string().nullable(),
   metaTitle: z.string().nullable(),
   metaDescription: z.string().nullable(),
+  customFields: storefrontCustomFieldsSchema,
 });
 
 // Review ratings on listing cards and the "N★ & up" facet (Wave B §2.4).

@@ -5,13 +5,8 @@
 import { products } from "@scalius/database/schema";
 import { sql } from "drizzle-orm";
 import { quickAddEligibleSql, type BuyerCatalogPricingProjection } from "../products/buyer-projection";
-import {
-    buyerPricingSelection,
-    presentBuyerPricing,
-    storeCurrencyCodeSql,
-    storeDecimalPlacesFromCode,
-    type BuyerPricingMinor,
-} from "../products/money";
+import { buyerPricingSelection, presentBuyerPricing, type BuyerPricingMinor } from "../products/money";
+import { storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../settings/store-money";
 import {
     resolveProductCardImages,
     type ProductCardImages,

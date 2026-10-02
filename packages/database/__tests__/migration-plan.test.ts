@@ -153,7 +153,10 @@ describe("D1 migration plan builder", () => {
         .filter((statement) => /^CREATE\s+TRIGGER\b/i.test(statement))
         .flatMap((statement) => {
           const name = /TRIGGER\s+(?:IF\s+NOT\s+EXISTS\s+)?[`"]?(\w+)/i.exec(statement)![1]!;
-          const body = statement.slice(statement.search(/\bBEGIN\b/i) + 5).replace(/\bEND\s*;?\s*$/i, "");
+          // Trailing comments after END (a migration's section end marker) are not body.
+          const body = statement.slice(statement.search(/\bBEGIN\b/i) + 5)
+            .replace(/(?:\s*--[^\n]*)+\s*$/, "")
+            .replace(/\bEND\s*;?\s*$/i, "");
           const safe = !/SELECT\s+CASE\s+WHEN/i.test(body) && body.split(";").length === 2;
           return safe || baselineExceptions.has(name) ? [] : [`${file.name}: ${name}`];
         }));

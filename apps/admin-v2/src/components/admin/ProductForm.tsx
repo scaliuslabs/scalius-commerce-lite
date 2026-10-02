@@ -81,6 +81,7 @@ import type {
   VariantPriceRange,
 } from "./product-form/variants/option-matrix-editor-model";
 import type { ProductSkuImageChoice } from "@/lib/api-query-options/products";
+import { CustomFieldsCard } from "./custom-fields/CustomFieldsCard";
 
 // The product page's own cards load after the editor, off its first download.
 const loadCards = () => import("./product-form/merchandising/cards");
@@ -496,6 +497,7 @@ function ProductEditor({
                   <ProductPageCard productId={productId} readOnly={readOnly} />
                 </React.Suspense>
               ) : null}
+              {isEdit && productId ? <CustomFieldsCard ownerType="product" ownerId={productId} canEdit={!readOnly} /> : null}
             </div>
           </fieldset>
           </ProductSectionsProvider>

@@ -15,6 +15,8 @@ import {
     type OrderPaymentRecoveryPreview,
     updateOrderDetailsSchema,
     restoreOrderSchema,
+    setOrderFulfillmentLocation,
+    setOrderFulfillmentLocationSchema,
 } from "@scalius/core/modules/orders";
 import {
     loadVariantSelectedOptions,
@@ -538,6 +540,44 @@ app.openapi(updateOrderDetailsRoute, async (c) => {
         });
     }
     return ok(c, { id: result.id, version: result.version });
+});
+
+// ─── PUT /:id/fulfillment-location ──────────────────────────────────────────
+
+const setFulfillmentLocationRoute = createRoute({
+    operationId: "dashboard.orders.fulfillment_location_set",
+    method: "put",
+    path: "/{id}/fulfillment-location",
+    tags: ["Admin - Orders"],
+    summary: "Choose the location an unshipped order's stock leaves from",
+    description: "An active location, or null for the store default. Allowed until anything has left: no stock deducted and no ship or pickup fulfilment.",
+    request: {
+        params: z.object({ id: z.string() }),
+        body: { content: { "application/json": { schema: setOrderFulfillmentLocationSchema } } },
+    },
+    responses: {
+        200: {
+            description: "Fulfilment location saved",
+            content: {
+                "application/json": {
+                    schema: successEnvelope(z.object({
+                        id: z.string(),
+                        version: z.number().int().min(1),
+                        fulfillmentLocationId: z.string().nullable(),
+                    })),
+                },
+            },
+        },
+        ...adminOrderResourceMutationErrorResponses,
+    },
+});
+
+app.openapi(setFulfillmentLocationRoute, async (c) => {
+    const orderId = c.req.valid("param").id;
+    const user = c.get("user") as { id?: string } | undefined;
+    // The timeline line is written in the same batch as the change.
+    const result = await setOrderFulfillmentLocation(c.get("db"), orderId, c.req.valid("json"), user?.id ?? null);
+    return ok(c, { id: result.id, version: result.version, fulfillmentLocationId: result.fulfillmentLocationId });
 });
 
 // ─── POST /:id/restore ──────────────────────────────────────────────────────

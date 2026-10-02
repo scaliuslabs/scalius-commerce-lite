@@ -446,11 +446,13 @@ homepage miss was 748 ms and breached its budget in that run. See
 first-page/pagination and unchanged-statement checks.
 
 The homepage part itself reads in two waves whatever its sections are: the
-settings, banners, collections, category rail and published theme first,
-then one batch with every product list the sections name (each scoped to
-the products it returns, with the media statement of exactly those rows),
-the section images and the banner rendition lookup
-(`packages/core/src/modules/storefront/README.md`).
+SEO document, the active collections and the published theme first, then
+one batch with every product list the sections name (each scoped to the
+products it returns, with the media statement of exactly those rows), the
+section images (hero slides included), the category tiles' categories, the
+collections sections' collections and a product homepage's product
+(`packages/core/src/modules/storefront/README.md`). The layout part reads
+the theme's brand images in its one batch.
 
 A "wave" is a round of D1 calls that must wait for the previous one. Each wave
 costs a full database round trip, so a new sequential `await` in a storefront
@@ -556,7 +558,7 @@ What one run does, sequentially:
    four-level tree with long and Bangla names, 240 generated photos with real
    rendition ladders (`pool.mjs`, sharp), 1% legacy primaries with no
    renditions, 2% products without a photo, three video products (ffmpeg),
-   a 12-category homepage rail with available category photos, hero sliders,
+   a 12-category homepage tiles section with category photos, theme hero slides,
    the five scale menus (`menus.mjs`: 20, 150, 136 on 3 levels,
    1,150, and the live store's flat 12), and the catalogue projections
    (migration 0091's statements). `--state-cache <dir>` keeps a pristine copy

@@ -5,6 +5,7 @@ import type { OrderOperationalReadState } from "@/lib/order-operational-read-sta
 import type { OrderShipmentRecoveryReason } from "@scalius/core/modules/orders/browser";
 import type { DeliveryMethodKind, FulfillmentRecordStatus, FulfillmentType } from "@scalius/shared/fulfilment";
 import type { CustomizationFieldType } from "@scalius/shared/line-properties";
+import type { OrderChannel } from "@scalius/shared/order-channel";
 
 export type OrderTimestamp = Date | string | number;
 export type ShipmentMetadata = Record<string, unknown> | string | null;
@@ -251,6 +252,10 @@ export interface Order {
   supportRequests?: OrderSupportRequest[];
   orderNumber: number | null;
   archivedAt: OrderTimestamp | null;
+  /** Where the order came from (online store, dashboard, AI agent…); set once. */
+  channel: OrderChannel;
+  /** Where it came in within the channel: a preset (`facebook`, `walk_in`) or the merchant's own slug. */
+  channelSource: string | null;
   /** Value of received returns not refunded yet. */
   refundDue: number;
   refundedAmount: number;
@@ -258,6 +263,11 @@ export interface Order {
     items: OrderEditState;
     details: OrderEditState;
   };
+  /**
+   * Where the order's stock leaves from: its own location or the store
+   * default (`explicit` false). Absent on reads that predate locations.
+   */
+  fulfillmentLocation?: { id: string; name: string; explicit: boolean } | null;
 }
 
 export interface OrderCustomerRecord {

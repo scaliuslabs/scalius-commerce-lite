@@ -38,6 +38,8 @@ import { assertNoActiveShipmentClaim, noActiveShipmentClaimCondition } from "../
 import { applyOrderStatusChange, reconcileInventoryForStatus } from "../orders/status/lifecycle";
 import type { StatusUpdateResult } from "../orders/types";
 import { fulfilmentVoidBlockedReason } from "../orders/line-presentation";
+import { defaultInventoryLocationIdSql } from "../inventory/locations";
+import { assertOrderStockCoverable } from "../inventory/inventory-transitions";
 
 type Statement = BatchItem<"sqlite">;
 
@@ -181,6 +183,13 @@ export function buildFulfilmentInsertStatements(
             actorId: input.actor.id,
             cashCollectedMinor: input.cashCollectedMinor ?? null,
             createdAt: sql`unixepoch()`,
+            // Physical units leave from the order's location (the default
+            // when it names none), read in the same statement.
+            locationId: input.kind === "ship" || input.kind === "pickup"
+                ? sql`COALESCE((
+                    SELECT ${orders.fulfillmentLocationId} FROM ${orders} WHERE ${orders.id} = ${input.orderId}
+                ), ${defaultInventoryLocationIdSql()})`
+                : null,
         }) as Statement,
     ];
     const rows = input.lines.map((line) => ({
@@ -424,6 +433,13 @@ export async function recordOrderFulfilment(
     const shipLinesDone = allHandedOver(items, fulfilledAfter, ["ship"]);
     const shouldShip = input.kind === "ship" && shipLinesDone && order.status === OrderStatus.CONFIRMED;
     if (shouldShip) validateTransition("order", order.status, OrderStatus.SHIPPED);
+    // The last physical hand-over deducts the order's stock at its location:
+    // refuse before recording anything when that location lacks the units.
+    const completesHandOver = (input.kind === "ship" && shipLinesDone)
+        || (input.kind !== "ship"
+            && !items.some((item) => lineType(item) === "ship")
+            && allHandedOver(items, fulfilledAfter, ["pickup", "service"]));
+    if (completesHandOver) await assertOrderStockCoverable(db, orderId);
 
     const fulfillmentId = createFulfilmentId();
     const shipmentId = input.kind === "ship"

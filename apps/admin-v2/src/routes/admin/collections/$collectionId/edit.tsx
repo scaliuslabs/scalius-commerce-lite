@@ -56,7 +56,6 @@ function EditCollectionPage() {
     categoryIds: parsedConfig.categoryIds,
     productIds: parsedConfig.productIds,
     featuredProductId: parsedConfig.featuredProductId,
-    showOnHomepage: parsedConfig.showOnHomepage,
     maxProducts: parsedConfig.maxProducts,
     title: parsedConfig.title,
     subtitle: parsedConfig.subtitle,

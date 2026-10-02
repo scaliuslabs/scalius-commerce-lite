@@ -51,7 +51,6 @@ export const collectionFormSchema = z.object({
     categoryIds: z.array(z.string().trim().min(1).max(180)).max(MAX_MEMBERSHIP_IDS),
     productIds: z.array(z.string().trim().min(1).max(180)).max(MAX_MEMBERSHIP_IDS),
     featuredProductId: z.string().trim().max(180).optional(),
-    showOnHomepage: z.boolean(),
     maxProducts: z
       .number(message("productsShownRange"))
       .int(message("productsShownRange"))

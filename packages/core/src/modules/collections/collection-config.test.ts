@@ -14,7 +14,6 @@ describe("collection config normalization", () => {
             source: "manual",
             categoryIds: [],
             productIds: [],
-            showOnHomepage: false,
             maxProducts: 8,
             title: "",
             subtitle: "",
@@ -24,7 +23,6 @@ describe("collection config normalization", () => {
             source: "manual",
             categoryIds: [],
             productIds: [],
-            showOnHomepage: false,
             maxProducts: 8,
             title: "",
             subtitle: "",
@@ -37,7 +35,6 @@ describe("collection config normalization", () => {
             categoryIds: ["cat_1", "", "cat_1"],
             productIds: ["prod_1", " prod_2 ", "prod_1"],
             featuredProductId: " prod_3 ",
-            showOnHomepage: true,
             maxProducts: "200",
             title: "Featured",
             subtitle: "Top picks",
@@ -46,7 +43,6 @@ describe("collection config normalization", () => {
             categoryIds: ["cat_1"],
             productIds: ["prod_1", "prod_2"],
             featuredProductId: "prod_3",
-            showOnHomepage: true,
             maxProducts: 24,
             title: "Featured",
             subtitle: "Top picks",
@@ -93,7 +89,6 @@ describe("collection config normalization", () => {
             categoryIds: [],
             productIds: ["prod_1"],
             featuredProductId: "prod_2",
-            showOnHomepage: false,
             maxProducts: 1,
             title: "",
             subtitle: "",
@@ -129,9 +124,8 @@ describe("collection config normalization", () => {
         });
     });
 
-    it("requires explicit homepage placement without affecting public display projection", () => {
-        expect(normalizeCollectionConfig({}).showOnHomepage).toBe(false);
-        expect(normalizeCollectionConfig({ showOnHomepage: true }).showOnHomepage).toBe(true);
+    it("has no homepage placement: the theme's collections section picks the collections", () => {
+        expect(normalizeCollectionConfig({ showOnHomepage: true })).not.toHaveProperty("showOnHomepage");
         expect(publicCollectionConfig({ showOnHomepage: true })).not.toHaveProperty("showOnHomepage");
     });
 });

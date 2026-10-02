@@ -4,26 +4,25 @@ import { useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-quer
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import {
-  postApiV1AdminSettingsFooter,
-  postApiV1AdminSettingsHeader,
   postApiV1AdminSettingsThemeDraft,
-  postApiV1AdminSettingsThemeDraftRebase,
   postApiV1AdminSettingsThemePublish,
 } from "@scalius/api-client/sdk";
 import {
-  HEADER_LOGO_WIDTH_DEFAULT,
   HEADER_LOGO_WIDTH_MAX,
   HEADER_LOGO_WIDTH_MIN,
   HEADER_LOGO_WIDTH_STEP,
 } from "@scalius/shared/brand-presentation";
 import {
+  STOREFRONT_ANNOUNCEMENT_MAX_LENGTH,
   STOREFRONT_DENSITIES,
+  STOREFRONT_FOOTER_TEXT_LIMITS,
   STOREFRONT_LISTING_FILTER_STYLES,
   storefrontListingFilterDefaultOrder,
   STOREFRONT_NAVIGATION_SOURCES,
+  STOREFRONT_PRODUCT_STICKY,
   STOREFRONT_THEME_MIN_CONTRAST,
   isStorefrontThemeHexColor,
-  storefrontBlockDefault,
+  storefrontBlockSwitch,
   storefrontBlockVariants,
   storefrontSectionRenderer,
   storefrontVariantSpec,
@@ -41,24 +40,22 @@ import {
 import { Input } from "~/components/ui/input";
 import { Button } from "~/components/ui/button";
 import { Label } from "~/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import { Switch } from "~/components/ui/switch";
-import { SearchableSelect } from "~/components/ui/searchable-select";
+import { SearchableSelect, type SearchableSelectLoader } from "~/components/ui/searchable-select";
+import { Textarea } from "~/components/ui/textarea";
 import { SaveBarProvider, SaveConflict, useServerFieldError } from "~/components/admin/shared/SaveBar";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
 import { apiData } from "~/lib/api";
 import { isAdminApiConflictError } from "~/lib/admin-api-error";
 import {
-  footerQueryOptions,
-  headerQueryOptions,
-  homepageSectionsQueryOptions,
-  themeQueryOptions,
   themeWorkspaceQueryOptions,
   type ThemeWorkspaceDocument,
 } from "~/lib/api-query-options/online-store";
+import { fetchProducts, productsByIdsQueryOptions } from "~/lib/api-query-options/products";
 import { formatNumber, useMessages } from "~/i18n";
 import { onlineStoreMessages } from "~/i18n/online-store";
-import { ImageField } from "./ImageField";
-import { OnlineStorePage, SectionCard, actionErrorText, failSave, useDocumentDraft } from "./shared";
+import { Field, OnlineStorePage, SectionCard, actionErrorText, useDocumentDraft } from "./shared";
 import { ThemePreviewAction } from "./ThemePreviewAction";
 import {
   CardStyleSketch,
@@ -74,22 +71,25 @@ import {
   Sketch,
   VisualChoice,
 } from "./ThemeChoices";
-import { SectionEditor, type SectionMediaPreview } from "./SectionEditor";
+import { LinkField, MediaField, SectionEditor, useMediaPreviews, type SectionMediaPreview } from "./SectionEditor";
 import { TypographyCard } from "./TypographyCard";
 import {
   COLOR_FIELD_IDS,
   COLOR_ROLE_TOKEN,
+  OPTIONAL_PRODUCT_MODULES,
   TEMPLATE_THEMES,
   applyTemplate,
   blockFallback,
   blockVariant,
-  colorFieldForPath,
   resolveThemeForStore,
   selectedTemplate,
   setBlockVariant,
   setThemeColor,
+  THEME_FIELD_IDS,
   themeContrastProblems,
   themeDraftInvalid,
+  themeFieldForPath,
+  toggleProductModule,
   type ColorRole,
   type ContrastProblem,
   type ThemeBlockSlot,
@@ -97,6 +97,7 @@ import {
 
 type Theme = StorefrontThemeDocument;
 type MessageKey = keyof (typeof onlineStoreMessages)["en"];
+type SetTheme = (next: Theme | ((theme: Theme) => Theme)) => void;
 
 /** What a block variant renders today, for its picker sketch. */
 function variantRenders<Render>(slot: ThemeBlockSlot, variant: string): Render {
@@ -337,94 +338,215 @@ function SwitchField({
   );
 }
 
-/** Header and footer documents: logos, favicon and the announcement bar switch. */
-function useSiteDrafts() {
+/**
+ * The brand: header logo (and its width), footer logo and browser tab icon,
+ * picked from Files and kept as media ids in the theme draft, so they
+ * preview, publish and roll back with the rest of the theme.
+ */
+function BrandCard({ theme, media, setDraft }: {
+  theme: Theme;
+  media: readonly SectionMediaPreview[];
+  setDraft: SetTheme;
+}) {
   const t = useMessages(onlineStoreMessages);
-  const queryClient = useQueryClient();
-  const header = useSuspenseQuery(headerQueryOptions());
-  const footer = useSuspenseQuery(footerQueryOptions());
-  const headerDraft = useDocumentDraft({
-    label: t("header"),
-    saved: header.data.config,
-    save: async (config) => {
-      try {
-        const saved = await apiData(postApiV1AdminSettingsHeader({
-          body: { ...config, expectedRevision: header.data.revision },
-        }));
-        queryClient.setQueryData(headerQueryOptions().queryKey, { config, revision: saved.revision });
-      } catch (error) {
-        failSave(error, () => void header.refetch());
-      }
+  const { previews, remember } = useMediaPreviews(media);
+  const { brand } = theme;
+  const setBrand = (next: Partial<Theme["brand"]>) =>
+    setDraft((current) => ({ ...current, brand: { ...current.brand, ...next } }));
+  const image = (key: "logo" | "footerLogo" | "favicon") => ({
+    mediaId: brand[key],
+    previews,
+    fit: "contain" as const,
+    onPick: (picked: SectionMediaPreview) => {
+      remember(picked);
+      setBrand({ [key]: picked.id } as Partial<Theme["brand"]>);
     },
+    onRemove: () => setBrand({ [key]: null } as Partial<Theme["brand"]>),
   });
-  const footerDraft = useDocumentDraft({
-    label: t("footer"),
-    saved: footer.data.config,
-    save: async (config) => {
-      try {
-        const saved = await apiData(postApiV1AdminSettingsFooter({
-          body: { ...config, expectedRevision: footer.data.revision },
-        }));
-        queryClient.setQueryData(footerQueryOptions().queryKey, { config, revision: saved.revision });
-      } catch (error) {
-        failSave(error, () => void footer.refetch());
-      }
-    },
-  });
-  return { headerDraft, footerDraft };
-}
-
-type SiteDrafts = ReturnType<typeof useSiteDrafts>;
-
-function LogoCard({ headerDraft, footerDraft }: SiteDrafts) {
-  const t = useMessages(onlineStoreMessages);
-  const logo = headerDraft.draft.logo;
-  const logoWidth = logo.width ?? HEADER_LOGO_WIDTH_DEFAULT;
 
   return (
     <SectionCard title={t("logo")}>
-      <ImageField
-        label={t("headerLogo")}
-        src={logo.src}
-        wide
-        onChange={(image) => headerDraft.setDraft((config) => ({
-          ...config,
-          logo: { ...config.logo, src: image.src, alt: config.logo.alt || image.alt },
-        }))}
-      />
-      {logo.src ? (
+      <MediaField id={THEME_FIELD_IDS.logo} label={t("headerLogo")} help={t("headerLogoHelp")} {...image("logo")} />
+      {brand.logo ? (
         <div className="space-y-1.5">
-          <Label htmlFor="theme-logo-width">{t("logoWidth", { width: logoWidth })}</Label>
+          <Label htmlFor={THEME_FIELD_IDS.logoWidth}>{t("logoWidth", { width: brand.logoWidth })}</Label>
           <input
-            id="theme-logo-width"
+            id={THEME_FIELD_IDS.logoWidth}
             type="range"
             min={HEADER_LOGO_WIDTH_MIN}
             max={HEADER_LOGO_WIDTH_MAX}
             step={HEADER_LOGO_WIDTH_STEP}
-            value={logoWidth}
-            onChange={(event) => headerDraft.setDraft((config) => ({
-              ...config,
-              logo: { ...config.logo, width: Number(event.target.value) },
-            }))}
+            value={brand.logoWidth}
+            onChange={(event) => setBrand({ logoWidth: Number(event.target.value) })}
             className="h-11 w-full accent-primary sm:h-6"
-            aria-valuetext={`${logoWidth}px`}
+            aria-valuetext={`${brand.logoWidth}px`}
           />
         </div>
       ) : null}
-      <ImageField
-        label={t("footerLogo")}
-        src={footerDraft.draft.logo.src}
-        wide
-        onChange={(image) => footerDraft.setDraft((config) => ({
-          ...config,
-          logo: { src: image.src, alt: config.logo.alt || image.alt },
-        }))}
-      />
-      <ImageField
-        label={t("favicon")}
-        src={headerDraft.draft.favicon.src}
-        onChange={(image) => headerDraft.setDraft((config) => ({ ...config, favicon: image }))}
-      />
+      <MediaField id={THEME_FIELD_IDS.footerLogo} label={t("footerLogo")} help={t("footerLogoHelp")} {...image("footerLogo")} />
+      <MediaField id={THEME_FIELD_IDS.favicon} label={t("favicon")} {...image("favicon")} />
+    </SectionCard>
+  );
+}
+
+/** The bar above the header (none is the only off switch) and, for any bar, its message and link. */
+function TopBarFields({ theme, setDraft }: { theme: Theme; setDraft: SetTheme }) {
+  const t = useMessages(onlineStoreMessages);
+  const option = (key: string) => t(key as MessageKey);
+  const topBar = theme.blocks.topBar;
+  const setWords = (next: { text?: string; link?: string | null }) => setDraft((current) => {
+    const bar = current.blocks.topBar;
+    if (bar.variant === "none") return current;
+    return {
+      ...current,
+      blocks: { ...current.blocks, topBar: { ...bar, settings: { ...bar.settings, ...next } } as Theme["blocks"]["topBar"] },
+    };
+  });
+  return (
+    <>
+      <div className="space-y-1.5">
+        <Label htmlFor="theme-top-bar">{t("topBar")}</Label>
+        <SearchableSelect
+          id="theme-top-bar"
+          value={topBar.variant}
+          options={storefrontBlockVariants("topBar").map((variant) => ({
+            value: variant,
+            label: option(`topBar_${variant}`),
+            description: option(`topBar_${variant}Help`),
+          }))}
+          onValueChange={(variant) => setDraft((current) => setBlockVariant(current, "topBar", variant))}
+          triggerClassName="w-full"
+        />
+      </div>
+      {topBar.variant !== "none" ? (
+        <>
+          <Field id={THEME_FIELD_IDS.announcementText} label={t("announcementText")} help={t("announcementTextHelp")}>
+            <Input
+              id={THEME_FIELD_IDS.announcementText}
+              value={topBar.settings.text}
+              maxLength={STOREFRONT_ANNOUNCEMENT_MAX_LENGTH}
+              placeholder={t("announcementPlaceholder")}
+              aria-describedby={`${THEME_FIELD_IDS.announcementText}-note`}
+              onChange={(event) => setWords({ text: event.target.value })}
+            />
+          </Field>
+          <LinkField
+            id={THEME_FIELD_IDS.announcementLink}
+            label={t("announcementLink")}
+            help={t("announcementLinkHelp")}
+            value={topBar.settings.link}
+            onChange={(link) => setWords({ link })}
+          />
+        </>
+      ) : null}
+    </>
+  );
+}
+
+/** The footer's words, whichever footer draws them. */
+function FooterWords({ theme, setDraft }: { theme: Theme; setDraft: SetTheme }) {
+  const t = useMessages(onlineStoreMessages);
+  const { settings } = theme.blocks.footer;
+  const setWords = (next: Partial<Record<"tagline" | "about" | "copyright", string>>) => setDraft((current) => ({
+    ...current,
+    blocks: {
+      ...current.blocks,
+      footer: { ...current.blocks.footer, settings: { ...current.blocks.footer.settings, ...next } } as Theme["blocks"]["footer"],
+    },
+  }));
+  return (
+    <>
+      <Field id={THEME_FIELD_IDS.footerTagline} label={t("tagline")} help={t("taglineHelp")}>
+        <Input
+          id={THEME_FIELD_IDS.footerTagline}
+          value={settings.tagline}
+          maxLength={STOREFRONT_FOOTER_TEXT_LIMITS.tagline}
+          aria-describedby={`${THEME_FIELD_IDS.footerTagline}-note`}
+          onChange={(event) => setWords({ tagline: event.target.value })}
+        />
+      </Field>
+      <Field id={THEME_FIELD_IDS.footerAbout} label={t("aboutText")} help={t("aboutTextHelp")}>
+        <Textarea
+          id={THEME_FIELD_IDS.footerAbout}
+          rows={5}
+          value={settings.about}
+          maxLength={STOREFRONT_FOOTER_TEXT_LIMITS.about}
+          aria-describedby={`${THEME_FIELD_IDS.footerAbout}-note`}
+          onChange={(event) => setWords({ about: event.target.value })}
+        />
+      </Field>
+      <Field id={THEME_FIELD_IDS.footerCopyright} label={t("copyright")} help={t("copyrightHelp")}>
+        <Input
+          id={THEME_FIELD_IDS.footerCopyright}
+          value={settings.copyright}
+          maxLength={STOREFRONT_FOOTER_TEXT_LIMITS.copyright}
+          aria-describedby={`${THEME_FIELD_IDS.footerCopyright}-note`}
+          onChange={(event) => setWords({ copyright: event.target.value })}
+        />
+      </Field>
+    </>
+  );
+}
+
+const HOME_PRODUCT_PAGE_SIZE = 20;
+const loadHomeProducts: SearchableSelectLoader = async ({ search, page }) => {
+  const result = await fetchProducts({ page, limit: HOME_PRODUCT_PAGE_SIZE, ...(search ? { search } : {}) });
+  return {
+    options: result.products.map((product) => ({ value: product.id, label: product.name })),
+    hasMore: page < result.pagination.totalPages,
+  };
+};
+
+/**
+ * What `/` shows: the homepage sections, or one product's page (a store that
+ * sells one product). A one-product homepage cannot be saved without its product.
+ */
+function HomeModeCard({ theme, setDraft }: { theme: Theme; setDraft: SetTheme }) {
+  const t = useMessages(onlineStoreMessages);
+  const mode = theme.pages.homeMode;
+  const productId = mode.kind === "product" ? mode.productId : "";
+  // Switching to sections and back keeps the product chosen before.
+  const [lastProduct, setLastProduct] = useState(productId);
+  const { data } = useQuery(productsByIdsQueryOptions(productId ? [productId] : []));
+  const productName = data?.products.find((product) => product.id === productId)?.name;
+  const setMode = (homeMode: Theme["pages"]["homeMode"]) =>
+    setDraft((current) => ({ ...current, pages: { ...current.pages, homeMode } }));
+  return (
+    <SectionCard title={t("homeMode")} description={t("homeModeHelp")}>
+      <RadioGroup
+        value={mode.kind}
+        aria-label={t("homeMode")}
+        onValueChange={(kind) => setMode(kind === "product" ? { kind: "product", productId: productId || lastProduct } : { kind: "sections" })}
+      >
+        {(["sections", "product"] as const).map((value) => (
+          <label key={value} className="flex min-h-11 items-start gap-3 py-1 text-body">
+            <RadioGroupItem value={value} className="mt-0.5" />
+            <span>
+              <span className="block font-medium">{t(`homeMode_${value}`)}</span>
+              <span className="block text-muted-foreground">{t(`homeMode_${value}Help`)}</span>
+            </span>
+          </label>
+        ))}
+      </RadioGroup>
+      {mode.kind === "product" ? (
+        <Field id={THEME_FIELD_IDS.homeProduct} label={t("homeProduct")} error={productId ? undefined : t("chooseProduct")}>
+          <SearchableSelect
+            id={THEME_FIELD_IDS.homeProduct}
+            value={productId}
+            selectedLabel={productName}
+            load={loadHomeProducts}
+            queryKey={["online-store", "home-product"]}
+            onValueChange={(value) => {
+              setLastProduct(value);
+              setMode({ kind: "product", productId: value });
+            }}
+            placeholder={t("chooseProduct")}
+            searchPlaceholder={t("searchProducts")}
+            emptyMessage={t("noProducts")}
+            triggerClassName="w-full"
+          />
+        </Field>
+      ) : null}
     </SectionCard>
   );
 }
@@ -481,24 +603,22 @@ function FitNote({ fallback, name, reason }: {
  * with the storefront's own resolver, so a choice that does not fit the
  * store says what buyers see instead.
  */
-function ThemeCards({ workspace, storeShape, sectionMedia, refetch, site }: {
+function ThemeCards({ workspace, refetch }: {
   workspace: ThemeWorkspaceDocument;
-  storeShape: StoreShape;
-  sectionMedia: readonly SectionMediaPreview[];
   refetch: () => Promise<unknown>;
-  site: SiteDrafts;
 }) {
   const t = useMessages(onlineStoreMessages);
   const queryClient = useQueryClient();
+  const storeShape = workspace.storeShape as StoreShape;
+  /** Every image the saved draft names (brand and sections). */
+  const media: readonly SectionMediaPreview[] = workspace.media;
   const [publishing, setPublishing] = useState(false);
-  const [rebasing, setRebasing] = useState(false);
   const [confirmPublish, setConfirmPublish] = useState(false);
-  const [confirmRebase, setConfirmRebase] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const { draft: theme, dirty, setDraft } = useDocumentDraft<Theme>({
     label: t("themeTitle"),
     saved: workspace.draft.theme as Theme,
-    fields: (path) => colorFieldForPath(path),
+    fields: (path, draft) => themeFieldForPath(path, draft),
     invalid: themeDraftInvalid,
     reload: refetch,
     save: async (next) => {
@@ -523,8 +643,7 @@ function ThemeCards({ workspace, storeShape, sectionMedia, refetch, site }: {
   });
   const hasSavedDraft = workspace.draft.revision > 0;
   const hasUnpublishedDraft = hasSavedDraft && JSON.stringify(workspace.draft.theme) !== JSON.stringify(workspace.published.theme);
-  const draftIsStale = workspace.draft.basePublishedRevision !== workspace.published.revision;
-  const actionDisabled = dirty || publishing || rebasing;
+  const actionDisabled = dirty || publishing;
   const publish = async () => {
     setPublishing(true);
     setActionError(null);
@@ -535,11 +654,9 @@ function ThemeCards({ workspace, storeShape, sectionMedia, refetch, site }: {
           expectedDraftRevision: workspace.draft.revision,
         },
       }));
-      queryClient.setQueryData(themeWorkspaceQueryOptions().queryKey, result);
-      queryClient.setQueryData(themeQueryOptions().queryKey, (previous) => previous && {
+      queryClient.setQueryData(themeWorkspaceQueryOptions().queryKey, (previous) => previous && {
         ...previous,
-        theme: result.published.theme,
-        revision: result.published.revision,
+        ...result,
       });
       toast.success(t("themePublished"));
     } catch (error) {
@@ -549,35 +666,13 @@ function ThemeCards({ workspace, storeShape, sectionMedia, refetch, site }: {
       setPublishing(false);
     }
   };
-  const rebase = async () => {
-    setRebasing(true);
-    setActionError(null);
-    try {
-      const result = await apiData(postApiV1AdminSettingsThemeDraftRebase({
-        body: {
-          theme: workspace.draft.theme,
-          expectedDraftRevision: workspace.draft.revision,
-          basePublishedRevision: workspace.published.revision,
-        },
-      }));
-      queryClient.setQueryData(themeWorkspaceQueryOptions().queryKey, (previous) => previous && {
-        ...previous,
-        draft: result,
-      });
-    } catch (error) {
-      if (isAdminApiConflictError(error)) await refetch();
-      setActionError(isAdminApiConflictError(error) ? t("themeActionConflict") : actionErrorText(error));
-    } finally {
-      setRebasing(false);
-    }
-  };
   const option = (key: string) => t(key as MessageKey);
   const filterOrder = theme.blocks.listing.filters.order
-    ?? storefrontListingFilterDefaultOrder(theme.template, theme.blocks.listing.filters.style);
+    ?? storefrontListingFilterDefaultOrder(theme.blocks.listing.filters.style);
   const filterGroupName = (group: StorefrontListingFilterGroup) => t(`filterGroup_${group}` as MessageKey);
   const moveFilterGroup = (group: StorefrontListingFilterGroup, delta: -1 | 1) => setDraft((current) => {
     const next = [...(current.blocks.listing.filters.order
-      ?? storefrontListingFilterDefaultOrder(current.template, current.blocks.listing.filters.style))];
+      ?? storefrontListingFilterDefaultOrder(current.blocks.listing.filters.style))];
     const from = next.indexOf(group);
     const to = from + delta;
     if (to < 0 || to >= next.length) return current;
@@ -587,19 +682,16 @@ function ThemeCards({ workspace, storeShape, sectionMedia, refetch, site }: {
     } } };
   });
   const resolved = resolveThemeForStore(theme, storeShape);
-  const hasCategoryTiles = theme.pages.home.some((section) => section.type === "category-tiles");
-  const { data: homepagePresentation } = useQuery({ ...homepageSectionsQueryOptions(), enabled: hasCategoryTiles });
-  const categoryRail = homepagePresentation?.config.categoryRail;
   const fitReason = useFitReason(resolved.facts);
   const problems = themeContrastProblems(theme);
-  const { headerDraft } = site;
-  // A changed theme matches no template: say which one it is based on, and
-  // confirm before another template replaces the merchant's changes.
+  // A changed look matches no template: say which one it is based on, and
+  // confirm before another template replaces the merchant's layout choices.
+  // Content (logo, words, slides, chosen categories) stays either way.
   const selected = selectedTemplate(theme);
   const [pendingTemplate, setPendingTemplate] = useState<StorefrontTemplateId | null>(null);
   const chooseTemplate = (id: StorefrontTemplateId) => {
     if (selected === null) setPendingTemplate(id);
-    else setDraft(applyTemplate(id));
+    else setDraft((current) => applyTemplate(id, current));
   };
   const setBlock = (slot: ThemeBlockSlot) => (variant: string) =>
     setDraft((current) => setBlockVariant(current, slot, variant));
@@ -621,35 +713,18 @@ function ThemeCards({ workspace, storeShape, sectionMedia, refetch, site }: {
     if (storefrontSectionRenderer(section) === null) return [[section.id, t("sectionNotYet")]];
     const fallback = resolved.fallbacks.find((each) => each.kind === "section" && each.key === section.id);
     if (fallback) return [[section.id, t("sectionHidden", { reason: fitReason(fallback) })]];
-    if (section.type === "category-tiles" && categoryRail) {
-      if (!categoryRail.enabled) return [[section.id, t("categoryTilesDisabled")]];
-      if (categoryRail.categoryIds.length < (section.settings.style === "photo" ? 1 : 2)) {
-        return [[section.id, t("categoryTilesNeedsCategories", { count: section.settings.style === "photo" ? 1 : 2 })]];
-      }
-    }
     return [];
   }));
 
   return (
     <>
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card px-4 py-3">
-        <div className="space-y-1">
-          <p role="status" className="text-body text-muted-foreground">
-            {dirty ? t("themeSaveDraftFirst") : draftIsStale && hasUnpublishedDraft
-              ? t("themeDraftStale") : hasUnpublishedDraft ? t("themeDraftNotLive") : t("themeLive")}
-          </p>
-          <p className="text-caption text-muted-foreground">{t("themeOtherSettingsLive")}</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {draftIsStale && hasUnpublishedDraft ? (
-            <Button type="button" variant="outline" disabled={actionDisabled} loading={rebasing} onClick={() => setConfirmRebase(true)}>
-              {t("themeRebase")}
-            </Button>
-          ) : null}
-          <Button type="button" disabled={actionDisabled || !hasUnpublishedDraft || draftIsStale} loading={publishing} onClick={() => setConfirmPublish(true)}>
-            {t("themePublish")}
-          </Button>
-        </div>
+        <p role="status" className="text-body text-muted-foreground">
+          {dirty ? t("themeSaveDraftFirst") : hasUnpublishedDraft ? t("themeDraftNotLive") : t("themeLive")}
+        </p>
+        <Button type="button" disabled={actionDisabled || !hasUnpublishedDraft} loading={publishing} onClick={() => setConfirmPublish(true)}>
+          {t("themePublish")}
+        </Button>
       </div>
       {actionError ? <p role="alert" className="text-body text-destructive">{actionError}</p> : null}
       <ThemePreviewAction draftRevision={workspace.draft.revision} disabled={actionDisabled} />
@@ -661,15 +736,6 @@ function ThemeCards({ workspace, storeShape, sectionMedia, refetch, site }: {
         confirmLabel={t("themePublish")}
         variant="default"
         onConfirm={() => { setConfirmPublish(false); void publish(); }}
-      />
-      <ConfirmDialog
-        open={confirmRebase}
-        onOpenChange={setConfirmRebase}
-        title={t("themeRebaseConfirmTitle")}
-        description={t("themeRebaseConfirmBody")}
-        confirmLabel={t("themeRebase")}
-        variant="default"
-        onConfirm={() => { setConfirmRebase(false); void rebase(); }}
       />
       <SectionCard title={t("themeTemplates")} description={t("themeTemplatesHelp")}>
         {selected === null ? (
@@ -699,12 +765,12 @@ function ThemeCards({ workspace, storeShape, sectionMedia, refetch, site }: {
           onConfirm={() => {
             const id = pendingTemplate;
             setPendingTemplate(null);
-            if (id) setDraft(applyTemplate(id));
+            if (id) setDraft((current) => applyTemplate(id, current));
           }}
         />
       </SectionCard>
 
-      <LogoCard {...site} />
+      <BrandCard theme={theme} media={media} setDraft={setDraft} />
 
       <SectionCard title={t("colors")}>
         <div className="grid gap-4 sm:grid-cols-2">
@@ -732,21 +798,7 @@ function ThemeCards({ workspace, storeShape, sectionMedia, refetch, site }: {
           onChange={setBlock("header")}
         />
         {fitNote("header", "header")}
-        <SwitchField
-          id="theme-announcement-bar"
-          label={t("announcementBar")}
-          help={
-            <>
-              {t("announcementBarHelp")}{" "}
-              <Link to="/admin/online-store/navigation" className="text-link hover:underline">
-                {t("editAnnouncement")}
-              </Link>
-            </>
-          }
-          checked={headerDraft.draft.topBar.isEnabled === true}
-          onCheckedChange={(isEnabled) =>
-            headerDraft.setDraft((config) => ({ ...config, topBar: { ...config.topBar, isEnabled } }))}
-        />
+        <TopBarFields theme={theme} setDraft={setDraft} />
       </SectionCard>
 
       <SectionCard
@@ -809,6 +861,25 @@ function ThemeCards({ workspace, storeShape, sectionMedia, refetch, site }: {
           onChange={setBlock("footer")}
         />
         {fitNote("footer", "footer")}
+        {theme.blocks.footer.variant === "directory" && (
+          <div className="space-y-1">
+            <Label htmlFor="theme-footer-directory-style">{t("footerDirectoryStyle")}</Label>
+            <SearchableSelect
+              id="theme-footer-directory-style"
+              value={theme.blocks.footer.settings.style}
+              options={(["columns", "bands"] as const).map((value) => ({ value, label: t(`footerDirectoryStyle_${value}`) }))}
+              onValueChange={(style) => setDraft((current) => current.blocks.footer.variant !== "directory" ? current : {
+                ...current,
+                blocks: {
+                  ...current.blocks,
+                  footer: { variant: "directory", settings: { ...current.blocks.footer.settings, style: style as "columns" | "bands" } },
+                },
+              })}
+              triggerClassName="w-full"
+            />
+          </div>
+        )}
+        <FooterWords theme={theme} setDraft={setDraft} />
       </SectionCard>
 
       <SectionCard title={t("productCards")}>
@@ -905,7 +976,7 @@ function ThemeCards({ workspace, storeShape, sectionMedia, refetch, site }: {
                   ...current.blocks,
                   listing: {
                     ...current.blocks.listing,
-                    layout: storefrontBlockDefault("listing", layout) as Theme["blocks"]["listing"]["layout"],
+                    layout: storefrontBlockSwitch("listing", current.blocks.listing.layout, layout) as Theme["blocks"]["listing"]["layout"],
                   },
                 },
               }))}
@@ -928,7 +999,7 @@ function ThemeCards({ workspace, storeShape, sectionMedia, refetch, site }: {
                 },
               }))}
             />
-            {theme.template === "showcase-landing" && <SwitchField
+            {theme.blocks.listing.links === "tabs" && <SwitchField
               id="theme-listing-category-tabs"
               label={t("listingCategoryTabs")}
               help={t("listingCategoryTabsHelp")}
@@ -946,7 +1017,7 @@ function ThemeCards({ workspace, storeShape, sectionMedia, refetch, site }: {
                 },
               }))}
             />}
-            {theme.template === "showcase-landing" && <SwitchField
+            {theme.blocks.listing.links === "tabs" && <SwitchField
               id="theme-listing-facet-chips"
               label={t("listingFacetChips")}
               help={t("listingFacetChipsHelp")}
@@ -967,7 +1038,7 @@ function ThemeCards({ workspace, storeShape, sectionMedia, refetch, site }: {
             <VisualChoice
               label={t("listingSearchDefault")}
               showLabel
-              value={theme.blocks.listing.searchLayout ?? (theme.template === "marketplace" ? "list" : "same")}
+              value={theme.blocks.listing.searchLayout}
               className="grid-cols-3"
               options={(["same", "grid", "list"] as const).map((layout) => ({
                 value: layout,
@@ -998,7 +1069,7 @@ function ThemeCards({ workspace, storeShape, sectionMedia, refetch, site }: {
               <p className="text-body text-muted-foreground">{t("listingDescriptionPlacementHelp")}</p>
               <SearchableSelect
                 id="theme-listing-description-placement"
-                value={theme.blocks.listing.descriptionPlacement ?? "below"}
+                value={theme.blocks.listing.descriptionPlacement}
                 options={([
                   { value: "below", label: t("listingDescriptionBelow") },
                   { value: "above", label: t("listingDescriptionAbove") },
@@ -1150,24 +1221,68 @@ function ThemeCards({ workspace, storeShape, sectionMedia, refetch, site }: {
         )}
       </SectionCard>
 
+      <SectionCard title={t("productPageExtras")} description={t("productPageExtrasHelp")}>
+        <div className="space-y-4" data-product-page-extras>
+          {OPTIONAL_PRODUCT_MODULES.map((module) => (
+            <SwitchField
+              key={module}
+              id={`theme-product-module-${module}`}
+              label={t(`productModule_${module}`)}
+              help={t(`productModule_${module}Help`)}
+              checked={theme.blocks.product.below.includes(module)}
+              onCheckedChange={(checked) => setDraft((current) => ({
+                ...current,
+                blocks: { ...current.blocks, product: { ...current.blocks.product, below: toggleProductModule(current.blocks.product.below, module, checked) } },
+              }))}
+            />
+          ))}
+          <SwitchField
+            id="theme-sticky-phone-buy-bar"
+            label={t("stickyPhoneBuyBar")}
+            help={t("stickyPhoneBuyBarHelp")}
+            checked={theme.blocks.product.sticky.phoneBottom === "buy-bar"}
+            onCheckedChange={(checked) => setDraft((current) => ({
+              ...current,
+              blocks: { ...current.blocks, product: { ...current.blocks.product, sticky: { ...current.blocks.product.sticky, phoneBottom: checked ? "buy-bar" : "none" } } },
+            }))}
+          />
+          <SwitchField
+            id="theme-sticky-phone-anchor-bar"
+            label={t("stickyPhoneAnchorBar")}
+            help={t("stickyPhoneAnchorBarHelp")}
+            checked={theme.blocks.product.sticky.phoneTop === "anchor-bar"}
+            onCheckedChange={(checked) => setDraft((current) => ({
+              ...current,
+              blocks: { ...current.blocks, product: { ...current.blocks.product, sticky: { ...current.blocks.product.sticky, phoneTop: checked ? "anchor-bar" : "none" } } },
+            }))}
+          />
+          <div className="space-y-1">
+            <Label htmlFor="theme-sticky-desktop">{t("stickyDesktop")}</Label>
+            <p className="text-body text-muted-foreground">{t("stickyDesktopHelp")}</p>
+            <SearchableSelect
+              id="theme-sticky-desktop"
+              value={theme.blocks.product.sticky.desktop}
+              options={STOREFRONT_PRODUCT_STICKY.desktop.map((value) => ({ value, label: t(`stickyDesktop_${value}`) }))}
+              onValueChange={(desktop) => setDraft((current) => ({
+                ...current,
+                blocks: { ...current.blocks, product: { ...current.blocks.product, sticky: { ...current.blocks.product.sticky, desktop: desktop as Theme["blocks"]["product"]["sticky"]["desktop"] } } },
+              }))}
+              triggerClassName="w-full"
+            />
+          </div>
+        </div>
+      </SectionCard>
+
+      <HomeModeCard theme={theme} setDraft={setDraft} />
+
       <SectionCard
         title={t("homepageSections")}
-        description={
-          <>
-            {t("homepageSectionsHelp")}
-            {hasCategoryTiles && <>
-              {" "}{t("featuredCategoriesSetup")}{" "}
-              <Link to="/admin/online-store/banners" className="text-link hover:underline">
-                {t("featuredCategories")}
-              </Link>
-            </>}
-          </>
-        }
+        description={t("homepageSectionsHelp")}
         rows={
           <SectionEditor
             sections={theme.pages.home}
             notes={sectionNotes}
-            media={sectionMedia}
+            media={media}
             onChange={(home) => setDraft((current) => ({ ...current, pages: { ...current.pages, home } }))}
           />
         }
@@ -1177,24 +1292,19 @@ function ThemeCards({ workspace, storeShape, sectionMedia, refetch, site }: {
 }
 
 function ThemeSettings() {
-  const { data } = useSuspenseQuery(themeQueryOptions());
   const { data: workspace, refetch } = useSuspenseQuery(themeWorkspaceQueryOptions());
-  const site = useSiteDrafts();
-  return (
-    <ThemeCards
-      workspace={workspace}
-      storeShape={data.storeShape as StoreShape}
-      sectionMedia={data.sectionMedia}
-      refetch={refetch}
-      site={site}
-    />
-  );
+  return <ThemeCards workspace={workspace} refetch={refetch} />;
 }
 
+/**
+ * The Theme page: everything that shapes how the storefront looks, one draft.
+ * Save stores the private draft (logo, words, homepage and layout together);
+ * Preview shows it; Publish makes it live.
+ */
 export function ThemePage() {
   const t = useMessages(onlineStoreMessages);
   return (
-    <SaveBarProvider>
+    <SaveBarProvider savedMessage={t("themeDraftSaved")}>
       <OnlineStorePage title={t("themeTitle")}>
         <ThemeSettings />
       </OnlineStorePage>

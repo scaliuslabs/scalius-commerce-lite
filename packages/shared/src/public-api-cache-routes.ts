@@ -21,17 +21,6 @@ const MAX_PUBLIC_CACHE_QUERY_ENTRIES = 30;
 const MAX_PUBLIC_CACHE_QUERY_KEY_LENGTH = 64;
 const MAX_PUBLIC_CACHE_QUERY_VALUE_LENGTH = 512;
 
-function isHeroRequestEligible(url: URL): boolean {
-  const pathname = url.pathname.replace(/\/$/, "");
-  if (!pathname.endsWith("/hero/sliders")) {
-    return url.searchParams.size === 0;
-  }
-  return (
-    url.searchParams.size === 1 &&
-    ["desktop", "mobile"].includes(url.searchParams.get("type") ?? "")
-  );
-}
-
 export const PUBLIC_API_CACHE_ROUTES: readonly PublicApiCacheRoute[] = [
   { path: "/api/v1/products" },
   { path: "/api/v1/categories" },
@@ -47,11 +36,8 @@ export const PUBLIC_API_CACHE_ROUTES: readonly PublicApiCacheRoute[] = [
   { path: "/api/v1/attributes" },
   { path: "/api/v1/pages" },
   { path: "/api/v1/articles" },
-  { path: "/api/v1/hero", isEligible: isHeroRequestEligible },
   { path: "/api/v1/seo" },
-  { path: "/api/v1/header" },
   { path: "/api/v1/navigation" },
-  { path: "/api/v1/footer" },
   { path: "/api/v1/storefront/pages/slug" },
   { path: "/api/v1/storefront/layout", exact: true },
 ];

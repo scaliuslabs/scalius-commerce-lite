@@ -14,7 +14,9 @@
     "enabled": true
   },
   "exports": {
-    "default": { "type": "worker", "cache": { "enabled": false } }
+    "default": { "type": "worker", "cache": { "enabled": false } },
+    // RPC-only plugin bridge (sandboxed plugins, src/plugins/bridge-entrypoint.ts).
+    "PluginBridge": { "type": "worker", "cache": { "enabled": false } }
   },
   // Part of every public cache key; `wrangler dev` assigns a fresh id on every
   // start and reload, so local caches never serve the previous code's payload.

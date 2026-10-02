@@ -8,7 +8,10 @@ import {
   EMPTY_STORE_SHAPE,
   STOREFRONT_DENSITIES,
   STOREFRONT_HEADER_TONES,
+  STOREFRONT_LISTING_BANDS,
   STOREFRONT_LISTING_FILTER_STYLES,
+  STOREFRONT_LISTING_LINK_STYLES,
+  STOREFRONT_LISTING_PHONE_BARS,
   STOREFRONT_NAVIGATION_SOURCES,
   STOREFRONT_PRODUCT_STICKY,
   STOREFRONT_THEME_PALETTES,
@@ -35,6 +38,9 @@ const FACTORS: Array<{ name: string; values: readonly string[] }> = [
   { name: "sticky.desktop", values: STOREFRONT_PRODUCT_STICKY.desktop },
   { name: "headerTone", values: STOREFRONT_HEADER_TONES },
   { name: "filters", values: STOREFRONT_LISTING_FILTER_STYLES },
+  { name: "listing.band", values: STOREFRONT_LISTING_BANDS },
+  { name: "listing.phoneBar", values: STOREFRONT_LISTING_PHONE_BARS },
+  { name: "listing.links", values: STOREFRONT_LISTING_LINK_STYLES },
   { name: "navigation.source", values: STOREFRONT_NAVIGATION_SOURCES },
   { name: "navigation.maxTopItems", values: ["1", "6", "18"] },
 ];
@@ -111,7 +117,10 @@ function documentFor(row: string[], palette: keyof typeof STOREFRONT_THEME_PALET
     desktop: value("sticky.desktop"),
   } as never;
   const style = value("filters") as (typeof STOREFRONT_LISTING_FILTER_STYLES)[number];
-  theme.blocks.listing.filters = { style, openByDefault: style.startsWith("sidebar") };
+  theme.blocks.listing.filters = { style, openByDefault: style.startsWith("sidebar"), searchPlacement: "same", ruled: false };
+  theme.blocks.listing.band = value("listing.band") as never;
+  theme.blocks.listing.phoneBar = value("listing.phoneBar") as never;
+  theme.blocks.listing.links = value("listing.links") as never;
   theme.blocks.navigation = {
     ...theme.blocks.navigation,
     source: value("navigation.source") as (typeof STOREFRONT_NAVIGATION_SOURCES)[number],
@@ -128,7 +137,7 @@ const SHAPES = [
     productCount: 5000, skuCount: 50_000, topCategoryCount: 18, categoryDepth: 4, categoryGroups: 5,
     menu: Array.from({ length: 12 }, () => ({ subMenu: [{ subMenu: [{}, {}] }, { subMenu: [{}, {}] }] })),
     brandCount: 300, hasCollections: true, hasDeliveryMethods: true, hasKeySpecs: true, hasEmiPlans: true,
-    hasDigitalLines: true, hasReviews: true, hasQuestions: true, hasContentBlocks: true,
+    hasDigitalLines: true, hasReviews: true, hasContentBlocks: true,
   }),
 ];
 
@@ -162,6 +171,7 @@ describe("block variant matrix", () => {
           for (const shape of SHAPES) {
             const resolved = resolveStorefrontTheme(theme, shape);
             expect(resolved.blocks.listing.filters.style, label).toBe(theme.blocks.listing.filters.style);
+            expect(resolved.blocks.listing.band, label).toBe(theme.blocks.listing.band);
             expect(resolved.facts.navTopItems, label).toBeLessThanOrEqual(theme.blocks.navigation.maxTopItems);
             const blocks: Record<string, string> = {};
             const chosen = {

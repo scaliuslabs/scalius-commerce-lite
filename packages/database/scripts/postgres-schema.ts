@@ -18,6 +18,7 @@ import {
   CACHE_DEP_POSTGRES_BUMP_FUNCTION,
   cacheDepPostgresTrigger,
 } from "./cache-dep-triggers";
+import { eventOutboxPostgresTrigger } from "./event-outbox-triggers";
 
 export const POSTGRES_SCHEMA_BUNDLE_VERSION =
   "scalius-postgres-schema/v1" as const;
@@ -64,6 +65,12 @@ function compileGlobPatterns(sql: string): string {
     .replaceAll("'*[^A-Z]*'", "'[^A-Z]'")
     .replaceAll("'*[^A-Z0-9_-]*'", "'[^A-Z0-9_-]'")
     .replaceAll("'*[^A-Za-z0-9_-]*'", "'[^A-Za-z0-9_-]'")
+    // Custom field namespaces and keys (0104).
+    .replaceAll("'*[^a-z0-9.-]*'", "'[^a-z0-9.-]'")
+    .replaceAll("'*[^_a-z0-9]*'", "'[^_a-z0-9]'")
+    // Plugin runtime: hex index values and collection names (0105).
+    .replaceAll("'*[^0-9a-f]*'", "'[^0-9a-f]'")
+    .replaceAll("'*[^a-z0-9-]*'", "'[^a-z0-9-]'")
     .replace(/\bNOT\s+GLOB\b/gi, "!~")
     .replace(/\bGLOB\b/gi, "~");
 }
@@ -414,10 +421,12 @@ export async function compileCanonicalPostgresSchema(
       typeof cacheDepPostgresTrigger(definition.name) === "string")
       ? [`${CACHE_DEP_POSTGRES_BUMP_FUNCTION};`]
       : [];
+    // Event outbox triggers likewise have a generated PostgreSQL form
+    // (jsonb facts and a PostgreSQL event id), not the generic compilation.
     const compiledTriggers = triggerDefinitions.flatMap((definition) => {
       const cacheDep = cacheDepPostgresTrigger(definition.name);
       if (cacheDep === null) return [];
-      return [cacheDep ?? compileSqliteTriggerForPostgres(definition)];
+      return [cacheDep ?? eventOutboxPostgresTrigger(definition.name) ?? compileSqliteTriggerForPostgres(definition)];
     });
     const preDataSql = [
       "BEGIN;",

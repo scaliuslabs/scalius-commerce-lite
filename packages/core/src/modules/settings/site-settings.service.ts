@@ -1,9 +1,12 @@
 // src/modules/settings/site-settings.service.ts
-// Store presentation and store-detail settings: currency, header/footer,
-// homepage, theme workflow, media hosts, SEO, storefront URL, and customer
-// countries. Storage lives in ./documents; cache effects stay in the routes.
+// Store presentation and store-detail settings: currency, the theme workflow
+// (everything that shapes how the storefront looks: brand, announcement,
+// footer words, homepage sections and what `/` shows), media hosts, SEO,
+// storefront URL, and customer countries. Storage lives in ./documents;
+// cache effects stay in the routes.
 
 import {
+  media,
   orders,
   products,
   shippingMethods,
@@ -12,7 +15,7 @@ import {
   themeSettingsDrafts,
   themeSettingsVersions,
 } from "@scalius/database/schema";
-import { eq, and, desc, gt, lte, sql } from "drizzle-orm";
+import { eq, and, desc, gt, isNull, lte, notInArray, or, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import {
   buildBatchGuard,
@@ -30,38 +33,27 @@ import {
   DEFAULT_STOREFRONT_THEME,
   parseStoredStorefrontThemeDocument,
   storefrontThemeDocumentSchema,
+  storefrontThemeMediaReferences,
   type StorefrontThemeDocument,
 } from "@scalius/shared/storefront-theme";
 import { mergeSeoDiscoverySettings, type SeoDiscoverySettings } from "@scalius/shared/seo-discovery";
 import { mergeSeoReturnPolicySettings, type SeoReturnPolicySettings } from "@scalius/shared/seo-return-policy";
 import {
-  sanitizeHomepagePresentationConfig,
-  type HomepagePresentationConfig,
-} from "@scalius/shared/homepage-presentation";
-import { readiness, type Readiness } from "@scalius/shared/readiness";
-import {
-  isMediaReferenceDeletingGuardError,
-  MEDIA_REFERENCE_DELETING_MESSAGE,
-  noDeletingMediaReferences,
-} from "../media/media-reference-guard";
-import {
   currencyDocument,
   customerCountriesDocument,
-  footerDocument,
-  headerDocument,
-  homepageDocument,
   mediaDocument,
   normalizeMediaHost,
   seoDocument,
-  stripEmbeddedNavigation,
   type CurrencySettings,
   type CustomerCountries,
   type MediaOptimizationSettings,
-  type SitePresentationSection,
 } from "./documents";
 import type { SettingsDocument, SettingsDocumentWriteResult } from "./settings-store";
 
 const THEME_SETTINGS_ID = "default";
+
+/** Published versions kept for history and restore: the most the history list returns. */
+export const THEME_VERSION_HISTORY_LIMIT = 50;
 
 /** The revision the merchant's editor loaded; a stale one is a 409 conflict. */
 export interface SettingsSaveOptions {
@@ -102,6 +94,7 @@ export interface ThemeVersionDocument extends ThemeSettingsDocument {
   createdAt: Date;
 }
 
+/** What a live preview renders: the saved draft as it is when the preview reads it. */
 export interface ThemePreviewSessionDocument {
   theme: StorefrontThemeDocument;
   draftRevision: number;
@@ -116,13 +109,6 @@ export interface ThemePreviewContinuationDocument {
   expiresAt: Date;
 }
 
-function assertPresentationRevision(expectedRevision: number): void {
-  if (!Number.isInteger(expectedRevision) || expectedRevision < 0) {
-    throw new ValidationError(
-      "A non-negative presentation settings revision is required.",
-    );
-  }
-}
 
 /** Stored theme rows are read strictly; an unreadable one fails closed. */
 function parseAuthoritativeThemeSettings(value: string): StorefrontThemeDocument {
@@ -249,137 +235,6 @@ export async function saveCurrencySettings(
 }
 
 // ─────────────────────────────────────────
-// General (header + footer) and homepage presentation
-// ─────────────────────────────────────────
-
-/**
- * Stable issue codes for a saved navigation section. `legacy_normalized` means
- * the stored links were safely converted and need one explicit save;
- * `invalid` means the section could not be read, so editing stays locked.
- */
-export const NAVIGATION_READINESS_CODES = {
-  legacyNormalized: "navigation.legacy_normalized",
-  invalid: "navigation.invalid",
-} as const;
-
-export async function getGeneralSettings(db: Database) {
-  const [header, footer] = await Promise.all([
-    headerDocument.readDetailed(db),
-    footerDocument.readDetailed(db),
-  ]);
-  return {
-    headerConfig: header.value,
-    footerConfig: footer.value,
-    revisions: { header: header.revision, footer: footer.revision },
-    navigationReadiness: {
-      header: readiness.ready(),
-      footer: readiness.ready(),
-    } satisfies Record<SitePresentationSection, Readiness>,
-  };
-}
-
-/**
- * Saves one presentation document at the expected revision, rejecting a
- * config that points at media being deleted.
- */
-async function savePresentationDocument<T extends object>(
-  document: typeof headerDocument | typeof homepageDocument,
-  db: Database,
-  config: T,
-  expectedRevision: number,
-): Promise<{ value: T; revision: number }> {
-  assertPresentationRevision(expectedRevision);
-  const mediaGuard = noDeletingMediaReferences(JSON.stringify(config));
-  try {
-    return await (document as typeof headerDocument).write(
-      db,
-      config as Record<string, unknown>,
-      {},
-      {
-        expectedRevision,
-        replace: true,
-        before: mediaGuard ? [buildBatchGuard(db, mediaGuard, "MEDIA_REFERENCE_DELETING")] : [],
-      },
-    ) as { value: T; revision: number };
-  } catch (error) {
-    if (isMediaReferenceDeletingGuardError(error)) {
-      throw new ConflictError(MEDIA_REFERENCE_DELETING_MESSAGE);
-    }
-    throw error;
-  }
-}
-
-function sitePresentationWriter(section: SitePresentationSection) {
-  const document = section === "header" ? headerDocument : footerDocument;
-  return async (
-    db: Database,
-    config: Record<string, unknown>,
-    expectedRevision: number,
-  ): Promise<{ revision: number }> => {
-    const { revision } = await savePresentationDocument(
-      document,
-      db,
-      stripEmbeddedNavigation(section, config),
-      expectedRevision,
-    );
-    return { revision };
-  };
-}
-
-export const saveHeaderConfig = sitePresentationWriter("header");
-export const saveFooterConfig = sitePresentationWriter("footer");
-
-export async function getHomepagePresentationSettings(
-  db: Database,
-): Promise<{ config: HomepagePresentationConfig; revision: number }> {
-  const { value, revision } = await homepageDocument.readDetailed(db);
-  return { config: value, revision };
-}
-
-/** The homepage presentation a save sends; an omitted home mode keeps the saved one. */
-export type HomepagePresentationSaveInput =
-  Omit<HomepagePresentationConfig, "homeMode" | "landingProductId">
-  & Partial<Pick<HomepagePresentationConfig, "homeMode" | "landingProductId">>;
-
-export async function saveHomepagePresentationSettings(
-  db: Database,
-  input: HomepagePresentationSaveInput,
-  expectedRevision: number,
-): Promise<{ config: HomepagePresentationConfig; revision: number }> {
-  // The write compares-and-swaps on the revision, so reading the saved mode
-  // first cannot resurrect a value another save replaced.
-  const saved = input.homeMode === undefined || input.landingProductId === undefined
-    ? (await homepageDocument.readDetailed(db)).value
-    : null;
-  const config: HomepagePresentationConfig = {
-    ...input,
-    homeMode: input.homeMode ?? saved!.homeMode,
-    landingProductId: input.landingProductId === undefined ? saved!.landingProductId : input.landingProductId,
-  };
-  const sanitized = sanitizeHomepagePresentationConfig(config);
-  if (config.homeMode === "landing" && sanitized.homeMode !== "landing") {
-    throw new ValidationError("Choose the product the landing homepage shows.", { field: "landingProductId" });
-  }
-  if (sanitized.homeMode === "landing") {
-    // The storefront still falls back to the catalog homepage whenever the
-    // product is not buyable; this refuses a product that is gone.
-    const product = await db.select({ id: products.id }).from(products)
-      .where(and(eq(products.id, sanitized.landingProductId!), sql`${products.deletedAt} IS NULL`))
-      .get();
-    if (!product) {
-      throw new ValidationError("That product is unavailable or in trash. Choose another product.", { field: "landingProductId" });
-    }
-  }
-  const { value, revision } = await savePresentationDocument(
-    homepageDocument,
-    db,
-    sanitized,
-    expectedRevision,
-  );
-  return { config: value, revision };
-}
-
-// ─────────────────────────────────────────
 // Theme
 // ─────────────────────────────────────────
 
@@ -473,6 +328,39 @@ export async function getThemeWorkspace(
   };
 }
 
+/**
+ * What a theme names must exist when it is saved: every image (brand,
+ * slides, section photos) a ready or trashed image in Files, and a product
+ * homepage's product, not in trash. Each problem is reported against its
+ * document path (`brand.logo`, `pages.home.0.settings.slides.1.image`). The
+ * storefront still renders only what is public when it reads the theme.
+ */
+async function assertThemeReferences(db: Database, theme: StorefrontThemeDocument): Promise<void> {
+  const references = storefrontThemeMediaReferences(theme);
+  const mediaIds = [...new Set(references.map((reference) => reference.mediaId))];
+  const productId = theme.pages.homeMode.kind === "product" ? theme.pages.homeMode.productId : null;
+  if (mediaIds.length === 0 && productId === null) return;
+  const [mediaRows, productRows] = await safeBatch(db, [
+    db.select({ id: media.id, kind: media.kind }).from(media).where(and(
+      sql`${media.id} IN (SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(mediaIds)}))`,
+      notInArray(media.status, ["deleting", "deleted"]),
+    )),
+    db.select({ id: products.id }).from(products)
+      .where(and(eq(products.id, productId ?? ""), isNull(products.deletedAt)))
+      .limit(1),
+  ]);
+  const images = new Set((mediaRows as Array<{ id: string; kind: string }>)
+    .filter((row) => row.kind === "image")
+    .map((row) => row.id));
+  const issues = references
+    .filter((reference) => !images.has(reference.mediaId))
+    .map((reference) => ({ path: reference.path, message: "That image is not in Files any more. Choose another image." }));
+  if (productId !== null && (productRows as unknown[]).length === 0) {
+    issues.push({ path: "pages.homeMode.productId", message: "That product is unavailable or in trash. Choose another product." });
+  }
+  if (issues.length > 0) throw new ValidationError(issues[0]!.message, issues);
+}
+
 export async function saveThemeDraft(
   db: Database,
   theme: StorefrontThemeDocument,
@@ -483,6 +371,7 @@ export async function saveThemeDraft(
   assertNonnegativeRevision(expectedDraftRevision, "draft");
   assertNonnegativeRevision(basePublishedRevision, "base published");
   const normalized = serializeThemeSettings(theme);
+  await assertThemeReferences(db, normalized.theme);
 
   if (expectedDraftRevision === 0) {
     const published = await getThemeSettings(db);
@@ -532,54 +421,6 @@ export async function saveThemeDraft(
       eq(themeSettingsDrafts.id, THEME_SETTINGS_ID),
       eq(themeSettingsDrafts.revision, expectedDraftRevision),
       eq(themeSettingsDrafts.basePublishedRevision, basePublishedRevision),
-    ))
-    .returning({
-      revision: themeSettingsDrafts.revision,
-      updatedAt: themeSettingsDrafts.updatedAt,
-    });
-  if (!updated[0]) {
-    throw themeConflict(
-      "The storefront style draft changed in another session. Reload the saved draft before continuing.",
-    );
-  }
-  return {
-    theme: normalized.theme,
-    revision: updated[0].revision,
-    basePublishedRevision,
-    updatedAt: updated[0].updatedAt,
-  };
-}
-
-export async function rebaseThemeDraft(
-  db: Database,
-  theme: StorefrontThemeDocument,
-  expectedDraftRevision: number,
-  basePublishedRevision: number,
-  actorId: string | null = null,
-): Promise<ThemeDraftDocument> {
-  if (!Number.isInteger(expectedDraftRevision) || expectedDraftRevision < 1) {
-    throw new ValidationError("A positive draft revision is required to rebase.");
-  }
-  assertNonnegativeRevision(basePublishedRevision, "base published");
-  const published = await getThemeSettings(db);
-  if (published.revision !== basePublishedRevision) {
-    throw themeConflict(
-      "The published storefront style changed again before this draft was rebased. Reload and try again.",
-    );
-  }
-  const normalized = serializeThemeSettings(theme);
-  const updated = await db
-    .update(themeSettingsDrafts)
-    .set({
-      theme: normalized.serialized,
-      revision: sql`${themeSettingsDrafts.revision} + 1`,
-      basePublishedRevision,
-      updatedBy: actorId,
-      updatedAt: sql`unixepoch()`,
-    })
-    .where(and(
-      eq(themeSettingsDrafts.id, THEME_SETTINGS_ID),
-      eq(themeSettingsDrafts.revision, expectedDraftRevision),
     ))
     .returning({
       revision: themeSettingsDrafts.revision,
@@ -656,61 +497,58 @@ function publishedThemeWriteStatement(
     ));
 }
 
+/**
+ * Publishing (a draft or a restored version) writes the published row, its
+ * history row and the synchronized draft in one batch, so the draft is always
+ * based on the live revision; history keeps the newest
+ * THEME_VERSION_HISTORY_LIMIT versions, the most the history list shows.
+ */
 async function runThemePublishBatch(
   db: Database,
   options: {
     theme: StorefrontThemeDocument;
     expectedPublishedRevision: number;
-    expectedDraftRevision?: number;
+    expectedDraftRevision: number;
     actorId: string | null;
     source: "publish" | "rollback";
     sourceRevision?: number | null;
-    synchronizeDraft: boolean;
   },
 ): Promise<ThemeWorkspaceDocument> {
   assertNonnegativeRevision(options.expectedPublishedRevision, "published");
+  if (!Number.isInteger(options.expectedDraftRevision) || options.expectedDraftRevision < 1) {
+    throw new ValidationError("A positive draft revision is required to publish.");
+  }
   const normalized = serializeThemeSettings(options.theme);
   const publishedRevision = options.expectedPublishedRevision + 1;
-  const statements = [];
-  statements.push(
-    buildPublishedThemeRevisionGuard(db, options.expectedPublishedRevision),
-  );
+  const draftRevision = options.expectedDraftRevision + 1;
 
-  if (options.expectedDraftRevision !== undefined) {
-    if (!Number.isInteger(options.expectedDraftRevision) || options.expectedDraftRevision < 1) {
-      throw new ValidationError("A positive draft revision is required to publish.");
-    }
-    statements.push(buildThemeDraftRevisionGuard(
-      db,
-      options.expectedDraftRevision,
-      options.expectedPublishedRevision,
-    ));
-  }
-
-  statements.push(
-    publishedThemeWriteStatement(
-      db,
-      normalized.serialized,
-      options.expectedPublishedRevision,
-    ) as never,
-    db.insert(themeSettingsVersions).values({
-      id: `themev_${nanoid()}`,
-      publishedRevision,
-      theme: normalized.serialized,
-      source: options.source,
-      sourceRevision: options.sourceRevision ?? null,
-      publishedBy: options.actorId,
-      createdAt: sql`unixepoch()`,
-    }) as never,
-  );
-
-  let draftRevision = 0;
-  if (options.synchronizeDraft) {
-    if (options.expectedDraftRevision === undefined) {
-      throw new ValidationError("A draft revision is required to synchronize publication.");
-    }
-    draftRevision = options.expectedDraftRevision + 1;
-    statements.push(
+  try {
+    await safeBatch(db, [
+      buildPublishedThemeRevisionGuard(db, options.expectedPublishedRevision),
+      buildThemeDraftRevisionGuard(
+        db,
+        options.expectedDraftRevision,
+        options.expectedPublishedRevision,
+      ),
+      publishedThemeWriteStatement(
+        db,
+        normalized.serialized,
+        options.expectedPublishedRevision,
+      ) as never,
+      db.insert(themeSettingsVersions).values({
+        id: `themev_${nanoid()}`,
+        publishedRevision,
+        theme: normalized.serialized,
+        source: options.source,
+        sourceRevision: options.sourceRevision ?? null,
+        publishedBy: options.actorId,
+        createdAt: sql`unixepoch()`,
+      }),
+      db.delete(themeSettingsVersions).where(sql`${themeSettingsVersions.publishedRevision} NOT IN (
+        SELECT ${themeSettingsVersions.publishedRevision} FROM ${themeSettingsVersions}
+        ORDER BY ${themeSettingsVersions.publishedRevision} DESC
+        LIMIT ${sql.raw(String(THEME_VERSION_HISTORY_LIMIT))}
+      )`),
       db
         .update(themeSettingsDrafts)
         .set({
@@ -723,12 +561,8 @@ async function runThemePublishBatch(
         .where(and(
           eq(themeSettingsDrafts.id, THEME_SETTINGS_ID),
           eq(themeSettingsDrafts.revision, options.expectedDraftRevision),
-        )) as never,
-    );
-  }
-
-  try {
-    await safeBatch(db, statements as never);
+        )),
+    ]);
   } catch (error) {
     if (isThemeRevisionConflict(error)) {
       throw themeConflict(
@@ -747,31 +581,6 @@ async function runThemePublishBatch(
       updatedAt: new Date(),
     },
   };
-}
-
-export async function saveThemeSettings(
-  db: Database,
-  theme: StorefrontThemeDocument,
-  expectedRevision: number,
-  actorId: string | null = null,
-): Promise<ThemeSettingsDocument> {
-  const draft = await db
-    .select({ revision: themeSettingsDrafts.revision })
-    .from(themeSettingsDrafts)
-    .where(and(
-      eq(themeSettingsDrafts.id, THEME_SETTINGS_ID),
-      eq(themeSettingsDrafts.basePublishedRevision, expectedRevision),
-    ))
-    .get();
-  const result = await runThemePublishBatch(db, {
-    theme,
-    expectedPublishedRevision: expectedRevision,
-    ...(draft ? { expectedDraftRevision: draft.revision } : {}),
-    actorId,
-    source: "publish",
-    synchronizeDraft: Boolean(draft),
-  });
-  return result.published;
 }
 
 export async function publishThemeDraft(
@@ -800,7 +609,6 @@ export async function publishThemeDraft(
     expectedDraftRevision,
     actorId,
     source: "publish",
-    synchronizeDraft: true,
   });
 }
 
@@ -808,7 +616,7 @@ export async function listThemeVersions(
   db: Database,
   limit = 20,
 ): Promise<ThemeVersionDocument[]> {
-  const boundedLimit = Math.min(50, Math.max(1, Math.trunc(limit)));
+  const boundedLimit = Math.min(THEME_VERSION_HISTORY_LIMIT, Math.max(1, Math.trunc(limit)));
   const rows = await db
     .select({
       id: themeSettingsVersions.id,
@@ -856,7 +664,6 @@ export async function rollbackThemeSettings(
     actorId,
     source: "rollback",
     sourceRevision,
-    synchronizeDraft: true,
   });
 }
 
@@ -865,6 +672,18 @@ const THEME_PREVIEW_SESSION_TTL_MS = 30 * 60 * 1000;
 const THEME_PREVIEW_CONTINUATION_CONSUME_SENTINEL =
   "THEME_PREVIEW_CONTINUATION_CONSUME_CONFLICT";
 
+/** Every place that reads or mints a preview row also clears the expired ones. */
+function deleteExpiredThemePreviewSessions(db: Database) {
+  return db
+    .delete(themePreviewSessions)
+    .where(lte(themePreviewSessions.expiresAt, sql`unixepoch()`));
+}
+
+/**
+ * Opens a preview of the saved draft. The session stores no theme: every
+ * preview read resolves the draft as it is then, so a refreshed preview tab
+ * shows the latest saved draft for the session's lifetime.
+ */
 export async function createThemePreviewSession(
   db: Database,
   expectedDraftRevision: number,
@@ -875,7 +694,6 @@ export async function createThemePreviewSession(
   }
   const draft = await db
     .select({
-      theme: themeSettingsDrafts.theme,
       revision: themeSettingsDrafts.revision,
       basePublishedRevision: themeSettingsDrafts.basePublishedRevision,
     })
@@ -897,18 +715,15 @@ export async function createThemePreviewSession(
   const continuationId = `tpc_${nanoid(48)}`;
   const tokenHash = await hashThemePreviewToken(continuationId);
   const expiresAt = new Date(Date.now() + THEME_PREVIEW_CONTINUATION_TTL_MS);
-  await db
-    .delete(themePreviewSessions)
-    .where(lte(themePreviewSessions.expiresAt, sql`unixepoch()`));
-  await db.insert(themePreviewSessions).values({
-    tokenHash,
-    theme: draft.theme,
-    draftRevision: draft.revision,
-    basePublishedRevision: draft.basePublishedRevision,
-    expiresAt,
-    createdBy: actorId,
-    createdAt: sql`unixepoch()`,
-  });
+  await safeBatch(db, [
+    deleteExpiredThemePreviewSessions(db),
+    db.insert(themePreviewSessions).values({
+      tokenHash,
+      expiresAt,
+      createdBy: actorId,
+      createdAt: sql`unixepoch()`,
+    }),
+  ]);
   return {
     continuationId,
     draftRevision: draft.revision,
@@ -925,20 +740,14 @@ export async function createThemePreviewSession(
 export async function exchangeThemePreviewContinuation(
   db: Database,
   continuationId: string,
-): Promise<ThemePreviewSessionDocument & { token: string }> {
+): Promise<{ token: string; expiresAt: Date }> {
   const normalizedId = continuationId.trim();
   if (!/^tpc_[A-Za-z0-9_-]{48}$/.test(normalizedId)) {
     throw new ConflictError("Theme preview continuation is unavailable or expired.");
   }
   const continuationHash = await hashThemePreviewToken(normalizedId);
   const continuation = await db
-    .select({
-      theme: themePreviewSessions.theme,
-      draftRevision: themePreviewSessions.draftRevision,
-      basePublishedRevision: themePreviewSessions.basePublishedRevision,
-      expiresAt: themePreviewSessions.expiresAt,
-      createdBy: themePreviewSessions.createdBy,
-    })
+    .select({ createdBy: themePreviewSessions.createdBy })
     .from(themePreviewSessions)
     .where(and(
       eq(themePreviewSessions.tokenHash, continuationHash),
@@ -960,15 +769,12 @@ export async function exchangeThemePreviewContinuation(
   try {
     await safeBatch(db, [
       consumeGuard,
-      db.delete(themePreviewSessions).where(and(
+      db.delete(themePreviewSessions).where(or(
         eq(themePreviewSessions.tokenHash, continuationHash),
-        gt(themePreviewSessions.expiresAt, sql`unixepoch()`),
+        lte(themePreviewSessions.expiresAt, sql`unixepoch()`),
       )),
       db.insert(themePreviewSessions).values({
         tokenHash,
-        theme: continuation.theme,
-        draftRevision: continuation.draftRevision,
-        basePublishedRevision: continuation.basePublishedRevision,
         expiresAt,
         createdBy: continuation.createdBy,
         createdAt: sql`unixepoch()`,
@@ -980,15 +786,10 @@ export async function exchangeThemePreviewContinuation(
     }
     throw error;
   }
-  return {
-    token,
-    theme: parseAuthoritativeThemeSettings(continuation.theme),
-    draftRevision: continuation.draftRevision,
-    basePublishedRevision: continuation.basePublishedRevision,
-    expiresAt,
-  };
+  return { token, expiresAt };
 }
 
+/** The saved draft as it is now, behind a live preview token; null when the token is unknown or expired. */
 export async function resolveThemePreviewSession(
   db: Database,
   token: string,
@@ -996,19 +797,29 @@ export async function resolveThemePreviewSession(
   const normalizedToken = token.trim();
   if (!/^tpv_[A-Za-z0-9_-]{48}$/.test(normalizedToken)) return null;
   const tokenHash = await hashThemePreviewToken(normalizedToken);
-  const row = await db
-    .select({
-      theme: themePreviewSessions.theme,
-      draftRevision: themePreviewSessions.draftRevision,
-      basePublishedRevision: themePreviewSessions.basePublishedRevision,
-      expiresAt: themePreviewSessions.expiresAt,
-    })
-    .from(themePreviewSessions)
-    .where(and(
-      eq(themePreviewSessions.tokenHash, tokenHash),
-      gt(themePreviewSessions.expiresAt, sql`unixepoch()`),
-    ))
-    .get();
+  const results = await safeBatch(db, [
+    deleteExpiredThemePreviewSessions(db),
+    db
+      .select({
+        theme: themeSettingsDrafts.theme,
+        draftRevision: themeSettingsDrafts.revision,
+        basePublishedRevision: themeSettingsDrafts.basePublishedRevision,
+        expiresAt: themePreviewSessions.expiresAt,
+      })
+      .from(themePreviewSessions)
+      .innerJoin(themeSettingsDrafts, eq(themeSettingsDrafts.id, THEME_SETTINGS_ID))
+      .where(and(
+        eq(themePreviewSessions.tokenHash, tokenHash),
+        gt(themePreviewSessions.expiresAt, sql`unixepoch()`),
+      ))
+      .limit(1),
+  ]);
+  const row = (results[1] as Array<{
+    theme: string;
+    draftRevision: number;
+    basePublishedRevision: number;
+    expiresAt: Date;
+  }>)[0];
   if (!row) return null;
   return {
     theme: parseAuthoritativeThemeSettings(row.theme),

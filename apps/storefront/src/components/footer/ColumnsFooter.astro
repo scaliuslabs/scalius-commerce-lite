@@ -1,7 +1,7 @@
 ---
 // minimal-columns (Dawn) and product-widgets (Game Ghor; its product lists
 // wait for product data in the layout read, so it renders the columns): the
-// logo, tagline and call line, the description, then one column per footer
+// logo, tagline and call line, the about text, then one column per footer
 // menu. Kept pixel-identical to the version 3 columns footer, the default
 // template's.
 import RecursiveFooterLink from "../RecursiveFooterLink.astro";
@@ -20,8 +20,7 @@ const {
   tagline,
   phoneHref,
   storePhone,
-  description,
-  descriptionHtml: optimizedDescription,
+  about,
   menus,
 } = Astro.props.model;
 
@@ -75,13 +74,15 @@ if (!collapsibleMenus && menuCount >= 4) menuGridCols = "grid-cols-2 lg:grid-col
       )
     }
 
-    {/* Rich text description from API */}
+    {/* The footer's about text: plain paragraphs, escaped. */}
     {
-      description && (
+      about.length > 0 && (
         <div
           class="mt-2 text-base text-inherit leading-relaxed max-w-md prose prose-base [&_*]:text-inherit prose-p:my-1 prose-p:leading-relaxed prose-a:underline prose-pre:bg-transparent"
-          set:html={optimizedDescription}
-        />
+          data-footer-about
+        >
+          {about.map((paragraph) => <p class="whitespace-pre-line">{paragraph}</p>)}
+        </div>
       )
     }
   </div>

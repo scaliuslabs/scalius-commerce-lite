@@ -7,14 +7,21 @@
 // - support-dark: the header's tone, a large phone card (Star Tech).
 // - brand-black: the ink surface, policies and a watermark (Apple Gadgets).
 // - newsletter-grey: the muted surface, one centred band (Fabrilife).
-// - directory: customer care and a curated link directory (Daraz, Amazon).
+// - directory: customer care and a curated link directory (Daraz); with
+//   `style: bands`, Amazon's banded directory in the header's tone.
 // Tones re-point the footer's own surface tokens (secondary, border), so the
-// shared bottom row and the menus read correctly on every surface.
-import type { FooterData, SocialLink } from "@/lib/api";
+// shared bottom row and the menus read correctly on every surface. Every
+// tone is a theme pair the AA rule checks (the header pair, ink on page, ink
+// on muted); the banded directory's raised and deep bands are derived from
+// the header pair with the same or better contrast (theme-header-raised,
+// theme-header-deep). The words (tagline, about, the name after ©) are the
+// footer block's settings and the footer logo the theme's brand; identity
+// and contact facts are Business settings.
+import type { FooterMenu, SocialLink } from "@/lib/api";
 import type { StorefrontBusinessInfo } from "@/lib/commerce-structured-data";
 import type { StorefrontFooterRenderer } from "@scalius/shared/storefront-theme";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
-import { footerModel } from "./footer/footer-model";
+import { footerModel, footerWords } from "./footer/footer-model";
 import ColumnsFooter from "./footer/ColumnsFooter.astro";
 import SupportFooter from "./footer/SupportFooter.astro";
 import BrandFooter from "./footer/BrandFooter.astro";
@@ -23,7 +30,8 @@ import DirectoryFooter from "./footer/DirectoryFooter.astro";
 import FooterBottom from "./footer/FooterBottom.astro";
 
 interface Props {
-  footerData: FooterData;
+  /** The footer menus (Online store -> Navigation; the layout read's `footerMenus`). */
+  menus: FooterMenu[];
   /** Business settings identity and the store's single social set. */
   storeName: string | null;
   storePhone: string | null;
@@ -35,11 +43,20 @@ interface Props {
   business: StorefrontBusinessInfo | null | undefined;
 }
 
-const { footerData, storeName, storePhone, social, policies, business } = Astro.props;
-const { resolved } = await currentRequestTheme(Astro.locals);
+const { menus, storeName, storePhone, social, policies, business } = Astro.props;
+const { resolved, brand } = await currentRequestTheme(Astro.locals);
 const variant = resolved.blocks.footer.variant;
-const marketplaceDirectory = variant === "directory" && resolved.template === "marketplace";
-const model = footerModel({ footerData, storeName, storePhone, social, policies, business }, Astro.url);
+const marketplaceDirectory = variant === "directory" && resolved.blocks.footer.settings.style === "bands";
+const model = footerModel({
+  words: footerWords(resolved.blocks.footer.settings),
+  logo: brand.footerLogo,
+  menus,
+  storeName,
+  storePhone,
+  social,
+  policies,
+  business,
+});
 const TONES: Record<string, string | undefined> = {
   "support-dark": "header",
   "brand-black": "ink",
@@ -50,7 +67,7 @@ const TONES: Record<string, string | undefined> = {
 <footer
   class="relative border-t border-border bg-secondary text-secondary-foreground overflow-hidden"
   data-footer-variant={variant}
-  data-footer-tone={TONES[variant]}
+  data-footer-tone={marketplaceDirectory ? "header" : TONES[variant]}
   data-footer-marketplace={marketplaceDirectory ? "" : undefined}
 >
   {marketplaceDirectory && <a class="directory-back-to-top" data-footer-back-to-top href="#">Back to top</a>}
@@ -111,16 +128,11 @@ const TONES: Record<string, string | undefined> = {
     --secondary-foreground: var(--foreground);
   }
 
-  footer[data-footer-marketplace] {
-    --secondary: #232f3e;
-    --secondary-foreground: #fff;
-    --primary-foreground: #fff;
-    --border: rgb(255 255 255 / 18%);
-  }
-
+  /* Amazon's bands, in the header's tone: the raised "Back to top" band,
+     the directory on the header surface, and the deeper bottom band. */
   footer[data-footer-marketplace]::after,
   .directory-lower {
-    background-color: #131a22;
+    background-color: var(--theme-header-deep);
   }
 
   .directory-back-to-top {
@@ -128,18 +140,19 @@ const TONES: Record<string, string | undefined> = {
     align-items: center;
     justify-content: center;
     min-height: 50px;
-    background: #37475a;
-    color: #fff;
+    background: var(--theme-header-raised);
+    color: var(--theme-header-foreground);
     font-size: 0.8125rem;
     font-weight: 600;
   }
 
   .directory-back-to-top:hover {
-    background: #485769;
+    text-decoration: underline;
+    text-underline-offset: 3px;
   }
 
   .directory-back-to-top:focus-visible {
-    outline: 2px solid #fff;
+    outline: 2px solid var(--theme-header-foreground);
     outline-offset: -4px;
   }
 </style>

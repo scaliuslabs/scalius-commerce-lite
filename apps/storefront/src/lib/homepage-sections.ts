@@ -10,6 +10,7 @@ import {
   HOME_DEAL_LIMIT,
   HOME_LOOKBOOK_LIMIT,
   homeSectionProductLists,
+  storefrontCategoryTilesMinimum,
   storefrontProductSourceKey,
   storefrontSectionNeedsContent,
   storefrontSectionRenderer,
@@ -20,43 +21,80 @@ import {
 import type { CollectionWithProducts, Product } from "@/lib/api";
 import type {
   HomepageBrand,
-  HomepageData,
+  HomepageCategory,
   HomepageMediaAsset,
+  HomepageProduct,
   HomepageProductList,
   HomepageSectionData,
 } from "@/lib/api/storefront";
 import type { DeliveryFact } from "@/lib/delivery-facts";
 import { resolveHomepageHero, type ResolvedHomepageHero } from "@/lib/homepage-hero";
 
-/** Everything the homepage sections draw from, looked up by source key, media id and promotion id. */
+/**
+ * Everything the homepage sections draw from, looked up by source key,
+ * media id, category id, collection id and promotion id.
+ */
 export interface HomepageContent {
-  hero: ResolvedHomepageHero;
-  collections: CollectionWithProducts[];
-  categoryRail: HomepageData["presentation"]["categoryRail"];
   deliveryFacts: DeliveryFact[];
   lists: ReadonlyMap<string, HomepageProductList>;
   media: ReadonlyMap<string, HomepageMediaAsset>;
+  /** The category tiles' published categories, by id. */
+  categories: ReadonlyMap<string, HomepageCategory>;
+  /** The collections sections' active collections, by id. */
+  collections: ReadonlyMap<string, CollectionWithProducts>;
   brands: readonly HomepageBrand[];
   /** Running promotions' end times, by promotion id. */
   promotionEnds: ReadonlyMap<string, string>;
+  /** The product a product homepage opens on, while it is public. */
+  homeProduct: HomepageProduct | null;
 }
 
-export const EMPTY_HOMEPAGE_SECTION_DATA: HomepageSectionData = { lists: [], media: [], brands: [], promotions: [] };
+export const EMPTY_HOMEPAGE_SECTION_DATA: HomepageSectionData = {
+  lists: [],
+  media: [],
+  brands: [],
+  promotions: [],
+  categories: [],
+  collections: [],
+  homeProduct: null,
+};
 
+/** The section data (published, or a preview's draft) keyed for the sections, with the store's delivery facts. */
 export function homepageContent(
-  data: Pick<HomepageData, "hero" | "collections" | "presentation" | "sections">,
+  data: Partial<HomepageSectionData> | null | undefined,
   deliveryFacts: DeliveryFact[],
 ): HomepageContent {
   return {
-    hero: resolveHomepageHero(data.hero),
-    collections: data.collections ?? [],
-    categoryRail: data.presentation.categoryRail,
     deliveryFacts,
-    lists: new Map((data.sections?.lists ?? []).map((list) => [list.key, list])),
-    media: new Map((data.sections?.media ?? []).map((asset) => [asset.id, asset])),
-    brands: data.sections?.brands ?? [],
-    promotionEnds: new Map((data.sections?.promotions ?? []).map((promotion) => [promotion.id, promotion.endsAt])),
+    lists: new Map((data?.lists ?? []).map((list) => [list.key, list])),
+    media: new Map((data?.media ?? []).map((asset) => [asset.id, asset])),
+    categories: new Map((data?.categories ?? []).map((category) => [category.id, category])),
+    collections: new Map((data?.collections ?? []).map((collection) => [collection.id, collection])),
+    brands: data?.brands ?? [],
+    promotionEnds: new Map((data?.promotions ?? []).map((promotion) => [promotion.id, promotion.endsAt])),
+    homeProduct: data?.homeProduct ?? null,
   };
+}
+
+/** A hero section's slides per viewport (slides whose image did not resolve are left out). */
+export function homepageHero(section: StorefrontSectionOf<"hero">, content: HomepageContent): ResolvedHomepageHero {
+  return resolveHomepageHero(section.settings.slides, (id) => homepageMedia(content, id));
+}
+
+/** The title category tiles show: the section's own, else "Shop by category". */
+export function homepageCategoryTilesTitle(section: StorefrontSectionOf<"category-tiles">): string {
+  return section.settings.title.trim() || "Shop by category";
+}
+
+/** A category-tiles section's categories, in the section's order (ones that are not public are skipped). */
+export function homepageCategoryTiles(
+  section: StorefrontSectionOf<"category-tiles">,
+  content: HomepageContent,
+): HomepageCategory[] {
+  return section.settings.categoryIds.flatMap((id) => {
+    const category = content.categories.get(id);
+    return category ? [category] : [];
+  });
 }
 
 /** Whether a homepage collection renders (a grid needs products or its featured product). */
@@ -173,9 +211,23 @@ export function homepageSectionTabs(
   });
 }
 
-/** The newest products a collections section shows when the store has no homepage collection. */
-export function homepageCollectionsFallback(content: HomepageContent): Product[] {
-  if (content.collections.length > 0) return [];
+/** A collections section's collections that show products, in the section's order. */
+export function homepageCollections(
+  section: StorefrontSectionOf<"collections">,
+  content: HomepageContent,
+): CollectionWithProducts[] {
+  return section.settings.collectionIds.flatMap((id) => {
+    const collection = content.collections.get(id);
+    return collection && collectionShowsProducts(collection) ? [collection] : [];
+  });
+}
+
+/** The newest products a collections section shows when none of its collections shows products. */
+export function homepageCollectionsFallback(
+  section: StorefrontSectionOf<"collections">,
+  content: HomepageContent,
+): Product[] {
+  if (homepageCollections(section, content).length > 0) return [];
   return (content.lists.get("newest")?.products ?? []).slice(0, HOME_COLLECTIONS_FALLBACK_LIMIT) as Product[];
 }
 
@@ -244,19 +296,17 @@ export function homepageSectionRenders(section: StorefrontSection, content: Home
     case "recently-viewed":
       return true;
     case "hero":
-      return content.hero.desktop.length > 0 || content.hero.mobile.length > 0;
+      return homepageHero(section, content).desktop.length > 0;
     case "usp-strip":
       return section.settings.source.kind === "delivery-facts"
         ? content.deliveryFacts.length > 0
         : section.settings.source.items.length > 0;
-    case "category-tiles": {
-      const count = content.categoryRail.enabled ? content.categoryRail.categories.length : 0;
-      // Photo tiles are today's rail (one category is enough there); the
-      // denser styles need two to be a choice at all.
-      return section.settings.style === "photo" ? count > 0 : count >= 2;
-    }
+    case "category-tiles":
+      // Photo tiles are a rail (one category is enough there); the denser
+      // styles need two to be a choice at all.
+      return homepageCategoryTiles(section, content).length >= storefrontCategoryTilesMinimum(section.settings.style);
     case "collections":
-      return content.collections.some(collectionShowsProducts) || homepageCollectionsFallback(content).length > 0;
+      return homepageCollections(section, content).length > 0 || homepageCollectionsFallback(section, content).length > 0;
     case "product-rail":
     case "product-grid":
     case "deal-block":
@@ -330,7 +380,7 @@ export function homepageLeadSection(
 ): StorefrontSection | null {
   return sections.find((section) =>
     homepageSectionRenders(section, content) &&
-    (leadsWithPhoto(section, content) || (categoryTilesLead && section.type === "category-tiles" && content.categoryRail.categories.some((category) => Boolean(category.imageUrl))))
+    (leadsWithPhoto(section, content) || (categoryTilesLead && section.type === "category-tiles" && homepageCategoryTiles(section, content).some((category) => Boolean(category.imageUrl))))
   ) ?? null;
 }
 

@@ -95,8 +95,8 @@ export function HomepageOrder<Section extends { id: string; type: StorefrontSect
   onChange,
 }: {
   sections: readonly Section[];
-  /** Why a section does not show on the store, by section id. */
-  notes?: Readonly<Record<string, string>>;
+  /** Why a section does not show on the store, by section id (text, or a node that draws itself). */
+  notes?: Readonly<Record<string, ReactNode>>;
   /** A specific label when several sections share one type. */
   names?: Readonly<Record<string, string>>;
   actions?: (section: Section, name: string) => ReactNode;
@@ -132,7 +132,7 @@ export function HomepageOrder<Section extends { id: string; type: StorefrontSect
           <li key={section.id} className="flex min-h-12 items-center gap-1 border-t border-border py-1 pr-2 pl-4 first:border-t-0">
             <span className="min-w-0 flex-1 text-body">
               {name}
-              {note ? <span className="block text-muted-foreground">{note}</span> : null}
+              {typeof note === "string" ? <span className="block text-muted-foreground">{note}</span> : note}
             </span>
             {actions?.(section, name)}
             <Button

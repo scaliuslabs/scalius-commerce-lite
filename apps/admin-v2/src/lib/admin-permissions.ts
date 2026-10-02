@@ -54,4 +54,6 @@ export const ADMIN_PERMISSIONS = {
   TAXES_MANAGE: "taxes.manage",
   AGENT_ACCESS_VIEW: "agent_access.view",
   AGENT_ACCESS_MANAGE: "agent_access.manage",
+  WEBHOOKS_VIEW: "webhooks.view",
+  WEBHOOKS_MANAGE: "webhooks.manage",
 } as const;

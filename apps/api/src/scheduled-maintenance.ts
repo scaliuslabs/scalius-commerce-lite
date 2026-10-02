@@ -534,6 +534,26 @@ async function runScheduledMaintenanceInner(
     }
   });
 
+  await isolated(async () => {
+    // Event outbox (COMMERCE-HOOKS H3): the at-least-once backstop for events
+    // no post-write flush handed over, due webhook retries, then retention.
+    const { runScheduledEventMaintenance } = await import("./events/dispatch");
+    const events = await timed("event_outbox_maintenance", () => runScheduledEventMaintenance(db, env));
+    if (
+      events.events.scanned > 0
+      || events.deliveries.scanned > 0
+      || events.pruned.events > 0
+      || events.pruned.deliveries > 0
+    ) {
+      console.log(
+        `[scheduled] Event outbox: scanned=${events.events.scanned}, enqueued=${events.events.enqueued}, ` +
+          `settledWithoutSubscribers=${events.events.settledWithoutSubscribers}, failed=${events.events.failed}, ` +
+          `deliveriesScanned=${events.deliveries.scanned}, deliveriesEnqueued=${events.deliveries.enqueued}, ` +
+          `prunedEvents=${events.pruned.events}, prunedDeliveries=${events.pruned.deliveries}`,
+      );
+    }
+  });
+
   // The first tick of a new API version heals writes the previous version
   // committed after the migration (scheduled/catalog-projections.ts).
   const postDeployRebuild = await timed("post_deploy_projection_rebuild", () =>

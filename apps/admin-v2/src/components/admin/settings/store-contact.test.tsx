@@ -198,6 +198,52 @@ describe("store name and contact", () => {
     expect(sdk.postApiV1AdminSettingsBusiness).not.toHaveBeenCalled();
   });
 
+  it("saves the store's social profiles, in order, through the business endpoint", async () => {
+    sdk.getApiV1AdminSettingsBusiness.mockImplementation(() => envelope({
+      ...business,
+      socialLinks: [{ id: "fb", label: "Facebook", url: "https://facebook.com/dokan" }],
+    }));
+    sdk.getApiV1AdminSettingsAllowedCountries.mockImplementation(() => envelope({ allowedCountries: [], allowedCountriesMode: "include" }));
+    sdk.postApiV1AdminSettingsBusiness.mockImplementation(() => envelope({ message: "ok" }));
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+    await act(async () => {
+      root.render(
+        <QueryClientProvider client={queryClient}>
+          <PermissionProvider isSuperAdmin>
+            <BusinessCard />
+          </PermissionProvider>
+        </QueryClientProvider>,
+      );
+    });
+    const row = await vi.waitFor(() => {
+      const button = [...container.querySelectorAll("button")].find((item) => item.textContent?.includes("Social profiles"));
+      expect(button?.textContent).toContain("Facebook");
+      return button!;
+    });
+    act(() => row.click());
+    const byId = (id: string) => document.getElementById(id) as HTMLInputElement;
+    await vi.waitFor(() => expect(byId("business-socialLinks.0.url")).not.toBeNull());
+    expect(byId("business-socialLinks.0.url").value).toBe("https://facebook.com/dokan");
+
+    const add = [...document.querySelectorAll("button")].find((button) => button.textContent === "Add profile")!;
+    act(() => add.click());
+    type(byId("business-socialLinks.1.label"), "Instagram");
+    type(byId("business-socialLinks.1.url"), "http://instagram.com/dokan");
+    leave(byId("business-socialLinks.1.url"));
+    expect(note("business-socialLinks\\.1\\.url")).toBe("Use the profile's full https:// address.");
+    const save = [...document.querySelectorAll("button")].find((button) => button.textContent === "Save")!;
+    await act(async () => { save.click(); });
+    expect(sdk.postApiV1AdminSettingsBusiness).not.toHaveBeenCalled();
+
+    type(byId("business-socialLinks.1.url"), "https://instagram.com/dokan");
+    await act(async () => { save.click(); });
+    await vi.waitFor(() => expect(sdk.postApiV1AdminSettingsBusiness).toHaveBeenCalledOnce());
+    expect(sdk.postApiV1AdminSettingsBusiness.mock.calls[0]![0].body.socialLinks).toEqual([
+      { id: "fb", label: "Facebook", url: "https://facebook.com/dokan" },
+      { id: expect.any(String), label: "Instagram", url: "https://instagram.com/dokan" },
+    ]);
+  });
+
   it("refuses a number from a country the store doesn't accept", async () => {
     await openContactDialog(["BD"]);
     const phone = field("business-phone");

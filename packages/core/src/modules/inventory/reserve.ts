@@ -861,7 +861,8 @@ function buildReservationMovementInsert(
         ${claim.previousPreorderStock},
         ${claim.newPreorderStock},
         ${claim.preorderStockDelta},
-        unixepoch()
+        unixepoch(),
+        NULL
       FROM ${productVariants}
       WHERE ${productVariants.id} = ${claim.variantId}
         AND ${productVariants.stockVersion} = ${variant.stockVersion}
@@ -938,7 +939,8 @@ function buildFreshReservationMovementInsert(
         ${variant.preorderStock},
         ${nextPreorderStock},
         ${preorderDelta},
-        unixepoch()
+        unixepoch(),
+        NULL
       FROM ${productVariants}
       INNER JOIN ${products}
         ON ${product.id} = ${variant.productId}

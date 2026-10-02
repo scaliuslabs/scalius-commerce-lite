@@ -13,6 +13,7 @@ import {
   type StorefrontProductModule,
   type StorefrontThemeBlocks,
 } from "./blocks";
+import { DEFAULT_STOREFRONT_THEME_BRAND } from "./brand";
 import {
   STOREFRONT_THEME_DOCUMENT_VERSION,
   STOREFRONT_TEMPLATE_IDS,
@@ -52,6 +53,22 @@ function home(type: StorefrontSectionType, id: string, settings: Record<string, 
   return { id, type, version: 1, settings: whole ? settings : { ...structuredClone(defaults), ...settings } } as StorefrontSection;
 }
 
+type Listing = StorefrontThemeBlocks["listing"];
+
+/** What most templates' listings share; each template states only where it departs. */
+const LISTING_DEFAULTS = {
+  searchLayout: "same",
+  descriptionPlacement: "below",
+  surface: "muted",
+  gutter: "inset",
+  band: "standard",
+  phoneBar: "standard",
+  links: "chips",
+  phoneBanner: true,
+  maxColumns: null,
+} as const satisfies Partial<Listing>;
+const FILTER_DEFAULTS = { searchPlacement: "same", ruled: false } as const satisfies Partial<StorefrontListingFilters>;
+
 function blocks(spec: {
   topBar: string;
   header: [string, Record<string, unknown>?];
@@ -59,10 +76,9 @@ function blocks(spec: {
   desktopNav: [string, Record<string, unknown>?];
   mobileNav: [string, Record<string, unknown>?];
   card: [string, Record<string, unknown>?];
-  listing: {
+  listing: Partial<Omit<Listing, "layout" | "filters" | "toolbar" | "phoneLayout" | "paging">> & {
     layout: [string, Record<string, unknown>?];
-    searchLayout?: "same" | "grid" | "list";
-    filters: StorefrontListingFilters;
+    filters: Omit<StorefrontListingFilters, keyof typeof FILTER_DEFAULTS> & Partial<Pick<StorefrontListingFilters, keyof typeof FILTER_DEFAULTS>>;
     toolbar: StorefrontListingToolbarPiece[];
     phoneLayout: "grid" | "list-row";
     paging: "numbered" | "load-more" | "infinite";
@@ -73,7 +89,7 @@ function blocks(spec: {
     below: StorefrontProductModule[];
     sticky: StorefrontThemeBlocks["product"]["sticky"];
   };
-  footer: string;
+  footer: [string, Record<string, unknown>?];
 }): StorefrontThemeBlocks {
   return {
     topBar: pick("topBar", spec.topBar),
@@ -82,7 +98,12 @@ function blocks(spec: {
     desktopNav: pick("desktopNav", ...spec.desktopNav),
     mobileNav: pick("mobileNav", ...spec.mobileNav),
     card: pick("card", ...spec.card),
-    listing: { searchLayout: "same", descriptionPlacement: "below", ...spec.listing, layout: pick("listing", ...spec.listing.layout) },
+    listing: {
+      ...LISTING_DEFAULTS,
+      ...spec.listing,
+      layout: pick("listing", ...spec.listing.layout),
+      filters: { ...FILTER_DEFAULTS, ...spec.listing.filters },
+    },
     product: {
       gallery: typeof spec.product.gallery === "string"
         ? pick("gallery", spec.product.gallery)
@@ -91,7 +112,7 @@ function blocks(spec: {
       below: spec.product.below,
       sticky: spec.product.sticky,
     },
-    footer: pick("footer", spec.footer),
+    footer: pick("footer", ...spec.footer),
   } as StorefrontThemeBlocks;
 }
 
@@ -123,22 +144,30 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
       desktopNav: ["dropdown"],
       mobileNav: ["accordion-drawer"],
       card: ["boutique"],
-      listing: { layout: ["grid"], filters: { style: "bar-dropdowns", openByDefault: false }, toolbar: ["breadcrumb", "result-count", "sort", "applied-chips"], phoneLayout: "grid", paging: "numbered" },
+      // Dawn: the page colour behind the grid, the title alone, then the
+      // count and sort on one line over the facet bar.
+      listing: {
+        layout: ["grid"], filters: { style: "bar-dropdowns", openByDefault: false },
+        toolbar: ["breadcrumb", "result-count", "sort", "applied-chips"], phoneLayout: "grid", paging: "numbered",
+        surface: "page", band: "inline",
+      },
+      // The stacked gallery keeps its details column sticky (Dawn's sticky info column).
       product: {
         gallery: "stacked",
         buyBox: ["boutique"],
         below: ["description", "content-blocks", "policies", "reviews", "related"],
-        sticky: { ...NO_STICKY, desktop: "info-column" },
+        sticky: NO_STICKY,
       },
-      footer: "minimal-columns",
+      footer: ["minimal-columns"],
     }),
+    // Dawn ends with an email signup; it joins once the store keeps a
+    // subscriber list with marketing consent (the newsletter section).
     home: [
       home("hero", "hero", { layout: "split" }),
       home("editorial", "intro"),
       home("product-grid", "featured", { columns: 4, rows: 2 }),
       home("editorial", "values", { layout: "multicolumn", heading: "", columns: [] }),
       home("editorial", "testimonials", { layout: "testimonial", quotes: [] }),
-      home("newsletter", "newsletter"),
     ],
   },
   {
@@ -157,13 +186,18 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
       desktopNav: ["mega-panel"],
       mobileNav: ["accordion-drawer"],
       card: ["portrait"],
-      listing: { layout: ["shelves"], filters: { style: "bar-dropdowns", openByDefault: false }, toolbar: ["breadcrumb", "sort", "applied-chips"], phoneLayout: "grid", paging: "numbered" },
+      // Aarong: shelves on an airy track, results flush to the container.
+      listing: {
+        layout: ["shelves", { spacing: "airy" }], filters: { style: "bar-dropdowns", openByDefault: false },
+        toolbar: ["breadcrumb", "sort", "applied-chips"], phoneLayout: "grid", paging: "numbered",
+        gutter: "flush",
+      },
       product: { gallery: "portrait", buyBox: ["heritage"], below: ["description", "reviews", "related", "recently-viewed"], sticky: NO_STICKY },
-      footer: "newsletter-grey",
+      footer: ["newsletter-grey"],
     }),
     home: [
-      home("hero", "hero", { layout: "full-screen" }),
-      home("category-tiles", "categories", { style: "photo" }),
+      home("hero", "hero", { layout: "full-screen", phoneHeight: "compact" }),
+      home("category-tiles", "categories", { style: "photo-grid" }),
       home("banner", "campaign"),
       home("product-rail", "whats-new", { source: { kind: "newest" } }),
       home("banner", "campaign-2"),
@@ -185,23 +219,29 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
       desktopNav: ["mega-panel", { promoImages: true }],
       mobileNav: ["bottom-tabs"],
       card: ["fashion-value"],
-      listing: { layout: ["grid"], filters: { style: "sidebar-comfortable", openByDefault: true }, toolbar: ["breadcrumb", "subcategory-pills", "result-count", "sort", "applied-chips"], phoneLayout: "grid", paging: "infinite" },
+      // Fabrilife: a flat, ruled department rail and the phone's Filter and
+      // Sort row pinned to the bottom of the screen.
+      listing: {
+        layout: ["grid"], filters: { style: "sidebar-comfortable", openByDefault: true, ruled: true },
+        toolbar: ["breadcrumb", "subcategory-pills", "result-count", "sort", "applied-chips"], phoneLayout: "grid", paging: "infinite",
+        phoneBar: "bottom",
+      },
       product: {
         gallery: "thumbs-below",
         buyBox: ["fashion"],
         below: ["frequently-bought-together", "description", "reviews", "related"],
         sticky: NO_STICKY,
       },
-      footer: "newsletter-grey",
+      footer: ["newsletter-grey"],
     }),
+    // Fabrilife's newsletter band joins once the store keeps a subscriber list.
     home: [
       home("hero", "hero", { layout: "full-bleed" }),
       home("usp-strip", "usp"),
       home("product-grid", "new-arrival", { columns: 6, rows: 4 }),
       home("banner", "promos", { layout: "two-up" }),
       home("category-tiles", "categories", { style: "photo" }),
-      home("lookbook", "lookbook"),
-      home("newsletter", "newsletter"),
+      home("lookbook", "lookbook", { photo: "square" }),
     ],
   },
   {
@@ -220,19 +260,26 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
       desktopNav: ["sticky-category-bar", { flyouts: "cascading" }],
       mobileNav: ["bottom-tabs", { tabs: ["home", "categories", "offers", "compare", "account"], drawer: "accordion" }],
       card: ["spec"],
+      // Star Tech: price first in a dense rail, the title band beside it,
+      // and searches spending the full width on results.
       listing: {
-        layout: ["grid"], filters: { style: "sidebar-dense", openByDefault: true, column: 225, rowPitch: 32, label: 14 }, // Star Tech
-        toolbar: ["breadcrumb", "subcategory-pills", "result-count", "sort", "per-page"],
+        layout: ["grid"],
+        filters: {
+          style: "sidebar-dense", openByDefault: true, column: 225, rowPitch: 32, label: 14,
+          order: ["price", "availability", "rating", "brand", "other", "category"], searchPlacement: "drawer",
+        },
+        toolbar: ["breadcrumb", "subcategory-pills", "result-count", "sort", "per-page", "applied-chips"],
         phoneLayout: "grid",
         paging: "numbered",
+        band: "beside-filters",
       },
       product: {
         gallery: "thumbs-below",
         buyBox: ["spec"],
-        below: ["spec-table", "description", "warranty", "questions", "reviews", "related"],
+        below: ["spec-table", "description", "warranty", "reviews", "related"],
         sticky: { phoneTop: "anchor-bar", phoneBottom: "none", desktop: "anchor-bar" },
       },
-      footer: "support-dark",
+      footer: ["support-dark"],
     }),
     home: [
       home("hero", "hero", { layout: "contained-banners" }),
@@ -259,20 +306,29 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
       desktopNav: ["dropdown"],
       mobileNav: ["bottom-tabs", { tabs: ["home", "categories", "offers", "account"], drawer: "accordion" }],
       card: ["tech-rounded"],
-      listing: { layout: ["grid"], filters: { style: "sidebar-comfortable", openByDefault: true, column: 316, rowPitch: 28, label: 16 }, toolbar: ["breadcrumb", "category-banner", "result-count", "sort"], phoneLayout: "grid", paging: "numbered" },
+      // Apple Gadgets: price first, the category banner on computers only.
+      listing: {
+        layout: ["grid"],
+        filters: {
+          style: "sidebar-comfortable", openByDefault: true, column: 316, rowPitch: 28, label: 16,
+          order: ["price", "availability", "rating", "brand", "other", "category"],
+        },
+        toolbar: ["breadcrumb", "category-banner", "result-count", "sort", "applied-chips"], phoneLayout: "grid", paging: "numbered",
+        phoneBanner: false,
+      },
       product: {
         gallery: "thumbs-below",
         buyBox: ["tech"],
         below: ["spec-table", "description", "warranty", "policies", "reviews", "related", "recently-viewed"],
-        sticky: { phoneTop: "none", phoneBottom: "buy-bar", desktop: "side-rail" },
+        sticky: { phoneTop: "none", phoneBottom: "buy-bar", desktop: "none" },
       },
-      footer: "brand-black",
+      footer: ["brand-black"],
     }),
     home: [
       home("hero", "hero", { layout: "contained-banners" }),
       home("usp-strip", "usp"),
-      home("category-tiles", "categories", { style: "round" }),
-      home("collections", "rails"),
+      home("category-tiles", "categories", { style: "round-small" }),
+      home("collections", "rails", { carousel: "compact" }),
       home("banner", "banner"),
       home("brand-wall", "brands", { style: "rail" }),
       home("recently-viewed", "recently-viewed"),
@@ -293,21 +349,23 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
       header: ["marketplace-search"],
       navigation: { source: "tree+menu", maxTopItems: 18 },
       desktopNav: ["drill-in-drawer"],
-      mobileNav: ["drill-in-drawer"],
+      mobileNav: ["drill-in-drawer", { rows: "tall" }],
       card: ["detailed"],
+      // Amazon: searches as rows, the phone's chip row with a split facet sheet.
       listing: {
         layout: ["grid"], searchLayout: "list", filters: { style: "sidebar-dense", openByDefault: true, column: 262, rowPitch: 22, label: 14 },
         toolbar: ["aspect-chips", "result-count", "sort", "applied-chips", "grid-list-toggle"],
         phoneLayout: "grid",
         paging: "numbered",
+        phoneBar: "split-sheet",
       },
       product: {
         gallery: "thumbs-left",
         buyBox: ["marketplace-3col"],
-        below: ["about-bullets", "key-attributes", "spec-table", "description", "warranty", "reviews", "questions", "related"],
+        below: ["about-bullets", "key-attributes", "spec-table", "description", "warranty", "reviews", "related"],
         sticky: { phoneTop: "anchor-bar", phoneBottom: "buy-bar", desktop: "none" },
       },
-      footer: "directory",
+      footer: ["directory", { style: "bands" }],
     }),
     home: [
       home("hero", "hero", { layout: "story-cards" }),
@@ -332,24 +390,27 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
       desktopNav: ["drill-in-drawer"],
       mobileNav: ["drill-in-drawer"],
       card: ["retail"],
+      // Target: the phone's pill row of filters and chips, four roomy columns.
       listing: {
         layout: ["grid"], searchLayout: "list", filters: { style: "drawer", openByDefault: false },
         toolbar: ["breadcrumb", "popular-filter-chips", "result-count", "sort", "grid-list-toggle", "applied-chips"],
         phoneLayout: "grid",
         paging: "numbered",
+        phoneBar: "pill-row",
+        maxColumns: 4,
       },
       product: {
         gallery: "image-grid",
         buyBox: ["retail"],
-        below: ["about-bullets", "description", "spec-table", "warranty", "questions", "compare-similar", "reviews", "related"],
+        below: ["about-bullets", "description", "spec-table", "warranty", "compare-similar", "reviews", "related"],
         sticky: { ...NO_STICKY, desktop: "product-bar" },
       },
-      footer: "minimal-columns",
+      footer: ["minimal-columns"],
     }),
     home: [
       home("hero", "hero", { layout: "full-bleed" }),
       home("banner", "promos", { layout: "four-up" }),
-      home("category-tiles", "categories", { style: "round" }),
+      home("category-tiles", "categories", { style: "round-row" }),
       home("collections", "rails"),
       home("banner", "banner"),
     ],
@@ -373,9 +434,9 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
       mobileNav: ["accordion-drawer"],
       card: ["mall"],
       // No per-page: the default listing stays compact, without extra crawl variants.
-      listing: { layout: ["grid"], filters: { style: "sidebar-dense", openByDefault: true, column: 262, rowPitch: 21, label: 14 }, toolbar: ["breadcrumb", "result-count", "sort"], phoneLayout: "grid", paging: "numbered" },
+      listing: { layout: ["grid"], filters: { style: "sidebar-dense", openByDefault: true, column: 262, rowPitch: 21, label: 14 }, toolbar: ["breadcrumb", "result-count", "sort", "applied-chips"], phoneLayout: "grid", paging: "numbered" },
       product: { gallery: "classic", buyBox: ["mall"], below: ["description", "reviews", "related"], sticky: BUY_BAR },
-      footer: "product-widgets",
+      footer: ["product-widgets"],
     }),
     home: [
       home("hero", "hero", { layout: "contained-banners" }),
@@ -402,7 +463,7 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
       card: ["quick-add", { fullAction: true }],
       listing: { layout: ["grid"], filters: { style: "sidebar-comfortable", openByDefault: true }, toolbar: ["breadcrumb", "result-count", "sort", "applied-chips"], phoneLayout: "grid", paging: "numbered" },
       product: { gallery: ["thumbs-left", { phoneSideThumbnails: false }], buyBox: ["essentials"], below: ["description", "related"], sticky: NO_STICKY },
-      footer: "directory",
+      footer: ["directory"],
     }),
     home: [
       home("hero", "hero", { layout: "full-bleed" }),
@@ -428,9 +489,14 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
       desktopNav: ["dropdown"],
       mobileNav: ["accordion-drawer"],
       card: ["showcase"],
-      listing: { layout: ["grid"], filters: { style: "drawer", openByDefault: false }, toolbar: ["subcategory-pills", "facet-value-chips", "result-count", "sort"], phoneLayout: "grid", paging: "numbered" },
+      // A launch store's collection links read as one tab strip starting with "All".
+      listing: {
+        layout: ["grid"], filters: { style: "drawer", openByDefault: false },
+        toolbar: ["subcategory-pills", "facet-value-chips", "result-count", "sort", "applied-chips"], phoneLayout: "grid", paging: "numbered",
+        links: "tabs",
+      },
       product: { gallery: "stacked", buyBox: ["showcase"], below: ["content-blocks", "description", "reviews"], sticky: BUY_BAR },
-      footer: "minimal-columns",
+      footer: ["minimal-columns"],
     }),
     // A landing page opens on its offer: the hero, the store's own delivery
     // and payment facts, then the products themselves, before the story,
@@ -467,8 +533,9 @@ export function storefrontTemplateTheme(
     version: STOREFRONT_THEME_DOCUMENT_VERSION,
     template: id,
     tokens: { ...structuredClone(template.tokens), colors: { ...STOREFRONT_THEME_PALETTES[palette] } } as StorefrontThemeTokens,
+    brand: { ...DEFAULT_STOREFRONT_THEME_BRAND },
     blocks: structuredClone(template.blocks) as StorefrontThemeBlocks,
-    pages: { home: structuredClone(template.home) as StorefrontSection[] },
+    pages: { home: structuredClone(template.home) as StorefrontSection[], homeMode: { kind: "sections" } },
   };
 }
 

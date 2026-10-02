@@ -22,12 +22,13 @@ import { SearchableSelect } from "~/components/ui/searchable-select";
 import { apiData } from "~/lib/api";
 import { readApiFieldIssues } from "~/lib/api-field-errors";
 import type { InventoryAdjustmentReason, InventoryVariant } from "~/lib/api-query-options/inventory";
+import type { InventoryLocation, VariantInventoryLevels } from "~/lib/api-query-options/inventory-locations";
 import { formatNumber, useMessages } from "~/i18n";
 import { inventoryMessages } from "~/i18n/inventory";
 import { resourceMessages } from "~/i18n/resource";
 
 type AdjustmentMode = "relative" | "stocktake";
-type Field = "quantity" | "reason" | "alertLevel";
+type Field = "quantity" | "reason" | "alertLevel" | "location";
 
 const INCREASE_REASONS: readonly InventoryAdjustmentReason[] = ["received", "return", "correction", "other"];
 const DECREASE_REASONS: readonly InventoryAdjustmentReason[] = ["damage", "theft", "correction", "other"];
@@ -38,6 +39,7 @@ const FIELD_BY_PATH: Record<string, Field> = {
   newStock: "quantity",
   reason: "reason",
   lowStockThreshold: "alertLevel",
+  locationId: "location",
 };
 
 const isWhole = (value: number | null): value is number => value !== null && Number.isSafeInteger(value);
@@ -46,6 +48,16 @@ interface AdjustStockDialogProps {
   variant: InventoryVariant | null;
   /** The store-wide alert level an empty field falls back to. */
   storeLevel?: number | null;
+  /**
+   * The store's active locations. With more than one, stock changes at a
+   * chosen location (the location select shows); with one, every number is
+   * that location's and the select stays hidden.
+   */
+  locations?: readonly InventoryLocation[];
+  /** The variant's on-hand per location; needed (and awaited) only with several locations. */
+  levels?: VariantInventoryLevels;
+  /** The location to start on (the inventory location filter), else the default. */
+  initialLocationId?: string | null;
   open: boolean;
   onClose: () => void;
   onSaved: () => void;
@@ -56,9 +68,32 @@ interface AdjustStockDialogProps {
  * operation key per stock intent. Always mounted; the parent re-keys it per
  * opening so every opening starts clean.
  */
-export function AdjustStockDialog({ variant, storeLevel = null, open, onClose, onSaved }: AdjustStockDialogProps) {
+export function AdjustStockDialog({
+  variant,
+  storeLevel = null,
+  locations = [],
+  levels,
+  initialLocationId = null,
+  open,
+  onClose,
+  onSaved,
+}: AdjustStockDialogProps) {
   const t = useMessages(inventoryMessages);
   const r = useMessages(resourceMessages);
+  const activeLocations = locations.filter((location) => location.status === "active");
+  const pickLocation = activeLocations.length > 1;
+  const [locationId, setLocationId] = useState<string>(() =>
+    activeLocations.find((location) => location.id === initialLocationId)?.id
+      ?? activeLocations.find((location) => location.isDefault)?.id
+      ?? activeLocations[0]?.id
+      ?? "");
+  const location = activeLocations.find((candidate) => candidate.id === locationId) ?? null;
+  // With several locations the dialog counts the chosen one; its level must be loaded.
+  const locationOnHand = pickLocation
+    ? levels?.variantId === variant?.id
+      ? levels?.levels.find((level) => level.locationId === locationId)?.onHand ?? 0
+      : null
+    : null;
   const [mode, setMode] = useState<AdjustmentMode>("relative");
   const [delta, setDelta] = useState<number | null>(0);
   const [counted, setCounted] = useState<number | null>(variant?.stock ?? 0);
@@ -71,16 +106,20 @@ export function AdjustStockDialog({ variant, storeLevel = null, open, onClose, o
   const [submitting, setSubmitting] = useState(false);
   const operationIntentRef = useRef<{ fingerprint: string; key: string } | null>(null);
   const fieldRefs = {
+    location: useRef<HTMLButtonElement>(null),
     quantity: useRef<HTMLInputElement>(null),
     reason: useRef<HTMLButtonElement>(null),
     alertLevel: useRef<HTMLInputElement>(null),
   };
 
-  const stock = variant?.stock ?? 0;
+  // The on-hand being changed: the chosen location's, or the SKU's with one location.
+  const stock = locationOnHand ?? variant?.stock ?? 0;
+  const levelsReady = !pickLocation || locationOnHand !== null;
   const entered = mode === "stocktake" ? counted : delta;
   const targetStock = isWhole(entered) ? (mode === "stocktake" ? entered : stock + entered) : null;
   const effectiveDelta = targetStock === null ? 0 : targetStock - stock;
-  const newAvailable = (targetStock ?? stock) - (variant?.reservedStock ?? 0);
+  // Reservations are not held at a location: availability is the SKU's.
+  const newAvailable = (variant?.stock ?? 0) + effectiveDelta - (variant?.reservedStock ?? 0);
   // The reason always fits the direction: flipping the sign picks that direction's first reason.
   const reasonOptions = effectiveDelta < 0 ? DECREASE_REASONS : INCREASE_REASONS;
   const reason = reasonOptions.includes(reasonChoice) ? reasonChoice : reasonOptions[0]!;
@@ -96,6 +135,7 @@ export function AdjustStockDialog({ variant, storeLevel = null, open, onClose, o
   const canSubmit = Boolean(
     variant &&
     !submitting &&
+    (levelsReady || effectiveDelta === 0) &&
     isWhole(entered) &&
     targetStock !== null && targetStock >= 0 &&
     alertLevelValid &&
@@ -122,15 +162,17 @@ export function AdjustStockDialog({ variant, storeLevel = null, open, onClose, o
 
   const saveStock = async (current: InventoryVariant) => {
     const trimmedNotes = notes.trim();
+    // A store with one location sends none: the API uses the default.
+    const at = pickLocation && location ? { locationId: location.id } : {};
     if (mode === "stocktake") {
       const stocktakeReason = trimmedNotes || "Manual stocktake";
-      const body = { variantId: current.id, newStock: targetStock!, reason: stocktakeReason };
+      const body = { variantId: current.id, newStock: targetStock!, reason: stocktakeReason, ...at };
       await apiData(postApiV1AdminInventoryStockSet({
         body: { ...body, operationKey: operationKeyForIntent(JSON.stringify({ mode, ...body })) },
       }));
       return;
     }
-    const body = { delta: effectiveDelta, reason, ...(trimmedNotes ? { notes: trimmedNotes } : {}) };
+    const body = { delta: effectiveDelta, reason, ...(trimmedNotes ? { notes: trimmedNotes } : {}), ...at };
     await apiData(postApiV1AdminInventoryByVariantIdAdjust({
       path: { variantId: current.id },
       body: { ...body, operationKey: operationKeyForIntent(JSON.stringify({ mode, variantId: current.id, ...body })) },
@@ -165,9 +207,14 @@ export function AdjustStockDialog({ variant, storeLevel = null, open, onClose, o
         return field ? [field] : [];
       });
       if (fields.length > 0) {
-        const messages = { quantity: t("wholeNumber"), reason: t("chooseReason"), alertLevel: t("alertLevelInvalid") };
+        const messages = {
+          quantity: t("wholeNumber"),
+          reason: t("chooseReason"),
+          alertLevel: t("alertLevelInvalid"),
+          location: t("chooseLocation"),
+        };
         setServerErrors(Object.fromEntries(fields.map((field) => [field, messages[field]])));
-        const first = (["quantity", "reason", "alertLevel"] as const).find((field) => fields.includes(field))!;
+        const first = (["location", "quantity", "reason", "alertLevel"] as const).find((field) => fields.includes(field))!;
         fieldRefs[first].current?.focus();
       } else {
         toast.error(t(saved.alertLevel ? "stockNotUpdated" : alertLevelChanged ? "alertLevelFailed" : "adjustFailed"));
@@ -202,15 +249,41 @@ export function AdjustStockDialog({ variant, storeLevel = null, open, onClose, o
               void handleSubmit();
             }}
           >
+            {pickLocation ? (
+              <div className="space-y-2">
+                <Label htmlFor="inventory-adjustment-location">{t("location")}</Label>
+                <SearchableSelect
+                  triggerClassName="w-full"
+                  triggerRef={fieldRefs.location}
+                  id="inventory-adjustment-location"
+                  aria-invalid={errors.location ? true : undefined}
+                  value={locationId}
+                  onValueChange={(value) => {
+                    if (!activeLocations.some((candidate) => candidate.id === value)) return;
+                    clearServerError("location");
+                    setLocationId(value);
+                    setDelta(0);
+                    setCounted(levels?.levels.find((level) => level.locationId === value)?.onHand ?? 0);
+                    setTouched(false);
+                  }}
+                  options={activeLocations.map((candidate) => ({
+                    value: candidate.id,
+                    label: candidate.isDefault ? t("locationDefault", { name: candidate.name }) : candidate.name,
+                  }))}
+                />
+                {fieldError("location", "inventory-adjustment-location-error")}
+              </div>
+            ) : null}
+
             <dl className="grid grid-cols-3 gap-4">
               {([
-                ["onHand", variant.stock],
+                [pickLocation ? "onHandHere" : "onHand", pickLocation ? locationOnHand : variant.stock],
                 ["committed", variant.reservedStock],
                 ["available", variant.available],
               ] as const).map(([key, value]) => (
                 <div key={key} className="space-y-1">
                   <dt className="text-body text-muted-foreground">{t(key)}</dt>
-                  <dd className="text-body font-medium tabular-nums">{formatNumber(value)}</dd>
+                  <dd className="text-body font-medium tabular-nums">{value === null ? t("loading") : formatNumber(value)}</dd>
                 </div>
               ))}
             </dl>
@@ -223,7 +296,7 @@ export function AdjustStockDialog({ variant, storeLevel = null, open, onClose, o
                 value={mode}
                 onValueChange={(value) => {
                   setMode(value as AdjustmentMode);
-                  setCounted(variant.stock);
+                  setCounted(stock);
                   setDelta(0);
                   setTouched(false);
                 }}
@@ -291,11 +364,18 @@ export function AdjustStockDialog({ variant, storeLevel = null, open, onClose, o
                 </p>
               ) : effectiveDelta !== 0 ? (
                 <p className="text-body text-muted-foreground">
-                  {t("newStockPreview", {
-                    change: `${effectiveDelta > 0 ? "+" : ""}${formatNumber(effectiveDelta)}`,
-                    stock: targetStock!,
-                    available: newAvailable,
-                  })}
+                  {pickLocation && location
+                    ? t("newLocationStockPreview", {
+                      change: `${effectiveDelta > 0 ? "+" : ""}${formatNumber(effectiveDelta)}`,
+                      location: location.name,
+                      stock: targetStock!,
+                      available: newAvailable,
+                    })
+                    : t("newStockPreview", {
+                      change: `${effectiveDelta > 0 ? "+" : ""}${formatNumber(effectiveDelta)}`,
+                      stock: targetStock!,
+                      available: newAvailable,
+                    })}
                 </p>
               ) : null}
               {!errors.quantity && newAvailable < 0 ? (

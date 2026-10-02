@@ -38,8 +38,6 @@ import {
 import {
   getAllowedCountries,
   getCurrencySettings,
-  getGeneralSettings,
-  getHomepagePresentationSettings,
   getMediaOptimizationSettings,
   getSeoSettings,
 } from "./site-settings.service";
@@ -345,14 +343,6 @@ async function expectCommonSettings(db: Parameters<typeof getBusinessSettings>[0
     visibility: "show_unavailable",
     introText: "Need help?",
   });
-  const general = await getGeneralSettings(db);
-  expect(general.headerConfig).toEqual({ logo: { src: "media/logo.png", alt: "Shop" } });
-  expect(general.footerConfig).toEqual({ tagline: "Made nearby" });
-  expect(general.revisions).toEqual({ header: 4, footer: 2 });
-  expect(await getHomepagePresentationSettings(db)).toMatchObject({
-    revision: 3,
-    config: { categoryRail: { enabled: true, title: "Shop by category", categoryIds: ["cat_1"] } },
-  });
   expect(await getSeoSettings(db)).toEqual({
     homepageTitle: "Home",
     homepageMetaDescription: "Everything nearby",
@@ -391,5 +381,10 @@ function expectOnlyDocumentRows(sqlite: DatabaseSync) {
   ]);
   expect(sqlite.prepare(
     "SELECT name FROM sqlite_master WHERE name IN ('site_settings', 'meta_conversions_settings')",
+  ).all()).toEqual([]);
+  // 0106: the look (logo, announcement, footer words, homepage) is the theme
+  // document's, so the header, footer and homepage documents 0065 assembled are gone.
+  expect(sqlite.prepare(
+    "SELECT category FROM settings WHERE category IN ('header', 'footer', 'homepage')",
   ).all()).toEqual([]);
 }

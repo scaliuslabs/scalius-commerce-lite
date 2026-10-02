@@ -22,6 +22,8 @@ const adjustInventoryFields = {
     reason: z.enum(["received", "correction", "damage", "theft", "return", "other"]),
     notes: z.string().trim().max(500).optional(),
     pool: z.enum(["stock", "preorderStock"]).optional().default("stock"),
+    /** On-hand stock only: the active location adjusted; the default location when omitted. */
+    locationId: z.string().trim().min(1).max(100).optional(),
 } as const;
 
 function validateAdjustmentReason(

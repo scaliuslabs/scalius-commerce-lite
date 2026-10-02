@@ -33,12 +33,13 @@ import {
   productGridFluidCss,
   productGridSpec,
 } from "@/lib/product-card-layout";
-import { CARD_IMAGE_DIMENSIONS, CARD_PHOTO_INSET } from "@/components/cards/card-model";
+import { CARD_IMAGE_DIMENSIONS, CARD_PHOTO_INSET, CARD_PHOTO_MAX_PX } from "@/components/cards/card-model";
 import { capSizesDensity, scaleSizes } from "@/lib/responsive-image";
 import { homepageLeadSection, homepageSectionRenders, type HomepageContent } from "@/lib/homepage-sections";
 import { heroImageCandidate } from "@/lib/homepage-hero";
 import {
   productGalleryMainSlot,
+  productGalleryPortraitMaxPx,
   productGalleryThumbnailSlot,
 } from "@/components/product/lib/gallery-images";
 import { HEADER_SPECS, headerCondense, headerSpec } from "@/components/header/header-variants";
@@ -189,6 +190,8 @@ function product(id: string, overrides: Record<string, unknown> = {}) {
     imageAlt: null,
     hasVariants: false,
     availableForSale: true,
+    // The API's proof that a simple in-stock SKU can be added without a choice.
+    quickAddEligible: true,
     ...overrides,
   };
 }
@@ -216,12 +219,22 @@ const slide = (id: string) => ({
   focalPoint: { x: 50, y: 50 },
 });
 
+/** The hero's slides as the theme stores them: the first has its own phone image. */
+const HERO_SLIDES = [
+  { image: "d1", phoneImage: "m1", focalPoint: { x: 50, y: 50 }, alt: "Banner d1", link: null },
+  { image: "d2", focalPoint: { x: 50, y: 50 }, alt: "Banner d2", link: null },
+];
+// m1 has renditions (its URL is the 1080px master), the others don't.
+const PHONE_BANNER_URL = "https://cdn.shop.test/media/m1.jpg/1080.webp";
+const HERO_MEDIA = [
+  { id: "d1", url: "https://cdn.shop.test/banners/d1.jpg", alt: "", width: 1300, height: 500 },
+  { id: "d2", url: "https://cdn.shop.test/banners/d2.jpg", alt: "", width: 1300, height: 500 },
+  { id: "m1", url: PHONE_BANNER_URL, alt: "", width: 640, height: 300 },
+];
+const CATEGORY_IDS = ["c1", "c2"];
+const COLLECTION_IDS = ["col-grid", "col-rail"];
+
 const HOMEPAGE_DATA = {
-  hero: {
-    // m1 has renditions (its URL is the 1080px master), the others don't.
-    desktop: [slide("d1"), slide("d2")],
-    mobile: [{ ...slide("m1"), url: "https://cdn.shop.test/media/m1.jpg/1080.webp" }],
-  },
   collections: [
     {
       id: "col-grid",
@@ -238,14 +251,10 @@ const HOMEPAGE_DATA = {
       products: [CARD_PRODUCTS.withOptions, CARD_PRODUCTS.soldOut],
     },
   ],
-  categoryRail: {
-    enabled: true,
-    title: "Shop by category",
-    categories: [
-      { id: "c1", name: "Sarees", slug: "sarees", description: null, imageUrl: image("sarees"), canonicalPath: null },
-      { id: "c2", name: "Panjabi", slug: "panjabi", description: null, imageUrl: null, canonicalPath: null },
-    ],
-  },
+  categories: [
+    { id: "c1", name: "Sarees", slug: "sarees", description: null, imageUrl: image("sarees"), canonicalPath: null },
+    { id: "c2", name: "Panjabi", slug: "panjabi", description: null, imageUrl: null, canonicalPath: null },
+  ],
   deliveryFacts: [
     { kind: "delivery", title: "Delivery in 2-3 days", detail: "Across Bangladesh" },
     { kind: "cod", title: "Cash on delivery", detail: "Pay when it arrives" },
@@ -259,17 +268,40 @@ const SECTION_LISTS = ["newest", "on-sale", "popular"].map((key) => ({
   collection: null,
 }));
 const HOMEPAGE_CONTENT: HomepageContent = {
-  hero: HOMEPAGE_DATA.hero,
-  collections: HOMEPAGE_DATA.collections as unknown as HomepageContent["collections"],
-  categoryRail: HOMEPAGE_DATA.categoryRail,
+  collections: new Map(HOMEPAGE_DATA.collections.map((collection) => [collection.id, collection])) as unknown as HomepageContent["collections"],
+  categories: new Map(HOMEPAGE_DATA.categories.map((category) => [category.id, category])),
+  homeProduct: null,
   deliveryFacts: HOMEPAGE_DATA.deliveryFacts as HomepageContent["deliveryFacts"],
   lists: new Map(SECTION_LISTS.map((list) => [list.key, list as never])),
-  media: new Map(),
+  media: new Map(HERO_MEDIA.map((asset) => [asset.id, asset])),
   brands: [],
   promotionEnds: new Map(),
 };
 const HOMEPAGE_PROPS = { content: HOMEPAGE_CONTENT, currencySymbol: "৳", currencyCode: "BDT" };
-const NO_HERO = { desktop: [], mobile: [] };
+const NO_HERO_MEDIA: Pick<HomepageContent, "media"> = { media: new Map() };
+
+const ANNOUNCEMENT = "Free delivery in Dhaka over ৳2000";
+const FOOTER_WORDS = { tagline: "Handmade in Bangladesh", about: "", copyright: "" };
+
+/**
+ * A document with the store's own content in it, as a merchant fills it in:
+ * the announcement, the footer's words, and each homepage section's slides,
+ * categories and collections.
+ */
+function withStoreContent(base: StorefrontThemeDocument): StorefrontThemeDocument {
+  const theme = structuredClone(base) as StorefrontThemeDocument;
+  if (theme.blocks.topBar.variant !== "none") {
+    theme.blocks.topBar = { ...theme.blocks.topBar, settings: { ...theme.blocks.topBar.settings, text: ANNOUNCEMENT, link: null } } as never;
+  }
+  theme.blocks.footer = { ...theme.blocks.footer, settings: { ...theme.blocks.footer.settings, ...FOOTER_WORDS } } as never;
+  theme.pages.home = theme.pages.home.map((section) => {
+    if (section.type === "hero") return { ...section, settings: { ...section.settings, slides: HERO_SLIDES } };
+    if (section.type === "category-tiles") return { ...section, settings: { ...section.settings, categoryIds: CATEGORY_IDS } };
+    if (section.type === "collections") return { ...section, settings: { ...section.settings, collectionIds: COLLECTION_IDS } };
+    return section;
+  }) as never;
+  return storefrontThemeDocumentSchema.parse(theme);
+}
 
 const LONG_MENU = [
   "Women", "Men", "Kids", "Home & living", "Beauty", "Jewellery", "Gifts",
@@ -303,24 +335,13 @@ const BUSINESS = {
 function layoutData(options: { business: boolean }) {
   return {
     analytics: [],
-    header: {
-      topBar: { text: "Free delivery in Dhaka over ৳2000", isEnabled: true },
-      logo: { src: "", alt: "Nakshi Ghor" },
-      favicon: { src: "", alt: "" },
-      contact: { phone: "", text: "", isEnabled: true },
-      social: [],
-    },
     navigation: LONG_MENU,
-    footer: {
-      logo: { src: "", alt: "Nakshi Ghor" },
-      tagline: "Handmade in Bangladesh",
-      description: "",
-      copyrightText: "Nakshi Ghor",
-      menus: FOOTER_MENUS,
-      social: [{ label: "Facebook", platform: "facebook", url: "https://facebook.com/nakshighor" }],
-    },
-    currency: { code: "BDT", symbol: "৳", usdExchangeRate: 120, decimalPlaces: 0 },
-    business: options.business ? BUSINESS : undefined,
+    footerMenus: FOOTER_MENUS,
+    brand: { logo: null, footerLogo: null, favicon: null },
+    currency: { code: "BDT", symbol: "৳", decimalPlaces: 0 },
+    business: options.business
+      ? { ...BUSINESS, socialLinks: [{ id: "fb", label: "Facebook", url: "https://facebook.com/nakshighor" }] }
+      : undefined,
     policies: [
       { kind: "refund", title: "Refund policy", path: "/refund-policy" },
       { kind: "privacy", title: "Privacy policy", path: "/privacy-policy" },
@@ -384,7 +405,7 @@ const MATRIX = (() => {
   return STOREFRONT_TEMPLATE_IDS.flatMap((template) =>
     (Object.entries(MATRIX_AXES) as Array<[MatrixAxis, readonly string[]]>).flatMap(([axis, values]) =>
       values.map((value) => {
-        const theme = withChoice(storefrontTemplateTheme(template), axis, value);
+        const theme = withStoreContent(withChoice(storefrontTemplateTheme(template), axis, value));
         const { blocks } = requestThemeFor(theme, STORE_SHAPE).resolved;
         const key = `${template} ${JSON.stringify(resolveLayout(theme))} ${blocks.topBar.variant} ${blocks.header.variant} ${blocks.footer.variant}`;
         if (seen.has(key)) return null;
@@ -403,6 +424,8 @@ describe("storefront theme render matrix", () => {
     }));
     const footer = marketplace.querySelector('footer[data-footer-variant="directory"]')!;
     expect(footer.hasAttribute("data-footer-marketplace")).toBe(true);
+    // Amazon's bands wear the header's tone (an AA pair of the theme), never fixed colours.
+    expect(footer.getAttribute("data-footer-tone")).toBe("header");
     expect(footer.querySelector('a[data-footer-back-to-top]')?.getAttribute("href")).toBe("#");
     expect(footer.querySelector('nav[aria-label="Store directory"]')?.querySelectorAll("section")).toHaveLength(FOOTER_MENUS.length);
     expect(footer.querySelector("[data-footer-identity]")?.textContent).toContain("Nakshi Ghor");
@@ -417,11 +440,18 @@ describe("storefront theme render matrix", () => {
     expect(otherFooter.hasAttribute("data-footer-marketplace")).toBe(false);
     expect(otherFooter.querySelector("[data-footer-back-to-top], [data-footer-lower], [data-footer-identity]")).toBeNull();
     expect(otherFooter.querySelector(".directory-more")).toBeNull();
+    // The bands are the directory's own setting, in any template.
+    const banded = withChoice(storefrontTemplateTheme("boutique"), "footer", "directory");
+    banded.blocks.footer = { variant: "directory", settings: { style: "bands", ...FOOTER_WORDS } };
+    const bandedFooter = parse(await render("/src/layouts/Layout.astro", banded, { title: "Home", layoutData: data }))
+      .querySelector('footer[data-footer-variant="directory"]')!;
+    expect(bandedFooter.hasAttribute("data-footer-marketplace")).toBe(true);
+    expect(bandedFooter.querySelector("[data-footer-lower]")).not.toBeNull();
   });
 
   it("keeps long directory menus reachable without a phone link wall", async () => {
     const data = layoutData({ business: true });
-    data.footer.menus = FOOTER_MENUS.slice(0, 2).map((menu, index) => ({
+    data.footerMenus = FOOTER_MENUS.slice(0, 2).map((menu, index) => ({
       ...menu,
       links: Array.from({ length: index === 0 ? 20 : 12 }, (_, linkIndex) => ({
         id: `${menu.id}-${linkIndex}`,
@@ -440,7 +470,7 @@ describe("storefront theme render matrix", () => {
       expect(section.querySelectorAll(":scope > ul > li")).toHaveLength(4);
       expect(section.querySelector("details.directory-more")?.hasAttribute("open")).toBe(false);
       expect(Array.from(section.querySelectorAll("a")).map((link) => link.getAttribute("href")))
-        .toEqual(expect.arrayContaining(data.footer.menus[index]!.links.map((link) => link.href)));
+        .toEqual(expect.arrayContaining(data.footerMenus[index]!.links.map((link) => link.href)));
     }
     const marketplace = parse(await render("/src/layouts/Layout.astro", storefrontTemplateTheme("marketplace"), {
       title: "Home", layoutData: data,
@@ -534,7 +564,7 @@ describe("storefront theme render matrix", () => {
         // Phones get a phone-sized rendition, and the first slide paints without script.
         const phoneSource = page.querySelector(".mobile-carousel [data-slide-index='0'] source")!;
         expect(phoneSource.getAttribute("srcset")).toContain("https://cdn.shop.test/media/m1.jpg/613.webp 613w");
-        expect(phoneSource.getAttribute("sizes")).toBe(heroImageCandidate(HOMEPAGE_DATA.hero.mobile[0]!.url, "mobile", layout).sizes);
+        expect(phoneSource.getAttribute("sizes")).toBe(heroImageCandidate(PHONE_BANNER_URL, "mobile", layout).sizes);
         expect(page.querySelector(".desktop-carousel [data-slide-index='0'] source")!.getAttribute("sizes")).toBeNull();
         expect(page.querySelector(".mobile-carousel [data-slide-index='0']")!.classList.contains("opacity-100")).toBe(true);
       }
@@ -593,6 +623,14 @@ describe("storefront theme render matrix", () => {
       expect(mainImage.getAttribute("alt")).toBe("Kurta front");
     }
     expect(productPage.querySelector("#product-gallery")!.getAttribute("data-main-sizes")).toBe(mainSizes);
+    // The portrait stage's CSS cap is the width its `sizes` name.
+    const portraitMax = productGalleryPortraitMaxPx(layout.productPage);
+    expect(productPage.querySelector("#product-gallery")!.getAttribute("style")).toBe(
+      portraitMax === null ? null : `--gallery-portrait-max: ${portraitMax}px;`,
+    );
+    if (portraitMax !== null && layout.productPage.thumbnails !== "beside") {
+      expect(mainSizes).toMatch(new RegExp(`(^|\\s)${portraitMax}px$`));
+    }
     for (const rail of ["mobile", "desktop"] as const) {
       const thumbs = productPage.querySelectorAll(`[data-thumbnail-rail="${rail}"] [data-gallery-thumbnail] img`);
       expect(thumbs).toHaveLength(GALLERY_MEDIA.length);
@@ -636,7 +674,7 @@ describe("storefront theme render matrix", () => {
     expect(mall.querySelector('details[data-menu-home-open][open] .drail-panel')).not.toBeNull();
     expect(mall.querySelector('#mall-shortcuts-nav')).not.toBeNull();
     const classicTheme = storefrontTemplateTheme("department-mall");
-    classicTheme.blocks.topBar = { variant: "announcement", settings: {} };
+    classicTheme.blocks.topBar = { variant: "announcement", settings: { text: ANNOUNCEMENT, link: null } };
     classicTheme.blocks.header = { variant: "mall-departments", settings: { cartTotal: true } };
     classicTheme.blocks.desktopNav = { variant: "dropdown", settings: {} };
     const page = parse(
@@ -701,6 +739,16 @@ function assertHeader(page: Document, variant: string, renderer: string) {
   // The phone menu opens without JavaScript too (the drawer's :target).
   expect(page.querySelector('#site-header noscript')?.innerHTML ?? "").toContain('href="#mobile-menu-panel"');
   expect(page.querySelector("#mobile-menu-panel")!.hasAttribute("inert")).toBe(false);
+  // ...and closes through its <noscript> link: a real rule (never a literal
+  // `${...}` template, which Astro leaves unevaluated in <style>) hides each
+  // drawer's JS-only close button.
+  const noScript = Array.from(page.querySelectorAll("noscript"), (element) => element.innerHTML).join("\n");
+  expect(noScript).toContain("[data-drawer-close]{display:none!important}");
+  expect(noScript).not.toContain("${");
+  for (const drawer of Array.from(page.querySelectorAll("[data-drawer]"))) {
+    expect(drawer.querySelector(`#${drawer.getAttribute("data-drawer")}-close`)!.hasAttribute("data-drawer-close")).toBe(true);
+    expect(drawer.querySelector('noscript')?.innerHTML ?? "").toContain('href="#"');
+  }
   if (variant === "mall-departments") {
     expect(header.querySelector(".header-row")).not.toBeNull();
     expect(page.querySelector("#mobile-search-toggle")).not.toBeNull();
@@ -723,7 +771,7 @@ function assertHeader(page: Document, variant: string, renderer: string) {
     }
   }
   const scope = page.querySelector("select[data-search-scope]");
-  expect(Boolean(scope)).toBe(spec.search === "scoped");
+  expect(Boolean(scope)).toBe(spec.search === "scoped" || spec.search === "scoped-right");
   if (scope) {
     // Department scopes from the menu's category links; no name, so it never reaches the query.
     expect(scope.hasAttribute("name")).toBe(false);
@@ -757,7 +805,9 @@ function assertFooter(page: Document, variant: string, options: { business: bool
     "brand-black": "ink",
     "newsletter-grey": "muted",
   };
-  expect(tone).toBe(toneByVariant[variant] ?? null);
+  // Amazon's banded directory (`style: bands`) wears the header's tone.
+  const banded = footer.hasAttribute("data-footer-marketplace");
+  expect(tone).toBe(banded ? "header" : toneByVariant[variant] ?? null);
 
   if (variant === "newsletter-grey") {
     // One centred band of every link; the policies are in it, not below.
@@ -818,14 +868,19 @@ function assertCards(document: Document, theme: StorefrontThemeDocument) {
     const media = element.querySelector(".product-card-media")!;
     const photo = media.querySelector("img")!;
     // `sizes` follows the density's fluid grid within the container cap; every
-    // card but standard asks for its photo's own width inside its margin, and
-    // DPR 3 phones for about 2x pixels.
+    // card but standard asks for its photo's own width inside its margin (or
+    // its fixed CSS width, the one --pc-photo-max draws), and DPR 3 phones
+    // for about 2x pixels.
     const slot = productCardImageSizes(grid, containerWidth);
     expect(slot).toMatch(/^\(max-width: \d+px\) calc\(100vw - \d+px\), \(max-width: \d+px\) calc\(50vw - \d+px\), /);
     const variant = resolved.blocks.card.variant;
+    const photoMax = variant === "standard" ? undefined : CARD_PHOTO_MAX_PX[variant];
     expect(photo.getAttribute("sizes")).toBe(variant === "standard"
       ? slot
-      : capSizesDensity(scaleSizes(slot, 1 - 2 * (CARD_PHOTO_INSET[variant] ?? 0))));
+      : capSizesDensity(photoMax ? `${photoMax}px` : scaleSizes(slot, 1 - 2 * (CARD_PHOTO_INSET[variant] ?? 0))));
+    const style = element.getAttribute("style") ?? "";
+    if (photoMax) expect(style).toContain(`--pc-photo-max:${photoMax}px`);
+    else expect(style).not.toContain("--pc-photo-max");
     expect(photo.getAttribute("height")).toBe(String(photoHeight));
     // First row eager, a phone row (the first two photos) high priority.
     expect(photo.getAttribute("loading")).toBe(index < firstRow ? "eager" : "lazy");
@@ -846,7 +901,9 @@ function assertCards(document: Document, theme: StorefrontThemeDocument) {
   // A purchase action only on cards with one, only in stock without options;
   // grocery quick add keeps the shelf open instead of entering /buy. The card matrix
   // (cards/product-card.render.test.ts) covers each anatomy in detail.
-  const cartAction = ["quick-add", "retail"].includes(resolved.blocks.card.variant);
+  // Mirrors anatomy.astro: these cards add to the cart in place instead of entering /buy.
+  const cardVariant = resolved.blocks.card.variant;
+  const cartAction = ["quick-add", "retail", "showcase"].includes(cardVariant) || (cardVariant === "boutique" && card.quickBuy);
   const buyAction = (element: Element) => element.querySelector(cartAction ? "a[data-card-quick-add]" : 'a[href^="/buy/"]');
   expect(Boolean(buyAction(onSale))).toBe(card.quickBuy);
   expect(Boolean(buyAction(plain))).toBe(card.quickBuy);
@@ -1249,7 +1306,9 @@ describe("navigation", () => {
     expect(page.querySelector("#mobile-tab-bar [data-cart-open]")).toBeNull();
     expect(page.querySelector("#mobile-tab-bar a[href='/search?hasDiscount=true']")).not.toBeNull();
 
-    theme.blocks.mobileNav.settings.tabs = ["home", "categories", "compare", "cart", "account"];
+    const mobileNav = theme.blocks.mobileNav;
+    if (mobileNav.variant !== "bottom-tabs") throw new Error("The spec catalogue uses bottom tabs.");
+    mobileNav.settings.tabs = ["home", "categories", "compare", "cart", "account"];
     const merchantPage = await pageFor();
     expect(merchantPage.querySelector("#main-header")!.getAttribute("data-phone-drop")).toBe("cart account");
     expect(merchantPage.querySelector("#mobile-tab-bar [data-cart-open]")).not.toBeNull();
@@ -1467,6 +1526,140 @@ function assertDrill(drawer: Element) {
   expect(new Set(names).size).toBe(1);
 }
 
+// ─── Brand images and the store's words, from the theme ──────────────────
+
+describe("theme brand and words", () => {
+  const LOGO = { id: "med_logo", url: "https://cdn.shop.test/brand/logo.png", alt: "Old logo alt", width: 480, height: 120 };
+  const FOOTER_LOGO = { id: "med_footer", url: "https://cdn.shop.test/brand/footer-logo.png", alt: "", width: 480, height: 120 };
+  const FAVICON = { id: "med_icon", url: "https://cdn.shop.test/brand/icon.png", alt: "", width: 64, height: 64 };
+  const branded = (base: StorefrontThemeDocument, brand: Partial<StorefrontThemeDocument["brand"]>) =>
+    storefrontThemeDocumentSchema.parse({ ...withStoreContent(base), brand: { ...base.brand, ...brand } });
+
+  /** Renders with a request theme built by the caller (brand images, a preview). */
+  async function renderRequest(
+    path: string,
+    requestTheme: ReturnType<typeof requestThemeFor>,
+    props: object,
+  ): Promise<Document> {
+    return parse(await container.renderToString(await component(path), {
+      props,
+      locals: { storefrontTheme: Promise.resolve(requestTheme) },
+      request: new Request("https://shop.test/"),
+    }));
+  }
+
+  it("draws the announcement bar from the top bar block, with its link, and none for `none`", async () => {
+    const theme = storefrontTemplateTheme("boutique");
+    theme.blocks.topBar = { variant: "announcement", settings: { text: ANNOUNCEMENT, link: "/collections/eid" } };
+    const page = parse(await render("/src/layouts/Layout.astro", theme, { title: "Home", layoutData: layoutData({ business: true }) }));
+    const bar = page.querySelector("#site-header > .bg-primary")!;
+    const link = bar.querySelector("a[data-top-bar-link]")!;
+    expect(link.getAttribute("href")).toBe("/collections/eid");
+    expect(link.textContent!.trim()).toBe(ANNOUNCEMENT);
+    expect(link.hasAttribute("target")).toBe(false);
+
+    theme.blocks.topBar = { variant: "app-banner", settings: { text: ANNOUNCEMENT, link: "https://apps.example.com/nakshi" } };
+    const external = parse(await render("/src/layouts/Layout.astro", theme, { title: "Home", layoutData: layoutData({ business: true }) }))
+      .querySelector('[data-top-bar="app-banner"] a[data-top-bar-link]')!;
+    expect(external.getAttribute("href")).toBe("https://apps.example.com/nakshi");
+    expect(external.getAttribute("target")).toBe("_blank");
+    expect(external.getAttribute("rel")).toBe("noopener noreferrer");
+
+    theme.blocks.topBar = { variant: "none", settings: {} };
+    const none = parse(await render("/src/layouts/Layout.astro", theme, { title: "Home", layoutData: layoutData({ business: true }) }));
+    expect(none.body.textContent).not.toContain(ANNOUNCEMENT);
+    expect(none.querySelector("#site-header > .bg-primary, [data-top-bar]")).toBeNull();
+
+    // Empty words: no announcement line; the utility bar keeps its own links.
+    theme.blocks.topBar = { variant: "announcement", settings: { text: "", link: "/sale" } };
+    const empty = parse(await render("/src/layouts/Layout.astro", theme, { title: "Home", layoutData: layoutData({ business: true }) }));
+    expect(empty.querySelector("#site-header > .bg-primary, [data-top-bar-link]")).toBeNull();
+    theme.blocks.topBar = { variant: "utility", settings: { text: "", link: null } };
+    const utility = parse(await render("/src/layouts/Layout.astro", theme, { title: "Home", layoutData: layoutData({ business: true }) }))
+      .querySelector('[data-top-bar="utility"]')!;
+    expect(utility.querySelector(".top-utility-text")!.textContent!.trim()).toBe("");
+    expect(utility.querySelector('a[href="/track-order"]')).not.toBeNull();
+    expect(utility.querySelector('a[href^="tel:"]')).not.toBeNull();
+  });
+
+  it("writes the footer block's words, its about text as escaped paragraphs and the © name", async () => {
+    const theme = withStoreContent(storefrontTemplateTheme("boutique"));
+    theme.blocks.footer = {
+      variant: "minimal-columns",
+      settings: { tagline: "Handmade in Bangladesh", about: "Woven in Tangail.\n\nEvery saree takes <b>two weeks</b>.", copyright: "" },
+    };
+    const year = new Date().getFullYear();
+    const page = parse(await render("/src/layouts/Layout.astro", theme, { title: "Home", layoutData: layoutData({ business: true }) }));
+    const footer = page.querySelector("footer")!;
+    expect(footer.textContent).toContain("Handmade in Bangladesh");
+    expect(Array.from(footer.querySelectorAll("[data-footer-about] p")).map((node) => node.textContent)).toEqual([
+      "Woven in Tangail.",
+      "Every saree takes <b>two weeks</b>.",
+    ]);
+    expect(footer.querySelector("[data-footer-about] b")).toBeNull();
+    const copyright = () => Array.from(footer.querySelectorAll("span")).map((node) => node.textContent!.replace(/\s+/g, " ").trim())
+      .find((value) => value.startsWith("©"));
+    expect(copyright()).toBe(`© ${year} Nakshi Ghor. All rights reserved.`);
+
+    // The footer's own name after ©, in every variant; without words, no about block.
+    for (const variant of ["support-dark", "brand-black", "newsletter-grey", "directory"]) {
+      const named = structuredClone(theme);
+      const footer = storefrontBlockDefault("footer", variant);
+      named.blocks.footer = { ...footer, settings: { ...footer.settings, copyright: "Nakshi Ghor Limited" } } as never;
+      const other = parse(await render("/src/layouts/Layout.astro", named, { title: "Home", layoutData: layoutData({ business: true }) }))
+        .querySelector("footer")!;
+      expect(other.textContent!.replace(/\s+/g, " "), variant).toContain(`© ${year} Nakshi Ghor Limited. All rights reserved.`);
+      expect(other.querySelector("[data-footer-about]"), variant).toBeNull();
+    }
+  });
+
+  it("draws the theme's logo, footer logo and tab icon with the store name as their alt text", async () => {
+    const theme = branded(storefrontTemplateTheme("boutique"), { logo: LOGO.id, logoWidth: 140, footerLogo: FOOTER_LOGO.id, favicon: FAVICON.id });
+    const brand = { logo: LOGO, footerLogo: FOOTER_LOGO, favicon: FAVICON };
+    const data = { ...layoutData({ business: true }), brand };
+    const page = await renderRequest("/src/layouts/Layout.astro", requestThemeFor(theme, STORE_SHAPE, { brand }), { title: "Home", layoutData: data });
+    const logo = page.querySelector("#main-header a[href='/'] img")!;
+    expect(logo.getAttribute("src")).toBe(LOGO.url);
+    expect(logo.getAttribute("alt")).toBe("Nakshi Ghor");
+    expect(page.querySelector("#main-header")!.getAttribute("style")).toContain("--header-logo-width: 140px");
+    expect(page.querySelector("link[rel='icon']")!.getAttribute("href")).toBe(FAVICON.url);
+    const footerLogo = page.querySelector("footer a[href='/'] img")!;
+    expect(footerLogo.getAttribute("src")).toBe(FOOTER_LOGO.url);
+    expect(footerLogo.getAttribute("alt")).toBe("Nakshi Ghor");
+
+    // No brand images: the store name in text and the platform icon.
+    const plain = await renderRequest("/src/layouts/Layout.astro", requestThemeFor(withStoreContent(storefrontTemplateTheme("boutique")), STORE_SHAPE), {
+      title: "Home", layoutData: data,
+    });
+    expect(plain.querySelector("#main-header a[href='/'] img")).toBeNull();
+    expect(plain.querySelector("#main-header .hdr-logo-text")!.textContent).toBe("Nakshi Ghor");
+    expect(plain.querySelector("link[rel='icon']")!.getAttribute("href")).toBe("/favicon.svg");
+    expect(plain.querySelector("footer a[href='/'] img")).toBeNull();
+    expect(plain.querySelector("footer a[href='/']")!.textContent!.trim()).toBe("Nakshi Ghor");
+  });
+
+  it("previews the draft's brand images, never the published ones", async () => {
+    const published = { logo: LOGO, footerLogo: null, favicon: FAVICON };
+    const draftLogo = { ...LOGO, id: "med_draft", url: "https://cdn.shop.test/brand/draft-logo.png" };
+    const draftBrand = { logo: draftLogo, footerLogo: null, favicon: null };
+    const draft = branded(storefrontTemplateTheme("boutique"), { logo: draftLogo.id });
+    const preview = { theme: draft, brand: draftBrand, draftRevision: 2, basePublishedRevision: 1, expiresAt: "2026-10-02T01:00:00Z" };
+    const requestTheme = requestThemeFor(draft, STORE_SHAPE, { previewToken: `tpv_${"a".repeat(48)}`, preview, brand: draftBrand });
+    const data = { ...layoutData({ business: true }), brand: published };
+    const page = await renderRequest("/src/layouts/Layout.astro", requestTheme, { title: "Home", layoutData: data });
+    expect(page.querySelector("#main-header a[href='/'] img")!.getAttribute("src")).toBe(draftLogo.url);
+    expect(page.querySelector("link[rel='icon']")!.getAttribute("href")).toBe("/favicon.svg");
+
+    // The cart and checkout header follows the same request theme.
+    const checkout = await renderRequest("/src/components/CheckoutHeader.astro", requestTheme, {
+      layoutData: data,
+      copy: { homeAriaLabel: "Home", secureCheckoutText: "Secure checkout", pageTitle: "Checkout" },
+    });
+    expect(checkout.querySelector("header a img")!.getAttribute("src")).toBe(draftLogo.url);
+    expect(checkout.querySelector("header a img")!.getAttribute("alt")).toBe("Nakshi Ghor");
+  });
+});
+
 // ─── Sections in any order, repeated rich text ────────────────────────────
 
 describe("theme sections", () => {
@@ -1485,13 +1678,14 @@ describe("theme sections", () => {
             body: "Woven by hand in Tangail.\n\nEvery saree takes <b>two weeks</b>.\nAsk us anything.",
           },
         },
-        { id: "hero", type: "hero", version: 1, settings: { layout: "full-screen" } },
-        { id: "collections", type: "collections", version: 1, settings: {} },
+        { id: "hero", type: "hero", version: 1, settings: { layout: "full-screen", slides: HERO_SLIDES } },
+        { id: "collections", type: "collections", version: 1, settings: { carousel: "large", collectionIds: COLLECTION_IDS } },
         { id: "care", type: "editorial", version: 1, settings: { layout: "rich-text", heading: "", body: "Dry clean only." } },
         // Waits for a subscriber list: renders nothing.
         { id: "brands", type: "newsletter", version: 1, settings: { heading: "Join", text: "" } },
         { id: "delivery", type: "usp-strip", version: 1, settings: { style: "icons", source: { kind: "delivery-facts" } } },
       ],
+      homeMode: { kind: "sections" },
     },
   });
 
@@ -1527,18 +1721,105 @@ describe("theme sections", () => {
     // The hero holds the first large photo, so it gets high priority.
     expect(page.querySelector(".desktop-carousel img")!.getAttribute("fetchpriority")).toBe("high");
     // The categories section is absent in this custom document.
-    expect(page.querySelector("#homepage-category-rail-title")).toBeNull();
+    expect(page.querySelector('[data-home-section="category-tiles"]')).toBeNull();
   });
 
   it("skips empty sections and text strips when choosing what leads", () => {
     expect(
-      homepageLeadSection(custom.pages.home, { ...HOMEPAGE_CONTENT, hero: NO_HERO })?.id,
+      homepageLeadSection(custom.pages.home, { ...HOMEPAGE_CONTENT, ...NO_HERO_MEDIA })?.id,
     ).toBe("collections");
-    expect(homepageLeadSection(custom.pages.home, { ...HOMEPAGE_CONTENT, hero: NO_HERO, collections: [], lists: new Map() })).toBeNull();
+    expect(homepageLeadSection(custom.pages.home, { ...HOMEPAGE_CONTENT, ...NO_HERO_MEDIA, collections: new Map(), lists: new Map() })).toBeNull();
     const emptyStory = custom.pages.home.map((section) =>
       section.type === "editorial" ? { ...section, settings: { layout: "rich-text" as const, heading: " ", body: "\n\n" } } : section,
     );
     expect(homepageLeadSection(emptyStory, HOMEPAGE_CONTENT)?.id).toBe("hero");
-    expect(homepageLeadSection(emptyStory, { ...HOMEPAGE_CONTENT, hero: NO_HERO })?.id).toBe("collections");
+    expect(homepageLeadSection(emptyStory, { ...HOMEPAGE_CONTENT, ...NO_HERO_MEDIA })?.id).toBe("collections");
+  });
+});
+
+// ─── Product page modules and sticky bars from the page's own data ────────
+
+describe("product page modules", () => {
+  const theme = storefrontTemplateTheme("fashion-value");
+
+  it("bundles this item with the co-bought products, joined by +, with a total only for fixed prices", async () => {
+    const props = {
+      title: "Frequently bought together",
+      current: { name: "Linen shirt", imageUrl: image("shirt"), price: 1500, startingAt: false },
+      products: [product("belt", { discountedPrice: 600 }), product("socks", { discountedPrice: 300 })],
+      currencySymbol: "৳",
+      currencyCode: "BDT",
+    };
+    const page = parse(await render("/src/components/product/modules/ProductBoughtTogether.astro", theme, props));
+    const module = page.querySelector("[data-product-module='bought-together']")!;
+    expect(module.querySelector("h2")!.textContent).toBe("Frequently bought together");
+    expect(module.querySelectorAll("ol > li[aria-hidden='true']")).toHaveLength(2);
+    expect(Array.from(module.querySelectorAll("ul a")).map((link) => link.getAttribute("href")))
+      .toEqual(["/products/product-belt", "/products/product-socks"]);
+    expect(module.querySelector("[data-bought-together-total]")!.textContent).toContain("2,400");
+    const varying = parse(await render("/src/components/product/modules/ProductBoughtTogether.astro", theme, {
+      ...props, products: [product("belt", { discountedPrice: 600, priceVaries: true })],
+    }));
+    expect(varying.querySelector("[data-bought-together-total]")).toBeNull();
+    expect(varying.querySelector("ul")!.textContent).toContain("From ");
+  });
+
+  it("compares similar items in the store's card and opens /compare with this product and them", async () => {
+    const page = parse(await render("/src/components/product/modules/ProductCompareSimilar.astro", theme, {
+      title: "Compare with similar items",
+      productId: "p_main",
+      products: [product("a"), product("b")],
+      currencySymbol: "৳",
+      currencyCode: "BDT",
+    }));
+    const module = page.querySelector("[data-product-module='compare-similar']")!;
+    expect(module.querySelectorAll(".product-card-link").length).toBeGreaterThanOrEqual(2);
+    expect(module.querySelector("[data-compare-similar-link]")!.getAttribute("href")).toBe("/compare?ids=p_main,a,b");
+  });
+
+  it("links the store's published policies", async () => {
+    const page = parse(await render("/src/components/product/modules/ProductPolicies.astro", theme, {
+      title: "Store policies",
+      policies: [{ title: "Refund policy", path: "/refund-policy" }, { title: "Shipping", path: "/shipping" }],
+    }));
+    expect(Array.from(page.querySelectorAll("[data-product-module='policies'] a")).map((link) => [link.querySelector("span")!.textContent, link.getAttribute("href")]))
+      .toEqual([["Refund policy", "/refund-policy"], ["Shipping", "/shipping"]]);
+  });
+
+  it("ships recently viewed as a hidden, empty island the browser fills without this product", async () => {
+    const html = await render("/src/components/product/modules/ProductRecentlyViewed.astro", theme, { title: "Recently viewed", slug: "linen-shirt" });
+    const page = parse(html);
+    const module = page.querySelector("[data-product-module='recently-viewed']")!;
+    expect(module.hasAttribute("hidden")).toBe(true);
+    expect(module.querySelector("[data-recently-viewed-list]")!.children).toHaveLength(0);
+    expect(html).toContain('o="linen-shirt"');
+  });
+
+  it("pins the buy bar at the bottom on phones and under the header on computers, per choice", async () => {
+    const both = parse(await render("/src/components/product/StickyBuyBar.astro", theme, { productName: "Linen shirt", phone: true, desktop: true }));
+    const bar = both.querySelector("[data-sticky-buy]")!;
+    expect(bar.getAttribute("data-sticky-buy-screens")).toBe("all");
+    expect(bar.className).toContain("bottom-0");
+    expect(bar.className).toContain("lg:top-[var(--header-height,0px)]");
+    const desktop = parse(await render("/src/components/product/StickyBuyBar.astro", theme, { productName: "Linen shirt", phone: false, desktop: true }));
+    expect(desktop.querySelector("[data-sticky-buy]")!.className).toContain("max-lg:hidden");
+    expect(desktop.querySelector("[data-sticky-buy]")!.getAttribute("data-sticky-buy-screens")).toBe("desktop");
+    const phone = parse(await render("/src/components/product/StickyBuyBar.astro", theme, { productName: "Linen shirt" }));
+    expect(phone.querySelector("[data-sticky-buy]")!.className).toContain("lg:hidden");
+    const none = parse(await render("/src/components/product/StickyBuyBar.astro", theme, { productName: "Linen shirt", phone: false }));
+    expect(none.querySelector("[data-sticky-buy]")).toBeNull();
+  });
+
+  it("pins the section anchor bar on phones, computers or both, under the header", async () => {
+    const props = { detailsId: "specifications", reviewsId: "reviews" };
+    const desktop = parse(await render("/src/components/product/ProductSectionNav.astro", theme, { ...props, phone: false, desktop: true }));
+    const nav = desktop.querySelector("[data-product-section-nav]")!;
+    expect(nav.className).toContain("hidden lg:flex");
+    expect(nav.className).toContain("top-[var(--header-height,0px)]");
+    const both = parse(await render("/src/components/product/ProductSectionNav.astro", theme, { ...props, phone: true, desktop: true }));
+    expect(both.querySelector("[data-product-section-nav]")!.hasAttribute("data-section-nav-desktop")).toBe(true);
+    expect(both.querySelector("[data-product-section-nav]")!.hasAttribute("data-section-nav-phone")).toBe(true);
+    const off = parse(await render("/src/components/product/ProductSectionNav.astro", theme, { ...props, phone: false }));
+    expect(off.querySelector("[data-product-section-nav]")).toBeNull();
   });
 });

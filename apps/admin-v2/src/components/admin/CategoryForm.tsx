@@ -35,6 +35,7 @@ import { queryKeys } from "@/lib/query-keys";
 import { readAdminApiErrorCode, readCategoryRevisionConflict } from "@/lib/admin-api-error";
 import { useMessages } from "~/i18n";
 import { categoryFormMessages } from "~/i18n/category-form";
+import { CustomFieldsCard } from "./custom-fields/CustomFieldsCard";
 
 interface CategoryFormProps {
   defaultValues?: Partial<CategoryFormValues>;
@@ -279,6 +280,10 @@ export function CategoryForm({ defaultValues, isEdit = false, publishReadiness }
 
           {isEdit && defaultValues?.id ? (
             <CategoryAttributeSetCard categoryId={defaultValues.id} canEdit={canSave} />
+          ) : null}
+
+          {isEdit && defaultValues?.id ? (
+            <CustomFieldsCard ownerType="category" ownerId={defaultValues.id} canEdit={canSave} />
           ) : null}
 
           <SearchListingCard

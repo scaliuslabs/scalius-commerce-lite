@@ -19,6 +19,12 @@ import { useCatalogActionPermissions } from "~/hooks/use-catalog-action-permissi
 import { useIsMobile } from "~/hooks/use-mobile";
 import { cn } from "@scalius/shared/utils";
 import { inventoryQueryOptions, type InventoryVariant } from "~/lib/api-query-options/inventory";
+import {
+  hasSeveralLocations,
+  inventoryLocationKeys,
+  inventoryLocationsQueryOptions,
+  variantInventoryLevelsQueryOptions,
+} from "~/lib/api-query-options/inventory-locations";
 import { createDataSelector } from "~/lib/list-helpers";
 import { queryKeys } from "~/lib/query-keys";
 import { formatNumber, useMessages } from "~/i18n";
@@ -136,8 +142,10 @@ export function VariantName({ productId, productName, optionLabel }: {
   );
 }
 
+const ALL_LOCATIONS = "all";
+
 interface VariantsTabProps {
-  filters: Pick<InventoryFilters, "q" | "stock">;
+  filters: Pick<InventoryFilters, "q" | "stock" | "location">;
   onFiltersChange: InventoryFiltersChange;
   onSelectionChange: (variantIds: string[]) => void;
 }
@@ -149,16 +157,29 @@ export function VariantsTab({ filters, onFiltersChange, onSelectionChange }: Var
   const { inventory: permissions } = useCatalogActionPermissions();
   const isMobile = useIsMobile();
   const { q: search, stock: status } = filters;
+  // Locations show only once a store has more than one.
+  const { data: locations } = useQuery(inventoryLocationsQueryOptions());
+  const severalLocations = hasSeveralLocations(locations);
+  const activeLocations = useMemo(() => locations?.filter((location) => location.status === "active") ?? [], [locations]);
+  const filterLocation = severalLocations
+    ? activeLocations.find((location) => location.id === filters.location) ?? null
+    : null;
+  const locationId = filterLocation?.id ?? "";
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(50);
   const [sort, setSort] = useState<VariantSort>({ field: "available", order: "asc" });
   // Any filter or search change (typed, cleared or from another tab) starts at page 1.
-  useEffect(() => setPage(1), [search, status]);
+  useEffect(() => setPage(1), [search, status, locationId]);
   // The last chosen variant stays set while the dialog closes, so its content never jumps.
   const [adjusting, setAdjusting] = useState<InventoryVariant | null>(null);
   const [adjustOpen, setAdjustOpen] = useState(false);
   const [adjustSession, setAdjustSession] = useState(0);
-  const listQuery = inventoryQueryOptions(variantsQuery(filters, page, limit, sort));
+  const listQuery = inventoryQueryOptions(variantsQuery({ ...filters, location: locationId }, page, limit, sort));
+  // The variant's per-location on-hand, for the dialog's location select.
+  const levels = useQuery({
+    ...variantInventoryLevelsQueryOptions(adjusting?.id ?? ""),
+    enabled: severalLocations && adjustOpen && adjusting !== null,
+  }).data;
   // The same cached query the table reads; it also carries the store alert level.
   const storeLevel = useQuery({ ...listQuery, placeholderData: keepPreviousData }).data?.defaultLowStockThreshold ?? null;
 
@@ -197,6 +218,17 @@ export function VariantsTab({ filters, onFiltersChange, onSelectionChange }: Var
       meta: { priority: 92, minWidth: 150 },
       cell: ({ row }) => <IdText value={row.original.sku} copy className="text-muted-foreground" />,
     },
+    ...(filterLocation ? [{
+      // With a location filter, that location's on-hand sits beside the SKU's availability.
+      id: "locationOnHand",
+      accessorKey: "locationOnHand",
+      header: t("onHandAt", { location: filterLocation.name }),
+      meta: { numeric: true, priority: 93, minWidth: 110 },
+      cell: ({ row }) => (
+        <span className="tabular-nums">{formatNumber(row.original.locationOnHand ?? 0)}</span>
+      ),
+      enableSorting: false,
+    } satisfies ColumnDef<InventoryVariant, unknown>] : []),
     {
       // "Available" is the one stock number; on hand and committed live in its breakdown.
       accessorKey: "available",
@@ -218,7 +250,7 @@ export function VariantsTab({ filters, onFiltersChange, onSelectionChange }: Var
       cell: ({ row }) => adjustButton(row.original),
       enableSorting: false,
     },
-  ], [adjustButton, r, storeLevel, t]);
+  ], [adjustButton, filterLocation, r, storeLevel, t]);
 
   const { table, isFetching, isLoading, error, refetch, selectedIds, clearSelection } = useServerTable<InventoryVariant>({
     columns,
@@ -267,6 +299,11 @@ export function VariantsTab({ filters, onFiltersChange, onSelectionChange }: Var
             <StockBadge variant={variant} storeLevel={storeLevel} />
             <AvailableBreakdown variant={variant} storeLevel={storeLevel}>{t("availableCount", { count: variant.available })}</AvailableBreakdown>
           </div>
+          {filterLocation ? (
+            <p className="text-body text-muted-foreground tabular-nums">
+              {t("onHandAtCount", { count: variant.locationOnHand ?? 0, location: filterLocation.name })}
+            </p>
+          ) : null}
         </div>
         <div className="self-center">{adjustButton(variant)}</div>
       </div>
@@ -293,13 +330,27 @@ export function VariantsTab({ filters, onFiltersChange, onSelectionChange }: Var
             onSearchChange={(value) => onFiltersChange({ q: value })}
             searchPlaceholder={t("searchVariants")}
             filters={(
-              <SearchableSelect
-                triggerClassName="w-auto min-w-40"
-                ariaLabel={t("stockFilter")}
-                value={status}
-                onValueChange={(value) => onFiltersChange({ stock: value as StockFilter })}
-                options={STOCK_FILTERS.map((value) => ({ value, label: t(FILTER_LABEL[value]) }))}
-              />
+              <>
+                <SearchableSelect
+                  triggerClassName="w-auto min-w-40"
+                  ariaLabel={t("stockFilter")}
+                  value={status}
+                  onValueChange={(value) => onFiltersChange({ stock: value as StockFilter })}
+                  options={STOCK_FILTERS.map((value) => ({ value, label: t(FILTER_LABEL[value]) }))}
+                />
+                {severalLocations ? (
+                  <SearchableSelect
+                    triggerClassName="w-auto min-w-40"
+                    ariaLabel={t("location")}
+                    value={locationId || ALL_LOCATIONS}
+                    onValueChange={(value) => onFiltersChange({ location: value === ALL_LOCATIONS ? "" : value })}
+                    options={[
+                      { value: ALL_LOCATIONS, label: t("allLocations") },
+                      ...activeLocations.map((location) => ({ value: location.id, label: location.name })),
+                    ]}
+                  />
+                ) : null}
+              </>
             )}
           /></div>}
         emptyState={filtered
@@ -322,9 +373,15 @@ export function VariantsTab({ filters, onFiltersChange, onSelectionChange }: Var
         key={adjustSession}
         variant={adjusting}
         storeLevel={storeLevel}
+        locations={activeLocations}
+        levels={levels}
+        initialLocationId={locationId || null}
         open={adjustOpen && permissions.canAdjustStock}
         onClose={() => setAdjustOpen(false)}
-        onSaved={() => void queryClient.invalidateQueries({ queryKey: queryKeys.inventory.all })}
+        onSaved={() => void Promise.all([
+          queryClient.invalidateQueries({ queryKey: queryKeys.inventory.all }),
+          queryClient.invalidateQueries({ queryKey: inventoryLocationKeys.all }),
+        ])}
       />
       <SelectionSheet count={showSelectionBar ? selectedIds.length : 0} clearLabel={t("clearSelection")} onClear={clearSelection}>
         <Button asChild>

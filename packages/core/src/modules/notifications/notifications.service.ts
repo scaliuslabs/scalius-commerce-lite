@@ -269,6 +269,50 @@ export interface AdminPushSpec {
 }
 
 /**
+ * A best-effort system notice pushed to every active admin device (no
+ * outbox row, so no per-token receipts): for facts with no order subject,
+ * such as a webhook endpoint turned off after sustained failure.
+ */
+export async function sendAdminPushNotice(
+    db: Database,
+    env: Env,
+    notice: { title: string; body: string; link: string | null; data: Record<string, string> },
+): Promise<void> {
+    let serviceAccountJson: string | undefined;
+    try {
+        serviceAccountJson = await readFirebaseServiceAccountJson(db, credentialEncryptionKeyFromEnv(env));
+    } catch {
+        return;
+    }
+    const messaging = getFirebaseAdminMessaging(env, serviceAccountJson);
+    const tokens = (await db
+        .select({ token: adminFcmTokens.token })
+        .from(adminFcmTokens)
+        .where(eq(adminFcmTokens.isActive, true)))
+        .map((row) => row.token);
+    if (tokens.length === 0) return;
+    const response = await messaging.sendEachForMulticast({
+        notification: { title: notice.title, body: notice.body },
+        ...(notice.link ? { webpush: { fcmOptions: { link: notice.link } } } : {}),
+        data: { ...notice.data, ...(notice.link ? { link: notice.link } : {}) },
+        tokens,
+    });
+    await deactivateInvalidFcmTokens(db, tokens, response.responses);
+}
+
+/** An absolute dashboard link for a dashboard path, or null without a dashboard origin. */
+export function resolveDashboardLink(env: object | undefined, path: string): string | null {
+    const origin = (env as { BETTER_AUTH_URL?: unknown } | undefined)?.BETTER_AUTH_URL;
+    const dashboardUrl = typeof origin === "string" ? origin.trim() : "";
+    if (!dashboardUrl) return null;
+    try {
+        return new URL(path, dashboardUrl).href;
+    } catch {
+        return null;
+    }
+}
+
+/**
  * Sends one push to every active admin device. When an outbox id is
  * provided, each FCM token is guarded by a durable delivery receipt so
  * retries skip tokens already accepted by FCM.

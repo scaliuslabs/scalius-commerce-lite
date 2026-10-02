@@ -96,7 +96,8 @@ export type {
   ConversationNotificationClaim,
   ConversationNotificationResult,
 } from "./conversation-notifications";
-export { sendAdminPush, type AdminPushSpec } from "./notifications.service";
+export { sendAdminPush, sendAdminPushNotice, resolveDashboardLink, type AdminPushSpec } from "./notifications.service";
+export { sendWebhookDisabledNotice } from "./system-notices";
 export {
   NOTHING_TO_SEND,
   recordNothingToSend,

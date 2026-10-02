@@ -138,7 +138,7 @@ two public entries:
 | `warranty` | Revisioned warranty policies, per-fulfilment-line warranty records, claims backed by threads (stubs until B5) | index, browser |
 | `settings` | Typed settings documents, their store, and the settings services | index, browser |
 | `platform` | Public origins, CORS and identity handoff for the Worker entry | index |
-| `media`, `pages`, `navigation`, `hero-sliders`, `storefront`, `analytics`, `fraud-checker` | Their records and reads | index (browser where listed in `package.json`) |
+| `media`, `pages`, `navigation`, `storefront`, `analytics`, `fraud-checker` | Their records and reads | index (browser where listed in `package.json`) |
 | `agent-access`, `agent-storefront` | Agent connections and the agent storefront workflows | index |
 
 ### How the boundaries are enforced

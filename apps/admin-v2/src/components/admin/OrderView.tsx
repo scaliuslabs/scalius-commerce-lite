@@ -47,6 +47,9 @@ import { orderBadgeVisibility, statusBadgeVariant } from "./orderview/status-bad
 import { customerContactLinks } from "./orderview/contact-links";
 import { useOrderNeighbours } from "./orderview/order-neighbours";
 import type { Order } from "./orderview/types";
+import { CustomFieldsCard } from "./custom-fields/CustomFieldsCard";
+import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
+import { usePermissions } from "~/contexts/PermissionContext";
 
 /** Order statuses worth repeating in the header next to payment and delivery. */
 const HEADER_ORDER_STATUSES = new Set(["cancelled", "returned", "refunded", "incomplete"]);
@@ -81,6 +84,7 @@ export function OrderView({ order }: { order: Order }) {
   const contact = customerContactLinks(order.customerPhone);
   const name = formatOrderNumber(order.orderNumber, order.id);
   const archived = Boolean(order.archivedAt);
+  const canEditCustomData = usePermissions().hasPermission(PERMISSIONS.ORDERS_EDIT);
   // Finished orders (delivered, cancelled, returned, refunded) leave the working list (R3-ORD-11).
   const canArchive = actions.canBulkDeleteOrders && !archived && orderSkipReason(order, "archive") === null;
   const itemsLock = order.editReadiness.items;
@@ -244,6 +248,7 @@ export function OrderView({ order }: { order: Order }) {
             <div className="contents lg:block lg:space-y-4">
               <div className="order-1 lg:order-none"><OrderStatusCard order={order} /></div>
               <div className="order-6 lg:order-none"><OrderCustomerCard order={order} /></div>
+              <div className="order-7 lg:order-none"><CustomFieldsCard ownerType="order" ownerId={order.id} canEdit={canEditCustomData} /></div>
               {order.notes ? <div className="order-7 lg:order-none"><OrderNotesCard notes={order.notes} /></div> : null}
             </div>
           </div>

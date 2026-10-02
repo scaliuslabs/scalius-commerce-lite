@@ -11,7 +11,8 @@
  * - From 1024px the gallery spans 7 of 12 columns (`gap-x-10`) of the
  *   `max-w-7xl px-8` section, 6 from 1280px, minus the thumbnail column
  *   (80px / 100px + `lg:gap-5`, or a narrow strip plus 12px) when
- *   thumbnails sit beside the photo. The portrait gallery stops at 404px.
+ *   thumbnails sit beside the photo. The portrait gallery stops at
+ *   `PORTRAIT_GALLERY_MAX_PX`.
  * - Stacked and grid galleries fill the column left of the sticky info
  *   column (ProductPageLayout); on phones they are one swipeable row.
  */
@@ -30,6 +31,18 @@ export const GALLERY_IMAGE_WIDTHS = {
 /** A thumbnail is at most 100px wide: the 296 step covers DPR 3 (the first ladder step at or above 288). */
 const THUMBNAIL_MAX_WIDTH = 296;
 
+/**
+ * From 1024px the 3:4 portrait gallery (Aarong) stops at this width, centred
+ * in its column. ProductGallery.astro sets it as `--gallery-portrait-max` for
+ * its CSS cap, so the `sizes` below and the drawn width cannot drift apart.
+ */
+export const PORTRAIT_GALLERY_MAX_PX = 404;
+
+/** The portrait gallery's desktop width cap, or null for every other stage. */
+export function productGalleryPortraitMaxPx(layout: ProductGalleryLayout): number | null {
+  return layout.stageRatio === 0.75 ? PORTRAIT_GALLERY_MAX_PX : null;
+}
+
 /** Below 1024px: full row width (12px gutters), capped at the 384px stage. */
 const MOBILE_MAIN_SIZES = ["(max-width: 407px) calc(100vw - 24px)", "(max-width: 1023px) 384px"];
 const MOBILE_SIDE_MAIN_SIZES = ["(max-width: 463px) calc(100vw - 80px)", "(max-width: 1023px) 384px"];
@@ -40,7 +53,8 @@ function desktopMainSizes(layout: ProductGalleryLayout, railBeside: boolean): st
   // Grid: two photos across (8px apart) left of a 400px/480px info column.
   if (layout.gallery === "grid") return ["(max-width: 1279px) calc(50vw - 256px)", "344px"];
   // The 3:4 portrait gallery is centred inside its column at this width.
-  if (layout.stageRatio === 0.75 && !railBeside) return ["404px"];
+  const portraitMax = productGalleryPortraitMaxPx(layout);
+  if (portraitMax !== null && !railBeside) return [`${portraitMax}px`];
   if (railBeside && layout.thumbnailSize !== null) {
     // A narrow strip (Amazon): its width plus a 12px gap.
     const rail = layout.thumbnailSize + 12;

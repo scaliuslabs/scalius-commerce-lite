@@ -1,7 +1,8 @@
 ---
 // src/components/hero.astro
-// The homepage hero in its layout (SYNTHESIS.md 2.3), from the merchant's
-// banners; phones fall back to the desktop banners.
+// The homepage hero in its layout (SYNTHESIS.md 2.3), from the section's
+// own slides (lib/homepage-hero resolveHomepageHero): phones show each
+// slide's phone image, else its computer image around the phone focal point.
 // - contained-banners: today's contained carousel (Star Tech), with up to
 //   two side banners beside it when the section names them.
 // - app-panel: the contained carousel with the store's delivery facts
@@ -22,7 +23,6 @@ import type { HomepageMediaAsset } from "@/lib/api/storefront";
 import type { DeliveryFact } from "@/lib/delivery-facts";
 import { mediaImageSrcSet, mediaImageUrl } from "@/lib/media-url";
 import { getStorefrontPrefetchAttribute } from "@/lib/prefetch-policy";
-import { currentRequestTheme } from "@/lib/storefront-theme-context";
 
 export interface HeroSideBanner {
   asset: HomepageMediaAsset;
@@ -37,6 +37,8 @@ interface Props {
   /** Phones can show category tiles before this banner. */
   phonePriority?: boolean;
   layout?: StorefrontHeroLayout;
+  /** full-screen on phones: the first screen, or Aarong's compact frame for photo-only banners. */
+  phoneHeight?: "screen" | "compact";
   /** contained-banners: up to two images beside the banner. */
   sideBanners?: HeroSideBanner[];
   /** app-panel: the facts listed beside the banner. */
@@ -48,6 +50,7 @@ const {
   priority = true,
   phonePriority = priority,
   layout = "contained-banners",
+  phoneHeight = "screen",
   sideBanners = [],
   panelFacts = [],
 } = Astro.props;
@@ -67,8 +70,9 @@ const FRAME_HEIGHT = {
   },
 } as const;
 const frame = layout === "full-bleed" || layout === "full-screen" ? FRAME_HEIGHT[layout] : null;
+// A photo-only phone banner needs no full screen (Aarong): 65svh, 23-35rem.
 const compactHeritagePhone = layout === "full-screen"
-  && (await currentRequestTheme(Astro.locals)).resolved.template === "heritage-editorial"
+  && phoneHeight === "compact"
   && hero.mobile.length > 0
   && hero.mobile.every((slide) => !slide.heading?.trim() && !slide.supportingText?.trim() && !(slide.link && slide.buttonLabel?.trim()));
 const split = layout === "split" ? hero.desktop.slice(0, 2) : [];

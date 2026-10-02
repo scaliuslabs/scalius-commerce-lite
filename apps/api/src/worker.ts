@@ -28,6 +28,10 @@ import { fetchRuntimeApiApp } from "./runtime/fetch-runtime-app";
 import { composeApiRuntimeEnv, hasMasterSecret } from "./runtime/runtime-env";
 
 export type { AppType } from "./app";
+// The plugin bridge entrypoint: sandboxed plugins reach the platform only
+// through `ctx.exports.PluginBridge` (plugins/loaders/sandbox.ts). Its methods
+// load the bridge lazily, so this export costs no startup work.
+export { PluginBridge } from "./plugins/bridge-entrypoint";
 
 const PROBE_PATHS = new Set([
   "/api/v1/health",

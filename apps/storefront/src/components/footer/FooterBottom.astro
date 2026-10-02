@@ -48,7 +48,7 @@ const { policyLinks, copyrightName, trackOrderInBottomRow, social } = model;
       social.length > 0 && (
         <div class="flex items-center justify-center gap-4 flex-wrap">
           {social.map((item) => {
-            const displayTitle = item.label || item.platform || "Social";
+            const displayTitle = item.label || "Social";
             const href = item.url;
 
             return (

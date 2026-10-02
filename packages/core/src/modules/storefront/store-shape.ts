@@ -14,6 +14,7 @@ import { sql } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import {
   STORE_SHAPE_COUNT_CAP,
+  STOREFRONT_RENDERED_CONTENT_BLOCK_TYPES,
   storeShapeFromFacts,
   type StoreShape,
   type StoreShapeMenuItem,
@@ -21,7 +22,8 @@ import {
 import { getPublishedNavigationPlacements } from "../navigation/navigation.authority.service";
 import { cacheDep } from "@scalius/shared/cache-deps";
 import { deps } from "../../cache-deps";
-import { reviewsEnabledSql } from "../settings/documents";
+import { emiDocument, reviewsEnabledSql } from "../settings/documents";
+import { SETTINGS_DOCUMENT_ROW_KEY } from "../settings/settings-store";
 
 const cap = STORE_SHAPE_COUNT_CAP;
 
@@ -53,7 +55,10 @@ export function selectStoreShapeCounts(db: Database) {
   // is_active, deleted_at or fulfilment kind), key-spec values and whether a
   // review is published. Public category/brand membership uses `lm:all`;
   // neither key advances on ordinary product edits. Category, brand, attribute,
-  // collection and shipping rows count through their "any row" keys.
+  // collection and shipping rows count through their "any row" keys. The EMI
+  // plans are the `emi` settings document; content blocks are any block row
+  // (`t:product_content_blocks`: block edits are rare merchant writes, and a
+  // product's visibility moves `lm:all`).
   deps.key(cacheDep.storeShape());
   deps.listMembership("all");
   deps.anyCategory();
@@ -61,6 +66,9 @@ export function selectStoreShapeCounts(db: Database) {
   deps.anyAttribute();
   deps.anyCollection();
   deps.shipping();
+  deps.settings(emiDocument.key, SETTINGS_DOCUMENT_ROW_KEY);
+  deps.key(cacheDep.table("product_content_blocks"));
+  const renderedBlockTypes = sql.raw(STOREFRONT_RENDERED_CONTENT_BLOCK_TYPES.map((type) => `'${type}'`).join(", "));
   return db
     .select({
       productCount: sql<number>`(SELECT count(*) FROM (
@@ -150,6 +158,27 @@ export function selectStoreShapeCounts(db: Database) {
           AND p."deleted_at" IS NULL AND p."is_active" = 1
         LIMIT 1
       ) AS capped_digital_skus)`,
+      // The `emi` document is on with a plan (the product page's own
+      // `normalizeEmiSettings` read still decides each line).
+      emiPlanCount: sql<number>`(SELECT count(*) FROM (
+        SELECT 1 FROM "settings" emi_settings
+        WHERE emi_settings."category" = ${emiDocument.key} AND emi_settings."key" = ${SETTINGS_DOCUMENT_ROW_KEY}
+          AND (CASE WHEN json_valid(emi_settings."value") THEN json_type(emi_settings."value", '$.enabled') END) = 'true'
+          AND (CASE WHEN json_valid(emi_settings."value") THEN json_array_length(emi_settings."value", '$.plans') END) > 0
+        LIMIT 1
+      ) AS capped_emi_plans)`,
+      // A public product has a block the product page renders, outside the
+      // description tabs (rich text there is a tab, and mirrored legacy tabs
+      // are rich text in the tabs). Through the (product, placement, position)
+      // index, the first match ends the read.
+      contentBlockCount: sql<number>`(SELECT count(*) FROM (
+        SELECT 1 FROM "product_content_blocks" block
+        INNER JOIN "product_buyer_state" block_product
+          ON block_product."product_id" = block."product_id" AND block_product."is_public" = 1
+        WHERE block."type" IN (${renderedBlockTypes})
+          AND NOT (block."type" = 'rich-text' AND block."placement" = 'tabs')
+        LIMIT 1
+      ) AS capped_content_blocks)`,
     })
     .from(sql`(SELECT 1 AS one) AS store_shape_row`);
 }
@@ -168,6 +197,8 @@ export interface StoreShapeCountsRow {
   deliveryMethodCount: Counted;
   publishedReviewCount?: Counted;
   digitalSkuCount?: Counted;
+  emiPlanCount?: Counted;
+  contentBlockCount?: Counted;
 }
 
 /** The shape from the counts row and the header menu tree. */
@@ -189,6 +220,8 @@ export function storeShapeFromCounts(
     hasKeySpecs: number(row?.keySpecCount) > 0,
     hasReviews: number(row?.publishedReviewCount) > 0,
     hasDigitalLines: number(row?.digitalSkuCount) > 0,
+    hasEmiPlans: number(row?.emiPlanCount) > 0,
+    hasContentBlocks: number(row?.contentBlockCount) > 0,
   });
 }
 

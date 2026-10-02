@@ -553,14 +553,35 @@
   display: none;
 }
 
-/* The mass-retail listing gives each desktop photo room while preserving the
-   density's natural column count on narrower screens. */
+/* A listing's column cap (`blocks.listing.maxColumns`, or the card's) gives
+   each desktop photo room while preserving the density's natural column
+   count on narrower screens. */
 @container product-grid (min-width: 36rem) {
+  .product-grid-frame[data-catalog-grid-columns="3"]:not([data-catalog-results="list"]) .product-grid {
+    grid-template-columns: repeat(
+      auto-fill,
+      minmax(
+        max(min(var(--card-min), 100%), calc((100% - 2 * var(--theme-grid-gap-desktop, 1.5rem)) / 3)),
+        1fr
+      )
+    );
+  }
+
   .product-grid-frame[data-catalog-grid-columns="4"]:not([data-catalog-results="list"]) .product-grid {
     grid-template-columns: repeat(
       auto-fill,
       minmax(
         max(min(var(--card-min), 100%), calc((100% - 3 * var(--theme-grid-gap-desktop, 1.5rem)) / 4)),
+        1fr
+      )
+    );
+  }
+
+  .product-grid-frame[data-catalog-grid-columns="6"]:not([data-catalog-results="list"]) .product-grid {
+    grid-template-columns: repeat(
+      auto-fill,
+      minmax(
+        max(min(var(--card-min), 100%), calc((100% - 5 * var(--theme-grid-gap-desktop, 1.5rem)) / 6)),
         1fr
       )
     );
@@ -686,8 +707,9 @@
     font-size: 1rem;
   }
 
-  /* Fabrilife's department rail is a flat, independently scrolling list.
-     Keep the merchant's filter width, row pitch, colours and radius tokens. */
+  /* A ruled rail (`filters.ruled`, Fabrilife's department rail) is a flat,
+     independently scrolling list. Keep the merchant's filter width, row
+     pitch, colours and radius tokens. */
   [data-catalog-layout="sidebar"][data-catalog-rail="fashion"] > #filter-section[data-placement="sidebar"] {
     top: var(--header-height, 0px);
     max-height: calc(100dvh - var(--header-height, 0px));
@@ -700,7 +722,7 @@
     gap: 0;
   }
 
-  [data-catalog-rail="fashion"] .catalog-filter-form[data-filter-style="sidebar-comfortable"] .catalog-facet {
+  [data-catalog-rail="fashion"] .catalog-filter-form[data-placement="sidebar"] .catalog-facet {
     padding: 0.25rem 0.75rem 0.375rem 0;
     border: 0;
     border-bottom: 1px solid var(--border);
@@ -708,7 +730,7 @@
     background: transparent;
   }
 
-  [data-catalog-rail="fashion"] .catalog-filter-form[data-filter-style="sidebar-comfortable"] .catalog-facet-summary {
+  [data-catalog-rail="fashion"] .catalog-filter-form[data-placement="sidebar"] .catalog-facet-summary {
     min-height: 2rem;
     font-size: 0.875rem;
   }

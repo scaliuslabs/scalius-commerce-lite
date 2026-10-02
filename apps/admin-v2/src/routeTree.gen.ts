@@ -48,7 +48,6 @@ import { Route as AdminInboxConversationIdRouteImport } from './routes/admin/inb
 import { Route as AdminInventoryIndexRouteImport } from './routes/admin/inventory/index'
 import { Route as AdminInventoryLabelsRouteImport } from './routes/admin/inventory/labels'
 import { Route as AdminOnlineStoreIndexRouteImport } from './routes/admin/online-store/index'
-import { Route as AdminOnlineStoreBannersRouteImport } from './routes/admin/online-store/banners'
 import { Route as AdminOnlineStorePreferencesRouteImport } from './routes/admin/online-store/preferences'
 import { Route as AdminOnlineStoreThemeRouteImport } from './routes/admin/online-store/theme'
 import { Route as AdminOrdersListRouteImport } from './routes/admin/orders/_list'
@@ -62,7 +61,9 @@ import { Route as AdminSettingsIndexRouteImport } from './routes/admin/settings/
 import { Route as AdminSettingsAdvancedRouteImport } from './routes/admin/settings/advanced'
 import { Route as AdminSettingsAppsRouteImport } from './routes/admin/settings/apps'
 import { Route as AdminSettingsCheckoutRouteImport } from './routes/admin/settings/checkout'
+import { Route as AdminSettingsCustomDataRouteImport } from './routes/admin/settings/custom-data'
 import { Route as AdminSettingsCustomerAccountsRouteImport } from './routes/admin/settings/customer-accounts'
+import { Route as AdminSettingsLocationsRouteImport } from './routes/admin/settings/locations'
 import { Route as AdminSettingsNotificationsRouteImport } from './routes/admin/settings/notifications'
 import { Route as AdminSettingsPaymentsRouteImport } from './routes/admin/settings/payments'
 import { Route as AdminSettingsPoliciesRouteImport } from './routes/admin/settings/policies'
@@ -70,6 +71,7 @@ import { Route as AdminSettingsShippingRouteImport } from './routes/admin/settin
 import { Route as AdminSettingsStoreRouteImport } from './routes/admin/settings/store'
 import { Route as AdminSettingsTaxesRouteImport } from './routes/admin/settings/taxes'
 import { Route as AdminSettingsUsersRouteImport } from './routes/admin/settings/users'
+import { Route as AdminSettingsWebhooksRouteImport } from './routes/admin/settings/webhooks'
 import { Route as AdminArticlesArticleIdEditRouteImport } from './routes/admin/articles/$articleId/edit'
 import { Route as AdminBrandsBrandIdEditRouteImport } from './routes/admin/brands/$brandId/edit'
 import { Route as AdminCategoriesCategoryIdEditRouteImport } from './routes/admin/categories/$categoryId/edit'
@@ -290,11 +292,6 @@ const AdminOnlineStoreIndexRoute = AdminOnlineStoreIndexRouteImport.update({
   path: '/online-store/',
   getParentRoute: () => AdminRoute,
 } as any)
-const AdminOnlineStoreBannersRoute = AdminOnlineStoreBannersRouteImport.update({
-  id: '/online-store/banners',
-  path: '/online-store/banners',
-  getParentRoute: () => AdminRoute,
-} as any)
 const AdminOnlineStorePreferencesRoute =
   AdminOnlineStorePreferencesRouteImport.update({
     id: '/online-store/preferences',
@@ -361,12 +358,22 @@ const AdminSettingsCheckoutRoute = AdminSettingsCheckoutRouteImport.update({
   path: '/checkout',
   getParentRoute: () => AdminSettingsRouteRoute,
 } as any)
+const AdminSettingsCustomDataRoute = AdminSettingsCustomDataRouteImport.update({
+  id: '/custom-data',
+  path: '/custom-data',
+  getParentRoute: () => AdminSettingsRouteRoute,
+} as any)
 const AdminSettingsCustomerAccountsRoute =
   AdminSettingsCustomerAccountsRouteImport.update({
     id: '/customer-accounts',
     path: '/customer-accounts',
     getParentRoute: () => AdminSettingsRouteRoute,
   } as any)
+const AdminSettingsLocationsRoute = AdminSettingsLocationsRouteImport.update({
+  id: '/locations',
+  path: '/locations',
+  getParentRoute: () => AdminSettingsRouteRoute,
+} as any)
 const AdminSettingsNotificationsRoute =
   AdminSettingsNotificationsRouteImport.update({
     id: '/notifications',
@@ -401,6 +408,11 @@ const AdminSettingsTaxesRoute = AdminSettingsTaxesRouteImport.update({
 const AdminSettingsUsersRoute = AdminSettingsUsersRouteImport.update({
   id: '/users',
   path: '/users',
+  getParentRoute: () => AdminSettingsRouteRoute,
+} as any)
+const AdminSettingsWebhooksRoute = AdminSettingsWebhooksRouteImport.update({
+  id: '/webhooks',
+  path: '/webhooks',
   getParentRoute: () => AdminSettingsRouteRoute,
 } as any)
 const AdminArticlesArticleIdEditRoute =
@@ -555,7 +567,6 @@ export interface FileRoutesByFullPath {
   '/admin/gift-cards/$giftCardId': typeof AdminGiftCardsGiftCardIdRoute
   '/admin/inbox/$conversationId': typeof AdminInboxConversationIdRoute
   '/admin/inventory/labels': typeof AdminInventoryLabelsRoute
-  '/admin/online-store/banners': typeof AdminOnlineStoreBannersRoute
   '/admin/online-store/preferences': typeof AdminOnlineStorePreferencesRoute
   '/admin/online-store/theme': typeof AdminOnlineStoreThemeRoute
   '/admin/orders': typeof AdminOrdersListRouteWithChildren
@@ -565,7 +576,9 @@ export interface FileRoutesByFullPath {
   '/admin/settings/advanced': typeof AdminSettingsAdvancedRoute
   '/admin/settings/apps': typeof AdminSettingsAppsRoute
   '/admin/settings/checkout': typeof AdminSettingsCheckoutRoute
+  '/admin/settings/custom-data': typeof AdminSettingsCustomDataRoute
   '/admin/settings/customer-accounts': typeof AdminSettingsCustomerAccountsRoute
+  '/admin/settings/locations': typeof AdminSettingsLocationsRoute
   '/admin/settings/notifications': typeof AdminSettingsNotificationsRoute
   '/admin/settings/payments': typeof AdminSettingsPaymentsRoute
   '/admin/settings/policies': typeof AdminSettingsPoliciesRoute
@@ -573,6 +586,7 @@ export interface FileRoutesByFullPath {
   '/admin/settings/store': typeof AdminSettingsStoreRoute
   '/admin/settings/taxes': typeof AdminSettingsTaxesRoute
   '/admin/settings/users': typeof AdminSettingsUsersRoute
+  '/admin/settings/webhooks': typeof AdminSettingsWebhooksRoute
   '/admin/articles/': typeof AdminArticlesIndexRoute
   '/admin/brands/': typeof AdminBrandsIndexRoute
   '/admin/categories/': typeof AdminCategoriesIndexRoute
@@ -637,7 +651,6 @@ export interface FileRoutesByTo {
   '/admin/gift-cards/$giftCardId': typeof AdminGiftCardsGiftCardIdRoute
   '/admin/inbox/$conversationId': typeof AdminInboxConversationIdRoute
   '/admin/inventory/labels': typeof AdminInventoryLabelsRoute
-  '/admin/online-store/banners': typeof AdminOnlineStoreBannersRoute
   '/admin/online-store/preferences': typeof AdminOnlineStorePreferencesRoute
   '/admin/online-store/theme': typeof AdminOnlineStoreThemeRoute
   '/admin/orders/new': typeof AdminOrdersNewRoute
@@ -646,7 +659,9 @@ export interface FileRoutesByTo {
   '/admin/settings/advanced': typeof AdminSettingsAdvancedRoute
   '/admin/settings/apps': typeof AdminSettingsAppsRoute
   '/admin/settings/checkout': typeof AdminSettingsCheckoutRoute
+  '/admin/settings/custom-data': typeof AdminSettingsCustomDataRoute
   '/admin/settings/customer-accounts': typeof AdminSettingsCustomerAccountsRoute
+  '/admin/settings/locations': typeof AdminSettingsLocationsRoute
   '/admin/settings/notifications': typeof AdminSettingsNotificationsRoute
   '/admin/settings/payments': typeof AdminSettingsPaymentsRoute
   '/admin/settings/policies': typeof AdminSettingsPoliciesRoute
@@ -654,6 +669,7 @@ export interface FileRoutesByTo {
   '/admin/settings/store': typeof AdminSettingsStoreRoute
   '/admin/settings/taxes': typeof AdminSettingsTaxesRoute
   '/admin/settings/users': typeof AdminSettingsUsersRoute
+  '/admin/settings/webhooks': typeof AdminSettingsWebhooksRoute
   '/admin/articles': typeof AdminArticlesIndexRoute
   '/admin/brands': typeof AdminBrandsIndexRoute
   '/admin/categories': typeof AdminCategoriesIndexRoute
@@ -721,7 +737,6 @@ export interface FileRoutesById {
   '/admin/gift-cards/$giftCardId': typeof AdminGiftCardsGiftCardIdRoute
   '/admin/inbox/$conversationId': typeof AdminInboxConversationIdRoute
   '/admin/inventory/labels': typeof AdminInventoryLabelsRoute
-  '/admin/online-store/banners': typeof AdminOnlineStoreBannersRoute
   '/admin/online-store/preferences': typeof AdminOnlineStorePreferencesRoute
   '/admin/online-store/theme': typeof AdminOnlineStoreThemeRoute
   '/admin/orders/_list': typeof AdminOrdersListRouteWithChildren
@@ -731,7 +746,9 @@ export interface FileRoutesById {
   '/admin/settings/advanced': typeof AdminSettingsAdvancedRoute
   '/admin/settings/apps': typeof AdminSettingsAppsRoute
   '/admin/settings/checkout': typeof AdminSettingsCheckoutRoute
+  '/admin/settings/custom-data': typeof AdminSettingsCustomDataRoute
   '/admin/settings/customer-accounts': typeof AdminSettingsCustomerAccountsRoute
+  '/admin/settings/locations': typeof AdminSettingsLocationsRoute
   '/admin/settings/notifications': typeof AdminSettingsNotificationsRoute
   '/admin/settings/payments': typeof AdminSettingsPaymentsRoute
   '/admin/settings/policies': typeof AdminSettingsPoliciesRoute
@@ -739,6 +756,7 @@ export interface FileRoutesById {
   '/admin/settings/store': typeof AdminSettingsStoreRoute
   '/admin/settings/taxes': typeof AdminSettingsTaxesRoute
   '/admin/settings/users': typeof AdminSettingsUsersRoute
+  '/admin/settings/webhooks': typeof AdminSettingsWebhooksRoute
   '/admin/articles/': typeof AdminArticlesIndexRoute
   '/admin/brands/': typeof AdminBrandsIndexRoute
   '/admin/categories/': typeof AdminCategoriesIndexRoute
@@ -807,7 +825,6 @@ export interface FileRouteTypes {
     | '/admin/gift-cards/$giftCardId'
     | '/admin/inbox/$conversationId'
     | '/admin/inventory/labels'
-    | '/admin/online-store/banners'
     | '/admin/online-store/preferences'
     | '/admin/online-store/theme'
     | '/admin/orders'
@@ -817,7 +834,9 @@ export interface FileRouteTypes {
     | '/admin/settings/advanced'
     | '/admin/settings/apps'
     | '/admin/settings/checkout'
+    | '/admin/settings/custom-data'
     | '/admin/settings/customer-accounts'
+    | '/admin/settings/locations'
     | '/admin/settings/notifications'
     | '/admin/settings/payments'
     | '/admin/settings/policies'
@@ -825,6 +844,7 @@ export interface FileRouteTypes {
     | '/admin/settings/store'
     | '/admin/settings/taxes'
     | '/admin/settings/users'
+    | '/admin/settings/webhooks'
     | '/admin/articles/'
     | '/admin/brands/'
     | '/admin/categories/'
@@ -889,7 +909,6 @@ export interface FileRouteTypes {
     | '/admin/gift-cards/$giftCardId'
     | '/admin/inbox/$conversationId'
     | '/admin/inventory/labels'
-    | '/admin/online-store/banners'
     | '/admin/online-store/preferences'
     | '/admin/online-store/theme'
     | '/admin/orders/new'
@@ -898,7 +917,9 @@ export interface FileRouteTypes {
     | '/admin/settings/advanced'
     | '/admin/settings/apps'
     | '/admin/settings/checkout'
+    | '/admin/settings/custom-data'
     | '/admin/settings/customer-accounts'
+    | '/admin/settings/locations'
     | '/admin/settings/notifications'
     | '/admin/settings/payments'
     | '/admin/settings/policies'
@@ -906,6 +927,7 @@ export interface FileRouteTypes {
     | '/admin/settings/store'
     | '/admin/settings/taxes'
     | '/admin/settings/users'
+    | '/admin/settings/webhooks'
     | '/admin/articles'
     | '/admin/brands'
     | '/admin/categories'
@@ -972,7 +994,6 @@ export interface FileRouteTypes {
     | '/admin/gift-cards/$giftCardId'
     | '/admin/inbox/$conversationId'
     | '/admin/inventory/labels'
-    | '/admin/online-store/banners'
     | '/admin/online-store/preferences'
     | '/admin/online-store/theme'
     | '/admin/orders/_list'
@@ -982,7 +1003,9 @@ export interface FileRouteTypes {
     | '/admin/settings/advanced'
     | '/admin/settings/apps'
     | '/admin/settings/checkout'
+    | '/admin/settings/custom-data'
     | '/admin/settings/customer-accounts'
+    | '/admin/settings/locations'
     | '/admin/settings/notifications'
     | '/admin/settings/payments'
     | '/admin/settings/policies'
@@ -990,6 +1013,7 @@ export interface FileRouteTypes {
     | '/admin/settings/store'
     | '/admin/settings/taxes'
     | '/admin/settings/users'
+    | '/admin/settings/webhooks'
     | '/admin/articles/'
     | '/admin/brands/'
     | '/admin/categories/'
@@ -1312,13 +1336,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminOnlineStoreIndexRouteImport
       parentRoute: typeof AdminRoute
     }
-    '/admin/online-store/banners': {
-      id: '/admin/online-store/banners'
-      path: '/online-store/banners'
-      fullPath: '/admin/online-store/banners'
-      preLoaderRoute: typeof AdminOnlineStoreBannersRouteImport
-      parentRoute: typeof AdminRoute
-    }
     '/admin/online-store/preferences': {
       id: '/admin/online-store/preferences'
       path: '/online-store/preferences'
@@ -1410,11 +1427,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminSettingsCheckoutRouteImport
       parentRoute: typeof AdminSettingsRouteRoute
     }
+    '/admin/settings/custom-data': {
+      id: '/admin/settings/custom-data'
+      path: '/custom-data'
+      fullPath: '/admin/settings/custom-data'
+      preLoaderRoute: typeof AdminSettingsCustomDataRouteImport
+      parentRoute: typeof AdminSettingsRouteRoute
+    }
     '/admin/settings/customer-accounts': {
       id: '/admin/settings/customer-accounts'
       path: '/customer-accounts'
       fullPath: '/admin/settings/customer-accounts'
       preLoaderRoute: typeof AdminSettingsCustomerAccountsRouteImport
+      parentRoute: typeof AdminSettingsRouteRoute
+    }
+    '/admin/settings/locations': {
+      id: '/admin/settings/locations'
+      path: '/locations'
+      fullPath: '/admin/settings/locations'
+      preLoaderRoute: typeof AdminSettingsLocationsRouteImport
       parentRoute: typeof AdminSettingsRouteRoute
     }
     '/admin/settings/notifications': {
@@ -1464,6 +1495,13 @@ declare module '@tanstack/react-router' {
       path: '/users'
       fullPath: '/admin/settings/users'
       preLoaderRoute: typeof AdminSettingsUsersRouteImport
+      parentRoute: typeof AdminSettingsRouteRoute
+    }
+    '/admin/settings/webhooks': {
+      id: '/admin/settings/webhooks'
+      path: '/webhooks'
+      fullPath: '/admin/settings/webhooks'
+      preLoaderRoute: typeof AdminSettingsWebhooksRouteImport
       parentRoute: typeof AdminSettingsRouteRoute
     }
     '/admin/articles/$articleId/edit': {
@@ -1620,7 +1658,9 @@ interface AdminSettingsRouteRouteChildren {
   AdminSettingsAdvancedRoute: typeof AdminSettingsAdvancedRoute
   AdminSettingsAppsRoute: typeof AdminSettingsAppsRoute
   AdminSettingsCheckoutRoute: typeof AdminSettingsCheckoutRoute
+  AdminSettingsCustomDataRoute: typeof AdminSettingsCustomDataRoute
   AdminSettingsCustomerAccountsRoute: typeof AdminSettingsCustomerAccountsRoute
+  AdminSettingsLocationsRoute: typeof AdminSettingsLocationsRoute
   AdminSettingsNotificationsRoute: typeof AdminSettingsNotificationsRoute
   AdminSettingsPaymentsRoute: typeof AdminSettingsPaymentsRoute
   AdminSettingsPoliciesRoute: typeof AdminSettingsPoliciesRoute
@@ -1628,6 +1668,7 @@ interface AdminSettingsRouteRouteChildren {
   AdminSettingsStoreRoute: typeof AdminSettingsStoreRoute
   AdminSettingsTaxesRoute: typeof AdminSettingsTaxesRoute
   AdminSettingsUsersRoute: typeof AdminSettingsUsersRoute
+  AdminSettingsWebhooksRoute: typeof AdminSettingsWebhooksRoute
   AdminSettingsIndexRoute: typeof AdminSettingsIndexRoute
   AdminSettingsNotificationsEventRoute: typeof AdminSettingsNotificationsEventRoute
   AdminSettingsPoliciesWarrantyRoute: typeof AdminSettingsPoliciesWarrantyRoute
@@ -1642,7 +1683,9 @@ const AdminSettingsRouteRouteChildren: AdminSettingsRouteRouteChildren = {
   AdminSettingsAdvancedRoute: AdminSettingsAdvancedRoute,
   AdminSettingsAppsRoute: AdminSettingsAppsRoute,
   AdminSettingsCheckoutRoute: AdminSettingsCheckoutRoute,
+  AdminSettingsCustomDataRoute: AdminSettingsCustomDataRoute,
   AdminSettingsCustomerAccountsRoute: AdminSettingsCustomerAccountsRoute,
+  AdminSettingsLocationsRoute: AdminSettingsLocationsRoute,
   AdminSettingsNotificationsRoute: AdminSettingsNotificationsRoute,
   AdminSettingsPaymentsRoute: AdminSettingsPaymentsRoute,
   AdminSettingsPoliciesRoute: AdminSettingsPoliciesRoute,
@@ -1650,6 +1693,7 @@ const AdminSettingsRouteRouteChildren: AdminSettingsRouteRouteChildren = {
   AdminSettingsStoreRoute: AdminSettingsStoreRoute,
   AdminSettingsTaxesRoute: AdminSettingsTaxesRoute,
   AdminSettingsUsersRoute: AdminSettingsUsersRoute,
+  AdminSettingsWebhooksRoute: AdminSettingsWebhooksRoute,
   AdminSettingsIndexRoute: AdminSettingsIndexRoute,
   AdminSettingsNotificationsEventRoute: AdminSettingsNotificationsEventRoute,
   AdminSettingsPoliciesWarrantyRoute: AdminSettingsPoliciesWarrantyRoute,
@@ -1711,7 +1755,6 @@ interface AdminRouteChildren {
   AdminGiftCardsGiftCardIdRoute: typeof AdminGiftCardsGiftCardIdRoute
   AdminInboxConversationIdRoute: typeof AdminInboxConversationIdRoute
   AdminInventoryLabelsRoute: typeof AdminInventoryLabelsRoute
-  AdminOnlineStoreBannersRoute: typeof AdminOnlineStoreBannersRoute
   AdminOnlineStorePreferencesRoute: typeof AdminOnlineStorePreferencesRoute
   AdminOnlineStoreThemeRoute: typeof AdminOnlineStoreThemeRoute
   AdminOrdersListRoute: typeof AdminOrdersListRouteWithChildren
@@ -1761,7 +1804,6 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminGiftCardsGiftCardIdRoute: AdminGiftCardsGiftCardIdRoute,
   AdminInboxConversationIdRoute: AdminInboxConversationIdRoute,
   AdminInventoryLabelsRoute: AdminInventoryLabelsRoute,
-  AdminOnlineStoreBannersRoute: AdminOnlineStoreBannersRoute,
   AdminOnlineStorePreferencesRoute: AdminOnlineStorePreferencesRoute,
   AdminOnlineStoreThemeRoute: AdminOnlineStoreThemeRoute,
   AdminOrdersListRoute: AdminOrdersListRouteWithChildren,

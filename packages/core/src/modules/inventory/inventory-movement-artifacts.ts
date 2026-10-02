@@ -11,6 +11,7 @@ export type InventoryMovementExportInput = {
   search?: string;
   movementType?: string;
   orderId?: string;
+  locationId?: string;
   startDate?: Date;
   endDate?: Date;
   maxRows: number;
@@ -40,6 +41,7 @@ export function inventoryMovementCsvRow(movement: InventoryMovement): string {
     movement.variantSku,
     movement.productName,
     movement.orderId ? formatOrderNumber(movement.orderNumber, movement.orderId) : null,
+    movement.locationName,
     movement.actorName,
     movement.pool,
     movement.reservationGeneration,
@@ -57,7 +59,7 @@ export function inventoryMovementCsvRow(movement: InventoryMovement): string {
 }
 
 const HEADER = [
-  "Timestamp", "Movement ID", "Type", "SKU", "Product", "Order", "Actor",
+  "Timestamp", "Movement ID", "Type", "SKU", "Product", "Order", "Location", "Actor",
   "Pool", "Generation", "Stock delta", "Stock before", "Stock after",
   "Reserved delta", "Reserved before", "Reserved after", "Preorder delta",
   "Preorder before", "Preorder after", "Notes",
@@ -91,6 +93,7 @@ export async function buildInventoryMovementCsvArtifact(
       search: input.search,
       movementType: input.movementType,
       orderId: input.orderId,
+      locationId: input.locationId,
       startDate: input.startDate,
       endDate: input.endDate,
       cursor,

@@ -7,7 +7,7 @@
 
 import "@cloudflare/workers-types";
 import type { Database } from "@scalius/database/client";
-import type { AgentPrincipal } from "./agent-access/types";
+import type { AgentPrincipal, PluginPrincipal } from "./agent-access/types";
 
 // Extend Hono's context variable map for type-safe c.get("db")
 declare module "hono" {
@@ -30,6 +30,8 @@ declare module "hono" {
     };
     adminPermissions: Set<string>;
     agentPrincipal: AgentPrincipal;
+    /** Set when an installed plugin calls an operation (plugins/admin-request.ts). */
+    pluginPrincipal: PluginPrincipal;
     /** The single global `Env` declared in apps/api/src/env.d.ts. */
     env: Env;
   }

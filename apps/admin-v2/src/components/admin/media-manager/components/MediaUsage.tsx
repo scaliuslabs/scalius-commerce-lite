@@ -17,9 +17,8 @@ const KIND_LABEL = {
   brand: "usageBrand",
   page: "usagePage",
   article: "usageArticle",
-  banner: "usageBanner",
   theme: "usageTheme",
-  navigation: "usageNavigation",
+  social_link: "usageSocialLink",
   invoice: "usageInvoice",
   social_image: "usageSocialImage",
   video_cover: "usageVideoCover",
@@ -42,12 +41,9 @@ function referenceLink(reference: Reference, text: string): ReactNode {
       return <Link className={LINK} to="/admin/pages/$pageId/edit" params={{ pageId: id }}>{text}</Link>;
     case "article":
       return <Link className={LINK} to="/admin/articles/$articleId/edit" params={{ articleId: id }}>{text}</Link>;
-    case "banner":
-      return <Link className={LINK} to="/admin/online-store/banners">{text}</Link>;
     case "theme":
       return <Link className={LINK} to="/admin/online-store/theme">{text}</Link>;
-    case "navigation":
-      return <Link className={LINK} to="/admin/online-store/navigation">{text}</Link>;
+    case "social_link":
     case "invoice":
       return <Link className={LINK} to="/admin/settings/store">{text}</Link>;
     case "social_image":

@@ -25,7 +25,8 @@ interface Props {
 const { section, title, href, products, photo, currencySymbol, currencyCode, aboveFold } = Astro.props;
 const headingId = `home-${section.id}-title`;
 const { resolved } = await currentRequestTheme(Astro.locals);
-const fashionPhoto = Boolean(photo) && resolved.template === "fashion-value";
+// `photo: square` is Fabrilife's square photo in a 1:2 split; `tall` fills the grid's height.
+const fashionPhoto = Boolean(photo) && section.settings.photo === "square";
 const compactFashion = fashionPhoto && resolved.blocks.card.variant === "fashion-value";
 // Eight tiles at most: with more to see, the eighth is "View more".
 const viewMore = Boolean(href) && products.length >= 8;

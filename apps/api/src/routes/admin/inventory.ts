@@ -22,7 +22,20 @@ import {
     acknowledgeLowStockAlert,
     setDefaultLowStockThreshold,
     setLowStockThreshold,
+    archiveInventoryLocation,
+    createInventoryLocation,
+    getProductInventoryLevels,
+    getVariantInventoryLevels,
+    inventoryLocationInputSchema,
+    listInventoryLocations,
+    readLocationOnHand,
+    resolveActiveInventoryLocation,
+    setDefaultInventoryLocation,
+    unarchiveInventoryLocation,
+    updateInventoryLocation,
+    updateInventoryLocationSchema,
 } from "@scalius/core/modules/inventory";
+import { INVENTORY_LOCATION_KINDS, INVENTORY_LOCATION_STATUSES } from "@scalius/database/schema";
 import { getCurrencyConfig } from "@scalius/core/modules/settings";
 import { NotFoundError, ValidationError } from "../../utils/api-error";
 
@@ -30,7 +43,7 @@ import { ok } from "../../utils/api-response";
 import { successEnvelope, paginationSchema, errorResponses, conflictResponse } from "../../schemas/responses";
 import { enqueueCatalogProjectionRebuild } from "../../utils/catalog-jobs";
 
-import { nullableTimestampSchema } from "../../schemas/timestamps";
+import { nullableTimestampSchema, timestampSchema } from "../../schemas/timestamps";
 import { parseBangladeshDateOnlyBoundary } from "./order-date-filter";
 import { commerceCalendarDateKey } from "@scalius/shared/commerce-time";
 
@@ -76,6 +89,7 @@ const inventoryVariantSchema = z.object({
     available: z.number(),
     lowStockThreshold: z.number().nullable(),
     version: z.number(),
+    locationOnHand: z.number().int().nullable().openapi({ description: "On-hand at the `locationId` filter; null without one" }),
 }).passthrough();
 
 const inventoryStatsSchema = z.object({
@@ -111,6 +125,8 @@ const inventoryMovementSchema = z.object({
     newPreorderStock: z.number().int().nullable(),
     preorderStockDelta: z.number().int().nullable(),
     createdAt: z.union([z.string(), z.number()]),
+    locationId: z.string().nullable().openapi({ description: "Where physical stock moved; null for reservations and releases" }),
+    locationName: z.string().nullable(),
     variantSku: z.string().nullable(),
     optionLabel: z.string().nullable(),
     productName: z.string().nullable(),
@@ -160,11 +176,18 @@ const inventoryOverviewSchema = z.object({
     defaultLowStockThreshold: z.number().int().nullable().optional().openapi({ description: "Store-wide alert level for SKUs without their own (variants and alerts sections)" }),
 }).passthrough();
 
+const locationResultShape = {
+    locationId: z.string().optional().openapi({ description: "On-hand stock: the location the units moved at" }),
+    locationPreviousStock: z.number().int().optional().openapi({ description: "That location's on-hand before" }),
+    locationNewStock: z.number().int().optional().openapi({ description: "That location's on-hand after" }),
+};
+
 const adjustResultSchema = z.object({
     variantId: z.string(),
     previousStock: z.number(),
     newStock: z.number(),
     delta: z.number(),
+    ...locationResultShape,
 }).passthrough();
 
 const stockAdjustResultSchema = z.object({
@@ -172,6 +195,46 @@ const stockAdjustResultSchema = z.object({
     previousStock: z.number(),
     newStock: z.number(),
     delta: z.number(),
+    ...locationResultShape,
+});
+
+const optionalLocationIdSchema = z.string().trim().min(1).max(100).optional().openapi({
+    description: "Active location counted or adjusted; the default location when omitted",
+});
+
+const inventoryLocationSchema = z.object({
+    id: z.string(),
+    name: z.string(),
+    code: z.string(),
+    kind: z.enum(INVENTORY_LOCATION_KINDS),
+    addressLine1: z.string().nullable(),
+    addressLine2: z.string().nullable(),
+    city: z.string().nullable(),
+    postalCode: z.string().nullable(),
+    countryCode: z.string(),
+    phone: z.string().nullable(),
+    isDefault: z.boolean(),
+    status: z.enum(INVENTORY_LOCATION_STATUSES),
+    position: z.number().int(),
+    version: z.number().int().min(1),
+    onHand: z.number().int().openapi({ description: "Units on hand there, every SKU" }),
+    stockedSkus: z.number().int().openapi({ description: "SKUs with units on hand there" }),
+    createdAt: timestampSchema,
+    updatedAt: timestampSchema,
+});
+
+const variantInventoryLevelsSchema = z.object({
+    variantId: z.string(),
+    stock: z.number().int(),
+    reservedStock: z.number().int(),
+    levels: z.array(z.object({
+        locationId: z.string(),
+        name: z.string(),
+        code: z.string(),
+        isDefault: z.boolean(),
+        status: z.enum(INVENTORY_LOCATION_STATUSES),
+        onHand: z.number().int(),
+    })),
 });
 
 const scannerLookupSchema = z.object({
@@ -186,6 +249,7 @@ const scannerLookupSchema = z.object({
         barcode: z.string().nullable(),
         barcodeType: z.string().nullable(),
         lowStockThreshold: z.number().nullable(),
+        locationOnHand: z.number().int().nullable().openapi({ description: "On-hand at the `locationId` asked for; null without one" }),
     }).passthrough(),
     product: z.object({
         id: z.string(),
@@ -233,12 +297,14 @@ const listRoute = createRoute({
             alertStatus: z.enum(["active", "acknowledged", "resolved", "all"]).optional().openapi({ description: "Alert status filter" }),
             movementType: z.enum(["all", "reserved", "deducted", "released", "adjusted", "restored", "preorder_reserved", "preorder_deducted"]).optional().default("all").openapi({ description: "Movement type filter" }),
             movementOrderId: z.string().trim().max(100).optional().openapi({ description: "Exact order ID filter for movements" }),
+            movementLocationId: z.string().trim().min(1).max(100).optional().openapi({ description: "Movements at this inventory location only" }),
             movementStartDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().openapi({ description: "Movement start date (YYYY-MM-DD, Bangladesh calendar day)" }),
             movementEndDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().openapi({ description: "Movement end date (YYYY-MM-DD, Bangladesh calendar day)" }),
             movementCursor: z.string().max(512).optional().openapi({ description: "Opaque cursor for the next movement page" }),
             movementHealthOnly: z.enum(["true"]).optional().openapi({ description: "Return only ledger health diagnostics" }),
             sort: z.enum(["productName", "sku", "available"]).optional().default("available").openapi({ description: "Sort field" }),
             order: z.enum(["asc", "desc"]).optional().default("asc").openapi({ description: "Sort order" }),
+            locationId: z.string().trim().min(1).max(100).optional().openapi({ description: "Variants section: also return each SKU's on-hand at this location (locationOnHand)" }),
         })
     },
     responses: {
@@ -272,12 +338,14 @@ app.openapi(listRoute, async (c) => {
             alertStatus: query.alertStatus,
             movementType: query.movementType,
             movementOrderId: query.movementOrderId,
+            movementLocationId: query.movementLocationId,
             movementStartDate,
             movementEndDate,
             movementCursor: query.movementCursor,
             movementHealthOnly: query.movementHealthOnly === "true",
             sort: query.sort,
             order: query.order,
+            locationId: query.locationId,
         });
         return ok(c, result);
     } catch (error: unknown) {
@@ -294,6 +362,7 @@ const movementExportBodySchema = z.object({
     search: z.string().trim().max(120).optional().default(""),
     movementType: z.enum(["all", "reserved", "deducted", "released", "adjusted", "restored", "preorder_reserved", "preorder_deducted"]).optional().default("all"),
     movementOrderId: z.string().trim().max(100).optional(),
+    movementLocationId: z.string().trim().min(1).max(100).optional(),
     movementStartDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
     movementEndDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
     maxRows: z.number().int().min(1).max(INVENTORY_MOVEMENT_EXPORT_MAX_ROWS).default(INVENTORY_MOVEMENT_EXPORT_MAX_ROWS),
@@ -331,6 +400,7 @@ app.openapi(movementsExportRoute, async (c) => {
         search: input.search,
         movementType: input.movementType,
         orderId: input.movementOrderId,
+        locationId: input.movementLocationId,
         startDate,
         endDate,
         maxRows: input.maxRows,
@@ -701,6 +771,7 @@ const scannerLookupRoute = createRoute({
     request: {
         query: z.object({
             code: z.string().trim().min(1).max(256).openapi({ description: "Barcode or SKU value to search for" }),
+            locationId: z.string().trim().min(1).max(100).optional().openapi({ description: "Active location being counted: the variant also carries its on-hand there (locationOnHand)" }),
         }),
     },
     responses: {
@@ -714,12 +785,19 @@ const scannerLookupRoute = createRoute({
 
 app.openapi(scannerLookupRoute, async (c) => {
     const db = c.get("db");
-    const { code } = c.req.valid("query");
-    const result = await lookupByBarcodeOrSku(db, code);
+    const { code, locationId } = c.req.valid("query");
+    // A named location must be active: the scanner adjusts stock there next.
+    const [result, location] = await Promise.all([
+        lookupByBarcodeOrSku(db, code),
+        locationId ? resolveActiveInventoryLocation(db, locationId) : null,
+    ]);
     if (!result) {
         throw new NotFoundError("No variant found with this barcode or SKU");
     }
-    return ok(c, result);
+    const locationOnHand = location
+        ? (await readLocationOnHand(db, location.id, [result.variant.id])).get(result.variant.id) ?? 0
+        : null;
+    return ok(c, { ...result, variant: { ...result.variant, locationOnHand } });
 });
 
 // ── Scanner: Stock Adjust (relative) ──
@@ -740,6 +818,7 @@ const stockAdjustRoute = createRoute({
                         variantId: z.string().openapi({ description: "Variant ID" }),
                         adjustment: z.number().int().min(-Number.MAX_SAFE_INTEGER).max(Number.MAX_SAFE_INTEGER).refine((value) => value !== 0, "Adjustment must not be zero.").openapi({ description: "Whole-number stock adjustment (positive=add, negative=remove)" }),
                         reason: z.string().trim().max(500).optional().openapi({ description: "Reason for adjustment" }),
+                        locationId: optionalLocationIdSchema,
                     }),
                 },
             },
@@ -757,14 +836,14 @@ const stockAdjustRoute = createRoute({
 
 app.openapi(stockAdjustRoute, async (c) => {
     const db = c.get("db");
-    const { operationKey: bodyOperationKey, variantId, adjustment, reason } = c.req.valid("json");
+    const { operationKey: bodyOperationKey, variantId, adjustment, reason, locationId } = c.req.valid("json");
     const operationKey = resolveInventoryOperationKey(
         c.req.valid("header")["idempotency-key"],
         bodyOperationKey,
     );
     const user = c.get("user");
     try {
-        const result = await adjustStock(db, variantId, adjustment, operationKey, reason, user?.id);
+        const result = await adjustStock(db, variantId, adjustment, operationKey, reason, user?.id, locationId);
 
         return ok(c, result);
     } catch (error: unknown) {
@@ -780,7 +859,7 @@ const stockSetRoute = createRoute({
     path: "/stock-set",
     operationId: "dashboard.inventory.set_stock",
     tags: ["Admin - Inventory"],
-    summary: "Set stock to an absolute value (stocktaking)",
+    summary: "Set the counted stock of a SKU at a location (stocktaking)",
     request: {
         headers: inventoryIdempotencyHeadersSchema,
         body: {
@@ -789,8 +868,9 @@ const stockSetRoute = createRoute({
                     schema: z.object({
                         operationKey: inventoryOperationKeySchema.optional(),
                         variantId: z.string().openapi({ description: "Variant ID" }),
-                        newStock: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).openapi({ description: "New absolute whole-number stock value" }),
+                        newStock: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).openapi({ description: "Counted whole-number stock at the location" }),
                         reason: z.string().trim().max(500).optional().openapi({ description: "Reason for stocktake" }),
+                        locationId: optionalLocationIdSchema,
                     }),
                 },
             },
@@ -808,20 +888,213 @@ const stockSetRoute = createRoute({
 
 app.openapi(stockSetRoute, async (c) => {
     const db = c.get("db");
-    const { operationKey: bodyOperationKey, variantId, newStock, reason } = c.req.valid("json");
+    const { operationKey: bodyOperationKey, variantId, newStock, reason, locationId } = c.req.valid("json");
     const operationKey = resolveInventoryOperationKey(
         c.req.valid("header")["idempotency-key"],
         bodyOperationKey,
     );
     const user = c.get("user");
     try {
-        const result = await setStock(db, variantId, newStock, operationKey, reason, user?.id);
+        const result = await setStock(db, variantId, newStock, operationKey, reason, user?.id, locationId);
 
         return ok(c, result);
     } catch (error: unknown) {
         if (error instanceof Error && error.message === "Variant not found") throw new NotFoundError(error.message);
         throw error;
     }
+});
+
+// ── Per-location levels of a product's SKUs ──
+
+const productLevelsRoute = createRoute({
+    method: "get",
+    path: "/levels",
+    operationId: "dashboard.inventory.product_levels",
+    tags: ["Admin - Inventory"],
+    summary: "Get the on-hand stock of a product's SKUs at each location",
+    description: "One bounded read for the product editor: every live SKU's units at each location holding some. A SKU's levels sum to its on-hand stock; locations without units are omitted.",
+    request: {
+        query: z.object({
+            productId: z.string().trim().min(1).max(100).openapi({ description: "Product whose live SKUs to read" }),
+        }),
+    },
+    responses: {
+        200: {
+            description: "Per-location on-hand of the product's SKUs",
+            content: {
+                "application/json": {
+                    schema: successEnvelope(z.object({
+                        productId: z.string(),
+                        levels: z.array(z.object({
+                            variantId: z.string(),
+                            locationId: z.string(),
+                            onHand: z.number().int(),
+                        })),
+                    })),
+                },
+            },
+        },
+    },
+});
+
+app.openapi(productLevelsRoute, async (c) => {
+    const { productId } = c.req.valid("query");
+    return ok(c, await getProductInventoryLevels(c.get("db"), productId));
+});
+
+// ── Per-location levels of one SKU ──
+
+const variantLevelsRoute = createRoute({
+    method: "get",
+    path: "/{variantId}/levels",
+    operationId: "dashboard.inventory.levels",
+    tags: ["Admin - Inventory"],
+    summary: "Get a SKU's on-hand stock at each location",
+    description: "On-hand at every active location (0 where it holds none). The levels sum to the SKU's on-hand stock.",
+    request: { params: z.object({ variantId: z.string() }) },
+    responses: {
+        200: {
+            description: "Per-location on-hand",
+            content: { "application/json": { schema: successEnvelope(variantInventoryLevelsSchema) } },
+        },
+        404: errorResponses[404],
+    },
+});
+
+app.openapi(variantLevelsRoute, async (c) => {
+    const { variantId } = c.req.valid("param");
+    return ok(c, await getVariantInventoryLevels(c.get("db"), variantId));
+});
+
+// ── Locations ──
+
+const locationParamsSchema = z.object({ locationId: z.string().trim().min(1).max(100) });
+const locationEnvelope = successEnvelope(inventoryLocationSchema);
+
+const listLocationsRoute = createRoute({
+    method: "get",
+    path: "/locations",
+    operationId: "dashboard.inventory_locations.list",
+    tags: ["Admin - Inventory"],
+    summary: "List inventory locations",
+    description: "Where stock is held. Active locations first (the default leads); archived ones only when asked for.",
+    request: {
+        query: z.object({
+            includeArchived: z.enum(["true", "false"]).optional().default("false").openapi({ description: "Also list archived locations" }),
+        }),
+    },
+    responses: {
+        200: {
+            description: "Inventory locations",
+            content: { "application/json": { schema: successEnvelope(z.object({ locations: z.array(inventoryLocationSchema) })) } },
+        },
+    },
+});
+
+app.openapi(listLocationsRoute, async (c) => {
+    const { includeArchived } = c.req.valid("query");
+    const locations = await listInventoryLocations(c.get("db"), { includeArchived: includeArchived === "true" });
+    return ok(c, { locations });
+});
+
+const createLocationRoute = createRoute({
+    method: "post",
+    path: "/locations",
+    operationId: "dashboard.inventory_locations.create",
+    tags: ["Admin - Inventory"],
+    summary: "Add an inventory location",
+    request: { body: { content: { "application/json": { schema: inventoryLocationInputSchema } } } },
+    responses: {
+        200: { description: "Location added", content: { "application/json": { schema: locationEnvelope } } },
+        400: errorResponses[400],
+        409: conflictResponse,
+    },
+});
+
+app.openapi(createLocationRoute, async (c) => {
+    return ok(c, await createInventoryLocation(c.get("db"), c.req.valid("json")));
+});
+
+const updateLocationRoute = createRoute({
+    method: "patch",
+    path: "/locations/{locationId}",
+    operationId: "dashboard.inventory_locations.update",
+    tags: ["Admin - Inventory"],
+    summary: "Edit an inventory location",
+    description: "Replaces the location's details; expectedVersion must be its current version.",
+    request: {
+        params: locationParamsSchema,
+        body: { content: { "application/json": { schema: updateInventoryLocationSchema } } },
+    },
+    responses: {
+        200: { description: "Location saved", content: { "application/json": { schema: locationEnvelope } } },
+        400: errorResponses[400],
+        404: errorResponses[404],
+        409: conflictResponse,
+    },
+});
+
+app.openapi(updateLocationRoute, async (c) => {
+    const { locationId } = c.req.valid("param");
+    return ok(c, await updateInventoryLocation(c.get("db"), locationId, c.req.valid("json")));
+});
+
+const archiveLocationRoute = createRoute({
+    method: "post",
+    path: "/locations/{locationId}/archive",
+    operationId: "dashboard.inventory_locations.archive",
+    tags: ["Admin - Inventory"],
+    summary: "Archive an inventory location",
+    description: "Refused for the default location, while it holds any units, or while an open order is set to ship from it.",
+    request: { params: locationParamsSchema },
+    responses: {
+        200: { description: "Location archived", content: { "application/json": { schema: locationEnvelope } } },
+        404: errorResponses[404],
+        409: conflictResponse,
+    },
+});
+
+app.openapi(archiveLocationRoute, async (c) => {
+    const { locationId } = c.req.valid("param");
+    return ok(c, await archiveInventoryLocation(c.get("db"), locationId));
+});
+
+const unarchiveLocationRoute = createRoute({
+    method: "post",
+    path: "/locations/{locationId}/unarchive",
+    operationId: "dashboard.inventory_locations.unarchive",
+    tags: ["Admin - Inventory"],
+    summary: "Make an archived inventory location active again",
+    request: { params: locationParamsSchema },
+    responses: {
+        200: { description: "Location active", content: { "application/json": { schema: locationEnvelope } } },
+        404: errorResponses[404],
+    },
+});
+
+app.openapi(unarchiveLocationRoute, async (c) => {
+    const { locationId } = c.req.valid("param");
+    return ok(c, await unarchiveInventoryLocation(c.get("db"), locationId));
+});
+
+const defaultLocationRoute = createRoute({
+    method: "post",
+    path: "/locations/{locationId}/default",
+    operationId: "dashboard.inventory_locations.set_default",
+    tags: ["Admin - Inventory"],
+    summary: "Make an active location the default",
+    description: "Stock that moves without a named location (product editor edits, orders without their own location) moves at the default.",
+    request: { params: locationParamsSchema },
+    responses: {
+        200: { description: "Default location set", content: { "application/json": { schema: locationEnvelope } } },
+        400: errorResponses[400],
+        404: errorResponses[404],
+    },
+});
+
+app.openapi(defaultLocationRoute, async (c) => {
+    const { locationId } = c.req.valid("param");
+    return ok(c, await setDefaultInventoryLocation(c.get("db"), locationId));
 });
 
 export { app as adminInventoryRoutes };

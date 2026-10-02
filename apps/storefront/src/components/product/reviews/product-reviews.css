@@ -2,11 +2,11 @@
  * The product page's reviews module and the /products/<slug>/reviews page,
  * after Amazon's "Customer reviews" (summary column with star bars beside
  * the list) and Daraz's "Ratings & Reviews" (the same, stacked on phones).
- * Theme colours only, except the amber of the stars and bars, which every
- * reference shares.
+ * Theme colours only; the stars and bars take the theme's rating amber
+ * (`--theme-rating`), which every reference shares.
  */
 .product-reviews {
-  --review-bar: #f59e0b;
+  --review-bar: var(--theme-rating, #f59e0b);
   border-top: 1px solid var(--border);
 }
 

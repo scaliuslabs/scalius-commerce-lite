@@ -1,7 +1,8 @@
 /**
  * One store identity for every buyer-facing surface: page titles, Open Graph,
- * schema, header, footer and the mobile menu all read the store name and
- * support phone from Business settings, so they can never disagree.
+ * schema, header, footer and the mobile menu all read the store name, support
+ * phone and social profiles from Business settings, so they can never
+ * disagree.
  */
 import type { SocialLink } from "./api/types";
 import { mediaImageUrl } from "./media-url";
@@ -34,7 +35,7 @@ export function resolveStoreDisplayName(
 
 /**
  * The store-level share image: the social image from Preferences, else the
- * header logo. Pages without their own image (and schema that needs one)
+ * theme's logo. Pages without their own image (and schema that needs one)
  * use it, so no page shares without a preview.
  */
 export function resolveStoreShareImage(input: {
@@ -45,12 +46,11 @@ export function resolveStoreShareImage(input: {
   return source ? mediaImageUrl(source, MEDIA_DISCOVERY_IMAGE_WIDTH) || null : null;
 }
 
-/** Business settings own the support phone; the header field is the fallback. */
+/** Business settings own the support phone: there is no other source. */
 export function resolveStorePhone(
   business: StorefrontBusinessInfo | null | undefined,
-  headerPhone: string | null | undefined,
 ): string | null {
-  return business?.phone?.trim() || headerPhone?.trim() || null;
+  return business?.phone?.trim() || null;
 }
 
 /** A pagination suffix added by listing pages (" – Page 2"). */
@@ -103,7 +103,7 @@ function absoluteSocialUrl(url: string): string {
 }
 
 function isWhatsappLink(link: SocialLink, url: URL): boolean {
-  const name = `${link.platform ?? ""} ${link.label ?? ""}`.toLowerCase();
+  const name = (link.label ?? "").toLowerCase();
   return (
     name.includes("whatsapp") ||
     /(^|\.)whatsapp\.com$/i.test(url.hostname) ||
@@ -118,17 +118,17 @@ function whatsappLinkHasNumber(url: URL): boolean {
 }
 
 /**
- * The store's single social icon set: header and footer links merged in
+ * The store's single social icon set: the Business settings profiles in
  * order, de-duplicated by URL. A WhatsApp link without a number (for example
  * `web.whatsapp.com`) is pointed at a chat with the store's phone instead.
  */
 export function resolveStoreSocialLinks(
-  sources: ReadonlyArray<ReadonlyArray<SocialLink> | null | undefined>,
+  socialLinks: ReadonlyArray<SocialLink> | null | undefined,
   storePhone: string | null,
-): Array<SocialLink & { url: string }> {
+): SocialLink[] {
   const seen = new Set<string>();
-  const links: Array<SocialLink & { url: string }> = [];
-  for (const link of sources.flat()) {
+  const links: SocialLink[] = [];
+  for (const link of socialLinks ?? []) {
     if (!link?.url?.trim()) continue;
     let url: URL;
     try {

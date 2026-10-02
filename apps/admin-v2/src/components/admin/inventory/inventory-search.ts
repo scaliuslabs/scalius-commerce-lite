@@ -34,6 +34,8 @@ export type InventorySearch = {
   type: MovementFilter;
   from: string;
   to: string;
+  /** Variants and History tabs: an inventory location id, or "" for every location. */
+  location: string;
   q?: string;
 };
 
@@ -45,6 +47,7 @@ export const INVENTORY_SEARCH_DEFAULTS = {
   type: "all",
   from: "",
   to: "",
+  location: "",
 } as const satisfies Omit<InventorySearch, "q">;
 
 /** What a tab filters by: the URL state plus the search term, which lives in the session, one per tab (`inventory.<section>`). */
@@ -68,6 +71,7 @@ export function validateInventorySearch(search: Record<string, unknown>): Invent
     type: pick(search.type, MOVEMENT_FILTERS, "all"),
     from: calendarDate(search.from),
     to: calendarDate(search.to),
+    location: typeof search.location === "string" && /^[A-Za-z0-9_-]{1,100}$/.test(search.location) ? search.location : "",
     ...(typeof search.q === "string" ? { q: search.q.trim().slice(0, 120) } : {}),
   };
 }
@@ -78,7 +82,7 @@ export const MOVEMENT_PAGE_SIZE = 50;
 
 /** One query builder per tab, shared by the route prefetch and the tab so their cache keys match. */
 export const variantsQuery = (
-  search: Pick<InventoryFilters, "q" | "stock">,
+  search: Pick<InventoryFilters, "q" | "stock"> & { location?: string },
   page = 1,
   limit = 50,
   sort: VariantSort = { field: "available", order: "asc" },
@@ -90,6 +94,8 @@ export const variantsQuery = (
   limit,
   sort: sort.field,
   order: sort.order,
+  // With a location chosen, each row also carries its on-hand there.
+  ...(search.location ? { locationId: search.location } : {}),
 });
 
 export const alertsQuery = (
@@ -105,12 +111,14 @@ export const alertsQuery = (
 });
 
 export const movementsQuery = (
-  search: Pick<InventoryFilters, "q" | "type" | "from" | "to">,
+  search: Pick<InventoryFilters, "q" | "type" | "from" | "to"> & { location?: string },
   cursor?: string,
 ): InventoryQuery => ({
   section: "movements",
   search: search.q || undefined,
   movementType: search.type,
+  // Only stock that moved at this location (reservations hold none).
+  ...(search.location ? { movementLocationId: search.location } : {}),
   movementStartDate: search.from || undefined,
   movementEndDate: search.to || undefined,
   movementCursor: cursor || undefined,

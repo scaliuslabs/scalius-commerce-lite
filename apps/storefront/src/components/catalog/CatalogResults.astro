@@ -42,7 +42,11 @@ interface Props {
 
 const { products, results, kind, phoneLayout, context, filterColumnPx = 0, maxColumns: columns, restoreView, marked, currencySymbol, currencyCode } = Astro.props;
 const { resolved, theme, layout } = await currentRequestTheme(Astro.locals);
-const maxColumns = columns ?? (["spec", "mall"].includes(resolved.blocks.card.variant) || (resolved.template === "mass-retail" && resolved.tokens.density === "comfortable") ? 4 : undefined);
+// The page's own cap (a full-width search), else the listing's (Target's
+// four roomy columns), else the card's: Star Tech's and the mall's tiles cap at four.
+const maxColumns = columns
+  ?? resolved.blocks.listing.maxColumns
+  ?? (["spec", "mall"].includes(resolved.blocks.card.variant) ? 4 : undefined);
 // Only a grid beside the filters loses their column.
 const columnPx = context === "beside-filters" ? filterColumnPx : 0;
 

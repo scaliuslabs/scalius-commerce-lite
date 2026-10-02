@@ -22,6 +22,7 @@ import { customersMessages } from "~/i18n/customers";
 import { customerTitle, type CustomerTitleInput } from "~/lib/customer-title";
 import { readCustomerPhoneConflict, type CustomerPhoneConflict } from "~/lib/admin-api-error";
 import { CustomerTrashNotice, type TrashedCustomer } from "./CustomerTrashNotice";
+import { CustomFieldsCard } from "./custom-fields/CustomFieldsCard";
 
 interface CustomerFormProps {
   defaultValues?: Partial<CustomerFormValues>;
@@ -198,6 +199,9 @@ export function CustomerForm({ defaultValues, isEdit = false, record }: Customer
           <input type="hidden" {...form.register("areaName")} />
         </CardContent>
       </Card>
+      {isEdit && defaultValues?.id && !trashed ? (
+        <CustomFieldsCard ownerType="customer" ownerId={defaultValues.id} canEdit={canSave} />
+      ) : null}
     </>
   );
 

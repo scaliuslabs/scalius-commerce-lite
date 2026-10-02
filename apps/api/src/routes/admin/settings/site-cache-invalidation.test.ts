@@ -3,9 +3,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { ConflictError } from "@scalius/core/errors";
 import {
   DEFAULT_STOREFRONT_THEME,
+  EMPTY_STORE_SHAPE,
   storefrontTemplateTheme,
   type StorefrontThemeDocument,
 } from "@scalius/shared/storefront-theme";
+import { THEME_VERSION_HISTORY_LIMIT } from "@scalius/core/modules/settings";
 
 import { errorResponseFromError } from "../../../utils/api-response";
 
@@ -14,14 +16,8 @@ const mocks = vi.hoisted(() => ({
   getCurrencySettings: vi.fn(),
   isCurrencyCodeLocked: vi.fn(),
   saveCurrencySettings: vi.fn(),
-  getGeneralSettings: vi.fn(),
-  saveHeaderConfig: vi.fn(),
-  saveFooterConfig: vi.fn(),
-  getThemeSettings: vi.fn(),
-  saveThemeSettings: vi.fn(),
   getThemeWorkspace: vi.fn(),
   saveThemeDraft: vi.fn(),
-  rebaseThemeDraft: vi.fn(),
   publishThemeDraft: vi.fn(),
   listThemeVersions: vi.fn(),
   rollbackThemeSettings: vi.fn(),
@@ -34,12 +30,12 @@ const mocks = vi.hoisted(() => ({
   getProductFeedDiagnostics: vi.fn(),
   getStorefrontUrlSetting: vi.fn(),
   saveStorefrontUrl: vi.fn(),
-  getHomepagePresentationSettings: vi.fn(),
-  saveHomepagePresentationSettings: vi.fn(),
   getAllowedCountries: vi.fn(),
   saveAllowedCountries: vi.fn(),
   runSeoDiscoveryLiveProbe: vi.fn(),
   readSettingsForEdit: vi.fn(),
+  readThemeMedia: vi.fn(),
+  readStoreShape: vi.fn(),
 }));
 
 vi.mock("@scalius/core/modules/settings", async (importOriginal) => ({
@@ -47,14 +43,8 @@ vi.mock("@scalius/core/modules/settings", async (importOriginal) => ({
   getCurrencySettings: mocks.getCurrencySettings,
   isCurrencyCodeLocked: mocks.isCurrencyCodeLocked,
   saveCurrencySettings: mocks.saveCurrencySettings,
-  getGeneralSettings: mocks.getGeneralSettings,
-  saveHeaderConfig: mocks.saveHeaderConfig,
-  saveFooterConfig: mocks.saveFooterConfig,
-  getThemeSettings: mocks.getThemeSettings,
-  saveThemeSettings: mocks.saveThemeSettings,
   getThemeWorkspace: mocks.getThemeWorkspace,
   saveThemeDraft: mocks.saveThemeDraft,
-  rebaseThemeDraft: mocks.rebaseThemeDraft,
   publishThemeDraft: mocks.publishThemeDraft,
   listThemeVersions: mocks.listThemeVersions,
   rollbackThemeSettings: mocks.rollbackThemeSettings,
@@ -64,11 +54,15 @@ vi.mock("@scalius/core/modules/settings", async (importOriginal) => ({
   saveMediaOptimizationSettings: mocks.saveMediaOptimizationSettings,
   getSeoSettings: mocks.getSeoSettings,
   saveSeoSettings: mocks.saveSeoSettings,
-  getHomepagePresentationSettings: mocks.getHomepagePresentationSettings,
-  saveHomepagePresentationSettings: mocks.saveHomepagePresentationSettings,
   getAllowedCountries: mocks.getAllowedCountries,
   saveAllowedCountries: mocks.saveAllowedCountries,
   readSettingsForEdit: mocks.readSettingsForEdit,
+}));
+
+vi.mock("@scalius/core/modules/storefront", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/storefront")>()),
+  readThemeMedia: mocks.readThemeMedia,
+  readStoreShape: mocks.readStoreShape,
 }));
 
 vi.mock("@scalius/core/modules/platform", async (importOriginal) => ({
@@ -127,42 +121,6 @@ function createTestApp() {
   });
   mocks.isCurrencyCodeLocked.mockResolvedValue(false);
   mocks.saveCurrencySettings.mockResolvedValue({ value: {}, revision: 2 });
-  mocks.getGeneralSettings.mockResolvedValue({
-    headerConfig: {},
-    footerConfig: {},
-    navigationReadiness: {
-      header: { status: "ready", issues: [] },
-      footer: { status: "ready", issues: [] },
-    },
-  });
-  mocks.saveHeaderConfig.mockResolvedValue(undefined);
-  mocks.saveFooterConfig.mockResolvedValue(undefined);
-  mocks.getHomepagePresentationSettings.mockResolvedValue({
-    config: {
-      categoryRail: {
-        enabled: false,
-        title: "Shop by category",
-        categoryIds: [],
-      },
-      trustStrip: { enabled: false },
-    },
-    revision: 1,
-  });
-  mocks.saveHomepagePresentationSettings.mockResolvedValue({
-    config: {
-      categoryRail: { enabled: true, title: "Browse", categoryIds: ["cat_1"] },
-      trustStrip: { enabled: true },
-    },
-    revision: 2,
-  });
-  mocks.getThemeSettings.mockResolvedValue({
-    theme: DEFAULT_STOREFRONT_THEME,
-    revision: 1,
-  });
-  mocks.saveThemeSettings.mockResolvedValue({
-    theme: storefrontTemplateTheme("rounded-tech"),
-    revision: 2,
-  });
   const themeDraft = {
     theme: DEFAULT_STOREFRONT_THEME,
     revision: 2,
@@ -178,10 +136,8 @@ function createTestApp() {
   };
   mocks.getThemeWorkspace.mockResolvedValue(themeWorkspace);
   mocks.saveThemeDraft.mockResolvedValue(themeDraft);
-  mocks.rebaseThemeDraft.mockResolvedValue({
-    ...themeDraft,
-    revision: 3,
-  });
+  mocks.readThemeMedia.mockResolvedValue([]);
+  mocks.readStoreShape.mockResolvedValue(EMPTY_STORE_SHAPE);
   mocks.publishThemeDraft.mockResolvedValue({
     published: {
       theme: DEFAULT_STOREFRONT_THEME,
@@ -495,121 +451,6 @@ describe("site settings write behavior", () => {
     },
   );
 
-  it("fails general settings reads visibly instead of returning empty success", async () => {
-    const { app, env } = createTestApp();
-    mocks.getGeneralSettings.mockRejectedValueOnce(new Error("D1 unavailable"));
-
-    const response = await app.request(
-      "/api/v1/admin/settings/general",
-      { method: "GET" },
-      env,
-    );
-    const body = await response.json();
-
-    expect(response.status).toBe(500);
-    expect(body).toMatchObject({ success: false });
-  });
-
-  it("exposes bounded header and footer documents with their exact CAS revisions", async () => {
-    const { app, env } = createTestApp();
-    mocks.getGeneralSettings.mockResolvedValue({
-      headerConfig: {
-        topBar: { text: "Welcome", isEnabled: true },
-        logo: { src: "/logo.png", alt: "Logo", width: 160 },
-        favicon: { src: "/favicon.png", alt: "Icon" },
-        contact: { phone: "+8801700000000", text: "Call", isEnabled: true },
-        social: [],
-        navigation: [{ id: "must-not-project" }],
-      },
-      footerConfig: {
-        logo: { src: "/logo.png", alt: "Logo" },
-        tagline: "Carefully made",
-        description: "Commerce",
-        copyrightText: "Scalius",
-        social: [],
-        menus: [{ id: "must-not-project" }],
-      },
-      revisions: { header: 7, footer: 9 },
-      navigationReadiness: {
-        header: { status: "ready", issues: [] },
-        footer: { status: "ready", issues: [] },
-      },
-    });
-
-    const headerResponse = await app.request(
-      "/api/v1/admin/settings/header",
-      { method: "GET" },
-      env,
-    );
-    const footerResponse = await app.request(
-      "/api/v1/admin/settings/footer",
-      { method: "GET" },
-      env,
-    );
-    const headerText = await headerResponse.text();
-    const footerText = await footerResponse.text();
-
-    expect(headerResponse.status).toBe(200);
-    expect(footerResponse.status).toBe(200);
-    expect(JSON.parse(headerText)).toMatchObject({ data: { revision: 7 } });
-    expect(JSON.parse(footerText)).toMatchObject({ data: { revision: 9 } });
-    expect(headerText).not.toContain("navigation");
-    expect(footerText).not.toContain("menus");
-    expect(new TextEncoder().encode(headerText).byteLength).toBeLessThan(65_536);
-    expect(new TextEncoder().encode(footerText).byteLength).toBeLessThan(65_536);
-  });
-
-  it("normalizes empty first-run header and footer documents into writable defaults", async () => {
-    const { app, env } = createTestApp();
-    mocks.getGeneralSettings.mockResolvedValue({
-      headerConfig: {},
-      footerConfig: {},
-      revisions: { header: 0, footer: 0 },
-      navigationReadiness: {
-        header: { status: "ready", issues: [] },
-        footer: { status: "ready", issues: [] },
-      },
-    });
-
-    const headerResponse = await app.request(
-      "/api/v1/admin/settings/header",
-      { method: "GET" },
-      env,
-    );
-    const footerResponse = await app.request(
-      "/api/v1/admin/settings/footer",
-      { method: "GET" },
-      env,
-    );
-
-    expect(headerResponse.status).toBe(200);
-    await expect(headerResponse.json()).resolves.toMatchObject({
-      data: {
-        revision: 0,
-        config: {
-          topBar: { text: "", isEnabled: false },
-          logo: { src: "", alt: "" },
-          favicon: { src: "", alt: "" },
-          contact: { phone: "", text: "", isEnabled: false },
-          social: [],
-        },
-      },
-    });
-    expect(footerResponse.status).toBe(200);
-    await expect(footerResponse.json()).resolves.toMatchObject({
-      data: {
-        revision: 0,
-        config: {
-          logo: { src: "", alt: "" },
-          tagline: "",
-          description: "",
-          copyrightText: "Your store",
-          social: [],
-        },
-      },
-    });
-  });
-
   it("fails Store URL reads visibly instead of returning a relative fallback", async () => {
     const { app, env } = createTestApp();
     mocks.getStorefrontUrlSetting.mockRejectedValueOnce(
@@ -650,49 +491,6 @@ describe("site settings write behavior", () => {
     },
   );
 
-  it("returns section-local navigation diagnostics without failing general settings", async () => {
-    const { app, env } = createTestApp();
-    mocks.getGeneralSettings.mockResolvedValueOnce({
-      headerConfig: { navigation: [] },
-      footerConfig: {
-        menus: [{ id: "help", title: "Help", links: [] }],
-      },
-      navigationReadiness: {
-        header: {
-          status: "error",
-          issues: [{
-            code: "navigation.invalid",
-            message: "Stored header configuration is invalid.",
-          }],
-        },
-        footer: { status: "ready", issues: [] },
-      },
-    });
-
-    const response = await app.request(
-      "/api/v1/admin/settings/general",
-      { method: "GET" },
-      env,
-    );
-    const body = await response.json();
-
-    expect(response.status).toBe(200);
-    expect(body).toMatchObject({
-      success: true,
-      data: {
-        headerConfig: { navigation: [] },
-        footerConfig: { menus: [{ id: "help" }] },
-        navigationReadiness: {
-          header: {
-            status: "error",
-            issues: [{ code: "navigation.invalid" }],
-          },
-          footer: { status: "ready", issues: [] },
-        },
-      },
-    });
-  });
-
   it("exposes return policy settings on SEO reads", async () => {
     const { app, env } = createTestApp();
 
@@ -718,44 +516,6 @@ describe("site settings write behavior", () => {
         },
       },
     });
-  });
-
-  it("keeps navigation out of the header presentation write boundary", async () => {
-    const { app, env } = createTestApp();
-    const navigationItem = {
-      id: "featured-product",
-      target: {
-        type: "resource",
-        resourceType: "product",
-        resourceId: "prod_1",
-        query: "?color=blue",
-      },
-      labelMode: "resource",
-      lastKnownLabel: "Featured trainer",
-    };
-
-    const response = await requestJson(app, env, "POST", "/header", {
-      expectedRevision: 1,
-      topBar: { text: "Hi", isEnabled: true },
-      logo: { src: "/logo.png", alt: "Logo" },
-      favicon: { src: "/favicon.png", alt: "Icon" },
-      contact: { phone: "123", text: "Call", isEnabled: true },
-      social: [],
-      navigation: [navigationItem],
-    });
-
-    expect(response.status).toBe(200);
-    expect(mocks.saveHeaderConfig).toHaveBeenCalledWith(
-      expect.anything(),
-      {
-        topBar: { text: "Hi", isEnabled: true },
-        logo: { src: "/logo.png", alt: "Logo", width: 180 },
-        favicon: { src: "/favicon.png", alt: "Icon" },
-        contact: { phone: "123", text: "Call", isEnabled: true },
-        social: [],
-      },
-      1,
-    );
   });
 
   it("accepts nested partial SEO discovery saves for safe merge semantics", async () => {
@@ -956,40 +716,6 @@ describe("site settings write behavior", () => {
       body: { currencyCode: "BDT", currencySymbol: "Tk", usdExchangeRate: "1" },
     },
     {
-      path: "/header",
-      method: "POST" as const,
-      body: {
-        expectedRevision: 1,
-        topBar: { text: "Hi", isEnabled: true },
-        logo: { src: "/logo.png", alt: "Logo" },
-        favicon: { src: "/favicon.png", alt: "Icon" },
-        contact: { phone: "123", text: "Call", isEnabled: true },
-        social: [],
-        navigation: [],
-      },
-    },
-    {
-      path: "/footer",
-      method: "POST" as const,
-      body: {
-        expectedRevision: 1,
-        logo: { src: "/logo.png", alt: "Logo" },
-        tagline: "",
-        description: "",
-        copyrightText: "",
-        menus: [],
-        social: [],
-      },
-    },
-    {
-      path: "/theme",
-      method: "POST" as const,
-      body: {
-        expectedRevision: 1,
-        theme: storefrontTemplateTheme("rounded-tech"),
-      },
-    },
-    {
       path: "/media",
       method: "POST" as const,
       body: { canonicalCdnUrl: "cdn.example.com" },
@@ -1003,19 +729,6 @@ describe("site settings write behavior", () => {
       path: "/storefront-url",
       method: "POST" as const,
       body: { storefrontUrl: "https://storefront.example.com" },
-    },
-    {
-      path: "/homepage-presentation",
-      method: "POST" as const,
-      body: {
-        expectedRevision: 1,
-        categoryRail: {
-          enabled: true,
-          title: "Browse",
-          categoryIds: ["cat_1"],
-        },
-        trustStrip: { enabled: true },
-      },
     },
     {
       path: "/allowed-countries",
@@ -1160,47 +873,33 @@ describe("site settings write behavior", () => {
     ];
 
     for (const theme of invalidThemes) {
-      const response = await requestJson(app, env, "POST", "/theme", {
-        expectedRevision: 1,
+      const response = await requestJson(app, env, "POST", "/theme/draft", {
         theme,
+        expectedDraftRevision: 2,
+        basePublishedRevision: 1,
       });
       expect(response.status).toBe(400);
     }
-    const draftResponse = await requestJson(app, env, "POST", "/theme/draft", {
-      theme: lowContrast,
-      expectedDraftRevision: 2,
-      basePublishedRevision: 1,
-    });
-    expect(draftResponse.status).toBe(400);
-    expect(mocks.saveThemeSettings).not.toHaveBeenCalled();
     expect(mocks.saveThemeDraft).not.toHaveBeenCalled();
 
   });
 
   it("returns a conflict for a stale theme publish", async () => {
     const { app, env } = createTestApp();
-    mocks.saveThemeSettings.mockRejectedValueOnce(
-      new ConflictError(
-        "The storefront theme was published from another session. Your draft is still available; load the latest saved theme before publishing again.",
-      ),
+    mocks.publishThemeDraft.mockRejectedValueOnce(
+      new ConflictError("The storefront style or its draft changed in another session. Reload before publishing."),
     );
 
-    const response = await requestJson(app, env, "POST", "/theme", {
-      expectedRevision: 1,
-      theme: storefrontTemplateTheme("marketplace"),
+    const response = await requestJson(app, env, "POST", "/theme/publish", {
+      expectedPublishedRevision: 1,
+      expectedDraftRevision: 2,
     });
 
     expect(response.status).toBe(409);
-    expect(mocks.saveThemeSettings).toHaveBeenCalledWith(
-      { id: "db" },
-      storefrontTemplateTheme("marketplace"),
-      1,
-      null,
-    );
-
+    expect(mocks.publishThemeDraft).toHaveBeenCalledWith({ id: "db" }, 1, 2, null);
   });
 
-  it("saves and rebases theme drafts", async () => {
+  it("saves theme drafts, and publishing goes only through the draft", async () => {
     const { app, env } = createTestApp();
     const payload = {
       theme: DEFAULT_STOREFRONT_THEME,
@@ -1208,23 +907,8 @@ describe("site settings write behavior", () => {
       basePublishedRevision: 1,
     };
 
-    const saveResponse = await requestJson(
-      app,
-      env,
-      "POST",
-      "/theme/draft",
-      payload,
-    );
-    const rebaseResponse = await requestJson(
-      app,
-      env,
-      "POST",
-      "/theme/draft/rebase",
-      payload,
-    );
-
+    const saveResponse = await requestJson(app, env, "POST", "/theme/draft", payload);
     expect(saveResponse.status).toBe(200);
-    expect(rebaseResponse.status).toBe(200);
     expect(mocks.saveThemeDraft).toHaveBeenCalledWith(
       { id: "db" },
       DEFAULT_STOREFRONT_THEME,
@@ -1232,17 +916,51 @@ describe("site settings write behavior", () => {
       1,
       null,
     );
-    expect(mocks.rebaseThemeDraft).toHaveBeenCalledWith(
-      { id: "db" },
-      DEFAULT_STOREFRONT_THEME,
-      2,
-      1,
-      null,
-    );
 
+    // No direct publish and no rebase: a draft is always based on the live revision.
+    for (const path of ["/theme", "/theme/draft/rebase"]) {
+      const response = await requestJson(app, env, "POST", path, { expectedRevision: 1, ...payload });
+      expect(response.status).toBe(404);
+    }
+    const legacyRead = await app.request("/api/v1/admin/settings/theme", { method: "GET" }, env);
+    expect(legacyRead.status).toBe(404);
   });
 
-  it("creates a private exact-draft preview", async () => {
+  it("loads the workspace with every image the draft names and the store shape in one read", async () => {
+    const { app, env } = createTestApp();
+    const draftTheme = storefrontTemplateTheme("heritage-editorial");
+    const media = [{ id: "media_draft", url: "https://cdn.example.com/story.jpg", alt: "", width: 1200, height: 800 }];
+    mocks.getThemeWorkspace.mockResolvedValueOnce({
+      published: { theme: DEFAULT_STOREFRONT_THEME, revision: 1 },
+      draft: { theme: draftTheme, revision: 3, basePublishedRevision: 1, updatedAt: new Date(1_000) },
+    });
+    mocks.readThemeMedia.mockResolvedValueOnce(media);
+
+    const response = await app.request("/api/v1/admin/settings/theme/workspace", { method: "GET" }, env);
+    const body = (await response.json()) as { data?: Record<string, unknown> };
+
+    expect(response.status).toBe(200);
+    expect(mocks.readThemeMedia).toHaveBeenCalledTimes(1);
+    expect(mocks.readThemeMedia).toHaveBeenCalledWith({ id: "db" }, draftTheme);
+    expect(body.data).toMatchObject({
+      published: { revision: 1 },
+      draft: { revision: 3, basePublishedRevision: 1 },
+      storeShape: EMPTY_STORE_SHAPE,
+      media,
+    });
+    expect(body.data).not.toHaveProperty("sectionMedia");
+  });
+
+  it("bounds the history list to the versions publishing keeps", async () => {
+    const { app, env } = createTestApp();
+    const ok = await app.request(`/api/v1/admin/settings/theme/versions?limit=${THEME_VERSION_HISTORY_LIMIT}`, { method: "GET" }, env);
+    const tooMany = await app.request(`/api/v1/admin/settings/theme/versions?limit=${THEME_VERSION_HISTORY_LIMIT + 1}`, { method: "GET" }, env);
+    expect(ok.status).toBe(200);
+    expect(tooMany.status).toBe(400);
+    expect(mocks.listThemeVersions).toHaveBeenCalledWith({ id: "db" }, THEME_VERSION_HISTORY_LIMIT);
+  });
+
+  it("creates a private preview of the saved draft", async () => {
     const { app, env } = createTestApp();
     const response = await requestJson(
       app,

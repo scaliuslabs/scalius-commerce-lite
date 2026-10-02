@@ -30,6 +30,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("../inventory/inventory-transitions", () => ({
   applyInventoryForStatusChangeWithImpact: mocks.applyInventoryForStatusChange,
+  assertOrderStockCoverable: async () => undefined,
 }));
 
 vi.mock("../delivery/delivery.service", () => ({

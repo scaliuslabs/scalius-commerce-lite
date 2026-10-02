@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { createApplyBinder } from "../apply-bind.mjs";
 import { compileDemoStoreAdminCommands } from "../compile.mjs";
 import { demoStoreManifest } from "../manifest.mjs";
 import {
@@ -7,6 +8,7 @@ import {
   demoApplyIntentFingerprint,
 } from "./authorization.mjs";
 import { runDemoApplyLifecycle } from "./orchestrator.mjs";
+import { requiredPermissionsForLifecycle } from "./preflight.mjs";
 import {
   buildDemoApplyLifecycle,
   DEMO_APPLY_PHASE_ORDER,
@@ -18,7 +20,32 @@ import {
 } from "./resume-journal.mjs";
 import { createDemoLifecycleRuntime } from "./runtime.mjs";
 
-function currentSnapshot() {
+/** A theme document's homepage, as far as the demo store reads it. */
+function themeDocument(changes = {}) {
+  return {
+    version: 6,
+    template: "department-mall",
+    tokens: { radius: "subtle" },
+    pages: {
+      home: [
+        { id: "hero", type: "hero", version: 1, settings: { layout: "contained-banners", slides: [] } },
+        { id: "collections", type: "collections", version: 1, settings: { carousel: "large", collectionIds: [] } },
+        { id: "categories", type: "category-tiles", version: 1, settings: { style: "photo", title: "", categoryIds: ["cat_merchant"] } },
+      ],
+      homeMode: { kind: "sections" },
+    },
+    ...changes,
+  };
+}
+
+function themeWorkspace({ published = themeDocument(), draft = published, draftRevision = 5, publishedRevision = 2 } = {}) {
+  return {
+    published: { theme: published, revision: publishedRevision },
+    draft: { theme: draft, revision: draftRevision, basePublishedRevision: publishedRevision },
+  };
+}
+
+function currentSnapshot(workspace = themeWorkspace()) {
   const categories = demoStoreManifest.categories.map((category) => ({
     id: `cat_${category.slug}`,
     slug: category.slug,
@@ -54,29 +81,22 @@ function currentSnapshot() {
       presentation: collection.presentation,
       isActive: index === 0,
     })),
-    heroes: [
-      { id: "slider_desktop", type: "desktop", revision: 4, isActive: true },
-      { id: "slider_mobile", type: "mobile", revision: 3, isActive: false },
-    ],
-    presentation: {
-      theme: { colors: {}, revision: 2 },
-      heroes: [
-        { id: "slider_desktop", type: "desktop", revision: 4, isActive: true },
-        { id: "slider_mobile", type: "mobile", revision: 3, isActive: false },
-      ],
-    },
+    presentation: { theme: workspace },
   };
 }
 
-function lifecycle(publicationIntent = {}) {
-  const snapshot = currentSnapshot();
+function lifecycle(publicationIntent = {}, snapshot = currentSnapshot()) {
   const compiled = compileDemoStoreAdminCommands(demoStoreManifest, { current: snapshot });
   return buildDemoApplyLifecycle({ manifest: demoStoreManifest, snapshot, compiled, publicationIntent });
 }
 
+function phase(plan, name) {
+  return plan.phases.find((item) => item.name === name);
+}
+
 describe("complete apply authorization", () => {
   it("covers deep catalog, merchandising, and publication facts", () => {
-    const intent = { theme: { colors: { "--primary": "#000000" } } };
+    const intent = {};
     const base = demoApplyIntentFingerprint(demoStoreManifest, intent);
     for (const mutate of [
       (manifest) => { manifest.products[0].price += 1; },
@@ -84,13 +104,14 @@ describe("complete apply authorization", () => {
       (manifest) => { manifest.products.find((product) => product.offer).offer.value += 1; },
       (manifest) => { manifest.collections[0].limit += 1; },
       (manifest) => { manifest.heroes[0].destination = "category:footwear"; },
+      (manifest) => { manifest.homepageCollections.reverse(); },
     ]) {
       const changed = structuredClone(demoStoreManifest);
       mutate(changed);
       expect(demoApplyIntentFingerprint(changed, intent)).not.toBe(base);
     }
     expect(demoApplyIntentFingerprint(demoStoreManifest, {
-      theme: { colors: { "--primary": "#ffffff" } },
+      promotions: [{ code: "DEMO10" }],
     })).not.toBe(base);
     expect(() => assertDemoApplyAuthorization({
       authorization: { confirmed: true, intentFingerprint: "0".repeat(64) },
@@ -123,57 +144,186 @@ describe("safe lifecycle phase model", () => {
       ]));
   });
 
-  it("quarantines active collections and heroes before staging and reactivates with CAS", () => {
+  it("quarantines active collections before staging and reactivates with CAS", () => {
     const plan = lifecycle();
-    const quarantine = plan.phases.find((phase) => phase.name === "quarantine").commands;
+    const quarantine = phase(plan, "quarantine").commands;
     expect(quarantine).toEqual(expect.arrayContaining([
       expect.objectContaining({
         logicalKey: "collection:new-noteworthy:quarantine",
         body: { expectedVersion: 2, isActive: false },
       }),
-      expect.objectContaining({
-        logicalKey: "hero-slider:desktop:quarantine",
-        body: { expectedRevision: 4, isActive: false },
-      }),
     ]));
-    const stagedCollection = plan.phases.find((phase) => phase.name === "stage_collections")
+    // A saved theme draft is not public: the homepage needs no quarantine.
+    expect(quarantine.some((command) => command.logicalKey.startsWith("theme:"))).toBe(false);
+    const stagedCollection = phase(plan, "stage_collections")
       .commands.find((command) => command.logicalKey === "collection:new-noteworthy");
     expect(stagedCollection.body.isActive).toBe(false);
     expect(stagedCollection.body.expectedVersion).toEqual({
       $ref: "collection:new-noteworthy:quarantine",
       field: "version",
     });
-    const collectionActivation = plan.phases.find((phase) => phase.name === "activate_collections")
+    const collectionActivation = phase(plan, "activate_collections")
       .commands.find((command) => command.logicalKey === "collection:new-noteworthy:activate");
     expect(collectionActivation.body).toEqual({
       expectedVersion: { $ref: "collection:new-noteworthy", field: "version" },
       isActive: true,
     });
-    const heroActivation = plan.phases.find((phase) => phase.name === "activate_heroes")
-      .commands.find((command) => command.logicalKey === "hero-slider:desktop:activate");
-    expect(heroActivation.body).toEqual({
-      expectedRevision: { $ref: "hero-slider:desktop", field: "revision" },
-      isActive: true,
-    });
   });
 
-  it("publishes versioned theme but blocks unversioned navigation and promotions", () => {
+  it("stages the homepage as the theme draft, publishes that draft last, and blocks unversioned navigation and promotions", () => {
     const plan = lifecycle({
-      theme: { colors: { "--background": "#ffffff" } },
       navigation: { header: { navigation: [] } },
       promotions: [{ code: "DEMO10" }],
     });
-    const theme = plan.phases.find((phase) => phase.name === "publish_theme");
-    expect(theme.state).toBe("ready");
-    expect(theme.commands[0].body.expectedRevision).toBe(2);
-    expect(plan.phases.find((phase) => phase.name === "publish_navigation")).toMatchObject({
+    const draftRevision = { $ref: "current-theme", field: "draftRevision" };
+    const publishedRevision = { $ref: "current-theme", field: "publishedRevision" };
+    const [draft] = phase(plan, "stage_theme").commands;
+    expect(phase(plan, "stage_theme").commands).toHaveLength(1);
+    expect(draft).toMatchObject({
+      logicalKey: "theme:draft",
+      phase: "stage_theme",
+      method: "POST",
+      path: "/api/v1/admin/settings/theme/draft",
+      action: "update",
+      body: { expectedDraftRevision: draftRevision, basePublishedRevision: publishedRevision },
+      preconditions: { expectedRevision: draftRevision },
+    });
+    expect(draft.body.theme.$demoHomepage.slides).toHaveLength(demoStoreManifest.heroes.length);
+    expect(phase(plan, "publish_theme").commands).toEqual([
+      expect.objectContaining({
+        logicalKey: "theme:publish",
+        method: "POST",
+        path: "/api/v1/admin/settings/theme/publish",
+        action: "update",
+        body: { expectedPublishedRevision: publishedRevision, expectedDraftRevision: { $ref: "theme:draft", field: "revision" } },
+        preconditions: { expectedRevision: publishedRevision },
+        desired: draft.desired,
+        dependsOn: ["theme:draft"],
+      }),
+    ]);
+    // Slides link to categories and collections: the theme goes live last.
+    expect(plan.phases.at(-1).name).toBe("publish_theme");
+    expect(requiredPermissionsForLifecycle(lifecycle())).toContain("settings.general.edit");
+    expect(phase(plan, "publish_navigation")).toMatchObject({
       state: "blocked",
       blockers: [expect.objectContaining({ code: "NAVIGATION_CAS_MISSING" })],
     });
-    expect(plan.phases.find((phase) => phase.name === "activate_promotions")).toMatchObject({
+    expect(phase(plan, "activate_promotions")).toMatchObject({
       state: "blocked",
       blockers: [expect.objectContaining({ code: "PROMOTION_CAS_MISSING" })],
     });
+  });
+});
+
+describe("theme homepage runtime", () => {
+  const heroAssets = new Map(demoStoreManifest.heroes.flatMap((hero) => ["desktop", "mobile"].map((type) => [
+    `${hero.logicalKey}:${type}`,
+    { mediaId: `media_${hero.logicalKey.slice("hero:".length)}_${type}` },
+  ])));
+
+  function themePhases(workspace) {
+    const plan = lifecycle({}, currentSnapshot(workspace));
+    return [phase(plan, "stage_theme"), phase(plan, "publish_theme")];
+  }
+
+  it("refuses a draft with the merchant's unpublished changes, unreadable revisions, or no homepage sections", () => {
+    const changedLook = themeDocument({ tokens: { radius: "round" } });
+    for (const [workspace, code] of [
+      [themeWorkspace({ draft: changedLook }), "THEME_DRAFT_UNPUBLISHED"],
+      [{ published: { revision: 2 } }, "THEME_REVISION_MISSING"],
+      [{ ...themeWorkspace(), draft: { ...themeWorkspace().draft, basePublishedRevision: 1 } }, "THEME_REVISION_MISSING"],
+      [themeWorkspace({ published: themeDocument({ pages: { home: [themeDocument().pages.home[0]], homeMode: { kind: "sections" } } }) }), "THEME_SECTION_MISSING"],
+    ]) {
+      for (const item of themePhases(workspace)) {
+        expect(item).toMatchObject({ state: "blocked", commands: [], blockers: [expect.objectContaining({ code })] });
+      }
+    }
+    const binder = createApplyBinder({
+      manifest: demoStoreManifest,
+      readiness: { assets: heroAssets },
+      snapshot: currentSnapshot(themeWorkspace({ draft: changedLook })),
+    });
+    const [draft] = phase(lifecycle(), "stage_theme").commands;
+    expect(() => binder.bind(draft)).toThrow(/unpublished changes/);
+  });
+
+  it("adopts an interrupted run's staged draft that differs only in the demo homepage", () => {
+    const staged = structuredClone(themeDocument());
+    staged.pages.home[0].settings.slides = [{ image: "media_old", focalPoint: { x: 50, y: 50 }, alt: "Old", link: null }];
+    staged.pages.home[1].settings.collectionIds = ["col_old"];
+    for (const item of themePhases(themeWorkspace({ draft: staged, draftRevision: 6 }))) {
+      expect(item.state).toBe("ready");
+    }
+  });
+
+  it("binds slides and collections into the published theme and verifies each side of the workspace", async () => {
+    const snapshot = currentSnapshot();
+    const plan = lifecycle({}, snapshot);
+    const [draftIntent] = phase(plan, "stage_theme").commands;
+    const [publishIntent] = phase(plan, "publish_theme").commands;
+    const outputs = new Map([["theme:draft", { id: "theme", revision: 6 }]]);
+    const binder = createApplyBinder({ manifest: demoStoreManifest, readiness: { assets: heroAssets }, snapshot, outputs });
+    const draft = binder.bind(draftIntent);
+    const publish = binder.bind(publishIntent);
+
+    const expected = structuredClone(themeDocument());
+    expected.pages.home[0].settings.slides = [
+      {
+        image: "media_everyday-edit_desktop", phoneImage: "media_everyday-edit_mobile", focalPoint: { x: 50, y: 50 },
+        alt: "The Everyday Edit", heading: "The Everyday Edit", text: "Useful things, considered well.", link: "/collections/col_0",
+      },
+      {
+        image: "media_softer-home_desktop", phoneImage: "media_softer-home_mobile", focalPoint: { x: 50, y: 50 },
+        alt: "A softer home", heading: "A softer home", text: "Light, texture, and room to breathe.", link: "/categories/home-living",
+      },
+      {
+        image: "media_carry-day_desktop", phoneImage: "media_carry-day_mobile", focalPoint: { x: 50, y: 50 },
+        alt: "Carry the day", heading: "Carry the day", text: "Commute-ready bags without the bulk.", link: "/categories/bags-carry",
+      },
+    ];
+    expected.pages.home[1].settings.collectionIds = ["col_0", "col_1", "col_2"];
+    expect(draft).toMatchObject({
+      action: "update",
+      expectedRevision: 5,
+      identity: { id: "theme" },
+      body: { theme: expected, expectedDraftRevision: 5, basePublishedRevision: 2 },
+      desired: { theme: expected },
+    });
+    expect(publish).toMatchObject({
+      action: "update",
+      expectedRevision: 2,
+      identity: { id: "theme" },
+      body: { expectedPublishedRevision: 2, expectedDraftRevision: 6 },
+      desired: { theme: expected },
+    });
+
+    // Key order does not matter; the saved document does.
+    const reversedKeys = (value) => (Array.isArray(value)
+      ? value.map(reversedKeys)
+      : value && typeof value === "object"
+        ? Object.fromEntries(Object.keys(value).reverse().map((key) => [key, reversedKeys(value[key])]))
+        : value);
+    const reordered = reversedKeys(expected);
+    expect(JSON.stringify(reordered)).not.toBe(JSON.stringify(expected));
+    const workspace = (draftRevision, publishedRevision, draftTheme, publishedTheme) => ({
+      published: { theme: publishedTheme, revision: publishedRevision },
+      draft: { theme: draftTheme, revision: draftRevision, basePublishedRevision: publishedRevision },
+    });
+    const get = vi.fn()
+      .mockResolvedValueOnce(workspace(6, 2, reordered, themeDocument()))
+      .mockResolvedValueOnce(workspace(7, 3, reordered, reordered))
+      .mockResolvedValueOnce(workspace(0, 0, expected, expected));
+    const runtime = createDemoLifecycleRuntime({ get });
+    const draftCurrent = await runtime.resolveCurrent(draft);
+    expect(get).toHaveBeenCalledWith("/api/v1/admin/settings/theme/workspace", "theme:draft");
+    expect(draftCurrent).toEqual({ id: "theme", revision: 6, theme: reordered });
+    expect(await runtime.matchesDesired(draft, draftCurrent)).toBe(true);
+    const publishCurrent = await runtime.resolveCurrent(publish);
+    expect(publishCurrent).toEqual({ id: "theme", revision: 3, theme: reordered });
+    expect(await runtime.matchesDesired(publish, publishCurrent)).toBe(true);
+    expect(await runtime.matchesDesired(publish, { id: "theme", revision: 3, theme: themeDocument() })).toBe(false);
+    // The unsaved default at revision 0 never counts as applied.
+    expect(await runtime.matchesDesired(draft, await runtime.resolveCurrent(draft))).toBe(false);
   });
 });
 
@@ -399,12 +549,12 @@ describe("resume authority", () => {
     expect(result.phases[0]).toMatchObject({ name: "quarantine", outcomes: [] });
   });
 
-  it("treats category, collection, and hero publication as superseding staging", async () => {
+  it("treats category, collection, and theme publication as superseding staging", async () => {
     const fingerprint = demoApplyIntentFingerprint(demoStoreManifest);
     const records = [
       ["publish_categories", "category:footwear:publish", { id: "cat_footwear", revision: 3 }],
       ["activate_collections", "collection:new-noteworthy:activate", { id: "col_new", version: 4 }],
-      ["activate_heroes", "hero-slider:desktop:activate", { id: "slider_desktop", revision: 5 }],
+      ["publish_theme", "theme:publish", { id: "theme", revision: 3 }],
     ].map(([phase, logicalKey, authority]) => createResumeRecord({
       intentFingerprint: fingerprint,
       phase,
@@ -420,7 +570,6 @@ describe("resume authority", () => {
         phases: [{
           name: "quarantine", state: "ready", blockers: [], commands: [
             { logicalKey: "collection:new-noteworthy:quarantine" },
-            { logicalKey: "hero-slider:desktop:quarantine" },
           ],
         }, {
           name: "stage_categories", state: "ready", blockers: [],
@@ -429,8 +578,8 @@ describe("resume authority", () => {
           name: "stage_collections", state: "ready", blockers: [],
           commands: [{ logicalKey: "collection:new-noteworthy" }],
         }, {
-          name: "stage_heroes", state: "ready", blockers: [],
-          commands: [{ logicalKey: "hero-slider:desktop" }],
+          name: "stage_theme", state: "ready", blockers: [],
+          commands: [{ logicalKey: "theme:draft" }],
         }],
       },
       resumeRecords: records,
@@ -475,7 +624,7 @@ describe("blocked publication phases", () => {
       lifecycle: {
         phases: [
           { name: "publish_navigation", state: "blocked", commands: [], blockers: [{ code: "NAVIGATION_CAS_MISSING", message: "Navigation is unversioned." }] },
-          { name: "activate_heroes", state: "ready", commands: [{ logicalKey: "hero-slider:desktop:activate" }], blockers: [] },
+          { name: "publish_theme", state: "ready", commands: [{ logicalKey: "theme:publish" }], blockers: [] },
         ],
       },
       executeCommand,

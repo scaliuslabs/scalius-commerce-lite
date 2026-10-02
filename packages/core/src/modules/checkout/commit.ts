@@ -21,6 +21,7 @@ import {
 } from "@scalius/database/schema";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
+import type { OrderChannel } from "@scalius/shared/order-channel";
 import { ConflictError, ServiceUnavailableError, ValidationError } from "../../errors";
 import {
     isInventoryReservationConflictError,
@@ -329,6 +330,7 @@ function buildOrderWriteBatch(
     payload: StorefrontOrderCommitPayload,
     customer: ResolvedOrderCustomer,
     appliedPromotion: AppliedPromotion | null,
+    channel: Extract<OrderChannel, "online_store" | "agent">,
 ): SQLiteBatchItem[] {
     const od = payload.orderData;
     const writes: SQLiteBatchItem[] = [];
@@ -439,6 +441,9 @@ function buildOrderWriteBatch(
             inventoryAction: od.inventoryAction,
             customerId: customer.id,
             accountOwnerCustomerId: customer.accountOwnerCustomerId,
+            // Set once here; the orders trigger keeps it immutable.
+            channel,
+            channelSource: null,
             createdAt: sql`unixepoch()`,
             updatedAt: sql`unixepoch()`,
         }),
@@ -796,7 +801,15 @@ export async function commitStorefrontOrderPayload(
         const agentContextPlan = checkoutCommit?.agentContext
             ? prepareAgentStorefrontCheckoutCommit(db, payload, checkoutCommit.agentContext)
             : null;
-        const orderWrites = buildOrderWriteBatch(db, payload, customer, appliedPromotion);
+        // A buyer agent's checkout carries its storefront context; every other
+        // commit is the storefront's own checkout (COMMERCE-HOOKS H2).
+        const orderWrites = buildOrderWriteBatch(
+            db,
+            payload,
+            customer,
+            appliedPromotion,
+            checkoutCommit?.agentContext ? "agent" : "online_store",
+        );
         const writesBeforeInventory: SQLiteBatchItem[] = [
             authorityGuard,
             ...(checkoutAttemptPlan?.writesBeforeOrder ?? []),

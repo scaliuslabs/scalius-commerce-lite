@@ -1,6 +1,7 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { describe, expect, it } from "vitest";
 import { ORDER_STATUSES } from "@scalius/shared/order-state";
+import { ORDER_CHANNELS } from "@scalius/shared/order-channel";
 import { adminOrdersRoutes } from "./orders";
 
 type OperationDoc = {
@@ -102,6 +103,31 @@ describe("admin order mutation OpenAPI responses", () => {
                 "startDate", "endDate", "maxRows",
             ],
         );
+    });
+
+    it("exposes where each order came from on the list, detail, filters, export and create", () => {
+        const spec = buildAdminOrdersSpec();
+        const responseData = (path: string) => (
+            (spec.paths?.[path]?.get?.responses?.["200"] as {
+                content?: Record<string, { schema?: OpenApiSchema }>;
+            } | undefined)?.content?.["application/json"]?.schema?.properties?.data
+        );
+        const listItem = responseData("/api/v1/admin/orders")?.properties?.orders?.items;
+        const detail = responseData("/api/v1/admin/orders/{id}");
+        for (const order of [listItem, detail]) {
+            expect(order?.required).toEqual(expect.arrayContaining(["channel", "channelSource"]));
+            expect(order?.properties?.channel?.enum).toEqual([...ORDER_CHANNELS]);
+        }
+        for (const path of ["/api/v1/admin/orders", "/api/v1/admin/orders/export"]) {
+            const names = spec.paths?.[path]?.get?.parameters?.map((parameter) => parameter.name);
+            expect(names).toEqual(expect.arrayContaining(["channel", "channelSource", "deliveryMethod"]));
+        }
+        const create = spec.paths?.["/api/v1/admin/orders"]?.post
+            ?.requestBody?.content?.["application/json"]?.schema;
+        expect(create?.properties).toHaveProperty("channelSource");
+        expect(create?.required ?? []).not.toContain("channelSource");
+        // Staff never pick the channel: a dashboard order is always "admin".
+        expect(create?.properties).not.toHaveProperty("channel");
     });
 
     it("documents the bounded manual-order catalog search", () => {

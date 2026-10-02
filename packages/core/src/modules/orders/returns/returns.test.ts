@@ -90,6 +90,7 @@ describe("order return service", () => {
     inventoryMocks.applyClaimedInventoryEntryBatch.mockResolvedValue({
       movementIds: ["movement_1"],
       availabilityTransitionVariantIds: [],
+      locationIdByVariant: { sku_1: "loc_default" },
     });
   });
 
@@ -159,6 +160,8 @@ describe("order return service", () => {
     expect(inventoryMocks.applyClaimedInventoryEntryBatch).toHaveBeenCalledWith(db, expect.objectContaining({
       operation: "restore", createdBy: "admin_1",
       claimKey: "return-receipt:v1:ret_1:receive-partial-1:line_1",
+      // No restock location: units go back to where they were sent from.
+      locationId: null,
     }));
   });
 
@@ -216,10 +219,12 @@ describe("order return service", () => {
       .mockResolvedValueOnce({
         movementIds: ["movement_1"],
         availabilityTransitionVariantIds: [],
+        locationIdByVariant: { sku_1: "loc_default" },
       })
       .mockResolvedValueOnce({
         movementIds: ["movement_2"],
         availabilityTransitionVariantIds: [],
+        locationIdByVariant: { sku_1: "loc_default" },
       });
     const { db } = createDb({
       gets: [

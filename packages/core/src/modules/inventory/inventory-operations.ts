@@ -14,6 +14,14 @@ import {
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { checkAndAlertLowStock } from "./alerts";
 import { buildStockMovementClaim } from "./stock-movement-claims";
+import {
+  inventoryLocationErrorFrom,
+  isInventoryLevelShortfallError,
+  isInventoryLocationRequiredError,
+  readLocationOnHand,
+  resolveActiveInventoryLocation,
+  type InventoryLocationRef,
+} from "./locations";
 import { catalogBuyerStateRefreshStatementsForSkus } from "../products/catalog-projections";
 import {
   validateAbsoluteStockCount,
@@ -56,9 +64,14 @@ export type InventoryOperationPool = "stock" | "preorderStock";
 
 export interface InventoryOperationResult {
   variantId: string;
+  /** The SKU's on-hand across every location, before and after. */
   previousStock: number;
   newStock: number;
   delta: number;
+  /** On-hand stock only: the location the units moved at, and its count before and after. */
+  locationId?: string;
+  locationPreviousStock?: number;
+  locationNewStock?: number;
 }
 
 type InventoryOperationBase = {
@@ -68,6 +81,12 @@ type InventoryOperationBase = {
   pool: InventoryOperationPool;
   reason: string;
   notes?: string;
+  /**
+   * On-hand stock only: the active location counted or adjusted (the default
+   * when omitted). Part of the request hash; a stocktake counts that
+   * location, and a relative change applies there.
+   */
+  locationId?: string | null;
 };
 
 export type InventoryOperationInput =
@@ -128,17 +147,36 @@ export async function executeInventoryOperation(
   }
 
   const movementId = `imov_${(await sha256Hex(`inventory-operation:${normalized.operationKey}`)).slice(0, 48)}`;
+  // Physical stock moves at a location; preorder allocation has none.
+  const location = normalized.pool === "stock"
+    ? await resolveActiveInventoryLocation(db, normalized.locationId)
+    : null;
 
   for (let attempt = 0; attempt < MAX_CAS_RETRIES; attempt++) {
     const variant = await selectInventoryVariant(db, normalized.variantId);
     if (!variant) throw new NotFoundError("Variant not found");
+    // Every level change bumps the SKU's stockVersion, so this read is
+    // covered by the same compare-and-set as the counters.
+    const locationPreviousStock = location
+      ? (await readLocationOnHand(db, location.id, [normalized.variantId])).get(normalized.variantId) ?? 0
+      : undefined;
 
     const previousStock = normalized.pool === "preorderStock"
       ? variant.preorderStock
       : variant.stock;
-    const newStock = normalized.mode === "relative"
-      ? previousStock + normalized.delta
+    // A stocktake counts the location; a relative change applies there.
+    const counted = locationPreviousStock ?? previousStock;
+    const countedAfter = normalized.mode === "relative"
+      ? counted + normalized.delta
       : normalized.newStock;
+    if (location && countedAfter < 0) {
+      throw new ValidationError(
+        `${location.name} has ${counted} on hand, so at most ${counted} can be removed there.`,
+      );
+    }
+    validateAbsoluteStockCount(countedAfter, "resulting stock");
+    const delta = countedAfter - counted;
+    const newStock = previousStock + delta;
     validateAbsoluteStockCount(newStock, "resulting stock");
     if (
       normalized.pool === "stock"
@@ -149,7 +187,6 @@ export async function executeInventoryOperation(
         `Resulting stock cannot be lower than ${variant.reservedStock} reserved units`,
       );
     }
-    const delta = newStock - previousStock;
     if (companionStatements.length > 0 && delta === 0) {
       throw new ValidationError("An inventory operation with companion statements must change the stock.");
     }
@@ -158,6 +195,9 @@ export async function executeInventoryOperation(
       previousStock,
       newStock,
       delta,
+      ...(location
+        ? { locationId: location.id, locationPreviousStock: counted, locationNewStock: countedAfter }
+        : {}),
     };
 
     try {
@@ -177,6 +217,7 @@ export async function executeInventoryOperation(
           result,
           variant,
           movementId,
+          location,
           adminUserId,
           companionStatements,
         );
@@ -188,6 +229,11 @@ export async function executeInventoryOperation(
         return result;
       }
     } catch (error) {
+      // The location lost the units (or was archived) since the read: the
+      // whole batch rolled back, so say what the merchant can fix.
+      if (isInventoryLevelShortfallError(error) || isInventoryLocationRequiredError(error)) {
+        throw inventoryLocationErrorFrom(error, location?.name);
+      }
       const racedOperation = await selectInventoryOperation(
         db,
         normalized.operationKey,
@@ -238,6 +284,7 @@ async function commitCounterOperation(
   result: InventoryOperationResult,
   variant: InventoryVariantState,
   movementId: string,
+  location: InventoryLocationRef | null,
   adminUserId?: string,
   companionStatements: readonly BatchItem<"sqlite">[] = [],
 ): Promise<boolean> {
@@ -258,6 +305,7 @@ async function commitCounterOperation(
     },
     notes: formatMovementNotes(input, result),
     adminUserId,
+    ...(location ? { locationId: location.id } : {}),
   });
   const operationInsert = buildOperationInsert(db, {
     input,
@@ -443,6 +491,15 @@ function replayInventoryOperation(
       previousStock: value.previousStock!,
       newStock: value.newStock!,
       delta: value.delta!,
+      ...(typeof value.locationId === "string"
+        && Number.isSafeInteger(value.locationPreviousStock)
+        && Number.isSafeInteger(value.locationNewStock)
+        ? {
+          locationId: value.locationId,
+          locationPreviousStock: value.locationPreviousStock!,
+          locationNewStock: value.locationNewStock!,
+        }
+        : {}),
     };
   } catch {
     throw new ServiceUnavailableError(
@@ -456,6 +513,7 @@ function normalizeInventoryOperationRequest(input: InventoryOperationInput) {
   const variantId = input.variantId.trim();
   const reason = input.reason.trim();
   const notes = input.notes?.trim() || null;
+  const locationId = input.locationId?.trim() || null;
   if (!INVENTORY_OPERATION_TYPES.includes(input.operationType)) {
     throw new ValidationError("Unsupported inventory operation type");
   }
@@ -473,14 +531,21 @@ function normalizeInventoryOperationRequest(input: InventoryOperationInput) {
   if (input.operationType !== "stocktake" && input.mode !== "relative") {
     throw new ValidationError("Relative inventory operations require an adjustment delta");
   }
+  if (locationId && input.pool !== "stock") {
+    throw new ValidationError("Preorder stock isn't held at a location");
+  }
+  if (locationId && locationId.length > 100) {
+    throw new ValidationError("locationId is invalid");
+  }
   if (input.mode === "relative") {
     validateSignedStockAdjustment(input.delta);
     return {
-      schemaVersion: 1 as const,
+      schemaVersion: 2 as const,
       operationKey,
       operationType: input.operationType,
       variantId,
       pool: input.pool,
+      locationId,
       mode: input.mode,
       delta: input.delta,
       reason,
@@ -492,11 +557,12 @@ function normalizeInventoryOperationRequest(input: InventoryOperationInput) {
     throw new ValidationError("Stocktake currently supports on-hand stock only");
   }
   return {
-    schemaVersion: 1 as const,
+    schemaVersion: 2 as const,
     operationKey,
     operationType: input.operationType,
     variantId,
     pool: input.pool,
+    locationId,
     mode: input.mode,
     newStock: input.newStock,
     reason,
@@ -518,7 +584,8 @@ function formatMovementNotes(
   if (input.operationType === "licence_keys") {
     return `Licence keys (${input.reason})${suffix}`;
   }
-  return `Stocktake (${input.reason}): set from ${result.previousStock} to ${result.newStock}${suffix}`;
+  // A stocktake counts one location: the note shows that location's count.
+  return `Stocktake (${input.reason}): set from ${result.locationPreviousStock ?? result.previousStock} to ${result.locationNewStock ?? result.newStock}${suffix}`;
 }
 
 function hashNormalizedRequest(

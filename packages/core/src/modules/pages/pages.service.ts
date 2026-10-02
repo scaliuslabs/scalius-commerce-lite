@@ -29,6 +29,11 @@ import {
 import { sanitizeHtml } from "@scalius/shared/html-sanitize";
 import { unixToDate } from "@scalius/shared/timestamps";
 import {
+  presentStorefrontCustomFields,
+  selectStorefrontCustomFieldRows,
+  type StorefrontCustomFieldRow,
+} from "../custom-fields/custom-fields.storefront";
+import {
   createPageSchema,
   updatePageSchema,
   contentEntryPath,
@@ -288,27 +293,32 @@ export async function getPageBySlug(
  *  Swap: `const page = await getPublicPageById(db, id);`
  *  then `if (!page) throw new NotFoundError("Page not found");` + `return ok(c, { page });`
  *  This also eliminates unused imports: pages, isNull, eq, and, SQL from drizzle-orm. */
+/** A public page and its storefront-visible custom fields, in one round trip. */
+async function readPublicPage(db: Database, where: SQL) {
+  const [rows, customFieldRows] = await db.batch([
+    db.select().from(pages).where(where).limit(1),
+    selectStorefrontCustomFieldRows(db, "page", sql`(SELECT ${pages.id} FROM ${pages} WHERE ${where} LIMIT 1)`),
+  ]);
+  const page = rows[0];
+  return page ? { page, customFields: presentStorefrontCustomFields(customFieldRows as StorefrontCustomFieldRow[]) } : null;
+}
+
+function toPublicPageWithFields(read: NonNullable<Awaited<ReturnType<typeof readPublicPage>>>) {
+  return { ...toPublicPage(sanitizePageRecord(read.page)), customFields: read.customFields };
+}
+
 export async function getPublicPageById(db: Database, id: string) {
-  const page =
-    (await db
-      .select()
-      .from(pages)
-      .where(and(eq(pages.id, id), publicPageVisibilityCondition("page")))
-      .get()) ?? null;
+  const read = await readPublicPage(db, and(eq(pages.id, id), publicPageVisibilityCondition("page"))!);
 
   // A page's id never moves to another row: its own key covers every answer.
   deps.page(id);
-  if (!page) await declareNextPagePublication(db, and(eq(pages.id, id), eq(pages.contentType, "page")));
-  return page ? toPublicPage(sanitizePageRecord(page)) : null;
+  if (!read) await declareNextPagePublication(db, and(eq(pages.id, id), eq(pages.contentType, "page")));
+  return read ? toPublicPageWithFields(read) : null;
 }
 
 export async function getPublicPageBySlug(db: Database, slug: string) {
-  const page =
-    (await db
-      .select()
-      .from(pages)
-      .where(and(eq(pages.slug, slug), publicPageVisibilityCondition("page")))
-      .get()) ?? null;
+  const read = await readPublicPage(db, and(eq(pages.slug, slug), publicPageVisibilityCondition("page"))!);
+  const page = read?.page ?? null;
 
   if (page) {
     // Slugs are unique: another page can take this one only after this row's
@@ -319,7 +329,7 @@ export async function getPublicPageBySlug(db: Database, slug: string) {
     deps.anyPage();
     await declareNextPagePublication(db, and(eq(pages.slug, slug), eq(pages.contentType, "page")));
   }
-  return page ? toPublicPage(sanitizePageRecord(page)) : null;
+  return read ? toPublicPageWithFields(read) : null;
 }
 
 export async function getPublicPages(

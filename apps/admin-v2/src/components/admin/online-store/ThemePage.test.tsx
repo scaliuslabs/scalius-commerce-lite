@@ -8,15 +8,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   DEFAULT_STOREFRONT_THEME,
   storeShapeFromFacts,
+  storefrontSectionDefault,
   storefrontTemplateTheme,
+  storefrontThemeDocumentSchema,
   type StorefrontThemeDocument,
 } from "@scalius/shared/storefront-theme";
-import { DEFAULT_HOMEPAGE_PRESENTATION } from "@scalius/shared/homepage-presentation";
 import {
-  footerQueryOptions,
-  headerQueryOptions,
-  homepageSectionsQueryOptions,
-  themeQueryOptions,
   themeWorkspaceQueryOptions,
   type ThemeWorkspaceDocument,
 } from "~/lib/api-query-options/online-store";
@@ -25,27 +22,59 @@ import { ThemePage } from "./ThemePage";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const api = vi.hoisted(() => ({ draft: vi.fn(), publish: vi.fn(), rebase: vi.fn(), header: vi.fn(), footer: vi.fn() }));
+const api = vi.hoisted(() => ({ draft: vi.fn(), publish: vi.fn() }));
+/** Endpoints the Theme page must never call: its one Save writes the theme draft only. */
+const others = vi.hoisted(() => ({
+  header: vi.fn(),
+  footer: vi.fn(),
+  homepagePresentation: vi.fn(),
+  heroSliders: vi.fn(),
+  heroSlider: vi.fn(),
+  business: vi.fn(),
+}));
 const fonts = vi.hoisted(() => ({ register: vi.fn() }));
+/** The files the next pick from Files returns (several for a multi-select picker). */
+const files = vi.hoisted(() => ({ next: [] as Array<{ id: string; url: string; altText?: string }> }));
 
 vi.mock("./type-preview-fonts", () => ({ registerTypePreviewFonts: fonts.register }));
 vi.mock("./ThemePreviewAction", () => ({ ThemePreviewAction: ({ draftRevision }: { draftRevision: number }) => <section data-draft-revision={draftRevision}><h2>Storefront preview</h2></section> }));
 
 vi.mock("~/lib/api", () => ({ apiData: (call: unknown) => call }));
 vi.mock("@scalius/api-client/sdk", () => ({
-  getApiV1AdminSettingsTheme: vi.fn(),
   getApiV1AdminSettingsThemeWorkspace: vi.fn(),
-  getApiV1AdminSettingsHeader: vi.fn(),
-  getApiV1AdminSettingsFooter: vi.fn(),
   postApiV1AdminSettingsThemeDraft: api.draft,
-  postApiV1AdminSettingsThemeDraftRebase: api.rebase,
   postApiV1AdminSettingsThemePublish: api.publish,
-  postApiV1AdminSettingsHeader: api.header,
-  postApiV1AdminSettingsFooter: api.footer,
+  getApiV1AdminCategoriesFormOptions: vi.fn(async () => ({
+    categories: [{ id: "cat_honey", name: "Honey", status: "published" }, { id: "cat_ghee", name: "Ghee", status: "published" }],
+  })),
+  getApiV1AdminCollections: vi.fn(async () => ({ collections: [], pagination: { page: 1, totalPages: 1 } })),
+  getApiV1AdminCollectionsByIds: vi.fn(async () => ({ collections: [] })),
+  getApiV1AdminDiscounts: vi.fn(async () => ({ discounts: [] })),
+  getApiV1AdminProducts: vi.fn(async () => ({
+    products: [{ id: "prod_honey", name: "Sundarban honey" }, { id: "prod_ghee", name: "Cow ghee" }],
+    pagination: { page: 1, totalPages: 1 },
+  })),
+  getApiV1AdminProductsByIds: vi.fn(async ({ query }: { query: { ids: string } }) => ({
+    products: [{ id: "prod_honey", name: "Sundarban honey" }].filter((product) => query.ids.split(",").includes(product.id)),
+  })),
+  postApiV1AdminSettingsHeader: others.header,
+  postApiV1AdminSettingsFooter: others.footer,
+  postApiV1AdminSettingsHomepagePresentation: others.homepagePresentation,
+  postApiV1AdminSettingsHeroSliders: others.heroSliders,
+  putApiV1AdminSettingsHeroSlidersById: others.heroSlider,
+  postApiV1AdminSettingsBusiness: others.business,
 }));
-vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() } }));
 vi.mock("~/components/admin/shared/UnsavedChangesGuard", () => ({ UnsavedChangesGuard: () => null }));
-vi.mock("~/components/admin/media-manager", () => ({ MediaManager: ({ trigger }: { trigger: ReactNode }) => trigger }));
+vi.mock("~/components/admin/media-manager", () => ({
+  MediaManager: ({ trigger, onSelect, onSelectMultiple }: {
+    trigger: ReactNode;
+    onSelect?: (file: unknown) => void;
+    onSelectMultiple?: (files: unknown[]) => void;
+  }) => (
+    <span onClickCapture={() => (onSelectMultiple ? onSelectMultiple(files.next) : onSelect?.(files.next[0]))}>{trigger}</span>
+  ),
+}));
 vi.mock("@tanstack/react-router", () => ({
   Link: ({ to, children, ...props }: AnchorHTMLAttributes<HTMLAnchorElement> & { to: string; children: ReactNode }) => (
     <a href={to} {...props}>{children}</a>
@@ -83,26 +112,21 @@ const SHAPE = storeShapeFromFacts({
   hasDeliveryMethods: true,
 });
 
+type WorkspaceRecords = Pick<ThemeWorkspaceDocument, "published" | "draft">;
+
+type WorkspaceMedia = Array<{ id: string; url: string; alt: string; width: number | null; height: number | null }>;
+
 function render(
   theme: StorefrontThemeDocument,
   storeShape = SHAPE,
-  categoryRail = DEFAULT_HOMEPAGE_PRESENTATION.categoryRail,
-  workspace: ThemeWorkspaceDocument = {
+  workspace: WorkspaceRecords = {
     published: { theme, revision: 1 },
     draft: { theme, revision: 1, basePublishedRevision: 1 },
   },
+  media: WorkspaceMedia = [],
 ) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
-  queryClient.setQueryData(themeQueryOptions().queryKey, { theme, revision: 1, storeShape, sectionMedia: [] } as never);
-  queryClient.setQueryData(themeWorkspaceQueryOptions().queryKey, workspace);
-  queryClient.setQueryData(homepageSectionsQueryOptions().queryKey, {
-    config: { ...DEFAULT_HOMEPAGE_PRESENTATION, categoryRail }, revision: 1,
-  } as never);
-  queryClient.setQueryData(headerQueryOptions().queryKey, {
-    config: { logo: { src: "", alt: "" }, favicon: { src: "", alt: "" }, topBar: { isEnabled: false } },
-    revision: 1,
-  } as never);
-  queryClient.setQueryData(footerQueryOptions().queryKey, { config: { logo: { src: "", alt: "" } }, revision: 1 } as never);
+  queryClient.setQueryData(themeWorkspaceQueryOptions().queryKey, { ...workspace, storeShape, media } as unknown as ThemeWorkspaceDocument);
   act(() => {
     root.render(
       <QueryClientProvider client={queryClient}>
@@ -126,11 +150,82 @@ const pressSave = () =>
       .click();
   });
 
-function type(input: HTMLInputElement, value: string) {
+function type(input: HTMLInputElement | HTMLTextAreaElement, value: string) {
   act(() => {
-    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, value);
+    const prototype = input instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+    Object.getOwnPropertyDescriptor(prototype, "value")?.set?.call(input, value);
     input.dispatchEvent(new Event("input", { bubbles: true }));
   });
+}
+
+/** Types into a field, then leaves it (links settle into their canonical form on leaving). */
+function typeAndLeave(input: HTMLInputElement, value: string) {
+  act(() => input.focus());
+  type(input, value);
+  act(() => input.blur());
+}
+
+const field = <Element extends HTMLElement = HTMLInputElement>(id: string) => document.querySelector<Element>(`#${CSS.escape(id)}`)!;
+const buttonIn = (id: string, name: string) =>
+  [...document.querySelectorAll<HTMLButtonElement>(`#${CSS.escape(id)} button`)].find((button) => button.textContent === name)!;
+const buttonNamed = (name: string) =>
+  document.querySelector<HTMLButtonElement>(`button[aria-label="${name}"]`)
+  ?? [...document.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent === name)!;
+
+function choose(trigger: HTMLButtonElement, label: string) {
+  act(() => trigger.click());
+  const option = [...document.querySelectorAll<HTMLButtonElement>('[role="option"]')]
+    .find((item) => item.textContent?.trim().startsWith(label));
+  expect(option).toBeDefined();
+  act(() => option!.click());
+}
+
+/** Picks an option a select loads from the server or a query. */
+async function chooseLoaded(trigger: HTMLButtonElement, label: string) {
+  await act(async () => trigger.click());
+  const option = await vi.waitFor(() => {
+    const found = [...document.querySelectorAll<HTMLButtonElement>('[role="option"]')]
+      .find((item) => item.textContent?.trim() === label);
+    expect(found).toBeDefined();
+    return found!;
+  });
+  await act(async () => option.click());
+}
+
+const settle = () => act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+const homeModeRadio = (value: "sections" | "product") =>
+  container.querySelector<HTMLButtonElement>(`[role=radiogroup][aria-label="Homepage"] [role=radio][value="${value}"]`)!;
+
+const SLIDE = { image: "media_slide", focalPoint: { x: 50, y: 50 }, alt: "Honey jars", link: "/collections/eid" };
+
+/** The theme with its category tiles naming these categories. */
+function withCategoryTiles(theme: StorefrontThemeDocument, categoryIds: string[]): StorefrontThemeDocument {
+  return {
+    ...theme,
+    pages: {
+      ...theme.pages,
+      home: theme.pages.home.map((section) =>
+        section.type === "category-tiles" ? { ...section, settings: { ...section.settings, categoryIds } } : section),
+    },
+  };
+}
+
+/** The theme with the merchant's content: a logo, the bar's and footer's words, a slide and a one-product homepage. */
+function withContent(theme: StorefrontThemeDocument): StorefrontThemeDocument {
+  return {
+    ...theme,
+    brand: { ...theme.brand, logo: "media_logo" },
+    blocks: {
+      ...theme.blocks,
+      topBar: { variant: "utility", settings: { text: "Eid sale", link: "/collections/eid" } },
+      footer: { ...theme.blocks.footer, settings: { ...theme.blocks.footer.settings, tagline: "Pure honey" } },
+    } as StorefrontThemeDocument["blocks"],
+    pages: {
+      homeMode: { kind: "product", productId: "prod_honey" },
+      home: theme.pages.home.map((section) =>
+        section.type === "hero" ? { ...section, settings: { ...section.settings, slides: [SLIDE] } } : section),
+    },
+  };
 }
 
 describe("theme page", () => {
@@ -151,6 +246,8 @@ describe("theme page", () => {
       "Density",
       "Product page",
       "Purchase panel",
+      "More on the product page",
+      "Homepage",
       "Homepage sections",
     ]);
     expect(radio("Department mall").getAttribute("aria-checked")).toBe("true");
@@ -249,28 +346,77 @@ describe("theme page", () => {
     expect(api.publish).not.toHaveBeenCalled();
   });
 
-  it("requires an explicit draft rebase when the live theme changed", async () => {
+  it("offers publishing as the only workflow action: a draft is always based on the live theme", () => {
     const published = storefrontTemplateTheme("boutique");
     const draft = storefrontTemplateTheme("marketplace");
-    render(published, SHAPE, DEFAULT_HOMEPAGE_PRESENTATION.categoryRail, {
+    render(published, SHAPE, {
       published: { theme: published, revision: 2 },
-      draft: { theme: draft, revision: 4, basePublishedRevision: 1 },
+      draft: { theme: draft, revision: 4, basePublishedRevision: 2 },
     });
-    const publishButton = [...container.querySelectorAll<HTMLButtonElement>("button")]
-      .find((button) => button.textContent === "Publish theme")!;
-    expect(publishButton.disabled).toBe(true);
-    expect(container.textContent).toContain("The live theme changed since this draft started.");
-    api.rebase.mockResolvedValue({ theme: draft, revision: 5, basePublishedRevision: 2 });
+    const actions = [...container.querySelectorAll<HTMLButtonElement>("button")].map((button) => button.textContent);
+    expect(actions).toContain("Publish theme");
+    expect(actions).not.toContain("Use current live version");
+    expect(container.textContent).toContain("Draft saved. Your storefront still shows the live theme.");
+    expect(container.textContent).not.toContain("The live theme changed since this draft started.");
+  });
+
+  it("says Draft saved after every save: logo and words are part of the draft too", async () => {
+    const { toast } = await import("sonner");
+    render(DEFAULT_STOREFRONT_THEME);
+    act(() => radio("Fashion value").click());
+    await pressSave();
+    expect(toast.success).toHaveBeenLastCalledWith("Draft saved");
+
+    type(field("theme-footer-tagline"), "Pure honey");
+    await pressSave();
+    expect(api.draft).toHaveBeenCalledTimes(2);
+    expect(toast.success).toHaveBeenLastCalledWith("Draft saved");
+    expect(container.textContent).not.toContain("save live");
+  });
+
+  it("keeps the store shape and section images from the workspace after publishing", async () => {
+    const queryClient = render(DEFAULT_STOREFRONT_THEME);
+    const fashion = storefrontTemplateTheme("fashion-value");
+    act(() => radio("Fashion value").click());
+    await pressSave();
+    api.publish.mockResolvedValue({
+      published: { theme: fashion, revision: 2 },
+      draft: { theme: fashion, revision: 3, basePublishedRevision: 2 },
+    });
     act(() => [...container.querySelectorAll<HTMLButtonElement>("button")]
-      .find((button) => button.textContent === "Use current live version")!.click());
+      .find((button) => button.textContent === "Publish theme")!.click());
     await act(async () => {
       [...document.querySelectorAll<HTMLButtonElement>("[role=alertdialog] button")]
-        .find((button) => button.textContent === "Use current live version")!.click();
+        .find((button) => button.textContent === "Publish theme")!.click();
     });
-    expect(api.rebase.mock.calls[0]![0].body).toEqual({
-      theme: draft, expectedDraftRevision: 4, basePublishedRevision: 2,
+    expect(queryClient.getQueryData<ThemeWorkspaceDocument>(themeWorkspaceQueryOptions().queryKey)).toMatchObject({
+      published: { theme: fashion, revision: 2 },
+      draft: { revision: 3, basePublishedRevision: 2 },
+      storeShape: SHAPE,
+      media: [],
     });
-    expect(api.publish).not.toHaveBeenCalled();
+  });
+
+  it("previews the images the saved draft's sections name", () => {
+    const draft: StorefrontThemeDocument = {
+      ...DEFAULT_STOREFRONT_THEME,
+      pages: {
+        home: [{
+          id: "story",
+          type: "editorial",
+          version: 1,
+          settings: { layout: "image-with-text", heading: "Our story", body: "", mediaId: "media_draft", imageSide: "start" },
+        }],
+        homeMode: { kind: "sections" },
+      },
+    } as StorefrontThemeDocument;
+    render(DEFAULT_STOREFRONT_THEME, SHAPE, {
+      published: { theme: DEFAULT_STOREFRONT_THEME, revision: 1 },
+      draft: { theme: draft, revision: 2, basePublishedRevision: 1 },
+    }, [{ id: "media_draft", url: "https://cdn.example.com/story.jpg", alt: "", width: 1200, height: 800 }]);
+    act(() => container.querySelector<HTMLButtonElement>("[aria-label='Edit Our story']")!.click());
+    expect(document.querySelector<HTMLImageElement>("[role=dialog] img")?.getAttribute("src"))
+      .toContain("story.jpg");
   });
 
   it("lets a Marketplace merchant set category and search starting views separately", async () => {
@@ -303,7 +449,7 @@ describe("theme page", () => {
   it.each(["shelves", "quick-grid"] as const)("previews search using the selected %s category layout", (layout) => {
     const theme = storefrontTemplateTheme("marketplace");
     theme.blocks.listing.layout = layout === "shelves"
-      ? { variant: "shelves", settings: { maxShelves: 8 } }
+      ? { variant: "shelves", settings: { maxShelves: 8, spacing: "standard" } }
       : { variant: "quick-grid", settings: {} };
     theme.blocks.listing.searchLayout = "same";
     render(theme);
@@ -343,10 +489,34 @@ describe("theme page", () => {
     expect(saved.blocks.listing.toolbar).not.toContain("subcategory-pills");
   });
 
-  it("shows quick filter chip settings only for Showcase", () => {
+  it("shows quick filter chip settings only with the tab strip (Showcase's link style)", () => {
     render(storefrontTemplateTheme("marketplace"));
     expect(container.querySelector("#theme-listing-facet-chips")).toBeNull();
     expect(container.querySelector("#theme-listing-category-tabs")).toBeNull();
+  });
+
+  it("shows the tab strip's settings on any theme that uses the tab strip", () => {
+    // The controls follow the document's setting, not the template it is based on.
+    const tabbed = storefrontTemplateTheme("marketplace");
+    tabbed.blocks.listing.links = "tabs";
+    render(tabbed);
+    expect(container.querySelector("#theme-listing-category-tabs")).not.toBeNull();
+  });
+
+  it("turns product page extras and sticky bars on in the saved draft", async () => {
+    render(DEFAULT_STOREFRONT_THEME);
+    const extras = container.querySelector("[data-product-page-extras]")!;
+    const bundle = extras.querySelector<HTMLButtonElement>("#theme-product-module-frequently-bought-together")!;
+    expect(bundle.getAttribute("aria-checked")).toBe("false");
+    act(() => bundle.click());
+    act(() => extras.querySelector<HTMLButtonElement>("#theme-product-module-policies")!.click());
+    act(() => extras.querySelector<HTMLButtonElement>("#theme-sticky-phone-anchor-bar")!.click());
+    // Department mall keeps its phone buy bar; turning it off saves `none`.
+    act(() => extras.querySelector<HTMLButtonElement>("#theme-sticky-phone-buy-bar")!.click());
+    await pressSave();
+    const saved = api.draft.mock.calls[0]![0].body.theme as StorefrontThemeDocument;
+    expect(saved.blocks.product.below).toEqual(["frequently-bought-together", "description", "reviews", "policies", "related"]);
+    expect(saved.blocks.product.sticky).toEqual({ phoneTop: "anchor-bar", phoneBottom: "none", desktop: "none" });
   });
 
   it("lets a merchant choose one card per row on phones", async () => {
@@ -450,7 +620,7 @@ describe("theme page", () => {
     act(() => sidebar.click());
     await pressSave();
     const saved = api.draft.mock.calls[0]![0].body.theme as StorefrontThemeDocument;
-    expect(saved.blocks.listing.filters).toEqual({ style: "sidebar-dense", openByDefault: true });
+    expect(saved.blocks.listing.filters).toEqual({ style: "sidebar-dense", openByDefault: true, searchPlacement: "same", ruled: false });
     expect(saved.blocks.listing.layout).toEqual(retail.blocks.listing.layout);
   });
 
@@ -525,6 +695,8 @@ describe("theme page", () => {
     act(() => radio("Department mall").click());
     const dialog = document.querySelector("[role=alertdialog]");
     expect(dialog?.textContent).toContain("Replace your changes with Department mall?");
+    // Layout choices are replaced; the merchant's content stays.
+    expect(dialog?.textContent).toContain("Your logo, words, banner slides and chosen categories and collections stay.");
     // Cancelling keeps the changed theme.
     act(() => [...dialog!.querySelectorAll("button")].find((button) => button.textContent === "Cancel")!.click());
     expect(container.textContent).toContain("Changed (based on Fashion value)");
@@ -546,7 +718,12 @@ describe("theme page", () => {
       hasCollections: true,
       hasDeliveryMethods: true,
     });
-    render(storefrontTemplateTheme("boutique"), big);
+    // A merchant who adds the newsletter (it waits for a subscriber list) is
+    // told so; no template ships it until then.
+    const boutique = storefrontTemplateTheme("boutique");
+    expect(boutique.pages.home.map((section) => section.type)).not.toContain("newsletter");
+    boutique.pages.home = [...boutique.pages.home, storefrontSectionDefault("newsletter", "newsletter")];
+    render(boutique, big);
     expect(radio("Inline menu").getAttribute("aria-checked")).toBe("true");
     expect(container.textContent).not.toContain("Your store shows Departments instead.");
     // Sections that wait for their data (a subscriber list) say so; the
@@ -554,24 +731,138 @@ describe("theme page", () => {
     const rows = [...container.querySelectorAll("li")].map((row) => row.textContent);
     expect(rows).toContain("NewsletterNot on your store yet.");
     expect(rows).toContain("Product grid");
-    expect(rows).toContain("Banners");
+    // A hero without slides shows nothing until its slides are added.
+    expect(rows).toContain("BannersHidden until you add its content.");
   });
 
   it.each([
-    ["department-mall", false, ["cat_a"], "Turn on Featured categories"],
-    ["department-mall", true, [], "Select published categories under Home content (1 needed)"],
-    ["marketplace", true, ["cat_a"], "Select published categories under Home content (2 needed)"],
-  ] as const)("explains when %s category tiles are hidden by Home content", (template, enabled, categoryIds, reason) => {
-    render(storefrontTemplateTheme(template), SHAPE, { enabled, title: "Categories", categoryIds: [...categoryIds] });
+    ["department-mall", []],
+    ["marketplace", ["cat_a"]],
+  ] as const)("flags %s category tiles until they have the categories their style needs", (template, categoryIds) => {
+    render(withCategoryTiles(storefrontTemplateTheme(template), [...categoryIds]));
     const row = [...container.querySelectorAll("li")].find((item) => item.textContent?.startsWith("Featured categories"));
-    expect(row?.textContent).toContain(`Hidden on your store. ${reason}`);
-    expect(container.querySelector('a[href="/admin/online-store/banners"]')?.textContent).toBe("Featured categories");
+    expect(row?.textContent).toBe("Featured categoriesHidden until you add its content.");
+    expect(container.querySelector('a[href="/admin/online-store/banners"]')).toBeNull();
   });
 
-  it("does not mark configured category tiles hidden", () => {
-    render(storefrontTemplateTheme("marketplace"), SHAPE, { enabled: true, title: "Categories", categoryIds: ["cat_a", "cat_b"] });
+  it("does not mark category tiles with their categories hidden", () => {
+    render(withCategoryTiles(storefrontTemplateTheme("marketplace"), ["cat_a", "cat_b"]));
     const row = [...container.querySelectorAll("li")].find((item) => item.textContent?.startsWith("Featured categories"));
     expect(row?.textContent).toBe("Featured categories");
+  });
+
+  it("saves the logo, top bar, footer words, a slide, categories and the home product in one theme draft, and nothing else", async () => {
+    render(DEFAULT_STOREFRONT_THEME);
+    files.next = [{ id: "media_logo", url: "https://cdn.test/logo.png", altText: "Mou Ghor" }];
+    expect(field("theme-logo-width")).toBeNull();
+    act(() => buttonIn("theme-brand-logo", "Select image").click());
+    expect(document.querySelector("#theme-brand-logo img")?.getAttribute("src")).toContain("logo.png");
+    expect(field("theme-logo-width")).not.toBeNull();
+
+    type(field("theme-announcement-text"), "Free delivery in Dhaka");
+    typeAndLeave(field("theme-announcement-link"), "collections/sale");
+    expect(field("theme-announcement-link").value).toBe("/collections/sale");
+
+    type(field("theme-footer-tagline"), "Pure honey");
+    type(field<HTMLTextAreaElement>("theme-footer-about"), "From the Sundarbans.\n\nPacked in Dhaka.");
+    type(field("theme-footer-copyright"), "Mou Ghor Ltd");
+
+    act(() => homeModeRadio("product").click());
+    await chooseLoaded(field<HTMLButtonElement>("theme-home-product"), "Sundarban honey");
+
+    act(() => buttonNamed("Edit Banners").click());
+    files.next = [{ id: "media_slide", url: "https://cdn.test/slide.jpg", altText: "Honey jars" }];
+    act(() => buttonNamed("Add slides").click());
+    await act(async () => buttonNamed("Done").click());
+    await settle();
+
+    act(() => buttonNamed("Edit Featured categories").click());
+    await chooseLoaded(field<HTMLButtonElement>("section-categories-categories"), "Honey");
+    await act(async () => buttonNamed("Done").click());
+
+    // Content never makes the template custom.
+    expect(radio("Department mall").getAttribute("aria-checked")).toBe("true");
+    await pressSave();
+
+    expect(api.draft).toHaveBeenCalledTimes(1);
+    const saved = api.draft.mock.calls[0]![0].body.theme as StorefrontThemeDocument;
+    expect(saved.brand).toEqual({ logo: "media_logo", logoWidth: 180, footerLogo: null, favicon: null });
+    expect(saved.blocks.topBar).toEqual({ variant: "utility", settings: { text: "Free delivery in Dhaka", link: "/collections/sale" } });
+    expect(saved.blocks.footer.settings).toMatchObject({
+      tagline: "Pure honey",
+      about: "From the Sundarbans.\n\nPacked in Dhaka.",
+      copyright: "Mou Ghor Ltd",
+    });
+    expect(saved.pages.homeMode).toEqual({ kind: "product", productId: "prod_honey" });
+    expect(saved.pages.home.find((section) => section.type === "hero")?.settings).toMatchObject({
+      slides: [{ image: "media_slide", focalPoint: { x: 50, y: 50 }, alt: "Honey jars", link: null }],
+    });
+    expect(saved.pages.home.find((section) => section.type === "category-tiles")?.settings).toMatchObject({ categoryIds: ["cat_honey"] });
+    expect(storefrontThemeDocumentSchema.safeParse(saved).success).toBe(true);
+    for (const call of Object.values(others)) expect(call).not.toHaveBeenCalled();
+    expect(api.publish).not.toHaveBeenCalled();
+  });
+
+  it("keeps the logo, words, slides and home product when another template is chosen", async () => {
+    const theme = withContent(DEFAULT_STOREFRONT_THEME);
+    render(theme, SHAPE, undefined, [{ id: "media_logo", url: "https://cdn.test/logo.png", alt: "", width: 400, height: 120 }]);
+    expect(radio("Department mall").getAttribute("aria-checked")).toBe("true");
+    act(() => radio("Fashion value").click());
+    expect(radio("Fashion value").getAttribute("aria-checked")).toBe("true");
+    await pressSave();
+    const saved = api.draft.mock.calls[0]![0].body.theme as StorefrontThemeDocument;
+    const fashion = storefrontTemplateTheme("fashion-value");
+    expect(saved.template).toBe("fashion-value");
+    expect(saved.blocks.header).toEqual(fashion.blocks.header);
+    expect(saved.tokens).toEqual(fashion.tokens);
+    expect(saved.brand).toEqual(theme.brand);
+    expect(saved.pages.homeMode).toEqual({ kind: "product", productId: "prod_honey" });
+    expect(saved.blocks.footer.settings).toMatchObject({ tagline: "Pure honey" });
+    expect(saved.blocks.topBar.settings).toEqual({ text: "Eid sale", link: "/collections/eid" });
+    expect(saved.pages.home.find((section) => section.type === "hero")?.settings).toMatchObject({ slides: [SLIDE] });
+  });
+
+  it("will not save a one-product homepage until its product is chosen", async () => {
+    render(DEFAULT_STOREFRONT_THEME);
+    act(() => homeModeRadio("product").click());
+    await pressSave();
+    expect(api.draft).not.toHaveBeenCalled();
+    expect(document.querySelector("#theme-home-product-note")?.textContent).toBe("Choose a product");
+    act(() => homeModeRadio("sections").click());
+    expect(field("theme-home-product")).toBeNull();
+  });
+
+  it("offers None as the top bar's only off switch and keeps the words when switching bars", async () => {
+    render(DEFAULT_STOREFRONT_THEME);
+    type(field("theme-announcement-text"), "Eid sale");
+    choose(field<HTMLButtonElement>("theme-top-bar"), "Phone banner");
+    expect(field("theme-announcement-text").value).toBe("Eid sale");
+
+    typeAndLeave(field("theme-announcement-link"), "sale page");
+    expect(document.querySelector("#theme-announcement-link-note")?.textContent).toBe("Use a store path like /sale or a full https:// link.");
+    await pressSave();
+    expect(api.draft).not.toHaveBeenCalled();
+
+    choose(field<HTMLButtonElement>("theme-top-bar"), "None");
+    expect(field("theme-announcement-text")).toBeNull();
+    await pressSave();
+    expect((api.draft.mock.calls[0]![0].body.theme as StorefrontThemeDocument).blocks.topBar).toEqual({ variant: "none", settings: {} });
+  });
+
+  it("marks a missing logo on its field and a missing slide image on its section", async () => {
+    const theme = withContent(DEFAULT_STOREFRONT_THEME);
+    render(theme);
+    type(field("theme-footer-tagline"), "Raw honey");
+    const message = "That image is not in Files any more. Choose another image.";
+    const hero = theme.pages.home.findIndex((section) => section.type === "hero");
+    api.draft.mockRejectedValueOnce(new AdminApiResponseError(message, 400, "VALIDATION_ERROR", [
+      { path: "brand.logo", message },
+      { path: `pages.home.${hero}.settings.slides.0.image`, message },
+    ]));
+    await pressSave();
+    expect(document.querySelector("#theme-brand-logo-note")?.textContent).toBe(message);
+    expect(document.querySelector("#theme-section-hero")?.textContent).toBe(message);
+    expect(saveBar()).not.toBeNull();
   });
 
   it("names unreadable text in plain words and will not save it", async () => {

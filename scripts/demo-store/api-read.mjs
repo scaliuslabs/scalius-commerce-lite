@@ -131,9 +131,10 @@ export async function readAdminSnapshot(client, manifest) {
   const media = await listCursor(client, { path: "/api/v1/admin/media", collectionKey: "files", label: "Media", params: { view: "ready", sortBy: "createdAt", sortOrder: "asc" } });
   const attributes = await listPaged(client, { path: "/api/v1/admin/attributes", collectionKey: "attributes", label: "Attributes", params: { sort: "createdAt", order: "asc" } });
   const collections = await listPaged(client, { path: "/api/v1/admin/collections", collectionKey: "collections", label: "Collections", params: { sort: "updatedAt", order: "asc" } });
-  const general = await client.get("/api/v1/admin/settings/general", "General settings");
-  const theme = await client.get("/api/v1/admin/settings/theme", "Theme settings");
-  const heroes = await client.get("/api/v1/admin/settings/hero-sliders", "Hero settings");
+  // The published theme and the shared draft: the homepage (hero slides,
+  // homepage collections) is saved into the draft, then that draft is published.
+  const { published, draft } = await client.get("/api/v1/admin/settings/theme/workspace", "Theme workspace");
+  const theme = { published, draft };
 
   const productBySlug = exactUniqueBySlug(products, "Products");
   const desiredProductSlugs = new Set(manifest.products.map((product) => product.slug));
@@ -156,6 +157,6 @@ export async function readAdminSnapshot(client, manifest) {
     media,
     attributes,
     collections,
-    presentation: { general, theme, heroes },
+    presentation: { theme },
   };
 }

@@ -3,12 +3,7 @@ import {
   getApiV1AdminNavigationMenus,
   getApiV1AdminNavigationMenusByMenuId,
   getApiV1AdminNavigationPlacementSettings,
-  getApiV1AdminSettingsFooter,
-  getApiV1AdminSettingsHeader,
-  getApiV1AdminSettingsHeroSliders,
-  getApiV1AdminSettingsHomepagePresentation,
   getApiV1AdminSettingsSeoFeedDiagnostics,
-  getApiV1AdminSettingsTheme,
   getApiV1AdminSettingsThemeWorkspace,
 } from "@scalius/api-client/sdk";
 import { apiData, type ApiResult } from "../api";
@@ -18,52 +13,16 @@ import type {
   NavigationPlacementSetting,
 } from "./navigation";
 
-export type ThemeDocument = ApiResult<typeof getApiV1AdminSettingsTheme>;
+/** The published theme, the shared draft, and what the editor reads (store shape, every image the draft names). */
 export type ThemeWorkspaceDocument = ApiResult<typeof getApiV1AdminSettingsThemeWorkspace>;
-export type HeaderDocument = ApiResult<typeof getApiV1AdminSettingsHeader>;
-export type FooterDocument = ApiResult<typeof getApiV1AdminSettingsFooter>;
-export type HeroSliderDocument = ApiResult<typeof getApiV1AdminSettingsHeroSliders>[number];
 /** The menu detail is the stored row: no item or placement counts. */
 export type NavigationMenuRecord = Omit<NavigationMenuSummary, "itemCount" | "placementCount">;
 export type FeedDiagnostics = ApiResult<typeof getApiV1AdminSettingsSeoFeedDiagnostics>;
-export type HomepageSectionsDocument = ApiResult<
-  typeof getApiV1AdminSettingsHomepagePresentation
->;
-
-export const themeQueryOptions = () =>
-  queryOptions({
-    queryKey: queryKeys.settings.theme(),
-    queryFn: () => apiData(getApiV1AdminSettingsTheme()),
-  });
 
 export const themeWorkspaceQueryOptions = () =>
   queryOptions({
     queryKey: [...queryKeys.settings.theme(), "workspace"] as const,
     queryFn: () => apiData(getApiV1AdminSettingsThemeWorkspace()),
-  });
-
-export const headerQueryOptions = () =>
-  queryOptions({
-    queryKey: queryKeys.settings.header(),
-    queryFn: () => apiData(getApiV1AdminSettingsHeader()),
-  });
-
-export const footerQueryOptions = () =>
-  queryOptions({
-    queryKey: queryKeys.settings.footer(),
-    queryFn: () => apiData(getApiV1AdminSettingsFooter()),
-  });
-
-export const heroSlidersQueryOptions = () =>
-  queryOptions({
-    queryKey: queryKeys.settings.heroSliders(),
-    queryFn: () => apiData(getApiV1AdminSettingsHeroSliders()),
-  });
-
-export const homepageSectionsQueryOptions = () =>
-  queryOptions({
-    queryKey: queryKeys.settings.homepagePresentation(),
-    queryFn: () => apiData(getApiV1AdminSettingsHomepagePresentation()),
   });
 
 export const navigationMenusQueryOptions = () =>

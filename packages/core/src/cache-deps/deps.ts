@@ -96,7 +96,6 @@ export const deps = {
   theme: (): void => declare(cacheDep.theme()),
   navigation: (menuId: Id): void => declareOne(cacheDep.navigation, menuId),
   anyNavigation: (): void => declare(cacheDep.anyNavigation()),
-  hero: (): void => declare(cacheDep.hero()),
   shipping: (): void => declare(cacheDep.shipping()),
   locations: (): void => declare(cacheDep.locations()),
   tax: (): void => declare(cacheDep.tax()),
@@ -105,6 +104,8 @@ export const deps = {
   promotions: (promotionIds: Iterable<Id>): void => declareEach(cacheDep.promotion, promotionIds),
   anyPromotion: (): void => declare(cacheDep.anyPromotion()),
   analytics: (): void => declare(cacheDep.analytics()),
+  /** `cf:<ownerType>`: the storefront-visible custom field definitions a reader shows values of. */
+  customFieldDefinitions: (ownerType: string): void => declare(cacheDep.customFieldDefinitions(ownerType)),
 
   // --- Coarse, time and soft ------------------------------------------------------
   /** `t:<table>`: any change of the table. Correct but coarse; prefer a precise key. */

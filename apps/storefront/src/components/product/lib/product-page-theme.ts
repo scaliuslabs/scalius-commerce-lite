@@ -5,22 +5,26 @@ import {
   type StoreShape,
 } from "@scalius/shared/storefront-theme";
 import type { Product } from "@/lib/api";
-import { renderedContentBlocks } from "./product-page-modules";
 import type { RequestTheme } from "@/lib/storefront-theme-context";
 
-/** A product overrides its product blocks only; the store's shell and tokens stay intact. */
+/**
+ * A product's own page template (`pageTemplate`) swaps in that template's
+ * product blocks (gallery, buy box, modules, sticky bars) as data; the
+ * store's shell and tokens stay intact. Without one, the request theme is
+ * used as is: the store shape already says whether any public product has
+ * content blocks (`hasContentBlocks`), and the page leaves out a module this
+ * product has nothing for.
+ */
 export function resolveProductPageTheme(
   requestTheme: Pick<RequestTheme, "theme" | "resolved">,
-  product: Pick<Product, "pageTemplate" | "contentBlocks">,
+  product: Pick<Product, "pageTemplate">,
   shape: StoreShape,
 ) {
   const id = product.pageTemplate === "classic" ? "department-mall" : product.pageTemplate;
   const template = STOREFRONT_TEMPLATE_IDS.find((candidate) => candidate === id);
-  // The layout aggregate may not know about this product's content yet.
-  const hasContentBlocks = renderedContentBlocks(product).length > 0;
-  if (!template && hasContentBlocks === shape.hasContentBlocks) return requestTheme.resolved;
+  if (!template) return requestTheme.resolved;
   return resolveStorefrontTheme({
     ...requestTheme.theme,
-    blocks: { ...requestTheme.theme.blocks, product: template ? storefrontTemplateTheme(template).blocks.product : requestTheme.theme.blocks.product },
-  }, { ...shape, hasContentBlocks });
+    blocks: { ...requestTheme.theme.blocks, product: storefrontTemplateTheme(template).blocks.product },
+  }, shape);
 }

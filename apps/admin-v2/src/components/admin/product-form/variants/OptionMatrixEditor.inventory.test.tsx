@@ -14,6 +14,11 @@ const mocks = vi.hoisted(() => ({
   navigate: vi.fn(),
   putApiV1AdminProductsByIdVariantsByVariantId: vi.fn(async (_input: unknown) => ({ aggregateRevision: 4 })),
   putApiV1AdminProductsByIdOptionsMatrix: vi.fn(async (_input: unknown) => ({ aggregateRevision: 4 })),
+  // One location unless a test opens a second one.
+  getApiV1AdminInventoryLocations: vi.fn(async (_input: unknown): Promise<{ locations: unknown[] }> => ({
+    locations: [{ id: "loc_default", name: "Main location", isDefault: true, status: "active" }],
+  })),
+  getApiV1AdminInventoryLevels: vi.fn(async (_input: unknown) => ({ productId: "prod_1", levels: [] as unknown[] })),
 }));
 
 vi.mock("@scalius/api-client/sdk", () => mocks);
@@ -258,5 +263,129 @@ describe("OptionMatrixEditor inventory for products without options", () => {
       body: { variants: Array<{ id: string }> };
     }).body.variants;
     expect(rows.map((row) => row.id)).toEqual(["var_s"]);
+  });
+
+  describe("with several locations", () => {
+    const settle = () => act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+    const atMain = translate(productMessages, "quantityAt", { location: "Main location" });
+
+    beforeEach(() => {
+      mocks.getApiV1AdminInventoryLocations.mockResolvedValue({
+        locations: [
+          { id: "loc_default", name: "Main location", isDefault: true, status: "active" },
+          { id: "loc_branch", name: "Banani store", isDefault: false, status: "active" },
+        ],
+      });
+      mocks.getApiV1AdminInventoryLevels.mockResolvedValue({
+        productId: "prod_1",
+        levels: [
+          { variantId: "var_default_prod_1", locationId: "loc_branch", onHand: 2 },
+          { variantId: "var_default_prod_1", locationId: "loc_default", onHand: 3 },
+        ],
+      });
+    });
+
+    it("edits the default location's quantity, shows the rest per location and saves the SKU total", async () => {
+      const ref = React.createRef<OptionMatrixEditorHandle>();
+      await render(
+        <OptionMatrixEditor
+          ref={ref}
+          productId="prod_1"
+          productName="Mug"
+          productPrice={250}
+          variants={[{ ...defaultSku, trackInventory: true }]}
+          images={[]}
+          aggregateRevision={3}
+        />,
+      );
+      await settle();
+      await settle();
+
+      expect(mocks.getApiV1AdminInventoryLevels).toHaveBeenCalledWith({ query: { productId: "prod_1" } });
+      const input = host.querySelector<HTMLInputElement>(`input[aria-label="${atMain}"]`)!;
+      expect(input.value).toBe("3");
+      expect(host.textContent).toContain("Main location 3 · Banani store 2");
+
+      await act(async () => {
+        setInput(input, "4");
+        input.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
+      });
+      await act(async () => ref.current!.save());
+      // One more at the default location: the SKU's 5 become 6.
+      expect(mocks.putApiV1AdminProductsByIdVariantsByVariantId.mock.lastCall?.[0]).toMatchObject({
+        body: { stock: 6, expectedStockVersion: 2 },
+      });
+    });
+
+    it("edits each variant's default-location quantity in the table", async () => {
+      mocks.getApiV1AdminInventoryLevels.mockResolvedValue({
+        productId: "prod_1",
+        levels: [
+          { variantId: "var_s", locationId: "loc_branch", onHand: 2 },
+          { variantId: "var_s", locationId: "loc_default", onHand: 3 },
+        ],
+      });
+      const sizeOption = {
+        id: "popt_size", name: "Size", position: 0, standardMapping: "size" as const,
+        values: [{ id: "pval_s", value: "S", position: 0 }],
+      };
+      const small: ProductVariant = {
+        ...defaultSku, id: "var_s", isDefault: false, trackInventory: true, optionCombinationKey: "pval_s",
+        sku: "MUG-S", barcode: "MUG-S-BARCODE", stockVersion: 4,
+        selectedOptions: [{
+          optionDefinitionId: "popt_size", optionValueId: "pval_s", name: "Size", value: "S",
+          position: 0, valuePosition: 0, standardMapping: "size",
+        }],
+      };
+      const ref = React.createRef<OptionMatrixEditorHandle>();
+      await render(
+        <OptionMatrixEditor
+          ref={ref}
+          productId="prod_1"
+          productName="Mug"
+          productPrice={250}
+          options={[sizeOption]}
+          variants={[small]}
+          images={[]}
+          aggregateRevision={3}
+        />,
+      );
+      await settle();
+      await settle();
+
+      expect(host.textContent).toContain(atMain);
+      const input = host.querySelector<HTMLInputElement>(`input[aria-label="${translate(productMessages, "quantityFor", { name: "S" })}"]`)!;
+      expect(input.value).toBe("3");
+      await act(async () => {
+        setInput(input, "1");
+        input.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
+      });
+      await act(async () => ref.current!.save());
+      const rows = (mocks.putApiV1AdminProductsByIdOptionsMatrix.mock.lastCall?.[0] as {
+        body: { variants: Array<Record<string, unknown>> };
+      }).body.variants;
+      expect(rows[0]).toMatchObject({ id: "var_s", stock: 3, expectedStockVersion: 4 });
+    });
+
+    it("keeps a single-location store's quantity field as it was", async () => {
+      mocks.getApiV1AdminInventoryLocations.mockResolvedValue({
+        locations: [{ id: "loc_default", name: "Main location", isDefault: true, status: "active" }],
+      });
+      await render(
+        <OptionMatrixEditor
+          productId="prod_1"
+          productName="Mug"
+          productPrice={250}
+          variants={[{ ...defaultSku, trackInventory: true }]}
+          images={[]}
+          aggregateRevision={3}
+        />,
+      );
+      await settle();
+
+      expect(quantityInput()?.value).toBe("5");
+      expect(host.querySelector(`input[aria-label="${atMain}"]`)).toBeNull();
+      expect(mocks.getApiV1AdminInventoryLevels).not.toHaveBeenCalled();
+    });
   });
 });

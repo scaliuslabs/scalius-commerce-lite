@@ -346,12 +346,15 @@ export const demoStoreManifest = Object.freeze({
   })),
   products: productDefinitions.map(expandProduct),
   collections: [
-    { logicalKey: "collection:new-noteworthy", name: "New & Noteworthy", source: "manual", presentation: "carousel", limit: 12, showOnHomepage: true },
-    { logicalKey: "collection:everyday-carry", name: "Everyday Carry", source: "dynamic", presentation: "grid", limit: 8, showOnHomepage: true },
-    { logicalKey: "collection:home-refresh", name: "Home Refresh", source: "dynamic", presentation: "grid", limit: 8, showOnHomepage: true },
-    { logicalKey: "collection:weekend-ready", name: "Weekend Ready", source: "manual", presentation: "carousel", limit: 8, showOnHomepage: false },
-    { logicalKey: "collection:offers-worth-opening", name: "Offers Worth Opening", source: "manual", presentation: "grid", limit: 12, showOnHomepage: false },
+    { logicalKey: "collection:new-noteworthy", name: "New & Noteworthy", source: "manual", presentation: "carousel", limit: 12 },
+    { logicalKey: "collection:everyday-carry", name: "Everyday Carry", source: "dynamic", presentation: "grid", limit: 8 },
+    { logicalKey: "collection:home-refresh", name: "Home Refresh", source: "dynamic", presentation: "grid", limit: 8 },
+    { logicalKey: "collection:weekend-ready", name: "Weekend Ready", source: "manual", presentation: "carousel", limit: 8 },
+    { logicalKey: "collection:offers-worth-opening", name: "Offers Worth Opening", source: "manual", presentation: "grid", limit: 12 },
   ],
+  // The theme's homepage: the collections section's collections, in order, and
+  // the hero section's slides (one per hero: its desktop and mobile images).
+  homepageCollections: ["collection:new-noteworthy", "collection:everyday-carry", "collection:home-refresh"],
   heroes: [
     { logicalKey: "hero:everyday-edit", title: "The Everyday Edit", copy: "Useful things, considered well.", destination: "collection:new-noteworthy" },
     { logicalKey: "hero:softer-home", title: "A softer home", copy: "Light, texture, and room to breathe.", destination: "category:home-living" },

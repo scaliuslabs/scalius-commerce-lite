@@ -36,6 +36,7 @@ import {
   readRepeatedPublicQueryValues,
 } from "../utils/public-search-query";
 import { optionalProductCardFacts } from "../schemas/product-card-facts";
+import { storefrontCustomFieldsSchema } from "../schemas/custom-fields";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 const PRODUCT_FEED_CURSOR_PATTERN = /^feed-v1\.[0-9a-z]+\.[A-Za-z0-9_-]+$/;
@@ -356,6 +357,7 @@ const productDetailVariantSchema = z.object({
   discountAmount: z.number().nullable(),
   /** physical (shipped or picked up), digital, or service (performed, no delivery). */
   fulfillmentKind: fulfillmentKindSchema,
+  customFields: storefrontCustomFieldsSchema,
   createdAt: z.string().nullable(),
   deletedAt: z.string().nullable(),
 });
@@ -437,6 +439,7 @@ const productDetailDataSchema = z.object({
     }).nullable(),
     ...productPageMerchandisingFields,
     ...productPageReviewFields,
+    customFields: storefrontCustomFieldsSchema,
     offers: z.array(z.object({
       promotionId: z.string(),
       title: z.string(),
@@ -522,6 +525,7 @@ const productSectionTextSchema = z.object({
 });
 
 const productSectionVariantSchema = productDetailVariantSchema.omit({
+  customFields: true,
   stock: true,
   reservedStock: true,
   lowStockThreshold: true,

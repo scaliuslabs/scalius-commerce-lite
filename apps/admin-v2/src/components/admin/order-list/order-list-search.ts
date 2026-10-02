@@ -1,4 +1,5 @@
 import { PAYMENT_STATUSES as ORDER_PAYMENT_STATUSES } from "@scalius/shared/order-state";
+import { ORDER_CHANNELS, type OrderChannel } from "@scalius/shared/order-channel";
 import {
   createListSearchValidator,
   normalizeBooleanSearchParam,
@@ -21,6 +22,8 @@ export const PAYMENT_METHODS = ["cod", "stripe", "sslcommerz"] as const;
 export const FULFILLMENT_STATUSES = ["pending", "partial", "complete"] as const;
 /** How the order reaches the buyer: shipped to an address, picked up, or nothing physical (a service). */
 export const DELIVERY_METHODS = ["delivery", "pickup", "none"] as const;
+/** Where the order came from: online store, dashboard, POS, AI agent or app. */
+export const SALES_CHANNELS = ORDER_CHANNELS;
 export const PAYMENT_RECOVERY_STATES = [
   "recoverable",
   "awaiting_payment",
@@ -40,6 +43,7 @@ export type OrderListSearch = Omit<ListSearchParams<OrderSort>, "trashed"> & {
   paymentMethod?: (typeof PAYMENT_METHODS)[number];
   fulfillmentStatus?: (typeof FULFILLMENT_STATUSES)[number];
   deliveryMethod?: (typeof DELIVERY_METHODS)[number];
+  channel?: OrderChannel;
   paymentRecovery?: (typeof PAYMENT_RECOVERY_STATES)[number];
   startDate?: string;
   endDate?: string;
@@ -69,6 +73,7 @@ export function validateOrderSearch(search: SearchValidatorInput<OrderListSearch
     paymentMethod: normalizeOptionalEnumSearchParam(search.paymentMethod, PAYMENT_METHODS),
     fulfillmentStatus: normalizeOptionalEnumSearchParam(search.fulfillmentStatus, FULFILLMENT_STATUSES),
     deliveryMethod: normalizeOptionalEnumSearchParam(search.deliveryMethod, DELIVERY_METHODS),
+    channel: normalizeOptionalEnumSearchParam(search.channel, SALES_CHANNELS),
     paymentRecovery: normalizeOptionalEnumSearchParam(search.paymentRecovery, PAYMENT_RECOVERY_STATES),
     startDate: normalizeDateSearchParam(search.startDate),
     endDate: normalizeDateSearchParam(search.endDate),
@@ -86,6 +91,7 @@ export function orderFilterQuery(search: OrderListSearch, term: string): Omit<Or
     paymentMethod: search.paymentMethod,
     fulfillmentStatus: search.fulfillmentStatus,
     deliveryMethod: search.deliveryMethod,
+    channel: search.channel,
     paymentRecovery: search.paymentRecovery,
     sort: search.sort,
     order: search.order,
@@ -105,6 +111,7 @@ export const CLEARED_ORDER_FILTERS: Partial<OrderListSearch> = {
   paymentMethod: undefined,
   fulfillmentStatus: undefined,
   deliveryMethod: undefined,
+  channel: undefined,
   paymentRecovery: undefined,
   startDate: undefined,
   endDate: undefined,
@@ -140,6 +147,7 @@ export function countOrderFilters(search: OrderListSearch): number {
     search.paymentMethod,
     search.fulfillmentStatus,
     search.deliveryMethod,
+    search.channel,
     search.paymentRecovery,
     search.startDate || search.endDate,
     search.openRequest,

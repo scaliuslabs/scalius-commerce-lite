@@ -1,9 +1,18 @@
-# Storefront theme document (version 5)
+# Storefront theme document (version 6)
 
 One JSON document describes how the storefront looks: the template it is
-based on, the tokens every block reads, one variant per block, and the
-homepage sections. The dashboard Theme page writes it; the storefront renders
-it; both resolve it against the store's shape with the same function.
+based on (a label), the tokens every block reads, the brand (logo, footer
+logo, tab icon), one variant per block with its settings (the announcement's
+words, the footer's words), the homepage sections with their own content
+(hero slides, the category tiles' and collections' picks) and what `/`
+shows. It is the one draft for the look: the dashboard Theme page saves
+every visual and merchandising choice into it with one Save, previews it,
+publishes it atomically and restores it from theme versions (and a builder,
+an agent or a plugin section can write it); the storefront renders it; both
+resolve it against the store's shape with the same function. Store identity
+(name, phone, email, address, social profiles) is not here: Settings ->
+Store (the business document) owns it, and every buyer surface reads it
+from there only.
 
 Source of truth: `storefront-theme/*.ts`, re-exported by `storefront-theme.ts`
 (import `@scalius/shared/storefront-theme`). The layout grammar and the
@@ -12,11 +21,14 @@ numbers come from the storefront study
 
 | File | Holds |
 |---|---|
-| `contrast.ts` | the 19 colour keys, colour maths, the base AA pairs, header-tone surfaces |
-| `tokens.ts` | token enums and specs (density, type scale, radius…), palettes, fonts, the token schema, token CSS |
+| `brand.ts` | the brand (logo, logo width, footer logo, tab icon as media ids) and the resolved brand images the layout and a preview carry |
+| `links.ts` | the link rule theme content uses (navigation-safe hrefs in canonical form) |
+| `content.ts` | the merchant's content inside the document (`storefrontThemeWithContent`, `storefrontThemeLook`) and every image it names with its path (`storefrontThemeMediaReferences`) |
+| `contrast.ts` | the 19 colour keys, colour maths, the base AA pairs, header-tone surfaces and the bands derived from them |
+| `tokens.ts` | token enums and specs (density, type scale, radius…), palettes, fonts, the token schema, token CSS (with the rating colour and the header bands) |
 | `fit.ts` | `StoreShape` (bounded store facts), the navigation facts, and the fit conditions variants declare |
-| `blocks.ts` | the block-variant registry, card looks, listing filter styles, the navigation schema and the blocks schema |
-| `sections.ts` | the section registry (17 types, strict settings) and the types the storefront renders |
+| `blocks.ts` | the block-variant registry, card looks, listing filter styles and page chrome, product modules and sticky bars, the navigation schema and the blocks schema |
+| `sections.ts` | the section registry (20 types, strict settings) and the types the storefront renders |
 | `home-data.ts` | what homepage sections read (product lists by source, images), shared by the API and the storefront |
 | `document.ts` | the document schema, the document's contrast pairs, strict parsing, token CSS |
 | `templates.ts` | the 10 templates as frozen data, `DEFAULT_STOREFRONT_THEME` |
@@ -25,27 +37,102 @@ numbers come from the storefront study
 
 ```jsonc
 {
-  "version": 5,                        // literal; a new shape means a new version
-  "template": "department-mall",       // the template it is based on (a label)
+  "version": 6,                        // literal; a new shape means a new version
+  "template": "department-mall",       // the template it is based on: a label, never read for behaviour
   "tokens": {
     "colors": { "<19 keys>": "#rrggbb" },
     "typography", "typeScale", "headingCase", "density", "radius",
     "buttonShape", "surface", "imageRatio", "imageFit", "headerTone", "container"
   },
+  "brand": { "logo", "logoWidth", "footerLogo", "favicon" },  // media ids (null: none), width 80-240 step 10
   "blocks": {                          // each block: { "variant", "settings" }
-    "topBar", "header",
+    "topBar",                          // none (off) | announcement | utility | app-banner: { text, link }
+    "header",
     "navigation": { "source", "maxTopItems", "linkBudget" },   // shared by every header surface
     "desktopNav", "mobileNav", "card",
-    "listing": { "layout", "filters": { "style", "openByDefault", "column"?, "rowPitch"?, "label"? }, "toolbar": [], "phoneLayout", "paging" },
+    "listing": {
+      "layout",                        // grid | list | shelves { maxShelves, spacing } | quick-grid
+      "searchLayout", "descriptionPlacement",
+      "filters": { "style", "openByDefault", "order"?, "column"?, "rowPitch"?, "label"?, "searchPlacement", "ruled" },
+      "toolbar": [], "phoneLayout", "paging",
+      "surface", "gutter", "band", "phoneBar", "links", "phoneBanner", "maxColumns"
+    },
     "product": { "gallery", "buyBox", "below": [], "sticky": { "phoneTop", "phoneBottom", "desktop" } },
-    "footer"
+    "footer"                           // every variant: { tagline, about, copyright } (+ directory's style)
   },
-  "pages": { "home": [{ "id", "type", "version", "settings" }] }
+  "pages": {
+    "home": [{ "id", "type", "version", "settings" }],
+    "homeMode": { "kind": "sections" } // or { "kind": "product", "productId" }
+  }
 }
 ```
 
 ## Rules
 
+- **One draft for the look.** Every visual and merchandising choice is in
+  the document: the brand images and logo width, the announcement bar (its
+  `topBar` variant is the only switch, `none` is off; `announcement`,
+  `utility` and `app-banner` carry `{ text, link }`), the footer's words
+  (`tagline`, plain-text `about` with blank lines between paragraphs, and
+  `copyright`, the name after "©", empty: the store name; the line always
+  renders), the hero's slides, the category tiles' categories and title,
+  the collections section's collections, every other section and what `/`
+  shows. A dashboard Save writes the draft only; preview renders the draft;
+  publish makes all of it live at once; a theme version restores all of it.
+  Header and footer menus stay navigation menus (their own publish); the
+  theme chooses only where links come from (`blocks.navigation`).
+- **Brand.** `brand.logo`, `brand.footerLogo` and `brand.favicon` are media
+  ids (`null`: the store name in text, or the platform tab icon);
+  `brand.logoWidth` is the header logo's computer width (80-240px in steps
+  of 10, phones cap it at 160). The layout read resolves the published
+  theme's images in its one batch, through the stored theme row
+  (`layout.brand`: `{ logo, footerLogo, favicon }`, each a ready or trashed
+  image or `null`), declaring `m:<id>` for each id the row names (or
+  `m:none`, which never advances, when it names none: the read matched no
+  row and `theme` covers that). A preview resolves its draft's own
+  (`theme-preview/resolve` returns `brand`). Emails use the published logo's
+  original upload. Store identity is never brand: the store name, phone,
+  email, address and social profiles come from the business document only.
+- **Saves check what the document names.** A draft save rejects a media id
+  that is not a ready or trashed image in Files, and a product home mode
+  whose product is gone or in trash, each against its document path
+  (`brand.logo`, `pages.home.2.settings.slides.0.image`,
+  `pages.homeMode.productId`); links are canonical navigation-safe hrefs
+  (a same-store path, `?query`, `#fragment` or an https URL; the schema
+  refuses anything else). The published theme and the draft are places in
+  a file's "Used in" (`theme`), so Files refuses to delete an image either
+  still shows.
+- **Content survives a template.** Choosing a template copies its look and
+  keeps the merchant's content (`storefrontThemeWithContent`: brand, home
+  mode, announcement and footer words where the new variants carry them,
+  each hero's slides and side banners, the category tiles' and collections'
+  picks, given to the first section of the same type, then the second...);
+  "matches a template" compares looks only (`storefrontThemeLook`).
+  Switching a block's variant (and the resolver's fit fallbacks) keeps the
+  settings both variants declare (`storefrontBlockSwitch`).
+- **What `/` shows.** `pages.homeMode` is `sections`, or `product` with a
+  `productId`: while that product is public (the homepage read returns it
+  as `sections.homeProduct`), `/` answers 302 to its own page
+  (`/products/<slug>`), which keeps its canonical URL and SEO; the product
+  route never redirects back, so there is no loop, and a product that stops
+  being public leaves `/` on the sections. A preview follows the draft's
+  mode.
+
+- **The template is a label.** `template` says what the theme is based on
+  (the dashboard's "based on" line and its reset-to-template defaults). No
+  storefront component and not the resolver read it for behaviour: every
+  behaviour a reference needs is a block variant, a setting or a token that
+  the template's data states, so blocks from any template (or a builder, an
+  agent, a plugin section) mix freely and render truthfully. A test fails if
+  a component branches on the template
+  (`apps/storefront/src/lib/theme-contract-consumers.test.ts`).
+- **Every choice does something.** Every enum value of every block setting,
+  the listing's and product page's choices, each toolbar piece, product
+  module and section setting has a consumer (a renderer, or the variant's
+  `renders` mapping), tested by the same file. An option with nothing to
+  render it is removed, not shipped (questions wait for a question model;
+  the newsletter section, registered, waits for a subscriber list and no
+  template ships it).
 - **Strict.** Unknown keys, values outside the enums, settings that belong to
   another variant, and other versions are rejected. Writes (API) and reads
   (core, storefront) use the same schema. There is no tolerant or legacy
@@ -85,10 +172,18 @@ numbers come from the storefront study
   second-level categories with two or more published children under one
   root; `brandCount` = published brands with a public product;
   `hasKeySpecs` = a live `key_spec` attribute has a value on a public
-  product. "Public product" is `product_buyer_state.is_public`. EMI,
-  digital lines, reviews, questions and content blocks read as absent until
-  their phase lands. On the 30k catalogue seed it reads 25 roots, 4 levels,
-  300 brands and key specs (`store-shape.scale.test.ts`, opt-in).
+  product; `hasReviews` = reviews are on and one is published;
+  `hasDigitalLines` = a live digital SKU of an active product;
+  `hasEmiPlans` = the `emi` settings document is on with a plan;
+  `hasContentBlocks` = a public product has a block the product page
+  renders (`STOREFRONT_RENDERED_CONTENT_BLOCK_TYPES`, outside the
+  description tabs). "Public product" is `product_buyer_state.is_public`.
+  Every fact is computed (a core test fails if a `requires` names a fact
+  the statement does not produce); its cache keys are precise: `lm:shape`,
+  `lm:all`, the "any row" keys, `set:emi:document` and
+  `t:product_content_blocks` (block edits are rare merchant writes). On the
+  30k catalogue seed it reads 25 roots, 4 levels, 300 brands and key specs
+  (`store-shape.scale.test.ts`, opt-in).
 - **Navigation.** `blocks.navigation` is shared by every header surface:
   `source` is `menu`, `category-tree` (published roots with public products
   and their published descendants, 4 levels at most) or `tree+menu` (the
@@ -115,11 +210,45 @@ numbers come from the storefront study
   spec-catalogue Star Tech's 225/32/14 and rounded-tech Apple Gadgets'
   316/28/16. Other templates use a Filter button and a 288px phone sheet;
   Marketplace uses persistent filter chips and a full-width split sheet.
-  The small-catalogue
+  `order` reorders whole groups (unset keeps the style's reference
+  arrangement, including the dense column's price after the first two
+  specs); Star Tech and Apple Gadgets state price first.
+  `searchPlacement: drawer` (Star Tech) moves a sidebar's facets into the
+  drawer on search, so the results take the width (up to five columns);
+  `ruled` (Fabrilife) draws a sidebar's groups as one flat, ruled list that
+  scrolls on its own. The small-catalogue
   rule is `storefrontListingFiltersShown`: filters need 8 results and a
   facet with two values, unless the buyer already refined; a store with
   fewer than 8 products resolves `shown: false`. The listing `layout` is
-  the result arrangement only: `grid`, `list`, `shelves`, `quick-grid`.
+  the result arrangement only: `grid`, `list`, `shelves` (`spacing: airy`
+  is Aarong's track), `quick-grid`.
+- **Listing chrome.** What the references do around the results is data:
+  `surface` (`page`, Dawn's page colour behind the grid, or `muted`),
+  `gutter` (`inset` or Aarong's `flush`), `band` (`standard`, Dawn's
+  `inline` title band over a facet bar, Star Tech's `beside-filters` band
+  in the results column), `phoneBar` (`standard`, Target's `pill-row`,
+  Amazon's `split-sheet`, Fabrilife's `bottom`), `links` (`chips`, or the
+  showcase `tabs` strip that starts with "All"), `phoneBanner` (the
+  category banner on phones too; Apple Gadgets shows it on computers only)
+  and `maxColumns` (3-6 or null; Target's four roomy columns). A band that
+  needs a placement (`inline` the bar, `beside-filters` a sidebar) renders
+  `standard` elsewhere. The toolbar's `applied-chips` piece shows the
+  buyer's refinements as removable chips; without it the filter form still
+  undoes each one.
+- **Product page.** `below` lists the modules in page order, each rendered
+  only when this product has its data, all from reads the page already
+  makes: `frequently-bought-together` (the recommendations when they are
+  mostly real co-purchases; the co-bought products rank first, so it shows
+  the first half, two at most, with this item and a total for fixed
+  prices), `compare-similar` (recommended products of the same category in
+  the store's card, and a link into `/compare` with this one),
+  `policies` (the published policy pages in the layout data),
+  `recently-viewed` (this browser's own list, filled before paint, nothing
+  without JavaScript). `sticky`: `phoneTop: anchor-bar` (Amazon's Top,
+  Details, Explore, Reviews bar), `phoneBottom: buy-bar`, `desktop:
+  anchor-bar` (Star Tech) or `product-bar` (Target: name, price and Add to
+  cart under the header once the buy buttons scroll away). Stacked and
+  image-grid galleries keep their details column sticky by layout.
 - **Sections.** Each `type` is an entry in `STOREFRONT_SECTION_REGISTRY` with
   its own `version` and strict settings. Sections are optional, repeatable
   and reorderable; ids are unique; at most 24.
@@ -129,20 +258,45 @@ numbers come from the storefront study
   gallery, footer, top bar).
 - **Section renderers and data.** `STOREFRONT_SECTION_RENDERERS` lists the
   section types the storefront renders (one component each under
-  `apps/storefront/src/components/homepage/`). `brand-wall`,
-  `recently-viewed` and `newsletter` wait for their data (the brand entity,
-  product pages that record views, a subscriber list) and render nothing;
-  the Theme page says so. `home-data.ts` derives what the sections read
-  (`homeSectionRequests`: one product list per source at the largest limit
-  any section asks, capped at 8 lists of 36, and at most 24 images). The
-  API reads exactly those: for the published theme in the homepage batch
-  part (a fixed read that rejects any query string), and for a preview's
-  stored draft on the token-verified `POST /storefront/theme-preview/homepage`
-  (private, never cached). Callers never name reads. The storefront looks
-  each section's data up by the same keys. A section without data
-  renders nothing (no placeholder). Consecutive `banner` sections with the
-  same `two-up` or `four-up` layout share one row. The hero's optional
+  `apps/storefront/src/components/homepage/`). `newsletter` waits for a
+  subscriber list with marketing consent and renders nothing (the Theme
+  page says so); no template ships it until then. `home-data.ts` derives what the page reads
+  (`homeSectionRequests(home, homeMode)`: one product list per source at the
+  largest limit any section asks, capped at 8 lists of 36; at most 40
+  images, hero slides and their phone images included; the category tiles'
+  categories, at most 24; the collections sections' collections, at most
+  8; the brand wall's brands; the deal promotions; and a product homepage's
+  product). The API reads exactly those in the homepage's two batches
+  (`sections`: `lists`, `media`, `brands`, `promotions`, `categories`,
+  `collections`, `homeProduct`): for the published theme in the homepage
+  batch part (a fixed read that rejects any query string), and for the
+  saved draft a preview follows on the token-verified
+  `POST /storefront/theme-preview/homepage` (private, never cached), so
+  slides, tiles, collections and the home mode all preview. Callers never
+  name reads. The storefront looks each section's data up by the same
+  keys. A section without data renders nothing (no placeholder): a hero
+  without a slide whose image resolves, category tiles with fewer public
+  categories than their style needs (`storefrontCategoryTilesMinimum`).
+  A collections section without a collection that has products shows the
+  newest products. The `usp-strip` section's presence is its switch (the
+  storefront reads shipping and checkout facts only when a section shows
+  them, `homeSectionsShowDeliveryFacts`). Consecutive `banner` sections with
+  the same `two-up` or `four-up` layout share one row. The hero's optional
   `sideBanners` show only with `contained-banners`.
+- **Hero slides.** Each slide is a computer image and an optional phone
+  image (`phoneImage`; phones use the computer image without one), each
+  with a focal point (`phoneFocalPoint` falls back to `focalPoint`), the alt
+  text (what the image shows, never drawn over it), optional words over it
+  (`heading`, `text`) and a link (`null`: not a link; the button shows only
+  with a link). At most 10.
+- **Colours.** Every colour a block paints is a theme token: the footer
+  tones re-point the footer's surface tokens to an AA pair (the header
+  tone, ink on page, ink on muted); Amazon's banded directory footer uses
+  the header tone with two bands derived from it (`theme-header-raised`,
+  at most 14% toward the header's text and never below AA, and
+  `theme-header-deep`, away from the text, so never less readable); stars
+  and review bars use `theme-rating` (the references' shared amber; a
+  rating always carries its number in text); scrollbars use the neutrals.
 - **Cards.** A card id's `renders` is its measured anatomy as data: body
   order (title, price, facts), price colour role (`sale-always` is Star
   Tech's red price), discount wording, placement (`both`: Fabrilife's photo
@@ -168,36 +322,35 @@ numbers come from the storefront study
   hover photo is fetched on intent, decoded, then faded. `standard` is today's card, unchanged. The storefront renders
   `standard` from its own file and every other id from
   `apps/storefront/src/components/cards/variants/anatomy.astro`.
-- **The default renders today's store.** `DEFAULT_STOREFRONT_THEME` is the
-  Department mall template. It resolves to the version 3 Classic look
-  exactly (tested against values captured from the v3 code), including the
-  owner-protected product page (`gallery: classic`, `buyBox: classic`).
+- **The default.** `DEFAULT_STOREFRONT_THEME` is the Department mall
+  template: the v3 Classic grid, density and tokens (tested against values
+  captured from the v3 code) with the department search header, the mall
+  card and buy box, and the owner-protected classic gallery.
 
 ## Templates
 
-| Id | Best for | Blocks (header / desktop menu / phone menu / card / listing / gallery / buy box / footer) | Tokens |
+Generated from `templates.ts` (the data is the truth; this is a summary).
+
+| Id | Best for | Blocks (header / desktop menu / phone menu / card / listing + filters (chrome) / gallery / buy box / footer); navigation; modules; sticky | Tokens (density, radius, buttons, surface, header, container) |
 |---|---|---|---|
-| `boutique` | one brand, 5–200 products | boutique-inline / dropdown / accordion-drawer / boutique / grid + bar-dropdowns / stacked / boutique / minimal-columns; nav menu, 6 | airy, display, square, flat, 1200 |
-| `heritage-editorial` | fashion, sarees, crafts | heritage-nav / mega-panel / accordion-drawer / portrait / shelves + bar-dropdowns / portrait / heritage / newsletter-grey; nav tree+menu, 11 | airy, display, uppercase, portrait photos, 1360 |
-| `fashion-value` | apparel, 200–5,000 SKUs | fashion-department / mega-panel / bottom-tabs / fashion-value / grid + sidebar-comfortable / thumbs-below / fashion / newsletter-grey; nav tree+menu, 6 | compact, retail, uppercase, square, flat |
-| `spec-catalogue` | electronics, 5k–50k SKUs | spec-two-row / sticky-category-bar / bottom-tabs / spec / grid + sidebar-dense (list rows on phones) / thumbs-below / spec / support-dark; nav category-tree, 18 | dense, flat type, subtle, dark header, contain, 1290 |
-| `rounded-tech` | premium gadgets, 500–10k SKUs | tech-rounded / dropdown / bottom-tabs / tech-rounded / grid + sidebar-comfortable / thumbs-below / tech / brand-black; nav category-tree, 9 | comfortable, soft, pill, raised, light header |
-| `marketplace` | very large mixed catalogues | marketplace-search / drill-in-drawer / drill-in-drawer / detailed / grid categories, list search + sidebar-dense / thumbs-left / marketplace-3col / directory; nav tree+menu, 18 | compact, flat type, dark header, full width |
-| `mass-retail` | household, general goods | retail-pill / drill-in-drawer / drill-in-drawer / retail / grid + drawer (list rows on phones) / image-grid / retail / minimal-columns; nav tree+menu, 17 | comfortable, rounded, pill, brand header |
-| `department-mall` | multi-category shops, 50–3,000 SKUs (the default) | mall-search / departments-rail (home) / accordion-drawer / standard / grid + sidebar-dense / classic / classic / product-widgets; nav tree+menu, 8 | compact, subtle, hairline cards, 1440 |
-| `daily-essentials` | grocery, pharmacy, repeat buys | grocery-shell / departments-rail (always open) / accordion-drawer / quick-add / quick-grid + drawer / thumbs-below / classic / minimal-columns; nav tree+menu, 16 | compact, rounded, pill, contain, full width |
-| `showcase-landing` | 1–20 hero products, launches | showcase-simple / dropdown / accordion-drawer / boutique / grid + drawer / stacked / showcase / minimal-columns; nav menu, 6 | comfortable, display, rounded, pill, 1200 |
+| `boutique` | one brand, 5–200 products | boutique-inline / dropdown / accordion-drawer / boutique / grid + bar-dropdowns (surface page, band inline) / stacked / boutique / minimal-columns; nav menu, 6; modules description, content-blocks, policies, reviews, related | airy, square, radius, flat, light header, 1200 |
+| `heritage-editorial` | fashion, sarees, crafts | heritage-nav / mega-panel / accordion-drawer / portrait / shelves + bar-dropdowns (gutter flush) / portrait / heritage / newsletter-grey; nav tree+menu, 11; modules description, reviews, related, recently-viewed | airy, square, radius, flat, light header, 1360 |
+| `fashion-value` | apparel, 200–5,000 SKUs | fashion-department / mega-panel / bottom-tabs / fashion-value / grid + sidebar-comfortable (phone bar bottom, ruled) / thumbs-below / fashion / newsletter-grey; nav tree+menu, 6; modules frequently-bought-together, description, reviews, related | compact, square, radius, flat, light header, 1360 |
+| `spec-catalogue` | electronics, 5k–50k SKUs | spec-two-row / sticky-category-bar / bottom-tabs / spec / grid + sidebar-dense (band beside-filters, search drawer) / thumbs-below / spec / support-dark; nav category-tree, 18; modules spec-table, description, warranty, reviews, related; sticky phoneTop anchor-bar, desktop anchor-bar | dense, subtle, radius, flat, dark header, 1290 |
+| `rounded-tech` | premium gadgets, 500–10k SKUs | tech-rounded / dropdown / bottom-tabs / tech-rounded / grid + sidebar-comfortable (no phone banner) / thumbs-below / tech / brand-black; nav category-tree, 9; modules spec-table, description, warranty, policies, reviews, related, recently-viewed; sticky phoneBottom buy-bar | comfortable, soft, pill, raised, dark header, 1360 |
+| `marketplace` | very large mixed catalogues | marketplace-search / drill-in-drawer / drill-in-drawer / detailed / grid + sidebar-dense (phone bar split-sheet, list search) / thumbs-left / marketplace-3col / directory (bands); nav tree+menu, 18; modules about-bullets, key-attributes, spec-table, description, warranty, reviews, related; sticky phoneTop anchor-bar, phoneBottom buy-bar | compact, subtle, radius, flat, dark header, full |
+| `mass-retail` | household, general goods | retail-pill / drill-in-drawer / drill-in-drawer / retail / grid + drawer (phone bar pill-row, 4 columns, list search) / image-grid / retail / minimal-columns; nav tree+menu, 17; modules about-bullets, description, spec-table, warranty, compare-similar, reviews, related; sticky desktop product-bar | comfortable, rounded, pill, flat, brand header, 1440 |
+| `department-mall` | multi-category shops, 50–3,000 SKUs (the default) | mall-search / departments-rail / accordion-drawer / mall / grid + sidebar-dense / classic / mall / product-widgets; nav tree+menu, 8; modules description, reviews, related; sticky phoneBottom buy-bar | compact, subtle, radius, hairline, light header, 1200 |
+| `daily-essentials` | grocery, pharmacy, repeat buys | mall-search / sticky-category-bar / bottom-tabs / quick-add / grid + sidebar-comfortable / thumbs-left / essentials / directory; nav tree+menu, 16; modules description, related | compact, rounded, radius, flat, light header, 1360 |
+| `showcase-landing` | 1–20 hero products, launches | showcase-simple / dropdown / accordion-drawer / showcase / grid + drawer (links tabs) / stacked / showcase / minimal-columns; nav menu, 6; modules content-blocks, description, reviews; sticky phoneBottom buy-bar | comfortable, rounded, pill, flat, light header, 1200 |
 
 Where the data departs from SYNTHESIS.md, and why:
 
-- **Department mall** keeps today's Classic tokens (radius buttons, hairline
-  cards, a 1440px container, today's homepage order and product page)
-  instead of the study's pill buttons, flat cards and Game Ghor order: it is
-  the default, and today's store and product page must stay pixel-identical.
-  For the same reason it uses the announcement top bar and the dropdown menu
-  row (today's bar and row) instead of the study's utility bar and
-  "All departments" rail; both stay available as `utility` and
-  `departments-rail` for any other mix.
+- **Department mall** keeps the owner-protected classic gallery with its
+  own mall buy box, radius buttons and hairline cards in a 1200px container
+  instead of the study's pill buttons and flat cards: it is the default.
+  It uses the utility top bar, the department search header and the "All
+  departments" rail (open on the home page).
 - **Mass retail** starts with Target's filter drawer; merchants can select a
   sticky category sidebar in the dashboard. Its popular-filter chips stay.
 - **Marketplace** starts categories as cards and searches as rows. Shoppers
@@ -210,10 +363,11 @@ Where the data departs from SYNTHESIS.md, and why:
   auto-fill grid stretches cards, and two cards must fit a 360px phone.
   `dense` shares compact's type scale (the 14px phone floor) and uses a 12px
   desktop gap so columns never drop when the page gutter grows at 1024px.
-- **Containers** add `1440` (today's width) to the measured 1200/1290/1360/full.
-- **`pages.landing`** is left out until a route renders it: the agent
-  operation manifest inlines the whole document schema into every theme
-  operation, so each page costs about 0.9 MB of generated source.
+- **Containers** add `1440` (the v3 width, Mass retail's) to the measured 1200/1290/1360/full.
+- **`pages.landing`** is left out until a route renders it (a page is added
+  only with its renderer). A single-product store uses `pages.homeMode`. The document schema is one named OpenAPI
+  component (`StorefrontThemeDocument`) that every theme operation
+  references, so a page adds its sections once to the generated contract.
 
 ## Changing the contract
 
@@ -230,19 +384,20 @@ Where the data departs from SYNTHESIS.md, and why:
    sections valid without one.
 3. For any other shape change, bump `STOREFRONT_THEME_DOCUMENT_VERSION` and
    add a migration that resets stored theme rows to the defaults (0082 was
-   the version 4 reset; 0097 is the version 5 reset). There is no backward
+   the version 4 reset, 0093 the version 5 reset, 0106 the version 6
+   reset; 0106 also dropped the hero sliders and the homepage, header and
+   footer settings documents the theme replaced). There is no backward
    compatibility.
 4. Deploy order: a storefront that reads an older or newer document version
    renders its own default whole and logs a warning, and a store shape with
    keys it does not know reads as an empty store (every block falls back to
    its always-fitting variant). Between `deploy:api` and
-   `deploy:storefront` a version 4 storefront therefore renders its own
-   Department mall default (the v3 Classic look), which is what the reset
-   migration puts every store on anyway; only its homepage category tiles
-   hide until the new storefront is live (they need two roots, and an
-   unknown shape reads as empty). Checked for 0097 by feeding the v5 API's
-   serialized layout payload to the v4 reader and resolver from
-   `lean/fidelity`.
+   `deploy:storefront` an older storefront therefore renders its own
+   Department mall default, which is what the reset migration puts every
+   store on anyway. Version 6 also changes the store shape's keys (no
+   `hasQuestions`), so a version 5 storefront reads it as an empty store
+   until the new storefront is live: its homepage category tiles and the
+   fit-dependent variants hide for that window.
 
 ## Palettes: references and rationale
 

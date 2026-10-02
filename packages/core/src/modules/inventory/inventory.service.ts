@@ -1,10 +1,10 @@
-import { productVariants, products, inventoryMovements, orders, productLowStockAlerts, user as adminUsers } from "@scalius/database/schema";
+import { productVariants, products, inventoryLocations, inventoryMovements, orders, productLowStockAlerts, user as adminUsers } from "@scalius/database/schema";
 import { eq, sql, and, isNull, desc, asc, or, like } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import type { SQL } from "drizzle-orm";
 import { ValidationError } from "@scalius/core/errors";
 import { discountedPriceMinor, fromMinor } from "@scalius/shared/money";
-import { storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../products/money";
+import { storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../settings/store-money";
 import { getCurrencyConfig } from "../settings/settings.service";
 import {
     buildInventoryLowStockCondition,
@@ -18,6 +18,7 @@ const availableStockSql = sql<number>`(${productVariants.stock} - ${productVaria
 import { variantOptionLabelSql } from "../products/option-model";
 import { adjustInventorySchema } from "./inventory.validation";
 import { executeInventoryOperation } from "./inventory-operations";
+import { locationOnHandSql } from "./locations";
 
 const ALLOWED_INVENTORY_SECTIONS: ReadonlySet<string> = new Set(["variants", "movements", "alerts"]);
 const ALLOWED_INVENTORY_STATUSES: ReadonlySet<string> = new Set(["all", "low", "out", "reserved"]);
@@ -109,6 +110,8 @@ export async function listInventoryMovements(db: Database, params: {
     search?: string;
     movementType?: string;
     orderId?: string;
+    /** Only movements that moved physical stock at this location. */
+    locationId?: string;
     startDate?: Date;
     endDate?: Date;
     cursor?: string;
@@ -116,8 +119,10 @@ export async function listInventoryMovements(db: Database, params: {
 }) {
     const search = params.search?.trim() ?? "";
     const orderId = params.orderId?.trim() ?? "";
+    const locationId = params.locationId?.trim() ?? "";
     if (search.length > 120) throw new ValidationError("Inventory search must be at most 120 characters");
     if (orderId.length > 100) throw new ValidationError("Inventory order ID must be at most 100 characters");
+    if (locationId.length > 100) throw new ValidationError("Inventory location ID must be at most 100 characters");
     if (params.movementType && !ALLOWED_MOVEMENT_TYPES.has(params.movementType)) {
         throw new ValidationError("Invalid movement type parameter");
     }
@@ -146,6 +151,7 @@ export async function listInventoryMovements(db: Database, params: {
         )!);
     }
     if (orderId) conditions.push(eq(inventoryMovements.orderId, orderId));
+    if (locationId) conditions.push(eq(inventoryMovements.locationId, locationId));
     if (params.startDate) {
         conditions.push(sql`CAST(${inventoryMovements.createdAt} AS INTEGER) >= ${Math.floor(params.startDate.getTime() / 1000)}`);
     }
@@ -190,11 +196,14 @@ export async function listInventoryMovements(db: Database, params: {
             newPreorderStock: inventoryMovements.newPreorderStock,
             preorderStockDelta: inventoryMovements.preorderStockDelta,
             createdAt: inventoryMovements.createdAt,
+            locationId: inventoryMovements.locationId,
+            locationName: inventoryLocations.name,
             variantSku: productVariants.sku,
             optionLabel: variantOptionLabelSql(productVariants.id),
             productName: products.name,
         })
         .from(inventoryMovements)
+        .leftJoin(inventoryLocations, eq(inventoryLocations.id, inventoryMovements.locationId))
         .leftJoin(productVariants, eq(productVariants.id, inventoryMovements.variantId))
         .leftJoin(products, eq(products.id, productVariants.productId))
         .leftJoin(adminUsers, eq(adminUsers.id, inventoryMovements.createdBy))
@@ -353,6 +362,10 @@ export async function getInventoryOverview(db: Database, params: {
     movementHealthOnly?: boolean;
     sort?: string;
     order?: string;
+    /** Variants section: also return each SKU's on-hand at this location. */
+    locationId?: string;
+    /** Movements section: only movements at this location. */
+    movementLocationId?: string;
 }) {
     const { section, search, status, page, limit, alertStatus, movementType, sort, order } = params;
 
@@ -389,6 +402,14 @@ export async function getInventoryOverview(db: Database, params: {
     }
 
     if (section === "variants") {
+        const locationId = params.locationId?.trim() || null;
+        if (locationId) {
+            const location = await db.select({ id: inventoryLocations.id })
+                .from(inventoryLocations)
+                .where(eq(inventoryLocations.id, locationId))
+                .get();
+            if (!location) throw new ValidationError("Unknown inventory location");
+        }
         const conditions: (SQL | undefined)[] = [
             isNull(productVariants.deletedAt),
             isNull(products.deletedAt),
@@ -436,6 +457,7 @@ export async function getInventoryOverview(db: Database, params: {
                 available: availableSql,
                 lowStockThreshold: productVariants.lowStockThreshold,
                 version: productVariants.version,
+                locationOnHand: locationId ? locationOnHandSql(locationId) : sql<number | null>`NULL`,
                 storeCurrencyCode: storeCurrencyCodeSql(),
             })
             .from(productVariants)
@@ -487,9 +509,11 @@ export async function getInventoryOverview(db: Database, params: {
         };
 
         return {
-            variants: variantRows.map(({ priceMinor, storeCurrencyCode, ...variant }) => ({
+            variants: variantRows.map(({ priceMinor, storeCurrencyCode, locationOnHand, ...variant }) => ({
                 ...variant,
                 price: fromMinor(priceMinor, storeDecimalPlacesFromCode(storeCurrencyCode)),
+                // On-hand at the filtered location; null without a location filter.
+                locationOnHand: locationId ? Number(locationOnHand ?? 0) : null,
             })),
             defaultLowStockThreshold: defaultLowStockThreshold ?? null,
             pagination: {
@@ -510,6 +534,7 @@ export async function getInventoryOverview(db: Database, params: {
             search,
             movementType,
             orderId: params.movementOrderId,
+            locationId: params.movementLocationId,
             startDate: params.movementStartDate,
             endDate: params.movementEndDate,
             cursor: params.movementCursor,
@@ -598,6 +623,7 @@ export async function adjustInventory(db: Database, variantId: string, payload: 
     reason: string;
     notes?: string;
     pool?: string;
+    locationId?: string;
 }, adminUserId?: string) {
     const parsedPayload = adjustInventorySchema.safeParse(payload);
     if (!parsedPayload.success) {
@@ -605,7 +631,7 @@ export async function adjustInventory(db: Database, variantId: string, payload: 
             parsedPayload.error.issues[0]?.message ?? "Invalid stock adjustment",
         );
     }
-    const { operationKey, pool, delta, reason, notes } = parsedPayload.data;
+    const { operationKey, pool, delta, reason, notes, locationId } = parsedPayload.data;
     return executeInventoryOperation(db, {
         operationKey,
         operationType: "manual_adjustment",
@@ -615,5 +641,6 @@ export async function adjustInventory(db: Database, variantId: string, payload: 
         delta,
         reason,
         ...(notes ? { notes } : {}),
+        ...(locationId ? { locationId } : {}),
     }, adminUserId);
 }

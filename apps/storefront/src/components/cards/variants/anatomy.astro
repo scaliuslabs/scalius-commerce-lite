@@ -32,9 +32,11 @@ interface Props {
   showBuyNow?: boolean;
   /** The contained photo's margin on each side, as a share of its box (CARD_PHOTO_INSET). */
   inset: number;
+  /** The photo's fixed CSS width, when it has one (CARD_PHOTO_MAX_PX). */
+  photoMaxPx?: number;
 }
 
-const { variant, anatomy, model, ratio, dimensions, sizes, loading, headingLevel, productId, inset, showBuyNow = false } = Astro.props;
+const { variant, anatomy, model, ratio, dimensions, sizes, loading, headingLevel, productId, inset, photoMaxPx, showBuyNow = false } = Astro.props;
 const TitleTag = headingLevel;
 const discount = cardDiscountLabel(model, anatomy.discount);
 const { facts } = model;
@@ -78,6 +80,7 @@ const lookStyle = [
   `--pc-fit:${look.image.fit}`,
   `--pc-radius:${look.radius}px`,
   `--pc-inset:${Number((inset * 100).toFixed(2))}%`,
+  photoMaxPx !== undefined && `--pc-photo-max:${photoMaxPx}px`,
   look.title && `--pc-title-d:${look.title.size.desktop}px;--pc-title-m:${look.title.size.phone}px;--pc-title-w:${look.title.weight}`,
   look.price && `--pc-price-d:${look.price.size.desktop}px;--pc-price-m:${look.price.size.phone}px;--pc-price-w:${look.price.weight}`,
   compactSpec && "min-height:0",

@@ -40,4 +40,27 @@ export const INVENTORY_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/inventory/*/adjust": {
     POST: { permission: PERMISSIONS.PRODUCTS_EDIT },
   },
+  "/api/v1/admin/inventory/*/levels": {
+    GET: { permission: PERMISSIONS.PRODUCTS_VIEW },
+  },
+  "/api/v1/admin/inventory/levels": {
+    GET: { permission: PERMISSIONS.PRODUCTS_VIEW },
+  },
+  // Inventory locations (where stock is held).
+  "/api/v1/admin/inventory/locations": {
+    GET: { permission: PERMISSIONS.PRODUCTS_VIEW },
+    POST: { permission: PERMISSIONS.PRODUCTS_EDIT },
+  },
+  "/api/v1/admin/inventory/locations/*": {
+    PATCH: { permission: PERMISSIONS.PRODUCTS_EDIT },
+  },
+  "/api/v1/admin/inventory/locations/*/archive": {
+    POST: { permission: PERMISSIONS.PRODUCTS_EDIT },
+  },
+  "/api/v1/admin/inventory/locations/*/unarchive": {
+    POST: { permission: PERMISSIONS.PRODUCTS_EDIT },
+  },
+  "/api/v1/admin/inventory/locations/*/default": {
+    POST: { permission: PERMISSIONS.PRODUCTS_EDIT },
+  },
 };
