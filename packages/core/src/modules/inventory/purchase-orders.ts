@@ -945,7 +945,7 @@ export async function buildPurchaseOrderCsv(db: Database, id: string) {
     ["Tax", order.tax],
     ["Total", order.total],
   ];
-  const body = `﻿${rows.map((row) => row.map(spreadsheetSafeCsvCell).join(",")).join("\n")}\n`;
+  const body = `\uFEFF${rows.map((row) => row.map(spreadsheetSafeCsvCell).join(",")).join("\n")}\n`;
   return {
     body,
     byteLength: new TextEncoder().encode(body).byteLength,
