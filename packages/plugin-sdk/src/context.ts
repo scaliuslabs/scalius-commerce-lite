@@ -82,9 +82,14 @@ export interface PluginCustomFields {
 }
 
 export interface PluginMessaging {
-  /** Sends through the store's configured providers; recipients are resolved by the platform. */
-  email(input: { customerId?: string; to?: string; subject: string; html: string; text?: string }): Promise<{ queued: boolean }>;
-  sms(input: { customerId?: string; to?: string; text: string }): Promise<{ queued: boolean }>;
+  /**
+   * Sends through the store's configured providers; recipients are resolved by the platform.
+   * `marketing: true` (with `customerId`) sends only when the customer is subscribed on that
+   * channel now (`queued: false` otherwise); e-mail then carries the store's unsubscribe
+   * footer and RFC 8058 List-Unsubscribe headers. Transactional mail leaves it unset.
+   */
+  email(input: { customerId?: string; to?: string; subject: string; html: string; text?: string; marketing?: boolean }): Promise<{ queued: boolean }>;
+  sms(input: { customerId?: string; to?: string; text: string; marketing?: boolean }): Promise<{ queued: boolean }>;
   /** A dashboard notification for staff. */
   notifyStaff(input: { title: string; body?: string; url?: string }): Promise<void>;
 }

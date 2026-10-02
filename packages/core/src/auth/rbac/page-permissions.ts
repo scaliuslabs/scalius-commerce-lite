@@ -120,6 +120,9 @@ const PAGE_PERMISSION_MAP: Record<string, PagePermissionConfig> = {
   // Customers
   "/admin/customers": { permission: PERMISSIONS.CUSTOMERS_VIEW },
   "/admin/customers/new": { permission: PERMISSIONS.CUSTOMERS_CREATE },
+  // Customers & marketing: saved segments (editing is gated inside the page).
+  "/admin/customers/segments": { permission: PERMISSIONS.CUSTOMERS_VIEW },
+  "/admin/customers/segments/new": { permission: PERMISSIONS.CUSTOMERS_EDIT },
 
   // Settings - Account is always accessible (own account management)
   "/admin/settings/account": { allowAnyAdmin: true },
@@ -223,6 +226,10 @@ const DYNAMIC_PAGE_PERMISSIONS: Array<{
   // Customers: one customer page; saving and order history are gated inside it.
   {
     pattern: /^\/admin\/customers\/[^/]+\/edit$/,
+    config: { permission: PERMISSIONS.CUSTOMERS_VIEW },
+  },
+  {
+    pattern: /^\/admin\/customers\/segments\/seg_[^/]+$/,
     config: { permission: PERMISSIONS.CUSTOMERS_VIEW },
   },
 

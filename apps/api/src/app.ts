@@ -60,6 +60,8 @@ import { adminCategoryRoutes } from "./routes/admin/categories";
 import { adminBrandRoutes } from "./routes/admin/brands";
 import { adminCollectionRoutes } from "./routes/admin/collections";
 import { adminCustomerRoutes } from "./routes/admin/customers";
+import { adminCustomerMarketingRoutes } from "./routes/admin/customer-marketing";
+import { marketingRoutes } from "./routes/marketing";
 import { adminPageRoutes } from "./routes/admin/pages";
 import { adminDiscountRoutes } from "./routes/admin/discounts";
 import { adminMediaRoutes } from "./routes/admin/media";
@@ -151,6 +153,7 @@ app.use("/customer-auth/*", cookieOriginGuardMiddleware);
 app.route("/customer-auth", customerAuthRoutes);
 app.route("/checkout-languages", publicCheckoutLanguageRoutes);
 app.route("/abandoned-checkouts", abandonedCheckoutsRoutes);
+app.route("/marketing", marketingRoutes);
 app.route("/locations", locationRoutes);
 app.route("/shipping-methods", shippingMethodRoutes);
 // SEO settings — used by storefront product/page routes for meta tags
@@ -234,6 +237,8 @@ app.use("/admin/*", adminAuthMiddleware);
 app.route("/admin/categories", adminCategoryRoutes);
 app.route("/admin/brands", adminBrandRoutes);
 app.route("/admin/collections", adminCollectionRoutes);
+// Static customer paths (tags, segments, export) before the /{id} routes.
+app.route("/admin/customers", adminCustomerMarketingRoutes);
 app.route("/admin/customers", adminCustomerRoutes);
 app.route("/admin/pages", adminPageRoutes);
 app.route("/admin/discounts", adminDiscountRoutes);

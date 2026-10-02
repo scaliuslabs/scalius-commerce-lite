@@ -3,6 +3,9 @@
 // through the staff notice path. Contact details are resolved here from the
 // customer id when the plugin passes one; sending to customers needs the
 // `customers.view` permission, since it reaches their contact data.
+// `marketing: true` messages go only to a customer subscribed on that channel
+// now (Customers & marketing), to the subscribed address, and e-mail carries
+// the unsubscribe footer and RFC 2369/8058 list headers.
 
 import { customers } from "@scalius/database/schema";
 import { compactPhone, normalizeBdMobile } from "@scalius/shared/phone-input";
@@ -42,6 +45,27 @@ async function customerContact(context: PluginMessagingContext, customerId: unkn
   return { email: row.email ?? null, phone: row.phone ?? null };
 }
 
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]!);
+}
+
+/** Marketing sends: the subscribed address and what the message must carry, or null (not subscribed). */
+async function marketingPermission(context: PluginMessagingContext, customerId: string | undefined, channel: "email" | "sms") {
+  if (customerId === undefined) {
+    throw new PluginError("messaging.invalid", "Marketing messages go to a customerId (consent is per customer).");
+  }
+  if (typeof customerId !== "string" || customerId.length < 1 || customerId.length > 128) {
+    throw new PluginError("messaging.invalid", "customerId is a customer id.");
+  }
+  const env = await context.runtime.composedEnv();
+  const { marketingSendPermission } = await import("@scalius/core/modules/customer-marketing");
+  const permission = await marketingSendPermission(context.runtime.db(), { customerId, channel }, {
+    env: env as never,
+    storefrontUrl: (env as { STOREFRONT_URL?: string }).STOREFRONT_URL,
+  });
+  return permission.allowed ? permission : null;
+}
+
 function text(value: unknown, field: string, max: number, required = true): string | undefined {
   if (value === undefined && !required) return undefined;
   if (typeof value !== "string" || !value.trim() || value.length > max) {
@@ -52,12 +76,27 @@ function text(value: unknown, field: string, max: number, required = true): stri
 
 export async function sendPluginEmail(
   context: PluginMessagingContext,
-  input: { customerId?: string; to?: string; subject: string; html: string; text?: string },
+  input: { customerId?: string; to?: string; subject: string; html: string; text?: string; marketing?: boolean },
 ): Promise<{ queued: boolean }> {
   requireContactAccess(context);
   const subject = text(input?.subject, "subject", 200)!;
-  const html = text(input?.html, "html", 100_000)!;
-  const plain = text(input?.text, "text", 50_000, false);
+  let html = text(input?.html, "html", 100_000)!;
+  let plain = text(input?.text, "text", 50_000, false);
+  if (input?.marketing === true) {
+    const permission = await marketingPermission(context, input.customerId, "email");
+    if (!permission) return { queued: false };
+    await requireRate(context);
+    const unsubscribe = permission.unsubscribeUrl!;
+    html = `${html}<p style="margin:24px 0 0;font-size:12px;line-height:1.5;color:#5f6368;">${escapeHtml(permission.footer.text)} <a href="${escapeHtml(unsubscribe)}">${escapeHtml(permission.footer.unsubscribeLabel)}</a></p>`;
+    plain = `${plain ?? ""}\n\n${permission.footer.text}\n${permission.footer.unsubscribeLabel}: ${unsubscribe}`.trim();
+    const env = await context.runtime.composedEnv();
+    const { sendEmail } = await import("@scalius/core/integrations/email");
+    const result = await sendEmail(
+      { to: permission.contact!, subject, html, text: plain, headers: permission.headers },
+      { env: env as never, db: context.runtime.db(), encryptionKey: env.CREDENTIAL_ENCRYPTION_KEY },
+    );
+    return { queued: result.success };
+  }
   if ((input.customerId === undefined) === (input.to === undefined)) {
     throw new PluginError("messaging.invalid", "Pass exactly one of customerId or to.");
   }
@@ -78,14 +117,18 @@ export async function sendPluginEmail(
 
 export async function sendPluginSms(
   context: PluginMessagingContext,
-  input: { customerId?: string; to?: string; text: string },
+  input: { customerId?: string; to?: string; text: string; marketing?: boolean },
 ): Promise<{ queued: boolean }> {
   requireContactAccess(context);
   const message = text(input?.text, "text", 1000)!;
-  if ((input.customerId === undefined) === (input.to === undefined)) {
+  const marketing = input?.marketing === true ? await marketingPermission(context, input.customerId, "sms") : undefined;
+  if (marketing === null) return { queued: false };
+  if (!marketing && (input.customerId === undefined) === (input.to === undefined)) {
     throw new PluginError("messaging.invalid", "Pass exactly one of customerId or to.");
   }
-  const raw = input.customerId !== undefined ? (await customerContact(context, input.customerId)).phone : input.to;
+  const raw = marketing
+    ? marketing.contact
+    : input.customerId !== undefined ? (await customerContact(context, input.customerId)).phone : input.to;
   const compact = typeof raw === "string" ? compactPhone(raw) : "";
   const phone = E164.test(compact) ? compact : normalizeBdMobile(compact);
   if (!phone) {

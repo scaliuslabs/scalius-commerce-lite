@@ -195,6 +195,29 @@ describe("plugin messaging", () => {
       .rejects.toThrow(/^\[messaging\.invalid\] /);
   });
 
+  it("sends marketing only to a current subscription, with the unsubscribe footer and list headers", async () => {
+    const bridge = bridgeWith(["customers.view"]);
+    const env = await environment.composedEnv();
+    (env as unknown as Record<string, unknown>).SCALIUS_SECRET = "test-master-secret-that-is-long-enough-123456";
+    // Not subscribed: nothing is sent.
+    expect(await bridge.messagingEmail({ customerId: "cus_1", subject: "Eid sale", html: "<p>20% off</p>", marketing: true })).toEqual({ queued: false });
+    expect(messaging.sendEmail).not.toHaveBeenCalled();
+    await expect(bridge.messagingEmail({ to: "rahim@example.com", subject: "Eid", html: "x", marketing: true }))
+      .rejects.toThrow(/^\[messaging\.invalid\] /);
+    sqlite.prepare(`INSERT INTO customer_marketing_consents (customer_id, channel, state, contact, source, actor, subscribed_at)
+      VALUES ('cus_1', 'email', 'subscribed', 'rahim@example.com', 'newsletter', 'buyer', 1)`).run();
+    expect(await bridge.messagingEmail({ customerId: "cus_1", subject: "Eid sale", html: "<p>20% off</p>", marketing: true })).toEqual({ queued: true });
+    const [options] = messaging.sendEmail.mock.calls.at(-1) as unknown as [{ to: string; html: string; text: string; headers: Record<string, string> }];
+    expect(options.to).toBe("rahim@example.com");
+    expect(options.headers["List-Unsubscribe-Post"]).toBe("List-Unsubscribe=One-Click");
+    expect(options.headers["List-Unsubscribe"]).toMatch(/^<https:\/\/shop\.test\/newsletter\/unsubscribe\?token=u1\.[^>]+>$/);
+    expect(options.html).toContain("https://shop.test/newsletter/unsubscribe?token=");
+    expect(options.text).toContain("Unsubscribe: https://shop.test/newsletter/unsubscribe?token=");
+    // Consent covers an address: after the e-mail changes, marketing stops.
+    sqlite.prepare("UPDATE customers SET email = 'new@example.com' WHERE id = 'cus_1'").run();
+    expect(await bridge.messagingEmail({ customerId: "cus_1", subject: "Eid sale", html: "x", marketing: true })).toEqual({ queued: false });
+  });
+
   it("notifies staff with a dashboard link only", async () => {
     await bridgeWith([]).messagingNotifyStaff({ title: "Points expired", body: "12 customers", url: "/admin/apps/acme" });
     expect(messaging.sendAdminPushNotice).toHaveBeenCalledWith(expect.anything(), expect.anything(), {

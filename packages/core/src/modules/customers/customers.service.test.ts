@@ -145,7 +145,8 @@ describe("admin customer list location projection", () => {
     const result = await listCustomers(db as never, { page: 2, limit: 10 });
 
     expect(batch.mock.calls[0]?.[0]).toHaveLength(2);
-    expect(queries[0]?.joins).toHaveLength(0);
+    // The count joins only the stored order facts (segment filters read them), never locations.
+    expect(queries[0]?.joins).toHaveLength(1);
     expect(queries[1]).toMatchObject({ limit: 10, offset: 10 });
     expect(result.pagination).toEqual({
       total: 25,

@@ -197,36 +197,46 @@ const dateFilter = z.discriminatedUnion("op", [
 
 const MONEY_MINOR_MAX = 1_000_000_000_000;
 
-/** Segment conditions as stored (money in integer minor units). */
-export const customerSegmentConditionSchema = z.discriminatedUnion("field", [
-  z.object({ field: z.literal("amount_spent") }).extend({ min: z.number().int().min(0).max(MONEY_MINOR_MAX).optional(), max: z.number().int().min(0).max(MONEY_MINOR_MAX).optional() }).strict(),
-  z.object({ field: z.literal("orders_count") }).extend({ min: z.number().int().min(0).max(1_000_000).optional(), max: z.number().int().min(0).max(1_000_000).optional() }).strict(),
-  z.object({ field: z.literal("last_order_date"), filter: dateFilter }).strict(),
-  z.object({ field: z.literal("first_order_date"), filter: dateFilter }).strict(),
-  z.object({ field: z.literal("customer_since"), filter: dateFilter }).strict(),
-  z.object({ field: z.literal("city"), op: z.enum(["in", "not_in"]), ids: z.array(locationId).min(1).max(CUSTOMER_SEGMENT_VALUES_MAX) }).strict(),
-  z.object({ field: z.literal("zone"), op: z.enum(["in", "not_in"]), ids: z.array(locationId).min(1).max(CUSTOMER_SEGMENT_VALUES_MAX) }).strict(),
-  z.object({ field: z.literal("tags"), op: z.enum(["has_any", "has_all", "has_none"]), tags: z.array(customerTagSchema).min(1).max(CUSTOMER_SEGMENT_VALUES_MAX) }).strict(),
-  z.object({ field: z.literal("marketing_consent"), channel: z.enum(MARKETING_CHANNELS), status: z.enum(MARKETING_CONSENT_STATUSES) }).strict(),
-  z.object({ field: z.literal("customer_type"), types: z.array(z.enum(["account", "guest", "merchant"])).min(1).max(3) }).strict(),
-  z.object({
-    field: z.literal("custom_field"),
-    definitionId: z.string().trim().min(4).max(68),
-    op: z.enum(["equals", "is_set", "is_not_set"]),
-    value: z.string().max(500).optional(),
-  }).strict(),
-]).superRefine((condition, context) => {
-  if (condition.field === "custom_field" && (condition.op === "equals") !== (condition.value !== undefined)) {
-    context.addIssue({ code: "custom", message: "Give a value only for equals." });
-  }
-  if ((condition.field === "amount_spent" || condition.field === "orders_count")) {
-    if (condition.min === undefined && condition.max === undefined) {
-      context.addIssue({ code: "custom", message: "Give a minimum, a maximum or both." });
-    } else if (condition.min !== undefined && condition.max !== undefined && condition.min > condition.max) {
-      context.addIssue({ code: "custom", message: "The minimum is above the maximum." });
+function conditionSchema(money: z.ZodNumber) {
+  return z.discriminatedUnion("field", [
+    z.object({ field: z.literal("amount_spent"), min: money.optional(), max: money.optional() }).strict(),
+    z.object({ field: z.literal("orders_count"), min: z.number().int().min(0).max(1_000_000).optional(), max: z.number().int().min(0).max(1_000_000).optional() }).strict(),
+    z.object({ field: z.literal("last_order_date"), filter: dateFilter }).strict(),
+    z.object({ field: z.literal("first_order_date"), filter: dateFilter }).strict(),
+    z.object({ field: z.literal("customer_since"), filter: dateFilter }).strict(),
+    z.object({ field: z.literal("city"), op: z.enum(["in", "not_in"]), ids: z.array(locationId).min(1).max(CUSTOMER_SEGMENT_VALUES_MAX) }).strict(),
+    z.object({ field: z.literal("zone"), op: z.enum(["in", "not_in"]), ids: z.array(locationId).min(1).max(CUSTOMER_SEGMENT_VALUES_MAX) }).strict(),
+    z.object({ field: z.literal("tags"), op: z.enum(["has_any", "has_all", "has_none"]), tags: z.array(customerTagSchema).min(1).max(CUSTOMER_SEGMENT_VALUES_MAX) }).strict(),
+    z.object({ field: z.literal("marketing_consent"), channel: z.enum(MARKETING_CHANNELS), status: z.enum(MARKETING_CONSENT_STATUSES) }).strict(),
+    z.object({ field: z.literal("customer_type"), types: z.array(z.enum(["account", "guest", "merchant"])).min(1).max(3) }).strict(),
+    z.object({
+      field: z.literal("custom_field"),
+      definitionId: z.string().trim().min(4).max(68),
+      op: z.enum(["equals", "is_set", "is_not_set"]),
+      value: z.string().max(500).optional(),
+    }).strict(),
+  ]).superRefine((condition, context) => {
+    if (condition.field === "custom_field" && (condition.op === "equals") !== (condition.value !== undefined)) {
+      context.addIssue({ code: "custom", message: "Give a value only for equals." });
     }
-  }
-});
+    if ((condition.field === "amount_spent" || condition.field === "orders_count")) {
+      if (condition.min === undefined && condition.max === undefined) {
+        context.addIssue({ code: "custom", message: "Give a minimum, a maximum or both." });
+      } else if (condition.min !== undefined && condition.max !== undefined && condition.min > condition.max) {
+        context.addIssue({ code: "custom", message: "The minimum is above the maximum." });
+      }
+    }
+  });
+}
+
+/** Segment conditions as stored (money in integer minor units). */
+export const customerSegmentConditionSchema = conditionSchema(z.number().int().min(0).max(MONEY_MINOR_MAX));
+
+/**
+ * Segment conditions in the HTTP contract: money in decimal major units
+ * (converted once at the edge with the store currency, `mapSegmentMoney`).
+ */
+export const customerSegmentConditionInputSchema = conditionSchema(z.number().min(0).max(MONEY_MINOR_MAX));
 
 export type CustomerSegmentCondition = z.infer<typeof customerSegmentConditionSchema>;
 export type CustomerSegmentField = CustomerSegmentCondition["field"];
@@ -246,23 +256,30 @@ export const CUSTOMER_SEGMENT_FIELDS = [
   "custom_field",
 ] as const satisfies readonly CustomerSegmentField[];
 
-export const customerSegmentDefinitionSchema = z.object({
-  version: z.literal(CUSTOMER_SEGMENT_DEFINITION_VERSION).default(CUSTOMER_SEGMENT_DEFINITION_VERSION),
-  /** `all`: every condition (AND); `any`: at least one (OR). */
-  match: z.enum(["all", "any"]).default("all"),
-  conditions: z.array(customerSegmentConditionSchema).min(1).max(CUSTOMER_SEGMENT_CONDITIONS_MAX),
-}).strict();
+function definitionSchema<T extends z.ZodType>(condition: T) {
+  return z.object({
+    version: z.literal(CUSTOMER_SEGMENT_DEFINITION_VERSION).default(CUSTOMER_SEGMENT_DEFINITION_VERSION),
+    /** `all`: every condition (AND); `any`: at least one (OR). */
+    match: z.enum(["all", "any"]).default("all"),
+    conditions: z.array(condition).min(1).max(CUSTOMER_SEGMENT_CONDITIONS_MAX),
+  }).strict();
+}
+
+export const customerSegmentDefinitionSchema = definitionSchema(customerSegmentConditionSchema);
+/** The definition as the HTTP contract carries it (money in major units). */
+export const customerSegmentDefinitionInputSchema = definitionSchema(customerSegmentConditionInputSchema);
 
 export type CustomerSegmentDefinition = z.infer<typeof customerSegmentDefinitionSchema>;
+export type CustomerSegmentDefinitionInput = z.infer<typeof customerSegmentDefinitionInputSchema>;
 
 /**
  * The definition with money converted between the stored minor units and
  * the HTTP contract's decimal major units (`amount_spent` only).
  */
-export function mapSegmentMoney(
-  definition: CustomerSegmentDefinition,
+export function mapSegmentMoney<T extends CustomerSegmentDefinition | CustomerSegmentDefinitionInput>(
+  definition: T,
   convert: (amount: number) => number,
-): CustomerSegmentDefinition {
+): T {
   return {
     ...definition,
     conditions: definition.conditions.map((condition) => condition.field === "amount_spent"
@@ -272,7 +289,7 @@ export function mapSegmentMoney(
         ...(condition.max !== undefined ? { max: convert(condition.max) } : {}),
       }
       : condition),
-  };
+  } as T;
 }
 
 /** Stable JSON for storage and comparison (keys in schema order). */

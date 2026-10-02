@@ -82,6 +82,16 @@ interface MessageCopy {
     ignore: string;
     sms: (code: string, store: string | null) => string;
   };
+  /** Customers & marketing: the e-mail double opt-in and marketing mail footer. */
+  marketing: {
+    optInSubject: (store: string | null) => string;
+    optInBody: (store: string | null) => string;
+    optInAction: string;
+    optInIgnore: string;
+    /** Marketing mail footer: why the buyer got it and how to stop. */
+    footer: (store: string | null) => string;
+    unsubscribe: string;
+  };
 }
 
 const EN: MessageCopy = {
@@ -174,6 +184,14 @@ const EN: MessageCopy = {
     expires: "This code expires in 5 minutes.",
     ignore: "If you didn't ask for this code, you can ignore this email.",
     sms: (code, store) => `${code} is your ${store ? `${store} ` : "verification "}code. It expires in 5 minutes. Don't share it.`,
+  },
+  marketing: {
+    optInSubject: (store) => (store ? `Confirm your subscription to ${store}` : "Confirm your subscription"),
+    optInBody: (store) => `Tap the button below to get news and offers${store ? ` from ${store}` : ""} by email.`,
+    optInAction: "Confirm subscription",
+    optInIgnore: "If you didn't ask for this, ignore this email. You won't be subscribed.",
+    footer: (store) => `You get this email because you subscribed to news and offers${store ? ` from ${store}` : ""}.`,
+    unsubscribe: "Unsubscribe",
   },
 };
 
@@ -268,6 +286,14 @@ const BN: MessageCopy = {
     expires: "কোডটির মেয়াদ ৫ মিনিট।",
     ignore: "আপনি এই কোড না চাইলে ইমেইলটি উপেক্ষা করুন।",
     sms: (code, store) => `${store ? `${store}-এর` : "আপনার যাচাই"} কোড ${code}। মেয়াদ ৫ মিনিট।`,
+  },
+  marketing: {
+    optInSubject: (store) => (store ? `${store}-এর সাবস্ক্রিপশন নিশ্চিত করুন` : "আপনার সাবস্ক্রিপশন নিশ্চিত করুন"),
+    optInBody: (store) => `${store ? `${store}-এর ` : ""}নতুন খবর ও অফার ইমেইলে পেতে নিচের বোতামে চাপুন।`,
+    optInAction: "সাবস্ক্রিপশন নিশ্চিত করুন",
+    optInIgnore: "আপনি এটি না চাইলে ইমেইলটি উপেক্ষা করুন। আপনাকে সাবস্ক্রাইব করা হবে না।",
+    footer: (store) => `আপনি ${store ? `${store}-এর ` : ""}নতুন খবর ও অফার পেতে সাবস্ক্রাইব করেছেন বলে এই ইমেইল পাচ্ছেন।`,
+    unsubscribe: "আনসাবস্ক্রাইব করুন",
   },
 };
 

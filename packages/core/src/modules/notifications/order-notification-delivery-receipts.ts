@@ -4,7 +4,7 @@ import { and, eq, inArray, lte, or, sql } from "drizzle-orm";
 import {
   isCodeBearingNotificationType,
   type NotificationSubjectType,
-  type NotificationType,
+  type OutboxNotificationType,
 } from "./notification-types";
 
 export type OrderNotificationDeliveryChannel = "email" | "sms" | "whatsapp" | "push";
@@ -26,7 +26,7 @@ export interface OrderNotificationDeliveryTargetInput {
   orderId?: string | null;
   subjectType?: NotificationSubjectType;
   subjectId?: string;
-  notificationType: NotificationType;
+  notificationType: OutboxNotificationType;
   channel: OrderNotificationDeliveryChannel;
   provider: string;
   recipient: string;

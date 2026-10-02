@@ -11,4 +11,5 @@ export const EVENT_SOURCE_TABLES: ReadonlySet<string> = new Set([
   "products",
   "inventory_movements",
   "customers",
+  "customer_marketing_consents",
 ]);

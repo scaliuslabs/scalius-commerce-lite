@@ -5,6 +5,7 @@ import { abandonedCheckoutsRoutes } from "../routes/abandoned-checkouts";
 import { analyticsRoutes } from "../routes/analytics";
 import { customerAuthRoutes } from "../routes/customer-auth";
 import { discountRoutes } from "../routes/discounts";
+import { marketingRoutes } from "../routes/marketing";
 import { metaConversionsRoutes } from "../routes/meta-conversions";
 import { orderRoutes } from "../routes/storefront-orders";
 import { storefrontAgentContextRoutes } from "../routes/storefront-agent-contexts";
@@ -20,6 +21,7 @@ app.route("/storefront/agent-continuations", storefrontAgentContinuationRoutes);
 app.use("/customer-auth/*", cookieOriginGuardMiddleware);
 app.route("/customer-auth", customerAuthRoutes);
 app.route("/abandoned-checkouts", abandonedCheckoutsRoutes);
+app.route("/marketing", marketingRoutes);
 app.use("/orders/*", cookieOriginGuardMiddleware);
 app.route("/orders", orderRoutes);
 

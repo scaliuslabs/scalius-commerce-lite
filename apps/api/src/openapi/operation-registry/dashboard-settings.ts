@@ -194,6 +194,8 @@ export const DASHBOARD_SETTINGS_OPERATIONS = {
     risk: "security",
     limits: { request: 16_384, response: 8_192 },
   },
+  "dashboard.settings.marketing_consent_get": { limits: { request: 16_384, response: 8_192 } },
+  "dashboard.settings.marketing_consent_update": { revision: "required", limits: { request: 16_384, response: 8_192 } },
   "dashboard.settings.customer_countries_get": { limits: { request: 16_384, response: 16_384 } },
   "dashboard.settings.customer_countries_update": { revision: "required", limits: { request: 16_384, response: 8_192 } },
   "dashboard.settings.email_get": {

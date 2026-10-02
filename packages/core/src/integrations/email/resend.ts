@@ -3,6 +3,7 @@
 
 import {
   resolveSender,
+  safeEmailHeaders,
   type EmailProvider,
   type EmailRuntimeContext,
   type SendEmailOptions,
@@ -28,7 +29,7 @@ export class ResendEmailProvider implements EmailProvider {
   readonly name = "resend";
 
   async sendEmail(
-    { to, subject, html, from, fromName, text, idempotencyKey }: SendEmailOptions,
+    { to, subject, html, from, fromName, text, idempotencyKey, headers }: SendEmailOptions,
     context?: EmailRuntimeContext,
   ): Promise<SendEmailResult> {
     const settings = await getEmailRuntimeSettings(context);
@@ -39,6 +40,7 @@ export class ResendEmailProvider implements EmailProvider {
 
     const sender = resolveSender({ from, fromName }, settings);
     const fromAddress = sender.name ? `"${sender.name}" <${sender.email}>` : sender.email;
+    const extraHeaders = safeEmailHeaders(headers);
 
     try {
       const response = await fetch("https://api.resend.com/emails", {
@@ -54,6 +56,7 @@ export class ResendEmailProvider implements EmailProvider {
           subject,
           html,
           text,
+          ...(extraHeaders ? { headers: extraHeaders } : {}),
         }),
       });
 

@@ -10212,6 +10212,14 @@ export type GetApiV1CheckoutConfigResponses = {
             };
             unavailable: boolean;
             unavailableMessage?: string;
+            marketingConsent: {
+                enabled: boolean;
+                channels: Array<'email' | 'sms' | 'whatsapp'>;
+                label: {
+                    en: string;
+                    bn: string;
+                };
+            };
         };
     };
 };
@@ -14872,6 +14880,204 @@ export type PostApiV1CustomerAuthWarrantiesByIdClaimsResponses = {
 
 export type PostApiV1CustomerAuthWarrantiesByIdClaimsResponse = PostApiV1CustomerAuthWarrantiesByIdClaimsResponses[keyof PostApiV1CustomerAuthWarrantiesByIdClaimsResponses];
 
+export type GetApiV1CustomerAuthMarketingData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/customer-auth/marketing';
+};
+
+export type GetApiV1CustomerAuthMarketingErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1CustomerAuthMarketingError = GetApiV1CustomerAuthMarketingErrors[keyof GetApiV1CustomerAuthMarketingErrors];
+
+export type GetApiV1CustomerAuthMarketingResponses = {
+    /**
+     * Marketing preferences
+     */
+    200: {
+        success: true;
+        data: {
+            channels: Array<{
+                channel: 'email' | 'sms' | 'whatsapp';
+                status: 'subscribed' | 'pending' | 'unsubscribed' | 'not_subscribed';
+                available: boolean;
+            }>;
+        };
+    };
+};
+
+export type GetApiV1CustomerAuthMarketingResponse = GetApiV1CustomerAuthMarketingResponses[keyof GetApiV1CustomerAuthMarketingResponses];
+
+export type PutApiV1CustomerAuthMarketingData = {
+    body: {
+        email?: boolean;
+        sms?: boolean;
+        whatsapp?: boolean;
+        language?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/customer-auth/marketing';
+};
+
+export type PutApiV1CustomerAuthMarketingErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PutApiV1CustomerAuthMarketingError = PutApiV1CustomerAuthMarketingErrors[keyof PutApiV1CustomerAuthMarketingErrors];
+
+export type PutApiV1CustomerAuthMarketingResponses = {
+    /**
+     * Preferences saved
+     */
+    200: {
+        success: true;
+        data: {
+            channels: Array<{
+                channel: 'email' | 'sms' | 'whatsapp';
+                status: 'subscribed' | 'pending' | 'unsubscribed' | 'not_subscribed';
+                available: boolean;
+            }>;
+            confirmationRequested: boolean;
+        };
+    };
+};
+
+export type PutApiV1CustomerAuthMarketingResponse = PutApiV1CustomerAuthMarketingResponses[keyof PutApiV1CustomerAuthMarketingResponses];
+
 export type GetApiV1CheckoutLanguagesActiveData = {
     body?: never;
     path?: never;
@@ -15177,6 +15383,390 @@ export type PostApiV1AbandonedCheckoutsCleanupResponses = {
 };
 
 export type PostApiV1AbandonedCheckoutsCleanupResponse = PostApiV1AbandonedCheckoutsCleanupResponses[keyof PostApiV1AbandonedCheckoutsCleanupResponses];
+
+export type PostApiV1MarketingSubscribeData = {
+    body: {
+        phone: string;
+        email?: string;
+        whatsapp?: boolean;
+        language?: string;
+        consentText?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/marketing/subscribe';
+};
+
+export type PostApiV1MarketingSubscribeErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1MarketingSubscribeError = PostApiV1MarketingSubscribeErrors[keyof PostApiV1MarketingSubscribeErrors];
+
+export type PostApiV1MarketingSubscribeResponses = {
+    /**
+     * Signup recorded (or a confirmation e-mail is on its way)
+     */
+    200: {
+        success: true;
+        data: {
+            result: 'subscribed' | 'pending';
+        };
+    };
+};
+
+export type PostApiV1MarketingSubscribeResponse = PostApiV1MarketingSubscribeResponses[keyof PostApiV1MarketingSubscribeResponses];
+
+export type PostApiV1MarketingConfirmData = {
+    body: {
+        token: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/marketing/confirm';
+};
+
+export type PostApiV1MarketingConfirmErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1MarketingConfirmError = PostApiV1MarketingConfirmErrors[keyof PostApiV1MarketingConfirmErrors];
+
+export type PostApiV1MarketingConfirmResponses = {
+    /**
+     * Confirmation outcome
+     */
+    200: {
+        success: true;
+        data: {
+            status: 'confirmed' | 'invalid';
+        };
+    };
+};
+
+export type PostApiV1MarketingConfirmResponse = PostApiV1MarketingConfirmResponses[keyof PostApiV1MarketingConfirmResponses];
+
+export type PostApiV1MarketingUnsubscribePreviewData = {
+    body: {
+        token: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/marketing/unsubscribe/preview';
+};
+
+export type PostApiV1MarketingUnsubscribePreviewErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1MarketingUnsubscribePreviewError = PostApiV1MarketingUnsubscribePreviewErrors[keyof PostApiV1MarketingUnsubscribePreviewErrors];
+
+export type PostApiV1MarketingUnsubscribePreviewResponses = {
+    /**
+     * What the link unsubscribes
+     */
+    200: {
+        success: true;
+        data: {
+            valid: boolean;
+            channel: 'email' | 'sms' | 'whatsapp' | null;
+            status: 'subscribed' | 'pending' | 'unsubscribed' | 'not_subscribed' | null;
+            contactMasked: string | null;
+        };
+    };
+};
+
+export type PostApiV1MarketingUnsubscribePreviewResponse = PostApiV1MarketingUnsubscribePreviewResponses[keyof PostApiV1MarketingUnsubscribePreviewResponses];
+
+export type PostApiV1MarketingUnsubscribeData = {
+    body: {
+        token: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/marketing/unsubscribe';
+};
+
+export type PostApiV1MarketingUnsubscribeErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1MarketingUnsubscribeError = PostApiV1MarketingUnsubscribeErrors[keyof PostApiV1MarketingUnsubscribeErrors];
+
+export type PostApiV1MarketingUnsubscribeResponses = {
+    /**
+     * Unsubscribe outcome
+     */
+    200: {
+        success: true;
+        data: {
+            status: 'unsubscribed' | 'invalid';
+            channel: 'email' | 'sms' | 'whatsapp' | null;
+        };
+    };
+};
+
+export type PostApiV1MarketingUnsubscribeResponse = PostApiV1MarketingUnsubscribeResponses[keyof PostApiV1MarketingUnsubscribeResponses];
 
 export type GetApiV1LocationsCitiesData = {
     body?: never;
@@ -19833,6 +20423,9 @@ export type PostApiV1OrdersData = {
         giftCards?: Array<{
             handle: string;
         }>;
+        marketingConsent?: {
+            language: string | null;
+        } | null;
         /**
          * The amount due the buyer reviewed in the tax quote (`amountDueMinor`). Required with gift cards: a card that changed since then is a 409 GIFT_CARD_CHANGED.
          */
@@ -26918,6 +27511,2061 @@ export type DeleteApiV1AdminCollectionsByIdPermanentResponses = {
 
 export type DeleteApiV1AdminCollectionsByIdPermanentResponse = DeleteApiV1AdminCollectionsByIdPermanentResponses[keyof DeleteApiV1AdminCollectionsByIdPermanentResponses];
 
+export type GetApiV1AdminCustomersTagsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Part of a tag
+         */
+        q?: string;
+        limit?: number;
+    };
+    url: '/api/v1/admin/customers/tags';
+};
+
+export type GetApiV1AdminCustomersTagsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminCustomersTagsError = GetApiV1AdminCustomersTagsErrors[keyof GetApiV1AdminCustomersTagsErrors];
+
+export type GetApiV1AdminCustomersTagsResponses = {
+    /**
+     * Tags
+     */
+    200: {
+        success: true;
+        data: {
+            tags: Array<{
+                tag: string;
+                customers: number;
+            }>;
+        };
+    };
+};
+
+export type GetApiV1AdminCustomersTagsResponse = GetApiV1AdminCustomersTagsResponses[keyof GetApiV1AdminCustomersTagsResponses];
+
+export type PostApiV1AdminCustomersTagsBulkData = {
+    body: {
+        customerIds: Array<string>;
+        add?: Array<string>;
+        remove?: Array<string>;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/customers/tags/bulk';
+};
+
+export type PostApiV1AdminCustomersTagsBulkErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminCustomersTagsBulkError = PostApiV1AdminCustomersTagsBulkErrors[keyof PostApiV1AdminCustomersTagsBulkErrors];
+
+export type PostApiV1AdminCustomersTagsBulkResponses = {
+    /**
+     * Tags changed
+     */
+    200: {
+        success: true;
+        data: {
+            customers: number;
+            added: Array<string>;
+            removed: Array<string>;
+        };
+    };
+};
+
+export type PostApiV1AdminCustomersTagsBulkResponse = PostApiV1AdminCustomersTagsBulkResponses[keyof PostApiV1AdminCustomersTagsBulkResponses];
+
+export type PutApiV1AdminCustomersByIdTagsData = {
+    body: {
+        tags: Array<string>;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/customers/{id}/tags';
+};
+
+export type PutApiV1AdminCustomersByIdTagsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PutApiV1AdminCustomersByIdTagsError = PutApiV1AdminCustomersByIdTagsErrors[keyof PutApiV1AdminCustomersByIdTagsErrors];
+
+export type PutApiV1AdminCustomersByIdTagsResponses = {
+    /**
+     * Tags saved
+     */
+    200: {
+        success: true;
+        data: {
+            tags: Array<string>;
+        };
+    };
+};
+
+export type PutApiV1AdminCustomersByIdTagsResponse = PutApiV1AdminCustomersByIdTagsResponses[keyof PutApiV1AdminCustomersByIdTagsResponses];
+
+export type GetApiV1AdminCustomersExportData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Customers with this tag
+         */
+        tag?: string;
+        /**
+         * Customers in this saved segment
+         */
+        segmentId?: string;
+        /**
+         * Customers subscribed on this channel now (any: on at least one)
+         */
+        subscribed?: 'email' | 'sms' | 'whatsapp' | 'any';
+        /**
+         * Comma-separated customer ids (at most 100)
+         */
+        ids?: string;
+        maxRows?: number;
+    };
+    url: '/api/v1/admin/customers/export';
+};
+
+export type GetApiV1AdminCustomersExportErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminCustomersExportError = GetApiV1AdminCustomersExportErrors[keyof GetApiV1AdminCustomersExportErrors];
+
+export type GetApiV1AdminCustomersExportResponses = {
+    /**
+     * CSV file
+     */
+    200: string;
+};
+
+export type GetApiV1AdminCustomersExportResponse = GetApiV1AdminCustomersExportResponses[keyof GetApiV1AdminCustomersExportResponses];
+
+export type GetApiV1AdminCustomersSegmentsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/customers/segments';
+};
+
+export type GetApiV1AdminCustomersSegmentsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminCustomersSegmentsError = GetApiV1AdminCustomersSegmentsErrors[keyof GetApiV1AdminCustomersSegmentsErrors];
+
+export type GetApiV1AdminCustomersSegmentsResponses = {
+    /**
+     * Segments
+     */
+    200: {
+        success: true;
+        data: {
+            segments: Array<{
+                id: string;
+                name: string;
+                description: string | null;
+                definition: {
+                    version?: 1;
+                    match?: 'all' | 'any';
+                    conditions: Array<{
+                        field: 'amount_spent';
+                        min?: number;
+                        max?: number;
+                    } | {
+                        field: 'orders_count';
+                        min?: number;
+                        max?: number;
+                    } | {
+                        field: 'last_order_date';
+                        filter: {
+                            op: 'within_last';
+                            days: number;
+                        } | {
+                            op: 'not_within_last';
+                            days: number;
+                        } | {
+                            op: 'on_or_after';
+                            date: string;
+                        } | {
+                            op: 'before';
+                            date: string;
+                        };
+                    } | {
+                        field: 'first_order_date';
+                        filter: {
+                            op: 'within_last';
+                            days: number;
+                        } | {
+                            op: 'not_within_last';
+                            days: number;
+                        } | {
+                            op: 'on_or_after';
+                            date: string;
+                        } | {
+                            op: 'before';
+                            date: string;
+                        };
+                    } | {
+                        field: 'customer_since';
+                        filter: {
+                            op: 'within_last';
+                            days: number;
+                        } | {
+                            op: 'not_within_last';
+                            days: number;
+                        } | {
+                            op: 'on_or_after';
+                            date: string;
+                        } | {
+                            op: 'before';
+                            date: string;
+                        };
+                    } | {
+                        field: 'city';
+                        op: 'in' | 'not_in';
+                        ids: Array<string>;
+                    } | {
+                        field: 'zone';
+                        op: 'in' | 'not_in';
+                        ids: Array<string>;
+                    } | {
+                        field: 'tags';
+                        op: 'has_any' | 'has_all' | 'has_none';
+                        tags: Array<string>;
+                    } | {
+                        field: 'marketing_consent';
+                        channel: 'email' | 'sms' | 'whatsapp';
+                        status: 'subscribed' | 'pending' | 'unsubscribed' | 'not_subscribed';
+                    } | {
+                        field: 'customer_type';
+                        types: Array<'account' | 'guest' | 'merchant'>;
+                    } | {
+                        field: 'custom_field';
+                        definitionId: string;
+                        op: 'equals' | 'is_set' | 'is_not_set';
+                        value?: string;
+                    }>;
+                };
+                revision: number;
+                createdAt: string;
+                updatedAt: string;
+                promotionCount: number;
+            }>;
+        };
+    };
+};
+
+export type GetApiV1AdminCustomersSegmentsResponse = GetApiV1AdminCustomersSegmentsResponses[keyof GetApiV1AdminCustomersSegmentsResponses];
+
+export type PostApiV1AdminCustomersSegmentsData = {
+    body: {
+        name: string;
+        description?: string | null;
+        definition: {
+            version?: 1;
+            match?: 'all' | 'any';
+            conditions: Array<{
+                field: 'amount_spent';
+                min?: number;
+                max?: number;
+            } | {
+                field: 'orders_count';
+                min?: number;
+                max?: number;
+            } | {
+                field: 'last_order_date';
+                filter: {
+                    op: 'within_last';
+                    days: number;
+                } | {
+                    op: 'not_within_last';
+                    days: number;
+                } | {
+                    op: 'on_or_after';
+                    date: string;
+                } | {
+                    op: 'before';
+                    date: string;
+                };
+            } | {
+                field: 'first_order_date';
+                filter: {
+                    op: 'within_last';
+                    days: number;
+                } | {
+                    op: 'not_within_last';
+                    days: number;
+                } | {
+                    op: 'on_or_after';
+                    date: string;
+                } | {
+                    op: 'before';
+                    date: string;
+                };
+            } | {
+                field: 'customer_since';
+                filter: {
+                    op: 'within_last';
+                    days: number;
+                } | {
+                    op: 'not_within_last';
+                    days: number;
+                } | {
+                    op: 'on_or_after';
+                    date: string;
+                } | {
+                    op: 'before';
+                    date: string;
+                };
+            } | {
+                field: 'city';
+                op: 'in' | 'not_in';
+                ids: Array<string>;
+            } | {
+                field: 'zone';
+                op: 'in' | 'not_in';
+                ids: Array<string>;
+            } | {
+                field: 'tags';
+                op: 'has_any' | 'has_all' | 'has_none';
+                tags: Array<string>;
+            } | {
+                field: 'marketing_consent';
+                channel: 'email' | 'sms' | 'whatsapp';
+                status: 'subscribed' | 'pending' | 'unsubscribed' | 'not_subscribed';
+            } | {
+                field: 'customer_type';
+                types: Array<'account' | 'guest' | 'merchant'>;
+            } | {
+                field: 'custom_field';
+                definitionId: string;
+                op: 'equals' | 'is_set' | 'is_not_set';
+                value?: string;
+            }>;
+        };
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/customers/segments';
+};
+
+export type PostApiV1AdminCustomersSegmentsErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminCustomersSegmentsError = PostApiV1AdminCustomersSegmentsErrors[keyof PostApiV1AdminCustomersSegmentsErrors];
+
+export type PostApiV1AdminCustomersSegmentsResponses = {
+    /**
+     * Segment saved
+     */
+    201: {
+        success: true;
+        data: {
+            id: string;
+            name: string;
+            description: string | null;
+            definition: {
+                version?: 1;
+                match?: 'all' | 'any';
+                conditions: Array<{
+                    field: 'amount_spent';
+                    min?: number;
+                    max?: number;
+                } | {
+                    field: 'orders_count';
+                    min?: number;
+                    max?: number;
+                } | {
+                    field: 'last_order_date';
+                    filter: {
+                        op: 'within_last';
+                        days: number;
+                    } | {
+                        op: 'not_within_last';
+                        days: number;
+                    } | {
+                        op: 'on_or_after';
+                        date: string;
+                    } | {
+                        op: 'before';
+                        date: string;
+                    };
+                } | {
+                    field: 'first_order_date';
+                    filter: {
+                        op: 'within_last';
+                        days: number;
+                    } | {
+                        op: 'not_within_last';
+                        days: number;
+                    } | {
+                        op: 'on_or_after';
+                        date: string;
+                    } | {
+                        op: 'before';
+                        date: string;
+                    };
+                } | {
+                    field: 'customer_since';
+                    filter: {
+                        op: 'within_last';
+                        days: number;
+                    } | {
+                        op: 'not_within_last';
+                        days: number;
+                    } | {
+                        op: 'on_or_after';
+                        date: string;
+                    } | {
+                        op: 'before';
+                        date: string;
+                    };
+                } | {
+                    field: 'city';
+                    op: 'in' | 'not_in';
+                    ids: Array<string>;
+                } | {
+                    field: 'zone';
+                    op: 'in' | 'not_in';
+                    ids: Array<string>;
+                } | {
+                    field: 'tags';
+                    op: 'has_any' | 'has_all' | 'has_none';
+                    tags: Array<string>;
+                } | {
+                    field: 'marketing_consent';
+                    channel: 'email' | 'sms' | 'whatsapp';
+                    status: 'subscribed' | 'pending' | 'unsubscribed' | 'not_subscribed';
+                } | {
+                    field: 'customer_type';
+                    types: Array<'account' | 'guest' | 'merchant'>;
+                } | {
+                    field: 'custom_field';
+                    definitionId: string;
+                    op: 'equals' | 'is_set' | 'is_not_set';
+                    value?: string;
+                }>;
+            };
+            revision: number;
+            createdAt: string;
+            updatedAt: string;
+            promotionCount: number;
+        };
+    };
+};
+
+export type PostApiV1AdminCustomersSegmentsResponse = PostApiV1AdminCustomersSegmentsResponses[keyof PostApiV1AdminCustomersSegmentsResponses];
+
+export type PostApiV1AdminCustomersSegmentsPreviewData = {
+    body: {
+        definition: {
+            version?: 1;
+            match?: 'all' | 'any';
+            conditions: Array<{
+                field: 'amount_spent';
+                min?: number;
+                max?: number;
+            } | {
+                field: 'orders_count';
+                min?: number;
+                max?: number;
+            } | {
+                field: 'last_order_date';
+                filter: {
+                    op: 'within_last';
+                    days: number;
+                } | {
+                    op: 'not_within_last';
+                    days: number;
+                } | {
+                    op: 'on_or_after';
+                    date: string;
+                } | {
+                    op: 'before';
+                    date: string;
+                };
+            } | {
+                field: 'first_order_date';
+                filter: {
+                    op: 'within_last';
+                    days: number;
+                } | {
+                    op: 'not_within_last';
+                    days: number;
+                } | {
+                    op: 'on_or_after';
+                    date: string;
+                } | {
+                    op: 'before';
+                    date: string;
+                };
+            } | {
+                field: 'customer_since';
+                filter: {
+                    op: 'within_last';
+                    days: number;
+                } | {
+                    op: 'not_within_last';
+                    days: number;
+                } | {
+                    op: 'on_or_after';
+                    date: string;
+                } | {
+                    op: 'before';
+                    date: string;
+                };
+            } | {
+                field: 'city';
+                op: 'in' | 'not_in';
+                ids: Array<string>;
+            } | {
+                field: 'zone';
+                op: 'in' | 'not_in';
+                ids: Array<string>;
+            } | {
+                field: 'tags';
+                op: 'has_any' | 'has_all' | 'has_none';
+                tags: Array<string>;
+            } | {
+                field: 'marketing_consent';
+                channel: 'email' | 'sms' | 'whatsapp';
+                status: 'subscribed' | 'pending' | 'unsubscribed' | 'not_subscribed';
+            } | {
+                field: 'customer_type';
+                types: Array<'account' | 'guest' | 'merchant'>;
+            } | {
+                field: 'custom_field';
+                definitionId: string;
+                op: 'equals' | 'is_set' | 'is_not_set';
+                value?: string;
+            }>;
+        };
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/customers/segments/preview';
+};
+
+export type PostApiV1AdminCustomersSegmentsPreviewErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminCustomersSegmentsPreviewError = PostApiV1AdminCustomersSegmentsPreviewErrors[keyof PostApiV1AdminCustomersSegmentsPreviewErrors];
+
+export type PostApiV1AdminCustomersSegmentsPreviewResponses = {
+    /**
+     * Preview
+     */
+    200: {
+        success: true;
+        data: {
+            count: number;
+            capped: boolean;
+            customers: Array<{
+                id: string;
+                name: string;
+                email: string | null;
+                phone: string;
+                address: string | null;
+                city: string | null;
+                zone: string | null;
+                area: string | null;
+                cityName: string | null;
+                zoneName: string | null;
+                areaName: string | null;
+                accountClaimedAt: string | null;
+                kind: 'account' | 'guest' | 'merchant';
+                latestOrderName: string | null;
+                totalOrders: number;
+                totalSpent: number;
+                lastOrderAt: string | null;
+                createdAt: string;
+                updatedAt: string;
+            }>;
+        };
+    };
+};
+
+export type PostApiV1AdminCustomersSegmentsPreviewResponse = PostApiV1AdminCustomersSegmentsPreviewResponses[keyof PostApiV1AdminCustomersSegmentsPreviewResponses];
+
+export type DeleteApiV1AdminCustomersSegmentsBySegmentIdData = {
+    body?: never;
+    path: {
+        segmentId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/customers/segments/{segmentId}';
+};
+
+export type DeleteApiV1AdminCustomersSegmentsBySegmentIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type DeleteApiV1AdminCustomersSegmentsBySegmentIdError = DeleteApiV1AdminCustomersSegmentsBySegmentIdErrors[keyof DeleteApiV1AdminCustomersSegmentsBySegmentIdErrors];
+
+export type DeleteApiV1AdminCustomersSegmentsBySegmentIdResponses = {
+    /**
+     * No content
+     */
+    204: void;
+};
+
+export type DeleteApiV1AdminCustomersSegmentsBySegmentIdResponse = DeleteApiV1AdminCustomersSegmentsBySegmentIdResponses[keyof DeleteApiV1AdminCustomersSegmentsBySegmentIdResponses];
+
+export type GetApiV1AdminCustomersSegmentsBySegmentIdData = {
+    body?: never;
+    path: {
+        segmentId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/customers/segments/{segmentId}';
+};
+
+export type GetApiV1AdminCustomersSegmentsBySegmentIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminCustomersSegmentsBySegmentIdError = GetApiV1AdminCustomersSegmentsBySegmentIdErrors[keyof GetApiV1AdminCustomersSegmentsBySegmentIdErrors];
+
+export type GetApiV1AdminCustomersSegmentsBySegmentIdResponses = {
+    /**
+     * Segment
+     */
+    200: {
+        success: true;
+        data: {
+            id: string;
+            name: string;
+            description: string | null;
+            definition: {
+                version?: 1;
+                match?: 'all' | 'any';
+                conditions: Array<{
+                    field: 'amount_spent';
+                    min?: number;
+                    max?: number;
+                } | {
+                    field: 'orders_count';
+                    min?: number;
+                    max?: number;
+                } | {
+                    field: 'last_order_date';
+                    filter: {
+                        op: 'within_last';
+                        days: number;
+                    } | {
+                        op: 'not_within_last';
+                        days: number;
+                    } | {
+                        op: 'on_or_after';
+                        date: string;
+                    } | {
+                        op: 'before';
+                        date: string;
+                    };
+                } | {
+                    field: 'first_order_date';
+                    filter: {
+                        op: 'within_last';
+                        days: number;
+                    } | {
+                        op: 'not_within_last';
+                        days: number;
+                    } | {
+                        op: 'on_or_after';
+                        date: string;
+                    } | {
+                        op: 'before';
+                        date: string;
+                    };
+                } | {
+                    field: 'customer_since';
+                    filter: {
+                        op: 'within_last';
+                        days: number;
+                    } | {
+                        op: 'not_within_last';
+                        days: number;
+                    } | {
+                        op: 'on_or_after';
+                        date: string;
+                    } | {
+                        op: 'before';
+                        date: string;
+                    };
+                } | {
+                    field: 'city';
+                    op: 'in' | 'not_in';
+                    ids: Array<string>;
+                } | {
+                    field: 'zone';
+                    op: 'in' | 'not_in';
+                    ids: Array<string>;
+                } | {
+                    field: 'tags';
+                    op: 'has_any' | 'has_all' | 'has_none';
+                    tags: Array<string>;
+                } | {
+                    field: 'marketing_consent';
+                    channel: 'email' | 'sms' | 'whatsapp';
+                    status: 'subscribed' | 'pending' | 'unsubscribed' | 'not_subscribed';
+                } | {
+                    field: 'customer_type';
+                    types: Array<'account' | 'guest' | 'merchant'>;
+                } | {
+                    field: 'custom_field';
+                    definitionId: string;
+                    op: 'equals' | 'is_set' | 'is_not_set';
+                    value?: string;
+                }>;
+            };
+            revision: number;
+            createdAt: string;
+            updatedAt: string;
+            promotionCount: number;
+        };
+    };
+};
+
+export type GetApiV1AdminCustomersSegmentsBySegmentIdResponse = GetApiV1AdminCustomersSegmentsBySegmentIdResponses[keyof GetApiV1AdminCustomersSegmentsBySegmentIdResponses];
+
+export type PutApiV1AdminCustomersSegmentsBySegmentIdData = {
+    body: {
+        name?: string;
+        description?: string | null;
+        definition?: {
+            version?: 1;
+            match?: 'all' | 'any';
+            conditions: Array<{
+                field: 'amount_spent';
+                min?: number;
+                max?: number;
+            } | {
+                field: 'orders_count';
+                min?: number;
+                max?: number;
+            } | {
+                field: 'last_order_date';
+                filter: {
+                    op: 'within_last';
+                    days: number;
+                } | {
+                    op: 'not_within_last';
+                    days: number;
+                } | {
+                    op: 'on_or_after';
+                    date: string;
+                } | {
+                    op: 'before';
+                    date: string;
+                };
+            } | {
+                field: 'first_order_date';
+                filter: {
+                    op: 'within_last';
+                    days: number;
+                } | {
+                    op: 'not_within_last';
+                    days: number;
+                } | {
+                    op: 'on_or_after';
+                    date: string;
+                } | {
+                    op: 'before';
+                    date: string;
+                };
+            } | {
+                field: 'customer_since';
+                filter: {
+                    op: 'within_last';
+                    days: number;
+                } | {
+                    op: 'not_within_last';
+                    days: number;
+                } | {
+                    op: 'on_or_after';
+                    date: string;
+                } | {
+                    op: 'before';
+                    date: string;
+                };
+            } | {
+                field: 'city';
+                op: 'in' | 'not_in';
+                ids: Array<string>;
+            } | {
+                field: 'zone';
+                op: 'in' | 'not_in';
+                ids: Array<string>;
+            } | {
+                field: 'tags';
+                op: 'has_any' | 'has_all' | 'has_none';
+                tags: Array<string>;
+            } | {
+                field: 'marketing_consent';
+                channel: 'email' | 'sms' | 'whatsapp';
+                status: 'subscribed' | 'pending' | 'unsubscribed' | 'not_subscribed';
+            } | {
+                field: 'customer_type';
+                types: Array<'account' | 'guest' | 'merchant'>;
+            } | {
+                field: 'custom_field';
+                definitionId: string;
+                op: 'equals' | 'is_set' | 'is_not_set';
+                value?: string;
+            }>;
+        };
+        expectedRevision: number;
+    };
+    path: {
+        segmentId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/customers/segments/{segmentId}';
+};
+
+export type PutApiV1AdminCustomersSegmentsBySegmentIdErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PutApiV1AdminCustomersSegmentsBySegmentIdError = PutApiV1AdminCustomersSegmentsBySegmentIdErrors[keyof PutApiV1AdminCustomersSegmentsBySegmentIdErrors];
+
+export type PutApiV1AdminCustomersSegmentsBySegmentIdResponses = {
+    /**
+     * Segment saved
+     */
+    200: {
+        success: true;
+        data: {
+            id: string;
+            name: string;
+            description: string | null;
+            definition: {
+                version?: 1;
+                match?: 'all' | 'any';
+                conditions: Array<{
+                    field: 'amount_spent';
+                    min?: number;
+                    max?: number;
+                } | {
+                    field: 'orders_count';
+                    min?: number;
+                    max?: number;
+                } | {
+                    field: 'last_order_date';
+                    filter: {
+                        op: 'within_last';
+                        days: number;
+                    } | {
+                        op: 'not_within_last';
+                        days: number;
+                    } | {
+                        op: 'on_or_after';
+                        date: string;
+                    } | {
+                        op: 'before';
+                        date: string;
+                    };
+                } | {
+                    field: 'first_order_date';
+                    filter: {
+                        op: 'within_last';
+                        days: number;
+                    } | {
+                        op: 'not_within_last';
+                        days: number;
+                    } | {
+                        op: 'on_or_after';
+                        date: string;
+                    } | {
+                        op: 'before';
+                        date: string;
+                    };
+                } | {
+                    field: 'customer_since';
+                    filter: {
+                        op: 'within_last';
+                        days: number;
+                    } | {
+                        op: 'not_within_last';
+                        days: number;
+                    } | {
+                        op: 'on_or_after';
+                        date: string;
+                    } | {
+                        op: 'before';
+                        date: string;
+                    };
+                } | {
+                    field: 'city';
+                    op: 'in' | 'not_in';
+                    ids: Array<string>;
+                } | {
+                    field: 'zone';
+                    op: 'in' | 'not_in';
+                    ids: Array<string>;
+                } | {
+                    field: 'tags';
+                    op: 'has_any' | 'has_all' | 'has_none';
+                    tags: Array<string>;
+                } | {
+                    field: 'marketing_consent';
+                    channel: 'email' | 'sms' | 'whatsapp';
+                    status: 'subscribed' | 'pending' | 'unsubscribed' | 'not_subscribed';
+                } | {
+                    field: 'customer_type';
+                    types: Array<'account' | 'guest' | 'merchant'>;
+                } | {
+                    field: 'custom_field';
+                    definitionId: string;
+                    op: 'equals' | 'is_set' | 'is_not_set';
+                    value?: string;
+                }>;
+            };
+            revision: number;
+            createdAt: string;
+            updatedAt: string;
+            promotionCount: number;
+        };
+    };
+};
+
+export type PutApiV1AdminCustomersSegmentsBySegmentIdResponse = PutApiV1AdminCustomersSegmentsBySegmentIdResponses[keyof PutApiV1AdminCustomersSegmentsBySegmentIdResponses];
+
+export type GetApiV1AdminCustomersSegmentsBySegmentIdCountData = {
+    body?: never;
+    path: {
+        segmentId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/customers/segments/{segmentId}/count';
+};
+
+export type GetApiV1AdminCustomersSegmentsBySegmentIdCountErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminCustomersSegmentsBySegmentIdCountError = GetApiV1AdminCustomersSegmentsBySegmentIdCountErrors[keyof GetApiV1AdminCustomersSegmentsBySegmentIdCountErrors];
+
+export type GetApiV1AdminCustomersSegmentsBySegmentIdCountResponses = {
+    /**
+     * Live member count (capped)
+     */
+    200: {
+        success: true;
+        data: {
+            count: number;
+            capped: boolean;
+        };
+    };
+};
+
+export type GetApiV1AdminCustomersSegmentsBySegmentIdCountResponse = GetApiV1AdminCustomersSegmentsBySegmentIdCountResponses[keyof GetApiV1AdminCustomersSegmentsBySegmentIdCountResponses];
+
+export type GetApiV1AdminCustomersSegmentsBySegmentIdMembersData = {
+    body?: never;
+    path: {
+        segmentId: string;
+    };
+    query?: {
+        after?: string;
+        limit?: number;
+    };
+    url: '/api/v1/admin/customers/segments/{segmentId}/members';
+};
+
+export type GetApiV1AdminCustomersSegmentsBySegmentIdMembersErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminCustomersSegmentsBySegmentIdMembersError = GetApiV1AdminCustomersSegmentsBySegmentIdMembersErrors[keyof GetApiV1AdminCustomersSegmentsBySegmentIdMembersErrors];
+
+export type GetApiV1AdminCustomersSegmentsBySegmentIdMembersResponses = {
+    /**
+     * A page of member ids
+     */
+    200: {
+        success: true;
+        data: {
+            customerIds: Array<string>;
+            next: string | null;
+        };
+    };
+};
+
+export type GetApiV1AdminCustomersSegmentsBySegmentIdMembersResponse = GetApiV1AdminCustomersSegmentsBySegmentIdMembersResponses[keyof GetApiV1AdminCustomersSegmentsBySegmentIdMembersResponses];
+
+export type GetApiV1AdminCustomersByIdMarketingData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/customers/{id}/marketing';
+};
+
+export type GetApiV1AdminCustomersByIdMarketingErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminCustomersByIdMarketingError = GetApiV1AdminCustomersByIdMarketingErrors[keyof GetApiV1AdminCustomersByIdMarketingErrors];
+
+export type GetApiV1AdminCustomersByIdMarketingResponses = {
+    /**
+     * Consent, audit log and tags
+     */
+    200: {
+        success: true;
+        data: {
+            consents: Array<{
+                channel: 'email' | 'sms' | 'whatsapp';
+                status: 'subscribed' | 'pending' | 'unsubscribed' | 'not_subscribed';
+                state: 'subscribed' | 'unsubscribed' | 'pending' | null;
+                contact: string | null;
+                consentContact: string | null;
+                source: 'checkout' | 'account' | 'newsletter' | 'admin' | 'import' | 'plugin' | 'link' | null;
+                consentTextVersion: string | null;
+                subscribedAt: string | null;
+                unsubscribedAt: string | null;
+                requestedAt: string | null;
+                updatedAt: string | null;
+            }>;
+            events: Array<{
+                id: string;
+                channel: 'email' | 'sms' | 'whatsapp';
+                previousState: 'subscribed' | 'unsubscribed' | 'pending' | null;
+                state: 'subscribed' | 'unsubscribed' | 'pending';
+                source: 'checkout' | 'account' | 'newsletter' | 'admin' | 'import' | 'plugin' | 'link';
+                actor: 'buyer' | 'staff' | 'plugin' | 'system';
+                actorName: string | null;
+                note: string | null;
+                contact: string;
+                consentTextVersion: string | null;
+                consentText: string | null;
+                createdAt: string;
+            }>;
+            tags: Array<string>;
+        };
+    };
+};
+
+export type GetApiV1AdminCustomersByIdMarketingResponse = GetApiV1AdminCustomersByIdMarketingResponses[keyof GetApiV1AdminCustomersByIdMarketingResponses];
+
+export type PutApiV1AdminCustomersByIdMarketingData = {
+    body: {
+        channel: 'email' | 'sms' | 'whatsapp';
+        state: 'subscribed' | 'unsubscribed';
+        note?: string | null;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/customers/{id}/marketing';
+};
+
+export type PutApiV1AdminCustomersByIdMarketingErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PutApiV1AdminCustomersByIdMarketingError = PutApiV1AdminCustomersByIdMarketingErrors[keyof PutApiV1AdminCustomersByIdMarketingErrors];
+
+export type PutApiV1AdminCustomersByIdMarketingResponses = {
+    /**
+     * Consent recorded
+     */
+    200: {
+        success: true;
+        data: {
+            consents: Array<{
+                channel: 'email' | 'sms' | 'whatsapp';
+                status: 'subscribed' | 'pending' | 'unsubscribed' | 'not_subscribed';
+                state: 'subscribed' | 'unsubscribed' | 'pending' | null;
+                contact: string | null;
+                consentContact: string | null;
+                source: 'checkout' | 'account' | 'newsletter' | 'admin' | 'import' | 'plugin' | 'link' | null;
+                consentTextVersion: string | null;
+                subscribedAt: string | null;
+                unsubscribedAt: string | null;
+                requestedAt: string | null;
+                updatedAt: string | null;
+            }>;
+            events: Array<{
+                id: string;
+                channel: 'email' | 'sms' | 'whatsapp';
+                previousState: 'subscribed' | 'unsubscribed' | 'pending' | null;
+                state: 'subscribed' | 'unsubscribed' | 'pending';
+                source: 'checkout' | 'account' | 'newsletter' | 'admin' | 'import' | 'plugin' | 'link';
+                actor: 'buyer' | 'staff' | 'plugin' | 'system';
+                actorName: string | null;
+                note: string | null;
+                contact: string;
+                consentTextVersion: string | null;
+                consentText: string | null;
+                createdAt: string;
+            }>;
+            tags: Array<string>;
+        };
+    };
+};
+
+export type PutApiV1AdminCustomersByIdMarketingResponse = PutApiV1AdminCustomersByIdMarketingResponses[keyof PutApiV1AdminCustomersByIdMarketingResponses];
+
 export type GetApiV1AdminCustomersData = {
     body?: never;
     path?: never;
@@ -26946,6 +29594,18 @@ export type GetApiV1AdminCustomersData = {
          * Sort order
          */
         order?: string;
+        /**
+         * Customers with this tag
+         */
+        tag?: string;
+        /**
+         * Customers in this saved segment
+         */
+        segmentId?: string;
+        /**
+         * Customers subscribed on this channel now (any: on at least one)
+         */
+        subscribed?: 'email' | 'sms' | 'whatsapp' | 'any';
     };
     url: '/api/v1/admin/customers';
 };
@@ -27325,6 +29985,12 @@ export type GetApiV1AdminCustomersByIdResponses = {
                 id: string;
                 name: string;
             } | null;
+            tags: Array<string>;
+            marketing: Array<{
+                channel: 'email' | 'sms' | 'whatsapp';
+                status: 'subscribed' | 'pending' | 'unsubscribed' | 'not_subscribed';
+                updatedAt: string | null;
+            }>;
         };
     };
 };
@@ -49019,6 +51685,236 @@ export type PutApiV1AdminSettingsEmiResponses = {
 
 export type PutApiV1AdminSettingsEmiResponse = PutApiV1AdminSettingsEmiResponses[keyof PutApiV1AdminSettingsEmiResponses];
 
+export type GetApiV1AdminSettingsMarketingConsentData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/marketing-consent';
+};
+
+export type GetApiV1AdminSettingsMarketingConsentErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsMarketingConsentError = GetApiV1AdminSettingsMarketingConsentErrors[keyof GetApiV1AdminSettingsMarketingConsentErrors];
+
+export type GetApiV1AdminSettingsMarketingConsentResponses = {
+    /**
+     * Marketing consent settings
+     */
+    200: {
+        success: true;
+        data: {
+            settings: {
+                checkout: {
+                    enabled: boolean;
+                    channels: Array<'email' | 'sms' | 'whatsapp'>;
+                    label: {
+                        en: string;
+                        bn: string;
+                    };
+                };
+                emailDoubleOptIn: boolean;
+            };
+            revision: number;
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsMarketingConsentResponse = GetApiV1AdminSettingsMarketingConsentResponses[keyof GetApiV1AdminSettingsMarketingConsentResponses];
+
+export type PutApiV1AdminSettingsMarketingConsentData = {
+    body: {
+        settings: {
+            checkout: {
+                enabled: boolean;
+                channels: Array<'email' | 'sms' | 'whatsapp'>;
+                label: {
+                    en: string;
+                    bn: string;
+                };
+            };
+            emailDoubleOptIn: boolean;
+        };
+        expectedRevision: number;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/marketing-consent';
+};
+
+export type PutApiV1AdminSettingsMarketingConsentErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PutApiV1AdminSettingsMarketingConsentError = PutApiV1AdminSettingsMarketingConsentErrors[keyof PutApiV1AdminSettingsMarketingConsentErrors];
+
+export type PutApiV1AdminSettingsMarketingConsentResponses = {
+    /**
+     * Saved
+     */
+    200: {
+        success: true;
+        data: {
+            settings: {
+                checkout: {
+                    enabled: boolean;
+                    channels: Array<'email' | 'sms' | 'whatsapp'>;
+                    label: {
+                        en: string;
+                        bn: string;
+                    };
+                };
+                emailDoubleOptIn: boolean;
+            };
+            revision: number;
+        };
+    };
+};
+
+export type PutApiV1AdminSettingsMarketingConsentResponse = PutApiV1AdminSettingsMarketingConsentResponses[keyof PutApiV1AdminSettingsMarketingConsentResponses];
+
 export type PutApiV1AdminOrdersByIdStatusData = {
     body: {
         status: 'pending' | 'processing' | 'confirmed' | 'shipped' | 'delivered' | 'completed' | 'cancelled' | 'returned' | 'refunded' | 'incomplete';
@@ -68794,7 +71690,7 @@ export type PostApiV1AdminWebhooksData = {
          * HTTPS endpoint on a public host. Private, loopback, link-local and reserved addresses are refused.
          */
         url: string;
-        topics: Array<'*' | 'order.*' | 'return.*' | 'product.*' | 'inventory.*' | 'customer.*' | 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'inventory.level_changed' | 'customer.created' | 'customer.updated'>;
+        topics: Array<'*' | 'order.*' | 'return.*' | 'product.*' | 'inventory.*' | 'customer.*' | 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'inventory.level_changed' | 'customer.created' | 'customer.updated' | 'customer.consent_changed'>;
         description?: string | null;
     };
     path?: never;
@@ -69051,7 +71947,7 @@ export type PatchApiV1AdminWebhooksByIdData = {
          * HTTPS endpoint on a public host. Private, loopback, link-local and reserved addresses are refused.
          */
         url?: string;
-        topics?: Array<'*' | 'order.*' | 'return.*' | 'product.*' | 'inventory.*' | 'customer.*' | 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'inventory.level_changed' | 'customer.created' | 'customer.updated'>;
+        topics?: Array<'*' | 'order.*' | 'return.*' | 'product.*' | 'inventory.*' | 'customer.*' | 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'inventory.level_changed' | 'customer.created' | 'customer.updated' | 'customer.consent_changed'>;
         description?: string | null;
         status?: 'active' | 'disabled';
     };
@@ -69517,7 +72413,7 @@ export type GetApiV1AdminEventsData = {
     body?: never;
     path?: never;
     query?: {
-        topic?: 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'inventory.level_changed' | 'customer.created' | 'customer.updated';
+        topic?: 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'inventory.level_changed' | 'customer.created' | 'customer.updated' | 'customer.consent_changed';
         resourceType?: 'order' | 'return' | 'product' | 'variant' | 'customer';
         resourceId?: string;
         /**

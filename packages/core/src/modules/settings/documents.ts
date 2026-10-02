@@ -30,6 +30,11 @@ import {
 } from "@scalius/shared/seo-return-policy";
 import { emiSettingsSchema, type EmiSettings } from "@scalius/shared/emi";
 import {
+  DEFAULT_MARKETING_CONSENT_SETTINGS,
+  marketingConsentSettingsSchema,
+  type MarketingConsentSettings,
+} from "@scalius/shared/customer-marketing";
+import {
   NOTIFICATION_TYPES,
   TEMPLATED_NOTIFICATION_TYPES,
   adminChannelsForType,
@@ -357,6 +362,17 @@ export const customerAuthDocument = defineSettingsDocument<CustomerAuthSettings>
     }),
   ) as unknown as z.ZodType<CustomerAuthSettings>,
   defaults: { ...DEFAULT_CUSTOMER_IDENTITY, channels: [...DEFAULT_CUSTOMER_IDENTITY.channels] },
+});
+
+/**
+ * Settings → Customer accounts → Marketing: the checkout consent checkbox
+ * (label per language, channels it subscribes; always unchecked, never
+ * required) and e-mail double opt-in for storefront subscriptions.
+ */
+export const marketingConsentDocument = defineSettingsDocument<MarketingConsentSettings>({
+  key: "marketing_consent",
+  schema: marketingConsentSettingsSchema as unknown as z.ZodType<MarketingConsentSettings>,
+  defaults: DEFAULT_MARKETING_CONSENT_SETTINGS,
 });
 
 export const customerRequestsDocument = defineSettingsDocument<CustomerRequestPolicy>({
