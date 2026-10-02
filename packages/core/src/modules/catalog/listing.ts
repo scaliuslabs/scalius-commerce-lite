@@ -10,6 +10,9 @@ import { suggestSearchCorrection } from "../../search/correct";
 import { productSearchRankJoin, productSearchRelevanceOrder } from "../../search/relevance";
 import { unixToDate } from "@scalius/shared/utils";
 import { fromMinor } from "@scalius/shared/money";
+import { planLimits } from "@scalius/shared/plan-limits";
+import { cappedCountLimit, capTotal, encodeListCursor } from "@scalius/shared/pagination";
+import { invalidCursor, keysetCondition, readListCursor, type KeysetOrder } from "../../utils/keyset";
 import { quickAddEligibleSql } from "../products/buyer-projection";
 import type { ProductCondition } from "@scalius/shared/product-condition";
 import type { StorefrontProductFilterInput } from "../products/types";
@@ -86,6 +89,8 @@ type StorefrontProductListRow = {
     createdAt: number;
     ratingAvgCenti: number | null;
     reviewCount: number | null;
+    /** The sort column as stored (`product_buyer_state`), for the page's cursor. */
+    keysetValue: number | null;
 };
 
 type StorefrontProductListRowWithVariants = StorefrontProductListRow & {
@@ -136,6 +141,18 @@ function getStorefrontProductOrderBy(sort: StorefrontProductSort = "newest", sor
     }
     return sql`${column(buyerState.productCreatedAt)} DESC`;
 }
+
+/**
+ * The orders a listing can continue from with a `cursor`: the buyer state's own
+ * indexed columns, ties broken by product id ascending (the page's ORDER BY).
+ * Name, discount, rating and search relevance order by joined or computed
+ * values and page by number only.
+ */
+const LISTING_KEYSET_SORTS = {
+    newest: { column: buyerState.productCreatedAt, direction: "desc" },
+    "price-asc": { column: buyerState.fromMinor, direction: "asc" },
+    "price-desc": { column: buyerState.fromMinor, direction: "desc" },
+} as const satisfies Record<string, { column: SQLWrapper; direction: "asc" | "desc" }>;
 
 // ─────────────────────────────────────────
 // Storefront queries
@@ -209,7 +226,9 @@ async function readStorefrontCatalogResults(
         limit = 20,
         search,
         sort = search ? "relevance" : "newest",
+        cursor,
     } = params;
+    const lists = planLimits().lists;
     const priceBounds = priceFilterBoundsMinor(params);
     const unscoped = !scope.condition && !params.category && !params.search && !params.ids;
     // Facet counts apply every selection except their own facet's, so they
@@ -239,7 +258,35 @@ async function readStorefrontCatalogResults(
         : sort === "relevance" && search
             ? [...productSearchRelevanceOrder(db, search), desc(buyerState.productCreatedAt)]
             : [getStorefrontProductOrderBy(sort, scope.sortAfterScope)];
-    const offset = (page - 1) * limit;
+    // A `cursor` continues the keyset orders; any other order pages by number
+    // (within the plan's offset bound).
+    const keysetSort = !scope.orderBy && !(sort === "relevance" && search)
+        ? LISTING_KEYSET_SORTS[sort as keyof typeof LISTING_KEYSET_SORTS]
+        : undefined;
+    const keysetOrder: KeysetOrder | undefined = keysetSort && {
+        // A scope read through its own index and then sorted keeps the order off the sortable
+        // index; the keyset predicate must not hand it back (the unary `+`, see above).
+        column: scope.sortAfterScope ? sql`+${keysetSort.column}` : keysetSort.column,
+        id: buyerState.productId,
+        direction: keysetSort.direction,
+        idDirection: "asc",
+    };
+    let cursorCondition: SQL | undefined;
+    if (cursor) {
+        if (!keysetSort || !keysetOrder) {
+            throw invalidCursor("A cursor continues the newest, price-asc and price-desc orders of a listing; other orders (relevance, name, discount, rating) page by number.");
+        }
+        if (page > 1) throw invalidCursor("Use either page or a cursor, not both.");
+        cursorCondition = keysetCondition(
+            keysetOrder,
+            readListCursor(cursor, { sort, direction: keysetSort.direction, kinds: ["number"] }),
+        );
+    }
+    const offset = cursor ? 0 : (page - 1) * limit;
+    // A numbered page this deep is empty: past the last countable page, so the
+    // storefront answers 404 (never an indexable empty page) and nothing reads
+    // `offset` rows to find that out. Deeper rows are reached with a cursor.
+    const pageTooDeep = !cursor && offset >= lists.maxOffset;
     const shelfPreview = Boolean(
         scope.shelfChildIds?.length && page === 1 && limit === 20 && sort === "newest"
         && !search && params.minPrice === undefined && params.maxPrice === undefined
@@ -297,6 +344,10 @@ async function readStorefrontCatalogResults(
             }).as("listing_quick_add_eligible"),
             ratingAvgCenti: reviewStats.ratingAvgCenti,
             reviewCount: reviewStats.reviewCount,
+            // The sort column as stored: a cursor compares what the ORDER BY compared.
+            keysetValue: keysetSort
+                ? sql<number | null>`${keysetSort.column}`.as("keyset_value")
+                : sql<number | null>`NULL`.as("keyset_value"),
         })
         .from(buyerState)
         .innerJoin(products, eq(products.id, buyerState.productId))
@@ -309,6 +360,7 @@ async function readStorefrontCatalogResults(
                 UNION ALL
                 SELECT product_id FROM (${shelfIds}) AS shelf_sample
             )` : undefined,
+            cursorCondition,
         ))
         .$dynamic();
     const rankJoin = !scope.orderBy && sort === "relevance" && search
@@ -320,6 +372,25 @@ async function readStorefrontCatalogResults(
     // so one statement answers both.
     const hasPriceFilter = priceBounds.minPriceMinor !== undefined || priceBounds.maxPriceMinor !== undefined;
     const ancestorsCategoryId = scope.fixedCategory?.id && deps.active() ? scope.fixedCategory.id : null;
+    // The plain shop-all page (no scope, no filter): the count stops at the
+    // plan's cap and the price range reads one lone MIN and one lone MAX over
+    // the public rows, each a single index probe once the buyer state has an
+    // index on (is_public, to_minor) (the price index already serves the MIN).
+    // Anywhere else the count, MIN and MAX share one scan of the scope's own
+    // rows (bounded by the scope, and a lone MIN/MAX there would walk the
+    // global price index looking for the scope's rows), and the count is capped
+    // when it is reported.
+    const plainShopAll = unscoped && conditions.length === 1 && !countNeedsProducts;
+    const publicRows = and(...conditions);
+    const plainShopAllCountQuery = () => db
+        .select({
+            count: sql<number>`(SELECT count(*) FROM (SELECT 1 FROM ${buyerState} WHERE ${publicRows} LIMIT ${sql.raw(String(cappedCountLimit(lists.countCap)))}) AS capped_rows)`,
+            storeCurrencyCode: storeCurrencyCodeSql(),
+            min: sql<number | null>`(SELECT MIN(${buyerState.fromMinor}) FROM ${buyerState} WHERE ${publicRows})`,
+            max: sql<number | null>`(SELECT MAX(${buyerState.toMinor}) FROM ${buyerState} WHERE ${publicRows})`,
+            publicCatalogueSize: boundedPublicCatalogueSizeSql(SHOP_ALL_LIVE_FACET_PRODUCT_LIMIT),
+        })
+        .from(sql`(SELECT 1) AS shop_all_probe`);
     let countQuery = db
         .select({
             count: sql<number>`count(*)`,
@@ -366,14 +437,18 @@ async function readStorefrontCatalogResults(
     const noFacets = Promise.resolve([] as CatalogFacetCountRow[]);
     // A scoped listing counts its facets in the first wave; the unscoped one
     // learns the catalogue size from its count first (see the limit above).
-    const [productsList, totalCount, filteredPriceRange, scopedFacets] = await Promise.all([
-        (shelfPreview ? query.orderBy(...orderBy, buyerState.productId).all()
-            : query.orderBy(...orderBy, buyerState.productId).limit(limit).offset(offset).all()) as Promise<StorefrontProductListRowWithVariants[]>,
-        countQuery.get(),
+    const [fetchedList, totalCount, filteredPriceRange, scopedFacets] = await Promise.all([
+        // One row past the page tells whether another page follows.
+        (pageTooDeep ? Promise.resolve([])
+            : shelfPreview ? query.orderBy(...orderBy, buyerState.productId).all()
+                : query.orderBy(...orderBy, buyerState.productId).limit(limit + 1).offset(offset).all()) as Promise<StorefrontProductListRowWithVariants[]>,
+        plainShopAll ? plainShopAllCountQuery().get() : countQuery.get(),
         hasPriceFilter ? priceRangeQuery.get() : Promise.resolve(null),
         unscoped ? noFacets : facetReads(),
     ]);
+    const productsList = shelfPreview ? fetchedList : fetchedList.slice(0, limit);
     const decimalPlaces = storeDecimalPlacesFromCode(totalCount?.storeCurrencyCode);
+    const { total, totalIsCapped } = capTotal(totalCount?.count ?? 0, lists.countCap);
     const rawPriceRange = hasPriceFilter ? filteredPriceRange : totalCount;
     const shopAllFacetsLive = unscoped
         && Number(totalCount?.publicCatalogueSize ?? 0) <= SHOP_ALL_LIVE_FACET_PRODUCT_LIMIT;
@@ -450,6 +525,7 @@ async function readStorefrontCatalogResults(
         quickAddEligible,
         ratingAvgCenti,
         reviewCount,
+        keysetValue: _keysetValue,
         ...product
     }) => {
         // A card names its category (id, name, slug), never the page's whole
@@ -477,7 +553,22 @@ async function readStorefrontCatalogResults(
     return {
         products: shelfPreview ? productsWithImages.slice(0, limit) : productsWithImages,
         shelfProducts: shelfPreview ? productsWithImages : [],
-        pagination: getPagination(page, limit, totalCount?.count ?? 0),
+        pagination: { ...getPagination(cursor ? 0 : page, limit, total), totalIsCapped },
+        // The cursor of the last card, for the orders a cursor continues; a
+        // shelf preview's page is the first `limit` of its ordered rows.
+        pageInfo: {
+            hasNextPage: !pageTooDeep && (shelfPreview
+                ? totalIsCapped || total > limit
+                : fetchedList.length > limit),
+            endCursor: keysetSort && productsList.length > 0
+                ? encodeListCursor({
+                    sort,
+                    direction: keysetSort.direction,
+                    values: [productsList[Math.min(limit, productsList.length) - 1]!.keysetValue],
+                    id: productsList[Math.min(limit, productsList.length) - 1]!.id,
+                })
+                : null,
+        },
         priceRange: {
             min: fromMinor(rawPriceRange?.min ?? 0, decimalPlaces),
             max: fromMinor(rawPriceRange?.max ?? 0, decimalPlaces),

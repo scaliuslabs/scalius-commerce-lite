@@ -16,6 +16,7 @@ import {
   type ProductRecommendations,
 } from "@/lib/api";
 import { recommendationTitle } from "@/lib/recommendations";
+import { catalogCountText } from "@/lib/catalog-paging";
 import { setRuntimeImageCdnPolicy } from "@/lib/api/runtime";
 import {
   buildProductListHref,
@@ -83,7 +84,7 @@ if (products.length === 0) {
   categories = (allCategories ?? []).slice(0, 12);
 }
 
-const resultCountLabel = `${pagination.total} ${pagination.total === 1 ? "result" : "results"}`;
+const resultCountLabel = `${catalogCountText(pagination.total, pagination.totalIsCapped)} ${pagination.total === 1 && !pagination.totalIsCapped ? "result" : "results"}`;
 const pageTitle = `${query ? `Search results for "${query}"` : "All products"}${
   pagination.page > 1 ? ` – Page ${pagination.page}` : ""
 }`;
@@ -123,6 +124,7 @@ const analyticsProductData = products.map((p) => ({
     hero={{
       title: query ? "Search results" : "All products",
       count: pagination.total,
+      countCapped: pagination.totalIsCapped,
       // Amazon's results bar: the count and the words searched for.
       countLabel: products.length === 0
         ? null

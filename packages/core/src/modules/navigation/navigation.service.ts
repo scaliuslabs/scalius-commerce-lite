@@ -156,7 +156,8 @@ export async function getNavigationPreviewProductCount(
         attributeFilters,
     });
 
-    return { count: result.pagination.total };
+    // The listing counts to the plan's cap: past it `count` is a lower bound.
+    return { count: result.pagination.total, countIsCapped: result.pagination.totalIsCapped };
 }
 
 // ─────────────────────────────────────────

@@ -255,6 +255,9 @@ const previewProductsRoute = createRoute({
                 "application/json": {
                     schema: successEnvelope(z.object({
                         count: z.number(),
+                        countIsCapped: z.boolean().openapi({
+                            description: "More products match than `count` (a lower bound: 1,000; 10,000 on a Paid deployment).",
+                        }),
                     })),
                 },
             },

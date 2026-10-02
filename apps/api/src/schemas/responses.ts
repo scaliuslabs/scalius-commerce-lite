@@ -70,6 +70,28 @@ export const keysetPaginatedEnvelope = (itemsKey: string, itemSchema: z.ZodTypeA
     }),
   );
 
+/** Pagination counts of a buyer-facing listing: `total` is capped (1,000; 10,000 on a Paid deployment). */
+export const listingPaginationSchema = paginationSchema.extend({
+  total: z.number().openapi({ description: "Matching products: exact up to the count cap (1,000; 10,000 on a Paid deployment), otherwise the cap with totalIsCapped true." }),
+  totalIsCapped: z.boolean().openapi({ description: "More products match than `total` counts (show \"1,000+\")." }),
+  page: z.number().openapi({ description: "Page number; 0 for a page read with `cursor`. Numbered pages reach the first 1,000 products (10,000 on a Paid deployment): deeper ones are empty." }),
+});
+
+/** Where a listing continues: `endCursor` goes back as `cursor` (newest, price-asc and price-desc only). */
+export const listingPageInfoSchema = z.object({
+  hasNextPage: z.boolean(),
+  endCursor: z.string().nullable().openapi({
+    description: "Pass as `cursor` for the next page of the newest, price-asc and price-desc orders; null for other orders and for an empty page.",
+  }),
+});
+
+/** The `cursor` query parameter shared by every buyer-facing product listing. */
+export const listingCursorQuerySchema = {
+  cursor: z.string().max(1024).optional().openapi({
+    description: "Continue after the last product of the previous page (its pageInfo.endCursor): newest, price-asc and price-desc only, not with `page` beyond 1. Walks a large catalogue without OFFSET; a cursor from another order is rejected with INVALID_CURSOR.",
+  }),
+};
+
 /** The `after`/`before` query parameters shared by every keyset-paged list. */
 export const keysetQuerySchema = {
   after: z.string().max(1024).optional().openapi({

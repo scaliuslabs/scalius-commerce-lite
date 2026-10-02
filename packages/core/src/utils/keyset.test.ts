@@ -38,22 +38,30 @@ function setup() {
 const column = sql.raw("kt.v");
 const id = sql.raw("kt.id");
 
-function expected(direction: CursorDirection): string[] {
+function expected(direction: CursorDirection, idDirection: CursorDirection = direction): string[] {
     const sign = direction === "asc" ? 1 : -1;
+    const idSign = idDirection === "asc" ? 1 : -1;
     const rank = (value: number | null) => value === null ? -Infinity : value;
     return [...rows]
-        .sort((a, b) => sign * ((rank(a.value) - rank(b.value) || 0) || (a.id < b.id ? -1 : 1)))
+        .sort((a, b) => sign * ((rank(a.value) - rank(b.value) || 0)) || idSign * (a.id < b.id ? -1 : 1))
         .map((row) => row.id);
 }
 
 describe("keyset conditions", () => {
-    for (const nullable of [true, false]) {
-        for (const direction of ["asc", "desc"] as const) {
-            it(`pages ${direction} through ties${nullable ? " and NULLs" : ""} one row at a time`, async () => {
+    // The storefront lists newest-first with ids ascending, so the tiebreaker may run against the sort.
+    const orders = [
+        ...([true, false] as const).flatMap((nullable) => (["asc", "desc"] as const).map((direction) => ({ nullable, direction, idDirection: direction }))),
+        { nullable: false, direction: "desc" as const, idDirection: "asc" as const },
+        { nullable: false, direction: "asc" as const, idDirection: "desc" as const },
+        { nullable: true, direction: "desc" as const, idDirection: "asc" as const },
+    ];
+    for (const { nullable, direction, idDirection } of orders) {
+        {
+            it(`pages ${direction} (ids ${idDirection}) through ties${nullable ? " and NULLs" : ""} one row at a time`, async () => {
                 const db = setup();
                 // Without NULLs the column is declared non-nullable; use only the non-NULL rows then.
-                const all = nullable ? expected(direction) : expected(direction).filter((rowId) => rows.find((row) => row.id === rowId)!.value !== null);
-                const order: KeysetOrder = { column, id, direction, nullable };
+                const all = nullable ? expected(direction, idDirection) : expected(direction, idDirection).filter((rowId) => rows.find((row) => row.id === rowId)!.value !== null);
+                const order: KeysetOrder = { column, id, direction, idDirection, nullable };
                 const present = (rowId: string) => nullable || rows.find((row) => row.id === rowId)!.value !== null;
 
                 // Forward from every position: the rest of the list, in order.

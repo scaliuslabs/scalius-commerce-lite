@@ -681,7 +681,7 @@ export async function listCustomers(
     const positionWhere = plan.positionWhere(whereClause);
     const statements: unknown[] = [countProbe(whereClause), resultsQuery];
     if (positionWhere) statements.push(countProbe(positionWhere));
-    const batchResult = await db.batch(statements as Parameters<Database["batch"]>[0]) as unknown as [
+    const batchResult = await db.batch(statements as unknown as Parameters<Database["batch"]>[0]) as unknown as [
         { count: number }[],
         { id: string; name: string; email: string | null; phone: string; address: string | null; city: string | null; zone: string | null; area: string | null; cityName: string | null; zoneName: string | null; areaName: string | null; accountClaimedAt: number | null; origin: string; latestOrderName: string | null; totalOrders: number; totalSpentMinor: number; spendDecimalPlaces: number; lastOrderAt: number | null; createdAt: number; updatedAt: number; keysetValue: number | string | null }[],
         { count: number }[]?,

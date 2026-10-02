@@ -569,6 +569,7 @@ describe("storefront feed category search", () => {
             page: 1,
             limit: 2,
             total: 3,
+            totalIsCapped: false,
             totalPages: 2,
         });
         expect(secondPage.pagination.total).toBe(3);
@@ -622,6 +623,7 @@ describe("storefront feed category search", () => {
             page: 1,
             limit: 2,
             total: 4,
+            totalIsCapped: false,
             totalPages: 2,
         });
         expect(new Set([

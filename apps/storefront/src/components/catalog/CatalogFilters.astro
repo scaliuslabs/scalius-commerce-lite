@@ -55,6 +55,8 @@ interface Props {
   sortBy: ProductListSort;
   defaultSort: ProductListSort;
   total: number;
+  /** `total` is a lower bound ("Show 1,000+ products"). */
+  totalIsCapped?: boolean;
   pathname: string;
   resetPath: string;
   searchLabel: string;
@@ -78,6 +80,7 @@ const {
   sortBy,
   defaultSort,
   total,
+  totalIsCapped = false,
   pathname,
   resetPath,
   searchLabel,
@@ -96,7 +99,7 @@ const bar = placement === "bar";
 const dense = presentation.style === "sidebar-dense";
 const { resolved } = await currentRequestTheme(Astro.locals);
 const money = (amount: number) => formatMoney(amount, { symbol: currencySymbol, code: currencyCode });
-const applyButton = catalogApplyButton(total);
+const applyButton = catalogApplyButton(total, totalIsCapped);
 const showPrice = showsCatalogPriceFilter(priceRange, currentFilters);
 const single = (key: string) => {
   const value = currentFilters[key];

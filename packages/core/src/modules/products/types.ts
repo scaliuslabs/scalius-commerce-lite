@@ -153,6 +153,11 @@ export interface StorefrontProductFilterInput {
     search?: string;
     page?: number;
     limit?: number;
+    /**
+     * Continue after the last card of the previous page (`pageInfo.endCursor`):
+     * newest, price-asc and price-desc only, never with `page` beyond 1.
+     */
+    cursor?: string;
     /** Defaults to "relevance" when `search` is set, otherwise "newest". */
     /** `rating`: the Bayesian review rank (`product_review_stats.rating_rank_milli`), unreviewed products last. */
     sort?: "relevance" | "newest" | "price-asc" | "price-desc" | "name-asc" | "name-desc" | "discount" | "rating";

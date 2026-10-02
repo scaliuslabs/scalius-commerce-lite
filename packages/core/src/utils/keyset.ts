@@ -39,9 +39,11 @@ export type ListLimits = PlanLimits["lists"];
 export interface KeysetOrder {
     /** The sort column or expression, exactly as the ORDER BY writes it. */
     column: SQLWrapper;
-    /** The unique tiebreaker (the id column), ordered the same way. */
+    /** The unique tiebreaker (the id column). */
     id: SQLWrapper;
     direction: CursorDirection;
+    /** The tiebreaker's own direction when it differs from the sort's (default: the same). */
+    idDirection?: CursorDirection;
     /** The sort column can hold NULL. */
     nullable?: boolean;
 }
@@ -53,8 +55,11 @@ function flip(direction: CursorDirection): CursorDirection {
 /** ORDER BY terms for the list, or for a backward read (a `before` cursor) in reverse. */
 export function keysetOrderBy(order: KeysetOrder, backward = false): SQL[] {
     const direction = backward ? flip(order.direction) : order.direction;
-    const word = direction === "asc" ? sql.raw("asc") : sql.raw("desc");
-    return [sql`${order.column} ${word}`, sql`${order.id} ${word}`];
+    const idDirection = backward ? flip(order.idDirection ?? order.direction) : (order.idDirection ?? order.direction);
+    return [
+        sql`${order.column} ${sql.raw(direction)}`,
+        sql`${order.id} ${sql.raw(idDirection)}`,
+    ];
 }
 
 /**
@@ -71,12 +76,13 @@ export function keysetCondition(
     options: { backward?: boolean; inclusive?: boolean } = {},
 ): SQL {
     const direction = options.backward ? flip(order.direction) : order.direction;
+    const idDirection = options.backward ? flip(order.idDirection ?? order.direction) : (order.idDirection ?? order.direction);
     const value: CursorValue = cursor.values[0] ?? null;
     const nullable = order.nullable === true;
     const column = sql`${order.column}`;
     const id = sql`${order.id}`;
     const ahead = sql.raw(direction === "asc" ? ">" : "<");
-    const idAhead = sql.raw(direction === "asc" ? (options.inclusive ? ">=" : ">") : (options.inclusive ? "<=" : "<"));
+    const idAhead = sql.raw(idDirection === "asc" ? (options.inclusive ? ">=" : ">") : (options.inclusive ? "<=" : "<"));
     const bound = sql.raw(direction === "asc" ? ">=" : "<=");
 
     if (value === null) {
