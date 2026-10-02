@@ -142,6 +142,36 @@ export function validatePluginSettingValues(
   return errors.length > 0 ? { ok: false, errors } : { ok: true, values: result };
 }
 
+/**
+ * Stored values read against the schema as it is now (the app may have been
+ * updated since they were saved): every valid value is kept, an unknown key
+ * is dropped, a value never set or no longer valid falls back to the field's
+ * default, `null` stays cleared (absent) and an empty text stays empty.
+ * Never fails; secrets are never resolved.
+ */
+export function resolvePluginSettingValues(schema: PluginSettingsSchema, stored: unknown): PluginSettingValues {
+  const values = typeof stored === "object" && stored !== null && !Array.isArray(stored) ? stored as Record<string, unknown> : {};
+  const result: PluginSettingValues = {};
+  for (const field of schema) {
+    if (field.type === "secret") continue;
+    const fallback = "default" in field && field.default !== undefined ? field.default : undefined;
+    if (!Object.prototype.hasOwnProperty.call(values, field.key) || values[field.key] === undefined) {
+      if (fallback !== undefined) result[field.key] = fallback;
+      continue;
+    }
+    const raw = values[field.key];
+    if (raw === null) continue;
+    if (raw === "" && (field.type === "text" || field.type === "textarea")) {
+      result[field.key] = "";
+      continue;
+    }
+    const parsed = valueSchema(field).safeParse(raw);
+    if (parsed.success) result[field.key] = parsed.data;
+    else if (fallback !== undefined) result[field.key] = fallback;
+  }
+  return result;
+}
+
 /** Defaults for a fresh installation (secrets have none). */
 export function pluginSettingDefaults(schema: PluginSettingsSchema): PluginSettingValues {
   const values: PluginSettingValues = {};
