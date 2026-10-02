@@ -84,6 +84,7 @@ import {
 } from "@scalius/core/modules/media";
 import { getCredentialEncryptionKey } from "./utils/encryption-key";
 import { enqueueOrderAutoFulfil } from "./utils/auto-fulfil-queue";
+import { queueLaneOrder } from "./utils/queue-lanes";
 import { autoFulfilOrder, type OrderAutoFulfilQueueMessage } from "@scalius/core/modules/fulfilment";
 import { logOpsEvent } from "./utils/ops-log";
 import {
@@ -277,16 +278,21 @@ export async function handleQueueBatch(
   logQueueBatchStarted(batchContext);
   logQueueBatchConcurrency(batchContext);
 
-  const results = await runSettledWithConcurrency(
-    batch.messages,
+  // Urgent messages (OTP, payments, notifications) start before bulk ones
+  // (renditions, catalogue refreshes) whatever order the batch arrived in.
+  const order = queueLaneOrder(batch.messages.map((message) => message.body));
+  const processed = await runSettledWithConcurrency(
+    order,
     QUEUE_BATCH_CONCURRENCY_LIMIT,
-    (msg) => processQueueMessage(
-      msg as unknown as Message<QueueBody>,
+    (index) => processQueueMessage(
+      batch.messages[index] as unknown as Message<QueueBody>,
       db,
       env,
       executionCtx,
     ),
   );
+  const results: Array<PromiseSettledResult<void>> = new Array(batch.messages.length);
+  order.forEach((index, position) => { results[index] = processed[position]!; });
 
   let acked = 0;
   let retried = 0;
@@ -1267,6 +1273,19 @@ async function processAuthOtpQueueMessage(
       getAuthOtpDeliveryRetryDelaySeconds(claim.receipt.attempts),
     );
   }
+}
+
+/**
+ * Delivers an OTP message without the queue: the fallback of a handoff the
+ * queue refused (utils/otp-queue.ts). The delivery receipt makes it safe: it is
+ * claimed once, so a message the queue did take after all finds it accepted.
+ */
+export async function deliverAuthOtpDirect(
+  payload: AuthOtpQueueMessage,
+  db: ReturnType<typeof getDb>,
+  env: Env,
+): Promise<void> {
+  await processAuthOtpQueueMessage(payload, `direct_${crypto.randomUUID()}`, db, env);
 }
 
 async function sendAuthOtpByChannel(

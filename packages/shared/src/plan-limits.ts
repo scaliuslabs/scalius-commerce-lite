@@ -42,6 +42,10 @@ export interface PlanLimits {
     readonly bulkPageSize: number;
     /** Recommendation lists the nightly pass refreshes. */
     readonly nightlyRecommendationRefreshLimit: number;
+    /** Products one `catalog.recommendations.refresh` message recomputes (one ranking statement each). */
+    readonly recommendationProductsPerMessage: number;
+    /** Products one `catalog.projections.rebuild` message recomputes before it queues the next chunk. */
+    readonly catalogRebuildChunk: number;
     /**
      * A public read that shows an image still without renditions queues its
      * rendering at once (and marks it in KV so the next read does not queue it
@@ -60,6 +64,10 @@ export interface PlanLimits {
   readonly maintenance: {
     /** The cron rotates through this many groups of sweeps, one group a run (1: every sweep every run). */
     readonly slices: number;
+    /** Each sweep's row limit is this fraction of its full limit (1: the full limit). */
+    readonly limitScale: number;
+    /** Images the cron renders itself, without the queue, when the queue cannot take them. */
+    readonly inlineRenditionsPerRun: number;
   };
   readonly lists: {
     /** Most rows a list counts for its total: `total` is exact up to it and reads "N+" beyond. */
@@ -80,10 +88,12 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
       bulkBacklogLimit: 20,
       bulkPageSize: 10,
       nightlyRecommendationRefreshLimit: 150,
+      recommendationProductsPerMessage: 5,
+      catalogRebuildChunk: 90,
       renditionsFromPublicReads: false,
     }),
     kv: Object.freeze({ checkoutRecoveryHints: false, permissionCache: false }),
-    maintenance: Object.freeze({ slices: 4 }),
+    maintenance: Object.freeze({ slices: 4, limitScale: 0.2, inlineRenditionsPerRun: 1 }),
     lists: Object.freeze({ countCap: 1_000, maxOffset: 1_000 }),
   }),
   paid: Object.freeze({
@@ -96,10 +106,12 @@ export const PLAN_LIMITS: Readonly<Record<WorkersPlan, PlanLimits>> = Object.fre
       bulkBacklogLimit: 1_000,
       bulkPageSize: 1_000,
       nightlyRecommendationRefreshLimit: 3_000,
+      recommendationProductsPerMessage: 20,
+      catalogRebuildChunk: 900,
       renditionsFromPublicReads: true,
     }),
     kv: Object.freeze({ checkoutRecoveryHints: true, permissionCache: true }),
-    maintenance: Object.freeze({ slices: 1 }),
+    maintenance: Object.freeze({ slices: 1, limitScale: 1, inlineRenditionsPerRun: 240 }),
     lists: Object.freeze({ countCap: 10_000, maxOffset: 10_000 }),
   }),
 }) as Readonly<Record<WorkersPlan, PlanLimits>>;

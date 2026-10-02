@@ -18,6 +18,12 @@ const BEFORE_THE_PROFILE = {
   mediaFanOutPerRun: 1_000,
   /** NIGHTLY_RECOMMENDATION_REFRESH_LIMIT. */
   nightlyRecommendationRefreshLimit: 3_000,
+  /** RECOMMENDATION_REFRESH_PRODUCTS_PER_MESSAGE and CATALOG_PROJECTION_REBUILD_CHUNK. */
+  recommendationProductsPerMessage: 20,
+  catalogRebuildChunk: 900,
+  /** Every sweep ran its full limit, and the cron rendered up to MEDIA_RENDITION_BACKFILL_MAX_PER_RUN images itself. */
+  sweepLimitScale: 1,
+  inlineRenditionsPerRun: 240,
 } as const;
 
 describe("plan profile", () => {
@@ -65,6 +71,8 @@ describe("plan profile", () => {
       expect(paid.queue.bulkPageSize).toBeGreaterThanOrEqual(BEFORE_THE_PROFILE.mediaFanOutPerRun);
       expect(paid.queue.bulkBacklogLimit).toBeGreaterThanOrEqual(BEFORE_THE_PROFILE.mediaFanOutPerRun);
       expect(paid.queue.nightlyRecommendationRefreshLimit).toBeGreaterThanOrEqual(BEFORE_THE_PROFILE.nightlyRecommendationRefreshLimit);
+      expect(paid.queue.recommendationProductsPerMessage).toBeGreaterThanOrEqual(BEFORE_THE_PROFILE.recommendationProductsPerMessage);
+      expect(paid.queue.catalogRebuildChunk).toBeGreaterThanOrEqual(BEFORE_THE_PROFILE.catalogRebuildChunk);
     });
 
     it("every KV hint and on-demand rendition stays on", () => {
@@ -72,8 +80,10 @@ describe("plan profile", () => {
       expect(paid.queue.renditionsFromPublicReads).toBe(true);
     });
 
-    it("every sweep runs on every cron tick", () => {
+    it("every sweep runs on every cron tick at its full limit", () => {
       expect(paid.maintenance.slices).toBe(1);
+      expect(paid.maintenance.limitScale).toBeGreaterThanOrEqual(BEFORE_THE_PROFILE.sweepLimitScale);
+      expect(paid.maintenance.inlineRenditionsPerRun).toBeGreaterThanOrEqual(BEFORE_THE_PROFILE.inlineRenditionsPerRun);
     });
   });
 
@@ -86,6 +96,9 @@ describe("plan profile", () => {
     expect(free.lists.countCap).toBeLessThanOrEqual(paid.lists.countCap);
     expect(free.lists.maxOffset).toBeLessThanOrEqual(paid.lists.maxOffset);
     expect(free.maintenance.slices).toBeGreaterThanOrEqual(paid.maintenance.slices);
+    expect(free.maintenance.limitScale).toBeLessThanOrEqual(paid.maintenance.limitScale);
+    expect(free.maintenance.limitScale).toBeGreaterThan(0);
+    expect(Number.isInteger(free.maintenance.slices) && free.maintenance.slices >= 1).toBe(true);
     // A fixed Free CPU of 10 ms leaves no room for a memory-hard hash.
     expect(free.password.algorithm).toBe("pbkdf2-sha256");
   });

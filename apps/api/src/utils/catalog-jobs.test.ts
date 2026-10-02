@@ -4,14 +4,14 @@
 // list; the nightly pass refreshes sales stats and queues both.
 import "@hono/zod-openapi";
 import { OpenAPIHono } from "@hono/zod-openapi";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resetKvHintBreaker } from "@scalius/shared/kv-hints";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 
 
 
+import { PLAN_LIMITS, type WorkersPlan } from "@scalius/shared/plan-limits";
 import {
-  CATALOG_PROJECTION_REBUILD_CHUNK,
   enqueueRecommendationRefresh,
   processCatalogQueueMessage,
   scheduleRecommendationRefreshAfterWrite,
@@ -55,38 +55,62 @@ function fakeQueue() {
   };
 }
 
-describe("catalogue queue jobs", () => {
+describe.each(["free", "paid"] as const satisfies readonly WorkersPlan[])("catalogue queue jobs on the %s profile", (plan) => {
+  const limits = PLAN_LIMITS[plan].queue;
+  beforeEach(() => { vi.stubGlobal("__SCALIUS_PLAN__", plan); });
+  afterEach(() => { vi.unstubAllGlobals(); });
+
   it("rebuilds in chunks, advances dependencies for drift, and leaves unchanged output valid", async () => {
-    const { db, count, sqlite } = seeded(CATALOG_PROJECTION_REBUILD_CHUNK + 5);
+    const chunk = limits.catalogRebuildChunk;
+    const { db, count, sqlite } = seeded(chunk + 5);
     const storeSeq = () => Number((sqlite.prepare("SELECT seq FROM cache_dep WHERE dep = 'store'").get() as { seq: number } | undefined)?.seq ?? 0);
     const before = storeSeq();
     const { queue, sent } = fakeQueue();
     const env = { JOBS_QUEUE: queue } as unknown as Env;
 
     await processCatalogQueueMessage({ type: "catalog.projections.rebuild", afterProductId: null }, db, env);
-    expect(count("product_buyer_state")).toBe(CATALOG_PROJECTION_REBUILD_CHUNK);
+    expect(count("product_buyer_state")).toBe(chunk);
     expect(storeSeq()).toBeGreaterThan(before);
-    expect(sent).toEqual([{ type: "catalog.projections.rebuild", afterProductId: "prod_00899" }]);
+    expect(sent).toEqual([{ type: "catalog.projections.rebuild", afterProductId: `prod_${String(chunk - 1).padStart(5, "0")}` }]);
 
     await processCatalogQueueMessage(sent[0]!, db, env);
-    expect(count("product_buyer_state")).toBe(CATALOG_PROJECTION_REBUILD_CHUNK + 5);
+    expect(count("product_buyer_state")).toBe(chunk + 5);
     expect(sent).toHaveLength(1);
     const unchanged = storeSeq();
     await processCatalogQueueMessage({ type: "catalog.projections.rebuild", afterProductId: null }, db, env);
     expect(storeSeq()).toBe(unchanged);
   });
 
-  it("stores recommendations for the products a message names, 20 per message", async () => {
+  it("stores recommendations for the products a message names, as many per message as the plan allows", async () => {
     const { db, count } = seeded(30);
     await processCatalogQueueMessage({ type: "catalog.projections.rebuild", afterProductId: null }, db, { JOBS_QUEUE: fakeQueue().queue } as unknown as Env);
     const { queue, sent } = fakeQueue();
-    const ids = Array.from({ length: 25 }, (_, index) => `prod_${String(index).padStart(5, "0")}`);
+    const per = limits.recommendationProductsPerMessage;
+    const ids = Array.from({ length: per + 5 }, (_, index) => `prod_${String(index).padStart(5, "0")}`);
+    // The bulk lane has room for a page of messages; this is two.
     await expect(enqueueRecommendationRefresh(queue, ids)).resolves.toBe(2);
-    expect(sent.map((message) => message.type === "catalog.recommendations.refresh" && message.productIds.length)).toEqual([20, 5]);
+    expect(sent.map((message) => message.type === "catalog.recommendations.refresh" && message.productIds.length)).toEqual([per, 5]);
 
     await processCatalogQueueMessage(sent[1]!, db, {} as Env);
     // Each of the 5 stores its top 24 of the 29 other public products.
     expect(count("product_recommendations")).toBe(5 * 24);
+  });
+
+  it("enqueues no more recommendation messages than the bulk lane has room for, and none when it is full", async () => {
+    const ids = Array.from({ length: limits.recommendationProductsPerMessage * (limits.bulkPageSize + 10) }, (_, index) => `prod_${index}`);
+    const open = fakeQueue();
+    (open.queue as unknown as { metrics: () => Promise<unknown> }).metrics = async () => ({ backlogCount: 0 });
+    // One page at most per call, however many products ask.
+    await expect(enqueueRecommendationRefresh(open.queue, ids)).resolves.toBe(limits.bulkPageSize);
+
+    const nearlyFull = fakeQueue();
+    (nearlyFull.queue as unknown as { metrics: () => Promise<unknown> }).metrics = async () => ({ backlogCount: limits.bulkBacklogLimit - 3 });
+    await expect(enqueueRecommendationRefresh(nearlyFull.queue, ids)).resolves.toBe(Math.min(3, limits.bulkPageSize));
+
+    const full = fakeQueue();
+    (full.queue as unknown as { metrics: () => Promise<unknown> }).metrics = async () => ({ backlogCount: limits.bulkBacklogLimit });
+    await expect(enqueueRecommendationRefresh(full.queue, ids)).resolves.toBe(0);
+    expect(full.sent).toEqual([]);
   });
 
   it("schedules a write's recommendation targets off the request path, and never fails the write", async () => {

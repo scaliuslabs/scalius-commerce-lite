@@ -120,8 +120,9 @@ import {
   INVENTORY_EXPIRY_SWEEP_LIMIT,
   MEDIA_RENDITION_BACKFILL_CONCURRENCY,
   MEDIA_RENDITION_BACKFILL_DEADLINE_MS,
-  MEDIA_RENDITION_BACKFILL_MAX_PER_RUN,
-  MEDIA_RENDITION_FANOUT_MAX_PER_RUN,
+  MAINTENANCE_SWEEPS,
+  MAINTENANCE_TICK_MS,
+  maintenanceSliceDue,
   CUSTOMER_AUTH_OTP_SWEEP_LIMIT,
   CUSTOMER_AUTH_OTP_RATE_LIMIT_SWEEP_LIMIT,
   CUSTOMER_SESSION_SWEEP_LIMIT,
@@ -138,6 +139,11 @@ import {
   STALE_INCOMPLETE_ORDER_SWEEP_LIMIT,
   runScheduledMaintenance,
 } from "./scheduled-maintenance";
+import { PLAN_LIMITS } from "@scalius/shared/plan-limits";
+
+/** What the Paid profile runs per tick: every sweep at its full limit (the behaviour before the profile). */
+const MEDIA_RENDITION_BACKFILL_MAX_PER_RUN = PLAN_LIMITS.paid.maintenance.inlineRenditionsPerRun;
+const MEDIA_RENDITION_FANOUT_MAX_PER_RUN = PLAN_LIMITS.paid.queue.bulkPageSize;
 
 function createEnv() {
   return {
@@ -159,6 +165,8 @@ describe("runScheduledMaintenance", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.useFakeTimers();
+    // Every sweep every tick at its full limit is the Paid profile; the Free rotation is the describe below.
+    vi.stubGlobal("__SCALIUS_PLAN__", "paid");
     vi.spyOn(console, "log").mockImplementation(() => undefined);
     vi.spyOn(console, "error").mockImplementation(() => undefined);
     mocks.releaseExpiredReservations.mockResolvedValue({
@@ -287,6 +295,7 @@ describe("runScheduledMaintenance", () => {
   });
 
   afterEach(() => {
+    vi.unstubAllGlobals();
     vi.useRealTimers();
     vi.restoreAllMocks();
   });
@@ -736,5 +745,127 @@ describe("runScheduledMaintenance", () => {
       expect.stringContaining("event=scheduled_run_failed"),
       error,
     );
+  });
+});
+
+describe("the sweep rotation", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.spyOn(console, "log").mockImplementation(() => undefined);
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  const tickAt = (tick: number) => tick * MAINTENANCE_TICK_MS;
+
+  it("names every sweep once, in a slice of the rotation or on every tick", () => {
+    const names = MAINTENANCE_SWEEPS.map((sweep) => sweep.name);
+    expect(new Set(names).size).toBe(names.length);
+    for (const sweep of MAINTENANCE_SWEEPS) expect([0, 1, 2, 3, "every"]).toContain(sweep.slice);
+    // Time-sensitive work is never thinned out: buyers' notifications, webhooks, the merchant's plugin schedules.
+    for (const name of ["notification_outbox_flush", "event_outbox_maintenance", "plugin_maintenance"]) {
+      expect(MAINTENANCE_SWEEPS.find((sweep) => sweep.name === name)?.slice).toBe("every");
+    }
+  });
+
+  it("on one slice (Paid) every sweep is due on every tick, and on an unknown time (a manual run)", () => {
+    for (const sweep of MAINTENANCE_SWEEPS) {
+      for (let tick = 0; tick < 8; tick += 1) expect(maintenanceSliceDue(tickAt(tick), sweep.slice, 1)).toBe(true);
+      expect(maintenanceSliceDue(undefined, sweep.slice, 4)).toBe(true);
+    }
+  });
+
+  it("on four slices (Free) each sweep runs once an hour, and the four ticks of an hour together run every sweep", () => {
+    const perSweep = new Map<string, number>();
+    for (let tick = 100; tick < 104; tick += 1) {
+      for (const sweep of MAINTENANCE_SWEEPS) {
+        if (maintenanceSliceDue(tickAt(tick), sweep.slice, 4)) perSweep.set(sweep.name, (perSweep.get(sweep.name) ?? 0) + 1);
+      }
+    }
+    for (const sweep of MAINTENANCE_SWEEPS) expect(perSweep.get(sweep.name), sweep.name).toBe(sweep.slice === "every" ? 4 : 1);
+  });
+
+  it("keeps a Free tick light: no tick runs more than a third of the sweeps that rotate", () => {
+    const rotating = MAINTENANCE_SWEEPS.filter((sweep) => sweep.slice !== "every");
+    for (let tick = 0; tick < 4; tick += 1) {
+      const due = rotating.filter((sweep) => maintenanceSliceDue(tickAt(tick), sweep.slice, 4));
+      expect(due.length, `tick ${tick}`).toBeLessThanOrEqual(Math.ceil(rotating.length / 3));
+    }
+  });
+
+  it("runs only the due slice on Free, at a fraction of each sweep's limit, and still the every-tick sweeps", async () => {
+    const env = { BUCKET: {}, JOBS_QUEUE: { send: vi.fn() } } as unknown as Env;
+    const ctx = { waitUntil: vi.fn(), passThroughOnException: vi.fn() } as unknown as ExecutionContext;
+    mocks.releaseExpiredReservations.mockResolvedValue({ found: 0, released: 0, limit: 10, hasMore: false, releasedVariantIds: [], availabilityTransitionVariantIds: [], errors: [] });
+    mocks.flushPendingNotificationOutbox.mockResolvedValue({ scanned: 0, enqueued: 0, failed: 0, skipped: 0, staleQueued: 0 });
+    mocks.reconcileDueRefundAttempts.mockResolvedValue({ refundNotifications: [], scanned: 0, claimed: 0, finalized: 0, failed: 0, deferred: 0, errors: [], limit: 1, hasMore: false });
+    mocks.reconcileExternalRefundWebhooks.mockResolvedValue({ refundNotifications: [], scanned: 0, imported: 0, finalized: 0, skipped: 0, deferred: 0, errors: [], limit: 1, hasMore: false });
+    mocks.failStaleQueuedPaymentWebhookEvents.mockResolvedValue({ scanned: 0, failed: 0, limit: 5, hasMore: false });
+    mocks.runScheduledEventMaintenance.mockResolvedValue({ events: { scanned: 0, enqueued: 0, settledWithoutSubscribers: 0, failed: 0 }, deliveries: { scanned: 0, enqueued: 0 }, pluginDeliveries: { scanned: 0, enqueued: 0 }, pruned: { events: 0, deliveries: 0, pluginDeliveries: 0 } });
+    mocks.runScheduledPluginMaintenance.mockResolvedValue({ bundled: { installed: [], updated: [], failed: [] }, cron: { due: 0, ran: 0, failed: 0, skipped: 0, deferred: 0, expired: 0 }, prunedCronRuns: 0 });
+
+    // Slice 0 (inventory, refunds, stale webhooks) on tick 0; nothing of slices 1-3.
+    await runScheduledMaintenance(env, ctx, { cron: "*/15 * * * *", scheduledTime: tickAt(4_000) });
+    expect(mocks.releaseExpiredReservations).toHaveBeenCalledWith(mocks.db, 30, {
+      limit: Math.floor(INVENTORY_EXPIRY_SWEEP_LIMIT * PLAN_LIMITS.free.maintenance.limitScale),
+    });
+    expect(mocks.reconcileDueRefundAttempts).toHaveBeenCalledTimes(1);
+    expect(mocks.cleanupStaleAbandonedCheckouts).not.toHaveBeenCalled();
+    expect(mocks.cleanupExpiredCustomerSessions).not.toHaveBeenCalled();
+    expect(mocks.flushPendingMetaPurchaseOutbox).not.toHaveBeenCalled();
+    // Every tick: the notification flush (at a fraction of its limit), the event outbox, the plugin tick.
+    expect(mocks.flushPendingNotificationOutbox).toHaveBeenCalledWith({
+      db: mocks.db,
+      queue: env.JOBS_QUEUE,
+      limit: Math.floor(ORDER_NOTIFICATION_OUTBOX_SWEEP_LIMIT * PLAN_LIMITS.free.maintenance.limitScale),
+    });
+    expect(mocks.runScheduledEventMaintenance).toHaveBeenCalledTimes(1);
+    expect(mocks.runScheduledPluginMaintenance).toHaveBeenCalledTimes(1);
+
+    // The next tick runs the next slice.
+    vi.clearAllMocks();
+    await runScheduledMaintenance(env, ctx, { cron: "*/15 * * * *", scheduledTime: tickAt(4_001) });
+    expect(mocks.releaseExpiredReservations).not.toHaveBeenCalled();
+    expect(mocks.cleanupStaleAbandonedCheckouts).toHaveBeenCalledTimes(1);
+    expect(mocks.flushPendingNotificationOutbox).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves a queue that is full of bulk work alone, and renders inline only without a queue or when the queue refuses", async () => {
+    const images = { info: vi.fn() };
+    const send = vi.fn();
+    const full = { send, metrics: vi.fn(async () => ({ backlogCount: PLAN_LIMITS.free.queue.bulkBacklogLimit })) };
+    const ctx = { waitUntil: vi.fn(), passThroughOnException: vi.fn() } as unknown as ExecutionContext;
+    // Slice 3 of the rotation: the rendition backlog.
+    const sliceThree = tickAt(4_003);
+    await runScheduledMaintenance({ BUCKET: {}, IMAGES: images, JOBS_QUEUE: full } as unknown as Env, ctx, { scheduledTime: sliceThree });
+    expect(mocks.enqueueMediaVariantsBacklog).not.toHaveBeenCalled();
+    expect(mocks.backfillMissingMediaVariants).not.toHaveBeenCalled();
+
+    // Room for 4 more: one small page, behind the jobs already queued.
+    const roomy = { send, metrics: vi.fn(async () => ({ backlogCount: PLAN_LIMITS.free.queue.bulkBacklogLimit - 4 })) };
+    mocks.enqueueMediaVariantsBacklog.mockResolvedValueOnce({ queued: 4, hasMore: true });
+    await runScheduledMaintenance({ BUCKET: {}, IMAGES: images, JOBS_QUEUE: roomy } as unknown as Env, ctx, { scheduledTime: sliceThree });
+    expect(mocks.enqueueMediaVariantsBacklog).toHaveBeenCalledWith(mocks.db, roomy, {
+      skip: PLAN_LIMITS.free.queue.bulkBacklogLimit - 4,
+      limit: 4,
+    });
+    expect(mocks.backfillMissingMediaVariants).not.toHaveBeenCalled();
+
+    // A queue that refuses falls back to the inline backfill, at the Free inline limit (one image).
+    mocks.enqueueMediaVariantsBacklog.mockRejectedValueOnce(new Error("queue down"));
+    mocks.backfillMissingMediaVariants.mockResolvedValueOnce({ scanned: 1, generated: 1, failed: 0, hasMore: true });
+    await runScheduledMaintenance({ BUCKET: {}, IMAGES: images, JOBS_QUEUE: roomy } as unknown as Env, ctx, { scheduledTime: sliceThree });
+    expect(mocks.backfillMissingMediaVariants).toHaveBeenCalledWith(
+      mocks.db,
+      expect.anything(),
+      images,
+      expect.objectContaining({ maxImages: PLAN_LIMITS.free.maintenance.inlineRenditionsPerRun }),
+    );
+
+    // No queue binding at all: inline too.
+    mocks.backfillMissingMediaVariants.mockClear();
+    mocks.backfillMissingMediaVariants.mockResolvedValueOnce({ scanned: 0, generated: 0, failed: 0, hasMore: false });
+    await runScheduledMaintenance({ BUCKET: {}, IMAGES: images } as unknown as Env, ctx, { scheduledTime: sliceThree });
+    expect(mocks.backfillMissingMediaVariants).toHaveBeenCalledTimes(1);
   });
 });

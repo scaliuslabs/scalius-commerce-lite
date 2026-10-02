@@ -1998,6 +1998,36 @@ describe("handleQueueBatch payment confirmation retries", () => {
     expect(message.retry).toHaveBeenCalledWith({ delaySeconds: 30 });
   });
 
+  it("starts urgent messages before bulk ones and still acks and retries each message by its own result", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    mocks.markAuthOtpDeliveryReceiptAccepted.mockResolvedValue(undefined);
+    const bulkFirst = createMessage({ type: "media.render_variants", mediaId: "media_a" } as never);
+    const otp = createMessage({
+      type: "auth.send_otp",
+      deliveryKey: "otp_lane_order",
+      otpExpiresAt: 4_102_444_800,
+      method: "email",
+      allowedMethod: "email",
+      identifier: "buyer@example.com",
+      code: "123456",
+      name: "Buyer",
+    } as const);
+    const bulkLast = createMessage({ type: "media.render_variants", mediaId: "media_b" } as never);
+    // The OTP's provider call fails: that message alone is retried.
+    mocks.sendEmail.mockRejectedValueOnce(new Error("provider unavailable"));
+
+    await handleQueueBatch(createBatch([bulkFirst, otp, bulkLast], "jobs"), {} as Env);
+
+    const started = log.mock.calls.map(([line]) => String(line)).filter((line) => line.startsWith("[Queue] Processing message"));
+    expect(started.map((line) => /type=(\S+)/.exec(line)![1])).toEqual(["auth.send_otp", "media.render_variants", "media.render_variants"]);
+    expect(otp.retry).toHaveBeenCalledTimes(1);
+    expect(otp.ack).not.toHaveBeenCalled();
+    expect(bulkFirst.ack).toHaveBeenCalledTimes(1);
+    expect(bulkLast.ack).toHaveBeenCalledTimes(1);
+    expect(bulkFirst.retry).not.toHaveBeenCalled();
+    log.mockRestore();
+  });
+
   it("costs a first-attempt OTP delivery no KV call at all", async () => {
     const cache = { get: vi.fn(), put: vi.fn(), delete: vi.fn() };
     const message = createMessage({

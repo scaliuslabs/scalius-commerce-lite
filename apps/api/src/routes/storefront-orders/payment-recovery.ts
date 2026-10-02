@@ -1,4 +1,5 @@
 // Buyer-verified hosted payment recovery: send and verify the recovery OTP.
+import { enqueueAuthOtp } from "../../utils/otp-queue";
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import {
   deleteOrderPaymentRecoveryChallenge,
@@ -84,7 +85,7 @@ app.openapi(sendOrderPaymentRecoveryOtpRoute, async (c) => {
 
   if (result.queuePayload) {
     try {
-      await c.env.JOBS_QUEUE.send(result.queuePayload);
+      await enqueueAuthOtp(c, result.queuePayload);
     } catch (error) {
       if (result.challengeKey && result.deliveryKey) {
         await deleteOrderPaymentRecoveryChallenge(db, {

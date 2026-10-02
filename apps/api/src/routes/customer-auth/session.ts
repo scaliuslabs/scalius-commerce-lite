@@ -1,4 +1,5 @@
 // Customer sign-in by OTP, the current session, and sign-out.
+import { enqueueAuthOtp } from "../../utils/otp-queue";
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import {
   sendOtp,
@@ -82,7 +83,7 @@ app.openapi(sendOtpRoute, async (c) => {
   });
 
   try {
-    await c.env.JOBS_QUEUE.send(result.queuePayload);
+    await enqueueAuthOtp(c, result.queuePayload);
   } catch (error) {
     await deleteCustomerAuthOtpChallenge(db, {
       otpKey: result.otpStorageKey,
