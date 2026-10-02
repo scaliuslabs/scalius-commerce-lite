@@ -28,8 +28,13 @@ import { variantOptionLabelSql } from "../../products/option-model";
 import { loadProductMediaProjections, resolveSkuImageRepresentation } from "../../products/media";
 import { resolveActiveDeliveryLocationNames } from "../../delivery/location-validation";
 import type { FunctionCart } from "@scalius/shared/plugins";
-import type { AppliedAppDiscount, CheckoutAppFunctions } from "../../checkout/app-functions";
-import { applyManualOrderAppFunctions, manualOrderAppLines } from "./app-functions";
+import type {
+    AppliedAppDiscount,
+    ManualOrderAppFunctions,
+    ManualOrderAppInput,
+    ManualOrderAppOutcome,
+} from "@scalius/shared/checkout-app-facts";
+import { manualOrderAppLines } from "./app-lines";
 
 type AdminOrderSkuItem = { productId: string; variantId: string | null };
 type AdminOrderItemWithInventory<T extends AdminOrderSkuItem> = T & {
@@ -212,10 +217,22 @@ export interface ManualOrderQuoteOptions {
      */
     fixedDeliveryMethodKind?: DeliveryMethodKind | null;
     /**
-     * The apps' checkout functions, channel "admin" (app-functions.ts).
-     * Amendments pass none: an order an app discounted is not amendable.
+     * The apps' checkout functions, channel "admin", injected by the API
+     * (checkout's `createManualOrderAppFunctions`). Amendments pass none: an
+     * order an app discounted is not amendable.
      */
-    apps?: CheckoutAppFunctions;
+    apps?: ManualOrderAppFunctions;
+}
+
+/** No app work: the staff discount and charge stand as entered. */
+function withoutApps(input: ManualOrderAppInput): ManualOrderAppOutcome {
+    return {
+        shippingMinor: input.shippingMinor,
+        deliveryMethod: input.deliveryMethod,
+        appDiscounts: [],
+        discountAllocation: undefined,
+        appCart: null,
+    };
 }
 
 async function loadManualOrderDeliveryMethod(
@@ -404,9 +421,8 @@ export async function prepareManualOrderQuote(
     const allocationLineIds = trackedItems.map((item, index) =>
         buildStorefrontTaxAllocationLineId(index, item.variantId),
     );
-    // The staff discount, then the apps (app-functions.ts), then tax. No app: no read, no call.
-    const appPricing = await applyManualOrderAppFunctions(db, {
-        apps: options.apps,
+    // The staff discount, then the apps (injected `apps`), then tax. No app: no read, no call.
+    const appInput: ManualOrderAppInput = {
         currency: { code: currency.code, decimalPlaces: currency.decimalPlaces },
         lines: manualOrderAppLines(trackedItems, allocationLineIds),
         manualDiscountMinor: money.discountAmountMinor,
@@ -416,7 +432,8 @@ export async function prepareManualOrderQuote(
         requiresShipping: plan.requiresShipping,
         address,
         locationNames,
-    });
+    };
+    const appPricing = options.apps ? await options.apps.price(appInput) : withoutApps(appInput);
     const taxQuote = await calculateStorefrontTaxQuote(db, {
         // No address (pickup, service): only store-wide rates apply.
         destination: {

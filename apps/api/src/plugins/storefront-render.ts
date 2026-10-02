@@ -23,11 +23,8 @@
 
 import type { Database } from "@scalius/database/client";
 import { deps } from "@scalius/core/cache-deps";
-import {
-  readPluginRenderContext,
-  type PluginInstallation,
-  type PluginRenderStoreFacts,
-} from "@scalius/core/modules/plugins";
+import type { PluginInstallation } from "@scalius/core/modules/plugins";
+import { readPluginRenderContext, type PluginRenderStoreFacts } from "@scalius/core/modules/storefront";
 import { COMMERCE_TIME_ZONE } from "@scalius/shared/commerce-time";
 import {
   EMPTY_PLUGIN_HEAD,

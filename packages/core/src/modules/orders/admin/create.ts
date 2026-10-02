@@ -37,9 +37,9 @@ import {
 import { prepareManualOrderQuote } from "./quote";
 import type { SQLiteBatchItem } from "./shared";
 import type { FunctionCart } from "@scalius/shared/plugins";
-import type { AppliedAppDiscount, CheckoutAppFunctions } from "../../checkout/app-functions";
+import type { AppliedAppDiscount, ManualOrderAppFunctions } from "@scalius/shared/checkout-app-facts";
 import { buildAppDiscountFactInserts } from "../app-facts";
-import { buildManualOrderAppCart, manualOrderAppLines } from "./app-functions";
+import { manualOrderAppLines } from "./app-lines";
 
 /**
  * What the API needs after a manual order commits, for the apps' advisory
@@ -100,7 +100,8 @@ export async function createManualOrder(
     db: Database,
     data: CreateOrderInput,
     actorId: string | null,
-    options: { apps?: CheckoutAppFunctions } = {},
+    /** The apps' checkout functions, injected by the API (checkout's `createManualOrderAppFunctions`). */
+    options: { apps?: ManualOrderAppFunctions } = {},
 ): Promise<CreateManualOrderResult> {
     const replayed = (response: { id: string }): CreateManualOrderResult => ({ response, committed: null });
     const attemptIdentity = await buildAdminOrderCreateAttemptIdentity(data, actorId);
@@ -466,13 +467,17 @@ export async function createManualOrder(
             paymentMethod: PaymentMethod.COD,
             totalAmountMinor: taxQuote.totalMinor,
             appDiscounts,
-            appCart: () => appCart ? Promise.resolve(appCart) : buildManualOrderAppCart(db, {
-                currency: { code: currency.code, decimalPlaces: currency.decimalPlaces },
-                lines: manualOrderAppLines(trackedItems, allocationLineIds),
-                requiresShipping,
-                locationNames: { cityName, zoneName },
-                manualDiscountMinor,
-            }),
+            appCart: () => {
+                if (appCart) return Promise.resolve(appCart);
+                if (!options.apps) return Promise.reject(new Error("No app functions were given for this order."));
+                return options.apps.orderCart({
+                    currency: { code: currency.code, decimalPlaces: currency.decimalPlaces },
+                    lines: manualOrderAppLines(trackedItems, allocationLineIds),
+                    requiresShipping,
+                    locationNames: { cityName, zoneName },
+                    manualDiscountMinor,
+                });
+            },
         },
     };
 }

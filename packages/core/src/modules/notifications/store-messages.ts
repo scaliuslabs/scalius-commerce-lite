@@ -5,10 +5,10 @@ import { checkoutLanguages, media, themeSettings } from "@scalius/database/schem
 import { checkoutLanguageBaseCode } from "@scalius/shared/checkout-language";
 import { escapeHtml } from "@scalius/shared/html-escape";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
-import { normalizeStorefrontOrigin } from "@scalius/shared/storefront-url";
 import { and, eq, isNull, notInArray, sql } from "drizzle-orm";
 import { getCurrentPublicMediaUrl } from "../../integrations/storage";
 import { businessDocument, platformDocument, type BusinessInfo } from "../settings/documents";
+import { storeDisplayName } from "../settings/store-name";
 import { selectSettingsDocuments } from "../settings/settings-store";
 import { MESSAGE_COPY, type MessageLanguage } from "./message-copy";
 import { storeHeaderHtml, type EmailStore } from "./notification-templates";
@@ -21,20 +21,8 @@ export interface StoreIdentity extends EmailStore {
   nameFromAddress: boolean;
 }
 
-/**
- * The store's name in every buyer and staff message (headers, sender name,
- * `{{store_name}}`): the business name, else the legal name, else the Store
- * URL's host (e.g. `shop.example.com`). Null only while none of them is set.
- */
-export function storeDisplayName(
-  business: Pick<BusinessInfo, "companyName" | "legalName">,
-  storefrontUrl: string,
-): string | null {
-  const businessName = business.companyName.trim() || business.legalName.trim();
-  if (businessName) return businessName;
-  const origin = normalizeStorefrontOrigin(storefrontUrl);
-  return origin ? new URL(origin).host.replace(/^www\./, "") : null;
-}
+/** The store's display name (settings/store-name.ts), re-exported where messages are built. */
+export { storeDisplayName };
 
 /** Only the store's display name, for staff emails. A failed read returns null: the email still goes, unbranded. */
 export async function readStoreName(db: Database): Promise<string | null> {

@@ -19,6 +19,7 @@ import {
 } from "../../../schemas/responses";
 
 import { listActiveFunctionRegistrations } from "@scalius/core/modules/plugins";
+import { createManualOrderAppFunctions } from "@scalius/core/modules/checkout";
 import type { Database } from "@scalius/database/client";
 import { resolveCanonicalIdempotencyKey } from "../idempotency-key";
 import { adminOrderResourceMutationErrorResponses, adminWriteErrorResponses } from "./shared";
@@ -118,7 +119,7 @@ const quoteManualOrderRoute = createRoute({
 app.openapi(quoteManualOrderRoute, async (c) => {
     const db = c.get("db");
     const apps = await manualOrderApps(c.env, getOptionalExecutionContext(c) as ExecutionContext | undefined, db);
-    const quote = await quoteManualOrder(db, c.req.valid("json"), { apps });
+    const quote = await quoteManualOrder(db, c.req.valid("json"), { apps: createManualOrderAppFunctions(db, apps) });
     return ok(c, quote);
 });
 
@@ -227,7 +228,7 @@ app.openapi(createOrderRoute, async (c) => {
     const user = c.get("user") as { id?: string } | undefined;
     const ctx = getOptionalExecutionContext(c) as ExecutionContext | undefined;
     const apps = await manualOrderApps(c.env, ctx, db);
-    const { response, committed } = await createManualOrder(db, data, user?.id ?? null, { apps });
+    const { response, committed } = await createManualOrder(db, data, user?.id ?? null, { apps: createManualOrderAppFunctions(db, apps) });
     // Apps' advisory risk checks: after this request's commit (never on a replay), off the response path.
     if (committed && apps.points.has("order.risk")) {
         const risk = runAppOrderRiskChecks({

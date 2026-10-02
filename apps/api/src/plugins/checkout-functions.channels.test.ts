@@ -16,6 +16,7 @@ import {
   buildCheckoutAttemptIdentity,
   commitStorefrontOrderPayload,
   createAtomicCheckoutAttempt,
+  createManualOrderAppFunctions,
   createStorefrontOrder,
   createTrustedStorefrontCheckoutPolicySnapshot,
   loadStorefrontCheckoutAuthority,
@@ -435,7 +436,7 @@ describe("checkout app functions on the agent and admin channels", () => {
     const staffWithout = await quoteManualOrder(db, manualOrder() as never);
     const staffQueries = queries.length;
     queries = [];
-    const staffWithEmpty = await quoteManualOrder(db, manualOrder() as never, { apps: NO_CHECKOUT_APP_FUNCTIONS });
+    const staffWithEmpty = await quoteManualOrder(db, manualOrder() as never, { apps: createManualOrderAppFunctions(db, NO_CHECKOUT_APP_FUNCTIONS) });
     expect(queries.length).toBe(staffQueries);
     expect(staffWithEmpty).toEqual(staffWithout);
     expect(staffWithout).toMatchObject({ totalAmount: 2_360, appDiscounts: [] });

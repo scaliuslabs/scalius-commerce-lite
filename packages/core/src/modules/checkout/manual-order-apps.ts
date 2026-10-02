@@ -1,8 +1,12 @@
 // Checkout app functions on staff-created (manual) orders, channel "admin".
-// The merge rules are checkout's (checkout/app-functions.ts); this file only
-// says what a manual order feeds them, so the same cart gets the same outcome
-// as on the online store. Amendments never run apps: an order an app
-// discounted is not amendable (orders/admin/amend.ts), like a promotion order.
+// The merge rules are checkout's (app-functions.ts); this file only says what
+// a manual order feeds them, so the same cart gets the same outcome as on the
+// online store. It implements `ManualOrderAppFunctions`
+// (`@scalius/shared/checkout-app-facts`): the API builds one per request with
+// `createManualOrderAppFunctions` and passes it to the orders module's quote
+// and create, so orders never depends on checkout. Amendments never run
+// apps: an order an app discounted is not amendable (orders/admin/amend.ts),
+// like a promotion order.
 //
 // - `cart.validate`: any rule error refuses the quote and the order, with the
 //   checkout refusal's shape (`details.reason` = `cart_rules`, `ruleErrors`
@@ -29,12 +33,19 @@
 //   method apps see. An app that hides it refuses the quote and the order
 //   (`payment_method_unavailable`), as checkout refuses a hidden method.
 // - `order.risk`: after the order commits (the API runs it in waitUntil),
-//   never on a replay; `buildManualOrderAppCart` gives the cart then.
+//   never on a replay; `orderCart` gives the cart then.
 //
 // With no active app implementing a cart point there is no read and no call.
 
 import type { Database } from "@scalius/database/client";
 import type { FunctionCart } from "@scalius/shared/plugins";
+import type {
+    ManualOrderAppCartInput,
+    ManualOrderAppFunctions,
+    ManualOrderAppInput,
+    ManualOrderAppLine,
+    ManualOrderAppOutcome,
+} from "@scalius/shared/checkout-app-facts";
 import { ValidationError } from "@scalius/core/errors";
 import {
     applyAppPaymentMethodOperations,
@@ -48,82 +59,23 @@ import {
     resolveAppDiscounts,
     wantsAppCart,
     type AppFunctionCartFacts,
-    type AppliedAppDiscount,
     type CheckoutAppFunctions,
     type CheckoutRateOption,
-} from "../../checkout/app-functions";
-import { checkoutPaymentMethodName, presentCheckoutRateOptions } from "../../checkout/pricing";
-import { DELIVERY_RATE_UNAVAILABLE_REASON, listDeliveryRatesForAddress } from "../../delivery/zones";
-import { buildStorefrontDiscountAllocation } from "../../tax/discount-allocation";
-import type { TaxDiscountAllocationInput } from "../../tax/types";
+} from "./app-functions";
+import { checkoutPaymentMethodName, presentCheckoutRateOptions } from "./pricing";
+import { DELIVERY_RATE_UNAVAILABLE_REASON, listDeliveryRatesForAddress } from "../delivery/zones";
+import { buildStorefrontDiscountAllocation } from "../tax/discount-allocation";
+import type { TaxDiscountAllocationInput } from "../tax/types";
 
 /** The one payment method a manual order takes. */
 export const MANUAL_ORDER_PAYMENT_METHOD = "cod";
 
-export interface ManualOrderAppLine {
-    lineId: string;
-    productId: string;
-    variantId: string;
-    productName: string;
-    variantLabel: string | null;
-    quantity: number;
-    unitPriceMinor: number;
-    isGiftCard: boolean;
-    /** The serialized buyer inputs (`order_items.properties`), or null. */
-    properties: string | null;
-}
-
-/** A manual order's priced lines as apps see them, by their tax allocation line ids. */
-export function manualOrderAppLines(
-    items: ReadonlyArray<Omit<ManualOrderAppLine, "lineId" | "isGiftCard"> & { isGiftCard?: boolean }>,
-    lineIds: readonly string[],
-): ManualOrderAppLine[] {
-    return items.map((item, index) => ({
-        lineId: lineIds[index]!,
-        productId: item.productId,
-        variantId: item.variantId,
-        productName: item.productName,
-        variantLabel: item.variantLabel,
-        quantity: item.quantity,
-        unitPriceMinor: item.unitPriceMinor,
-        isGiftCard: item.isGiftCard === true,
-        properties: item.properties,
-    }));
-}
-
-export interface ManualOrderAppDeliveryMethod {
-    id: string;
-    name: string;
-    /** The method's own fee (`shipping_methods.fee_minor`). */
-    feeMinor: number;
-    kind: "delivery" | "pickup";
-}
-
-export interface ManualOrderAppInput {
-    apps: CheckoutAppFunctions | undefined;
-    currency: { code: string; decimalPlaces: number };
-    lines: readonly ManualOrderAppLine[];
-    /** The staff discount, already checked against the discountable subtotal. */
-    manualDiscountMinor: number;
-    /** The staff delivery charge. */
-    shippingMinor: number;
-    /** The chosen method; null for a custom charge or nothing physical. */
-    deliveryMethod: ManualOrderAppDeliveryMethod | null;
-    requiresShipping: boolean;
-    address: { city: string; zone: string; area: string | null } | null;
-    locationNames: { cityName: string | null; zoneName: string | null };
-}
-
-export interface ManualOrderAppOutcome {
-    /** The delivery charge after the apps (an app may have priced the method). */
-    shippingMinor: number;
-    /** The chosen method as the order keeps it (an app may have renamed or priced it). */
-    deliveryMethod: ManualOrderAppDeliveryMethod | null;
-    appDiscounts: AppliedAppDiscount[];
-    /** The staff discount plus the apps', for the tax quote; undefined without app discounts. */
-    discountAllocation: TaxDiscountAllocationInput | undefined;
-    /** The cart apps saw; null when no app implements a cart point. */
-    appCart: FunctionCart | null;
+/** The apps' checkout functions on staff orders, bound to this request's database and apps. */
+export function createManualOrderAppFunctions(db: Database, apps: CheckoutAppFunctions): ManualOrderAppFunctions {
+    return {
+        price: (input) => applyManualOrderAppFunctions(db, apps, input),
+        orderCart: (input) => buildManualOrderAppCart(db, input),
+    };
 }
 
 const PRICING_POINTS = ["cart.validate", "checkout.discounts", "checkout.shipping_rates", "checkout.payment_methods"] as const;
@@ -197,14 +149,18 @@ function cartOf(
  */
 export async function buildManualOrderAppCart(
     db: Database,
-    input: CartSource & Pick<ManualOrderAppInput, "manualDiscountMinor">,
+    input: ManualOrderAppCartInput,
 ): Promise<FunctionCart> {
     const allocation = manualDiscountAllocation(input.lines, input.manualDiscountMinor);
     return cartOf(input, await loadCartFacts(db, input), new Map(allocation.lines.map((line) => [line.lineId, line.amountMinor])));
 }
 
 /** The rates the store offers for the order's address, the chosen one at the order's charge. */
-async function listRateOptions(db: Database, input: ManualOrderAppInput, chosen: ManualOrderAppDeliveryMethod): Promise<CheckoutRateOption[]> {
+async function listRateOptions(
+    db: Database,
+    input: ManualOrderAppInput,
+    chosen: NonNullable<ManualOrderAppInput["deliveryMethod"]>,
+): Promise<CheckoutRateOption[]> {
     const rows = await listDeliveryRatesForAddress(db, input.address);
     const options: CheckoutRateOption[] = rows
         // Without an address only pickup is offered (the storefront's rule).
@@ -234,6 +190,7 @@ async function listRateOptions(db: Database, input: ManualOrderAppInput, chosen:
 /** Apps' rules, delivery options, payment method and discounts on a manual order (see the header). */
 export async function applyManualOrderAppFunctions(
     db: Database,
+    apps: CheckoutAppFunctions,
     input: ManualOrderAppInput,
 ): Promise<ManualOrderAppOutcome> {
     const none: ManualOrderAppOutcome = {
@@ -243,8 +200,7 @@ export async function applyManualOrderAppFunctions(
         discountAllocation: undefined,
         appCart: null,
     };
-    const apps = input.apps;
-    if (!apps || !wantsAppCart(apps, PRICING_POINTS) || input.lines.length === 0) return none;
+    if (!wantsAppCart(apps, PRICING_POINTS) || input.lines.length === 0) return none;
 
     const manual = manualDiscountAllocation(input.lines, input.manualDiscountMinor);
     const platformLine = new Map(manual.lines.map((line) => [line.lineId, line.amountMinor]));

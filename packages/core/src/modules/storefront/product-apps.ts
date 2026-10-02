@@ -13,13 +13,9 @@ import {
 } from "@scalius/shared/storefront-theme";
 import { and, eq } from "drizzle-orm";
 import { deps } from "../../cache-deps";
-import {
-  activePluginInstallationsFromRows,
-  planPluginRenderStoreFacts,
-  selectActivePluginInstallations,
-  type PluginRenderStoreFacts,
-} from "../plugins/storefront";
+import { activePluginInstallationsFromRows, selectActivePluginInstallations } from "../plugins/storefront";
 import type { PluginInstallation } from "../plugins/installations";
+import { planPluginRenderStoreFacts, type PluginRenderStoreFacts } from "./app-render";
 
 export interface ProductAppContext {
   product: { id: string; slug: string; categoryId: string | null; brandId: string | null };
