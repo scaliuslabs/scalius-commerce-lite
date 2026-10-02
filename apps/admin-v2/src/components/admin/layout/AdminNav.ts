@@ -3,6 +3,7 @@
 // page would open.
 import {
   BadgePercent,
+  Blocks,
   FileText,
   House,
   Inbox,
@@ -76,6 +77,9 @@ export const ADMIN_NAV: readonly NavItem[] = [
       { key: "files", to: "/admin/media" },
     ],
   },
+  // Installed apps sit with the store's own sections: the panel draws every
+  // ungrouped row above the group labels, so panel and rail keep one order.
+  { key: "apps", to: "/admin/apps", icon: Blocks },
   {
     key: "onlineStore",
     group: "salesChannels",

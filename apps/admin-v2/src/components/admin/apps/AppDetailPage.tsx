@@ -1,0 +1,215 @@
+// One installed app: what it is, what it may do, its settings, its scheduled
+// jobs and its activity. Everything is drawn from the API's description of
+// the app; no app code runs in the dashboard. A Super Admin activates (or
+// approves an update); managers change settings, deactivate and uninstall.
+import { useState, type ReactNode } from "react";
+import { ChevronDown, CircleAlert, TriangleAlert } from "lucide-react";
+import { PageHeader } from "~/components/admin/resource/PageHeader";
+import { SaveBarProvider, SaveErrorBanner } from "~/components/admin/shared/SaveBar";
+import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
+import { Badge } from "~/components/ui/badge";
+import { Button } from "~/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu";
+import { usePermissions } from "~/contexts/PermissionContext";
+import { useMessages } from "~/i18n";
+import { installedAppsMessages } from "~/i18n/apps";
+import { resourceMessages } from "~/i18n/resource";
+import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
+import type { AppDetail } from "~/lib/api-query-options/apps";
+import { formatDuration, formatWhen } from "../settings/webhooks/webhook-format";
+import { AppAccess } from "./AppAccess";
+import { AppActivity } from "./AppActivity";
+import { ActivateAppDialog, DeactivateAppDialog, UninstallAppDialog } from "./AppDialogs";
+import { AppSettingsForm } from "./AppSettingsForm";
+import { AppStatusBadge } from "./app-status";
+
+type DialogName = "activate" | "deactivate" | "uninstall" | null;
+
+const JOB_VARIANT = { running: "info", succeeded: "success", failed: "destructive" } as const;
+
+function Fact({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex flex-col gap-0.5">
+      <dt className="text-body text-muted-foreground">{label}</dt>
+      <dd className="break-words text-body">{children}</dd>
+    </div>
+  );
+}
+
+function ExternalLink({ href, children }: { href: string; children: ReactNode }) {
+  return (
+    <a href={href} target="_blank" rel="noopener noreferrer" className="text-link hover:underline">
+      {children}
+    </a>
+  );
+}
+
+function Overview({ app }: { app: AppDetail }) {
+  const t = useMessages(installedAppsMessages);
+  const pages = app.admin.pages.map((page) => page.title);
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{t("overviewTitle")}</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {app.description ? <p className="whitespace-pre-wrap break-words text-body">{app.description}</p> : null}
+        <dl className="grid gap-4 sm:grid-cols-2">
+          <Fact label={t("developer")}>
+            {app.author.url ? <ExternalLink href={app.author.url}>{app.author.name}</ExternalLink> : app.author.name}
+          </Fact>
+          <Fact label={t("version")}><span className="font-mono">{app.version}</span></Fact>
+          {app.homepage ? (
+            <Fact label={t("website")}><ExternalLink href={app.homepage}>{app.homepage}</ExternalLink></Fact>
+          ) : null}
+          <Fact label={t("runsIn")}>{t(app.runtime === "bundled" ? "runtime_bundled" : "runtime_sandbox")}</Fact>
+          <Fact label={t("approvedBy")}>{app.activatedBy?.name ?? t("notApproved")}</Fact>
+          {app.activatedAt ? <Fact label={t("activeSince")}>{formatWhen(app.activatedAt) ?? "—"}</Fact> : null}
+          {/* Phase 2b renders these pages from the app's declarations; for now they are named only. */}
+          {pages.length > 0 ? <Fact label={t("pages")}>{pages.join(", ")}</Fact> : null}
+        </dl>
+      </CardContent>
+    </Card>
+  );
+}
+
+function Jobs({ app }: { app: AppDetail }) {
+  const t = useMessages(installedAppsMessages);
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{t("jobsTitle")}</CardTitle>
+        <CardDescription>{t("jobsDescription")}</CardDescription>
+      </CardHeader>
+      <ul className="border-t border-border">
+        {app.cron.map((job) => {
+          const run = job.lastRun;
+          const when = run ? formatWhen(run.finishedAt ?? run.scheduledFor) : null;
+          const took = run ? formatDuration(run.durationMs) : null;
+          return (
+            <li key={job.name} className="space-y-1 border-t border-border px-4 py-3 text-body first:border-t-0">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="font-mono">{job.name}</span>
+                {run ? <Badge variant={JOB_VARIANT[run.status]}>{t(`job_${run.status}`)}</Badge> : <Badge variant="secondary">{t("job_never")}</Badge>}
+              </div>
+              <p className="text-muted-foreground">
+                {t("schedule")} <code>{job.schedule}</code>
+                {when ? ` · ${t("lastRun", { when })}` : null}
+                {took ? ` · ${took}` : null}
+              </p>
+              {run?.error ? <p className="break-words text-destructive">{run.error}</p> : null}
+            </li>
+          );
+        })}
+      </ul>
+    </Card>
+  );
+}
+
+function AppPage({ app }: { app: AppDetail }) {
+  const t = useMessages(installedAppsMessages);
+  const r = useMessages(resourceMessages);
+  const { hasPermission, isSuperAdmin } = usePermissions();
+  const canManage = hasPermission(ADMIN_PERMISSIONS.APPS_MANAGE);
+  const [dialog, setDialog] = useState<DialogName>(null);
+  const closeDialog = (open: boolean) => {
+    if (!open) setDialog(null);
+  };
+  const active = app.status === "active";
+  // An update that needs approval leaves the app "installed" (paused), so this covers both.
+  const canActivate = isSuperAdmin && !active;
+  // Why there's nothing to press: no access to change apps, or activation is a Super Admin's.
+  const note = !canManage ? "readOnly" : !active && !app.needsApproval && !isSuperAdmin ? "superAdminActivates" : null;
+
+  const actions = (
+    <>
+      {canManage ? (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button type="button" variant="outline">
+              {r("moreActions")}
+              <ChevronDown className="size-4" aria-hidden="true" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {active ? <DropdownMenuItem onSelect={() => setDialog("deactivate")}>{t("deactivate")}</DropdownMenuItem> : null}
+            <DropdownMenuItem variant="destructive" onSelect={() => setDialog("uninstall")}>{t("uninstall")}</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ) : null}
+      {canActivate ? (
+        <Button type="button" disabled={!app.runtimeAvailable} onClick={() => setDialog("activate")}>
+          {t(app.needsApproval ? "reviewUpdate" : "reviewActivate")}
+        </Button>
+      ) : null}
+    </>
+  );
+
+  return (
+    <div className="mx-auto max-w-4xl">
+      <PageHeader backTo="/admin/apps" title={app.name} badge={<AppStatusBadge app={app} />} actions={actions} />
+      <div className="space-y-4">
+        <SaveErrorBanner />
+        {app.status === "failed" ? (
+          <Alert variant="destructive">
+            <CircleAlert aria-hidden="true" />
+            <AlertTitle>{t("failedTitle")}</AlertTitle>
+            <AlertDescription>{app.failureReason ?? t("failedBody")}</AlertDescription>
+          </Alert>
+        ) : null}
+        {app.needsApproval ? (
+          <Alert variant="warning">
+            <TriangleAlert aria-hidden="true" />
+            <AlertTitle>{t("needsApprovalTitle")}</AlertTitle>
+            <AlertDescription>{t("needsApprovalBody")}</AlertDescription>
+          </Alert>
+        ) : null}
+        {!app.runtimeAvailable ? (
+          <Alert variant="warning">
+            <TriangleAlert aria-hidden="true" />
+            <AlertTitle>{t("unavailableTitle")}</AlertTitle>
+            <AlertDescription>{t(app.runtime === "bundled" ? "unavailable_bundled" : "unavailable_sandbox")}</AlertDescription>
+          </Alert>
+        ) : null}
+        {note ? <p role="status" className="rounded-lg bg-muted px-4 py-2 text-body text-muted-foreground">{t(note)}</p> : null}
+        <Overview app={app} />
+        <Card>
+          <CardHeader>
+            <CardTitle>{t("accessTitle")}</CardTitle>
+            <CardDescription>{t("accessDescription")}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <AppAccess app={app} />
+          </CardContent>
+        </Card>
+        {app.settings.fields.length > 0 ? <AppSettingsForm app={app} canManage={canManage} /> : null}
+        {app.cron.length > 0 ? <Jobs app={app} /> : null}
+        <AppActivity appId={app.id} canManage={canManage} />
+      </div>
+
+      {isSuperAdmin ? <ActivateAppDialog app={app} open={dialog === "activate"} onOpenChange={closeDialog} /> : null}
+      {canManage ? (
+        <>
+          <DeactivateAppDialog app={app} open={dialog === "deactivate"} onOpenChange={closeDialog} />
+          <UninstallAppDialog app={app} open={dialog === "uninstall"} onOpenChange={closeDialog} />
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+/** The app page with its own save bar (the settings card registers with it). */
+export function AppDetailPage({ app }: { app: AppDetail }) {
+  const t = useMessages(installedAppsMessages);
+  return (
+    <SaveBarProvider savedMessage={t("settingsSaved")}>
+      <AppPage app={app} />
+    </SaveBarProvider>
+  );
+}
