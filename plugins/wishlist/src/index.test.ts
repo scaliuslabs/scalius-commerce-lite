@@ -10,14 +10,16 @@ import wishlist from "./index";
 
 const product = { id: "p_linen", slug: "linen-panjabi", categoryId: null, brandId: null };
 const productApi = async (operationId: string, input: unknown) => {
-  if (operationId !== "dashboard.products.get") return { ok: false, status: 404, data: null, error: { code: "x", message: "unknown" } };
-  const id = (input as { path: { id: string } }).path.id;
-  return {
-    ok: true,
-    status: 200,
-    data: { name: id === "p_linen" ? "Linen Panjabi" : "Cotton Panjabi", slug: id === "p_linen" ? "linen-panjabi" : "cotton-panjabi", isActive: true, media: [{ kind: "image", url: "https://cdn.example.com/linen.jpg", isPrimary: true }] },
-    error: null,
-  };
+  if (operationId === "dashboard.products.get_section") {
+    const id = (input as { path: { id: string } }).path.id;
+    const product = { name: id === "p_linen" ? "Linen Panjabi" : "Cotton Panjabi", slug: id === "p_linen" ? "linen-panjabi" : "cotton-panjabi", isActive: true, deletedAt: null };
+    return { ok: true, status: 200, data: { section: "base", product }, error: null };
+  }
+  if (operationId === "dashboard.products.get_by_ids") {
+    const id = (input as { query: { ids: string } }).query.ids;
+    return { ok: true, status: 200, data: { products: [{ id, primaryImage: "https://cdn.example.com/linen.jpg" }] }, error: null };
+  }
+  return { ok: false, status: 404, data: null, error: { code: "x", message: "unknown" } };
 };
 const json = { accept: "application/json" };
 const html = { accept: "text/html" };
@@ -88,7 +90,9 @@ describe("scalius.wishlist", () => {
     const harness = createPluginTestHarness(wishlist, {
       api: async (operationId, input) => {
         const result = await productApi(operationId, input);
-        return result.ok ? { ...result, data: { ...(result.data as object), name } } : result;
+        if (!result.ok || operationId !== "dashboard.products.get_section") return result;
+        const data = result.data as { product: Record<string, unknown> };
+        return { ...result, data: { ...data, product: { ...data.product, name } } };
       },
     });
     await harness.route("public", "toggle", { method: "POST", headers: json, body: { productId: "p_linen" }, customer: { id: "cust_1" } });

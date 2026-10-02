@@ -22,7 +22,7 @@ export const BUNDLED_PLUGINS: Readonly<Record<string, BundledPluginEntry>> = {
   },
   "scalius.wishlist": {
     version: "0.1.0",
-    sha256: "86fc623421d7b79ef8a7b6841c80bce6059e29e3f1c762ea4159b26be67f5b6e",
+    sha256: "34de3aafbede896b102e77e8111fdd7373dd3dbca3416a5ceff0c0ac78a29bdd",
     load: () => import("../../../../plugins/wishlist/src/index"),
   },
 };

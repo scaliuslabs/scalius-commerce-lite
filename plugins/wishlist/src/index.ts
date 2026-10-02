@@ -83,13 +83,17 @@ interface Wish extends Record<string, unknown> {
   addedAt: number;
 }
 
-interface WishedProduct extends Record<string, unknown> {
+/** What the app keeps of a wished product. */
+interface ProductFacts extends Record<string, unknown> {
   productId: string;
   name: string;
   slug: string;
   imageUrl: string | null;
   /** False once the product is trashed or deleted: the page leaves it out. */
   available: boolean;
+}
+
+interface WishedProduct extends ProductFacts {
   wishes: number;
 }
 
@@ -111,33 +115,42 @@ function fieldOf(request: PluginRouteRequest, name: string): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
-/** The product as the dashboard API returns it, reduced to what the app shows. */
-async function readProduct(ctx: PluginContext, productId: string): Promise<Omit<WishedProduct, "wishes"> | null> {
-  const result = await ctx.api.call<{ name?: string; slug?: string; isActive?: boolean; media?: Array<{ url?: string; kind?: string; isPrimary?: boolean }> }>(
-    "dashboard.products.get",
-    { path: { id: productId } },
-  );
-  if (!result.ok || !result.data) return null;
-  const media = result.data.media ?? [];
-  const image = media.find((item) => item.isPrimary && item.kind === "image") ?? media.find((item) => item.kind === "image");
+/** The product as the dashboard API returns it (its base section and its picker summary), reduced to what the app shows. */
+async function readProduct(ctx: PluginContext, productId: string): Promise<ProductFacts | null> {
+  const [base, summary] = await Promise.all([
+    ctx.api.call<{ product?: { name?: string; slug?: string; isActive?: boolean; deletedAt?: unknown } }>(
+      "dashboard.products.get_section",
+      { path: { id: productId, section: "base" } },
+    ),
+    ctx.api.call<{ products?: Array<{ id?: string; primaryImage?: string | null }> }>(
+      "dashboard.products.get_by_ids",
+      { query: { ids: productId } },
+    ),
+  ]);
+  const product = base.ok ? base.data?.product : undefined;
+  if (!product) return null;
+  const image = summary.ok ? summary.data?.products?.find((entry) => entry.id === productId)?.primaryImage : null;
   return {
     productId,
-    name: String(result.data.name ?? "").slice(0, 200),
-    slug: String(result.data.slug ?? "").slice(0, 200),
-    imageUrl: typeof image?.url === "string" && image.url ? image.url : null,
-    available: result.data.isActive !== false,
+    name: String(product.name ?? "").slice(0, 200),
+    slug: String(product.slug ?? "").slice(0, 200),
+    imageUrl: typeof image === "string" && image ? image : null,
+    available: product.isActive !== false && !product.deletedAt,
   };
 }
 
 /** Recounts a product's wishes and keeps its name, link and image (read once, when it is first wished). */
 async function refreshWishedProduct(ctx: PluginContext, productId: string): Promise<void> {
-  const [count, existing] = await Promise.all([wishes(ctx).count({ productId }), products(ctx).get(productId) as Promise<WishedProduct | null>]);
+  const [count, stored] = await Promise.all([wishes(ctx).count({ productId }), products(ctx).get(productId)]);
+  const existing = stored as WishedProduct | null;
   if (count === 0 && existing) {
     await products(ctx).delete(productId);
     return;
   }
   if (count === 0) return;
-  const facts = existing ?? await readProduct(ctx, productId) ?? { productId, name: "", slug: "", imageUrl: null, available: true };
+  const facts: ProductFacts = existing
+    ?? await readProduct(ctx, productId)
+    ?? { productId, name: "", slug: "", imageUrl: null, available: true };
   if (existing && existing.wishes === count) return;
   await products(ctx).put(productId, { ...facts, wishes: count } satisfies WishedProduct);
 }

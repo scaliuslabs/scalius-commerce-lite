@@ -4,7 +4,7 @@
 // exactly the writes the output depends on (the app's settings, version or
 // status, a collection it declares, the theme, the product) refresh it.
 import type { DatabaseSync } from "node:sqlite";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
 import "@hono/zod-openapi";
 import type { Database } from "@scalius/database/client";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
@@ -50,7 +50,7 @@ describe("storefront app output under dependency validation", () => {
   let binding: D1Database;
   let env: Env;
   let cache: MemoryCache;
-  let invoked: ReturnType<typeof vi.spyOn>;
+  let invoked: MockInstance<PluginHost["invokeRoute"]>;
 
   const read = async (path: string) => {
     const waits: Promise<unknown>[] = [];

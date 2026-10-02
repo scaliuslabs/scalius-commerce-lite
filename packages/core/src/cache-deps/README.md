@@ -87,6 +87,7 @@ Import from inside core with `import { deps } from "../../cache-deps";`.
    | One settings document | `deps.settings(category, key)` |
    | Category, brand, CMS page, media, attribute or promotion rows | `deps.category(id)`, `deps.brand(id)`, `deps.page(id)`, `deps.media(id)`, `deps.attribute(id)`, `deps.promotion(id)`, or `deps.anyX()` for a list of all of them |
    | Theme, menus, hero, shipping, locations, tax, languages, analytics | `deps.theme()`, `deps.navigation(menuId)`, `deps.hero()`, `deps.shipping()`, `deps.locations()`, `deps.tax()`, `deps.checkoutLanguages()`, `deps.analytics()` |
+   | App output (sections, product blocks) and the active apps' scripts | `deps.plugin(id)` (one installation), `deps.anyPlugin()` (which apps are active), `deps.pluginCollections(id, reads)` (the storage collections a section declares). These keys have no triggers: `core/modules/plugins` (the only writer of the plugin tables) advances them in the batch of every write (`plugins/cache-deps.ts`), and `apps/api/src/plugins/storefront-render.ts` declares them. |
 
    Id helpers skip `null` and `undefined`, so optional relations can be written
    inline, for example `deps.brand(product.brandId)`.
