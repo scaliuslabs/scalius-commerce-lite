@@ -11,6 +11,10 @@ export default defineConfig({
     {
       name: "@hey-api/sdk",
       exportFromIndex: true,
+      // Clients authenticate themselves (the dashboard's session cookie, the
+      // storefront's transport, a caller's headers), never through per-call
+      // `security` schemes: leaving those out keeps every bundle's SDK small.
+      auth: false,
       operations: {
         nesting: "id",
       },

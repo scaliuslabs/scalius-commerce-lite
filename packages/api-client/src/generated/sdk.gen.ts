@@ -21,11 +21,7 @@ export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends 
 /**
  * Get JWT token for service-to-service communication
  */
-export const getApiV1AuthToken = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AuthTokenData, ThrowOnError>): RequestResult<GetApiV1AuthTokenResponses, GetApiV1AuthTokenErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AuthTokenResponses, GetApiV1AuthTokenErrors, ThrowOnError>({
-    security: [{ name: 'X-API-Token', type: 'apiKey' }],
-    url: '/api/v1/auth/token',
-    ...options
-});
+export const getApiV1AuthToken = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AuthTokenData, ThrowOnError>): RequestResult<GetApiV1AuthTokenResponses, GetApiV1AuthTokenErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AuthTokenResponses, GetApiV1AuthTokenErrors, ThrowOnError>({ url: '/api/v1/auth/token', ...options });
 
 /**
  * Get public Firebase config for client setup
@@ -35,41 +31,17 @@ export const getApiV1AuthFirebaseConfig = <ThrowOnError extends boolean = false>
 /**
  * Get current user/service info
  */
-export const getApiV1AuthMe = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AuthMeData, ThrowOnError>): RequestResult<GetApiV1AuthMeResponses, GetApiV1AuthMeErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AuthMeResponses, GetApiV1AuthMeErrors, ThrowOnError>({
-    security: [{
-            key: 'bearerAuth',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/auth/me',
-    ...options
-});
+export const getApiV1AuthMe = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AuthMeData, ThrowOnError>): RequestResult<GetApiV1AuthMeResponses, GetApiV1AuthMeErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AuthMeResponses, GetApiV1AuthMeErrors, ThrowOnError>({ url: '/api/v1/auth/me', ...options });
 
 /**
  * Revoke current token
  */
-export const postApiV1AuthRevoke = <ThrowOnError extends boolean = false>(options?: Options<PostApiV1AuthRevokeData, ThrowOnError>): RequestResult<PostApiV1AuthRevokeResponses, PostApiV1AuthRevokeErrors, ThrowOnError> => (options?.client ?? client).post<PostApiV1AuthRevokeResponses, PostApiV1AuthRevokeErrors, ThrowOnError>({
-    security: [{
-            key: 'bearerAuth',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/auth/revoke',
-    ...options
-});
+export const postApiV1AuthRevoke = <ThrowOnError extends boolean = false>(options?: Options<PostApiV1AuthRevokeData, ThrowOnError>): RequestResult<PostApiV1AuthRevokeResponses, PostApiV1AuthRevokeErrors, ThrowOnError> => (options?.client ?? client).post<PostApiV1AuthRevokeResponses, PostApiV1AuthRevokeErrors, ThrowOnError>({ url: '/api/v1/auth/revoke', ...options });
 
 /**
  * Get token stats (admin/system only)
  */
-export const getApiV1AuthTokenStats = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AuthTokenStatsData, ThrowOnError>): RequestResult<GetApiV1AuthTokenStatsResponses, GetApiV1AuthTokenStatsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AuthTokenStatsResponses, GetApiV1AuthTokenStatsErrors, ThrowOnError>({
-    security: [{
-            key: 'bearerAuth',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/auth/token-stats',
-    ...options
-});
+export const getApiV1AuthTokenStats = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AuthTokenStatsData, ThrowOnError>): RequestResult<GetApiV1AuthTokenStatsResponses, GetApiV1AuthTokenStatsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AuthTokenStatsResponses, GetApiV1AuthTokenStatsErrors, ThrowOnError>({ url: '/api/v1/auth/token-stats', ...options });
 
 /**
  * Start CLI device pairing
@@ -119,11 +91,6 @@ export const postApiV1AgentAuthDeviceAck = <ThrowOnError extends boolean = false
  * Revokes the credential and grant represented by the current agent bearer token.
  */
 export const postApiV1AgentAuthRevoke = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AgentAuthRevokeData, ThrowOnError>): RequestResult<PostApiV1AgentAuthRevokeResponses, unknown, ThrowOnError> => (options.client ?? client).post<PostApiV1AgentAuthRevokeResponses, unknown, ThrowOnError>({
-    security: [{
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/agent-auth/revoke',
     ...options,
     headers: {
@@ -135,15 +102,7 @@ export const postApiV1AgentAuthRevoke = <ThrowOnError extends boolean = false>(o
 /**
  * Download a one-use authenticated agent artifact
  */
-export const getApiV1AgentArtifactsByArtifactId = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AgentArtifactsByArtifactIdData, ThrowOnError>): RequestResult<GetApiV1AgentArtifactsByArtifactIdResponses, GetApiV1AgentArtifactsByArtifactIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AgentArtifactsByArtifactIdResponses, GetApiV1AgentArtifactsByArtifactIdErrors, ThrowOnError>({
-    security: [{
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/agent-artifacts/{artifactId}',
-    ...options
-});
+export const getApiV1AgentArtifactsByArtifactId = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AgentArtifactsByArtifactIdData, ThrowOnError>): RequestResult<GetApiV1AgentArtifactsByArtifactIdResponses, GetApiV1AgentArtifactsByArtifactIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AgentArtifactsByArtifactIdResponses, GetApiV1AgentArtifactsByArtifactIdErrors, ThrowOnError>({ url: '/api/v1/agent-artifacts/{artifactId}', ...options });
 
 /**
  * Get the facets of a category by ID
@@ -369,38 +328,17 @@ export const getApiV1Meta = <ThrowOnError extends boolean = false>(options?: Opt
 /**
  * Create a relational storefront agent context
  */
-export const postApiV1StorefrontAgentContexts = <ThrowOnError extends boolean = false>(options?: Options<PostApiV1StorefrontAgentContextsData, ThrowOnError>): RequestResult<PostApiV1StorefrontAgentContextsResponses, PostApiV1StorefrontAgentContextsErrors, ThrowOnError> => (options?.client ?? client).post<PostApiV1StorefrontAgentContextsResponses, PostApiV1StorefrontAgentContextsErrors, ThrowOnError>({
-    security: [{
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/storefront/agent-contexts',
-    ...options
-});
+export const postApiV1StorefrontAgentContexts = <ThrowOnError extends boolean = false>(options?: Options<PostApiV1StorefrontAgentContextsData, ThrowOnError>): RequestResult<PostApiV1StorefrontAgentContextsResponses, PostApiV1StorefrontAgentContextsErrors, ThrowOnError> => (options?.client ?? client).post<PostApiV1StorefrontAgentContextsResponses, PostApiV1StorefrontAgentContextsErrors, ThrowOnError>({ url: '/api/v1/storefront/agent-contexts', ...options });
 
 /**
  * Get current storefront context state
  */
-export const getApiV1StorefrontAgentContextsByContextId = <ThrowOnError extends boolean = false>(options: Options<GetApiV1StorefrontAgentContextsByContextIdData, ThrowOnError>): RequestResult<GetApiV1StorefrontAgentContextsByContextIdResponses, GetApiV1StorefrontAgentContextsByContextIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1StorefrontAgentContextsByContextIdResponses, GetApiV1StorefrontAgentContextsByContextIdErrors, ThrowOnError>({
-    security: [{
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/storefront/agent-contexts/{contextId}',
-    ...options
-});
+export const getApiV1StorefrontAgentContextsByContextId = <ThrowOnError extends boolean = false>(options: Options<GetApiV1StorefrontAgentContextsByContextIdData, ThrowOnError>): RequestResult<GetApiV1StorefrontAgentContextsByContextIdResponses, GetApiV1StorefrontAgentContextsByContextIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1StorefrontAgentContextsByContextIdResponses, GetApiV1StorefrontAgentContextsByContextIdErrors, ThrowOnError>({ url: '/api/v1/storefront/agent-contexts/{contextId}', ...options });
 
 /**
  * Close a storefront context
  */
 export const postApiV1StorefrontAgentContextsByContextIdClose = <ThrowOnError extends boolean = false>(options: Options<PostApiV1StorefrontAgentContextsByContextIdCloseData, ThrowOnError>): RequestResult<PostApiV1StorefrontAgentContextsByContextIdCloseResponses, PostApiV1StorefrontAgentContextsByContextIdCloseErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1StorefrontAgentContextsByContextIdCloseResponses, PostApiV1StorefrontAgentContextsByContextIdCloseErrors, ThrowOnError>({
-    security: [{
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/storefront/agent-contexts/{contextId}/close',
     ...options,
     headers: {
@@ -413,11 +351,6 @@ export const postApiV1StorefrontAgentContextsByContextIdClose = <ThrowOnError ex
  * Clear the storefront cart
  */
 export const deleteApiV1StorefrontAgentContextsByContextIdCart = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1StorefrontAgentContextsByContextIdCartData, ThrowOnError>): RequestResult<DeleteApiV1StorefrontAgentContextsByContextIdCartResponses, DeleteApiV1StorefrontAgentContextsByContextIdCartErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1StorefrontAgentContextsByContextIdCartResponses, DeleteApiV1StorefrontAgentContextsByContextIdCartErrors, ThrowOnError>({
-    security: [{
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/storefront/agent-contexts/{contextId}/cart',
     ...options,
     headers: {
@@ -429,25 +362,12 @@ export const deleteApiV1StorefrontAgentContextsByContextIdCart = <ThrowOnError e
 /**
  * Rehydrate and validate the current storefront cart
  */
-export const getApiV1StorefrontAgentContextsByContextIdCart = <ThrowOnError extends boolean = false>(options: Options<GetApiV1StorefrontAgentContextsByContextIdCartData, ThrowOnError>): RequestResult<GetApiV1StorefrontAgentContextsByContextIdCartResponses, GetApiV1StorefrontAgentContextsByContextIdCartErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1StorefrontAgentContextsByContextIdCartResponses, GetApiV1StorefrontAgentContextsByContextIdCartErrors, ThrowOnError>({
-    security: [{
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/storefront/agent-contexts/{contextId}/cart',
-    ...options
-});
+export const getApiV1StorefrontAgentContextsByContextIdCart = <ThrowOnError extends boolean = false>(options: Options<GetApiV1StorefrontAgentContextsByContextIdCartData, ThrowOnError>): RequestResult<GetApiV1StorefrontAgentContextsByContextIdCartResponses, GetApiV1StorefrontAgentContextsByContextIdCartErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1StorefrontAgentContextsByContextIdCartResponses, GetApiV1StorefrontAgentContextsByContextIdCartErrors, ThrowOnError>({ url: '/api/v1/storefront/agent-contexts/{contextId}/cart', ...options });
 
 /**
  * Remove a variant from the storefront cart
  */
 export const deleteApiV1StorefrontAgentContextsByContextIdCartItems = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1StorefrontAgentContextsByContextIdCartItemsData, ThrowOnError>): RequestResult<DeleteApiV1StorefrontAgentContextsByContextIdCartItemsResponses, DeleteApiV1StorefrontAgentContextsByContextIdCartItemsErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1StorefrontAgentContextsByContextIdCartItemsResponses, DeleteApiV1StorefrontAgentContextsByContextIdCartItemsErrors, ThrowOnError>({
-    security: [{
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/storefront/agent-contexts/{contextId}/cart/items',
     ...options,
     headers: {
@@ -460,11 +380,6 @@ export const deleteApiV1StorefrontAgentContextsByContextIdCartItems = <ThrowOnEr
  * Set storefront cart quantity
  */
 export const patchApiV1StorefrontAgentContextsByContextIdCartItems = <ThrowOnError extends boolean = false>(options: Options<PatchApiV1StorefrontAgentContextsByContextIdCartItemsData, ThrowOnError>): RequestResult<PatchApiV1StorefrontAgentContextsByContextIdCartItemsResponses, PatchApiV1StorefrontAgentContextsByContextIdCartItemsErrors, ThrowOnError> => (options.client ?? client).patch<PatchApiV1StorefrontAgentContextsByContextIdCartItemsResponses, PatchApiV1StorefrontAgentContextsByContextIdCartItemsErrors, ThrowOnError>({
-    security: [{
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/storefront/agent-contexts/{contextId}/cart/items',
     ...options,
     headers: {
@@ -477,11 +392,6 @@ export const patchApiV1StorefrontAgentContextsByContextIdCartItems = <ThrowOnErr
  * Add a persisted variant to the storefront cart
  */
 export const postApiV1StorefrontAgentContextsByContextIdCartItems = <ThrowOnError extends boolean = false>(options: Options<PostApiV1StorefrontAgentContextsByContextIdCartItemsData, ThrowOnError>): RequestResult<PostApiV1StorefrontAgentContextsByContextIdCartItemsResponses, PostApiV1StorefrontAgentContextsByContextIdCartItemsErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1StorefrontAgentContextsByContextIdCartItemsResponses, PostApiV1StorefrontAgentContextsByContextIdCartItemsErrors, ThrowOnError>({
-    security: [{
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/storefront/agent-contexts/{contextId}/cart/items',
     ...options,
     headers: {
@@ -494,11 +404,6 @@ export const postApiV1StorefrontAgentContextsByContextIdCartItems = <ThrowOnErro
  * Remove the storefront discount code
  */
 export const deleteApiV1StorefrontAgentContextsByContextIdDiscount = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1StorefrontAgentContextsByContextIdDiscountData, ThrowOnError>): RequestResult<DeleteApiV1StorefrontAgentContextsByContextIdDiscountResponses, DeleteApiV1StorefrontAgentContextsByContextIdDiscountErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1StorefrontAgentContextsByContextIdDiscountResponses, DeleteApiV1StorefrontAgentContextsByContextIdDiscountErrors, ThrowOnError>({
-    security: [{
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/storefront/agent-contexts/{contextId}/discount',
     ...options,
     headers: {
@@ -511,11 +416,6 @@ export const deleteApiV1StorefrontAgentContextsByContextIdDiscount = <ThrowOnErr
  * Apply a storefront discount code
  */
 export const putApiV1StorefrontAgentContextsByContextIdDiscount = <ThrowOnError extends boolean = false>(options: Options<PutApiV1StorefrontAgentContextsByContextIdDiscountData, ThrowOnError>): RequestResult<PutApiV1StorefrontAgentContextsByContextIdDiscountResponses, PutApiV1StorefrontAgentContextsByContextIdDiscountErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1StorefrontAgentContextsByContextIdDiscountResponses, PutApiV1StorefrontAgentContextsByContextIdDiscountErrors, ThrowOnError>({
-    security: [{
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/storefront/agent-contexts/{contextId}/discount',
     ...options,
     headers: {
@@ -528,11 +428,6 @@ export const putApiV1StorefrontAgentContextsByContextIdDiscount = <ThrowOnError 
  * Set and validate storefront delivery selection
  */
 export const putApiV1StorefrontAgentContextsByContextIdDelivery = <ThrowOnError extends boolean = false>(options: Options<PutApiV1StorefrontAgentContextsByContextIdDeliveryData, ThrowOnError>): RequestResult<PutApiV1StorefrontAgentContextsByContextIdDeliveryResponses, PutApiV1StorefrontAgentContextsByContextIdDeliveryErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1StorefrontAgentContextsByContextIdDeliveryResponses, PutApiV1StorefrontAgentContextsByContextIdDeliveryErrors, ThrowOnError>({
-    security: [{
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/storefront/agent-contexts/{contextId}/delivery',
     ...options,
     headers: {
@@ -545,11 +440,6 @@ export const putApiV1StorefrontAgentContextsByContextIdDelivery = <ThrowOnError 
  * Validate authoritative cart and delivery state before checkout
  */
 export const postApiV1StorefrontAgentContextsByContextIdCheckoutValidate = <ThrowOnError extends boolean = false>(options: Options<PostApiV1StorefrontAgentContextsByContextIdCheckoutValidateData, ThrowOnError>): RequestResult<PostApiV1StorefrontAgentContextsByContextIdCheckoutValidateResponses, PostApiV1StorefrontAgentContextsByContextIdCheckoutValidateErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1StorefrontAgentContextsByContextIdCheckoutValidateResponses, PostApiV1StorefrontAgentContextsByContextIdCheckoutValidateErrors, ThrowOnError>({
-    security: [{
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/storefront/agent-contexts/{contextId}/checkout/validate',
     ...options,
     headers: {
@@ -562,11 +452,6 @@ export const postApiV1StorefrontAgentContextsByContextIdCheckoutValidate = <Thro
  * Quote current cart, discount, delivery, and tax authority
  */
 export const postApiV1StorefrontAgentContextsByContextIdCheckoutQuote = <ThrowOnError extends boolean = false>(options: Options<PostApiV1StorefrontAgentContextsByContextIdCheckoutQuoteData, ThrowOnError>): RequestResult<PostApiV1StorefrontAgentContextsByContextIdCheckoutQuoteResponses, PostApiV1StorefrontAgentContextsByContextIdCheckoutQuoteErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1StorefrontAgentContextsByContextIdCheckoutQuoteResponses, PostApiV1StorefrontAgentContextsByContextIdCheckoutQuoteErrors, ThrowOnError>({
-    security: [{
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/storefront/agent-contexts/{contextId}/checkout/quote',
     ...options,
     headers: {
@@ -579,11 +464,6 @@ export const postApiV1StorefrontAgentContextsByContextIdCheckoutQuote = <ThrowOn
  * Create an idempotent storefront order and bind order authority
  */
 export const postApiV1StorefrontAgentContextsByContextIdCheckoutSubmit = <ThrowOnError extends boolean = false>(options: Options<PostApiV1StorefrontAgentContextsByContextIdCheckoutSubmitData, ThrowOnError>): RequestResult<PostApiV1StorefrontAgentContextsByContextIdCheckoutSubmitResponses, PostApiV1StorefrontAgentContextsByContextIdCheckoutSubmitErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1StorefrontAgentContextsByContextIdCheckoutSubmitResponses, PostApiV1StorefrontAgentContextsByContextIdCheckoutSubmitErrors, ThrowOnError>({
-    security: [{
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/storefront/agent-contexts/{contextId}/checkout/submit',
     ...options,
     headers: {
@@ -596,11 +476,6 @@ export const postApiV1StorefrontAgentContextsByContextIdCheckoutSubmit = <ThrowO
  * Start secure customer authorization
  */
 export const postApiV1StorefrontAgentContextsByContextIdCustomerAuth = <ThrowOnError extends boolean = false>(options: Options<PostApiV1StorefrontAgentContextsByContextIdCustomerAuthData, ThrowOnError>): RequestResult<PostApiV1StorefrontAgentContextsByContextIdCustomerAuthResponses, PostApiV1StorefrontAgentContextsByContextIdCustomerAuthErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1StorefrontAgentContextsByContextIdCustomerAuthResponses, PostApiV1StorefrontAgentContextsByContextIdCustomerAuthErrors, ThrowOnError>({
-    security: [{
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/storefront/agent-contexts/{contextId}/customer/auth',
     ...options,
     headers: {
@@ -612,25 +487,12 @@ export const postApiV1StorefrontAgentContextsByContextIdCustomerAuth = <ThrowOnE
 /**
  * Get safe customer authorization status
  */
-export const getApiV1StorefrontAgentContextsByContextIdCustomerAuthByContinuationId = <ThrowOnError extends boolean = false>(options: Options<GetApiV1StorefrontAgentContextsByContextIdCustomerAuthByContinuationIdData, ThrowOnError>): RequestResult<GetApiV1StorefrontAgentContextsByContextIdCustomerAuthByContinuationIdResponses, GetApiV1StorefrontAgentContextsByContextIdCustomerAuthByContinuationIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1StorefrontAgentContextsByContextIdCustomerAuthByContinuationIdResponses, GetApiV1StorefrontAgentContextsByContextIdCustomerAuthByContinuationIdErrors, ThrowOnError>({
-    security: [{
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/storefront/agent-contexts/{contextId}/customer/auth/{continuationId}',
-    ...options
-});
+export const getApiV1StorefrontAgentContextsByContextIdCustomerAuthByContinuationId = <ThrowOnError extends boolean = false>(options: Options<GetApiV1StorefrontAgentContextsByContextIdCustomerAuthByContinuationIdData, ThrowOnError>): RequestResult<GetApiV1StorefrontAgentContextsByContextIdCustomerAuthByContinuationIdResponses, GetApiV1StorefrontAgentContextsByContextIdCustomerAuthByContinuationIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1StorefrontAgentContextsByContextIdCustomerAuthByContinuationIdResponses, GetApiV1StorefrontAgentContextsByContextIdCustomerAuthByContinuationIdErrors, ThrowOnError>({ url: '/api/v1/storefront/agent-contexts/{contextId}/customer/auth/{continuationId}', ...options });
 
 /**
  * Revoke the bound customer session and clear context authority
  */
 export const postApiV1StorefrontAgentContextsByContextIdCustomerLogout = <ThrowOnError extends boolean = false>(options: Options<PostApiV1StorefrontAgentContextsByContextIdCustomerLogoutData, ThrowOnError>): RequestResult<PostApiV1StorefrontAgentContextsByContextIdCustomerLogoutResponses, PostApiV1StorefrontAgentContextsByContextIdCustomerLogoutErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1StorefrontAgentContextsByContextIdCustomerLogoutResponses, PostApiV1StorefrontAgentContextsByContextIdCustomerLogoutErrors, ThrowOnError>({
-    security: [{
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/storefront/agent-contexts/{contextId}/customer/logout',
     ...options,
     headers: {
@@ -642,25 +504,12 @@ export const postApiV1StorefrontAgentContextsByContextIdCustomerLogout = <ThrowO
 /**
  * Get the authorized customer profile
  */
-export const getApiV1StorefrontAgentContextsByContextIdCustomerProfile = <ThrowOnError extends boolean = false>(options: Options<GetApiV1StorefrontAgentContextsByContextIdCustomerProfileData, ThrowOnError>): RequestResult<GetApiV1StorefrontAgentContextsByContextIdCustomerProfileResponses, GetApiV1StorefrontAgentContextsByContextIdCustomerProfileErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1StorefrontAgentContextsByContextIdCustomerProfileResponses, GetApiV1StorefrontAgentContextsByContextIdCustomerProfileErrors, ThrowOnError>({
-    security: [{
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/storefront/agent-contexts/{contextId}/customer/profile',
-    ...options
-});
+export const getApiV1StorefrontAgentContextsByContextIdCustomerProfile = <ThrowOnError extends boolean = false>(options: Options<GetApiV1StorefrontAgentContextsByContextIdCustomerProfileData, ThrowOnError>): RequestResult<GetApiV1StorefrontAgentContextsByContextIdCustomerProfileResponses, GetApiV1StorefrontAgentContextsByContextIdCustomerProfileErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1StorefrontAgentContextsByContextIdCustomerProfileResponses, GetApiV1StorefrontAgentContextsByContextIdCustomerProfileErrors, ThrowOnError>({ url: '/api/v1/storefront/agent-contexts/{contextId}/customer/profile', ...options });
 
 /**
  * Update the authorized customer delivery profile
  */
 export const putApiV1StorefrontAgentContextsByContextIdCustomerProfile = <ThrowOnError extends boolean = false>(options: Options<PutApiV1StorefrontAgentContextsByContextIdCustomerProfileData, ThrowOnError>): RequestResult<PutApiV1StorefrontAgentContextsByContextIdCustomerProfileResponses, PutApiV1StorefrontAgentContextsByContextIdCustomerProfileErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1StorefrontAgentContextsByContextIdCustomerProfileResponses, PutApiV1StorefrontAgentContextsByContextIdCustomerProfileErrors, ThrowOnError>({
-    security: [{
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/storefront/agent-contexts/{contextId}/customer/profile',
     ...options,
     headers: {
@@ -672,51 +521,22 @@ export const putApiV1StorefrontAgentContextsByContextIdCustomerProfile = <ThrowO
 /**
  * List orders owned by the authorized customer
  */
-export const getApiV1StorefrontAgentContextsByContextIdCustomerOrders = <ThrowOnError extends boolean = false>(options: Options<GetApiV1StorefrontAgentContextsByContextIdCustomerOrdersData, ThrowOnError>): RequestResult<GetApiV1StorefrontAgentContextsByContextIdCustomerOrdersResponses, GetApiV1StorefrontAgentContextsByContextIdCustomerOrdersErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1StorefrontAgentContextsByContextIdCustomerOrdersResponses, GetApiV1StorefrontAgentContextsByContextIdCustomerOrdersErrors, ThrowOnError>({
-    security: [{
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/storefront/agent-contexts/{contextId}/customer/orders',
-    ...options
-});
+export const getApiV1StorefrontAgentContextsByContextIdCustomerOrders = <ThrowOnError extends boolean = false>(options: Options<GetApiV1StorefrontAgentContextsByContextIdCustomerOrdersData, ThrowOnError>): RequestResult<GetApiV1StorefrontAgentContextsByContextIdCustomerOrdersResponses, GetApiV1StorefrontAgentContextsByContextIdCustomerOrdersErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1StorefrontAgentContextsByContextIdCustomerOrdersResponses, GetApiV1StorefrontAgentContextsByContextIdCustomerOrdersErrors, ThrowOnError>({ url: '/api/v1/storefront/agent-contexts/{contextId}/customer/orders', ...options });
 
 /**
  * Get an order owned by the authorized customer
  */
-export const getApiV1StorefrontAgentContextsByContextIdCustomerOrdersByOrderId = <ThrowOnError extends boolean = false>(options: Options<GetApiV1StorefrontAgentContextsByContextIdCustomerOrdersByOrderIdData, ThrowOnError>): RequestResult<GetApiV1StorefrontAgentContextsByContextIdCustomerOrdersByOrderIdResponses, GetApiV1StorefrontAgentContextsByContextIdCustomerOrdersByOrderIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1StorefrontAgentContextsByContextIdCustomerOrdersByOrderIdResponses, GetApiV1StorefrontAgentContextsByContextIdCustomerOrdersByOrderIdErrors, ThrowOnError>({
-    security: [{
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/storefront/agent-contexts/{contextId}/customer/orders/{orderId}',
-    ...options
-});
+export const getApiV1StorefrontAgentContextsByContextIdCustomerOrdersByOrderId = <ThrowOnError extends boolean = false>(options: Options<GetApiV1StorefrontAgentContextsByContextIdCustomerOrdersByOrderIdData, ThrowOnError>): RequestResult<GetApiV1StorefrontAgentContextsByContextIdCustomerOrdersByOrderIdResponses, GetApiV1StorefrontAgentContextsByContextIdCustomerOrdersByOrderIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1StorefrontAgentContextsByContextIdCustomerOrdersByOrderIdResponses, GetApiV1StorefrontAgentContextsByContextIdCustomerOrdersByOrderIdErrors, ThrowOnError>({ url: '/api/v1/storefront/agent-contexts/{contextId}/customer/orders/{orderId}', ...options });
 
 /**
  * Get a safe context-authorized order receipt
  */
-export const getApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdReceipt = <ThrowOnError extends boolean = false>(options: Options<GetApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdReceiptData, ThrowOnError>): RequestResult<GetApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdReceiptResponses, GetApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdReceiptErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdReceiptResponses, GetApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdReceiptErrors, ThrowOnError>({
-    security: [{
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/storefront/agent-contexts/{contextId}/orders/{orderId}/receipt',
-    ...options
-});
+export const getApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdReceipt = <ThrowOnError extends boolean = false>(options: Options<GetApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdReceiptData, ThrowOnError>): RequestResult<GetApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdReceiptResponses, GetApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdReceiptErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdReceiptResponses, GetApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdReceiptErrors, ThrowOnError>({ url: '/api/v1/storefront/agent-contexts/{contextId}/orders/{orderId}/receipt', ...options });
 
 /**
  * Submit a buyer support request for an authorized order
  */
 export const postApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdSupportRequests = <ThrowOnError extends boolean = false>(options: Options<PostApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdSupportRequestsData, ThrowOnError>): RequestResult<PostApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdSupportRequestsResponses, PostApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdSupportRequestsErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdSupportRequestsResponses, PostApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdSupportRequestsErrors, ThrowOnError>({
-    security: [{
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/storefront/agent-contexts/{contextId}/orders/{orderId}/support-requests',
     ...options,
     headers: {
@@ -729,11 +549,6 @@ export const postApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdSupportRe
  * Start secure payment for an authorized order
  */
 export const postApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdPayment = <ThrowOnError extends boolean = false>(options: Options<PostApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdPaymentData, ThrowOnError>): RequestResult<PostApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdPaymentResponses, PostApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdPaymentErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdPaymentResponses, PostApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdPaymentErrors, ThrowOnError>({
-    security: [{
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/storefront/agent-contexts/{contextId}/orders/{orderId}/payment',
     ...options,
     headers: {
@@ -745,25 +560,12 @@ export const postApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdPayment =
 /**
  * Get safe hosted-payment status
  */
-export const getApiV1StorefrontAgentContextsByContextIdPaymentsByContinuationId = <ThrowOnError extends boolean = false>(options: Options<GetApiV1StorefrontAgentContextsByContextIdPaymentsByContinuationIdData, ThrowOnError>): RequestResult<GetApiV1StorefrontAgentContextsByContextIdPaymentsByContinuationIdResponses, GetApiV1StorefrontAgentContextsByContextIdPaymentsByContinuationIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1StorefrontAgentContextsByContextIdPaymentsByContinuationIdResponses, GetApiV1StorefrontAgentContextsByContextIdPaymentsByContinuationIdErrors, ThrowOnError>({
-    security: [{
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/storefront/agent-contexts/{contextId}/payments/{continuationId}',
-    ...options
-});
+export const getApiV1StorefrontAgentContextsByContextIdPaymentsByContinuationId = <ThrowOnError extends boolean = false>(options: Options<GetApiV1StorefrontAgentContextsByContextIdPaymentsByContinuationIdData, ThrowOnError>): RequestResult<GetApiV1StorefrontAgentContextsByContextIdPaymentsByContinuationIdResponses, GetApiV1StorefrontAgentContextsByContextIdPaymentsByContinuationIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1StorefrontAgentContextsByContextIdPaymentsByContinuationIdResponses, GetApiV1StorefrontAgentContextsByContextIdPaymentsByContinuationIdErrors, ThrowOnError>({ url: '/api/v1/storefront/agent-contexts/{contextId}/payments/{continuationId}', ...options });
 
 /**
  * Start buyer-verified payment recovery
  */
 export const postApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdPaymentRecovery = <ThrowOnError extends boolean = false>(options: Options<PostApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdPaymentRecoveryData, ThrowOnError>): RequestResult<PostApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdPaymentRecoveryResponses, PostApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdPaymentRecoveryErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdPaymentRecoveryResponses, PostApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdPaymentRecoveryErrors, ThrowOnError>({
-    security: [{
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/storefront/agent-contexts/{contextId}/orders/{orderId}/payment-recovery',
     ...options,
     headers: {
@@ -775,38 +577,17 @@ export const postApiV1StorefrontAgentContextsByContextIdOrdersByOrderIdPaymentRe
 /**
  * Get safe payment-recovery status
  */
-export const getApiV1StorefrontAgentContextsByContextIdPaymentRecoveriesByContinuationId = <ThrowOnError extends boolean = false>(options: Options<GetApiV1StorefrontAgentContextsByContextIdPaymentRecoveriesByContinuationIdData, ThrowOnError>): RequestResult<GetApiV1StorefrontAgentContextsByContextIdPaymentRecoveriesByContinuationIdResponses, GetApiV1StorefrontAgentContextsByContextIdPaymentRecoveriesByContinuationIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1StorefrontAgentContextsByContextIdPaymentRecoveriesByContinuationIdResponses, GetApiV1StorefrontAgentContextsByContextIdPaymentRecoveriesByContinuationIdErrors, ThrowOnError>({
-    security: [{
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/storefront/agent-contexts/{contextId}/payment-recoveries/{continuationId}',
-    ...options
-});
+export const getApiV1StorefrontAgentContextsByContextIdPaymentRecoveriesByContinuationId = <ThrowOnError extends boolean = false>(options: Options<GetApiV1StorefrontAgentContextsByContextIdPaymentRecoveriesByContinuationIdData, ThrowOnError>): RequestResult<GetApiV1StorefrontAgentContextsByContextIdPaymentRecoveriesByContinuationIdResponses, GetApiV1StorefrontAgentContextsByContextIdPaymentRecoveriesByContinuationIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1StorefrontAgentContextsByContextIdPaymentRecoveriesByContinuationIdResponses, GetApiV1StorefrontAgentContextsByContextIdPaymentRecoveriesByContinuationIdErrors, ThrowOnError>({ url: '/api/v1/storefront/agent-contexts/{contextId}/payment-recoveries/{continuationId}', ...options });
 
 /**
  * Get safe storefront continuation status
  */
-export const getApiV1StorefrontAgentContextsByContextIdContinuationsByContinuationId = <ThrowOnError extends boolean = false>(options: Options<GetApiV1StorefrontAgentContextsByContextIdContinuationsByContinuationIdData, ThrowOnError>): RequestResult<GetApiV1StorefrontAgentContextsByContextIdContinuationsByContinuationIdResponses, GetApiV1StorefrontAgentContextsByContextIdContinuationsByContinuationIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1StorefrontAgentContextsByContextIdContinuationsByContinuationIdResponses, GetApiV1StorefrontAgentContextsByContextIdContinuationsByContinuationIdErrors, ThrowOnError>({
-    security: [{
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/storefront/agent-contexts/{contextId}/continuations/{continuationId}',
-    ...options
-});
+export const getApiV1StorefrontAgentContextsByContextIdContinuationsByContinuationId = <ThrowOnError extends boolean = false>(options: Options<GetApiV1StorefrontAgentContextsByContextIdContinuationsByContinuationIdData, ThrowOnError>): RequestResult<GetApiV1StorefrontAgentContextsByContextIdContinuationsByContinuationIdResponses, GetApiV1StorefrontAgentContextsByContextIdContinuationsByContinuationIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1StorefrontAgentContextsByContextIdContinuationsByContinuationIdResponses, GetApiV1StorefrontAgentContextsByContextIdContinuationsByContinuationIdErrors, ThrowOnError>({ url: '/api/v1/storefront/agent-contexts/{contextId}/continuations/{continuationId}', ...options });
 
 /**
  * Consume a one-time theme preview continuation for the storefront
  */
 export const postApiV1StorefrontAgentContinuationsThemePreview = <ThrowOnError extends boolean = false>(options: Options<PostApiV1StorefrontAgentContinuationsThemePreviewData, ThrowOnError>): RequestResult<PostApiV1StorefrontAgentContinuationsThemePreviewResponses, PostApiV1StorefrontAgentContinuationsThemePreviewErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1StorefrontAgentContinuationsThemePreviewResponses, PostApiV1StorefrontAgentContinuationsThemePreviewErrors, ThrowOnError>({
-    security: [{
-            key: 'bearerAuth',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/storefront/agent-continuations/theme-preview',
     ...options,
     headers: {
@@ -819,11 +600,6 @@ export const postApiV1StorefrontAgentContinuationsThemePreview = <ThrowOnError e
  * Consume a one-time storefront continuation bootstrap code
  */
 export const postApiV1StorefrontAgentContinuationsBootstrap = <ThrowOnError extends boolean = false>(options: Options<PostApiV1StorefrontAgentContinuationsBootstrapData, ThrowOnError>): RequestResult<PostApiV1StorefrontAgentContinuationsBootstrapResponses, PostApiV1StorefrontAgentContinuationsBootstrapErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1StorefrontAgentContinuationsBootstrapResponses, PostApiV1StorefrontAgentContinuationsBootstrapErrors, ThrowOnError>({
-    security: [{
-            key: 'bearerAuth',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/storefront/agent-continuations/bootstrap',
     ...options,
     headers: {
@@ -835,25 +611,12 @@ export const postApiV1StorefrontAgentContinuationsBootstrap = <ThrowOnError exte
 /**
  * Load a service-authenticated secure storefront continuation
  */
-export const getApiV1StorefrontAgentContinuationsByContinuationId = <ThrowOnError extends boolean = false>(options: Options<GetApiV1StorefrontAgentContinuationsByContinuationIdData, ThrowOnError>): RequestResult<GetApiV1StorefrontAgentContinuationsByContinuationIdResponses, GetApiV1StorefrontAgentContinuationsByContinuationIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1StorefrontAgentContinuationsByContinuationIdResponses, GetApiV1StorefrontAgentContinuationsByContinuationIdErrors, ThrowOnError>({
-    security: [{
-            key: 'bearerAuth',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/storefront/agent-continuations/{continuationId}',
-    ...options
-});
+export const getApiV1StorefrontAgentContinuationsByContinuationId = <ThrowOnError extends boolean = false>(options: Options<GetApiV1StorefrontAgentContinuationsByContinuationIdData, ThrowOnError>): RequestResult<GetApiV1StorefrontAgentContinuationsByContinuationIdResponses, GetApiV1StorefrontAgentContinuationsByContinuationIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1StorefrontAgentContinuationsByContinuationIdResponses, GetApiV1StorefrontAgentContinuationsByContinuationIdErrors, ThrowOnError>({ url: '/api/v1/storefront/agent-continuations/{continuationId}', ...options });
 
 /**
  * Send a customer OTP inside a secure storefront continuation
  */
 export const postApiV1StorefrontAgentContinuationsByContinuationIdCustomerSendOtp = <ThrowOnError extends boolean = false>(options: Options<PostApiV1StorefrontAgentContinuationsByContinuationIdCustomerSendOtpData, ThrowOnError>): RequestResult<PostApiV1StorefrontAgentContinuationsByContinuationIdCustomerSendOtpResponses, PostApiV1StorefrontAgentContinuationsByContinuationIdCustomerSendOtpErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1StorefrontAgentContinuationsByContinuationIdCustomerSendOtpResponses, PostApiV1StorefrontAgentContinuationsByContinuationIdCustomerSendOtpErrors, ThrowOnError>({
-    security: [{
-            key: 'bearerAuth',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/storefront/agent-continuations/{continuationId}/customer/send-otp',
     ...options,
     headers: {
@@ -866,11 +629,6 @@ export const postApiV1StorefrontAgentContinuationsByContinuationIdCustomerSendOt
  * Verify a customer OTP and bind the resulting session to its context
  */
 export const postApiV1StorefrontAgentContinuationsByContinuationIdCustomerVerifyOtp = <ThrowOnError extends boolean = false>(options: Options<PostApiV1StorefrontAgentContinuationsByContinuationIdCustomerVerifyOtpData, ThrowOnError>): RequestResult<PostApiV1StorefrontAgentContinuationsByContinuationIdCustomerVerifyOtpResponses, PostApiV1StorefrontAgentContinuationsByContinuationIdCustomerVerifyOtpErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1StorefrontAgentContinuationsByContinuationIdCustomerVerifyOtpResponses, PostApiV1StorefrontAgentContinuationsByContinuationIdCustomerVerifyOtpErrors, ThrowOnError>({
-    security: [{
-            key: 'bearerAuth',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/storefront/agent-continuations/{continuationId}/customer/verify-otp',
     ...options,
     headers: {
@@ -883,11 +641,6 @@ export const postApiV1StorefrontAgentContinuationsByContinuationIdCustomerVerify
  * Start a payment session in the buyer-only secure storefront tab
  */
 export const postApiV1StorefrontAgentContinuationsByContinuationIdPaymentStart = <ThrowOnError extends boolean = false>(options: Options<PostApiV1StorefrontAgentContinuationsByContinuationIdPaymentStartData, ThrowOnError>): RequestResult<PostApiV1StorefrontAgentContinuationsByContinuationIdPaymentStartResponses, PostApiV1StorefrontAgentContinuationsByContinuationIdPaymentStartErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1StorefrontAgentContinuationsByContinuationIdPaymentStartResponses, PostApiV1StorefrontAgentContinuationsByContinuationIdPaymentStartErrors, ThrowOnError>({
-    security: [{
-            key: 'bearerAuth',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/storefront/agent-continuations/{continuationId}/payment/start',
     ...options,
     headers: {
@@ -900,11 +653,6 @@ export const postApiV1StorefrontAgentContinuationsByContinuationIdPaymentStart =
  * Reconcile a provider-confirmed payment inside the buyer-only tab
  */
 export const postApiV1StorefrontAgentContinuationsByContinuationIdPaymentReconcile = <ThrowOnError extends boolean = false>(options: Options<PostApiV1StorefrontAgentContinuationsByContinuationIdPaymentReconcileData, ThrowOnError>): RequestResult<PostApiV1StorefrontAgentContinuationsByContinuationIdPaymentReconcileResponses, PostApiV1StorefrontAgentContinuationsByContinuationIdPaymentReconcileErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1StorefrontAgentContinuationsByContinuationIdPaymentReconcileResponses, PostApiV1StorefrontAgentContinuationsByContinuationIdPaymentReconcileErrors, ThrowOnError>({
-    security: [{
-            key: 'bearerAuth',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/storefront/agent-continuations/{continuationId}/payment/reconcile',
     ...options,
     headers: {
@@ -917,11 +665,6 @@ export const postApiV1StorefrontAgentContinuationsByContinuationIdPaymentReconci
  * Send buyer verification for payment recovery
  */
 export const postApiV1StorefrontAgentContinuationsByContinuationIdRecoverySendOtp = <ThrowOnError extends boolean = false>(options: Options<PostApiV1StorefrontAgentContinuationsByContinuationIdRecoverySendOtpData, ThrowOnError>): RequestResult<PostApiV1StorefrontAgentContinuationsByContinuationIdRecoverySendOtpResponses, PostApiV1StorefrontAgentContinuationsByContinuationIdRecoverySendOtpErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1StorefrontAgentContinuationsByContinuationIdRecoverySendOtpResponses, PostApiV1StorefrontAgentContinuationsByContinuationIdRecoverySendOtpErrors, ThrowOnError>({
-    security: [{
-            key: 'bearerAuth',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/storefront/agent-continuations/{continuationId}/recovery/send-otp',
     ...options,
     headers: {
@@ -934,11 +677,6 @@ export const postApiV1StorefrontAgentContinuationsByContinuationIdRecoverySendOt
  * Verify buyer recovery and bind order authority to its context
  */
 export const postApiV1StorefrontAgentContinuationsByContinuationIdRecoveryVerifyOtp = <ThrowOnError extends boolean = false>(options: Options<PostApiV1StorefrontAgentContinuationsByContinuationIdRecoveryVerifyOtpData, ThrowOnError>): RequestResult<PostApiV1StorefrontAgentContinuationsByContinuationIdRecoveryVerifyOtpResponses, PostApiV1StorefrontAgentContinuationsByContinuationIdRecoveryVerifyOtpErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1StorefrontAgentContinuationsByContinuationIdRecoveryVerifyOtpResponses, PostApiV1StorefrontAgentContinuationsByContinuationIdRecoveryVerifyOtpErrors, ThrowOnError>({
-    security: [{
-            key: 'bearerAuth',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/storefront/agent-continuations/{continuationId}/recovery/verify-otp',
     ...options,
     headers: {
@@ -1007,38 +745,17 @@ export const postApiV1CustomerAuthVerifyOtp = <ThrowOnError extends boolean = fa
 /**
  * Get current customer session info
  */
-export const getApiV1CustomerAuthMe = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1CustomerAuthMeData, ThrowOnError>): RequestResult<GetApiV1CustomerAuthMeResponses, GetApiV1CustomerAuthMeErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1CustomerAuthMeResponses, GetApiV1CustomerAuthMeErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'cs_tok',
-            type: 'apiKey'
-        }],
-    url: '/api/v1/customer-auth/me',
-    ...options
-});
+export const getApiV1CustomerAuthMe = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1CustomerAuthMeData, ThrowOnError>): RequestResult<GetApiV1CustomerAuthMeResponses, GetApiV1CustomerAuthMeErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1CustomerAuthMeResponses, GetApiV1CustomerAuthMeErrors, ThrowOnError>({ url: '/api/v1/customer-auth/me', ...options });
 
 /**
  * Logout and clear session
  */
-export const postApiV1CustomerAuthLogout = <ThrowOnError extends boolean = false>(options?: Options<PostApiV1CustomerAuthLogoutData, ThrowOnError>): RequestResult<PostApiV1CustomerAuthLogoutResponses, PostApiV1CustomerAuthLogoutErrors, ThrowOnError> => (options?.client ?? client).post<PostApiV1CustomerAuthLogoutResponses, PostApiV1CustomerAuthLogoutErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'cs_tok',
-            type: 'apiKey'
-        }],
-    url: '/api/v1/customer-auth/logout',
-    ...options
-});
+export const postApiV1CustomerAuthLogout = <ThrowOnError extends boolean = false>(options?: Options<PostApiV1CustomerAuthLogoutData, ThrowOnError>): RequestResult<PostApiV1CustomerAuthLogoutResponses, PostApiV1CustomerAuthLogoutErrors, ThrowOnError> => (options?.client ?? client).post<PostApiV1CustomerAuthLogoutResponses, PostApiV1CustomerAuthLogoutErrors, ThrowOnError>({ url: '/api/v1/customer-auth/logout', ...options });
 
 /**
  * Update customer profile
  */
 export const putApiV1CustomerAuthProfile = <ThrowOnError extends boolean = false>(options?: Options<PutApiV1CustomerAuthProfileData, ThrowOnError>): RequestResult<PutApiV1CustomerAuthProfileResponses, PutApiV1CustomerAuthProfileErrors, ThrowOnError> => (options?.client ?? client).put<PutApiV1CustomerAuthProfileResponses, PutApiV1CustomerAuthProfileErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'cs_tok',
-            type: 'apiKey'
-        }],
     url: '/api/v1/customer-auth/profile',
     ...options,
     headers: {
@@ -1050,15 +767,7 @@ export const putApiV1CustomerAuthProfile = <ThrowOnError extends boolean = false
 /**
  * Get orders for authenticated customer
  */
-export const getApiV1CustomerAuthOrders = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1CustomerAuthOrdersData, ThrowOnError>): RequestResult<GetApiV1CustomerAuthOrdersResponses, GetApiV1CustomerAuthOrdersErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1CustomerAuthOrdersResponses, GetApiV1CustomerAuthOrdersErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'cs_tok',
-            type: 'apiKey'
-        }],
-    url: '/api/v1/customer-auth/orders',
-    ...options
-});
+export const getApiV1CustomerAuthOrders = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1CustomerAuthOrdersData, ThrowOnError>): RequestResult<GetApiV1CustomerAuthOrdersResponses, GetApiV1CustomerAuthOrdersErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1CustomerAuthOrdersResponses, GetApiV1CustomerAuthOrdersErrors, ThrowOnError>({ url: '/api/v1/customer-auth/orders', ...options });
 
 /**
  * Send a code to the signed-in account's own phone
@@ -1081,11 +790,6 @@ export const postApiV1CustomerAuthPhoneVerify = <ThrowOnError extends boolean = 
  * Save a receipt-proven guest order to the authenticated customer account
  */
 export const postApiV1CustomerAuthOrdersByIdClaimReceipt = <ThrowOnError extends boolean = false>(options: Options<PostApiV1CustomerAuthOrdersByIdClaimReceiptData, ThrowOnError>): RequestResult<PostApiV1CustomerAuthOrdersByIdClaimReceiptResponses, PostApiV1CustomerAuthOrdersByIdClaimReceiptErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1CustomerAuthOrdersByIdClaimReceiptResponses, PostApiV1CustomerAuthOrdersByIdClaimReceiptErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'cs_tok',
-            type: 'apiKey'
-        }],
     url: '/api/v1/customer-auth/orders/{id}/claim-receipt',
     ...options,
     headers: {
@@ -1097,25 +801,12 @@ export const postApiV1CustomerAuthOrdersByIdClaimReceipt = <ThrowOnError extends
 /**
  * Get one authenticated customer order with timeline
  */
-export const getApiV1CustomerAuthOrdersById = <ThrowOnError extends boolean = false>(options: Options<GetApiV1CustomerAuthOrdersByIdData, ThrowOnError>): RequestResult<GetApiV1CustomerAuthOrdersByIdResponses, GetApiV1CustomerAuthOrdersByIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1CustomerAuthOrdersByIdResponses, GetApiV1CustomerAuthOrdersByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'cs_tok',
-            type: 'apiKey'
-        }],
-    url: '/api/v1/customer-auth/orders/{id}',
-    ...options
-});
+export const getApiV1CustomerAuthOrdersById = <ThrowOnError extends boolean = false>(options: Options<GetApiV1CustomerAuthOrdersByIdData, ThrowOnError>): RequestResult<GetApiV1CustomerAuthOrdersByIdResponses, GetApiV1CustomerAuthOrdersByIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1CustomerAuthOrdersByIdResponses, GetApiV1CustomerAuthOrdersByIdErrors, ThrowOnError>({ url: '/api/v1/customer-auth/orders/{id}', ...options });
 
 /**
  * Create an authenticated customer support request for an owned order
  */
 export const postApiV1CustomerAuthOrdersByIdSupportRequests = <ThrowOnError extends boolean = false>(options: Options<PostApiV1CustomerAuthOrdersByIdSupportRequestsData, ThrowOnError>): RequestResult<PostApiV1CustomerAuthOrdersByIdSupportRequestsResponses, PostApiV1CustomerAuthOrdersByIdSupportRequestsErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1CustomerAuthOrdersByIdSupportRequestsResponses, PostApiV1CustomerAuthOrdersByIdSupportRequestsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'cs_tok',
-            type: 'apiKey'
-        }],
     url: '/api/v1/customer-auth/orders/{id}/support-requests',
     ...options,
     headers: {
@@ -1128,11 +819,6 @@ export const postApiV1CustomerAuthOrdersByIdSupportRequests = <ThrowOnError exte
  * Create an authenticated customer payment session for an owned order
  */
 export const postApiV1CustomerAuthOrdersByIdPaymentSession = <ThrowOnError extends boolean = false>(options: Options<PostApiV1CustomerAuthOrdersByIdPaymentSessionData, ThrowOnError>): RequestResult<PostApiV1CustomerAuthOrdersByIdPaymentSessionResponses, PostApiV1CustomerAuthOrdersByIdPaymentSessionErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1CustomerAuthOrdersByIdPaymentSessionResponses, PostApiV1CustomerAuthOrdersByIdPaymentSessionErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'cs_tok',
-            type: 'apiKey'
-        }],
     url: '/api/v1/customer-auth/orders/{id}/payment-session',
     ...options,
     headers: {
@@ -1195,25 +881,12 @@ export const postApiV1CustomerAuthConversationsByIdRead = <ThrowOnError extends 
 /**
  * Read an owned order's conversation, or null before anyone wrote
  */
-export const getApiV1CustomerAuthOrdersByIdConversation = <ThrowOnError extends boolean = false>(options: Options<GetApiV1CustomerAuthOrdersByIdConversationData, ThrowOnError>): RequestResult<GetApiV1CustomerAuthOrdersByIdConversationResponses, GetApiV1CustomerAuthOrdersByIdConversationErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1CustomerAuthOrdersByIdConversationResponses, GetApiV1CustomerAuthOrdersByIdConversationErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'cs_tok',
-            type: 'apiKey'
-        }],
-    url: '/api/v1/customer-auth/orders/{id}/conversation',
-    ...options
-});
+export const getApiV1CustomerAuthOrdersByIdConversation = <ThrowOnError extends boolean = false>(options: Options<GetApiV1CustomerAuthOrdersByIdConversationData, ThrowOnError>): RequestResult<GetApiV1CustomerAuthOrdersByIdConversationResponses, GetApiV1CustomerAuthOrdersByIdConversationErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1CustomerAuthOrdersByIdConversationResponses, GetApiV1CustomerAuthOrdersByIdConversationErrors, ThrowOnError>({ url: '/api/v1/customer-auth/orders/{id}/conversation', ...options });
 
 /**
  * Post on an owned order's conversation (starts it on the first message)
  */
 export const postApiV1CustomerAuthOrdersByIdConversation = <ThrowOnError extends boolean = false>(options: Options<PostApiV1CustomerAuthOrdersByIdConversationData, ThrowOnError>): RequestResult<PostApiV1CustomerAuthOrdersByIdConversationResponses, PostApiV1CustomerAuthOrdersByIdConversationErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1CustomerAuthOrdersByIdConversationResponses, PostApiV1CustomerAuthOrdersByIdConversationErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'cs_tok',
-            type: 'apiKey'
-        }],
     url: '/api/v1/customer-auth/orders/{id}/conversation',
     ...options,
     headers: {
@@ -1611,19 +1284,7 @@ export const getApiV1CategoriesBySlugProductSummaries = <ThrowOnError extends bo
  *
  * Invalidates all public pages through the store dependency clock. Normal writes invalidate their affected data automatically.
  */
-export const postApiV1CacheClear = <ThrowOnError extends boolean = false>(options?: Options<PostApiV1CacheClearData, ThrowOnError>): RequestResult<PostApiV1CacheClearResponses, PostApiV1CacheClearErrors, ThrowOnError> => (options?.client ?? client).post<PostApiV1CacheClearResponses, PostApiV1CacheClearErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/cache/clear',
-    ...options
-});
+export const postApiV1CacheClear = <ThrowOnError extends boolean = false>(options?: Options<PostApiV1CacheClearData, ThrowOnError>): RequestResult<PostApiV1CacheClearResponses, PostApiV1CacheClearErrors, ThrowOnError> => (options?.client ?? client).post<PostApiV1CacheClearResponses, PostApiV1CacheClearErrors, ThrowOnError>({ url: '/api/v1/cache/clear', ...options });
 
 /**
  * Check order processing status by status token
@@ -1923,65 +1584,24 @@ export const getApiV1OrdersReceiptByIdWarrantyClaimsByClaimIdAttachmentsByAttach
 /**
  * Get active categories for form dropdowns
  */
-export const getApiV1AdminCategoriesFormOptions = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminCategoriesFormOptionsData, ThrowOnError>): RequestResult<GetApiV1AdminCategoriesFormOptionsResponses, GetApiV1AdminCategoriesFormOptionsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminCategoriesFormOptionsResponses, GetApiV1AdminCategoriesFormOptionsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/categories/form-options',
-    ...options
-});
+export const getApiV1AdminCategoriesFormOptions = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminCategoriesFormOptionsData, ThrowOnError>): RequestResult<GetApiV1AdminCategoriesFormOptionsResponses, GetApiV1AdminCategoriesFormOptionsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminCategoriesFormOptionsResponses, GetApiV1AdminCategoriesFormOptionsErrors, ThrowOnError>({ url: '/api/v1/admin/categories/form-options', ...options });
 
 /**
  * List one level of the category tree
  *
  * Live categories directly under `parentId` (omitted: the top level), in name order, each with its live child count.
  */
-export const getApiV1AdminCategoriesChildren = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminCategoriesChildrenData, ThrowOnError>): RequestResult<GetApiV1AdminCategoriesChildrenResponses, GetApiV1AdminCategoriesChildrenErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminCategoriesChildrenResponses, GetApiV1AdminCategoriesChildrenErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/categories/children',
-    ...options
-});
+export const getApiV1AdminCategoriesChildren = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminCategoriesChildrenData, ThrowOnError>): RequestResult<GetApiV1AdminCategoriesChildrenResponses, GetApiV1AdminCategoriesChildrenErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminCategoriesChildrenResponses, GetApiV1AdminCategoriesChildrenErrors, ThrowOnError>({ url: '/api/v1/admin/categories/children', ...options });
 
 /**
  * List all categories
  */
-export const getApiV1AdminCategories = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminCategoriesData, ThrowOnError>): RequestResult<GetApiV1AdminCategoriesResponses, GetApiV1AdminCategoriesErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminCategoriesResponses, GetApiV1AdminCategoriesErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }],
-    url: '/api/v1/admin/categories',
-    ...options
-});
+export const getApiV1AdminCategories = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminCategoriesData, ThrowOnError>): RequestResult<GetApiV1AdminCategoriesResponses, GetApiV1AdminCategoriesErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminCategoriesResponses, GetApiV1AdminCategoriesErrors, ThrowOnError>({ url: '/api/v1/admin/categories', ...options });
 
 /**
  * Create a category
  */
 export const postApiV1AdminCategories = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminCategoriesData, ThrowOnError>): RequestResult<PostApiV1AdminCategoriesResponses, PostApiV1AdminCategoriesErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminCategoriesResponses, PostApiV1AdminCategoriesErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/categories',
     ...options,
     headers: {
@@ -1993,72 +1613,24 @@ export const postApiV1AdminCategories = <ThrowOnError extends boolean = false>(o
 /**
  * List bounded category summaries
  */
-export const getApiV1AdminCategoriesSummaries = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminCategoriesSummariesData, ThrowOnError>): RequestResult<GetApiV1AdminCategoriesSummariesResponses, GetApiV1AdminCategoriesSummariesErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminCategoriesSummariesResponses, GetApiV1AdminCategoriesSummariesErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/categories/summaries',
-    ...options
-});
+export const getApiV1AdminCategoriesSummaries = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminCategoriesSummariesData, ThrowOnError>): RequestResult<GetApiV1AdminCategoriesSummariesResponses, GetApiV1AdminCategoriesSummariesErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminCategoriesSummariesResponses, GetApiV1AdminCategoriesSummariesErrors, ThrowOnError>({ url: '/api/v1/admin/categories/summaries', ...options });
 
 /**
  * Get a bounded category section
  */
-export const getApiV1AdminCategoriesByIdSectionsBySection = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminCategoriesByIdSectionsBySectionData, ThrowOnError>): RequestResult<GetApiV1AdminCategoriesByIdSectionsBySectionResponses, GetApiV1AdminCategoriesByIdSectionsBySectionErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminCategoriesByIdSectionsBySectionResponses, GetApiV1AdminCategoriesByIdSectionsBySectionErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/categories/{id}/sections/{section}',
-    ...options
-});
+export const getApiV1AdminCategoriesByIdSectionsBySection = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminCategoriesByIdSectionsBySectionData, ThrowOnError>): RequestResult<GetApiV1AdminCategoriesByIdSectionsBySectionResponses, GetApiV1AdminCategoriesByIdSectionsBySectionErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminCategoriesByIdSectionsBySectionResponses, GetApiV1AdminCategoriesByIdSectionsBySectionErrors, ThrowOnError>({ url: '/api/v1/admin/categories/{id}/sections/{section}', ...options });
 
 /**
  * Get category publication readiness
  */
-export const getApiV1AdminCategoriesByIdPublishReadiness = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminCategoriesByIdPublishReadinessData, ThrowOnError>): RequestResult<GetApiV1AdminCategoriesByIdPublishReadinessResponses, GetApiV1AdminCategoriesByIdPublishReadinessErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminCategoriesByIdPublishReadinessResponses, GetApiV1AdminCategoriesByIdPublishReadinessErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/categories/{id}/publish-readiness',
-    ...options
-});
+export const getApiV1AdminCategoriesByIdPublishReadiness = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminCategoriesByIdPublishReadinessData, ThrowOnError>): RequestResult<GetApiV1AdminCategoriesByIdPublishReadinessResponses, GetApiV1AdminCategoriesByIdPublishReadinessErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminCategoriesByIdPublishReadinessResponses, GetApiV1AdminCategoriesByIdPublishReadinessErrors, ThrowOnError>({ url: '/api/v1/admin/categories/{id}/publish-readiness', ...options });
 
 /**
  * Get a category's place in the tree
  *
  * The category's ancestors, root first, ending with the category (at most four).
  */
-export const getApiV1AdminCategoriesByIdAncestors = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminCategoriesByIdAncestorsData, ThrowOnError>): RequestResult<GetApiV1AdminCategoriesByIdAncestorsResponses, GetApiV1AdminCategoriesByIdAncestorsErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminCategoriesByIdAncestorsResponses, GetApiV1AdminCategoriesByIdAncestorsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/categories/{id}/ancestors',
-    ...options
-});
+export const getApiV1AdminCategoriesByIdAncestors = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminCategoriesByIdAncestorsData, ThrowOnError>): RequestResult<GetApiV1AdminCategoriesByIdAncestorsResponses, GetApiV1AdminCategoriesByIdAncestorsErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminCategoriesByIdAncestorsResponses, GetApiV1AdminCategoriesByIdAncestorsErrors, ThrowOnError>({ url: '/api/v1/admin/categories/{id}/ancestors', ...options });
 
 /**
  * Move a category in the tree
@@ -2066,15 +1638,6 @@ export const getApiV1AdminCategoriesByIdAncestors = <ThrowOnError extends boolea
  * Moves the category and its whole subtree under `parentId` (null: the top level). Refused (400 CATEGORY_PLACEMENT_REFUSED) for a cycle, a fifth level, or a trashed or missing parent.
  */
 export const patchApiV1AdminCategoriesByIdParent = <ThrowOnError extends boolean = false>(options: Options<PatchApiV1AdminCategoriesByIdParentData, ThrowOnError>): RequestResult<PatchApiV1AdminCategoriesByIdParentResponses, PatchApiV1AdminCategoriesByIdParentErrors, ThrowOnError> => (options.client ?? client).patch<PatchApiV1AdminCategoriesByIdParentResponses, PatchApiV1AdminCategoriesByIdParentErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/categories/{id}/parent',
     ...options,
     headers: {
@@ -2087,15 +1650,6 @@ export const patchApiV1AdminCategoriesByIdParent = <ThrowOnError extends boolean
  * Soft-delete a category
  */
 export const deleteApiV1AdminCategoriesById = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminCategoriesByIdData, ThrowOnError>): RequestResult<DeleteApiV1AdminCategoriesByIdResponses, DeleteApiV1AdminCategoriesByIdErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminCategoriesByIdResponses, DeleteApiV1AdminCategoriesByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/categories/{id}',
     ...options,
     headers: {
@@ -2107,29 +1661,12 @@ export const deleteApiV1AdminCategoriesById = <ThrowOnError extends boolean = fa
 /**
  * Get a single category by ID
  */
-export const getApiV1AdminCategoriesById = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminCategoriesByIdData, ThrowOnError>): RequestResult<GetApiV1AdminCategoriesByIdResponses, GetApiV1AdminCategoriesByIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminCategoriesByIdResponses, GetApiV1AdminCategoriesByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }],
-    url: '/api/v1/admin/categories/{id}',
-    ...options
-});
+export const getApiV1AdminCategoriesById = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminCategoriesByIdData, ThrowOnError>): RequestResult<GetApiV1AdminCategoriesByIdResponses, GetApiV1AdminCategoriesByIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminCategoriesByIdResponses, GetApiV1AdminCategoriesByIdErrors, ThrowOnError>({ url: '/api/v1/admin/categories/{id}', ...options });
 
 /**
  * Update a category
  */
 export const putApiV1AdminCategoriesById = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminCategoriesByIdData, ThrowOnError>): RequestResult<PutApiV1AdminCategoriesByIdResponses, PutApiV1AdminCategoriesByIdErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminCategoriesByIdResponses, PutApiV1AdminCategoriesByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/categories/{id}',
     ...options,
     headers: {
@@ -2142,15 +1679,6 @@ export const putApiV1AdminCategoriesById = <ThrowOnError extends boolean = false
  * Bulk delete categories
  */
 export const postApiV1AdminCategoriesBulkDelete = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminCategoriesBulkDeleteData, ThrowOnError>): RequestResult<PostApiV1AdminCategoriesBulkDeleteResponses, PostApiV1AdminCategoriesBulkDeleteErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminCategoriesBulkDeleteResponses, PostApiV1AdminCategoriesBulkDeleteErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/categories/bulk-delete',
     ...options,
     headers: {
@@ -2163,15 +1691,6 @@ export const postApiV1AdminCategoriesBulkDelete = <ThrowOnError extends boolean 
  * Bulk restore categories
  */
 export const postApiV1AdminCategoriesBulkRestore = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminCategoriesBulkRestoreData, ThrowOnError>): RequestResult<PostApiV1AdminCategoriesBulkRestoreResponses, PostApiV1AdminCategoriesBulkRestoreErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminCategoriesBulkRestoreResponses, PostApiV1AdminCategoriesBulkRestoreErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/categories/bulk-restore',
     ...options,
     headers: {
@@ -2184,15 +1703,6 @@ export const postApiV1AdminCategoriesBulkRestore = <ThrowOnError extends boolean
  * Change category publication status
  */
 export const patchApiV1AdminCategoriesByIdStatus = <ThrowOnError extends boolean = false>(options: Options<PatchApiV1AdminCategoriesByIdStatusData, ThrowOnError>): RequestResult<PatchApiV1AdminCategoriesByIdStatusResponses, PatchApiV1AdminCategoriesByIdStatusErrors, ThrowOnError> => (options.client ?? client).patch<PatchApiV1AdminCategoriesByIdStatusResponses, PatchApiV1AdminCategoriesByIdStatusErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/categories/{id}/status',
     ...options,
     headers: {
@@ -2205,15 +1715,6 @@ export const patchApiV1AdminCategoriesByIdStatus = <ThrowOnError extends boolean
  * Permanently delete a category
  */
 export const deleteApiV1AdminCategoriesByIdPermanent = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminCategoriesByIdPermanentData, ThrowOnError>): RequestResult<DeleteApiV1AdminCategoriesByIdPermanentResponses, DeleteApiV1AdminCategoriesByIdPermanentErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminCategoriesByIdPermanentResponses, DeleteApiV1AdminCategoriesByIdPermanentErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/categories/{id}/permanent',
     ...options,
     headers: {
@@ -2226,15 +1727,6 @@ export const deleteApiV1AdminCategoriesByIdPermanent = <ThrowOnError extends boo
  * Restore a soft-deleted category
  */
 export const postApiV1AdminCategoriesByIdRestore = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminCategoriesByIdRestoreData, ThrowOnError>): RequestResult<PostApiV1AdminCategoriesByIdRestoreResponses, PostApiV1AdminCategoriesByIdRestoreErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminCategoriesByIdRestoreResponses, PostApiV1AdminCategoriesByIdRestoreErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/categories/{id}/restore',
     ...options,
     headers: {
@@ -2246,33 +1738,12 @@ export const postApiV1AdminCategoriesByIdRestore = <ThrowOnError extends boolean
 /**
  * List brands
  */
-export const getApiV1AdminBrands = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminBrandsData, ThrowOnError>): RequestResult<GetApiV1AdminBrandsResponses, GetApiV1AdminBrandsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminBrandsResponses, GetApiV1AdminBrandsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/brands',
-    ...options
-});
+export const getApiV1AdminBrands = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminBrandsData, ThrowOnError>): RequestResult<GetApiV1AdminBrandsResponses, GetApiV1AdminBrandsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminBrandsResponses, GetApiV1AdminBrandsErrors, ThrowOnError>({ url: '/api/v1/admin/brands', ...options });
 
 /**
  * Create a brand
  */
 export const postApiV1AdminBrands = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminBrandsData, ThrowOnError>): RequestResult<PostApiV1AdminBrandsResponses, PostApiV1AdminBrandsErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminBrandsResponses, PostApiV1AdminBrandsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/brands',
     ...options,
     headers: {
@@ -2284,50 +1755,17 @@ export const postApiV1AdminBrands = <ThrowOnError extends boolean = false>(optio
 /**
  * Search live brands for a brand picker
  */
-export const getApiV1AdminBrandsFormOptions = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminBrandsFormOptionsData, ThrowOnError>): RequestResult<GetApiV1AdminBrandsFormOptionsResponses, GetApiV1AdminBrandsFormOptionsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminBrandsFormOptionsResponses, GetApiV1AdminBrandsFormOptionsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/brands/form-options',
-    ...options
-});
+export const getApiV1AdminBrandsFormOptions = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminBrandsFormOptionsData, ThrowOnError>): RequestResult<GetApiV1AdminBrandsFormOptionsResponses, GetApiV1AdminBrandsFormOptionsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminBrandsFormOptionsResponses, GetApiV1AdminBrandsFormOptionsErrors, ThrowOnError>({ url: '/api/v1/admin/brands/form-options', ...options });
 
 /**
  * Get a brand
  */
-export const getApiV1AdminBrandsById = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminBrandsByIdData, ThrowOnError>): RequestResult<GetApiV1AdminBrandsByIdResponses, GetApiV1AdminBrandsByIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminBrandsByIdResponses, GetApiV1AdminBrandsByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/brands/{id}',
-    ...options
-});
+export const getApiV1AdminBrandsById = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminBrandsByIdData, ThrowOnError>): RequestResult<GetApiV1AdminBrandsByIdResponses, GetApiV1AdminBrandsByIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminBrandsByIdResponses, GetApiV1AdminBrandsByIdErrors, ThrowOnError>({ url: '/api/v1/admin/brands/{id}', ...options });
 
 /**
  * Update a brand
  */
 export const putApiV1AdminBrandsById = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminBrandsByIdData, ThrowOnError>): RequestResult<PutApiV1AdminBrandsByIdResponses, PutApiV1AdminBrandsByIdErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminBrandsByIdResponses, PutApiV1AdminBrandsByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/brands/{id}',
     ...options,
     headers: {
@@ -2340,15 +1778,6 @@ export const putApiV1AdminBrandsById = <ThrowOnError extends boolean = false>(op
  * Publish or unpublish a brand
  */
 export const patchApiV1AdminBrandsByIdStatus = <ThrowOnError extends boolean = false>(options: Options<PatchApiV1AdminBrandsByIdStatusData, ThrowOnError>): RequestResult<PatchApiV1AdminBrandsByIdStatusResponses, PatchApiV1AdminBrandsByIdStatusErrors, ThrowOnError> => (options.client ?? client).patch<PatchApiV1AdminBrandsByIdStatusResponses, PatchApiV1AdminBrandsByIdStatusErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/brands/{id}/status',
     ...options,
     headers: {
@@ -2361,15 +1790,6 @@ export const patchApiV1AdminBrandsByIdStatus = <ThrowOnError extends boolean = f
  * Move brands to trash
  */
 export const postApiV1AdminBrandsTrash = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminBrandsTrashData, ThrowOnError>): RequestResult<PostApiV1AdminBrandsTrashResponses, PostApiV1AdminBrandsTrashErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminBrandsTrashResponses, PostApiV1AdminBrandsTrashErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/brands/trash',
     ...options,
     headers: {
@@ -2382,15 +1802,6 @@ export const postApiV1AdminBrandsTrash = <ThrowOnError extends boolean = false>(
  * Restore brands from trash
  */
 export const postApiV1AdminBrandsRestore = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminBrandsRestoreData, ThrowOnError>): RequestResult<PostApiV1AdminBrandsRestoreResponses, PostApiV1AdminBrandsRestoreErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminBrandsRestoreResponses, PostApiV1AdminBrandsRestoreErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/brands/restore',
     ...options,
     headers: {
@@ -2403,15 +1814,6 @@ export const postApiV1AdminBrandsRestore = <ThrowOnError extends boolean = false
  * Permanently delete brands in trash
  */
 export const postApiV1AdminBrandsDeletePermanently = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminBrandsDeletePermanentlyData, ThrowOnError>): RequestResult<PostApiV1AdminBrandsDeletePermanentlyResponses, PostApiV1AdminBrandsDeletePermanentlyErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminBrandsDeletePermanentlyResponses, PostApiV1AdminBrandsDeletePermanentlyErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/brands/delete-permanently',
     ...options,
     headers: {
@@ -2423,84 +1825,27 @@ export const postApiV1AdminBrandsDeletePermanently = <ThrowOnError extends boole
 /**
  * Get categories and products for collection form
  */
-export const getApiV1AdminCollectionsFormOptions = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminCollectionsFormOptionsData, ThrowOnError>): RequestResult<GetApiV1AdminCollectionsFormOptionsResponses, GetApiV1AdminCollectionsFormOptionsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminCollectionsFormOptionsResponses, GetApiV1AdminCollectionsFormOptionsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/collections/form-options',
-    ...options
-});
+export const getApiV1AdminCollectionsFormOptions = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminCollectionsFormOptionsData, ThrowOnError>): RequestResult<GetApiV1AdminCollectionsFormOptionsResponses, GetApiV1AdminCollectionsFormOptionsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminCollectionsFormOptionsResponses, GetApiV1AdminCollectionsFormOptionsErrors, ThrowOnError>({ url: '/api/v1/admin/collections/form-options', ...options });
 
 /**
  * Get categories for collection forms
  */
-export const getApiV1AdminCollectionsCategoryOptions = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminCollectionsCategoryOptionsData, ThrowOnError>): RequestResult<GetApiV1AdminCollectionsCategoryOptionsResponses, GetApiV1AdminCollectionsCategoryOptionsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminCollectionsCategoryOptionsResponses, GetApiV1AdminCollectionsCategoryOptionsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/collections/category-options',
-    ...options
-});
+export const getApiV1AdminCollectionsCategoryOptions = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminCollectionsCategoryOptionsData, ThrowOnError>): RequestResult<GetApiV1AdminCollectionsCategoryOptionsResponses, GetApiV1AdminCollectionsCategoryOptionsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminCollectionsCategoryOptionsResponses, GetApiV1AdminCollectionsCategoryOptionsErrors, ThrowOnError>({ url: '/api/v1/admin/collections/category-options', ...options });
 
 /**
  * Search products for collection forms
  */
-export const getApiV1AdminCollectionsProductOptions = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminCollectionsProductOptionsData, ThrowOnError>): RequestResult<GetApiV1AdminCollectionsProductOptionsResponses, GetApiV1AdminCollectionsProductOptionsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminCollectionsProductOptionsResponses, GetApiV1AdminCollectionsProductOptionsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/collections/product-options',
-    ...options
-});
+export const getApiV1AdminCollectionsProductOptions = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminCollectionsProductOptionsData, ThrowOnError>): RequestResult<GetApiV1AdminCollectionsProductOptionsResponses, GetApiV1AdminCollectionsProductOptionsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminCollectionsProductOptionsResponses, GetApiV1AdminCollectionsProductOptionsErrors, ThrowOnError>({ url: '/api/v1/admin/collections/product-options', ...options });
 
 /**
  * List all collections
  */
-export const getApiV1AdminCollections = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminCollectionsData, ThrowOnError>): RequestResult<GetApiV1AdminCollectionsResponses, GetApiV1AdminCollectionsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminCollectionsResponses, GetApiV1AdminCollectionsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/collections',
-    ...options
-});
+export const getApiV1AdminCollections = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminCollectionsData, ThrowOnError>): RequestResult<GetApiV1AdminCollectionsResponses, GetApiV1AdminCollectionsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminCollectionsResponses, GetApiV1AdminCollectionsErrors, ThrowOnError>({ url: '/api/v1/admin/collections', ...options });
 
 /**
  * Create a collection
  */
 export const postApiV1AdminCollections = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminCollectionsData, ThrowOnError>): RequestResult<PostApiV1AdminCollectionsResponses, PostApiV1AdminCollectionsErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminCollectionsResponses, PostApiV1AdminCollectionsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/collections',
     ...options,
     headers: {
@@ -2512,33 +1857,12 @@ export const postApiV1AdminCollections = <ThrowOnError extends boolean = false>(
 /**
  * Get lightweight collection summaries for known IDs
  */
-export const getApiV1AdminCollectionsByIds = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminCollectionsByIdsData, ThrowOnError>): RequestResult<GetApiV1AdminCollectionsByIdsResponses, GetApiV1AdminCollectionsByIdsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminCollectionsByIdsResponses, GetApiV1AdminCollectionsByIdsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/collections/by-ids',
-    ...options
-});
+export const getApiV1AdminCollectionsByIds = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminCollectionsByIdsData, ThrowOnError>): RequestResult<GetApiV1AdminCollectionsByIdsResponses, GetApiV1AdminCollectionsByIdsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminCollectionsByIdsResponses, GetApiV1AdminCollectionsByIdsErrors, ThrowOnError>({ url: '/api/v1/admin/collections/by-ids', ...options });
 
 /**
  * Bulk delete collections
  */
 export const postApiV1AdminCollectionsBulkDelete = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminCollectionsBulkDeleteData, ThrowOnError>): RequestResult<PostApiV1AdminCollectionsBulkDeleteResponses, PostApiV1AdminCollectionsBulkDeleteErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminCollectionsBulkDeleteResponses, PostApiV1AdminCollectionsBulkDeleteErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/collections/bulk-delete',
     ...options,
     headers: {
@@ -2551,15 +1875,6 @@ export const postApiV1AdminCollectionsBulkDelete = <ThrowOnError extends boolean
  * Bulk activate collections
  */
 export const postApiV1AdminCollectionsBulkActivate = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminCollectionsBulkActivateData, ThrowOnError>): RequestResult<PostApiV1AdminCollectionsBulkActivateResponses, PostApiV1AdminCollectionsBulkActivateErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminCollectionsBulkActivateResponses, PostApiV1AdminCollectionsBulkActivateErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/collections/bulk-activate',
     ...options,
     headers: {
@@ -2572,15 +1887,6 @@ export const postApiV1AdminCollectionsBulkActivate = <ThrowOnError extends boole
  * Bulk deactivate collections
  */
 export const postApiV1AdminCollectionsBulkDeactivate = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminCollectionsBulkDeactivateData, ThrowOnError>): RequestResult<PostApiV1AdminCollectionsBulkDeactivateResponses, PostApiV1AdminCollectionsBulkDeactivateErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminCollectionsBulkDeactivateResponses, PostApiV1AdminCollectionsBulkDeactivateErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/collections/bulk-deactivate',
     ...options,
     headers: {
@@ -2593,15 +1899,6 @@ export const postApiV1AdminCollectionsBulkDeactivate = <ThrowOnError extends boo
  * Bulk restore collections
  */
 export const postApiV1AdminCollectionsBulkRestore = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminCollectionsBulkRestoreData, ThrowOnError>): RequestResult<PostApiV1AdminCollectionsBulkRestoreResponses, PostApiV1AdminCollectionsBulkRestoreErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminCollectionsBulkRestoreResponses, PostApiV1AdminCollectionsBulkRestoreErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/collections/bulk-restore',
     ...options,
     headers: {
@@ -2613,33 +1910,12 @@ export const postApiV1AdminCollectionsBulkRestore = <ThrowOnError extends boolea
 /**
  * Restore a soft-deleted collection
  */
-export const postApiV1AdminCollectionsByIdRestore = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminCollectionsByIdRestoreData, ThrowOnError>): RequestResult<PostApiV1AdminCollectionsByIdRestoreResponses, PostApiV1AdminCollectionsByIdRestoreErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminCollectionsByIdRestoreResponses, PostApiV1AdminCollectionsByIdRestoreErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/collections/{id}/restore',
-    ...options
-});
+export const postApiV1AdminCollectionsByIdRestore = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminCollectionsByIdRestoreData, ThrowOnError>): RequestResult<PostApiV1AdminCollectionsByIdRestoreResponses, PostApiV1AdminCollectionsByIdRestoreErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminCollectionsByIdRestoreResponses, PostApiV1AdminCollectionsByIdRestoreErrors, ThrowOnError>({ url: '/api/v1/admin/collections/{id}/restore', ...options });
 
 /**
  * Reorder collections
  */
 export const postApiV1AdminCollectionsReorder = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminCollectionsReorderData, ThrowOnError>): RequestResult<PostApiV1AdminCollectionsReorderResponses, PostApiV1AdminCollectionsReorderErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminCollectionsReorderResponses, PostApiV1AdminCollectionsReorderErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/collections/reorder',
     ...options,
     headers: {
@@ -2651,63 +1927,22 @@ export const postApiV1AdminCollectionsReorder = <ThrowOnError extends boolean = 
 /**
  * Get a bounded collection section
  */
-export const getApiV1AdminCollectionsByIdSectionsBySection = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminCollectionsByIdSectionsBySectionData, ThrowOnError>): RequestResult<GetApiV1AdminCollectionsByIdSectionsBySectionResponses, GetApiV1AdminCollectionsByIdSectionsBySectionErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminCollectionsByIdSectionsBySectionResponses, GetApiV1AdminCollectionsByIdSectionsBySectionErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/collections/{id}/sections/{section}',
-    ...options
-});
+export const getApiV1AdminCollectionsByIdSectionsBySection = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminCollectionsByIdSectionsBySectionData, ThrowOnError>): RequestResult<GetApiV1AdminCollectionsByIdSectionsBySectionResponses, GetApiV1AdminCollectionsByIdSectionsBySectionErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminCollectionsByIdSectionsBySectionResponses, GetApiV1AdminCollectionsByIdSectionsBySectionErrors, ThrowOnError>({ url: '/api/v1/admin/collections/{id}/sections/{section}', ...options });
 
 /**
  * Soft-delete a collection
  */
-export const deleteApiV1AdminCollectionsById = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminCollectionsByIdData, ThrowOnError>): RequestResult<DeleteApiV1AdminCollectionsByIdResponses, DeleteApiV1AdminCollectionsByIdErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminCollectionsByIdResponses, DeleteApiV1AdminCollectionsByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/collections/{id}',
-    ...options
-});
+export const deleteApiV1AdminCollectionsById = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminCollectionsByIdData, ThrowOnError>): RequestResult<DeleteApiV1AdminCollectionsByIdResponses, DeleteApiV1AdminCollectionsByIdErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminCollectionsByIdResponses, DeleteApiV1AdminCollectionsByIdErrors, ThrowOnError>({ url: '/api/v1/admin/collections/{id}', ...options });
 
 /**
  * Get a collection by ID
  */
-export const getApiV1AdminCollectionsById = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminCollectionsByIdData, ThrowOnError>): RequestResult<GetApiV1AdminCollectionsByIdResponses, GetApiV1AdminCollectionsByIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminCollectionsByIdResponses, GetApiV1AdminCollectionsByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }],
-    url: '/api/v1/admin/collections/{id}',
-    ...options
-});
+export const getApiV1AdminCollectionsById = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminCollectionsByIdData, ThrowOnError>): RequestResult<GetApiV1AdminCollectionsByIdResponses, GetApiV1AdminCollectionsByIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminCollectionsByIdResponses, GetApiV1AdminCollectionsByIdErrors, ThrowOnError>({ url: '/api/v1/admin/collections/{id}', ...options });
 
 /**
  * Update a collection
  */
 export const putApiV1AdminCollectionsById = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminCollectionsByIdData, ThrowOnError>): RequestResult<PutApiV1AdminCollectionsByIdResponses, PutApiV1AdminCollectionsByIdErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminCollectionsByIdResponses, PutApiV1AdminCollectionsByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/collections/{id}',
     ...options,
     headers: {
@@ -2720,15 +1955,6 @@ export const putApiV1AdminCollectionsById = <ThrowOnError extends boolean = fals
  * Add or remove products in a manual collection
  */
 export const postApiV1AdminCollectionsByIdProducts = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminCollectionsByIdProductsData, ThrowOnError>): RequestResult<PostApiV1AdminCollectionsByIdProductsResponses, PostApiV1AdminCollectionsByIdProductsErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminCollectionsByIdProductsResponses, PostApiV1AdminCollectionsByIdProductsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/collections/{id}/products',
     ...options,
     headers: {
@@ -2740,52 +1966,19 @@ export const postApiV1AdminCollectionsByIdProducts = <ThrowOnError extends boole
 /**
  * Permanently delete a collection
  */
-export const deleteApiV1AdminCollectionsByIdPermanent = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminCollectionsByIdPermanentData, ThrowOnError>): RequestResult<DeleteApiV1AdminCollectionsByIdPermanentResponses, DeleteApiV1AdminCollectionsByIdPermanentErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminCollectionsByIdPermanentResponses, DeleteApiV1AdminCollectionsByIdPermanentErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/collections/{id}/permanent',
-    ...options
-});
+export const deleteApiV1AdminCollectionsByIdPermanent = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminCollectionsByIdPermanentData, ThrowOnError>): RequestResult<DeleteApiV1AdminCollectionsByIdPermanentResponses, DeleteApiV1AdminCollectionsByIdPermanentErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminCollectionsByIdPermanentResponses, DeleteApiV1AdminCollectionsByIdPermanentErrors, ThrowOnError>({ url: '/api/v1/admin/collections/{id}/permanent', ...options });
 
 /**
  * List customer tags
  *
  * The store's customer tags with how many live customers carry each, most used first.
  */
-export const getApiV1AdminCustomersTags = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminCustomersTagsData, ThrowOnError>): RequestResult<GetApiV1AdminCustomersTagsResponses, GetApiV1AdminCustomersTagsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminCustomersTagsResponses, GetApiV1AdminCustomersTagsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/customers/tags',
-    ...options
-});
+export const getApiV1AdminCustomersTags = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminCustomersTagsData, ThrowOnError>): RequestResult<GetApiV1AdminCustomersTagsResponses, GetApiV1AdminCustomersTagsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminCustomersTagsResponses, GetApiV1AdminCustomersTagsErrors, ThrowOnError>({ url: '/api/v1/admin/customers/tags', ...options });
 
 /**
  * Add or remove tags on many customers
  */
 export const postApiV1AdminCustomersTagsBulk = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminCustomersTagsBulkData, ThrowOnError>): RequestResult<PostApiV1AdminCustomersTagsBulkResponses, PostApiV1AdminCustomersTagsBulkErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminCustomersTagsBulkResponses, PostApiV1AdminCustomersTagsBulkErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/customers/tags/bulk',
     ...options,
     headers: {
@@ -2798,15 +1991,6 @@ export const postApiV1AdminCustomersTagsBulk = <ThrowOnError extends boolean = f
  * Replace one customer's tags
  */
 export const putApiV1AdminCustomersByIdTags = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminCustomersByIdTagsData, ThrowOnError>): RequestResult<PutApiV1AdminCustomersByIdTagsResponses, PutApiV1AdminCustomersByIdTagsErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminCustomersByIdTagsResponses, PutApiV1AdminCustomersByIdTagsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/customers/{id}/tags',
     ...options,
     headers: {
@@ -2820,50 +2004,17 @@ export const putApiV1AdminCustomersByIdTags = <ThrowOnError extends boolean = fa
  *
  * Live customers of a tag, saved segment or subscriber channel (or the given ids), with order facts, tags and consent per channel. At most 10000 rows; X-Export-Limited says when the file stopped early.
  */
-export const getApiV1AdminCustomersExport = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminCustomersExportData, ThrowOnError>): RequestResult<GetApiV1AdminCustomersExportResponses, GetApiV1AdminCustomersExportErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminCustomersExportResponses, GetApiV1AdminCustomersExportErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/customers/export',
-    ...options
-});
+export const getApiV1AdminCustomersExport = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminCustomersExportData, ThrowOnError>): RequestResult<GetApiV1AdminCustomersExportResponses, GetApiV1AdminCustomersExportErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminCustomersExportResponses, GetApiV1AdminCustomersExportErrors, ThrowOnError>({ url: '/api/v1/admin/customers/export', ...options });
 
 /**
  * List saved customer segments
  */
-export const getApiV1AdminCustomersSegments = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminCustomersSegmentsData, ThrowOnError>): RequestResult<GetApiV1AdminCustomersSegmentsResponses, GetApiV1AdminCustomersSegmentsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminCustomersSegmentsResponses, GetApiV1AdminCustomersSegmentsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/customers/segments',
-    ...options
-});
+export const getApiV1AdminCustomersSegments = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminCustomersSegmentsData, ThrowOnError>): RequestResult<GetApiV1AdminCustomersSegmentsResponses, GetApiV1AdminCustomersSegmentsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminCustomersSegmentsResponses, GetApiV1AdminCustomersSegmentsErrors, ThrowOnError>({ url: '/api/v1/admin/customers/segments', ...options });
 
 /**
  * Save a customer segment
  */
 export const postApiV1AdminCustomersSegments = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminCustomersSegmentsData, ThrowOnError>): RequestResult<PostApiV1AdminCustomersSegmentsResponses, PostApiV1AdminCustomersSegmentsErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminCustomersSegmentsResponses, PostApiV1AdminCustomersSegmentsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/customers/segments',
     ...options,
     headers: {
@@ -2878,15 +2029,6 @@ export const postApiV1AdminCustomersSegments = <ThrowOnError extends boolean = f
  * Live member count (capped) and the first customers of an unsaved definition. Changes nothing.
  */
 export const postApiV1AdminCustomersSegmentsPreview = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminCustomersSegmentsPreviewData, ThrowOnError>): RequestResult<PostApiV1AdminCustomersSegmentsPreviewResponses, PostApiV1AdminCustomersSegmentsPreviewErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminCustomersSegmentsPreviewResponses, PostApiV1AdminCustomersSegmentsPreviewErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/customers/segments/preview',
     ...options,
     headers: {
@@ -2900,50 +2042,17 @@ export const postApiV1AdminCustomersSegmentsPreview = <ThrowOnError extends bool
  *
  * Refused while a discount (not archived) is limited to it.
  */
-export const deleteApiV1AdminCustomersSegmentsBySegmentId = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminCustomersSegmentsBySegmentIdData, ThrowOnError>): RequestResult<DeleteApiV1AdminCustomersSegmentsBySegmentIdResponses, DeleteApiV1AdminCustomersSegmentsBySegmentIdErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminCustomersSegmentsBySegmentIdResponses, DeleteApiV1AdminCustomersSegmentsBySegmentIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/customers/segments/{segmentId}',
-    ...options
-});
+export const deleteApiV1AdminCustomersSegmentsBySegmentId = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminCustomersSegmentsBySegmentIdData, ThrowOnError>): RequestResult<DeleteApiV1AdminCustomersSegmentsBySegmentIdResponses, DeleteApiV1AdminCustomersSegmentsBySegmentIdErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminCustomersSegmentsBySegmentIdResponses, DeleteApiV1AdminCustomersSegmentsBySegmentIdErrors, ThrowOnError>({ url: '/api/v1/admin/customers/segments/{segmentId}', ...options });
 
 /**
  * Get a customer segment
  */
-export const getApiV1AdminCustomersSegmentsBySegmentId = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminCustomersSegmentsBySegmentIdData, ThrowOnError>): RequestResult<GetApiV1AdminCustomersSegmentsBySegmentIdResponses, GetApiV1AdminCustomersSegmentsBySegmentIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminCustomersSegmentsBySegmentIdResponses, GetApiV1AdminCustomersSegmentsBySegmentIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/customers/segments/{segmentId}',
-    ...options
-});
+export const getApiV1AdminCustomersSegmentsBySegmentId = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminCustomersSegmentsBySegmentIdData, ThrowOnError>): RequestResult<GetApiV1AdminCustomersSegmentsBySegmentIdResponses, GetApiV1AdminCustomersSegmentsBySegmentIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminCustomersSegmentsBySegmentIdResponses, GetApiV1AdminCustomersSegmentsBySegmentIdErrors, ThrowOnError>({ url: '/api/v1/admin/customers/segments/{segmentId}', ...options });
 
 /**
  * Change a customer segment
  */
 export const putApiV1AdminCustomersSegmentsBySegmentId = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminCustomersSegmentsBySegmentIdData, ThrowOnError>): RequestResult<PutApiV1AdminCustomersSegmentsBySegmentIdResponses, PutApiV1AdminCustomersSegmentsBySegmentIdErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminCustomersSegmentsBySegmentIdResponses, PutApiV1AdminCustomersSegmentsBySegmentIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/customers/segments/{segmentId}',
     ...options,
     headers: {
@@ -2955,57 +2064,21 @@ export const putApiV1AdminCustomersSegmentsBySegmentId = <ThrowOnError extends b
 /**
  * Count a segment's members now
  */
-export const getApiV1AdminCustomersSegmentsBySegmentIdCount = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminCustomersSegmentsBySegmentIdCountData, ThrowOnError>): RequestResult<GetApiV1AdminCustomersSegmentsBySegmentIdCountResponses, GetApiV1AdminCustomersSegmentsBySegmentIdCountErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminCustomersSegmentsBySegmentIdCountResponses, GetApiV1AdminCustomersSegmentsBySegmentIdCountErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/customers/segments/{segmentId}/count',
-    ...options
-});
+export const getApiV1AdminCustomersSegmentsBySegmentIdCount = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminCustomersSegmentsBySegmentIdCountData, ThrowOnError>): RequestResult<GetApiV1AdminCustomersSegmentsBySegmentIdCountResponses, GetApiV1AdminCustomersSegmentsBySegmentIdCountErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminCustomersSegmentsBySegmentIdCountResponses, GetApiV1AdminCustomersSegmentsBySegmentIdCountErrors, ThrowOnError>({ url: '/api/v1/admin/customers/segments/{segmentId}/count', ...options });
 
 /**
  * Walk a segment's members
  *
  * Member ids in id order, one page after `after` (keyset; plugins and agents walk a whole segment this way).
  */
-export const getApiV1AdminCustomersSegmentsBySegmentIdMembers = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminCustomersSegmentsBySegmentIdMembersData, ThrowOnError>): RequestResult<GetApiV1AdminCustomersSegmentsBySegmentIdMembersResponses, GetApiV1AdminCustomersSegmentsBySegmentIdMembersErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminCustomersSegmentsBySegmentIdMembersResponses, GetApiV1AdminCustomersSegmentsBySegmentIdMembersErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/customers/segments/{segmentId}/members',
-    ...options
-});
+export const getApiV1AdminCustomersSegmentsBySegmentIdMembers = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminCustomersSegmentsBySegmentIdMembersData, ThrowOnError>): RequestResult<GetApiV1AdminCustomersSegmentsBySegmentIdMembersResponses, GetApiV1AdminCustomersSegmentsBySegmentIdMembersErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminCustomersSegmentsBySegmentIdMembersResponses, GetApiV1AdminCustomersSegmentsBySegmentIdMembersErrors, ThrowOnError>({ url: '/api/v1/admin/customers/segments/{segmentId}/members', ...options });
 
 /**
  * Get a customer's marketing consent and tags
  *
  * Consent per channel (what applies to the current address), the consent audit log and the tags.
  */
-export const getApiV1AdminCustomersByIdMarketing = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminCustomersByIdMarketingData, ThrowOnError>): RequestResult<GetApiV1AdminCustomersByIdMarketingResponses, GetApiV1AdminCustomersByIdMarketingErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminCustomersByIdMarketingResponses, GetApiV1AdminCustomersByIdMarketingErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/customers/{id}/marketing',
-    ...options
-});
+export const getApiV1AdminCustomersByIdMarketing = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminCustomersByIdMarketingData, ThrowOnError>): RequestResult<GetApiV1AdminCustomersByIdMarketingResponses, GetApiV1AdminCustomersByIdMarketingErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminCustomersByIdMarketingResponses, GetApiV1AdminCustomersByIdMarketingErrors, ThrowOnError>({ url: '/api/v1/admin/customers/{id}/marketing', ...options });
 
 /**
  * Record a customer's marketing consent
@@ -3013,15 +2086,6 @@ export const getApiV1AdminCustomersByIdMarketing = <ThrowOnError extends boolean
  * Subscribe (consent the customer gave outside the store; a note saying how is required) or unsubscribe one channel. Kept on the audit log with the author.
  */
 export const putApiV1AdminCustomersByIdMarketing = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminCustomersByIdMarketingData, ThrowOnError>): RequestResult<PutApiV1AdminCustomersByIdMarketingResponses, PutApiV1AdminCustomersByIdMarketingErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminCustomersByIdMarketingResponses, PutApiV1AdminCustomersByIdMarketingErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/customers/{id}/marketing',
     ...options,
     headers: {
@@ -3035,33 +2099,12 @@ export const putApiV1AdminCustomersByIdMarketing = <ThrowOnError extends boolean
  *
  * Find recent or new customers and search bounded customer summaries.
  */
-export const getApiV1AdminCustomers = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminCustomersData, ThrowOnError>): RequestResult<GetApiV1AdminCustomersResponses, GetApiV1AdminCustomersErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminCustomersResponses, GetApiV1AdminCustomersErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/customers',
-    ...options
-});
+export const getApiV1AdminCustomers = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminCustomersData, ThrowOnError>): RequestResult<GetApiV1AdminCustomersResponses, GetApiV1AdminCustomersErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminCustomersResponses, GetApiV1AdminCustomersErrors, ThrowOnError>({ url: '/api/v1/admin/customers', ...options });
 
 /**
  * Create a customer
  */
 export const postApiV1AdminCustomers = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminCustomersData, ThrowOnError>): RequestResult<PostApiV1AdminCustomersResponses, PostApiV1AdminCustomersErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminCustomersResponses, PostApiV1AdminCustomersErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/customers',
     ...options,
     headers: {
@@ -3074,15 +2117,6 @@ export const postApiV1AdminCustomers = <ThrowOnError extends boolean = false>(op
  * Bulk delete customers
  */
 export const postApiV1AdminCustomersBulkDelete = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminCustomersBulkDeleteData, ThrowOnError>): RequestResult<PostApiV1AdminCustomersBulkDeleteResponses, unknown, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminCustomersBulkDeleteResponses, unknown, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/customers/bulk-delete',
     ...options,
     headers: {
@@ -3094,50 +2128,17 @@ export const postApiV1AdminCustomersBulkDelete = <ThrowOnError extends boolean =
 /**
  * Soft-delete a customer
  */
-export const deleteApiV1AdminCustomersById = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminCustomersByIdData, ThrowOnError>): RequestResult<DeleteApiV1AdminCustomersByIdResponses, DeleteApiV1AdminCustomersByIdErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminCustomersByIdResponses, DeleteApiV1AdminCustomersByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/customers/{id}',
-    ...options
-});
+export const deleteApiV1AdminCustomersById = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminCustomersByIdData, ThrowOnError>): RequestResult<DeleteApiV1AdminCustomersByIdResponses, DeleteApiV1AdminCustomersByIdErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminCustomersByIdResponses, DeleteApiV1AdminCustomersByIdErrors, ThrowOnError>({ url: '/api/v1/admin/customers/{id}', ...options });
 
 /**
  * Get a customer by ID
  */
-export const getApiV1AdminCustomersById = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminCustomersByIdData, ThrowOnError>): RequestResult<GetApiV1AdminCustomersByIdResponses, GetApiV1AdminCustomersByIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminCustomersByIdResponses, GetApiV1AdminCustomersByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/customers/{id}',
-    ...options
-});
+export const getApiV1AdminCustomersById = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminCustomersByIdData, ThrowOnError>): RequestResult<GetApiV1AdminCustomersByIdResponses, GetApiV1AdminCustomersByIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminCustomersByIdResponses, GetApiV1AdminCustomersByIdErrors, ThrowOnError>({ url: '/api/v1/admin/customers/{id}', ...options });
 
 /**
  * Update a customer
  */
 export const putApiV1AdminCustomersById = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminCustomersByIdData, ThrowOnError>): RequestResult<PutApiV1AdminCustomersByIdResponses, PutApiV1AdminCustomersByIdErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminCustomersByIdResponses, PutApiV1AdminCustomersByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/customers/{id}',
     ...options,
     headers: {
@@ -3149,84 +2150,27 @@ export const putApiV1AdminCustomersById = <ThrowOnError extends boolean = false>
 /**
  * Permanently delete a customer
  */
-export const deleteApiV1AdminCustomersByIdPermanent = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminCustomersByIdPermanentData, ThrowOnError>): RequestResult<DeleteApiV1AdminCustomersByIdPermanentResponses, unknown, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminCustomersByIdPermanentResponses, unknown, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/customers/{id}/permanent',
-    ...options
-});
+export const deleteApiV1AdminCustomersByIdPermanent = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminCustomersByIdPermanentData, ThrowOnError>): RequestResult<DeleteApiV1AdminCustomersByIdPermanentResponses, unknown, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminCustomersByIdPermanentResponses, unknown, ThrowOnError>({ url: '/api/v1/admin/customers/{id}/permanent', ...options });
 
 /**
  * Restore a soft-deleted customer
  */
-export const postApiV1AdminCustomersByIdRestore = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminCustomersByIdRestoreData, ThrowOnError>): RequestResult<PostApiV1AdminCustomersByIdRestoreResponses, unknown, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminCustomersByIdRestoreResponses, unknown, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/customers/{id}/restore',
-    ...options
-});
+export const postApiV1AdminCustomersByIdRestore = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminCustomersByIdRestoreData, ThrowOnError>): RequestResult<PostApiV1AdminCustomersByIdRestoreResponses, unknown, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminCustomersByIdRestoreResponses, unknown, ThrowOnError>({ url: '/api/v1/admin/customers/{id}/restore', ...options });
 
 /**
  * Get customer details with history and orders
  */
-export const getApiV1AdminCustomersByIdHistory = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminCustomersByIdHistoryData, ThrowOnError>): RequestResult<GetApiV1AdminCustomersByIdHistoryResponses, GetApiV1AdminCustomersByIdHistoryErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminCustomersByIdHistoryResponses, GetApiV1AdminCustomersByIdHistoryErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/customers/{id}/history',
-    ...options
-});
+export const getApiV1AdminCustomersByIdHistory = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminCustomersByIdHistoryData, ThrowOnError>): RequestResult<GetApiV1AdminCustomersByIdHistoryResponses, GetApiV1AdminCustomersByIdHistoryErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminCustomersByIdHistoryResponses, GetApiV1AdminCustomersByIdHistoryErrors, ThrowOnError>({ url: '/api/v1/admin/customers/{id}/history', ...options });
 
 /**
  * List all pages
  */
-export const getApiV1AdminPages = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminPagesData, ThrowOnError>): RequestResult<GetApiV1AdminPagesResponses, GetApiV1AdminPagesErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminPagesResponses, GetApiV1AdminPagesErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/pages',
-    ...options
-});
+export const getApiV1AdminPages = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminPagesData, ThrowOnError>): RequestResult<GetApiV1AdminPagesResponses, GetApiV1AdminPagesErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminPagesResponses, GetApiV1AdminPagesErrors, ThrowOnError>({ url: '/api/v1/admin/pages', ...options });
 
 /**
  * Create a page
  */
 export const postApiV1AdminPages = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminPagesData, ThrowOnError>): RequestResult<PostApiV1AdminPagesResponses, PostApiV1AdminPagesErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminPagesResponses, PostApiV1AdminPagesErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/pages',
     ...options,
     headers: {
@@ -3239,15 +2183,6 @@ export const postApiV1AdminPages = <ThrowOnError extends boolean = false>(option
  * Bulk delete pages
  */
 export const postApiV1AdminPagesBulkDelete = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminPagesBulkDeleteData, ThrowOnError>): RequestResult<PostApiV1AdminPagesBulkDeleteResponses, PostApiV1AdminPagesBulkDeleteErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminPagesBulkDeleteResponses, PostApiV1AdminPagesBulkDeleteErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/pages/bulk-delete',
     ...options,
     headers: {
@@ -3260,15 +2195,6 @@ export const postApiV1AdminPagesBulkDelete = <ThrowOnError extends boolean = fal
  * Bulk publish pages
  */
 export const postApiV1AdminPagesBulkPublish = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminPagesBulkPublishData, ThrowOnError>): RequestResult<PostApiV1AdminPagesBulkPublishResponses, PostApiV1AdminPagesBulkPublishErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminPagesBulkPublishResponses, PostApiV1AdminPagesBulkPublishErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/pages/bulk-publish',
     ...options,
     headers: {
@@ -3281,15 +2207,6 @@ export const postApiV1AdminPagesBulkPublish = <ThrowOnError extends boolean = fa
  * Bulk unpublish pages
  */
 export const postApiV1AdminPagesBulkUnpublish = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminPagesBulkUnpublishData, ThrowOnError>): RequestResult<PostApiV1AdminPagesBulkUnpublishResponses, PostApiV1AdminPagesBulkUnpublishErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminPagesBulkUnpublishResponses, PostApiV1AdminPagesBulkUnpublishErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/pages/bulk-unpublish',
     ...options,
     headers: {
@@ -3302,15 +2219,6 @@ export const postApiV1AdminPagesBulkUnpublish = <ThrowOnError extends boolean = 
  * Bulk restore pages
  */
 export const postApiV1AdminPagesBulkRestore = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminPagesBulkRestoreData, ThrowOnError>): RequestResult<PostApiV1AdminPagesBulkRestoreResponses, PostApiV1AdminPagesBulkRestoreErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminPagesBulkRestoreResponses, PostApiV1AdminPagesBulkRestoreErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/pages/bulk-restore',
     ...options,
     headers: {
@@ -3323,15 +2231,6 @@ export const postApiV1AdminPagesBulkRestore = <ThrowOnError extends boolean = fa
  * Restore a soft-deleted page
  */
 export const postApiV1AdminPagesByIdRestore = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminPagesByIdRestoreData, ThrowOnError>): RequestResult<PostApiV1AdminPagesByIdRestoreResponses, PostApiV1AdminPagesByIdRestoreErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminPagesByIdRestoreResponses, PostApiV1AdminPagesByIdRestoreErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/pages/{id}/restore',
     ...options,
     headers: {
@@ -3344,15 +2243,6 @@ export const postApiV1AdminPagesByIdRestore = <ThrowOnError extends boolean = fa
  * Soft-delete a page
  */
 export const deleteApiV1AdminPagesById = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminPagesByIdData, ThrowOnError>): RequestResult<DeleteApiV1AdminPagesByIdResponses, DeleteApiV1AdminPagesByIdErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminPagesByIdResponses, DeleteApiV1AdminPagesByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/pages/{id}',
     ...options,
     headers: {
@@ -3364,33 +2254,12 @@ export const deleteApiV1AdminPagesById = <ThrowOnError extends boolean = false>(
 /**
  * Get a page by ID
  */
-export const getApiV1AdminPagesById = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminPagesByIdData, ThrowOnError>): RequestResult<GetApiV1AdminPagesByIdResponses, GetApiV1AdminPagesByIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminPagesByIdResponses, GetApiV1AdminPagesByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/pages/{id}',
-    ...options
-});
+export const getApiV1AdminPagesById = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminPagesByIdData, ThrowOnError>): RequestResult<GetApiV1AdminPagesByIdResponses, GetApiV1AdminPagesByIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminPagesByIdResponses, GetApiV1AdminPagesByIdErrors, ThrowOnError>({ url: '/api/v1/admin/pages/{id}', ...options });
 
 /**
  * Update a page
  */
 export const putApiV1AdminPagesById = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminPagesByIdData, ThrowOnError>): RequestResult<PutApiV1AdminPagesByIdResponses, PutApiV1AdminPagesByIdErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminPagesByIdResponses, PutApiV1AdminPagesByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/pages/{id}',
     ...options,
     headers: {
@@ -3403,15 +2272,6 @@ export const putApiV1AdminPagesById = <ThrowOnError extends boolean = false>(opt
  * Permanently delete a page
  */
 export const deleteApiV1AdminPagesByIdPermanent = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminPagesByIdPermanentData, ThrowOnError>): RequestResult<DeleteApiV1AdminPagesByIdPermanentResponses, DeleteApiV1AdminPagesByIdPermanentErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminPagesByIdPermanentResponses, DeleteApiV1AdminPagesByIdPermanentErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/pages/{id}/permanent',
     ...options,
     headers: {
@@ -3423,33 +2283,12 @@ export const deleteApiV1AdminPagesByIdPermanent = <ThrowOnError extends boolean 
 /**
  * List code and automatic discounts
  */
-export const getApiV1AdminDiscounts = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminDiscountsData, ThrowOnError>): RequestResult<GetApiV1AdminDiscountsResponses, GetApiV1AdminDiscountsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminDiscountsResponses, GetApiV1AdminDiscountsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/discounts',
-    ...options
-});
+export const getApiV1AdminDiscounts = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminDiscountsData, ThrowOnError>): RequestResult<GetApiV1AdminDiscountsResponses, GetApiV1AdminDiscountsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminDiscountsResponses, GetApiV1AdminDiscountsErrors, ThrowOnError>({ url: '/api/v1/admin/discounts', ...options });
 
 /**
  * Create a draft discount
  */
 export const postApiV1AdminDiscounts = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminDiscountsData, ThrowOnError>): RequestResult<PostApiV1AdminDiscountsResponses, PostApiV1AdminDiscountsErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminDiscountsResponses, PostApiV1AdminDiscountsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/discounts',
     ...options,
     headers: {
@@ -3462,15 +2301,6 @@ export const postApiV1AdminDiscounts = <ThrowOnError extends boolean = false>(op
  * Delete a discount (kept for order history)
  */
 export const deleteApiV1AdminDiscountsById = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminDiscountsByIdData, ThrowOnError>): RequestResult<DeleteApiV1AdminDiscountsByIdResponses, DeleteApiV1AdminDiscountsByIdErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminDiscountsByIdResponses, DeleteApiV1AdminDiscountsByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/discounts/{id}',
     ...options,
     headers: {
@@ -3482,33 +2312,12 @@ export const deleteApiV1AdminDiscountsById = <ThrowOnError extends boolean = fal
 /**
  * Get a discount
  */
-export const getApiV1AdminDiscountsById = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminDiscountsByIdData, ThrowOnError>): RequestResult<GetApiV1AdminDiscountsByIdResponses, GetApiV1AdminDiscountsByIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminDiscountsByIdResponses, GetApiV1AdminDiscountsByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/discounts/{id}',
-    ...options
-});
+export const getApiV1AdminDiscountsById = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminDiscountsByIdData, ThrowOnError>): RequestResult<GetApiV1AdminDiscountsByIdResponses, GetApiV1AdminDiscountsByIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminDiscountsByIdResponses, GetApiV1AdminDiscountsByIdErrors, ThrowOnError>({ url: '/api/v1/admin/discounts/{id}', ...options });
 
 /**
  * Replace a discount's rules (revision-checked)
  */
 export const putApiV1AdminDiscountsById = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminDiscountsByIdData, ThrowOnError>): RequestResult<PutApiV1AdminDiscountsByIdResponses, PutApiV1AdminDiscountsByIdErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminDiscountsByIdResponses, PutApiV1AdminDiscountsByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/discounts/{id}',
     ...options,
     headers: {
@@ -3521,15 +2330,6 @@ export const putApiV1AdminDiscountsById = <ThrowOnError extends boolean = false>
  * Preview a saved discount against a cart
  */
 export const postApiV1AdminDiscountsByIdPreview = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminDiscountsByIdPreviewData, ThrowOnError>): RequestResult<PostApiV1AdminDiscountsByIdPreviewResponses, PostApiV1AdminDiscountsByIdPreviewErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminDiscountsByIdPreviewResponses, PostApiV1AdminDiscountsByIdPreviewErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/discounts/{id}/preview',
     ...options,
     headers: {
@@ -3542,15 +2342,6 @@ export const postApiV1AdminDiscountsByIdPreview = <ThrowOnError extends boolean 
  * Activate a discount
  */
 export const postApiV1AdminDiscountsByIdActivate = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminDiscountsByIdActivateData, ThrowOnError>): RequestResult<PostApiV1AdminDiscountsByIdActivateResponses, PostApiV1AdminDiscountsByIdActivateErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminDiscountsByIdActivateResponses, PostApiV1AdminDiscountsByIdActivateErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/discounts/{id}/activate',
     ...options,
     headers: {
@@ -3563,15 +2354,6 @@ export const postApiV1AdminDiscountsByIdActivate = <ThrowOnError extends boolean
  * Deactivate a discount
  */
 export const postApiV1AdminDiscountsByIdPause = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminDiscountsByIdPauseData, ThrowOnError>): RequestResult<PostApiV1AdminDiscountsByIdPauseResponses, PostApiV1AdminDiscountsByIdPauseErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminDiscountsByIdPauseResponses, PostApiV1AdminDiscountsByIdPauseErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/discounts/{id}/pause',
     ...options,
     headers: {
@@ -3583,19 +2365,7 @@ export const postApiV1AdminDiscountsByIdPause = <ThrowOnError extends boolean = 
 /**
  * List media with stable cursor pagination
  */
-export const getApiV1AdminMedia = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminMediaData, ThrowOnError>): RequestResult<GetApiV1AdminMediaResponses, GetApiV1AdminMediaErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminMediaResponses, GetApiV1AdminMediaErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/media',
-    ...options
-});
+export const getApiV1AdminMedia = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminMediaData, ThrowOnError>): RequestResult<GetApiV1AdminMediaResponses, GetApiV1AdminMediaErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminMediaResponses, GetApiV1AdminMediaErrors, ThrowOnError>({ url: '/api/v1/admin/media', ...options });
 
 /**
  * Initiate a durable image or video upload
@@ -3603,15 +2373,6 @@ export const getApiV1AdminMedia = <ThrowOnError extends boolean = false>(options
  * Start one resumable upload. Supported images: JPEG, PNG, GIF, WebP, and AVIF up to 20 MiB. Supported video: MP4 and WebM up to 100 MiB. File extension, declared MIME type, and signature must agree. Upload exactly session.expectedParts chunks of at most session.partSize bytes with dashboard.media.upload_part, then call dashboard.media.upload_complete. Resume with dashboard.media.upload_get or clean up with dashboard.media.upload_abort.
  */
 export const postApiV1AdminMediaUploads = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminMediaUploadsData, ThrowOnError>): RequestResult<PostApiV1AdminMediaUploadsResponses, PostApiV1AdminMediaUploadsErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminMediaUploadsResponses, PostApiV1AdminMediaUploadsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/media/uploads',
     ...options,
     headers: {
@@ -3626,15 +2387,6 @@ export const postApiV1AdminMediaUploads = <ThrowOnError extends boolean = false>
  * Fetch one credential-free public HTTPS asset into the same durable, signature-checked media authority used by direct uploads. Redirects are revalidated, Content-Type and Content-Length must be exact, and the source is never persisted as authority.
  */
 export const postApiV1AdminMediaUploadsImportUrl = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminMediaUploadsImportUrlData, ThrowOnError>): RequestResult<PostApiV1AdminMediaUploadsImportUrlResponses, PostApiV1AdminMediaUploadsImportUrlErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminMediaUploadsImportUrlResponses, PostApiV1AdminMediaUploadsImportUrlErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/media/uploads/import-url',
     ...options,
     headers: {
@@ -3646,36 +2398,12 @@ export const postApiV1AdminMediaUploadsImportUrl = <ThrowOnError extends boolean
 /**
  * Abort a media upload
  */
-export const deleteApiV1AdminMediaUploadsById = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminMediaUploadsByIdData, ThrowOnError>): RequestResult<DeleteApiV1AdminMediaUploadsByIdResponses, DeleteApiV1AdminMediaUploadsByIdErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminMediaUploadsByIdResponses, DeleteApiV1AdminMediaUploadsByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/media/uploads/{id}',
-    ...options
-});
+export const deleteApiV1AdminMediaUploadsById = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminMediaUploadsByIdData, ThrowOnError>): RequestResult<DeleteApiV1AdminMediaUploadsByIdResponses, DeleteApiV1AdminMediaUploadsByIdErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminMediaUploadsByIdResponses, DeleteApiV1AdminMediaUploadsByIdErrors, ThrowOnError>({ url: '/api/v1/admin/media/uploads/{id}', ...options });
 
 /**
  * Read resumable upload status
  */
-export const getApiV1AdminMediaUploadsById = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminMediaUploadsByIdData, ThrowOnError>): RequestResult<GetApiV1AdminMediaUploadsByIdResponses, GetApiV1AdminMediaUploadsByIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminMediaUploadsByIdResponses, GetApiV1AdminMediaUploadsByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/media/uploads/{id}',
-    ...options
-});
+export const getApiV1AdminMediaUploadsById = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminMediaUploadsByIdData, ThrowOnError>): RequestResult<GetApiV1AdminMediaUploadsByIdResponses, GetApiV1AdminMediaUploadsByIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminMediaUploadsByIdResponses, GetApiV1AdminMediaUploadsByIdErrors, ThrowOnError>({ url: '/api/v1/admin/media/uploads/{id}', ...options });
 
 /**
  * Stream one bounded media upload part
@@ -3684,15 +2412,6 @@ export const getApiV1AdminMediaUploadsById = <ThrowOnError extends boolean = fal
  */
 export const putApiV1AdminMediaUploadsByIdPartsByPartNumber = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminMediaUploadsByIdPartsByPartNumberData, ThrowOnError>): RequestResult<PutApiV1AdminMediaUploadsByIdPartsByPartNumberResponses, PutApiV1AdminMediaUploadsByIdPartsByPartNumberErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminMediaUploadsByIdPartsByPartNumberResponses, PutApiV1AdminMediaUploadsByIdPartsByPartNumberErrors, ThrowOnError>({
     bodySerializer: null,
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/media/uploads/{id}/parts/{partNumber}',
     ...options,
     headers: {
@@ -3706,46 +2425,17 @@ export const putApiV1AdminMediaUploadsByIdPartsByPartNumber = <ThrowOnError exte
  *
  * Commit an upload only after every expected part is present. The returned file.id is the media asset ID used by product media associations. If completion fails, inspect dashboard.media.upload_get and resume missing parts instead of initiating a duplicate session.
  */
-export const postApiV1AdminMediaUploadsByIdComplete = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminMediaUploadsByIdCompleteData, ThrowOnError>): RequestResult<PostApiV1AdminMediaUploadsByIdCompleteResponses, PostApiV1AdminMediaUploadsByIdCompleteErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminMediaUploadsByIdCompleteResponses, PostApiV1AdminMediaUploadsByIdCompleteErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/media/uploads/{id}/complete',
-    ...options
-});
+export const postApiV1AdminMediaUploadsByIdComplete = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminMediaUploadsByIdCompleteData, ThrowOnError>): RequestResult<PostApiV1AdminMediaUploadsByIdCompleteResponses, PostApiV1AdminMediaUploadsByIdCompleteErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminMediaUploadsByIdCompleteResponses, PostApiV1AdminMediaUploadsByIdCompleteErrors, ThrowOnError>({ url: '/api/v1/admin/media/uploads/{id}/complete', ...options });
 
 /**
  * Reconcile a bounded page of expired uploads
  */
-export const postApiV1AdminMediaUploadsReconcile = <ThrowOnError extends boolean = false>(options?: Options<PostApiV1AdminMediaUploadsReconcileData, ThrowOnError>): RequestResult<PostApiV1AdminMediaUploadsReconcileResponses, PostApiV1AdminMediaUploadsReconcileErrors, ThrowOnError> => (options?.client ?? client).post<PostApiV1AdminMediaUploadsReconcileResponses, PostApiV1AdminMediaUploadsReconcileErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }],
-    url: '/api/v1/admin/media/uploads/reconcile',
-    ...options
-});
+export const postApiV1AdminMediaUploadsReconcile = <ThrowOnError extends boolean = false>(options?: Options<PostApiV1AdminMediaUploadsReconcileData, ThrowOnError>): RequestResult<PostApiV1AdminMediaUploadsReconcileResponses, PostApiV1AdminMediaUploadsReconcileErrors, ThrowOnError> => (options?.client ?? client).post<PostApiV1AdminMediaUploadsReconcileResponses, PostApiV1AdminMediaUploadsReconcileErrors, ThrowOnError>({ url: '/api/v1/admin/media/uploads/reconcile', ...options });
 
 /**
  * Update ready media metadata with CAS
  */
 export const patchApiV1AdminMediaById = <ThrowOnError extends boolean = false>(options: Options<PatchApiV1AdminMediaByIdData, ThrowOnError>): RequestResult<PatchApiV1AdminMediaByIdResponses, PatchApiV1AdminMediaByIdErrors, ThrowOnError> => (options.client ?? client).patch<PatchApiV1AdminMediaByIdResponses, PatchApiV1AdminMediaByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/media/{id}',
     ...options,
     headers: {
@@ -3758,15 +2448,6 @@ export const patchApiV1AdminMediaById = <ThrowOnError extends boolean = false>(o
  * Move media to trash
  */
 export const postApiV1AdminMediaByIdTrash = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminMediaByIdTrashData, ThrowOnError>): RequestResult<PostApiV1AdminMediaByIdTrashResponses, PostApiV1AdminMediaByIdTrashErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminMediaByIdTrashResponses, PostApiV1AdminMediaByIdTrashErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/media/{id}/trash',
     ...options,
     headers: {
@@ -3779,15 +2460,6 @@ export const postApiV1AdminMediaByIdTrash = <ThrowOnError extends boolean = fals
  * Restore trashed media
  */
 export const postApiV1AdminMediaByIdRestore = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminMediaByIdRestoreData, ThrowOnError>): RequestResult<PostApiV1AdminMediaByIdRestoreResponses, PostApiV1AdminMediaByIdRestoreErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminMediaByIdRestoreResponses, PostApiV1AdminMediaByIdRestoreErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/media/{id}/restore',
     ...options,
     headers: {
@@ -3803,11 +2475,6 @@ export const postApiV1AdminMediaByIdRestore = <ThrowOnError extends boolean = fa
  */
 export const postApiV1AdminMediaByIdVariants = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminMediaByIdVariantsData, ThrowOnError>): RequestResult<PostApiV1AdminMediaByIdVariantsResponses, PostApiV1AdminMediaByIdVariantsErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminMediaByIdVariantsResponses, PostApiV1AdminMediaByIdVariantsErrors, ThrowOnError>({
     ...formDataBodySerializer,
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }],
     url: '/api/v1/admin/media/{id}/variants',
     ...options,
     headers: {
@@ -3821,67 +2488,26 @@ export const postApiV1AdminMediaByIdVariants = <ThrowOnError extends boolean = f
  *
  * Same-origin read of the stored original so the dashboard can generate renditions for media uploaded before them.
  */
-export const getApiV1AdminMediaByIdOriginal = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminMediaByIdOriginalData, ThrowOnError>): RequestResult<GetApiV1AdminMediaByIdOriginalResponses, GetApiV1AdminMediaByIdOriginalErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminMediaByIdOriginalResponses, GetApiV1AdminMediaByIdOriginalErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }],
-    url: '/api/v1/admin/media/{id}/original',
-    ...options
-});
+export const getApiV1AdminMediaByIdOriginal = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminMediaByIdOriginalData, ThrowOnError>): RequestResult<GetApiV1AdminMediaByIdOriginalResponses, GetApiV1AdminMediaByIdOriginalErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminMediaByIdOriginalResponses, GetApiV1AdminMediaByIdOriginalErrors, ThrowOnError>({ url: '/api/v1/admin/media/{id}/original', ...options });
 
 /**
  * List where a file is used
  *
  * Distinct places that show the file (up to 50, products first) and how many past order lines keep it. A file in use can be moved to trash (it keeps showing) but not deleted permanently.
  */
-export const getApiV1AdminMediaByIdUsage = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminMediaByIdUsageData, ThrowOnError>): RequestResult<GetApiV1AdminMediaByIdUsageResponses, GetApiV1AdminMediaByIdUsageErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminMediaByIdUsageResponses, GetApiV1AdminMediaByIdUsageErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/media/{id}/usage',
-    ...options
-});
+export const getApiV1AdminMediaByIdUsage = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminMediaByIdUsageData, ThrowOnError>): RequestResult<GetApiV1AdminMediaByIdUsageResponses, GetApiV1AdminMediaByIdUsageErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminMediaByIdUsageResponses, GetApiV1AdminMediaByIdUsageErrors, ThrowOnError>({ url: '/api/v1/admin/media/{id}/usage', ...options });
 
 /**
  * Permanently delete unreferenced trashed media
  *
  * Refused with 409 MEDIA_DEPENDENCY_CONFLICT while the file is used anywhere (see dashboard.media.usage) or kept by past orders.
  */
-export const deleteApiV1AdminMediaByIdPermanent = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminMediaByIdPermanentData, ThrowOnError>): RequestResult<DeleteApiV1AdminMediaByIdPermanentResponses, DeleteApiV1AdminMediaByIdPermanentErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminMediaByIdPermanentResponses, DeleteApiV1AdminMediaByIdPermanentErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/media/{id}/permanent',
-    ...options
-});
+export const deleteApiV1AdminMediaByIdPermanent = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminMediaByIdPermanentData, ThrowOnError>): RequestResult<DeleteApiV1AdminMediaByIdPermanentResponses, DeleteApiV1AdminMediaByIdPermanentErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminMediaByIdPermanentResponses, DeleteApiV1AdminMediaByIdPermanentErrors, ThrowOnError>({ url: '/api/v1/admin/media/{id}/permanent', ...options });
 
 /**
  * Move ready media with per-item CAS
  */
 export const postApiV1AdminMediaMove = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminMediaMoveData, ThrowOnError>): RequestResult<PostApiV1AdminMediaMoveResponses, PostApiV1AdminMediaMoveErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminMediaMoveResponses, PostApiV1AdminMediaMoveErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/media/move',
     ...options,
     headers: {
@@ -3893,33 +2519,12 @@ export const postApiV1AdminMediaMove = <ThrowOnError extends boolean = false>(op
 /**
  * List flat media folders with cursors
  */
-export const getApiV1AdminMediaFolders = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminMediaFoldersData, ThrowOnError>): RequestResult<GetApiV1AdminMediaFoldersResponses, GetApiV1AdminMediaFoldersErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminMediaFoldersResponses, GetApiV1AdminMediaFoldersErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/media/folders',
-    ...options
-});
+export const getApiV1AdminMediaFolders = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminMediaFoldersData, ThrowOnError>): RequestResult<GetApiV1AdminMediaFoldersResponses, GetApiV1AdminMediaFoldersErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminMediaFoldersResponses, GetApiV1AdminMediaFoldersErrors, ThrowOnError>({ url: '/api/v1/admin/media/folders', ...options });
 
 /**
  * Create a flat media folder
  */
 export const postApiV1AdminMediaFolders = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminMediaFoldersData, ThrowOnError>): RequestResult<PostApiV1AdminMediaFoldersResponses, PostApiV1AdminMediaFoldersErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminMediaFoldersResponses, PostApiV1AdminMediaFoldersErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/media/folders',
     ...options,
     headers: {
@@ -3931,33 +2536,12 @@ export const postApiV1AdminMediaFolders = <ThrowOnError extends boolean = false>
 /**
  * Delete a media folder with CAS
  */
-export const deleteApiV1AdminMediaFoldersById = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminMediaFoldersByIdData, ThrowOnError>): RequestResult<DeleteApiV1AdminMediaFoldersByIdResponses, DeleteApiV1AdminMediaFoldersByIdErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminMediaFoldersByIdResponses, DeleteApiV1AdminMediaFoldersByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/media/folders/{id}',
-    ...options
-});
+export const deleteApiV1AdminMediaFoldersById = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminMediaFoldersByIdData, ThrowOnError>): RequestResult<DeleteApiV1AdminMediaFoldersByIdResponses, DeleteApiV1AdminMediaFoldersByIdErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminMediaFoldersByIdResponses, DeleteApiV1AdminMediaFoldersByIdErrors, ThrowOnError>({ url: '/api/v1/admin/media/folders/{id}', ...options });
 
 /**
  * Rename a media folder with CAS
  */
 export const putApiV1AdminMediaFoldersById = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminMediaFoldersByIdData, ThrowOnError>): RequestResult<PutApiV1AdminMediaFoldersByIdResponses, PutApiV1AdminMediaFoldersByIdErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminMediaFoldersByIdResponses, PutApiV1AdminMediaFoldersByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/media/folders/{id}',
     ...options,
     headers: {
@@ -3971,33 +2555,12 @@ export const putApiV1AdminMediaFoldersById = <ThrowOnError extends boolean = fal
  *
  * Active suppliers by name (archived ones with status=archived or all). Searches name, contact, phone and email.
  */
-export const getApiV1AdminInventorySuppliers = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminInventorySuppliersData, ThrowOnError>): RequestResult<GetApiV1AdminInventorySuppliersResponses, unknown, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminInventorySuppliersResponses, unknown, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/inventory/suppliers',
-    ...options
-});
+export const getApiV1AdminInventorySuppliers = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminInventorySuppliersData, ThrowOnError>): RequestResult<GetApiV1AdminInventorySuppliersResponses, unknown, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminInventorySuppliersResponses, unknown, ThrowOnError>({ url: '/api/v1/admin/inventory/suppliers', ...options });
 
 /**
  * Add a supplier
  */
 export const postApiV1AdminInventorySuppliers = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminInventorySuppliersData, ThrowOnError>): RequestResult<PostApiV1AdminInventorySuppliersResponses, PostApiV1AdminInventorySuppliersErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminInventorySuppliersResponses, PostApiV1AdminInventorySuppliersErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/inventory/suppliers',
     ...options,
     headers: {
@@ -4009,19 +2572,7 @@ export const postApiV1AdminInventorySuppliers = <ThrowOnError extends boolean = 
 /**
  * Get a supplier
  */
-export const getApiV1AdminInventorySuppliersBySupplierId = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminInventorySuppliersBySupplierIdData, ThrowOnError>): RequestResult<GetApiV1AdminInventorySuppliersBySupplierIdResponses, GetApiV1AdminInventorySuppliersBySupplierIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminInventorySuppliersBySupplierIdResponses, GetApiV1AdminInventorySuppliersBySupplierIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/inventory/suppliers/{supplierId}',
-    ...options
-});
+export const getApiV1AdminInventorySuppliersBySupplierId = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminInventorySuppliersBySupplierIdData, ThrowOnError>): RequestResult<GetApiV1AdminInventorySuppliersBySupplierIdResponses, GetApiV1AdminInventorySuppliersBySupplierIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminInventorySuppliersBySupplierIdResponses, GetApiV1AdminInventorySuppliersBySupplierIdErrors, ThrowOnError>({ url: '/api/v1/admin/inventory/suppliers/{supplierId}', ...options });
 
 /**
  * Edit a supplier
@@ -4029,15 +2580,6 @@ export const getApiV1AdminInventorySuppliersBySupplierId = <ThrowOnError extends
  * Replaces the supplier's details; expectedVersion must be its current version.
  */
 export const patchApiV1AdminInventorySuppliersBySupplierId = <ThrowOnError extends boolean = false>(options: Options<PatchApiV1AdminInventorySuppliersBySupplierIdData, ThrowOnError>): RequestResult<PatchApiV1AdminInventorySuppliersBySupplierIdResponses, PatchApiV1AdminInventorySuppliersBySupplierIdErrors, ThrowOnError> => (options.client ?? client).patch<PatchApiV1AdminInventorySuppliersBySupplierIdResponses, PatchApiV1AdminInventorySuppliersBySupplierIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/inventory/suppliers/{supplierId}',
     ...options,
     headers: {
@@ -4051,55 +2593,19 @@ export const patchApiV1AdminInventorySuppliersBySupplierId = <ThrowOnError exten
  *
  * Refused while purchase orders are still expected from the supplier.
  */
-export const postApiV1AdminInventorySuppliersBySupplierIdArchive = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminInventorySuppliersBySupplierIdArchiveData, ThrowOnError>): RequestResult<PostApiV1AdminInventorySuppliersBySupplierIdArchiveResponses, PostApiV1AdminInventorySuppliersBySupplierIdArchiveErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminInventorySuppliersBySupplierIdArchiveResponses, PostApiV1AdminInventorySuppliersBySupplierIdArchiveErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/inventory/suppliers/{supplierId}/archive',
-    ...options
-});
+export const postApiV1AdminInventorySuppliersBySupplierIdArchive = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminInventorySuppliersBySupplierIdArchiveData, ThrowOnError>): RequestResult<PostApiV1AdminInventorySuppliersBySupplierIdArchiveResponses, PostApiV1AdminInventorySuppliersBySupplierIdArchiveErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminInventorySuppliersBySupplierIdArchiveResponses, PostApiV1AdminInventorySuppliersBySupplierIdArchiveErrors, ThrowOnError>({ url: '/api/v1/admin/inventory/suppliers/{supplierId}/archive', ...options });
 
 /**
  * Make an archived supplier active again
  */
-export const postApiV1AdminInventorySuppliersBySupplierIdUnarchive = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminInventorySuppliersBySupplierIdUnarchiveData, ThrowOnError>): RequestResult<PostApiV1AdminInventorySuppliersBySupplierIdUnarchiveResponses, PostApiV1AdminInventorySuppliersBySupplierIdUnarchiveErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminInventorySuppliersBySupplierIdUnarchiveResponses, PostApiV1AdminInventorySuppliersBySupplierIdUnarchiveErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/inventory/suppliers/{supplierId}/unarchive',
-    ...options
-});
+export const postApiV1AdminInventorySuppliersBySupplierIdUnarchive = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminInventorySuppliersBySupplierIdUnarchiveData, ThrowOnError>): RequestResult<PostApiV1AdminInventorySuppliersBySupplierIdUnarchiveResponses, PostApiV1AdminInventorySuppliersBySupplierIdUnarchiveErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminInventorySuppliersBySupplierIdUnarchiveResponses, PostApiV1AdminInventorySuppliersBySupplierIdUnarchiveErrors, ThrowOnError>({ url: '/api/v1/admin/inventory/suppliers/{supplierId}/unarchive', ...options });
 
 /**
  * List purchase orders
  *
  * Newest first. status=open lists ordered and partially received ones. q searches the number (PO1001), reference, supplier, SKU and barcode.
  */
-export const getApiV1AdminInventoryPurchaseOrders = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminInventoryPurchaseOrdersData, ThrowOnError>): RequestResult<GetApiV1AdminInventoryPurchaseOrdersResponses, unknown, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminInventoryPurchaseOrdersResponses, unknown, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/inventory/purchase-orders',
-    ...options
-});
+export const getApiV1AdminInventoryPurchaseOrders = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminInventoryPurchaseOrdersData, ThrowOnError>): RequestResult<GetApiV1AdminInventoryPurchaseOrdersResponses, unknown, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminInventoryPurchaseOrdersResponses, unknown, ThrowOnError>({ url: '/api/v1/admin/inventory/purchase-orders', ...options });
 
 /**
  * Create a draft purchase order
@@ -4107,15 +2613,6 @@ export const getApiV1AdminInventoryPurchaseOrders = <ThrowOnError extends boolea
  * Lines are live physical SKUs, each once, at most 100; costs are major units. The destination is the default location when omitted.
  */
 export const postApiV1AdminInventoryPurchaseOrders = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminInventoryPurchaseOrdersData, ThrowOnError>): RequestResult<PostApiV1AdminInventoryPurchaseOrdersResponses, PostApiV1AdminInventoryPurchaseOrdersErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminInventoryPurchaseOrdersResponses, PostApiV1AdminInventoryPurchaseOrdersErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/inventory/purchase-orders',
     ...options,
     headers: {
@@ -4129,36 +2626,12 @@ export const postApiV1AdminInventoryPurchaseOrders = <ThrowOnError extends boole
  *
  * Drafts only; an ordered purchase order is cancelled instead.
  */
-export const deleteApiV1AdminInventoryPurchaseOrdersByPurchaseOrderId = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdData, ThrowOnError>): RequestResult<DeleteApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdResponses, DeleteApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdResponses, DeleteApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/inventory/purchase-orders/{purchaseOrderId}',
-    ...options
-});
+export const deleteApiV1AdminInventoryPurchaseOrdersByPurchaseOrderId = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdData, ThrowOnError>): RequestResult<DeleteApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdResponses, DeleteApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdResponses, DeleteApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdErrors, ThrowOnError>({ url: '/api/v1/admin/inventory/purchase-orders/{purchaseOrderId}', ...options });
 
 /**
  * Get a purchase order with its lines and receipts
  */
-export const getApiV1AdminInventoryPurchaseOrdersByPurchaseOrderId = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdData, ThrowOnError>): RequestResult<GetApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdResponses, GetApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdResponses, GetApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/inventory/purchase-orders/{purchaseOrderId}',
-    ...options
-});
+export const getApiV1AdminInventoryPurchaseOrdersByPurchaseOrderId = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdData, ThrowOnError>): RequestResult<GetApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdResponses, GetApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdResponses, GetApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdErrors, ThrowOnError>({ url: '/api/v1/admin/inventory/purchase-orders/{purchaseOrderId}', ...options });
 
 /**
  * Edit a purchase order
@@ -4166,15 +2639,6 @@ export const getApiV1AdminInventoryPurchaseOrdersByPurchaseOrderId = <ThrowOnErr
  * A draft takes any change (sent lines replace its lines). Once ordered only the supplier, expected date, reference, notes, shipping, other costs and tax change. expectedRevision must be current.
  */
 export const putApiV1AdminInventoryPurchaseOrdersByPurchaseOrderId = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdData, ThrowOnError>): RequestResult<PutApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdResponses, PutApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdResponses, PutApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/inventory/purchase-orders/{purchaseOrderId}',
     ...options,
     headers: {
@@ -4189,15 +2653,6 @@ export const putApiV1AdminInventoryPurchaseOrdersByPurchaseOrderId = <ThrowOnErr
  * Its lines become incoming stock at the destination and can no longer change.
  */
 export const postApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdOrder = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdOrderData, ThrowOnError>): RequestResult<PostApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdOrderResponses, PostApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdOrderErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdOrderResponses, PostApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdOrderErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/inventory/purchase-orders/{purchaseOrderId}/order',
     ...options,
     headers: {
@@ -4212,15 +2667,6 @@ export const postApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdOrder = <Thro
  * Books some or all of the open quantities at the PO's destination: one ledger `received` movement per SKU with its stock compare-and-set, the receipt's unit costs (cost history) and the new PO status, in one atomic write. updateCost moves each SKU's unit cost to the weighted average of its on-hand units and the received ones. An exact retry with the same Idempotency-Key replays the result.
  */
 export const postApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdReceive = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdReceiveData, ThrowOnError>): RequestResult<PostApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdReceiveResponses, PostApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdReceiveErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdReceiveResponses, PostApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdReceiveErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/inventory/purchase-orders/{purchaseOrderId}/receive',
     ...options,
     headers: {
@@ -4235,15 +2681,6 @@ export const postApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdReceive = <Th
  * Stops what is still to come; units already received stay in stock.
  */
 export const postApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdCancel = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdCancelData, ThrowOnError>): RequestResult<PostApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdCancelResponses, PostApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdCancelErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdCancelResponses, PostApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdCancelErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/inventory/purchase-orders/{purchaseOrderId}/cancel',
     ...options,
     headers: {
@@ -4255,38 +2692,14 @@ export const postApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdCancel = <Thr
 /**
  * Download a purchase order as CSV
  */
-export const getApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdExport = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdExportData, ThrowOnError>): RequestResult<GetApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdExportResponses, GetApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdExportErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdExportResponses, GetApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdExportErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/inventory/purchase-orders/{purchaseOrderId}/export',
-    ...options
-});
+export const getApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdExport = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdExportData, ThrowOnError>): RequestResult<GetApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdExportResponses, GetApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdExportErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdExportResponses, GetApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdExportErrors, ThrowOnError>({ url: '/api/v1/admin/inventory/purchase-orders/{purchaseOrderId}/export', ...options });
 
 /**
  * List transfers between locations
  *
  * Newest first. status=open lists in-transit and partially received ones; locationId matches the origin or destination.
  */
-export const getApiV1AdminInventoryTransfers = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminInventoryTransfersData, ThrowOnError>): RequestResult<GetApiV1AdminInventoryTransfersResponses, unknown, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminInventoryTransfersResponses, unknown, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/inventory/transfers',
-    ...options
-});
+export const getApiV1AdminInventoryTransfers = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminInventoryTransfersData, ThrowOnError>): RequestResult<GetApiV1AdminInventoryTransfersResponses, unknown, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminInventoryTransfersResponses, unknown, ThrowOnError>({ url: '/api/v1/admin/inventory/transfers', ...options });
 
 /**
  * Create a draft transfer
@@ -4294,15 +2707,6 @@ export const getApiV1AdminInventoryTransfers = <ThrowOnError extends boolean = f
  * Between two different active locations; lines are live physical SKUs, each once, at most 100.
  */
 export const postApiV1AdminInventoryTransfers = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminInventoryTransfersData, ThrowOnError>): RequestResult<PostApiV1AdminInventoryTransfersResponses, PostApiV1AdminInventoryTransfersErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminInventoryTransfersResponses, PostApiV1AdminInventoryTransfersErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/inventory/transfers',
     ...options,
     headers: {
@@ -4314,36 +2718,12 @@ export const postApiV1AdminInventoryTransfers = <ThrowOnError extends boolean = 
 /**
  * Delete a draft transfer
  */
-export const deleteApiV1AdminInventoryTransfersByTransferId = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminInventoryTransfersByTransferIdData, ThrowOnError>): RequestResult<DeleteApiV1AdminInventoryTransfersByTransferIdResponses, DeleteApiV1AdminInventoryTransfersByTransferIdErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminInventoryTransfersByTransferIdResponses, DeleteApiV1AdminInventoryTransfersByTransferIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/inventory/transfers/{transferId}',
-    ...options
-});
+export const deleteApiV1AdminInventoryTransfersByTransferId = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminInventoryTransfersByTransferIdData, ThrowOnError>): RequestResult<DeleteApiV1AdminInventoryTransfersByTransferIdResponses, DeleteApiV1AdminInventoryTransfersByTransferIdErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminInventoryTransfersByTransferIdResponses, DeleteApiV1AdminInventoryTransfersByTransferIdErrors, ThrowOnError>({ url: '/api/v1/admin/inventory/transfers/{transferId}', ...options });
 
 /**
  * Get a transfer with its lines and activity
  */
-export const getApiV1AdminInventoryTransfersByTransferId = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminInventoryTransfersByTransferIdData, ThrowOnError>): RequestResult<GetApiV1AdminInventoryTransfersByTransferIdResponses, GetApiV1AdminInventoryTransfersByTransferIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminInventoryTransfersByTransferIdResponses, GetApiV1AdminInventoryTransfersByTransferIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/inventory/transfers/{transferId}',
-    ...options
-});
+export const getApiV1AdminInventoryTransfersByTransferId = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminInventoryTransfersByTransferIdData, ThrowOnError>): RequestResult<GetApiV1AdminInventoryTransfersByTransferIdResponses, GetApiV1AdminInventoryTransfersByTransferIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminInventoryTransfersByTransferIdResponses, GetApiV1AdminInventoryTransfersByTransferIdErrors, ThrowOnError>({ url: '/api/v1/admin/inventory/transfers/{transferId}', ...options });
 
 /**
  * Edit a draft transfer
@@ -4351,15 +2731,6 @@ export const getApiV1AdminInventoryTransfersByTransferId = <ThrowOnError extends
  * Drafts only; sent lines replace its lines. expectedRevision must be current.
  */
 export const putApiV1AdminInventoryTransfersByTransferId = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminInventoryTransfersByTransferIdData, ThrowOnError>): RequestResult<PutApiV1AdminInventoryTransfersByTransferIdResponses, PutApiV1AdminInventoryTransfersByTransferIdErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminInventoryTransfersByTransferIdResponses, PutApiV1AdminInventoryTransfersByTransferIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/inventory/transfers/{transferId}',
     ...options,
     headers: {
@@ -4374,15 +2745,6 @@ export const putApiV1AdminInventoryTransfersByTransferId = <ThrowOnError extends
  * Every line leaves the origin in one atomic write (ledger `transfer_out` movements). Units in transit are out of both locations and of the SKU's stock, so buyers cannot buy them. Refused before writing when the origin lacks a line's units or they are committed to orders.
  */
 export const postApiV1AdminInventoryTransfersByTransferIdShip = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminInventoryTransfersByTransferIdShipData, ThrowOnError>): RequestResult<PostApiV1AdminInventoryTransfersByTransferIdShipResponses, PostApiV1AdminInventoryTransfersByTransferIdShipErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminInventoryTransfersByTransferIdShipResponses, PostApiV1AdminInventoryTransfersByTransferIdShipErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/inventory/transfers/{transferId}/ship',
     ...options,
     headers: {
@@ -4397,15 +2759,6 @@ export const postApiV1AdminInventoryTransfersByTransferIdShip = <ThrowOnError ex
  * Books some or all in-transit units at the destination (ledger `transfer_in` movements) in one atomic write.
  */
 export const postApiV1AdminInventoryTransfersByTransferIdReceive = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminInventoryTransfersByTransferIdReceiveData, ThrowOnError>): RequestResult<PostApiV1AdminInventoryTransfersByTransferIdReceiveResponses, PostApiV1AdminInventoryTransfersByTransferIdReceiveErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminInventoryTransfersByTransferIdReceiveResponses, PostApiV1AdminInventoryTransfersByTransferIdReceiveErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/inventory/transfers/{transferId}/receive',
     ...options,
     headers: {
@@ -4420,15 +2773,6 @@ export const postApiV1AdminInventoryTransfersByTransferIdReceive = <ThrowOnError
  * A draft just closes. One in transit returns every unit still on the road to the origin (ledger `transfer_in` there) in one atomic write.
  */
 export const postApiV1AdminInventoryTransfersByTransferIdCancel = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminInventoryTransfersByTransferIdCancelData, ThrowOnError>): RequestResult<PostApiV1AdminInventoryTransfersByTransferIdCancelResponses, PostApiV1AdminInventoryTransfersByTransferIdCancelErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminInventoryTransfersByTransferIdCancelResponses, PostApiV1AdminInventoryTransfersByTransferIdCancelErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/inventory/transfers/{transferId}/cancel',
     ...options,
     headers: {
@@ -4442,33 +2786,12 @@ export const postApiV1AdminInventoryTransfersByTransferIdCancel = <ThrowOnError 
  *
  * Answer inventory and stock-status questions with bounded variant, movement, or alert pages.
  */
-export const getApiV1AdminInventory = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminInventoryData, ThrowOnError>): RequestResult<GetApiV1AdminInventoryResponses, unknown, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminInventoryResponses, unknown, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/inventory',
-    ...options
-});
+export const getApiV1AdminInventory = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminInventoryData, ThrowOnError>): RequestResult<GetApiV1AdminInventoryResponses, unknown, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminInventoryResponses, unknown, ThrowOnError>({ url: '/api/v1/admin/inventory', ...options });
 
 /**
  * Generate a bounded inventory movement CSV artifact
  */
 export const postApiV1AdminInventoryMovementsExport = <ThrowOnError extends boolean = false>(options?: Options<PostApiV1AdminInventoryMovementsExportData, ThrowOnError>): RequestResult<PostApiV1AdminInventoryMovementsExportResponses, PostApiV1AdminInventoryMovementsExportErrors, ThrowOnError> => (options?.client ?? client).post<PostApiV1AdminInventoryMovementsExportResponses, PostApiV1AdminInventoryMovementsExportErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/inventory/movements/export',
     ...options,
     headers: {
@@ -4482,33 +2805,12 @@ export const postApiV1AdminInventoryMovementsExport = <ThrowOnError extends bool
  *
  * Find low-stock, out-of-stock, and other inventory issues needing attention.
  */
-export const getApiV1AdminInventoryAlerts = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminInventoryAlertsData, ThrowOnError>): RequestResult<GetApiV1AdminInventoryAlertsResponses, unknown, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminInventoryAlertsResponses, unknown, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/inventory/alerts',
-    ...options
-});
+export const getApiV1AdminInventoryAlerts = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminInventoryAlertsData, ThrowOnError>): RequestResult<GetApiV1AdminInventoryAlertsResponses, unknown, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminInventoryAlertsResponses, unknown, ThrowOnError>({ url: '/api/v1/admin/inventory/alerts', ...options });
 
 /**
  * Acknowledge a low stock alert
  */
 export const patchApiV1AdminInventoryAlerts = <ThrowOnError extends boolean = false>(options: Options<PatchApiV1AdminInventoryAlertsData, ThrowOnError>): RequestResult<PatchApiV1AdminInventoryAlertsResponses, PatchApiV1AdminInventoryAlertsErrors, ThrowOnError> => (options.client ?? client).patch<PatchApiV1AdminInventoryAlertsResponses, PatchApiV1AdminInventoryAlertsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/inventory/alerts',
     ...options,
     headers: {
@@ -4521,15 +2823,6 @@ export const patchApiV1AdminInventoryAlerts = <ThrowOnError extends boolean = fa
  * Get exact SKU facts for a barcode label batch
  */
 export const postApiV1AdminInventoryLabelsPreview = <ThrowOnError extends boolean = false>(options?: Options<PostApiV1AdminInventoryLabelsPreviewData, ThrowOnError>): RequestResult<PostApiV1AdminInventoryLabelsPreviewResponses, unknown, ThrowOnError> => (options?.client ?? client).post<PostApiV1AdminInventoryLabelsPreviewResponses, unknown, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/inventory/labels/preview',
     ...options,
     headers: {
@@ -4542,15 +2835,6 @@ export const postApiV1AdminInventoryLabelsPreview = <ThrowOnError extends boolea
  * Generate a bounded barcode-label CSV, printable HTML, or PDF artifact
  */
 export const postApiV1AdminInventoryLabelsArtifact = <ThrowOnError extends boolean = false>(options?: Options<PostApiV1AdminInventoryLabelsArtifactData, ThrowOnError>): RequestResult<PostApiV1AdminInventoryLabelsArtifactResponses, PostApiV1AdminInventoryLabelsArtifactErrors, ThrowOnError> => (options?.client ?? client).post<PostApiV1AdminInventoryLabelsArtifactResponses, PostApiV1AdminInventoryLabelsArtifactErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/inventory/labels/artifact',
     ...options,
     headers: {
@@ -4563,15 +2847,6 @@ export const postApiV1AdminInventoryLabelsArtifact = <ThrowOnError extends boole
  * Adjust inventory for a variant
  */
 export const postApiV1AdminInventoryByVariantIdAdjust = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminInventoryByVariantIdAdjustData, ThrowOnError>): RequestResult<PostApiV1AdminInventoryByVariantIdAdjustResponses, PostApiV1AdminInventoryByVariantIdAdjustErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminInventoryByVariantIdAdjustResponses, PostApiV1AdminInventoryByVariantIdAdjustErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/inventory/{variantId}/adjust',
     ...options,
     headers: {
@@ -4586,15 +2861,6 @@ export const postApiV1AdminInventoryByVariantIdAdjust = <ThrowOnError extends bo
  * Alert when available stock falls to this level or below: a whole number from 0 to 1,000,000 (0 turns the alert off for this SKU), or null to use the store default. Stock is not changed.
  */
 export const putApiV1AdminInventoryByVariantIdAlertLevel = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminInventoryByVariantIdAlertLevelData, ThrowOnError>): RequestResult<PutApiV1AdminInventoryByVariantIdAlertLevelResponses, PutApiV1AdminInventoryByVariantIdAlertLevelErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminInventoryByVariantIdAlertLevelResponses, PutApiV1AdminInventoryByVariantIdAlertLevelErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/inventory/{variantId}/alert-level',
     ...options,
     headers: {
@@ -4609,15 +2875,6 @@ export const putApiV1AdminInventoryByVariantIdAlertLevel = <ThrowOnError extends
  * SKUs without their own alert level use this one: a whole number from 0 to 1,000,000, or null to turn it off. Stock is not changed.
  */
 export const putApiV1AdminInventoryDefaultAlertLevel = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminInventoryDefaultAlertLevelData, ThrowOnError>): RequestResult<PutApiV1AdminInventoryDefaultAlertLevelResponses, PutApiV1AdminInventoryDefaultAlertLevelErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminInventoryDefaultAlertLevelResponses, PutApiV1AdminInventoryDefaultAlertLevelErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/inventory/default-alert-level',
     ...options,
     headers: {
@@ -4629,49 +2886,12 @@ export const putApiV1AdminInventoryDefaultAlertLevel = <ThrowOnError extends boo
 /**
  * Look up a product variant by barcode or SKU (scanner workflow)
  */
-export const getApiV1AdminInventoryScannerLookup = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminInventoryScannerLookupData, ThrowOnError>): RequestResult<GetApiV1AdminInventoryScannerLookupResponses, GetApiV1AdminInventoryScannerLookupErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminInventoryScannerLookupResponses, GetApiV1AdminInventoryScannerLookupErrors, ThrowOnError>({
-    security: [
-        {
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        },
-        {
-            in: 'cookie',
-            name: 'scanner_sid',
-            type: 'apiKey'
-        },
-        {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }
-    ],
-    url: '/api/v1/admin/inventory/scanner/lookup',
-    ...options
-});
+export const getApiV1AdminInventoryScannerLookup = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminInventoryScannerLookupData, ThrowOnError>): RequestResult<GetApiV1AdminInventoryScannerLookupResponses, GetApiV1AdminInventoryScannerLookupErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminInventoryScannerLookupResponses, GetApiV1AdminInventoryScannerLookupErrors, ThrowOnError>({ url: '/api/v1/admin/inventory/scanner/lookup', ...options });
 
 /**
  * Adjust stock by a relative amount (+/-)
  */
 export const postApiV1AdminInventoryStockAdjust = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminInventoryStockAdjustData, ThrowOnError>): RequestResult<PostApiV1AdminInventoryStockAdjustResponses, PostApiV1AdminInventoryStockAdjustErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminInventoryStockAdjustResponses, PostApiV1AdminInventoryStockAdjustErrors, ThrowOnError>({
-    security: [
-        {
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        },
-        {
-            in: 'cookie',
-            name: 'scanner_sid',
-            type: 'apiKey'
-        },
-        {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }
-    ],
     url: '/api/v1/admin/inventory/stock-adjust',
     ...options,
     headers: {
@@ -4684,23 +2904,6 @@ export const postApiV1AdminInventoryStockAdjust = <ThrowOnError extends boolean 
  * Set the counted stock of a SKU at a location (stocktaking)
  */
 export const postApiV1AdminInventoryStockSet = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminInventoryStockSetData, ThrowOnError>): RequestResult<PostApiV1AdminInventoryStockSetResponses, PostApiV1AdminInventoryStockSetErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminInventoryStockSetResponses, PostApiV1AdminInventoryStockSetErrors, ThrowOnError>({
-    security: [
-        {
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        },
-        {
-            in: 'cookie',
-            name: 'scanner_sid',
-            type: 'apiKey'
-        },
-        {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }
-    ],
     url: '/api/v1/admin/inventory/stock-set',
     ...options,
     headers: {
@@ -4714,19 +2917,7 @@ export const postApiV1AdminInventoryStockSet = <ThrowOnError extends boolean = f
  *
  * On-hand units times each SKU's current unit cost, per location, plus units in transit. SKUs without a cost are counted (unitsWithoutCost, skusWithoutCost), not valued.
  */
-export const getApiV1AdminInventoryValuation = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminInventoryValuationData, ThrowOnError>): RequestResult<GetApiV1AdminInventoryValuationResponses, unknown, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminInventoryValuationResponses, unknown, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/inventory/valuation',
-    ...options
-});
+export const getApiV1AdminInventoryValuation = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminInventoryValuationData, ThrowOnError>): RequestResult<GetApiV1AdminInventoryValuationResponses, unknown, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminInventoryValuationResponses, unknown, ThrowOnError>({ url: '/api/v1/admin/inventory/valuation', ...options });
 
 /**
  * Set the unit cost of SKUs
@@ -4734,15 +2925,6 @@ export const getApiV1AdminInventoryValuation = <ThrowOnError extends boolean = f
  * Cost per item in major units (null clears it), up to 100 live SKUs in one atomic write. With expectedCost, a SKU whose cost changed since it was read (a receipt average or another editor) refuses the whole change. Never shown to buyers.
  */
 export const putApiV1AdminInventoryCosts = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminInventoryCostsData, ThrowOnError>): RequestResult<PutApiV1AdminInventoryCostsResponses, PutApiV1AdminInventoryCostsErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminInventoryCostsResponses, PutApiV1AdminInventoryCostsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/inventory/costs',
     ...options,
     headers: {
@@ -4756,71 +2938,26 @@ export const putApiV1AdminInventoryCosts = <ThrowOnError extends boolean = false
  *
  * One bounded read for the product editor: every live SKU's units at each location holding some. A SKU's levels sum to its on-hand stock; locations without units are omitted.
  */
-export const getApiV1AdminInventoryLevels = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminInventoryLevelsData, ThrowOnError>): RequestResult<GetApiV1AdminInventoryLevelsResponses, unknown, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminInventoryLevelsResponses, unknown, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/inventory/levels',
-    ...options
-});
+export const getApiV1AdminInventoryLevels = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminInventoryLevelsData, ThrowOnError>): RequestResult<GetApiV1AdminInventoryLevelsResponses, unknown, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminInventoryLevelsResponses, unknown, ThrowOnError>({ url: '/api/v1/admin/inventory/levels', ...options });
 
 /**
  * Get a SKU's on-hand stock at each location
  *
  * On-hand at every active location (0 where it holds none). The levels sum to the SKU's on-hand stock.
  */
-export const getApiV1AdminInventoryByVariantIdLevels = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminInventoryByVariantIdLevelsData, ThrowOnError>): RequestResult<GetApiV1AdminInventoryByVariantIdLevelsResponses, GetApiV1AdminInventoryByVariantIdLevelsErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminInventoryByVariantIdLevelsResponses, GetApiV1AdminInventoryByVariantIdLevelsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/inventory/{variantId}/levels',
-    ...options
-});
+export const getApiV1AdminInventoryByVariantIdLevels = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminInventoryByVariantIdLevelsData, ThrowOnError>): RequestResult<GetApiV1AdminInventoryByVariantIdLevelsResponses, GetApiV1AdminInventoryByVariantIdLevelsErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminInventoryByVariantIdLevelsResponses, GetApiV1AdminInventoryByVariantIdLevelsErrors, ThrowOnError>({ url: '/api/v1/admin/inventory/{variantId}/levels', ...options });
 
 /**
  * List inventory locations
  *
  * Where stock is held. Active locations first (the default leads); archived ones only when asked for.
  */
-export const getApiV1AdminInventoryLocations = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminInventoryLocationsData, ThrowOnError>): RequestResult<GetApiV1AdminInventoryLocationsResponses, unknown, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminInventoryLocationsResponses, unknown, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/inventory/locations',
-    ...options
-});
+export const getApiV1AdminInventoryLocations = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminInventoryLocationsData, ThrowOnError>): RequestResult<GetApiV1AdminInventoryLocationsResponses, unknown, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminInventoryLocationsResponses, unknown, ThrowOnError>({ url: '/api/v1/admin/inventory/locations', ...options });
 
 /**
  * Add an inventory location
  */
 export const postApiV1AdminInventoryLocations = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminInventoryLocationsData, ThrowOnError>): RequestResult<PostApiV1AdminInventoryLocationsResponses, PostApiV1AdminInventoryLocationsErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminInventoryLocationsResponses, PostApiV1AdminInventoryLocationsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/inventory/locations',
     ...options,
     headers: {
@@ -4835,15 +2972,6 @@ export const postApiV1AdminInventoryLocations = <ThrowOnError extends boolean = 
  * Replaces the location's details; expectedVersion must be its current version.
  */
 export const patchApiV1AdminInventoryLocationsByLocationId = <ThrowOnError extends boolean = false>(options: Options<PatchApiV1AdminInventoryLocationsByLocationIdData, ThrowOnError>): RequestResult<PatchApiV1AdminInventoryLocationsByLocationIdResponses, PatchApiV1AdminInventoryLocationsByLocationIdErrors, ThrowOnError> => (options.client ?? client).patch<PatchApiV1AdminInventoryLocationsByLocationIdResponses, PatchApiV1AdminInventoryLocationsByLocationIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/inventory/locations/{locationId}',
     ...options,
     headers: {
@@ -4857,133 +2985,44 @@ export const patchApiV1AdminInventoryLocationsByLocationId = <ThrowOnError exten
  *
  * Refused for the default location, while it holds any units, or while an open order is set to ship from it.
  */
-export const postApiV1AdminInventoryLocationsByLocationIdArchive = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminInventoryLocationsByLocationIdArchiveData, ThrowOnError>): RequestResult<PostApiV1AdminInventoryLocationsByLocationIdArchiveResponses, PostApiV1AdminInventoryLocationsByLocationIdArchiveErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminInventoryLocationsByLocationIdArchiveResponses, PostApiV1AdminInventoryLocationsByLocationIdArchiveErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/inventory/locations/{locationId}/archive',
-    ...options
-});
+export const postApiV1AdminInventoryLocationsByLocationIdArchive = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminInventoryLocationsByLocationIdArchiveData, ThrowOnError>): RequestResult<PostApiV1AdminInventoryLocationsByLocationIdArchiveResponses, PostApiV1AdminInventoryLocationsByLocationIdArchiveErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminInventoryLocationsByLocationIdArchiveResponses, PostApiV1AdminInventoryLocationsByLocationIdArchiveErrors, ThrowOnError>({ url: '/api/v1/admin/inventory/locations/{locationId}/archive', ...options });
 
 /**
  * Make an archived inventory location active again
  */
-export const postApiV1AdminInventoryLocationsByLocationIdUnarchive = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminInventoryLocationsByLocationIdUnarchiveData, ThrowOnError>): RequestResult<PostApiV1AdminInventoryLocationsByLocationIdUnarchiveResponses, PostApiV1AdminInventoryLocationsByLocationIdUnarchiveErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminInventoryLocationsByLocationIdUnarchiveResponses, PostApiV1AdminInventoryLocationsByLocationIdUnarchiveErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/inventory/locations/{locationId}/unarchive',
-    ...options
-});
+export const postApiV1AdminInventoryLocationsByLocationIdUnarchive = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminInventoryLocationsByLocationIdUnarchiveData, ThrowOnError>): RequestResult<PostApiV1AdminInventoryLocationsByLocationIdUnarchiveResponses, PostApiV1AdminInventoryLocationsByLocationIdUnarchiveErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminInventoryLocationsByLocationIdUnarchiveResponses, PostApiV1AdminInventoryLocationsByLocationIdUnarchiveErrors, ThrowOnError>({ url: '/api/v1/admin/inventory/locations/{locationId}/unarchive', ...options });
 
 /**
  * Make an active location the default
  *
  * Stock that moves without a named location (product editor edits, orders without their own location) moves at the default.
  */
-export const postApiV1AdminInventoryLocationsByLocationIdDefault = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminInventoryLocationsByLocationIdDefaultData, ThrowOnError>): RequestResult<PostApiV1AdminInventoryLocationsByLocationIdDefaultResponses, PostApiV1AdminInventoryLocationsByLocationIdDefaultErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminInventoryLocationsByLocationIdDefaultResponses, PostApiV1AdminInventoryLocationsByLocationIdDefaultErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/inventory/locations/{locationId}/default',
-    ...options
-});
+export const postApiV1AdminInventoryLocationsByLocationIdDefault = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminInventoryLocationsByLocationIdDefaultData, ThrowOnError>): RequestResult<PostApiV1AdminInventoryLocationsByLocationIdDefaultResponses, PostApiV1AdminInventoryLocationsByLocationIdDefaultErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminInventoryLocationsByLocationIdDefaultResponses, PostApiV1AdminInventoryLocationsByLocationIdDefaultErrors, ThrowOnError>({ url: '/api/v1/admin/inventory/locations/{locationId}/default', ...options });
 
 /**
  * Get navigation items
  */
-export const getApiV1AdminNavigationItems = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminNavigationItemsData, ThrowOnError>): RequestResult<GetApiV1AdminNavigationItemsResponses, GetApiV1AdminNavigationItemsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminNavigationItemsResponses, GetApiV1AdminNavigationItemsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }],
-    url: '/api/v1/admin/navigation/items',
-    ...options
-});
+export const getApiV1AdminNavigationItems = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminNavigationItemsData, ThrowOnError>): RequestResult<GetApiV1AdminNavigationItemsResponses, GetApiV1AdminNavigationItemsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminNavigationItemsResponses, GetApiV1AdminNavigationItemsErrors, ThrowOnError>({ url: '/api/v1/admin/navigation/items', ...options });
 
 /**
  * Search resources for navigation menu items
  */
-export const getApiV1AdminNavigationResources = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminNavigationResourcesData, ThrowOnError>): RequestResult<GetApiV1AdminNavigationResourcesResponses, GetApiV1AdminNavigationResourcesErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminNavigationResourcesResponses, GetApiV1AdminNavigationResourcesErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/navigation/resources',
-    ...options
-});
+export const getApiV1AdminNavigationResources = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminNavigationResourcesData, ThrowOnError>): RequestResult<GetApiV1AdminNavigationResourcesResponses, GetApiV1AdminNavigationResourcesErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminNavigationResourcesResponses, GetApiV1AdminNavigationResourcesErrors, ThrowOnError>({ url: '/api/v1/admin/navigation/resources', ...options });
 
 /**
  * Preview dynamic navigation product count
  */
-export const getApiV1AdminNavigationPreviewProducts = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminNavigationPreviewProductsData, ThrowOnError>): RequestResult<GetApiV1AdminNavigationPreviewProductsResponses, GetApiV1AdminNavigationPreviewProductsErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminNavigationPreviewProductsResponses, GetApiV1AdminNavigationPreviewProductsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/navigation/preview-products',
-    ...options
-});
+export const getApiV1AdminNavigationPreviewProducts = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminNavigationPreviewProductsData, ThrowOnError>): RequestResult<GetApiV1AdminNavigationPreviewProductsResponses, GetApiV1AdminNavigationPreviewProductsErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminNavigationPreviewProductsResponses, GetApiV1AdminNavigationPreviewProductsErrors, ThrowOnError>({ url: '/api/v1/admin/navigation/preview-products', ...options });
 
 /**
  * List reusable navigation menus
  */
-export const getApiV1AdminNavigationMenus = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminNavigationMenusData, ThrowOnError>): RequestResult<GetApiV1AdminNavigationMenusResponses, GetApiV1AdminNavigationMenusErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminNavigationMenusResponses, GetApiV1AdminNavigationMenusErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/navigation/menus',
-    ...options
-});
+export const getApiV1AdminNavigationMenus = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminNavigationMenusData, ThrowOnError>): RequestResult<GetApiV1AdminNavigationMenusResponses, GetApiV1AdminNavigationMenusErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminNavigationMenusResponses, GetApiV1AdminNavigationMenusErrors, ThrowOnError>({ url: '/api/v1/admin/navigation/menus', ...options });
 
 /**
  * Create a reusable navigation menu
  */
 export const postApiV1AdminNavigationMenus = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminNavigationMenusData, ThrowOnError>): RequestResult<PostApiV1AdminNavigationMenusResponses, PostApiV1AdminNavigationMenusErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminNavigationMenusResponses, PostApiV1AdminNavigationMenusErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/navigation/menus',
     ...options,
     headers: {
@@ -4996,15 +3035,6 @@ export const postApiV1AdminNavigationMenus = <ThrowOnError extends boolean = fal
  * Move an unplaced menu to Trash
  */
 export const deleteApiV1AdminNavigationMenusByMenuId = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminNavigationMenusByMenuIdData, ThrowOnError>): RequestResult<DeleteApiV1AdminNavigationMenusByMenuIdResponses, DeleteApiV1AdminNavigationMenusByMenuIdErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminNavigationMenusByMenuIdResponses, DeleteApiV1AdminNavigationMenusByMenuIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/navigation/menus/{menuId}',
     ...options,
     headers: {
@@ -5016,33 +3046,12 @@ export const deleteApiV1AdminNavigationMenusByMenuId = <ThrowOnError extends boo
 /**
  * Get one reusable navigation menu
  */
-export const getApiV1AdminNavigationMenusByMenuId = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminNavigationMenusByMenuIdData, ThrowOnError>): RequestResult<GetApiV1AdminNavigationMenusByMenuIdResponses, GetApiV1AdminNavigationMenusByMenuIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminNavigationMenusByMenuIdResponses, GetApiV1AdminNavigationMenusByMenuIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/navigation/menus/{menuId}',
-    ...options
-});
+export const getApiV1AdminNavigationMenusByMenuId = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminNavigationMenusByMenuIdData, ThrowOnError>): RequestResult<GetApiV1AdminNavigationMenusByMenuIdResponses, GetApiV1AdminNavigationMenusByMenuIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminNavigationMenusByMenuIdResponses, GetApiV1AdminNavigationMenusByMenuIdErrors, ThrowOnError>({ url: '/api/v1/admin/navigation/menus/{menuId}', ...options });
 
 /**
  * Update menu identity with revision protection
  */
 export const patchApiV1AdminNavigationMenusByMenuId = <ThrowOnError extends boolean = false>(options: Options<PatchApiV1AdminNavigationMenusByMenuIdData, ThrowOnError>): RequestResult<PatchApiV1AdminNavigationMenusByMenuIdResponses, PatchApiV1AdminNavigationMenusByMenuIdErrors, ThrowOnError> => (options.client ?? client).patch<PatchApiV1AdminNavigationMenusByMenuIdResponses, PatchApiV1AdminNavigationMenusByMenuIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/navigation/menus/{menuId}',
     ...options,
     headers: {
@@ -5055,15 +3064,6 @@ export const patchApiV1AdminNavigationMenusByMenuId = <ThrowOnError extends bool
  * Restore a menu from Trash
  */
 export const postApiV1AdminNavigationMenusByMenuIdRestore = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminNavigationMenusByMenuIdRestoreData, ThrowOnError>): RequestResult<PostApiV1AdminNavigationMenusByMenuIdRestoreResponses, PostApiV1AdminNavigationMenusByMenuIdRestoreErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminNavigationMenusByMenuIdRestoreResponses, PostApiV1AdminNavigationMenusByMenuIdRestoreErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/navigation/menus/{menuId}/restore',
     ...options,
     headers: {
@@ -5075,33 +3075,12 @@ export const postApiV1AdminNavigationMenusByMenuIdRestore = <ThrowOnError extend
 /**
  * List one parent page of menu items
  */
-export const getApiV1AdminNavigationMenusByMenuIdItems = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminNavigationMenusByMenuIdItemsData, ThrowOnError>): RequestResult<GetApiV1AdminNavigationMenusByMenuIdItemsResponses, GetApiV1AdminNavigationMenusByMenuIdItemsErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminNavigationMenusByMenuIdItemsResponses, GetApiV1AdminNavigationMenusByMenuIdItemsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/navigation/menus/{menuId}/items',
-    ...options
-});
+export const getApiV1AdminNavigationMenusByMenuIdItems = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminNavigationMenusByMenuIdItemsData, ThrowOnError>): RequestResult<GetApiV1AdminNavigationMenusByMenuIdItemsResponses, GetApiV1AdminNavigationMenusByMenuIdItemsErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminNavigationMenusByMenuIdItemsResponses, GetApiV1AdminNavigationMenusByMenuIdItemsErrors, ThrowOnError>({ url: '/api/v1/admin/navigation/menus/{menuId}/items', ...options });
 
 /**
  * Add one menu item
  */
 export const postApiV1AdminNavigationMenusByMenuIdItems = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminNavigationMenusByMenuIdItemsData, ThrowOnError>): RequestResult<PostApiV1AdminNavigationMenusByMenuIdItemsResponses, PostApiV1AdminNavigationMenusByMenuIdItemsErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminNavigationMenusByMenuIdItemsResponses, PostApiV1AdminNavigationMenusByMenuIdItemsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/navigation/menus/{menuId}/items',
     ...options,
     headers: {
@@ -5113,33 +3092,12 @@ export const postApiV1AdminNavigationMenusByMenuIdItems = <ThrowOnError extends 
 /**
  * Search a large menu and include its ancestors
  */
-export const getApiV1AdminNavigationMenusByMenuIdSearch = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminNavigationMenusByMenuIdSearchData, ThrowOnError>): RequestResult<GetApiV1AdminNavigationMenusByMenuIdSearchResponses, GetApiV1AdminNavigationMenusByMenuIdSearchErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminNavigationMenusByMenuIdSearchResponses, GetApiV1AdminNavigationMenusByMenuIdSearchErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/navigation/menus/{menuId}/search',
-    ...options
-});
+export const getApiV1AdminNavigationMenusByMenuIdSearch = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminNavigationMenusByMenuIdSearchData, ThrowOnError>): RequestResult<GetApiV1AdminNavigationMenusByMenuIdSearchResponses, GetApiV1AdminNavigationMenusByMenuIdSearchErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminNavigationMenusByMenuIdSearchResponses, GetApiV1AdminNavigationMenusByMenuIdSearchErrors, ThrowOnError>({ url: '/api/v1/admin/navigation/menus/{menuId}/search', ...options });
 
 /**
  * Delete one menu item subtree
  */
 export const deleteApiV1AdminNavigationMenusByMenuIdItemsByItemId = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminNavigationMenusByMenuIdItemsByItemIdData, ThrowOnError>): RequestResult<DeleteApiV1AdminNavigationMenusByMenuIdItemsByItemIdResponses, DeleteApiV1AdminNavigationMenusByMenuIdItemsByItemIdErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminNavigationMenusByMenuIdItemsByItemIdResponses, DeleteApiV1AdminNavigationMenusByMenuIdItemsByItemIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/navigation/menus/{menuId}/items/{itemId}',
     ...options,
     headers: {
@@ -5151,33 +3109,12 @@ export const deleteApiV1AdminNavigationMenusByMenuIdItemsByItemId = <ThrowOnErro
 /**
  * Get one menu item
  */
-export const getApiV1AdminNavigationMenusByMenuIdItemsByItemId = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminNavigationMenusByMenuIdItemsByItemIdData, ThrowOnError>): RequestResult<GetApiV1AdminNavigationMenusByMenuIdItemsByItemIdResponses, GetApiV1AdminNavigationMenusByMenuIdItemsByItemIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminNavigationMenusByMenuIdItemsByItemIdResponses, GetApiV1AdminNavigationMenusByMenuIdItemsByItemIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/navigation/menus/{menuId}/items/{itemId}',
-    ...options
-});
+export const getApiV1AdminNavigationMenusByMenuIdItemsByItemId = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminNavigationMenusByMenuIdItemsByItemIdData, ThrowOnError>): RequestResult<GetApiV1AdminNavigationMenusByMenuIdItemsByItemIdResponses, GetApiV1AdminNavigationMenusByMenuIdItemsByItemIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminNavigationMenusByMenuIdItemsByItemIdResponses, GetApiV1AdminNavigationMenusByMenuIdItemsByItemIdErrors, ThrowOnError>({ url: '/api/v1/admin/navigation/menus/{menuId}/items/{itemId}', ...options });
 
 /**
  * Update one menu item
  */
 export const patchApiV1AdminNavigationMenusByMenuIdItemsByItemId = <ThrowOnError extends boolean = false>(options: Options<PatchApiV1AdminNavigationMenusByMenuIdItemsByItemIdData, ThrowOnError>): RequestResult<PatchApiV1AdminNavigationMenusByMenuIdItemsByItemIdResponses, PatchApiV1AdminNavigationMenusByMenuIdItemsByItemIdErrors, ThrowOnError> => (options.client ?? client).patch<PatchApiV1AdminNavigationMenusByMenuIdItemsByItemIdResponses, PatchApiV1AdminNavigationMenusByMenuIdItemsByItemIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/navigation/menus/{menuId}/items/{itemId}',
     ...options,
     headers: {
@@ -5189,33 +3126,12 @@ export const patchApiV1AdminNavigationMenusByMenuIdItemsByItemId = <ThrowOnError
 /**
  * Get depth-safe exact move choices for one menu item
  */
-export const getApiV1AdminNavigationMenusByMenuIdItemsByItemIdMoveOptions = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminNavigationMenusByMenuIdItemsByItemIdMoveOptionsData, ThrowOnError>): RequestResult<GetApiV1AdminNavigationMenusByMenuIdItemsByItemIdMoveOptionsResponses, GetApiV1AdminNavigationMenusByMenuIdItemsByItemIdMoveOptionsErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminNavigationMenusByMenuIdItemsByItemIdMoveOptionsResponses, GetApiV1AdminNavigationMenusByMenuIdItemsByItemIdMoveOptionsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/navigation/menus/{menuId}/items/{itemId}/move-options',
-    ...options
-});
+export const getApiV1AdminNavigationMenusByMenuIdItemsByItemIdMoveOptions = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminNavigationMenusByMenuIdItemsByItemIdMoveOptionsData, ThrowOnError>): RequestResult<GetApiV1AdminNavigationMenusByMenuIdItemsByItemIdMoveOptionsResponses, GetApiV1AdminNavigationMenusByMenuIdItemsByItemIdMoveOptionsErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminNavigationMenusByMenuIdItemsByItemIdMoveOptionsResponses, GetApiV1AdminNavigationMenusByMenuIdItemsByItemIdMoveOptionsErrors, ThrowOnError>({ url: '/api/v1/admin/navigation/menus/{menuId}/items/{itemId}/move-options', ...options });
 
 /**
  * Move one menu item by stable destination identity
  */
 export const postApiV1AdminNavigationMenusByMenuIdItemsByItemIdMove = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminNavigationMenusByMenuIdItemsByItemIdMoveData, ThrowOnError>): RequestResult<PostApiV1AdminNavigationMenusByMenuIdItemsByItemIdMoveResponses, PostApiV1AdminNavigationMenusByMenuIdItemsByItemIdMoveErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminNavigationMenusByMenuIdItemsByItemIdMoveResponses, PostApiV1AdminNavigationMenusByMenuIdItemsByItemIdMoveErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/navigation/menus/{menuId}/items/{itemId}/move',
     ...options,
     headers: {
@@ -5228,15 +3144,6 @@ export const postApiV1AdminNavigationMenusByMenuIdItemsByItemIdMove = <ThrowOnEr
  * Publish an immutable menu revision
  */
 export const postApiV1AdminNavigationMenusByMenuIdPublish = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminNavigationMenusByMenuIdPublishData, ThrowOnError>): RequestResult<PostApiV1AdminNavigationMenusByMenuIdPublishResponses, PostApiV1AdminNavigationMenusByMenuIdPublishErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminNavigationMenusByMenuIdPublishResponses, PostApiV1AdminNavigationMenusByMenuIdPublishErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/navigation/menus/{menuId}/publish',
     ...options,
     headers: {
@@ -5248,33 +3155,12 @@ export const postApiV1AdminNavigationMenusByMenuIdPublish = <ThrowOnError extend
 /**
  * List immutable menu publications
  */
-export const getApiV1AdminNavigationMenusByMenuIdPublications = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminNavigationMenusByMenuIdPublicationsData, ThrowOnError>): RequestResult<GetApiV1AdminNavigationMenusByMenuIdPublicationsResponses, GetApiV1AdminNavigationMenusByMenuIdPublicationsErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminNavigationMenusByMenuIdPublicationsResponses, GetApiV1AdminNavigationMenusByMenuIdPublicationsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/navigation/menus/{menuId}/publications',
-    ...options
-});
+export const getApiV1AdminNavigationMenusByMenuIdPublications = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminNavigationMenusByMenuIdPublicationsData, ThrowOnError>): RequestResult<GetApiV1AdminNavigationMenusByMenuIdPublicationsResponses, GetApiV1AdminNavigationMenusByMenuIdPublicationsErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminNavigationMenusByMenuIdPublicationsResponses, GetApiV1AdminNavigationMenusByMenuIdPublicationsErrors, ThrowOnError>({ url: '/api/v1/admin/navigation/menus/{menuId}/publications', ...options });
 
 /**
  * Restore a publication as a new immutable menu revision
  */
 export const postApiV1AdminNavigationMenusByMenuIdRollback = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminNavigationMenusByMenuIdRollbackData, ThrowOnError>): RequestResult<PostApiV1AdminNavigationMenusByMenuIdRollbackResponses, PostApiV1AdminNavigationMenusByMenuIdRollbackErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminNavigationMenusByMenuIdRollbackResponses, PostApiV1AdminNavigationMenusByMenuIdRollbackErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/navigation/menus/{menuId}/rollback',
     ...options,
     headers: {
@@ -5286,50 +3172,17 @@ export const postApiV1AdminNavigationMenusByMenuIdRollback = <ThrowOnError exten
 /**
  * Get current navigation placement manifest
  */
-export const getApiV1AdminNavigationPlacements = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminNavigationPlacementsData, ThrowOnError>): RequestResult<GetApiV1AdminNavigationPlacementsResponses, GetApiV1AdminNavigationPlacementsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminNavigationPlacementsResponses, GetApiV1AdminNavigationPlacementsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/navigation/placements',
-    ...options
-});
+export const getApiV1AdminNavigationPlacements = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminNavigationPlacementsData, ThrowOnError>): RequestResult<GetApiV1AdminNavigationPlacementsResponses, GetApiV1AdminNavigationPlacementsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminNavigationPlacementsResponses, GetApiV1AdminNavigationPlacementsErrors, ThrowOnError>({ url: '/api/v1/admin/navigation/placements', ...options });
 
 /**
  * List navigation placement settings
  */
-export const getApiV1AdminNavigationPlacementSettings = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminNavigationPlacementSettingsData, ThrowOnError>): RequestResult<GetApiV1AdminNavigationPlacementSettingsResponses, GetApiV1AdminNavigationPlacementSettingsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminNavigationPlacementSettingsResponses, GetApiV1AdminNavigationPlacementSettingsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/navigation/placement-settings',
-    ...options
-});
+export const getApiV1AdminNavigationPlacementSettings = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminNavigationPlacementSettingsData, ThrowOnError>): RequestResult<GetApiV1AdminNavigationPlacementSettingsResponses, GetApiV1AdminNavigationPlacementSettingsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminNavigationPlacementSettingsResponses, GetApiV1AdminNavigationPlacementSettingsErrors, ThrowOnError>({ url: '/api/v1/admin/navigation/placement-settings', ...options });
 
 /**
  * Create or update one navigation placement with CAS
  */
 export const putApiV1AdminNavigationPlacementsByPlacementId = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminNavigationPlacementsByPlacementIdData, ThrowOnError>): RequestResult<PutApiV1AdminNavigationPlacementsByPlacementIdResponses, PutApiV1AdminNavigationPlacementsByPlacementIdErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminNavigationPlacementsByPlacementIdResponses, PutApiV1AdminNavigationPlacementsByPlacementIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/navigation/placements/{placementId}',
     ...options,
     headers: {
@@ -5341,98 +3194,37 @@ export const putApiV1AdminNavigationPlacementsByPlacementId = <ThrowOnError exte
 /**
  * Search across products, pages, and categories
  */
-export const getApiV1AdminSearch = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSearchData, ThrowOnError>): RequestResult<GetApiV1AdminSearchResponses, GetApiV1AdminSearchErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSearchResponses, GetApiV1AdminSearchErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }],
-    url: '/api/v1/admin/search',
-    ...options
-});
+export const getApiV1AdminSearch = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSearchData, ThrowOnError>): RequestResult<GetApiV1AdminSearchResponses, GetApiV1AdminSearchErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSearchResponses, GetApiV1AdminSearchErrors, ThrowOnError>({ url: '/api/v1/admin/search', ...options });
 
 /**
  * Trigger search reindex
  */
-export const postApiV1AdminSearchReindex = <ThrowOnError extends boolean = false>(options?: Options<PostApiV1AdminSearchReindexData, ThrowOnError>): RequestResult<PostApiV1AdminSearchReindexResponses, unknown, ThrowOnError> => (options?.client ?? client).post<PostApiV1AdminSearchReindexResponses, unknown, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }],
-    url: '/api/v1/admin/search/reindex',
-    ...options
-});
+export const postApiV1AdminSearchReindex = <ThrowOnError extends boolean = false>(options?: Options<PostApiV1AdminSearchReindexData, ThrowOnError>): RequestResult<PostApiV1AdminSearchReindexResponses, unknown, ThrowOnError> => (options?.client ?? client).post<PostApiV1AdminSearchReindexResponses, unknown, ThrowOnError>({ url: '/api/v1/admin/search/reindex', ...options });
 
 /**
  * Delete a shipment
  */
-export const deleteApiV1AdminShipmentsById = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminShipmentsByIdData, ThrowOnError>): RequestResult<DeleteApiV1AdminShipmentsByIdResponses, DeleteApiV1AdminShipmentsByIdErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminShipmentsByIdResponses, DeleteApiV1AdminShipmentsByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }],
-    url: '/api/v1/admin/shipments/{id}',
-    ...options
-});
+export const deleteApiV1AdminShipmentsById = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminShipmentsByIdData, ThrowOnError>): RequestResult<DeleteApiV1AdminShipmentsByIdResponses, DeleteApiV1AdminShipmentsByIdErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminShipmentsByIdResponses, DeleteApiV1AdminShipmentsByIdErrors, ThrowOnError>({ url: '/api/v1/admin/shipments/{id}', ...options });
 
 /**
  * Get shipment by ID
  */
-export const getApiV1AdminShipmentsById = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminShipmentsByIdData, ThrowOnError>): RequestResult<GetApiV1AdminShipmentsByIdResponses, GetApiV1AdminShipmentsByIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminShipmentsByIdResponses, GetApiV1AdminShipmentsByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }],
-    url: '/api/v1/admin/shipments/{id}',
-    ...options
-});
+export const getApiV1AdminShipmentsById = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminShipmentsByIdData, ThrowOnError>): RequestResult<GetApiV1AdminShipmentsByIdResponses, GetApiV1AdminShipmentsByIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminShipmentsByIdResponses, GetApiV1AdminShipmentsByIdErrors, ThrowOnError>({ url: '/api/v1/admin/shipments/{id}', ...options });
 
 /**
  * Check and update shipment status from provider
  */
-export const postApiV1AdminShipmentsByIdCheckStatus = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminShipmentsByIdCheckStatusData, ThrowOnError>): RequestResult<PostApiV1AdminShipmentsByIdCheckStatusResponses, PostApiV1AdminShipmentsByIdCheckStatusErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminShipmentsByIdCheckStatusResponses, PostApiV1AdminShipmentsByIdCheckStatusErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }],
-    url: '/api/v1/admin/shipments/{id}/check-status',
-    ...options
-});
+export const postApiV1AdminShipmentsByIdCheckStatus = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminShipmentsByIdCheckStatusData, ThrowOnError>): RequestResult<PostApiV1AdminShipmentsByIdCheckStatusResponses, PostApiV1AdminShipmentsByIdCheckStatusErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminShipmentsByIdCheckStatusResponses, PostApiV1AdminShipmentsByIdCheckStatusErrors, ThrowOnError>({ url: '/api/v1/admin/shipments/{id}/check-status', ...options });
 
 /**
  * List analytics scripts without executable source
  */
-export const getApiV1AdminAnalytics = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminAnalyticsData, ThrowOnError>): RequestResult<GetApiV1AdminAnalyticsResponses, GetApiV1AdminAnalyticsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminAnalyticsResponses, GetApiV1AdminAnalyticsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/analytics',
-    ...options
-});
+export const getApiV1AdminAnalytics = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminAnalyticsData, ThrowOnError>): RequestResult<GetApiV1AdminAnalyticsResponses, GetApiV1AdminAnalyticsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminAnalyticsResponses, GetApiV1AdminAnalyticsErrors, ThrowOnError>({ url: '/api/v1/admin/analytics', ...options });
 
 /**
  * Create an inactive analytics draft
  */
 export const postApiV1AdminAnalytics = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminAnalyticsData, ThrowOnError>): RequestResult<PostApiV1AdminAnalyticsResponses, PostApiV1AdminAnalyticsErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminAnalyticsResponses, PostApiV1AdminAnalyticsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/analytics',
     ...options,
     headers: {
@@ -5446,50 +3238,17 @@ export const postApiV1AdminAnalytics = <ThrowOnError extends boolean = false>(op
  *
  * Check analytics health, operational status, configuration issues, and provider readiness.
  */
-export const getApiV1AdminAnalyticsHealth = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminAnalyticsHealthData, ThrowOnError>): RequestResult<GetApiV1AdminAnalyticsHealthResponses, GetApiV1AdminAnalyticsHealthErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminAnalyticsHealthResponses, GetApiV1AdminAnalyticsHealthErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/analytics/health',
-    ...options
-});
+export const getApiV1AdminAnalyticsHealth = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminAnalyticsHealthData, ThrowOnError>): RequestResult<GetApiV1AdminAnalyticsHealthResponses, GetApiV1AdminAnalyticsHealthErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminAnalyticsHealthResponses, GetApiV1AdminAnalyticsHealthErrors, ThrowOnError>({ url: '/api/v1/admin/analytics/health', ...options });
 
 /**
  * Get analytics script source for the editor
  */
-export const getApiV1AdminAnalyticsByIdSource = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminAnalyticsByIdSourceData, ThrowOnError>): RequestResult<GetApiV1AdminAnalyticsByIdSourceResponses, GetApiV1AdminAnalyticsByIdSourceErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminAnalyticsByIdSourceResponses, GetApiV1AdminAnalyticsByIdSourceErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/analytics/{id}/source',
-    ...options
-});
+export const getApiV1AdminAnalyticsByIdSource = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminAnalyticsByIdSourceData, ThrowOnError>): RequestResult<GetApiV1AdminAnalyticsByIdSourceResponses, GetApiV1AdminAnalyticsByIdSourceErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminAnalyticsByIdSourceResponses, GetApiV1AdminAnalyticsByIdSourceErrors, ThrowOnError>({ url: '/api/v1/admin/analytics/{id}/source', ...options });
 
 /**
  * Move an analytics script to trash
  */
 export const deleteApiV1AdminAnalyticsById = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminAnalyticsByIdData, ThrowOnError>): RequestResult<DeleteApiV1AdminAnalyticsByIdResponses, DeleteApiV1AdminAnalyticsByIdErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminAnalyticsByIdResponses, DeleteApiV1AdminAnalyticsByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/analytics/{id}',
     ...options,
     headers: {
@@ -5502,15 +3261,6 @@ export const deleteApiV1AdminAnalyticsById = <ThrowOnError extends boolean = fal
  * Update an analytics script with optimistic concurrency
  */
 export const putApiV1AdminAnalyticsById = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminAnalyticsByIdData, ThrowOnError>): RequestResult<PutApiV1AdminAnalyticsByIdResponses, PutApiV1AdminAnalyticsByIdErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminAnalyticsByIdResponses, PutApiV1AdminAnalyticsByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/analytics/{id}',
     ...options,
     headers: {
@@ -5523,15 +3273,6 @@ export const putApiV1AdminAnalyticsById = <ThrowOnError extends boolean = false>
  * Activate or deactivate an analytics script with revision protection
  */
 export const postApiV1AdminAnalyticsByIdToggle = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminAnalyticsByIdToggleData, ThrowOnError>): RequestResult<PostApiV1AdminAnalyticsByIdToggleResponses, PostApiV1AdminAnalyticsByIdToggleErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminAnalyticsByIdToggleResponses, PostApiV1AdminAnalyticsByIdToggleErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/analytics/{id}/toggle',
     ...options,
     headers: {
@@ -5544,15 +3285,6 @@ export const postApiV1AdminAnalyticsByIdToggle = <ThrowOnError extends boolean =
  * Restore an analytics script as inactive
  */
 export const postApiV1AdminAnalyticsByIdRestore = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminAnalyticsByIdRestoreData, ThrowOnError>): RequestResult<PostApiV1AdminAnalyticsByIdRestoreResponses, PostApiV1AdminAnalyticsByIdRestoreErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminAnalyticsByIdRestoreResponses, PostApiV1AdminAnalyticsByIdRestoreErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/analytics/{id}/restore',
     ...options,
     headers: {
@@ -5565,15 +3297,6 @@ export const postApiV1AdminAnalyticsByIdRestore = <ThrowOnError extends boolean 
  * Permanently delete a trashed analytics script
  */
 export const deleteApiV1AdminAnalyticsByIdPermanent = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminAnalyticsByIdPermanentData, ThrowOnError>): RequestResult<DeleteApiV1AdminAnalyticsByIdPermanentResponses, DeleteApiV1AdminAnalyticsByIdPermanentErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminAnalyticsByIdPermanentResponses, DeleteApiV1AdminAnalyticsByIdPermanentErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/analytics/{id}/permanent',
     ...options,
     headers: {
@@ -5587,145 +3310,52 @@ export const deleteApiV1AdminAnalyticsByIdPermanent = <ThrowOnError extends bool
  *
  * Answer current-month order-count, customer and recent-order questions. Revenue values are null unless the caller may view sales numbers; recent orders are empty unless the caller may view orders.
  */
-export const getApiV1AdminDashboardHomeSummary = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminDashboardHomeSummaryData, ThrowOnError>): RequestResult<GetApiV1AdminDashboardHomeSummaryResponses, unknown, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminDashboardHomeSummaryResponses, unknown, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/dashboard/home-summary',
-    ...options
-});
+export const getApiV1AdminDashboardHomeSummary = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminDashboardHomeSummaryData, ThrowOnError>): RequestResult<GetApiV1AdminDashboardHomeSummaryResponses, unknown, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminDashboardHomeSummaryResponses, unknown, ThrowOnError>({ url: '/api/v1/admin/dashboard/home-summary', ...options });
 
 /**
  * Get dashboard daily activity chart data
  *
  * Answer daily or today's sales, revenue, order-count, and new-customer questions. Request days=1 for a minimal current-day result; the dashboard defaults to 90 days. Revenue is null unless the caller may view sales numbers.
  */
-export const getApiV1AdminDashboardActivity = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminDashboardActivityData, ThrowOnError>): RequestResult<GetApiV1AdminDashboardActivityResponses, unknown, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminDashboardActivityResponses, unknown, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/dashboard/activity',
-    ...options
-});
+export const getApiV1AdminDashboardActivity = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminDashboardActivityData, ThrowOnError>): RequestResult<GetApiV1AdminDashboardActivityResponses, unknown, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminDashboardActivityResponses, unknown, ThrowOnError>({ url: '/api/v1/admin/dashboard/activity', ...options });
 
 /**
  * Get the analytics overview
  *
  * Sales KPIs for a store-calendar date range and a comparison period: gross sales, discounts, returns, net sales, shipping, taxes, total sales, orders, average order value, units, new vs returning customers, repeat purchase rate, COD share, return-to-sender rate, cancellation rate and refunds, plus sales over time and breakdowns by channel, payment method, city, delivery zone and stock location. Orders placed in the range count (not incomplete hosted payments, not cancelled); returns and refunds count against the order's placement date. Money is decimal store currency.
  */
-export const getApiV1AdminReportsOverview = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminReportsOverviewData, ThrowOnError>): RequestResult<GetApiV1AdminReportsOverviewResponses, GetApiV1AdminReportsOverviewErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminReportsOverviewResponses, GetApiV1AdminReportsOverviewErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/reports/overview',
-    ...options
-});
+export const getApiV1AdminReportsOverview = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminReportsOverviewData, ThrowOnError>): RequestResult<GetApiV1AdminReportsOverviewResponses, GetApiV1AdminReportsOverviewErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminReportsOverviewResponses, GetApiV1AdminReportsOverviewErrors, ThrowOnError>({ url: '/api/v1/admin/reports/overview', ...options });
 
 /**
  * List analytics reports
  *
  * Every report with its columns, default sort and whether this caller can run it now (customer reports need the View customers permission; profit reports need unit costs recorded on order lines).
  */
-export const getApiV1AdminReports = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminReportsData, ThrowOnError>): RequestResult<GetApiV1AdminReportsResponses, GetApiV1AdminReportsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminReportsResponses, GetApiV1AdminReportsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/reports',
-    ...options
-});
+export const getApiV1AdminReports = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminReportsData, ThrowOnError>): RequestResult<GetApiV1AdminReportsResponses, GetApiV1AdminReportsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminReportsResponses, GetApiV1AdminReportsErrors, ThrowOnError>({ url: '/api/v1/admin/reports', ...options });
 
 /**
  * Run an analytics report
  *
  * One sorted page (at most 100 rows, 10000 rows deep) of a catalogued report for a store-calendar date range, with totals over all rows. Money is decimal store currency; percent values are 0–100.
  */
-export const getApiV1AdminReportsByReportId = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminReportsByReportIdData, ThrowOnError>): RequestResult<GetApiV1AdminReportsByReportIdResponses, GetApiV1AdminReportsByReportIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminReportsByReportIdResponses, GetApiV1AdminReportsByReportIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/reports/{reportId}',
-    ...options
-});
+export const getApiV1AdminReportsByReportId = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminReportsByReportIdData, ThrowOnError>): RequestResult<GetApiV1AdminReportsByReportIdResponses, GetApiV1AdminReportsByReportIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminReportsByReportIdResponses, GetApiV1AdminReportsByReportIdErrors, ThrowOnError>({ url: '/api/v1/admin/reports/{reportId}', ...options });
 
 /**
  * Export an analytics report as CSV
  *
  * The whole report in the requested order (at most 10000 rows and 16 MB) with a totals row, as a private spreadsheet-safe CSV. X-Export-Limited says when the file stopped early.
  */
-export const getApiV1AdminReportsByReportIdExport = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminReportsByReportIdExportData, ThrowOnError>): RequestResult<GetApiV1AdminReportsByReportIdExportResponses, GetApiV1AdminReportsByReportIdExportErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminReportsByReportIdExportResponses, GetApiV1AdminReportsByReportIdExportErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/reports/{reportId}/export',
-    ...options
-});
+export const getApiV1AdminReportsByReportIdExport = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminReportsByReportIdExportData, ThrowOnError>): RequestResult<GetApiV1AdminReportsByReportIdExportResponses, GetApiV1AdminReportsByReportIdExportErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminReportsByReportIdExportResponses, GetApiV1AdminReportsByReportIdExportErrors, ThrowOnError>({ url: '/api/v1/admin/reports/{reportId}/export', ...options });
 
 /**
  * List all fraud checker providers
  */
-export const getApiV1AdminFraudChecker = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminFraudCheckerData, ThrowOnError>): RequestResult<GetApiV1AdminFraudCheckerResponses, GetApiV1AdminFraudCheckerErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminFraudCheckerResponses, GetApiV1AdminFraudCheckerErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/fraud-checker',
-    ...options
-});
+export const getApiV1AdminFraudChecker = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminFraudCheckerData, ThrowOnError>): RequestResult<GetApiV1AdminFraudCheckerResponses, GetApiV1AdminFraudCheckerErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminFraudCheckerResponses, GetApiV1AdminFraudCheckerErrors, ThrowOnError>({ url: '/api/v1/admin/fraud-checker', ...options });
 
 /**
  * Create a fraud checker provider
  */
 export const postApiV1AdminFraudChecker = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminFraudCheckerData, ThrowOnError>): RequestResult<PostApiV1AdminFraudCheckerResponses, PostApiV1AdminFraudCheckerErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminFraudCheckerResponses, PostApiV1AdminFraudCheckerErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/fraud-checker',
     ...options,
     headers: {
@@ -5738,15 +3368,6 @@ export const postApiV1AdminFraudChecker = <ThrowOnError extends boolean = false>
  * Update a fraud checker provider
  */
 export const putApiV1AdminFraudChecker = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminFraudCheckerData, ThrowOnError>): RequestResult<PutApiV1AdminFraudCheckerResponses, PutApiV1AdminFraudCheckerErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminFraudCheckerResponses, PutApiV1AdminFraudCheckerErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/fraud-checker',
     ...options,
     headers: {
@@ -5758,50 +3379,17 @@ export const putApiV1AdminFraudChecker = <ThrowOnError extends boolean = false>(
 /**
  * Delete a fraud checker provider
  */
-export const deleteApiV1AdminFraudCheckerById = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminFraudCheckerByIdData, ThrowOnError>): RequestResult<DeleteApiV1AdminFraudCheckerByIdResponses, DeleteApiV1AdminFraudCheckerByIdErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminFraudCheckerByIdResponses, DeleteApiV1AdminFraudCheckerByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/fraud-checker/{id}',
-    ...options
-});
+export const deleteApiV1AdminFraudCheckerById = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminFraudCheckerByIdData, ThrowOnError>): RequestResult<DeleteApiV1AdminFraudCheckerByIdResponses, DeleteApiV1AdminFraudCheckerByIdErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminFraudCheckerByIdResponses, DeleteApiV1AdminFraudCheckerByIdErrors, ThrowOnError>({ url: '/api/v1/admin/fraud-checker/{id}', ...options });
 
 /**
  * Test a fraud checker provider connection
  */
-export const postApiV1AdminFraudCheckerByIdTest = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminFraudCheckerByIdTestData, ThrowOnError>): RequestResult<PostApiV1AdminFraudCheckerByIdTestResponses, PostApiV1AdminFraudCheckerByIdTestErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminFraudCheckerByIdTestResponses, PostApiV1AdminFraudCheckerByIdTestErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/fraud-checker/{id}/test',
-    ...options
-});
+export const postApiV1AdminFraudCheckerByIdTest = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminFraudCheckerByIdTestData, ThrowOnError>): RequestResult<PostApiV1AdminFraudCheckerByIdTestResponses, PostApiV1AdminFraudCheckerByIdTestErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminFraudCheckerByIdTestResponses, PostApiV1AdminFraudCheckerByIdTestErrors, ThrowOnError>({ url: '/api/v1/admin/fraud-checker/{id}/test', ...options });
 
 /**
  * Lookup fraud data for a phone number
  */
 export const postApiV1AdminFraudCheckerLookup = <ThrowOnError extends boolean = false>(options?: Options<PostApiV1AdminFraudCheckerLookupData, ThrowOnError>): RequestResult<PostApiV1AdminFraudCheckerLookupResponses, PostApiV1AdminFraudCheckerLookupErrors, ThrowOnError> => (options?.client ?? client).post<PostApiV1AdminFraudCheckerLookupResponses, PostApiV1AdminFraudCheckerLookupErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/fraud-checker/lookup',
     ...options,
     headers: {
@@ -5813,33 +3401,12 @@ export const postApiV1AdminFraudCheckerLookup = <ThrowOnError extends boolean = 
 /**
  * List all roles with permissions
  */
-export const getApiV1AdminRbacRoles = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminRbacRolesData, ThrowOnError>): RequestResult<GetApiV1AdminRbacRolesResponses, GetApiV1AdminRbacRolesErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminRbacRolesResponses, GetApiV1AdminRbacRolesErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/rbac/roles',
-    ...options
-});
+export const getApiV1AdminRbacRoles = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminRbacRolesData, ThrowOnError>): RequestResult<GetApiV1AdminRbacRolesResponses, GetApiV1AdminRbacRolesErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminRbacRolesResponses, GetApiV1AdminRbacRolesErrors, ThrowOnError>({ url: '/api/v1/admin/rbac/roles', ...options });
 
 /**
  * Create a new role
  */
 export const postApiV1AdminRbacRoles = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminRbacRolesData, ThrowOnError>): RequestResult<PostApiV1AdminRbacRolesResponses, PostApiV1AdminRbacRolesErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminRbacRolesResponses, PostApiV1AdminRbacRolesErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/rbac/roles',
     ...options,
     headers: {
@@ -5851,50 +3418,17 @@ export const postApiV1AdminRbacRoles = <ThrowOnError extends boolean = false>(op
 /**
  * Delete a role
  */
-export const deleteApiV1AdminRbacRolesById = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminRbacRolesByIdData, ThrowOnError>): RequestResult<DeleteApiV1AdminRbacRolesByIdResponses, DeleteApiV1AdminRbacRolesByIdErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminRbacRolesByIdResponses, DeleteApiV1AdminRbacRolesByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/rbac/roles/{id}',
-    ...options
-});
+export const deleteApiV1AdminRbacRolesById = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminRbacRolesByIdData, ThrowOnError>): RequestResult<DeleteApiV1AdminRbacRolesByIdResponses, DeleteApiV1AdminRbacRolesByIdErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminRbacRolesByIdResponses, DeleteApiV1AdminRbacRolesByIdErrors, ThrowOnError>({ url: '/api/v1/admin/rbac/roles/{id}', ...options });
 
 /**
  * Get a single role with permissions
  */
-export const getApiV1AdminRbacRolesById = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminRbacRolesByIdData, ThrowOnError>): RequestResult<GetApiV1AdminRbacRolesByIdResponses, GetApiV1AdminRbacRolesByIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminRbacRolesByIdResponses, GetApiV1AdminRbacRolesByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/rbac/roles/{id}',
-    ...options
-});
+export const getApiV1AdminRbacRolesById = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminRbacRolesByIdData, ThrowOnError>): RequestResult<GetApiV1AdminRbacRolesByIdResponses, GetApiV1AdminRbacRolesByIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminRbacRolesByIdResponses, GetApiV1AdminRbacRolesByIdErrors, ThrowOnError>({ url: '/api/v1/admin/rbac/roles/{id}', ...options });
 
 /**
  * Update a role
  */
 export const putApiV1AdminRbacRolesById = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminRbacRolesByIdData, ThrowOnError>): RequestResult<PutApiV1AdminRbacRolesByIdResponses, PutApiV1AdminRbacRolesByIdErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminRbacRolesByIdResponses, PutApiV1AdminRbacRolesByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/rbac/roles/{id}',
     ...options,
     headers: {
@@ -5907,15 +3441,6 @@ export const putApiV1AdminRbacRolesById = <ThrowOnError extends boolean = false>
  * Remove a role from a user
  */
 export const deleteApiV1AdminRbacUserRoles = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminRbacUserRolesData, ThrowOnError>): RequestResult<DeleteApiV1AdminRbacUserRolesResponses, DeleteApiV1AdminRbacUserRolesErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminRbacUserRolesResponses, DeleteApiV1AdminRbacUserRolesErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/rbac/user-roles',
     ...options,
     headers: {
@@ -5928,15 +3453,6 @@ export const deleteApiV1AdminRbacUserRoles = <ThrowOnError extends boolean = fal
  * Assign a role to a user
  */
 export const postApiV1AdminRbacUserRoles = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminRbacUserRolesData, ThrowOnError>): RequestResult<PostApiV1AdminRbacUserRolesResponses, PostApiV1AdminRbacUserRolesErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminRbacUserRolesResponses, PostApiV1AdminRbacUserRolesErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/rbac/user-roles',
     ...options,
     headers: {
@@ -5949,15 +3465,6 @@ export const postApiV1AdminRbacUserRoles = <ThrowOnError extends boolean = false
  * Remove a permission override
  */
 export const deleteApiV1AdminRbacUserPermissions = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminRbacUserPermissionsData, ThrowOnError>): RequestResult<DeleteApiV1AdminRbacUserPermissionsResponses, DeleteApiV1AdminRbacUserPermissionsErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminRbacUserPermissionsResponses, DeleteApiV1AdminRbacUserPermissionsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/rbac/user-permissions',
     ...options,
     headers: {
@@ -5970,15 +3477,6 @@ export const deleteApiV1AdminRbacUserPermissions = <ThrowOnError extends boolean
  * Set a permission override for a user
  */
 export const postApiV1AdminRbacUserPermissions = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminRbacUserPermissionsData, ThrowOnError>): RequestResult<PostApiV1AdminRbacUserPermissionsResponses, PostApiV1AdminRbacUserPermissionsErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminRbacUserPermissionsResponses, PostApiV1AdminRbacUserPermissionsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/rbac/user-permissions',
     ...options,
     headers: {
@@ -5990,67 +3488,22 @@ export const postApiV1AdminRbacUserPermissions = <ThrowOnError extends boolean =
 /**
  * List all available permissions
  */
-export const getApiV1AdminRbacPermissions = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminRbacPermissionsData, ThrowOnError>): RequestResult<GetApiV1AdminRbacPermissionsResponses, GetApiV1AdminRbacPermissionsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminRbacPermissionsResponses, GetApiV1AdminRbacPermissionsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/rbac/permissions',
-    ...options
-});
+export const getApiV1AdminRbacPermissions = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminRbacPermissionsData, ThrowOnError>): RequestResult<GetApiV1AdminRbacPermissionsResponses, GetApiV1AdminRbacPermissionsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminRbacPermissionsResponses, GetApiV1AdminRbacPermissionsErrors, ThrowOnError>({ url: '/api/v1/admin/rbac/permissions', ...options });
 
 /**
  * Get current user's permission context
  */
-export const getApiV1AdminRbacMyPermissions = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminRbacMyPermissionsData, ThrowOnError>): RequestResult<GetApiV1AdminRbacMyPermissionsResponses, GetApiV1AdminRbacMyPermissionsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminRbacMyPermissionsResponses, GetApiV1AdminRbacMyPermissionsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/rbac/my-permissions',
-    ...options
-});
+export const getApiV1AdminRbacMyPermissions = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminRbacMyPermissionsData, ThrowOnError>): RequestResult<GetApiV1AdminRbacMyPermissionsResponses, GetApiV1AdminRbacMyPermissionsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminRbacMyPermissionsResponses, GetApiV1AdminRbacMyPermissionsErrors, ThrowOnError>({ url: '/api/v1/admin/rbac/my-permissions', ...options });
 
 /**
  * Get currency settings
  */
-export const getApiV1AdminSettingsCurrency = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsCurrencyData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsCurrencyResponses, GetApiV1AdminSettingsCurrencyErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsCurrencyResponses, GetApiV1AdminSettingsCurrencyErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/settings/currency',
-    ...options
-});
+export const getApiV1AdminSettingsCurrency = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsCurrencyData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsCurrencyResponses, GetApiV1AdminSettingsCurrencyErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsCurrencyResponses, GetApiV1AdminSettingsCurrencyErrors, ThrowOnError>({ url: '/api/v1/admin/settings/currency', ...options });
 
 /**
  * Save currency settings
  */
 export const postApiV1AdminSettingsCurrency = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminSettingsCurrencyData, ThrowOnError>): RequestResult<PostApiV1AdminSettingsCurrencyResponses, PostApiV1AdminSettingsCurrencyErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminSettingsCurrencyResponses, PostApiV1AdminSettingsCurrencyErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/settings/currency',
     ...options,
     headers: {
@@ -6062,33 +3515,12 @@ export const postApiV1AdminSettingsCurrency = <ThrowOnError extends boolean = fa
 /**
  * Get published storefront style, durable draft and what the editor reads
  */
-export const getApiV1AdminSettingsThemeWorkspace = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsThemeWorkspaceData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsThemeWorkspaceResponses, GetApiV1AdminSettingsThemeWorkspaceErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsThemeWorkspaceResponses, GetApiV1AdminSettingsThemeWorkspaceErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/settings/theme/workspace',
-    ...options
-});
+export const getApiV1AdminSettingsThemeWorkspace = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsThemeWorkspaceData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsThemeWorkspaceResponses, GetApiV1AdminSettingsThemeWorkspaceErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsThemeWorkspaceResponses, GetApiV1AdminSettingsThemeWorkspaceErrors, ThrowOnError>({ url: '/api/v1/admin/settings/theme/workspace', ...options });
 
 /**
  * Save the durable storefront style draft
  */
 export const postApiV1AdminSettingsThemeDraft = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminSettingsThemeDraftData, ThrowOnError>): RequestResult<PostApiV1AdminSettingsThemeDraftResponses, PostApiV1AdminSettingsThemeDraftErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminSettingsThemeDraftResponses, PostApiV1AdminSettingsThemeDraftErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/settings/theme/draft',
     ...options,
     headers: {
@@ -6101,15 +3533,6 @@ export const postApiV1AdminSettingsThemeDraft = <ThrowOnError extends boolean = 
  * Publish the exact durable storefront style draft
  */
 export const postApiV1AdminSettingsThemePublish = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminSettingsThemePublishData, ThrowOnError>): RequestResult<PostApiV1AdminSettingsThemePublishResponses, PostApiV1AdminSettingsThemePublishErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminSettingsThemePublishResponses, PostApiV1AdminSettingsThemePublishErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/settings/theme/publish',
     ...options,
     headers: {
@@ -6121,33 +3544,12 @@ export const postApiV1AdminSettingsThemePublish = <ThrowOnError extends boolean 
 /**
  * List immutable published storefront style revisions
  */
-export const getApiV1AdminSettingsThemeVersions = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsThemeVersionsData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsThemeVersionsResponses, GetApiV1AdminSettingsThemeVersionsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsThemeVersionsResponses, GetApiV1AdminSettingsThemeVersionsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/settings/theme/versions',
-    ...options
-});
+export const getApiV1AdminSettingsThemeVersions = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsThemeVersionsData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsThemeVersionsResponses, GetApiV1AdminSettingsThemeVersionsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsThemeVersionsResponses, GetApiV1AdminSettingsThemeVersionsErrors, ThrowOnError>({ url: '/api/v1/admin/settings/theme/versions', ...options });
 
 /**
  * Restore a published storefront style as a new revision
  */
 export const postApiV1AdminSettingsThemeRollback = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminSettingsThemeRollbackData, ThrowOnError>): RequestResult<PostApiV1AdminSettingsThemeRollbackResponses, PostApiV1AdminSettingsThemeRollbackErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminSettingsThemeRollbackResponses, PostApiV1AdminSettingsThemeRollbackErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/settings/theme/rollback',
     ...options,
     headers: {
@@ -6160,15 +3562,6 @@ export const postApiV1AdminSettingsThemeRollback = <ThrowOnError extends boolean
  * Create a short-lived storefront preview session that follows the saved draft
  */
 export const postApiV1AdminSettingsThemePreviewSession = <ThrowOnError extends boolean = false>(options?: Options<PostApiV1AdminSettingsThemePreviewSessionData, ThrowOnError>): RequestResult<PostApiV1AdminSettingsThemePreviewSessionResponses, PostApiV1AdminSettingsThemePreviewSessionErrors, ThrowOnError> => (options?.client ?? client).post<PostApiV1AdminSettingsThemePreviewSessionResponses, PostApiV1AdminSettingsThemePreviewSessionErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/settings/theme/preview-session',
     ...options,
     headers: {
@@ -6180,33 +3573,12 @@ export const postApiV1AdminSettingsThemePreviewSession = <ThrowOnError extends b
 /**
  * Get media delivery host settings
  */
-export const getApiV1AdminSettingsMedia = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsMediaData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsMediaResponses, GetApiV1AdminSettingsMediaErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsMediaResponses, GetApiV1AdminSettingsMediaErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/settings/media',
-    ...options
-});
+export const getApiV1AdminSettingsMedia = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsMediaData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsMediaResponses, GetApiV1AdminSettingsMediaErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsMediaResponses, GetApiV1AdminSettingsMediaErrors, ThrowOnError>({ url: '/api/v1/admin/settings/media', ...options });
 
 /**
  * Save media delivery host settings
  */
 export const postApiV1AdminSettingsMedia = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminSettingsMediaData, ThrowOnError>): RequestResult<PostApiV1AdminSettingsMediaResponses, PostApiV1AdminSettingsMediaErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminSettingsMediaResponses, PostApiV1AdminSettingsMediaErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/settings/media',
     ...options,
     headers: {
@@ -6218,33 +3590,12 @@ export const postApiV1AdminSettingsMedia = <ThrowOnError extends boolean = false
 /**
  * Get SEO settings
  */
-export const getApiV1AdminSettingsSeo = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsSeoData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsSeoResponses, GetApiV1AdminSettingsSeoErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsSeoResponses, GetApiV1AdminSettingsSeoErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/settings/seo',
-    ...options
-});
+export const getApiV1AdminSettingsSeo = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsSeoData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsSeoResponses, GetApiV1AdminSettingsSeoErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsSeoResponses, GetApiV1AdminSettingsSeoErrors, ThrowOnError>({ url: '/api/v1/admin/settings/seo', ...options });
 
 /**
  * Save SEO settings
  */
 export const postApiV1AdminSettingsSeo = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminSettingsSeoData, ThrowOnError>): RequestResult<PostApiV1AdminSettingsSeoResponses, PostApiV1AdminSettingsSeoErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminSettingsSeoResponses, PostApiV1AdminSettingsSeoErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/settings/seo',
     ...options,
     headers: {
@@ -6256,67 +3607,22 @@ export const postApiV1AdminSettingsSeo = <ThrowOnError extends boolean = false>(
 /**
  * Get product feed diagnostics
  */
-export const getApiV1AdminSettingsSeoFeedDiagnostics = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsSeoFeedDiagnosticsData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsSeoFeedDiagnosticsResponses, GetApiV1AdminSettingsSeoFeedDiagnosticsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsSeoFeedDiagnosticsResponses, GetApiV1AdminSettingsSeoFeedDiagnosticsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/settings/seo/feed-diagnostics',
-    ...options
-});
+export const getApiV1AdminSettingsSeoFeedDiagnostics = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsSeoFeedDiagnosticsData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsSeoFeedDiagnosticsResponses, GetApiV1AdminSettingsSeoFeedDiagnosticsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsSeoFeedDiagnosticsResponses, GetApiV1AdminSettingsSeoFeedDiagnosticsErrors, ThrowOnError>({ url: '/api/v1/admin/settings/seo/feed-diagnostics', ...options });
 
 /**
  * Probe bounded public discovery resources
  */
-export const getApiV1AdminSettingsSeoLiveProbe = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsSeoLiveProbeData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsSeoLiveProbeResponses, GetApiV1AdminSettingsSeoLiveProbeErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsSeoLiveProbeResponses, GetApiV1AdminSettingsSeoLiveProbeErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/settings/seo/live-probe',
-    ...options
-});
+export const getApiV1AdminSettingsSeoLiveProbe = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsSeoLiveProbeData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsSeoLiveProbeResponses, GetApiV1AdminSettingsSeoLiveProbeErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsSeoLiveProbeResponses, GetApiV1AdminSettingsSeoLiveProbeErrors, ThrowOnError>({ url: '/api/v1/admin/settings/seo/live-probe', ...options });
 
 /**
  * Get storefront URL
  */
-export const getApiV1AdminSettingsStorefrontUrl = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsStorefrontUrlData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsStorefrontUrlResponses, GetApiV1AdminSettingsStorefrontUrlErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsStorefrontUrlResponses, GetApiV1AdminSettingsStorefrontUrlErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/settings/storefront-url',
-    ...options
-});
+export const getApiV1AdminSettingsStorefrontUrl = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsStorefrontUrlData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsStorefrontUrlResponses, GetApiV1AdminSettingsStorefrontUrlErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsStorefrontUrlResponses, GetApiV1AdminSettingsStorefrontUrlErrors, ThrowOnError>({ url: '/api/v1/admin/settings/storefront-url', ...options });
 
 /**
  * Save storefront URL
  */
 export const postApiV1AdminSettingsStorefrontUrl = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminSettingsStorefrontUrlData, ThrowOnError>): RequestResult<PostApiV1AdminSettingsStorefrontUrlResponses, PostApiV1AdminSettingsStorefrontUrlErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminSettingsStorefrontUrlResponses, PostApiV1AdminSettingsStorefrontUrlErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/settings/storefront-url',
     ...options,
     headers: {
@@ -6328,33 +3634,12 @@ export const postApiV1AdminSettingsStorefrontUrl = <ThrowOnError extends boolean
 /**
  * Get allowed countries for phone numbers
  */
-export const getApiV1AdminSettingsAllowedCountries = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsAllowedCountriesData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsAllowedCountriesResponses, GetApiV1AdminSettingsAllowedCountriesErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsAllowedCountriesResponses, GetApiV1AdminSettingsAllowedCountriesErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/settings/allowed-countries',
-    ...options
-});
+export const getApiV1AdminSettingsAllowedCountries = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsAllowedCountriesData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsAllowedCountriesResponses, GetApiV1AdminSettingsAllowedCountriesErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsAllowedCountriesResponses, GetApiV1AdminSettingsAllowedCountriesErrors, ThrowOnError>({ url: '/api/v1/admin/settings/allowed-countries', ...options });
 
 /**
  * Save allowed countries for phone numbers
  */
 export const putApiV1AdminSettingsAllowedCountries = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminSettingsAllowedCountriesData, ThrowOnError>): RequestResult<PutApiV1AdminSettingsAllowedCountriesResponses, PutApiV1AdminSettingsAllowedCountriesErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminSettingsAllowedCountriesResponses, PutApiV1AdminSettingsAllowedCountriesErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/settings/allowed-countries',
     ...options,
     headers: {
@@ -6368,50 +3653,17 @@ export const putApiV1AdminSettingsAllowedCountries = <ThrowOnError extends boole
  *
  * Projects current saved product state through the same Google/Meta row authority. It does not prove cache propagation or provider acceptance.
  */
-export const getApiV1AdminSettingsSeoFeedRowPreviewByProductId = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminSettingsSeoFeedRowPreviewByProductIdData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsSeoFeedRowPreviewByProductIdResponses, GetApiV1AdminSettingsSeoFeedRowPreviewByProductIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminSettingsSeoFeedRowPreviewByProductIdResponses, GetApiV1AdminSettingsSeoFeedRowPreviewByProductIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/settings/seo/feed-row-preview/{productId}',
-    ...options
-});
+export const getApiV1AdminSettingsSeoFeedRowPreviewByProductId = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminSettingsSeoFeedRowPreviewByProductIdData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsSeoFeedRowPreviewByProductIdResponses, GetApiV1AdminSettingsSeoFeedRowPreviewByProductIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminSettingsSeoFeedRowPreviewByProductIdResponses, GetApiV1AdminSettingsSeoFeedRowPreviewByProductIdErrors, ThrowOnError>({ url: '/api/v1/admin/settings/seo/feed-row-preview/{productId}', ...options });
 
 /**
  * Get business settings
  */
-export const getApiV1AdminSettingsBusiness = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsBusinessData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsBusinessResponses, GetApiV1AdminSettingsBusinessErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsBusinessResponses, GetApiV1AdminSettingsBusinessErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/settings/business',
-    ...options
-});
+export const getApiV1AdminSettingsBusiness = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsBusinessData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsBusinessResponses, GetApiV1AdminSettingsBusinessErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsBusinessResponses, GetApiV1AdminSettingsBusinessErrors, ThrowOnError>({ url: '/api/v1/admin/settings/business', ...options });
 
 /**
  * Save business settings
  */
 export const postApiV1AdminSettingsBusiness = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminSettingsBusinessData, ThrowOnError>): RequestResult<PostApiV1AdminSettingsBusinessResponses, PostApiV1AdminSettingsBusinessErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminSettingsBusinessResponses, PostApiV1AdminSettingsBusinessErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/settings/business',
     ...options,
     headers: {
@@ -6423,33 +3675,12 @@ export const postApiV1AdminSettingsBusiness = <ThrowOnError extends boolean = fa
 /**
  * Get active payment methods
  */
-export const getApiV1AdminSettingsPaymentMethods = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsPaymentMethodsData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsPaymentMethodsResponses, GetApiV1AdminSettingsPaymentMethodsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsPaymentMethodsResponses, GetApiV1AdminSettingsPaymentMethodsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/settings/payment-methods',
-    ...options
-});
+export const getApiV1AdminSettingsPaymentMethods = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsPaymentMethodsData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsPaymentMethodsResponses, GetApiV1AdminSettingsPaymentMethodsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsPaymentMethodsResponses, GetApiV1AdminSettingsPaymentMethodsErrors, ThrowOnError>({ url: '/api/v1/admin/settings/payment-methods', ...options });
 
 /**
  * Save payment methods configuration
  */
 export const postApiV1AdminSettingsPaymentMethods = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminSettingsPaymentMethodsData, ThrowOnError>): RequestResult<PostApiV1AdminSettingsPaymentMethodsResponses, PostApiV1AdminSettingsPaymentMethodsErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminSettingsPaymentMethodsResponses, PostApiV1AdminSettingsPaymentMethodsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/settings/payment-methods',
     ...options,
     headers: {
@@ -6462,15 +3693,6 @@ export const postApiV1AdminSettingsPaymentMethods = <ThrowOnError extends boolea
  * Remove the saved Stripe keys and turn Stripe off
  */
 export const deleteApiV1AdminSettingsStripe = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminSettingsStripeData, ThrowOnError>): RequestResult<DeleteApiV1AdminSettingsStripeResponses, DeleteApiV1AdminSettingsStripeErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminSettingsStripeResponses, DeleteApiV1AdminSettingsStripeErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/settings/stripe',
     ...options,
     headers: {
@@ -6482,33 +3704,12 @@ export const deleteApiV1AdminSettingsStripe = <ThrowOnError extends boolean = fa
 /**
  * Get Stripe settings
  */
-export const getApiV1AdminSettingsStripe = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsStripeData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsStripeResponses, GetApiV1AdminSettingsStripeErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsStripeResponses, GetApiV1AdminSettingsStripeErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/settings/stripe',
-    ...options
-});
+export const getApiV1AdminSettingsStripe = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsStripeData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsStripeResponses, GetApiV1AdminSettingsStripeErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsStripeResponses, GetApiV1AdminSettingsStripeErrors, ThrowOnError>({ url: '/api/v1/admin/settings/stripe', ...options });
 
 /**
  * Save Stripe settings
  */
 export const postApiV1AdminSettingsStripe = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminSettingsStripeData, ThrowOnError>): RequestResult<PostApiV1AdminSettingsStripeResponses, PostApiV1AdminSettingsStripeErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminSettingsStripeResponses, PostApiV1AdminSettingsStripeErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/settings/stripe',
     ...options,
     headers: {
@@ -6521,15 +3722,6 @@ export const postApiV1AdminSettingsStripe = <ThrowOnError extends boolean = fals
  * Remove the saved SSLCommerz keys and turn SSLCommerz off
  */
 export const deleteApiV1AdminSettingsSslcommerz = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminSettingsSslcommerzData, ThrowOnError>): RequestResult<DeleteApiV1AdminSettingsSslcommerzResponses, DeleteApiV1AdminSettingsSslcommerzErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminSettingsSslcommerzResponses, DeleteApiV1AdminSettingsSslcommerzErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/settings/sslcommerz',
     ...options,
     headers: {
@@ -6541,33 +3733,12 @@ export const deleteApiV1AdminSettingsSslcommerz = <ThrowOnError extends boolean 
 /**
  * Get SSLCommerz settings
  */
-export const getApiV1AdminSettingsSslcommerz = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsSslcommerzData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsSslcommerzResponses, GetApiV1AdminSettingsSslcommerzErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsSslcommerzResponses, GetApiV1AdminSettingsSslcommerzErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/settings/sslcommerz',
-    ...options
-});
+export const getApiV1AdminSettingsSslcommerz = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsSslcommerzData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsSslcommerzResponses, GetApiV1AdminSettingsSslcommerzErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsSslcommerzResponses, GetApiV1AdminSettingsSslcommerzErrors, ThrowOnError>({ url: '/api/v1/admin/settings/sslcommerz', ...options });
 
 /**
  * Save SSLCommerz settings
  */
 export const postApiV1AdminSettingsSslcommerz = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminSettingsSslcommerzData, ThrowOnError>): RequestResult<PostApiV1AdminSettingsSslcommerzResponses, PostApiV1AdminSettingsSslcommerzErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminSettingsSslcommerzResponses, PostApiV1AdminSettingsSslcommerzErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/settings/sslcommerz',
     ...options,
     headers: {
@@ -6581,50 +3752,17 @@ export const postApiV1AdminSettingsSslcommerz = <ThrowOnError extends boolean = 
  *
  * Check store checkout health, operational readiness, and blocking configuration issues.
  */
-export const getApiV1AdminSettingsCheckoutReadiness = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsCheckoutReadinessData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsCheckoutReadinessResponses, GetApiV1AdminSettingsCheckoutReadinessErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsCheckoutReadinessResponses, GetApiV1AdminSettingsCheckoutReadinessErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/settings/checkout-readiness',
-    ...options
-});
+export const getApiV1AdminSettingsCheckoutReadiness = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsCheckoutReadinessData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsCheckoutReadinessResponses, GetApiV1AdminSettingsCheckoutReadinessErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsCheckoutReadinessResponses, GetApiV1AdminSettingsCheckoutReadinessErrors, ThrowOnError>({ url: '/api/v1/admin/settings/checkout-readiness', ...options });
 
 /**
  * Get versioned checkout flow settings
  */
-export const getApiV1AdminSettingsCheckoutFlow = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsCheckoutFlowData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsCheckoutFlowResponses, GetApiV1AdminSettingsCheckoutFlowErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsCheckoutFlowResponses, GetApiV1AdminSettingsCheckoutFlowErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/settings/checkout-flow',
-    ...options
-});
+export const getApiV1AdminSettingsCheckoutFlow = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsCheckoutFlowData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsCheckoutFlowResponses, GetApiV1AdminSettingsCheckoutFlowErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsCheckoutFlowResponses, GetApiV1AdminSettingsCheckoutFlowErrors, ThrowOnError>({ url: '/api/v1/admin/settings/checkout-flow', ...options });
 
 /**
  * Save versioned checkout flow settings
  */
 export const putApiV1AdminSettingsCheckoutFlow = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminSettingsCheckoutFlowData, ThrowOnError>): RequestResult<PutApiV1AdminSettingsCheckoutFlowResponses, PutApiV1AdminSettingsCheckoutFlowErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminSettingsCheckoutFlowResponses, PutApiV1AdminSettingsCheckoutFlowErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/settings/checkout-flow',
     ...options,
     headers: {
@@ -6636,33 +3774,12 @@ export const putApiV1AdminSettingsCheckoutFlow = <ThrowOnError extends boolean =
 /**
  * Get customer authentication settings
  */
-export const getApiV1AdminSettingsAuth = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsAuthData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsAuthResponses, GetApiV1AdminSettingsAuthErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsAuthResponses, GetApiV1AdminSettingsAuthErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/settings/auth',
-    ...options
-});
+export const getApiV1AdminSettingsAuth = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsAuthData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsAuthResponses, GetApiV1AdminSettingsAuthErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsAuthResponses, GetApiV1AdminSettingsAuthErrors, ThrowOnError>({ url: '/api/v1/admin/settings/auth', ...options });
 
 /**
  * Save customer authentication settings
  */
 export const postApiV1AdminSettingsAuth = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminSettingsAuthData, ThrowOnError>): RequestResult<PostApiV1AdminSettingsAuthResponses, PostApiV1AdminSettingsAuthErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminSettingsAuthResponses, PostApiV1AdminSettingsAuthErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/settings/auth',
     ...options,
     headers: {
@@ -6674,33 +3791,12 @@ export const postApiV1AdminSettingsAuth = <ThrowOnError extends boolean = false>
 /**
  * Get security settings
  */
-export const getApiV1AdminSettingsSecurity = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsSecurityData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsSecurityResponses, GetApiV1AdminSettingsSecurityErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsSecurityResponses, GetApiV1AdminSettingsSecurityErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/settings/security',
-    ...options
-});
+export const getApiV1AdminSettingsSecurity = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsSecurityData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsSecurityResponses, GetApiV1AdminSettingsSecurityErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsSecurityResponses, GetApiV1AdminSettingsSecurityErrors, ThrowOnError>({ url: '/api/v1/admin/settings/security', ...options });
 
 /**
  * Save security settings
  */
 export const postApiV1AdminSettingsSecurity = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminSettingsSecurityData, ThrowOnError>): RequestResult<PostApiV1AdminSettingsSecurityResponses, PostApiV1AdminSettingsSecurityErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminSettingsSecurityResponses, PostApiV1AdminSettingsSecurityErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/settings/security',
     ...options,
     headers: {
@@ -6712,50 +3808,17 @@ export const postApiV1AdminSettingsSecurity = <ThrowOnError extends boolean = fa
 /**
  * Get inherited storefront security origins
  */
-export const getApiV1AdminSettingsSecurityRuntimeSources = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsSecurityRuntimeSourcesData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsSecurityRuntimeSourcesResponses, GetApiV1AdminSettingsSecurityRuntimeSourcesErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsSecurityRuntimeSourcesResponses, GetApiV1AdminSettingsSecurityRuntimeSourcesErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/settings/security/runtime-sources',
-    ...options
-});
+export const getApiV1AdminSettingsSecurityRuntimeSources = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsSecurityRuntimeSourcesData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsSecurityRuntimeSourcesResponses, GetApiV1AdminSettingsSecurityRuntimeSourcesErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsSecurityRuntimeSourcesResponses, GetApiV1AdminSettingsSecurityRuntimeSourcesErrors, ThrowOnError>({ url: '/api/v1/admin/settings/security/runtime-sources', ...options });
 
 /**
  * Get email settings (system)
  */
-export const getApiV1AdminSettingsEmail = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsEmailData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsEmailResponses, GetApiV1AdminSettingsEmailErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsEmailResponses, GetApiV1AdminSettingsEmailErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/settings/email',
-    ...options
-});
+export const getApiV1AdminSettingsEmail = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsEmailData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsEmailResponses, GetApiV1AdminSettingsEmailErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsEmailResponses, GetApiV1AdminSettingsEmailErrors, ThrowOnError>({ url: '/api/v1/admin/settings/email', ...options });
 
 /**
  * Save email settings (system)
  */
 export const postApiV1AdminSettingsEmail = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminSettingsEmailData, ThrowOnError>): RequestResult<PostApiV1AdminSettingsEmailResponses, PostApiV1AdminSettingsEmailErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminSettingsEmailResponses, PostApiV1AdminSettingsEmailErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/settings/email',
     ...options,
     headers: {
@@ -6767,33 +3830,12 @@ export const postApiV1AdminSettingsEmail = <ThrowOnError extends boolean = false
 /**
  * Get Firebase settings (system)
  */
-export const getApiV1AdminSettingsFirebase = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsFirebaseData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsFirebaseResponses, GetApiV1AdminSettingsFirebaseErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsFirebaseResponses, GetApiV1AdminSettingsFirebaseErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/settings/firebase',
-    ...options
-});
+export const getApiV1AdminSettingsFirebase = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsFirebaseData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsFirebaseResponses, GetApiV1AdminSettingsFirebaseErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsFirebaseResponses, GetApiV1AdminSettingsFirebaseErrors, ThrowOnError>({ url: '/api/v1/admin/settings/firebase', ...options });
 
 /**
  * Save Firebase settings (system)
  */
 export const postApiV1AdminSettingsFirebase = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminSettingsFirebaseData, ThrowOnError>): RequestResult<PostApiV1AdminSettingsFirebaseResponses, PostApiV1AdminSettingsFirebaseErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminSettingsFirebaseResponses, PostApiV1AdminSettingsFirebaseErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/settings/firebase',
     ...options,
     headers: {
@@ -6805,33 +3847,12 @@ export const postApiV1AdminSettingsFirebase = <ThrowOnError extends boolean = fa
 /**
  * Get platform origins
  */
-export const getApiV1AdminSettingsPlatform = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsPlatformData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsPlatformResponses, GetApiV1AdminSettingsPlatformErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsPlatformResponses, GetApiV1AdminSettingsPlatformErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/settings/platform',
-    ...options
-});
+export const getApiV1AdminSettingsPlatform = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsPlatformData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsPlatformResponses, GetApiV1AdminSettingsPlatformErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsPlatformResponses, GetApiV1AdminSettingsPlatformErrors, ThrowOnError>({ url: '/api/v1/admin/settings/platform', ...options });
 
 /**
  * Save platform origins
  */
 export const putApiV1AdminSettingsPlatform = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminSettingsPlatformData, ThrowOnError>): RequestResult<PutApiV1AdminSettingsPlatformResponses, PutApiV1AdminSettingsPlatformErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminSettingsPlatformResponses, PutApiV1AdminSettingsPlatformErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/settings/platform',
     ...options,
     headers: {
@@ -6843,33 +3864,12 @@ export const putApiV1AdminSettingsPlatform = <ThrowOnError extends boolean = fal
 /**
  * List delivery zones, their areas and rates, plus the Everywhere else rates
  */
-export const getApiV1AdminSettingsShippingMethods = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsShippingMethodsData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsShippingMethodsResponses, GetApiV1AdminSettingsShippingMethodsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsShippingMethodsResponses, GetApiV1AdminSettingsShippingMethodsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/settings/shipping-methods',
-    ...options
-});
+export const getApiV1AdminSettingsShippingMethods = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsShippingMethodsData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsShippingMethodsResponses, GetApiV1AdminSettingsShippingMethodsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsShippingMethodsResponses, GetApiV1AdminSettingsShippingMethodsErrors, ThrowOnError>({ url: '/api/v1/admin/settings/shipping-methods', ...options });
 
 /**
  * Create a delivery zone with its areas and rates
  */
 export const postApiV1AdminSettingsShippingMethods = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminSettingsShippingMethodsData, ThrowOnError>): RequestResult<PostApiV1AdminSettingsShippingMethodsResponses, PostApiV1AdminSettingsShippingMethodsErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminSettingsShippingMethodsResponses, PostApiV1AdminSettingsShippingMethodsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/settings/shipping-methods',
     ...options,
     headers: {
@@ -6882,15 +3882,6 @@ export const postApiV1AdminSettingsShippingMethods = <ThrowOnError extends boole
  * Replace the rates for addresses outside every delivery zone
  */
 export const putApiV1AdminSettingsShippingMethodsEverywhereElse = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminSettingsShippingMethodsEverywhereElseData, ThrowOnError>): RequestResult<PutApiV1AdminSettingsShippingMethodsEverywhereElseResponses, PutApiV1AdminSettingsShippingMethodsEverywhereElseErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminSettingsShippingMethodsEverywhereElseResponses, PutApiV1AdminSettingsShippingMethodsEverywhereElseErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/settings/shipping-methods/everywhere-else',
     ...options,
     headers: {
@@ -6903,15 +3894,6 @@ export const putApiV1AdminSettingsShippingMethodsEverywhereElse = <ThrowOnError 
  * Start from Dhaka-centric zones (inside/outside, or inside/near/outside Dhaka)
  */
 export const putApiV1AdminSettingsShippingMethodsTemplate = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminSettingsShippingMethodsTemplateData, ThrowOnError>): RequestResult<PutApiV1AdminSettingsShippingMethodsTemplateResponses, PutApiV1AdminSettingsShippingMethodsTemplateErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminSettingsShippingMethodsTemplateResponses, PutApiV1AdminSettingsShippingMethodsTemplateErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/settings/shipping-methods/template',
     ...options,
     headers: {
@@ -6923,33 +3905,12 @@ export const putApiV1AdminSettingsShippingMethodsTemplate = <ThrowOnError extend
 /**
  * Delete a delivery zone; its areas get the Everywhere else rates
  */
-export const deleteApiV1AdminSettingsShippingMethodsById = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminSettingsShippingMethodsByIdData, ThrowOnError>): RequestResult<DeleteApiV1AdminSettingsShippingMethodsByIdResponses, DeleteApiV1AdminSettingsShippingMethodsByIdErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminSettingsShippingMethodsByIdResponses, DeleteApiV1AdminSettingsShippingMethodsByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/settings/shipping-methods/{id}',
-    ...options
-});
+export const deleteApiV1AdminSettingsShippingMethodsById = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminSettingsShippingMethodsByIdData, ThrowOnError>): RequestResult<DeleteApiV1AdminSettingsShippingMethodsByIdResponses, DeleteApiV1AdminSettingsShippingMethodsByIdErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminSettingsShippingMethodsByIdResponses, DeleteApiV1AdminSettingsShippingMethodsByIdErrors, ThrowOnError>({ url: '/api/v1/admin/settings/shipping-methods/{id}', ...options });
 
 /**
  * Replace a delivery zone's name, areas and rates
  */
 export const putApiV1AdminSettingsShippingMethodsById = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminSettingsShippingMethodsByIdData, ThrowOnError>): RequestResult<PutApiV1AdminSettingsShippingMethodsByIdResponses, PutApiV1AdminSettingsShippingMethodsByIdErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminSettingsShippingMethodsByIdResponses, PutApiV1AdminSettingsShippingMethodsByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/settings/shipping-methods/{id}',
     ...options,
     headers: {
@@ -6961,33 +3922,12 @@ export const putApiV1AdminSettingsShippingMethodsById = <ThrowOnError extends bo
 /**
  * List all delivery providers
  */
-export const getApiV1AdminSettingsDeliveryProviders = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsDeliveryProvidersData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsDeliveryProvidersResponses, GetApiV1AdminSettingsDeliveryProvidersErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsDeliveryProvidersResponses, GetApiV1AdminSettingsDeliveryProvidersErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/settings/delivery-providers',
-    ...options
-});
+export const getApiV1AdminSettingsDeliveryProviders = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsDeliveryProvidersData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsDeliveryProvidersResponses, GetApiV1AdminSettingsDeliveryProvidersErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsDeliveryProvidersResponses, GetApiV1AdminSettingsDeliveryProvidersErrors, ThrowOnError>({ url: '/api/v1/admin/settings/delivery-providers', ...options });
 
 /**
  * Create a delivery provider
  */
 export const postApiV1AdminSettingsDeliveryProviders = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminSettingsDeliveryProvidersData, ThrowOnError>): RequestResult<PostApiV1AdminSettingsDeliveryProvidersResponses, PostApiV1AdminSettingsDeliveryProvidersErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminSettingsDeliveryProvidersResponses, PostApiV1AdminSettingsDeliveryProvidersErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/settings/delivery-providers',
     ...options,
     headers: {
@@ -7000,15 +3940,6 @@ export const postApiV1AdminSettingsDeliveryProviders = <ThrowOnError extends boo
  * Update a delivery provider
  */
 export const putApiV1AdminSettingsDeliveryProviders = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminSettingsDeliveryProvidersData, ThrowOnError>): RequestResult<PutApiV1AdminSettingsDeliveryProvidersResponses, PutApiV1AdminSettingsDeliveryProvidersErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminSettingsDeliveryProvidersResponses, PutApiV1AdminSettingsDeliveryProvidersErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/settings/delivery-providers',
     ...options,
     headers: {
@@ -7021,15 +3952,6 @@ export const putApiV1AdminSettingsDeliveryProviders = <ThrowOnError extends bool
  * Test a new provider connection before saving
  */
 export const postApiV1AdminSettingsDeliveryProvidersCreateTest = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminSettingsDeliveryProvidersCreateTestData, ThrowOnError>): RequestResult<PostApiV1AdminSettingsDeliveryProvidersCreateTestResponses, PostApiV1AdminSettingsDeliveryProvidersCreateTestErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminSettingsDeliveryProvidersCreateTestResponses, PostApiV1AdminSettingsDeliveryProvidersCreateTestErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/settings/delivery-providers/create-test',
     ...options,
     headers: {
@@ -7041,84 +3963,27 @@ export const postApiV1AdminSettingsDeliveryProvidersCreateTest = <ThrowOnError e
 /**
  * Delete a delivery provider
  */
-export const deleteApiV1AdminSettingsDeliveryProvidersById = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminSettingsDeliveryProvidersByIdData, ThrowOnError>): RequestResult<DeleteApiV1AdminSettingsDeliveryProvidersByIdResponses, DeleteApiV1AdminSettingsDeliveryProvidersByIdErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminSettingsDeliveryProvidersByIdResponses, DeleteApiV1AdminSettingsDeliveryProvidersByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/settings/delivery-providers/{id}',
-    ...options
-});
+export const deleteApiV1AdminSettingsDeliveryProvidersById = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminSettingsDeliveryProvidersByIdData, ThrowOnError>): RequestResult<DeleteApiV1AdminSettingsDeliveryProvidersByIdResponses, DeleteApiV1AdminSettingsDeliveryProvidersByIdErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminSettingsDeliveryProvidersByIdResponses, DeleteApiV1AdminSettingsDeliveryProvidersByIdErrors, ThrowOnError>({ url: '/api/v1/admin/settings/delivery-providers/{id}', ...options });
 
 /**
  * Get a delivery provider by ID
  */
-export const getApiV1AdminSettingsDeliveryProvidersById = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminSettingsDeliveryProvidersByIdData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsDeliveryProvidersByIdResponses, GetApiV1AdminSettingsDeliveryProvidersByIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminSettingsDeliveryProvidersByIdResponses, GetApiV1AdminSettingsDeliveryProvidersByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/settings/delivery-providers/{id}',
-    ...options
-});
+export const getApiV1AdminSettingsDeliveryProvidersById = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminSettingsDeliveryProvidersByIdData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsDeliveryProvidersByIdResponses, GetApiV1AdminSettingsDeliveryProvidersByIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminSettingsDeliveryProvidersByIdResponses, GetApiV1AdminSettingsDeliveryProvidersByIdErrors, ThrowOnError>({ url: '/api/v1/admin/settings/delivery-providers/{id}', ...options });
 
 /**
  * Test an existing provider connection
  */
-export const postApiV1AdminSettingsDeliveryProvidersById = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminSettingsDeliveryProvidersByIdData, ThrowOnError>): RequestResult<PostApiV1AdminSettingsDeliveryProvidersByIdResponses, PostApiV1AdminSettingsDeliveryProvidersByIdErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminSettingsDeliveryProvidersByIdResponses, PostApiV1AdminSettingsDeliveryProvidersByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/settings/delivery-providers/{id}',
-    ...options
-});
+export const postApiV1AdminSettingsDeliveryProvidersById = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminSettingsDeliveryProvidersByIdData, ThrowOnError>): RequestResult<PostApiV1AdminSettingsDeliveryProvidersByIdResponses, PostApiV1AdminSettingsDeliveryProvidersByIdErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminSettingsDeliveryProvidersByIdResponses, PostApiV1AdminSettingsDeliveryProvidersByIdErrors, ThrowOnError>({ url: '/api/v1/admin/settings/delivery-providers/{id}', ...options });
 
 /**
  * Get Meta Conversions API settings
  */
-export const getApiV1AdminSettingsMetaConversions = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsMetaConversionsData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsMetaConversionsResponses, GetApiV1AdminSettingsMetaConversionsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsMetaConversionsResponses, GetApiV1AdminSettingsMetaConversionsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/settings/meta-conversions',
-    ...options
-});
+export const getApiV1AdminSettingsMetaConversions = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsMetaConversionsData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsMetaConversionsResponses, GetApiV1AdminSettingsMetaConversionsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsMetaConversionsResponses, GetApiV1AdminSettingsMetaConversionsErrors, ThrowOnError>({ url: '/api/v1/admin/settings/meta-conversions', ...options });
 
 /**
  * Save Meta Conversions API settings
  */
 export const postApiV1AdminSettingsMetaConversions = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminSettingsMetaConversionsData, ThrowOnError>): RequestResult<PostApiV1AdminSettingsMetaConversionsResponses, PostApiV1AdminSettingsMetaConversionsErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminSettingsMetaConversionsResponses, PostApiV1AdminSettingsMetaConversionsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/settings/meta-conversions',
     ...options,
     headers: {
@@ -7130,84 +3995,27 @@ export const postApiV1AdminSettingsMetaConversions = <ThrowOnError extends boole
 /**
  * Clear all Meta Conversions API logs
  */
-export const deleteApiV1AdminSettingsMetaConversionsLogs = <ThrowOnError extends boolean = false>(options?: Options<DeleteApiV1AdminSettingsMetaConversionsLogsData, ThrowOnError>): RequestResult<DeleteApiV1AdminSettingsMetaConversionsLogsResponses, DeleteApiV1AdminSettingsMetaConversionsLogsErrors, ThrowOnError> => (options?.client ?? client).delete<DeleteApiV1AdminSettingsMetaConversionsLogsResponses, DeleteApiV1AdminSettingsMetaConversionsLogsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/settings/meta-conversions/logs',
-    ...options
-});
+export const deleteApiV1AdminSettingsMetaConversionsLogs = <ThrowOnError extends boolean = false>(options?: Options<DeleteApiV1AdminSettingsMetaConversionsLogsData, ThrowOnError>): RequestResult<DeleteApiV1AdminSettingsMetaConversionsLogsResponses, DeleteApiV1AdminSettingsMetaConversionsLogsErrors, ThrowOnError> => (options?.client ?? client).delete<DeleteApiV1AdminSettingsMetaConversionsLogsResponses, DeleteApiV1AdminSettingsMetaConversionsLogsErrors, ThrowOnError>({ url: '/api/v1/admin/settings/meta-conversions/logs', ...options });
 
 /**
  * Get Meta Conversions API logs
  */
-export const getApiV1AdminSettingsMetaConversionsLogs = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsMetaConversionsLogsData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsMetaConversionsLogsResponses, GetApiV1AdminSettingsMetaConversionsLogsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsMetaConversionsLogsResponses, GetApiV1AdminSettingsMetaConversionsLogsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/settings/meta-conversions/logs',
-    ...options
-});
+export const getApiV1AdminSettingsMetaConversionsLogs = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsMetaConversionsLogsData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsMetaConversionsLogsResponses, GetApiV1AdminSettingsMetaConversionsLogsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsMetaConversionsLogsResponses, GetApiV1AdminSettingsMetaConversionsLogsErrors, ThrowOnError>({ url: '/api/v1/admin/settings/meta-conversions/logs', ...options });
 
 /**
  * Trigger manual log cleanup
  */
-export const postApiV1AdminSettingsMetaConversionsLogs = <ThrowOnError extends boolean = false>(options?: Options<PostApiV1AdminSettingsMetaConversionsLogsData, ThrowOnError>): RequestResult<PostApiV1AdminSettingsMetaConversionsLogsResponses, PostApiV1AdminSettingsMetaConversionsLogsErrors, ThrowOnError> => (options?.client ?? client).post<PostApiV1AdminSettingsMetaConversionsLogsResponses, PostApiV1AdminSettingsMetaConversionsLogsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/settings/meta-conversions/logs',
-    ...options
-});
+export const postApiV1AdminSettingsMetaConversionsLogs = <ThrowOnError extends boolean = false>(options?: Options<PostApiV1AdminSettingsMetaConversionsLogsData, ThrowOnError>): RequestResult<PostApiV1AdminSettingsMetaConversionsLogsResponses, PostApiV1AdminSettingsMetaConversionsLogsErrors, ThrowOnError> => (options?.client ?? client).post<PostApiV1AdminSettingsMetaConversionsLogsResponses, PostApiV1AdminSettingsMetaConversionsLogsErrors, ThrowOnError>({ url: '/api/v1/admin/settings/meta-conversions/logs', ...options });
 
 /**
  * Get customer notification templates
  */
-export const getApiV1AdminSettingsNotificationChannelsTemplates = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsNotificationChannelsTemplatesData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsNotificationChannelsTemplatesResponses, GetApiV1AdminSettingsNotificationChannelsTemplatesErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsNotificationChannelsTemplatesResponses, GetApiV1AdminSettingsNotificationChannelsTemplatesErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/settings/notification-channels/templates',
-    ...options
-});
+export const getApiV1AdminSettingsNotificationChannelsTemplates = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsNotificationChannelsTemplatesData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsNotificationChannelsTemplatesResponses, GetApiV1AdminSettingsNotificationChannelsTemplatesErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsNotificationChannelsTemplatesResponses, GetApiV1AdminSettingsNotificationChannelsTemplatesErrors, ThrowOnError>({ url: '/api/v1/admin/settings/notification-channels/templates', ...options });
 
 /**
  * Save the customer message templates for one event
  */
 export const putApiV1AdminSettingsNotificationChannelsTemplates = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminSettingsNotificationChannelsTemplatesData, ThrowOnError>): RequestResult<PutApiV1AdminSettingsNotificationChannelsTemplatesResponses, PutApiV1AdminSettingsNotificationChannelsTemplatesErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminSettingsNotificationChannelsTemplatesResponses, PutApiV1AdminSettingsNotificationChannelsTemplatesErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/settings/notification-channels/templates',
     ...options,
     headers: {
@@ -7220,15 +4028,6 @@ export const putApiV1AdminSettingsNotificationChannelsTemplates = <ThrowOnError 
  * Send a draft template with sample data (email to yourself, SMS to a number you enter)
  */
 export const postApiV1AdminSettingsNotificationChannelsTemplatesTest = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminSettingsNotificationChannelsTemplatesTestData, ThrowOnError>): RequestResult<PostApiV1AdminSettingsNotificationChannelsTemplatesTestResponses, PostApiV1AdminSettingsNotificationChannelsTemplatesTestErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminSettingsNotificationChannelsTemplatesTestResponses, PostApiV1AdminSettingsNotificationChannelsTemplatesTestErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/settings/notification-channels/templates/test',
     ...options,
     headers: {
@@ -7240,33 +4039,12 @@ export const postApiV1AdminSettingsNotificationChannelsTemplatesTest = <ThrowOnE
 /**
  * Get customer and staff notification settings
  */
-export const getApiV1AdminSettingsNotificationChannels = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsNotificationChannelsData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsNotificationChannelsResponses, GetApiV1AdminSettingsNotificationChannelsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsNotificationChannelsResponses, GetApiV1AdminSettingsNotificationChannelsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/settings/notification-channels',
-    ...options
-});
+export const getApiV1AdminSettingsNotificationChannels = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsNotificationChannelsData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsNotificationChannelsResponses, GetApiV1AdminSettingsNotificationChannelsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsNotificationChannelsResponses, GetApiV1AdminSettingsNotificationChannelsErrors, ThrowOnError>({ url: '/api/v1/admin/settings/notification-channels', ...options });
 
 /**
  * Update customer notification channels per order status
  */
 export const putApiV1AdminSettingsNotificationChannels = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminSettingsNotificationChannelsData, ThrowOnError>): RequestResult<PutApiV1AdminSettingsNotificationChannelsResponses, PutApiV1AdminSettingsNotificationChannelsErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminSettingsNotificationChannelsResponses, PutApiV1AdminSettingsNotificationChannelsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/settings/notification-channels',
     ...options,
     headers: {
@@ -7279,15 +4057,6 @@ export const putApiV1AdminSettingsNotificationChannels = <ThrowOnError extends b
  * Update staff notifications: push per order status and new-order emails
  */
 export const putApiV1AdminSettingsNotificationChannelsAdminChannels = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminSettingsNotificationChannelsAdminChannelsData, ThrowOnError>): RequestResult<PutApiV1AdminSettingsNotificationChannelsAdminChannelsResponses, PutApiV1AdminSettingsNotificationChannelsAdminChannelsErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminSettingsNotificationChannelsAdminChannelsResponses, PutApiV1AdminSettingsNotificationChannelsAdminChannelsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/settings/notification-channels/admin-channels',
     ...options,
     headers: {
@@ -7299,33 +4068,12 @@ export const putApiV1AdminSettingsNotificationChannelsAdminChannels = <ThrowOnEr
 /**
  * Get SMS provider settings
  */
-export const getApiV1AdminSettingsSms = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsSmsData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsSmsResponses, GetApiV1AdminSettingsSmsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsSmsResponses, GetApiV1AdminSettingsSmsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/settings/sms',
-    ...options
-});
+export const getApiV1AdminSettingsSms = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsSmsData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsSmsResponses, GetApiV1AdminSettingsSmsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsSmsResponses, GetApiV1AdminSettingsSmsErrors, ThrowOnError>({ url: '/api/v1/admin/settings/sms', ...options });
 
 /**
  * Save SMS provider settings
  */
 export const postApiV1AdminSettingsSms = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminSettingsSmsData, ThrowOnError>): RequestResult<PostApiV1AdminSettingsSmsResponses, PostApiV1AdminSettingsSmsErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminSettingsSmsResponses, PostApiV1AdminSettingsSmsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/settings/sms',
     ...options,
     headers: {
@@ -7337,33 +4085,12 @@ export const postApiV1AdminSettingsSms = <ThrowOnError extends boolean = false>(
 /**
  * Get operational customer request policy
  */
-export const getApiV1AdminSettingsCustomerRequests = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsCustomerRequestsData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsCustomerRequestsResponses, GetApiV1AdminSettingsCustomerRequestsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsCustomerRequestsResponses, GetApiV1AdminSettingsCustomerRequestsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/settings/customer-requests',
-    ...options
-});
+export const getApiV1AdminSettingsCustomerRequests = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsCustomerRequestsData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsCustomerRequestsResponses, GetApiV1AdminSettingsCustomerRequestsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsCustomerRequestsResponses, GetApiV1AdminSettingsCustomerRequestsErrors, ThrowOnError>({ url: '/api/v1/admin/settings/customer-requests', ...options });
 
 /**
  * Save operational customer request policy
  */
 export const putApiV1AdminSettingsCustomerRequests = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminSettingsCustomerRequestsData, ThrowOnError>): RequestResult<PutApiV1AdminSettingsCustomerRequestsResponses, PutApiV1AdminSettingsCustomerRequestsErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminSettingsCustomerRequestsResponses, PutApiV1AdminSettingsCustomerRequestsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/settings/customer-requests',
     ...options,
     headers: {
@@ -7377,19 +4104,7 @@ export const putApiV1AdminSettingsCustomerRequests = <ThrowOnError extends boole
  *
  * Which of the store's content pages is its return and refund, privacy, terms of service, shipping and contact policy (page ids; null when not set).
  */
-export const getApiV1AdminSettingsPolicies = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsPoliciesData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsPoliciesResponses, GetApiV1AdminSettingsPoliciesErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsPoliciesResponses, GetApiV1AdminSettingsPoliciesErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/settings/policies',
-    ...options
-});
+export const getApiV1AdminSettingsPolicies = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsPoliciesData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsPoliciesResponses, GetApiV1AdminSettingsPoliciesErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsPoliciesResponses, GetApiV1AdminSettingsPoliciesErrors, ThrowOnError>({ url: '/api/v1/admin/settings/policies', ...options });
 
 /**
  * Link store policies to pages
@@ -7397,15 +4112,6 @@ export const getApiV1AdminSettingsPolicies = <ThrowOnError extends boolean = fal
  * Links each policy to one of the store's own content pages, or clears it. Unknown or trashed pages are refused against their field.
  */
 export const putApiV1AdminSettingsPolicies = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminSettingsPoliciesData, ThrowOnError>): RequestResult<PutApiV1AdminSettingsPoliciesResponses, PutApiV1AdminSettingsPoliciesErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminSettingsPoliciesResponses, PutApiV1AdminSettingsPoliciesErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/settings/policies',
     ...options,
     headers: {
@@ -7419,19 +4125,7 @@ export const putApiV1AdminSettingsPolicies = <ThrowOnError extends boolean = fal
  *
  * The plans behind "EMI on card payment, from X/month" on EMI-eligible products. Informational only: checkout does not offer EMI.
  */
-export const getApiV1AdminSettingsEmi = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsEmiData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsEmiResponses, GetApiV1AdminSettingsEmiErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsEmiResponses, GetApiV1AdminSettingsEmiErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/settings/emi',
-    ...options
-});
+export const getApiV1AdminSettingsEmi = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsEmiData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsEmiResponses, GetApiV1AdminSettingsEmiErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsEmiResponses, GetApiV1AdminSettingsEmiErrors, ThrowOnError>({ url: '/api/v1/admin/settings/emi', ...options });
 
 /**
  * Save the store's EMI plans
@@ -7439,15 +4133,6 @@ export const getApiV1AdminSettingsEmi = <ThrowOnError extends boolean = false>(o
  * Replaces the plans. Each plan's monthly amount is the price plus its fee, split over its months and rounded up to whole taka.
  */
 export const putApiV1AdminSettingsEmi = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminSettingsEmiData, ThrowOnError>): RequestResult<PutApiV1AdminSettingsEmiResponses, PutApiV1AdminSettingsEmiErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminSettingsEmiResponses, PutApiV1AdminSettingsEmiErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/settings/emi',
     ...options,
     headers: {
@@ -7459,33 +4144,12 @@ export const putApiV1AdminSettingsEmi = <ThrowOnError extends boolean = false>(o
 /**
  * Get marketing consent settings
  */
-export const getApiV1AdminSettingsMarketingConsent = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsMarketingConsentData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsMarketingConsentResponses, GetApiV1AdminSettingsMarketingConsentErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsMarketingConsentResponses, GetApiV1AdminSettingsMarketingConsentErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/settings/marketing-consent',
-    ...options
-});
+export const getApiV1AdminSettingsMarketingConsent = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsMarketingConsentData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsMarketingConsentResponses, GetApiV1AdminSettingsMarketingConsentErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsMarketingConsentResponses, GetApiV1AdminSettingsMarketingConsentErrors, ThrowOnError>({ url: '/api/v1/admin/settings/marketing-consent', ...options });
 
 /**
  * Save marketing consent settings
  */
 export const putApiV1AdminSettingsMarketingConsent = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminSettingsMarketingConsentData, ThrowOnError>): RequestResult<PutApiV1AdminSettingsMarketingConsentResponses, PutApiV1AdminSettingsMarketingConsentErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminSettingsMarketingConsentResponses, PutApiV1AdminSettingsMarketingConsentErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/settings/marketing-consent',
     ...options,
     headers: {
@@ -7498,15 +4162,6 @@ export const putApiV1AdminSettingsMarketingConsent = <ThrowOnError extends boole
  * Update order status
  */
 export const putApiV1AdminOrdersByIdStatus = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminOrdersByIdStatusData, ThrowOnError>): RequestResult<PutApiV1AdminOrdersByIdStatusResponses, PutApiV1AdminOrdersByIdStatusErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminOrdersByIdStatusResponses, PutApiV1AdminOrdersByIdStatusErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/orders/{id}/status',
     ...options,
     headers: {
@@ -7520,50 +4175,17 @@ export const putApiV1AdminOrdersByIdStatus = <ThrowOnError extends boolean = fal
  *
  * Cash-on-delivery orders are delivered by recording the cash (POST /{id}/cod). Refused while anything is unsent or money is due.
  */
-export const postApiV1AdminOrdersByIdMarkDelivered = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminOrdersByIdMarkDeliveredData, ThrowOnError>): RequestResult<PostApiV1AdminOrdersByIdMarkDeliveredResponses, PostApiV1AdminOrdersByIdMarkDeliveredErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminOrdersByIdMarkDeliveredResponses, PostApiV1AdminOrdersByIdMarkDeliveredErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/orders/{id}/mark-delivered',
-    ...options
-});
+export const postApiV1AdminOrdersByIdMarkDelivered = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminOrdersByIdMarkDeliveredData, ThrowOnError>): RequestResult<PostApiV1AdminOrdersByIdMarkDeliveredResponses, PostApiV1AdminOrdersByIdMarkDeliveredErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminOrdersByIdMarkDeliveredResponses, PostApiV1AdminOrdersByIdMarkDeliveredErrors, ThrowOnError>({ url: '/api/v1/admin/orders/{id}/mark-delivered', ...options });
 
 /**
  * Get COD tracking for an order
  */
-export const getApiV1AdminOrdersByIdCod = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminOrdersByIdCodData, ThrowOnError>): RequestResult<GetApiV1AdminOrdersByIdCodResponses, unknown, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminOrdersByIdCodResponses, unknown, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/orders/{id}/cod',
-    ...options
-});
+export const getApiV1AdminOrdersByIdCod = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminOrdersByIdCodData, ThrowOnError>): RequestResult<GetApiV1AdminOrdersByIdCodResponses, unknown, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminOrdersByIdCodResponses, unknown, ThrowOnError>({ url: '/api/v1/admin/orders/{id}/cod', ...options });
 
 /**
  * Process COD action
  */
 export const postApiV1AdminOrdersByIdCod = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminOrdersByIdCodData, ThrowOnError>): RequestResult<PostApiV1AdminOrdersByIdCodResponses, PostApiV1AdminOrdersByIdCodErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminOrdersByIdCodResponses, PostApiV1AdminOrdersByIdCodErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/orders/{id}/cod',
     ...options,
     headers: {
@@ -7575,33 +4197,12 @@ export const postApiV1AdminOrdersByIdCod = <ThrowOnError extends boolean = false
 /**
  * Get order shipments
  */
-export const getApiV1AdminOrdersByIdShipments = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminOrdersByIdShipmentsData, ThrowOnError>): RequestResult<GetApiV1AdminOrdersByIdShipmentsResponses, unknown, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminOrdersByIdShipmentsResponses, unknown, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/orders/{id}/shipments',
-    ...options
-});
+export const getApiV1AdminOrdersByIdShipments = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminOrdersByIdShipmentsData, ThrowOnError>): RequestResult<GetApiV1AdminOrdersByIdShipmentsResponses, unknown, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminOrdersByIdShipmentsResponses, unknown, ThrowOnError>({ url: '/api/v1/admin/orders/{id}/shipments', ...options });
 
 /**
  * Create a shipment for an order
  */
 export const postApiV1AdminOrdersByIdShipments = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminOrdersByIdShipmentsData, ThrowOnError>): RequestResult<PostApiV1AdminOrdersByIdShipmentsResponses, PostApiV1AdminOrdersByIdShipmentsErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminOrdersByIdShipmentsResponses, PostApiV1AdminOrdersByIdShipmentsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/orders/{id}/shipments',
     ...options,
     headers: {
@@ -7613,97 +4214,32 @@ export const postApiV1AdminOrdersByIdShipments = <ThrowOnError extends boolean =
 /**
  * Delete a shipment
  */
-export const deleteApiV1AdminOrdersByIdShipmentsByShipmentId = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminOrdersByIdShipmentsByShipmentIdData, ThrowOnError>): RequestResult<DeleteApiV1AdminOrdersByIdShipmentsByShipmentIdResponses, DeleteApiV1AdminOrdersByIdShipmentsByShipmentIdErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminOrdersByIdShipmentsByShipmentIdResponses, DeleteApiV1AdminOrdersByIdShipmentsByShipmentIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/orders/{id}/shipments/{shipmentId}',
-    ...options
-});
+export const deleteApiV1AdminOrdersByIdShipmentsByShipmentId = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminOrdersByIdShipmentsByShipmentIdData, ThrowOnError>): RequestResult<DeleteApiV1AdminOrdersByIdShipmentsByShipmentIdResponses, DeleteApiV1AdminOrdersByIdShipmentsByShipmentIdErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminOrdersByIdShipmentsByShipmentIdResponses, DeleteApiV1AdminOrdersByIdShipmentsByShipmentIdErrors, ThrowOnError>({ url: '/api/v1/admin/orders/{id}/shipments/{shipmentId}', ...options });
 
 /**
  * Get a specific shipment
  */
-export const getApiV1AdminOrdersByIdShipmentsByShipmentId = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminOrdersByIdShipmentsByShipmentIdData, ThrowOnError>): RequestResult<GetApiV1AdminOrdersByIdShipmentsByShipmentIdResponses, GetApiV1AdminOrdersByIdShipmentsByShipmentIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminOrdersByIdShipmentsByShipmentIdResponses, GetApiV1AdminOrdersByIdShipmentsByShipmentIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/orders/{id}/shipments/{shipmentId}',
-    ...options
-});
+export const getApiV1AdminOrdersByIdShipmentsByShipmentId = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminOrdersByIdShipmentsByShipmentIdData, ThrowOnError>): RequestResult<GetApiV1AdminOrdersByIdShipmentsByShipmentIdResponses, GetApiV1AdminOrdersByIdShipmentsByShipmentIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminOrdersByIdShipmentsByShipmentIdResponses, GetApiV1AdminOrdersByIdShipmentsByShipmentIdErrors, ThrowOnError>({ url: '/api/v1/admin/orders/{id}/shipments/{shipmentId}', ...options });
 
 /**
  * Check shipment status from provider and sync order
  */
-export const postApiV1AdminOrdersByIdShipmentsByShipmentIdStatus = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminOrdersByIdShipmentsByShipmentIdStatusData, ThrowOnError>): RequestResult<PostApiV1AdminOrdersByIdShipmentsByShipmentIdStatusResponses, PostApiV1AdminOrdersByIdShipmentsByShipmentIdStatusErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminOrdersByIdShipmentsByShipmentIdStatusResponses, PostApiV1AdminOrdersByIdShipmentsByShipmentIdStatusErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }],
-    url: '/api/v1/admin/orders/{id}/shipments/{shipmentId}/status',
-    ...options
-});
+export const postApiV1AdminOrdersByIdShipmentsByShipmentIdStatus = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminOrdersByIdShipmentsByShipmentIdStatusData, ThrowOnError>): RequestResult<PostApiV1AdminOrdersByIdShipmentsByShipmentIdStatusResponses, PostApiV1AdminOrdersByIdShipmentsByShipmentIdStatusErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminOrdersByIdShipmentsByShipmentIdStatusResponses, PostApiV1AdminOrdersByIdShipmentsByShipmentIdStatusErrors, ThrowOnError>({ url: '/api/v1/admin/orders/{id}/shipments/{shipmentId}/status', ...options });
 
 /**
  * Refresh shipment status and update order
  */
-export const postApiV1AdminOrdersByIdShipmentsByShipmentIdRefresh = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminOrdersByIdShipmentsByShipmentIdRefreshData, ThrowOnError>): RequestResult<PostApiV1AdminOrdersByIdShipmentsByShipmentIdRefreshResponses, PostApiV1AdminOrdersByIdShipmentsByShipmentIdRefreshErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminOrdersByIdShipmentsByShipmentIdRefreshResponses, PostApiV1AdminOrdersByIdShipmentsByShipmentIdRefreshErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/orders/{id}/shipments/{shipmentId}/refresh',
-    ...options
-});
+export const postApiV1AdminOrdersByIdShipmentsByShipmentIdRefresh = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminOrdersByIdShipmentsByShipmentIdRefreshData, ThrowOnError>): RequestResult<PostApiV1AdminOrdersByIdShipmentsByShipmentIdRefreshResponses, PostApiV1AdminOrdersByIdShipmentsByShipmentIdRefreshErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminOrdersByIdShipmentsByShipmentIdRefreshResponses, PostApiV1AdminOrdersByIdShipmentsByShipmentIdRefreshErrors, ThrowOnError>({ url: '/api/v1/admin/orders/{id}/shipments/{shipmentId}/refresh', ...options });
 
 /**
  * Repair a shipment reconciliation lock
  */
-export const postApiV1AdminOrdersByIdShipmentsByShipmentIdReconcile = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminOrdersByIdShipmentsByShipmentIdReconcileData, ThrowOnError>): RequestResult<PostApiV1AdminOrdersByIdShipmentsByShipmentIdReconcileResponses, PostApiV1AdminOrdersByIdShipmentsByShipmentIdReconcileErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminOrdersByIdShipmentsByShipmentIdReconcileResponses, PostApiV1AdminOrdersByIdShipmentsByShipmentIdReconcileErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/orders/{id}/shipments/{shipmentId}/reconcile',
-    ...options
-});
+export const postApiV1AdminOrdersByIdShipmentsByShipmentIdReconcile = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminOrdersByIdShipmentsByShipmentIdReconcileData, ThrowOnError>): RequestResult<PostApiV1AdminOrdersByIdShipmentsByShipmentIdReconcileResponses, PostApiV1AdminOrdersByIdShipmentsByShipmentIdReconcileErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminOrdersByIdShipmentsByShipmentIdReconcileResponses, PostApiV1AdminOrdersByIdShipmentsByShipmentIdReconcileErrors, ThrowOnError>({ url: '/api/v1/admin/orders/{id}/shipments/{shipmentId}/reconcile', ...options });
 
 /**
  * Resolve an unknown shipment through a positive provider lookup
  */
 export const postApiV1AdminOrdersByIdShipmentsByShipmentIdResolveUnknownLookup = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminOrdersByIdShipmentsByShipmentIdResolveUnknownLookupData, ThrowOnError>): RequestResult<PostApiV1AdminOrdersByIdShipmentsByShipmentIdResolveUnknownLookupResponses, PostApiV1AdminOrdersByIdShipmentsByShipmentIdResolveUnknownLookupErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminOrdersByIdShipmentsByShipmentIdResolveUnknownLookupResponses, PostApiV1AdminOrdersByIdShipmentsByShipmentIdResolveUnknownLookupErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/orders/{id}/shipments/{shipmentId}/resolve-unknown/lookup',
     ...options,
     headers: {
@@ -7716,15 +4252,6 @@ export const postApiV1AdminOrdersByIdShipmentsByShipmentIdResolveUnknownLookup =
  * Resolve an unknown shipment from accountable courier confirmation
  */
 export const postApiV1AdminOrdersByIdShipmentsByShipmentIdResolveUnknown = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminOrdersByIdShipmentsByShipmentIdResolveUnknownData, ThrowOnError>): RequestResult<PostApiV1AdminOrdersByIdShipmentsByShipmentIdResolveUnknownResponses, PostApiV1AdminOrdersByIdShipmentsByShipmentIdResolveUnknownErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminOrdersByIdShipmentsByShipmentIdResolveUnknownResponses, PostApiV1AdminOrdersByIdShipmentsByShipmentIdResolveUnknownErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/orders/{id}/shipments/{shipmentId}/resolve-unknown',
     ...options,
     headers: {
@@ -7737,15 +4264,6 @@ export const postApiV1AdminOrdersByIdShipmentsByShipmentIdResolveUnknown = <Thro
  * Process order refund
  */
 export const postApiV1AdminOrdersByIdRefund = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminOrdersByIdRefundData, ThrowOnError>): RequestResult<PostApiV1AdminOrdersByIdRefundResponses, PostApiV1AdminOrdersByIdRefundErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminOrdersByIdRefundResponses, PostApiV1AdminOrdersByIdRefundErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/orders/{id}/refund',
     ...options,
     headers: {
@@ -7757,50 +4275,17 @@ export const postApiV1AdminOrdersByIdRefund = <ThrowOnError extends boolean = fa
 /**
  * Check refund recovery
  */
-export const postApiV1AdminOrdersByIdRefundAttemptsByAttemptIdReconcile = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminOrdersByIdRefundAttemptsByAttemptIdReconcileData, ThrowOnError>): RequestResult<PostApiV1AdminOrdersByIdRefundAttemptsByAttemptIdReconcileResponses, PostApiV1AdminOrdersByIdRefundAttemptsByAttemptIdReconcileErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminOrdersByIdRefundAttemptsByAttemptIdReconcileResponses, PostApiV1AdminOrdersByIdRefundAttemptsByAttemptIdReconcileErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/orders/{id}/refund-attempts/{attemptId}/reconcile',
-    ...options
-});
+export const postApiV1AdminOrdersByIdRefundAttemptsByAttemptIdReconcile = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminOrdersByIdRefundAttemptsByAttemptIdReconcileData, ThrowOnError>): RequestResult<PostApiV1AdminOrdersByIdRefundAttemptsByAttemptIdReconcileResponses, PostApiV1AdminOrdersByIdRefundAttemptsByAttemptIdReconcileErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminOrdersByIdRefundAttemptsByAttemptIdReconcileResponses, PostApiV1AdminOrdersByIdRefundAttemptsByAttemptIdReconcileErrors, ThrowOnError>({ url: '/api/v1/admin/orders/{id}/refund-attempts/{attemptId}/reconcile', ...options });
 
 /**
  * Read an invoice or unnumbered draft without changing state
  */
-export const getApiV1AdminOrdersByIdInvoice = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminOrdersByIdInvoiceData, ThrowOnError>): RequestResult<GetApiV1AdminOrdersByIdInvoiceResponses, GetApiV1AdminOrdersByIdInvoiceErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminOrdersByIdInvoiceResponses, GetApiV1AdminOrdersByIdInvoiceErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/orders/{id}/invoice',
-    ...options
-});
+export const getApiV1AdminOrdersByIdInvoice = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminOrdersByIdInvoiceData, ThrowOnError>): RequestResult<GetApiV1AdminOrdersByIdInvoiceResponses, GetApiV1AdminOrdersByIdInvoiceErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminOrdersByIdInvoiceResponses, GetApiV1AdminOrdersByIdInvoiceErrors, ThrowOnError>({ url: '/api/v1/admin/orders/{id}/invoice', ...options });
 
 /**
  * Issue an immutable invoice with atomic monotonic numbering
  */
 export const postApiV1AdminOrdersByIdInvoice = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminOrdersByIdInvoiceData, ThrowOnError>): RequestResult<PostApiV1AdminOrdersByIdInvoiceResponses, PostApiV1AdminOrdersByIdInvoiceErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminOrdersByIdInvoiceResponses, PostApiV1AdminOrdersByIdInvoiceErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/orders/{id}/invoice',
     ...options,
     headers: {
@@ -7812,33 +4297,12 @@ export const postApiV1AdminOrdersByIdInvoice = <ThrowOnError extends boolean = f
 /**
  * Render a bounded self-contained printable invoice artifact
  */
-export const getApiV1AdminOrdersByIdInvoicePrint = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminOrdersByIdInvoicePrintData, ThrowOnError>): RequestResult<GetApiV1AdminOrdersByIdInvoicePrintResponses, GetApiV1AdminOrdersByIdInvoicePrintErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminOrdersByIdInvoicePrintResponses, GetApiV1AdminOrdersByIdInvoicePrintErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/orders/{id}/invoice/print',
-    ...options
-});
+export const getApiV1AdminOrdersByIdInvoicePrint = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminOrdersByIdInvoicePrintData, ThrowOnError>): RequestResult<GetApiV1AdminOrdersByIdInvoicePrintResponses, GetApiV1AdminOrdersByIdInvoicePrintErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminOrdersByIdInvoicePrintResponses, GetApiV1AdminOrdersByIdInvoicePrintErrors, ThrowOnError>({ url: '/api/v1/admin/orders/{id}/invoice/print', ...options });
 
 /**
  * Update an order support request status
  */
 export const putApiV1AdminOrdersByIdSupportRequestsByRequestIdStatus = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminOrdersByIdSupportRequestsByRequestIdStatusData, ThrowOnError>): RequestResult<PutApiV1AdminOrdersByIdSupportRequestsByRequestIdStatusResponses, PutApiV1AdminOrdersByIdSupportRequestsByRequestIdStatusErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminOrdersByIdSupportRequestsByRequestIdStatusResponses, PutApiV1AdminOrdersByIdSupportRequestsByRequestIdStatusErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/orders/{id}/support-requests/{requestId}/status',
     ...options,
     headers: {
@@ -7850,33 +4314,12 @@ export const putApiV1AdminOrdersByIdSupportRequestsByRequestIdStatus = <ThrowOnE
 /**
  * List item-level returns for an order
  */
-export const getApiV1AdminOrdersByIdReturns = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminOrdersByIdReturnsData, ThrowOnError>): RequestResult<GetApiV1AdminOrdersByIdReturnsResponses, GetApiV1AdminOrdersByIdReturnsErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminOrdersByIdReturnsResponses, GetApiV1AdminOrdersByIdReturnsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/orders/{id}/returns',
-    ...options
-});
+export const getApiV1AdminOrdersByIdReturns = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminOrdersByIdReturnsData, ThrowOnError>): RequestResult<GetApiV1AdminOrdersByIdReturnsResponses, GetApiV1AdminOrdersByIdReturnsErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminOrdersByIdReturnsResponses, GetApiV1AdminOrdersByIdReturnsErrors, ThrowOnError>({ url: '/api/v1/admin/orders/{id}/returns', ...options });
 
 /**
  * Request an item-level return without changing stock
  */
 export const postApiV1AdminOrdersByIdReturns = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminOrdersByIdReturnsData, ThrowOnError>): RequestResult<PostApiV1AdminOrdersByIdReturnsResponses, PostApiV1AdminOrdersByIdReturnsErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminOrdersByIdReturnsResponses, PostApiV1AdminOrdersByIdReturnsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/orders/{id}/returns',
     ...options,
     headers: {
@@ -7888,33 +4331,12 @@ export const postApiV1AdminOrdersByIdReturns = <ThrowOnError extends boolean = f
 /**
  * Get an item-level return
  */
-export const getApiV1AdminOrdersByIdReturnsByReturnId = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminOrdersByIdReturnsByReturnIdData, ThrowOnError>): RequestResult<GetApiV1AdminOrdersByIdReturnsByReturnIdResponses, GetApiV1AdminOrdersByIdReturnsByReturnIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminOrdersByIdReturnsByReturnIdResponses, GetApiV1AdminOrdersByIdReturnsByReturnIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/orders/{id}/returns/{returnId}',
-    ...options
-});
+export const getApiV1AdminOrdersByIdReturnsByReturnId = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminOrdersByIdReturnsByReturnIdData, ThrowOnError>): RequestResult<GetApiV1AdminOrdersByIdReturnsByReturnIdResponses, GetApiV1AdminOrdersByIdReturnsByReturnIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminOrdersByIdReturnsByReturnIdResponses, GetApiV1AdminOrdersByIdReturnsByReturnIdErrors, ThrowOnError>({ url: '/api/v1/admin/orders/{id}/returns/{returnId}', ...options });
 
 /**
  * Approve an item-level return
  */
 export const postApiV1AdminOrdersByIdReturnsByReturnIdApprove = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminOrdersByIdReturnsByReturnIdApproveData, ThrowOnError>): RequestResult<PostApiV1AdminOrdersByIdReturnsByReturnIdApproveResponses, PostApiV1AdminOrdersByIdReturnsByReturnIdApproveErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminOrdersByIdReturnsByReturnIdApproveResponses, PostApiV1AdminOrdersByIdReturnsByReturnIdApproveErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/orders/{id}/returns/{returnId}/approve',
     ...options,
     headers: {
@@ -7927,15 +4349,6 @@ export const postApiV1AdminOrdersByIdReturnsByReturnIdApprove = <ThrowOnError ex
  * Receive an item-level return
  */
 export const postApiV1AdminOrdersByIdReturnsByReturnIdReceive = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminOrdersByIdReturnsByReturnIdReceiveData, ThrowOnError>): RequestResult<PostApiV1AdminOrdersByIdReturnsByReturnIdReceiveResponses, PostApiV1AdminOrdersByIdReturnsByReturnIdReceiveErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminOrdersByIdReturnsByReturnIdReceiveResponses, PostApiV1AdminOrdersByIdReturnsByReturnIdReceiveErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/orders/{id}/returns/{returnId}/receive',
     ...options,
     headers: {
@@ -7948,15 +4361,6 @@ export const postApiV1AdminOrdersByIdReturnsByReturnIdReceive = <ThrowOnError ex
  * Cancel an item-level return
  */
 export const postApiV1AdminOrdersByIdReturnsByReturnIdCancel = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminOrdersByIdReturnsByReturnIdCancelData, ThrowOnError>): RequestResult<PostApiV1AdminOrdersByIdReturnsByReturnIdCancelResponses, PostApiV1AdminOrdersByIdReturnsByReturnIdCancelErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminOrdersByIdReturnsByReturnIdCancelResponses, PostApiV1AdminOrdersByIdReturnsByReturnIdCancelErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/orders/{id}/returns/{returnId}/cancel',
     ...options,
     headers: {
@@ -7968,69 +4372,24 @@ export const postApiV1AdminOrdersByIdReturnsByReturnIdCancel = <ThrowOnError ext
 /**
  * Resume a claimed return receipt from durable server state
  */
-export const postApiV1AdminOrdersByIdReturnsByReturnIdReconcile = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminOrdersByIdReturnsByReturnIdReconcileData, ThrowOnError>): RequestResult<PostApiV1AdminOrdersByIdReturnsByReturnIdReconcileResponses, PostApiV1AdminOrdersByIdReturnsByReturnIdReconcileErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminOrdersByIdReturnsByReturnIdReconcileResponses, PostApiV1AdminOrdersByIdReturnsByReturnIdReconcileErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/orders/{id}/returns/{returnId}/reconcile',
-    ...options
-});
+export const postApiV1AdminOrdersByIdReturnsByReturnIdReconcile = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminOrdersByIdReturnsByReturnIdReconcileData, ThrowOnError>): RequestResult<PostApiV1AdminOrdersByIdReturnsByReturnIdReconcileResponses, PostApiV1AdminOrdersByIdReturnsByReturnIdReconcileErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminOrdersByIdReturnsByReturnIdReconcileResponses, PostApiV1AdminOrdersByIdReturnsByReturnIdReconcileErrors, ThrowOnError>({ url: '/api/v1/admin/orders/{id}/returns/{returnId}/reconcile', ...options });
 
 /**
  * Search active products for manual order forms
  */
-export const getApiV1AdminOrdersCatalogProducts = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminOrdersCatalogProductsData, ThrowOnError>): RequestResult<GetApiV1AdminOrdersCatalogProductsResponses, GetApiV1AdminOrdersCatalogProductsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminOrdersCatalogProductsResponses, GetApiV1AdminOrdersCatalogProductsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/orders/catalog-products',
-    ...options
-});
+export const getApiV1AdminOrdersCatalogProducts = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminOrdersCatalogProductsData, ThrowOnError>): RequestResult<GetApiV1AdminOrdersCatalogProductsResponses, GetApiV1AdminOrdersCatalogProductsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminOrdersCatalogProductsResponses, GetApiV1AdminOrdersCatalogProductsErrors, ThrowOnError>({ url: '/api/v1/admin/orders/catalog-products', ...options });
 
 /**
  * List orders with pagination and filters
  *
  * Find recent orders and orders needing fulfillment, shipping, payment, or lifecycle attention.
  */
-export const getApiV1AdminOrders = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminOrdersData, ThrowOnError>): RequestResult<GetApiV1AdminOrdersResponses, GetApiV1AdminOrdersErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminOrdersResponses, GetApiV1AdminOrdersErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/orders',
-    ...options
-});
+export const getApiV1AdminOrders = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminOrdersData, ThrowOnError>): RequestResult<GetApiV1AdminOrdersResponses, GetApiV1AdminOrdersErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminOrdersResponses, GetApiV1AdminOrdersErrors, ThrowOnError>({ url: '/api/v1/admin/orders', ...options });
 
 /**
  * Create a new order (admin)
  */
 export const postApiV1AdminOrders = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminOrdersData, ThrowOnError>): RequestResult<PostApiV1AdminOrdersResponses, PostApiV1AdminOrdersErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminOrdersResponses, PostApiV1AdminOrdersErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/orders',
     ...options,
     headers: {
@@ -8042,69 +4401,24 @@ export const postApiV1AdminOrders = <ThrowOnError extends boolean = false>(optio
 /**
  * Export filtered orders as a bounded CSV artifact
  */
-export const getApiV1AdminOrdersExport = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminOrdersExportData, ThrowOnError>): RequestResult<GetApiV1AdminOrdersExportResponses, GetApiV1AdminOrdersExportErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminOrdersExportResponses, GetApiV1AdminOrdersExportErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/orders/export',
-    ...options
-});
+export const getApiV1AdminOrdersExport = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminOrdersExportData, ThrowOnError>): RequestResult<GetApiV1AdminOrdersExportResponses, GetApiV1AdminOrdersExportErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminOrdersExportResponses, GetApiV1AdminOrdersExportErrors, ThrowOnError>({ url: '/api/v1/admin/orders/export', ...options });
 
 /**
  * List hosted-payment recovery orders
  *
  * Find failed or incomplete payment attempts that need merchant or buyer attention.
  */
-export const getApiV1AdminOrdersPaymentRecovery = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminOrdersPaymentRecoveryData, ThrowOnError>): RequestResult<GetApiV1AdminOrdersPaymentRecoveryResponses, GetApiV1AdminOrdersPaymentRecoveryErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminOrdersPaymentRecoveryResponses, GetApiV1AdminOrdersPaymentRecoveryErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/orders/payment-recovery',
-    ...options
-});
+export const getApiV1AdminOrdersPaymentRecovery = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminOrdersPaymentRecoveryData, ThrowOnError>): RequestResult<GetApiV1AdminOrdersPaymentRecoveryResponses, GetApiV1AdminOrdersPaymentRecoveryErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminOrdersPaymentRecoveryResponses, GetApiV1AdminOrdersPaymentRecoveryErrors, ThrowOnError>({ url: '/api/v1/admin/orders/payment-recovery', ...options });
 
 /**
  * Export hosted-payment recovery orders as CSV
  */
-export const getApiV1AdminOrdersPaymentRecoveryExport = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminOrdersPaymentRecoveryExportData, ThrowOnError>): RequestResult<GetApiV1AdminOrdersPaymentRecoveryExportResponses, GetApiV1AdminOrdersPaymentRecoveryExportErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminOrdersPaymentRecoveryExportResponses, GetApiV1AdminOrdersPaymentRecoveryExportErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/orders/payment-recovery/export',
-    ...options
-});
+export const getApiV1AdminOrdersPaymentRecoveryExport = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminOrdersPaymentRecoveryExportData, ThrowOnError>): RequestResult<GetApiV1AdminOrdersPaymentRecoveryExportResponses, GetApiV1AdminOrdersPaymentRecoveryExportErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminOrdersPaymentRecoveryExportResponses, GetApiV1AdminOrdersPaymentRecoveryExportErrors, ThrowOnError>({ url: '/api/v1/admin/orders/payment-recovery/export', ...options });
 
 /**
  * Preview authoritative money and tax for a manual order
  */
 export const postApiV1AdminOrdersQuote = <ThrowOnError extends boolean = false>(options?: Options<PostApiV1AdminOrdersQuoteData, ThrowOnError>): RequestResult<PostApiV1AdminOrdersQuoteResponses, PostApiV1AdminOrdersQuoteErrors, ThrowOnError> => (options?.client ?? client).post<PostApiV1AdminOrdersQuoteResponses, PostApiV1AdminOrdersQuoteErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/orders/quote',
     ...options,
     headers: {
@@ -8117,15 +4431,6 @@ export const postApiV1AdminOrdersQuote = <ThrowOnError extends boolean = false>(
  * Preview a guarded manual COD order amendment
  */
 export const postApiV1AdminOrdersByIdAmendmentsPreview = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminOrdersByIdAmendmentsPreviewData, ThrowOnError>): RequestResult<PostApiV1AdminOrdersByIdAmendmentsPreviewResponses, PostApiV1AdminOrdersByIdAmendmentsPreviewErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminOrdersByIdAmendmentsPreviewResponses, PostApiV1AdminOrdersByIdAmendmentsPreviewErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/orders/{id}/amendments/preview',
     ...options,
     headers: {
@@ -8138,15 +4443,6 @@ export const postApiV1AdminOrdersByIdAmendmentsPreview = <ThrowOnError extends b
  * Confirm an idempotent guarded manual COD order amendment
  */
 export const postApiV1AdminOrdersByIdAmendments = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminOrdersByIdAmendmentsData, ThrowOnError>): RequestResult<PostApiV1AdminOrdersByIdAmendmentsResponses, PostApiV1AdminOrdersByIdAmendmentsErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminOrdersByIdAmendmentsResponses, PostApiV1AdminOrdersByIdAmendmentsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/orders/{id}/amendments',
     ...options,
     headers: {
@@ -8159,15 +4455,6 @@ export const postApiV1AdminOrdersByIdAmendments = <ThrowOnError extends boolean 
  * Archive completed orders without changing commerce state
  */
 export const postApiV1AdminOrdersArchive = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminOrdersArchiveData, ThrowOnError>): RequestResult<PostApiV1AdminOrdersArchiveResponses, PostApiV1AdminOrdersArchiveErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminOrdersArchiveResponses, PostApiV1AdminOrdersArchiveErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/orders/archive',
     ...options,
     headers: {
@@ -8180,15 +4467,6 @@ export const postApiV1AdminOrdersArchive = <ThrowOnError extends boolean = false
  * Bulk ship orders
  */
 export const postApiV1AdminOrdersBulkShip = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminOrdersBulkShipData, ThrowOnError>): RequestResult<PostApiV1AdminOrdersBulkShipResponses, PostApiV1AdminOrdersBulkShipErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminOrdersBulkShipResponses, PostApiV1AdminOrdersBulkShipErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/orders/bulk-ship',
     ...options,
     headers: {
@@ -8201,15 +4479,6 @@ export const postApiV1AdminOrdersBulkShip = <ThrowOnError extends boolean = fals
  * Confirm several new orders
  */
 export const postApiV1AdminOrdersBulkConfirm = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminOrdersBulkConfirmData, ThrowOnError>): RequestResult<PostApiV1AdminOrdersBulkConfirmResponses, PostApiV1AdminOrdersBulkConfirmErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminOrdersBulkConfirmResponses, PostApiV1AdminOrdersBulkConfirmErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/orders/bulk-confirm',
     ...options,
     headers: {
@@ -8222,15 +4491,6 @@ export const postApiV1AdminOrdersBulkConfirm = <ThrowOnError extends boolean = f
  * Mark several confirmed orders as sent with your own courier
  */
 export const postApiV1AdminOrdersBulkFulfill = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminOrdersBulkFulfillData, ThrowOnError>): RequestResult<PostApiV1AdminOrdersBulkFulfillResponses, PostApiV1AdminOrdersBulkFulfillErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminOrdersBulkFulfillResponses, PostApiV1AdminOrdersBulkFulfillErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/orders/bulk-fulfill',
     ...options,
     headers: {
@@ -8242,33 +4502,12 @@ export const postApiV1AdminOrdersBulkFulfill = <ThrowOnError extends boolean = f
 /**
  * Order timeline: staff comments and what happened, newest first
  */
-export const getApiV1AdminOrdersByIdTimeline = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminOrdersByIdTimelineData, ThrowOnError>): RequestResult<GetApiV1AdminOrdersByIdTimelineResponses, GetApiV1AdminOrdersByIdTimelineErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminOrdersByIdTimelineResponses, GetApiV1AdminOrdersByIdTimelineErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/orders/{id}/timeline',
-    ...options
-});
+export const getApiV1AdminOrdersByIdTimeline = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminOrdersByIdTimelineData, ThrowOnError>): RequestResult<GetApiV1AdminOrdersByIdTimelineResponses, GetApiV1AdminOrdersByIdTimelineErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminOrdersByIdTimelineResponses, GetApiV1AdminOrdersByIdTimelineErrors, ThrowOnError>({ url: '/api/v1/admin/orders/{id}/timeline', ...options });
 
 /**
  * Add a staff comment to the order timeline
  */
 export const postApiV1AdminOrdersByIdTimeline = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminOrdersByIdTimelineData, ThrowOnError>): RequestResult<PostApiV1AdminOrdersByIdTimelineResponses, PostApiV1AdminOrdersByIdTimelineErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminOrdersByIdTimelineResponses, PostApiV1AdminOrdersByIdTimelineErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/orders/{id}/timeline',
     ...options,
     headers: {
@@ -8280,67 +4519,22 @@ export const postApiV1AdminOrdersByIdTimeline = <ThrowOnError extends boolean = 
 /**
  * Delete one of your own comments from the order timeline
  */
-export const deleteApiV1AdminOrdersByIdTimelineByEventId = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminOrdersByIdTimelineByEventIdData, ThrowOnError>): RequestResult<DeleteApiV1AdminOrdersByIdTimelineByEventIdResponses, DeleteApiV1AdminOrdersByIdTimelineByEventIdErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminOrdersByIdTimelineByEventIdResponses, DeleteApiV1AdminOrdersByIdTimelineByEventIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/orders/{id}/timeline/{eventId}',
-    ...options
-});
+export const deleteApiV1AdminOrdersByIdTimelineByEventId = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminOrdersByIdTimelineByEventIdData, ThrowOnError>): RequestResult<DeleteApiV1AdminOrdersByIdTimelineByEventIdResponses, DeleteApiV1AdminOrdersByIdTimelineByEventIdErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminOrdersByIdTimelineByEventIdResponses, DeleteApiV1AdminOrdersByIdTimelineByEventIdErrors, ThrowOnError>({ url: '/api/v1/admin/orders/{id}/timeline/{eventId}', ...options });
 
 /**
  * Issue a hosted-payment receipt recovery link
  */
-export const postApiV1AdminOrdersByIdPaymentRecoveryLink = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminOrdersByIdPaymentRecoveryLinkData, ThrowOnError>): RequestResult<PostApiV1AdminOrdersByIdPaymentRecoveryLinkResponses, PostApiV1AdminOrdersByIdPaymentRecoveryLinkErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminOrdersByIdPaymentRecoveryLinkResponses, PostApiV1AdminOrdersByIdPaymentRecoveryLinkErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/orders/{id}/payment-recovery-link',
-    ...options
-});
+export const postApiV1AdminOrdersByIdPaymentRecoveryLink = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminOrdersByIdPaymentRecoveryLinkData, ThrowOnError>): RequestResult<PostApiV1AdminOrdersByIdPaymentRecoveryLinkResponses, PostApiV1AdminOrdersByIdPaymentRecoveryLinkErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminOrdersByIdPaymentRecoveryLinkResponses, PostApiV1AdminOrdersByIdPaymentRecoveryLinkErrors, ThrowOnError>({ url: '/api/v1/admin/orders/{id}/payment-recovery-link', ...options });
 
 /**
  * Get order details
  */
-export const getApiV1AdminOrdersById = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminOrdersByIdData, ThrowOnError>): RequestResult<GetApiV1AdminOrdersByIdResponses, GetApiV1AdminOrdersByIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminOrdersByIdResponses, GetApiV1AdminOrdersByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/orders/{id}',
-    ...options
-});
+export const getApiV1AdminOrdersById = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminOrdersByIdData, ThrowOnError>): RequestResult<GetApiV1AdminOrdersByIdResponses, GetApiV1AdminOrdersByIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminOrdersByIdResponses, GetApiV1AdminOrdersByIdErrors, ThrowOnError>({ url: '/api/v1/admin/orders/{id}', ...options });
 
 /**
  * Edit the customer and delivery details of an order that has not shipped
  */
 export const putApiV1AdminOrdersByIdDetails = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminOrdersByIdDetailsData, ThrowOnError>): RequestResult<PutApiV1AdminOrdersByIdDetailsResponses, PutApiV1AdminOrdersByIdDetailsErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminOrdersByIdDetailsResponses, PutApiV1AdminOrdersByIdDetailsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/orders/{id}/details',
     ...options,
     headers: {
@@ -8355,15 +4549,6 @@ export const putApiV1AdminOrdersByIdDetails = <ThrowOnError extends boolean = fa
  * An active location, or null for the store default. Allowed until anything has left: no stock deducted and no ship or pickup fulfilment.
  */
 export const putApiV1AdminOrdersByIdFulfillmentLocation = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminOrdersByIdFulfillmentLocationData, ThrowOnError>): RequestResult<PutApiV1AdminOrdersByIdFulfillmentLocationResponses, PutApiV1AdminOrdersByIdFulfillmentLocationErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminOrdersByIdFulfillmentLocationResponses, PutApiV1AdminOrdersByIdFulfillmentLocationErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/orders/{id}/fulfillment-location',
     ...options,
     headers: {
@@ -8376,15 +4561,6 @@ export const putApiV1AdminOrdersByIdFulfillmentLocation = <ThrowOnError extends 
  * Restore an archived order to the active workspace
  */
 export const postApiV1AdminOrdersByIdRestore = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminOrdersByIdRestoreData, ThrowOnError>): RequestResult<PostApiV1AdminOrdersByIdRestoreResponses, PostApiV1AdminOrdersByIdRestoreErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminOrdersByIdRestoreResponses, PostApiV1AdminOrdersByIdRestoreErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/orders/{id}/restore',
     ...options,
     headers: {
@@ -8396,84 +4572,27 @@ export const postApiV1AdminOrdersByIdRestore = <ThrowOnError extends boolean = f
 /**
  * Get order items with product details
  */
-export const getApiV1AdminOrdersByIdItems = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminOrdersByIdItemsData, ThrowOnError>): RequestResult<GetApiV1AdminOrdersByIdItemsResponses, unknown, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminOrdersByIdItemsResponses, unknown, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/orders/{id}/items',
-    ...options
-});
+export const getApiV1AdminOrdersByIdItems = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminOrdersByIdItemsData, ThrowOnError>): RequestResult<GetApiV1AdminOrdersByIdItemsResponses, unknown, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminOrdersByIdItemsResponses, unknown, ThrowOnError>({ url: '/api/v1/admin/orders/{id}/items', ...options });
 
 /**
  * Get order payments and payment plan
  */
-export const getApiV1AdminOrdersByIdPayments = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminOrdersByIdPaymentsData, ThrowOnError>): RequestResult<GetApiV1AdminOrdersByIdPaymentsResponses, unknown, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminOrdersByIdPaymentsResponses, unknown, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/orders/{id}/payments',
-    ...options
-});
+export const getApiV1AdminOrdersByIdPayments = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminOrdersByIdPaymentsData, ThrowOnError>): RequestResult<GetApiV1AdminOrdersByIdPaymentsResponses, unknown, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminOrdersByIdPaymentsResponses, unknown, ThrowOnError>({ url: '/api/v1/admin/orders/{id}/payments', ...options });
 
 /**
  * Get order notification delivery history
  */
-export const getApiV1AdminOrdersByIdNotifications = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminOrdersByIdNotificationsData, ThrowOnError>): RequestResult<GetApiV1AdminOrdersByIdNotificationsResponses, unknown, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminOrdersByIdNotificationsResponses, unknown, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/orders/{id}/notifications',
-    ...options
-});
+export const getApiV1AdminOrdersByIdNotifications = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminOrdersByIdNotificationsData, ThrowOnError>): RequestResult<GetApiV1AdminOrdersByIdNotificationsResponses, unknown, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminOrdersByIdNotificationsResponses, unknown, ThrowOnError>({ url: '/api/v1/admin/orders/{id}/notifications', ...options });
 
 /**
  * Retry a failed order notification
  */
-export const postApiV1AdminOrdersByIdNotificationsByOutboxIdRetry = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminOrdersByIdNotificationsByOutboxIdRetryData, ThrowOnError>): RequestResult<PostApiV1AdminOrdersByIdNotificationsByOutboxIdRetryResponses, unknown, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminOrdersByIdNotificationsByOutboxIdRetryResponses, unknown, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/orders/{id}/notifications/{outboxId}/retry',
-    ...options
-});
+export const postApiV1AdminOrdersByIdNotificationsByOutboxIdRetry = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminOrdersByIdNotificationsByOutboxIdRetryData, ThrowOnError>): RequestResult<PostApiV1AdminOrdersByIdNotificationsByOutboxIdRetryResponses, unknown, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminOrdersByIdNotificationsByOutboxIdRetryResponses, unknown, ThrowOnError>({ url: '/api/v1/admin/orders/{id}/notifications/{outboxId}/retry', ...options });
 
 /**
  * Manually resend an already-sent order notification
  */
 export const postApiV1AdminOrdersByIdNotificationsByOutboxIdResend = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminOrdersByIdNotificationsByOutboxIdResendData, ThrowOnError>): RequestResult<PostApiV1AdminOrdersByIdNotificationsByOutboxIdResendResponses, unknown, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminOrdersByIdNotificationsByOutboxIdResendResponses, unknown, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/orders/{id}/notifications/{outboxId}/resend',
     ...options,
     headers: {
@@ -8485,19 +4604,7 @@ export const postApiV1AdminOrdersByIdNotificationsByOutboxIdResend = <ThrowOnErr
 /**
  * Get order data with products for the edit form
  */
-export const getApiV1AdminOrdersByIdFormData = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminOrdersByIdFormDataData, ThrowOnError>): RequestResult<GetApiV1AdminOrdersByIdFormDataResponses, GetApiV1AdminOrdersByIdFormDataErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminOrdersByIdFormDataResponses, GetApiV1AdminOrdersByIdFormDataErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/orders/{id}/form-data',
-    ...options
-});
+export const getApiV1AdminOrdersByIdFormData = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminOrdersByIdFormDataData, ThrowOnError>): RequestResult<GetApiV1AdminOrdersByIdFormDataResponses, GetApiV1AdminOrdersByIdFormDataErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminOrdersByIdFormDataResponses, GetApiV1AdminOrdersByIdFormDataErrors, ThrowOnError>({ url: '/api/v1/admin/orders/{id}/form-data', ...options });
 
 /**
  * Hand over order lines: send with your own rider, picked up at the counter, or service done
@@ -8505,15 +4612,6 @@ export const getApiV1AdminOrdersByIdFormData = <ThrowOnError extends boolean = f
  * The only way units are marked handed over. When the last line that blocks delivery is handed over and the money is settled, the order becomes delivered (pickup and service); the last ship line makes it shipped.
  */
 export const postApiV1AdminOrdersByIdFulfillments = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminOrdersByIdFulfillmentsData, ThrowOnError>): RequestResult<PostApiV1AdminOrdersByIdFulfillmentsResponses, PostApiV1AdminOrdersByIdFulfillmentsErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminOrdersByIdFulfillmentsResponses, PostApiV1AdminOrdersByIdFulfillmentsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/orders/{id}/fulfillments',
     ...options,
     headers: {
@@ -8526,15 +4624,6 @@ export const postApiV1AdminOrdersByIdFulfillments = <ThrowOnError extends boolea
  * Void an own-rider parcel that came back: its units go back on the unsent list
  */
 export const postApiV1AdminOrdersByIdFulfillmentsByFulfillmentIdVoid = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminOrdersByIdFulfillmentsByFulfillmentIdVoidData, ThrowOnError>): RequestResult<PostApiV1AdminOrdersByIdFulfillmentsByFulfillmentIdVoidResponses, PostApiV1AdminOrdersByIdFulfillmentsByFulfillmentIdVoidErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminOrdersByIdFulfillmentsByFulfillmentIdVoidResponses, PostApiV1AdminOrdersByIdFulfillmentsByFulfillmentIdVoidErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/orders/{id}/fulfillments/{fulfillmentId}/void',
     ...options,
     headers: {
@@ -8547,15 +4636,6 @@ export const postApiV1AdminOrdersByIdFulfillmentsByFulfillmentIdVoid = <ThrowOnE
  * Mark a pickup order ready to collect and tell the buyer
  */
 export const postApiV1AdminOrdersByIdPickupReady = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminOrdersByIdPickupReadyData, ThrowOnError>): RequestResult<PostApiV1AdminOrdersByIdPickupReadyResponses, PostApiV1AdminOrdersByIdPickupReadyErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminOrdersByIdPickupReadyResponses, PostApiV1AdminOrdersByIdPickupReadyErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/orders/{id}/pickup-ready',
     ...options,
     headers: {
@@ -8570,15 +4650,6 @@ export const postApiV1AdminOrdersByIdPickupReady = <ThrowOnError extends boolean
  * Sends every file and key the order still gives access to, by the store's delivery channels. The same request key sends once.
  */
 export const postApiV1AdminOrdersByIdDigitalResend = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminOrdersByIdDigitalResendData, ThrowOnError>): RequestResult<PostApiV1AdminOrdersByIdDigitalResendResponses, PostApiV1AdminOrdersByIdDigitalResendErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminOrdersByIdDigitalResendResponses, PostApiV1AdminOrdersByIdDigitalResendErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/orders/{id}/digital/resend',
     ...options,
     headers: {
@@ -8591,11 +4662,6 @@ export const postApiV1AdminOrdersByIdDigitalResend = <ThrowOnError extends boole
  * Open a warranty claim for a line of this order (goodwill allowed after expiry)
  */
 export const postApiV1AdminOrdersByIdWarrantyClaims = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminOrdersByIdWarrantyClaimsData, ThrowOnError>): RequestResult<PostApiV1AdminOrdersByIdWarrantyClaimsResponses, PostApiV1AdminOrdersByIdWarrantyClaimsErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminOrdersByIdWarrantyClaimsResponses, PostApiV1AdminOrdersByIdWarrantyClaimsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }],
     url: '/api/v1/admin/orders/{id}/warranty-claims',
     ...options,
     headers: {
@@ -8607,28 +4673,12 @@ export const postApiV1AdminOrdersByIdWarrantyClaims = <ThrowOnError extends bool
 /**
  * List inbox conversations (25 per page, newest activity first)
  */
-export const getApiV1AdminConversations = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminConversationsData, ThrowOnError>): RequestResult<GetApiV1AdminConversationsResponses, GetApiV1AdminConversationsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminConversationsResponses, GetApiV1AdminConversationsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }],
-    url: '/api/v1/admin/conversations',
-    ...options
-});
+export const getApiV1AdminConversations = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminConversationsData, ThrowOnError>): RequestResult<GetApiV1AdminConversationsResponses, GetApiV1AdminConversationsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminConversationsResponses, GetApiV1AdminConversationsErrors, ThrowOnError>({ url: '/api/v1/admin/conversations', ...options });
 
 /**
  * Open conversation counts for the navigation badge
  */
-export const getApiV1AdminConversationsSummary = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminConversationsSummaryData, ThrowOnError>): RequestResult<GetApiV1AdminConversationsSummaryResponses, GetApiV1AdminConversationsSummaryErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminConversationsSummaryResponses, GetApiV1AdminConversationsSummaryErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }],
-    url: '/api/v1/admin/conversations/summary',
-    ...options
-});
+export const getApiV1AdminConversationsSummary = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminConversationsSummaryData, ThrowOnError>): RequestResult<GetApiV1AdminConversationsSummaryResponses, GetApiV1AdminConversationsSummaryErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminConversationsSummaryResponses, GetApiV1AdminConversationsSummaryErrors, ThrowOnError>({ url: '/api/v1/admin/conversations/summary', ...options });
 
 /**
  * Upload one image (JPEG, PNG or WebP, 5 MB or less) for a conversation
@@ -8637,11 +4687,6 @@ export const getApiV1AdminConversationsSummary = <ThrowOnError extends boolean =
  */
 export const postApiV1AdminConversationsAttachments = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminConversationsAttachmentsData, ThrowOnError>): RequestResult<PostApiV1AdminConversationsAttachmentsResponses, PostApiV1AdminConversationsAttachmentsErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminConversationsAttachmentsResponses, PostApiV1AdminConversationsAttachmentsErrors, ThrowOnError>({
     ...formDataBodySerializer,
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }],
     url: '/api/v1/admin/conversations/attachments',
     ...options,
     headers: {
@@ -8653,25 +4698,12 @@ export const postApiV1AdminConversationsAttachments = <ThrowOnError extends bool
 /**
  * The order's conversation, or null before anyone wrote
  */
-export const getApiV1AdminConversationsOrderByOrderId = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminConversationsOrderByOrderIdData, ThrowOnError>): RequestResult<GetApiV1AdminConversationsOrderByOrderIdResponses, GetApiV1AdminConversationsOrderByOrderIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminConversationsOrderByOrderIdResponses, GetApiV1AdminConversationsOrderByOrderIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }],
-    url: '/api/v1/admin/conversations/order/{orderId}',
-    ...options
-});
+export const getApiV1AdminConversationsOrderByOrderId = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminConversationsOrderByOrderIdData, ThrowOnError>): RequestResult<GetApiV1AdminConversationsOrderByOrderIdResponses, GetApiV1AdminConversationsOrderByOrderIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminConversationsOrderByOrderIdResponses, GetApiV1AdminConversationsOrderByOrderIdErrors, ThrowOnError>({ url: '/api/v1/admin/conversations/order/{orderId}', ...options });
 
 /**
  * Reply or add a note on an order's conversation (starts it when needed)
  */
 export const postApiV1AdminConversationsOrderByOrderIdMessages = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminConversationsOrderByOrderIdMessagesData, ThrowOnError>): RequestResult<PostApiV1AdminConversationsOrderByOrderIdMessagesResponses, PostApiV1AdminConversationsOrderByOrderIdMessagesErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminConversationsOrderByOrderIdMessagesResponses, PostApiV1AdminConversationsOrderByOrderIdMessagesErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }],
     url: '/api/v1/admin/conversations/order/{orderId}/messages',
     ...options,
     headers: {
@@ -8683,25 +4715,12 @@ export const postApiV1AdminConversationsOrderByOrderIdMessages = <ThrowOnError e
 /**
  * One conversation with internal notes, order context and cases
  */
-export const getApiV1AdminConversationsById = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminConversationsByIdData, ThrowOnError>): RequestResult<GetApiV1AdminConversationsByIdResponses, GetApiV1AdminConversationsByIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminConversationsByIdResponses, GetApiV1AdminConversationsByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }],
-    url: '/api/v1/admin/conversations/{id}',
-    ...options
-});
+export const getApiV1AdminConversationsById = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminConversationsByIdData, ThrowOnError>): RequestResult<GetApiV1AdminConversationsByIdResponses, GetApiV1AdminConversationsByIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminConversationsByIdResponses, GetApiV1AdminConversationsByIdErrors, ThrowOnError>({ url: '/api/v1/admin/conversations/{id}', ...options });
 
 /**
  * Change a conversation's status or assignee (guarded by its version)
  */
 export const patchApiV1AdminConversationsById = <ThrowOnError extends boolean = false>(options: Options<PatchApiV1AdminConversationsByIdData, ThrowOnError>): RequestResult<PatchApiV1AdminConversationsByIdResponses, PatchApiV1AdminConversationsByIdErrors, ThrowOnError> => (options.client ?? client).patch<PatchApiV1AdminConversationsByIdResponses, PatchApiV1AdminConversationsByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }],
     url: '/api/v1/admin/conversations/{id}',
     ...options,
     headers: {
@@ -8714,11 +4733,6 @@ export const patchApiV1AdminConversationsById = <ThrowOnError extends boolean = 
  * Reply to the customer or add an internal note
  */
 export const postApiV1AdminConversationsByIdMessages = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminConversationsByIdMessagesData, ThrowOnError>): RequestResult<PostApiV1AdminConversationsByIdMessagesResponses, PostApiV1AdminConversationsByIdMessagesErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminConversationsByIdMessagesResponses, PostApiV1AdminConversationsByIdMessagesErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }],
     url: '/api/v1/admin/conversations/{id}/messages',
     ...options,
     headers: {
@@ -8731,11 +4745,6 @@ export const postApiV1AdminConversationsByIdMessages = <ThrowOnError extends boo
  * Mark a conversation read for staff up to a message
  */
 export const postApiV1AdminConversationsByIdRead = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminConversationsByIdReadData, ThrowOnError>): RequestResult<PostApiV1AdminConversationsByIdReadResponses, PostApiV1AdminConversationsByIdReadErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminConversationsByIdReadResponses, PostApiV1AdminConversationsByIdReadErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }],
     url: '/api/v1/admin/conversations/{id}/read',
     ...options,
     headers: {
@@ -8747,64 +4756,24 @@ export const postApiV1AdminConversationsByIdRead = <ThrowOnError extends boolean
 /**
  * Read one image of a conversation
  */
-export const getApiV1AdminConversationsByIdAttachmentsByAttachmentId = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminConversationsByIdAttachmentsByAttachmentIdData, ThrowOnError>): RequestResult<GetApiV1AdminConversationsByIdAttachmentsByAttachmentIdResponses, GetApiV1AdminConversationsByIdAttachmentsByAttachmentIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminConversationsByIdAttachmentsByAttachmentIdResponses, GetApiV1AdminConversationsByIdAttachmentsByAttachmentIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }],
-    url: '/api/v1/admin/conversations/{id}/attachments/{attachmentId}',
-    ...options
-});
+export const getApiV1AdminConversationsByIdAttachmentsByAttachmentId = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminConversationsByIdAttachmentsByAttachmentIdData, ThrowOnError>): RequestResult<GetApiV1AdminConversationsByIdAttachmentsByAttachmentIdResponses, GetApiV1AdminConversationsByIdAttachmentsByAttachmentIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminConversationsByIdAttachmentsByAttachmentIdResponses, GetApiV1AdminConversationsByIdAttachmentsByAttachmentIdErrors, ThrowOnError>({ url: '/api/v1/admin/conversations/{id}/attachments/{attachmentId}', ...options });
 
 /**
  * Get product and category dashboard statistics
  *
  * Answer quick product, catalog, category, and merchandising count questions.
  */
-export const getApiV1AdminProductsStats = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminProductsStatsData, ThrowOnError>): RequestResult<GetApiV1AdminProductsStatsResponses, GetApiV1AdminProductsStatsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminProductsStatsResponses, GetApiV1AdminProductsStatsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/products/stats',
-    ...options
-});
+export const getApiV1AdminProductsStats = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminProductsStatsData, ThrowOnError>): RequestResult<GetApiV1AdminProductsStatsResponses, GetApiV1AdminProductsStatsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminProductsStatsResponses, GetApiV1AdminProductsStatsErrors, ThrowOnError>({ url: '/api/v1/admin/products/stats', ...options });
 
 /**
  * Look up a product variant by barcode
  */
-export const getApiV1AdminProductsLookupBarcode = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminProductsLookupBarcodeData, ThrowOnError>): RequestResult<GetApiV1AdminProductsLookupBarcodeResponses, GetApiV1AdminProductsLookupBarcodeErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminProductsLookupBarcodeResponses, GetApiV1AdminProductsLookupBarcodeErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/products/lookup-barcode',
-    ...options
-});
+export const getApiV1AdminProductsLookupBarcode = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminProductsLookupBarcodeData, ThrowOnError>): RequestResult<GetApiV1AdminProductsLookupBarcodeResponses, GetApiV1AdminProductsLookupBarcodeErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminProductsLookupBarcodeResponses, GetApiV1AdminProductsLookupBarcodeErrors, ThrowOnError>({ url: '/api/v1/admin/products/lookup-barcode', ...options });
 
 /**
  * List all products
  */
-export const getApiV1AdminProducts = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminProductsData, ThrowOnError>): RequestResult<GetApiV1AdminProductsResponses, GetApiV1AdminProductsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminProductsResponses, GetApiV1AdminProductsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }],
-    url: '/api/v1/admin/products',
-    ...options
-});
+export const getApiV1AdminProducts = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminProductsData, ThrowOnError>): RequestResult<GetApiV1AdminProductsResponses, GetApiV1AdminProductsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminProductsResponses, GetApiV1AdminProductsErrors, ThrowOnError>({ url: '/api/v1/admin/products', ...options });
 
 /**
  * Create a product
@@ -8812,15 +4781,6 @@ export const getApiV1AdminProducts = <ThrowOnError extends boolean = false>(opti
  * Create the complete product atomically. Discover categoryId with dashboard.categories.form_options and attributeId with dashboard.attributes.list_summaries. Media must first be committed through dashboard.media.upload_initiate, upload_part, and upload_complete. Product-media IDs (pmed_*) are caller-local association IDs; option/value/variant draft IDs only correlate this request. Each variant selectedOptionValueIds must follow option order, and variant imageId references a pmed_* association rather than a media_* asset.
  */
 export const postApiV1AdminProducts = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminProductsData, ThrowOnError>): RequestResult<PostApiV1AdminProductsResponses, PostApiV1AdminProductsErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminProductsResponses, PostApiV1AdminProductsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/products',
     ...options,
     headers: {
@@ -8832,50 +4792,17 @@ export const postApiV1AdminProducts = <ThrowOnError extends boolean = false>(opt
 /**
  * List bounded product summaries
  */
-export const getApiV1AdminProductsSummaries = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminProductsSummariesData, ThrowOnError>): RequestResult<GetApiV1AdminProductsSummariesResponses, GetApiV1AdminProductsSummariesErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminProductsSummariesResponses, GetApiV1AdminProductsSummariesErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/products/summaries',
-    ...options
-});
+export const getApiV1AdminProductsSummaries = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminProductsSummariesData, ThrowOnError>): RequestResult<GetApiV1AdminProductsSummariesResponses, GetApiV1AdminProductsSummariesErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminProductsSummariesResponses, GetApiV1AdminProductsSummariesErrors, ThrowOnError>({ url: '/api/v1/admin/products/summaries', ...options });
 
 /**
  * Get lightweight product summaries for known IDs
  */
-export const getApiV1AdminProductsByIds = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminProductsByIdsData, ThrowOnError>): RequestResult<GetApiV1AdminProductsByIdsResponses, GetApiV1AdminProductsByIdsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminProductsByIdsResponses, GetApiV1AdminProductsByIdsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/products/by-ids',
-    ...options
-});
+export const getApiV1AdminProductsByIds = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminProductsByIdsData, ThrowOnError>): RequestResult<GetApiV1AdminProductsByIdsResponses, GetApiV1AdminProductsByIdsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminProductsByIdsResponses, GetApiV1AdminProductsByIdsErrors, ThrowOnError>({ url: '/api/v1/admin/products/by-ids', ...options });
 
 /**
  * Bulk delete products
  */
 export const postApiV1AdminProductsBulkDelete = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminProductsBulkDeleteData, ThrowOnError>): RequestResult<PostApiV1AdminProductsBulkDeleteResponses, PostApiV1AdminProductsBulkDeleteErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminProductsBulkDeleteResponses, PostApiV1AdminProductsBulkDeleteErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/products/bulk-delete',
     ...options,
     headers: {
@@ -8890,15 +4817,6 @@ export const postApiV1AdminProductsBulkDelete = <ThrowOnError extends boolean = 
  * Changes every listed product together, except that activating skips (and lists in `skipped`) products where the product or one of its live SKUs has no price above 0.
  */
 export const postApiV1AdminProductsBulkUpdate = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminProductsBulkUpdateData, ThrowOnError>): RequestResult<PostApiV1AdminProductsBulkUpdateResponses, PostApiV1AdminProductsBulkUpdateErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminProductsBulkUpdateResponses, PostApiV1AdminProductsBulkUpdateErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/products/bulk-update',
     ...options,
     headers: {
@@ -8913,15 +4831,6 @@ export const postApiV1AdminProductsBulkUpdate = <ThrowOnError extends boolean = 
  * Copies text, pricing, media, attributes, sections, content blocks, quantity bundles, the page template, options and variants. The copy is a draft with no stock, new SKUs (…-COPY) and generated barcodes.
  */
 export const postApiV1AdminProductsByIdDuplicate = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminProductsByIdDuplicateData, ThrowOnError>): RequestResult<PostApiV1AdminProductsByIdDuplicateResponses, PostApiV1AdminProductsByIdDuplicateErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminProductsByIdDuplicateResponses, PostApiV1AdminProductsByIdDuplicateErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/products/{id}/duplicate',
     ...options,
     headers: {
@@ -8933,33 +4842,12 @@ export const postApiV1AdminProductsByIdDuplicate = <ThrowOnError extends boolean
 /**
  * Read one bounded semantic section of a product
  */
-export const getApiV1AdminProductsByIdSectionsBySection = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminProductsByIdSectionsBySectionData, ThrowOnError>): RequestResult<GetApiV1AdminProductsByIdSectionsBySectionResponses, GetApiV1AdminProductsByIdSectionsBySectionErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminProductsByIdSectionsBySectionResponses, GetApiV1AdminProductsByIdSectionsBySectionErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/products/{id}/sections/{section}',
-    ...options
-});
+export const getApiV1AdminProductsByIdSectionsBySection = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminProductsByIdSectionsBySectionData, ThrowOnError>): RequestResult<GetApiV1AdminProductsByIdSectionsBySectionResponses, GetApiV1AdminProductsByIdSectionsBySectionErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminProductsByIdSectionsBySectionResponses, GetApiV1AdminProductsByIdSectionsBySectionErrors, ThrowOnError>({ url: '/api/v1/admin/products/{id}/sections/{section}', ...options });
 
 /**
  * Update one semantic section with product revision control
  */
 export const patchApiV1AdminProductsByIdSectionsBySection = <ThrowOnError extends boolean = false>(options: Options<PatchApiV1AdminProductsByIdSectionsBySectionData, ThrowOnError>): RequestResult<PatchApiV1AdminProductsByIdSectionsBySectionResponses, PatchApiV1AdminProductsByIdSectionsBySectionErrors, ThrowOnError> => (options.client ?? client).patch<PatchApiV1AdminProductsByIdSectionsBySectionResponses, PatchApiV1AdminProductsByIdSectionsBySectionErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/products/{id}/sections/{section}',
     ...options,
     headers: {
@@ -8971,46 +4859,17 @@ export const patchApiV1AdminProductsByIdSectionsBySection = <ThrowOnError extend
 /**
  * Soft-delete a product
  */
-export const deleteApiV1AdminProductsById = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminProductsByIdData, ThrowOnError>): RequestResult<DeleteApiV1AdminProductsByIdResponses, DeleteApiV1AdminProductsByIdErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminProductsByIdResponses, DeleteApiV1AdminProductsByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/products/{id}',
-    ...options
-});
+export const deleteApiV1AdminProductsById = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminProductsByIdData, ThrowOnError>): RequestResult<DeleteApiV1AdminProductsByIdResponses, DeleteApiV1AdminProductsByIdErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminProductsByIdResponses, DeleteApiV1AdminProductsByIdErrors, ThrowOnError>({ url: '/api/v1/admin/products/{id}', ...options });
 
 /**
  * Get a product by ID with all details
  */
-export const getApiV1AdminProductsById = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminProductsByIdData, ThrowOnError>): RequestResult<GetApiV1AdminProductsByIdResponses, GetApiV1AdminProductsByIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminProductsByIdResponses, GetApiV1AdminProductsByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }],
-    url: '/api/v1/admin/products/{id}',
-    ...options
-});
+export const getApiV1AdminProductsById = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminProductsByIdData, ThrowOnError>): RequestResult<GetApiV1AdminProductsByIdResponses, GetApiV1AdminProductsByIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminProductsByIdResponses, GetApiV1AdminProductsByIdErrors, ThrowOnError>({ url: '/api/v1/admin/products/{id}', ...options });
 
 /**
  * Update a product
  */
 export const putApiV1AdminProductsById = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminProductsByIdData, ThrowOnError>): RequestResult<PutApiV1AdminProductsByIdResponses, PutApiV1AdminProductsByIdErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminProductsByIdResponses, PutApiV1AdminProductsByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/products/{id}',
     ...options,
     headers: {
@@ -9022,67 +4881,22 @@ export const putApiV1AdminProductsById = <ThrowOnError extends boolean = false>(
 /**
  * Restore a soft-deleted product
  */
-export const postApiV1AdminProductsByIdRestore = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminProductsByIdRestoreData, ThrowOnError>): RequestResult<PostApiV1AdminProductsByIdRestoreResponses, PostApiV1AdminProductsByIdRestoreErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminProductsByIdRestoreResponses, PostApiV1AdminProductsByIdRestoreErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/products/{id}/restore',
-    ...options
-});
+export const postApiV1AdminProductsByIdRestore = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminProductsByIdRestoreData, ThrowOnError>): RequestResult<PostApiV1AdminProductsByIdRestoreResponses, PostApiV1AdminProductsByIdRestoreErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminProductsByIdRestoreResponses, PostApiV1AdminProductsByIdRestoreErrors, ThrowOnError>({ url: '/api/v1/admin/products/{id}/restore', ...options });
 
 /**
  * Permanently delete a product
  */
-export const deleteApiV1AdminProductsByIdPermanent = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminProductsByIdPermanentData, ThrowOnError>): RequestResult<DeleteApiV1AdminProductsByIdPermanentResponses, DeleteApiV1AdminProductsByIdPermanentErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminProductsByIdPermanentResponses, DeleteApiV1AdminProductsByIdPermanentErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/products/{id}/permanent',
-    ...options
-});
+export const deleteApiV1AdminProductsByIdPermanent = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminProductsByIdPermanentData, ThrowOnError>): RequestResult<DeleteApiV1AdminProductsByIdPermanentResponses, DeleteApiV1AdminProductsByIdPermanentErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminProductsByIdPermanentResponses, DeleteApiV1AdminProductsByIdPermanentErrors, ThrowOnError>({ url: '/api/v1/admin/products/{id}/permanent', ...options });
 
 /**
  * List variants for a product
  */
-export const getApiV1AdminProductsByIdVariants = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminProductsByIdVariantsData, ThrowOnError>): RequestResult<GetApiV1AdminProductsByIdVariantsResponses, GetApiV1AdminProductsByIdVariantsErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminProductsByIdVariantsResponses, GetApiV1AdminProductsByIdVariantsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/products/{id}/variants',
-    ...options
-});
+export const getApiV1AdminProductsByIdVariants = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminProductsByIdVariantsData, ThrowOnError>): RequestResult<GetApiV1AdminProductsByIdVariantsResponses, GetApiV1AdminProductsByIdVariantsErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminProductsByIdVariantsResponses, GetApiV1AdminProductsByIdVariantsErrors, ThrowOnError>({ url: '/api/v1/admin/products/{id}/variants', ...options });
 
 /**
  * Create a product variant
  */
 export const postApiV1AdminProductsByIdVariants = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminProductsByIdVariantsData, ThrowOnError>): RequestResult<PostApiV1AdminProductsByIdVariantsResponses, PostApiV1AdminProductsByIdVariantsErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminProductsByIdVariantsResponses, PostApiV1AdminProductsByIdVariantsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/products/{id}/variants',
     ...options,
     headers: {
@@ -9094,33 +4908,12 @@ export const postApiV1AdminProductsByIdVariants = <ThrowOnError extends boolean 
 /**
  * Delete a product variant
  */
-export const deleteApiV1AdminProductsByIdVariantsByVariantId = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminProductsByIdVariantsByVariantIdData, ThrowOnError>): RequestResult<DeleteApiV1AdminProductsByIdVariantsByVariantIdResponses, DeleteApiV1AdminProductsByIdVariantsByVariantIdErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminProductsByIdVariantsByVariantIdResponses, DeleteApiV1AdminProductsByIdVariantsByVariantIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/products/{id}/variants/{variantId}',
-    ...options
-});
+export const deleteApiV1AdminProductsByIdVariantsByVariantId = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminProductsByIdVariantsByVariantIdData, ThrowOnError>): RequestResult<DeleteApiV1AdminProductsByIdVariantsByVariantIdResponses, DeleteApiV1AdminProductsByIdVariantsByVariantIdErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminProductsByIdVariantsByVariantIdResponses, DeleteApiV1AdminProductsByIdVariantsByVariantIdErrors, ThrowOnError>({ url: '/api/v1/admin/products/{id}/variants/{variantId}', ...options });
 
 /**
  * Update a product variant
  */
 export const putApiV1AdminProductsByIdVariantsByVariantId = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminProductsByIdVariantsByVariantIdData, ThrowOnError>): RequestResult<PutApiV1AdminProductsByIdVariantsByVariantIdResponses, PutApiV1AdminProductsByIdVariantsByVariantIdErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminProductsByIdVariantsByVariantIdResponses, PutApiV1AdminProductsByIdVariantsByVariantIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/products/{id}/variants/{variantId}',
     ...options,
     headers: {
@@ -9133,15 +4926,6 @@ export const putApiV1AdminProductsByIdVariantsByVariantId = <ThrowOnError extend
  * Save the complete normalized product option matrix
  */
 export const putApiV1AdminProductsByIdOptionsMatrix = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminProductsByIdOptionsMatrixData, ThrowOnError>): RequestResult<PutApiV1AdminProductsByIdOptionsMatrixResponses, PutApiV1AdminProductsByIdOptionsMatrixErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminProductsByIdOptionsMatrixResponses, PutApiV1AdminProductsByIdOptionsMatrixErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/products/{id}/options/matrix',
     ...options,
     headers: {
@@ -9153,19 +4937,7 @@ export const putApiV1AdminProductsByIdOptionsMatrix = <ThrowOnError extends bool
 /**
  * List a product's downloadable files and licence-key pools
  */
-export const getApiV1AdminProductsByIdDigitalAssets = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminProductsByIdDigitalAssetsData, ThrowOnError>): RequestResult<GetApiV1AdminProductsByIdDigitalAssetsResponses, GetApiV1AdminProductsByIdDigitalAssetsErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminProductsByIdDigitalAssetsResponses, GetApiV1AdminProductsByIdDigitalAssetsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/products/{id}/digital-assets',
-    ...options
-});
+export const getApiV1AdminProductsByIdDigitalAssets = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminProductsByIdDigitalAssetsData, ThrowOnError>): RequestResult<GetApiV1AdminProductsByIdDigitalAssetsResponses, GetApiV1AdminProductsByIdDigitalAssetsErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminProductsByIdDigitalAssetsResponses, GetApiV1AdminProductsByIdDigitalAssetsErrors, ThrowOnError>({ url: '/api/v1/admin/products/{id}/digital-assets', ...options });
 
 /**
  * Add a downloadable file (starts its upload) or a licence-key pool to a product
@@ -9173,15 +4945,6 @@ export const getApiV1AdminProductsByIdDigitalAssets = <ThrowOnError extends bool
  * A file starts as `draft` with an upload session: send each part with dashboard.digital_assets.upload_part, then dashboard.digital_assets.upload_complete. A key pool belongs to one digital variant whose quantity is tracked: imported keys become its stock.
  */
 export const postApiV1AdminProductsByIdDigitalAssets = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminProductsByIdDigitalAssetsData, ThrowOnError>): RequestResult<PostApiV1AdminProductsByIdDigitalAssetsResponses, PostApiV1AdminProductsByIdDigitalAssetsErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminProductsByIdDigitalAssetsResponses, PostApiV1AdminProductsByIdDigitalAssetsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/products/{id}/digital-assets',
     ...options,
     headers: {
@@ -9193,33 +4956,12 @@ export const postApiV1AdminProductsByIdDigitalAssets = <ThrowOnError extends boo
 /**
  * List all admin users
  */
-export const getApiV1AdminAuthUsers = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminAuthUsersData, ThrowOnError>): RequestResult<GetApiV1AdminAuthUsersResponses, GetApiV1AdminAuthUsersErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminAuthUsersResponses, GetApiV1AdminAuthUsersErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/auth/users',
-    ...options
-});
+export const getApiV1AdminAuthUsers = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminAuthUsersData, ThrowOnError>): RequestResult<GetApiV1AdminAuthUsersResponses, GetApiV1AdminAuthUsersErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminAuthUsersResponses, GetApiV1AdminAuthUsersErrors, ThrowOnError>({ url: '/api/v1/admin/auth/users', ...options });
 
 /**
  * Create a new admin user
  */
 export const postApiV1AdminAuthUsers = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminAuthUsersData, ThrowOnError>): RequestResult<PostApiV1AdminAuthUsersResponses, PostApiV1AdminAuthUsersErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminAuthUsersResponses, PostApiV1AdminAuthUsersErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/auth/users',
     ...options,
     headers: {
@@ -9231,50 +4973,17 @@ export const postApiV1AdminAuthUsers = <ThrowOnError extends boolean = false>(op
 /**
  * Resend an invited administrator's password setup link
  */
-export const postApiV1AdminAuthUsersByIdResendSetup = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminAuthUsersByIdResendSetupData, ThrowOnError>): RequestResult<PostApiV1AdminAuthUsersByIdResendSetupResponses, PostApiV1AdminAuthUsersByIdResendSetupErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminAuthUsersByIdResendSetupResponses, PostApiV1AdminAuthUsersByIdResendSetupErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/auth/users/{id}/resend-setup',
-    ...options
-});
+export const postApiV1AdminAuthUsersByIdResendSetup = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminAuthUsersByIdResendSetupData, ThrowOnError>): RequestResult<PostApiV1AdminAuthUsersByIdResendSetupResponses, PostApiV1AdminAuthUsersByIdResendSetupErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminAuthUsersByIdResendSetupResponses, PostApiV1AdminAuthUsersByIdResendSetupErrors, ThrowOnError>({ url: '/api/v1/admin/auth/users/{id}/resend-setup', ...options });
 
 /**
  * Revoke an unfinished administrator invitation
  */
-export const deleteApiV1AdminAuthUsersById = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminAuthUsersByIdData, ThrowOnError>): RequestResult<DeleteApiV1AdminAuthUsersByIdResponses, DeleteApiV1AdminAuthUsersByIdErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminAuthUsersByIdResponses, DeleteApiV1AdminAuthUsersByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/auth/users/{id}',
-    ...options
-});
+export const deleteApiV1AdminAuthUsersById = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminAuthUsersByIdData, ThrowOnError>): RequestResult<DeleteApiV1AdminAuthUsersByIdResponses, DeleteApiV1AdminAuthUsersByIdErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminAuthUsersByIdResponses, DeleteApiV1AdminAuthUsersByIdErrors, ThrowOnError>({ url: '/api/v1/admin/auth/users/{id}', ...options });
 
 /**
  * Suspend or reactivate an administrator
  */
 export const postApiV1AdminAuthUsersByIdSuspension = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminAuthUsersByIdSuspensionData, ThrowOnError>): RequestResult<PostApiV1AdminAuthUsersByIdSuspensionResponses, PostApiV1AdminAuthUsersByIdSuspensionErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminAuthUsersByIdSuspensionResponses, PostApiV1AdminAuthUsersByIdSuspensionErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/auth/users/{id}/suspension',
     ...options,
     headers: {
@@ -9288,29 +4997,12 @@ export const postApiV1AdminAuthUsersByIdSuspension = <ThrowOnError extends boole
  *
  * Permanently ends the person's sign-in and access (sessions, password, two-step, roles, permissions). Their name stays on orders and history. The store owner and yourself can't be removed.
  */
-export const postApiV1AdminAuthUsersByIdRemove = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminAuthUsersByIdRemoveData, ThrowOnError>): RequestResult<PostApiV1AdminAuthUsersByIdRemoveResponses, PostApiV1AdminAuthUsersByIdRemoveErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminAuthUsersByIdRemoveResponses, PostApiV1AdminAuthUsersByIdRemoveErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/auth/users/{id}/remove',
-    ...options
-});
+export const postApiV1AdminAuthUsersByIdRemove = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminAuthUsersByIdRemoveData, ThrowOnError>): RequestResult<PostApiV1AdminAuthUsersByIdRemoveResponses, PostApiV1AdminAuthUsersByIdRemoveErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminAuthUsersByIdRemoveResponses, PostApiV1AdminAuthUsersByIdRemoveErrors, ThrowOnError>({ url: '/api/v1/admin/auth/users/{id}/remove', ...options });
 
 /**
  * Change current user password
  */
 export const postApiV1AdminAuthChangePassword = <ThrowOnError extends boolean = false>(options?: Options<PostApiV1AdminAuthChangePasswordData, ThrowOnError>): RequestResult<PostApiV1AdminAuthChangePasswordResponses, PostApiV1AdminAuthChangePasswordErrors, ThrowOnError> => (options?.client ?? client).post<PostApiV1AdminAuthChangePasswordResponses, PostApiV1AdminAuthChangePasswordErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }],
     url: '/api/v1/admin/auth/change-password',
     ...options,
     headers: {
@@ -9323,15 +5015,6 @@ export const postApiV1AdminAuthChangePassword = <ThrowOnError extends boolean = 
  * Update current user profile
  */
 export const postApiV1AdminAuthUpdateProfile = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminAuthUpdateProfileData, ThrowOnError>): RequestResult<PostApiV1AdminAuthUpdateProfileResponses, PostApiV1AdminAuthUpdateProfileErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminAuthUpdateProfileResponses, PostApiV1AdminAuthUpdateProfileErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/auth/update-profile',
     ...options,
     headers: {
@@ -9345,19 +5028,7 @@ export const postApiV1AdminAuthUpdateProfile = <ThrowOnError extends boolean = f
  *
  * Destination path -> "g <key>". An empty string turns that destination's default shortcut off. Revision 0 means nothing is saved yet.
  */
-export const getApiV1AdminAuthShortcuts = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminAuthShortcutsData, ThrowOnError>): RequestResult<GetApiV1AdminAuthShortcutsResponses, GetApiV1AdminAuthShortcutsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminAuthShortcutsResponses, GetApiV1AdminAuthShortcutsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/auth/shortcuts',
-    ...options
-});
+export const getApiV1AdminAuthShortcuts = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminAuthShortcutsData, ThrowOnError>): RequestResult<GetApiV1AdminAuthShortcutsResponses, GetApiV1AdminAuthShortcutsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminAuthShortcutsResponses, GetApiV1AdminAuthShortcutsErrors, ThrowOnError>({ url: '/api/v1/admin/auth/shortcuts', ...options });
 
 /**
  * Save your dashboard keyboard shortcuts
@@ -9365,15 +5036,6 @@ export const getApiV1AdminAuthShortcuts = <ThrowOnError extends boolean = false>
  * Replaces the whole map. Paths match /admin plus up to three segments; values are "g" then one letter or number, or "" to turn a default off, each used once. A stale expectedRevision is a 409.
  */
 export const putApiV1AdminAuthShortcuts = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminAuthShortcutsData, ThrowOnError>): RequestResult<PutApiV1AdminAuthShortcutsResponses, PutApiV1AdminAuthShortcutsErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminAuthShortcutsResponses, PutApiV1AdminAuthShortcutsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/auth/shortcuts',
     ...options,
     headers: {
@@ -9385,42 +5047,17 @@ export const putApiV1AdminAuthShortcuts = <ThrowOnError extends boolean = false>
 /**
  * Create a one-time scanner device pairing token
  */
-export const postApiV1AdminAuthScannerLink = <ThrowOnError extends boolean = false>(options?: Options<PostApiV1AdminAuthScannerLinkData, ThrowOnError>): RequestResult<PostApiV1AdminAuthScannerLinkResponses, PostApiV1AdminAuthScannerLinkErrors, ThrowOnError> => (options?.client ?? client).post<PostApiV1AdminAuthScannerLinkResponses, PostApiV1AdminAuthScannerLinkErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }],
-    url: '/api/v1/admin/auth/scanner-link',
-    ...options
-});
+export const postApiV1AdminAuthScannerLink = <ThrowOnError extends boolean = false>(options?: Options<PostApiV1AdminAuthScannerLinkData, ThrowOnError>): RequestResult<PostApiV1AdminAuthScannerLinkResponses, PostApiV1AdminAuthScannerLinkErrors, ThrowOnError> => (options?.client ?? client).post<PostApiV1AdminAuthScannerLinkResponses, PostApiV1AdminAuthScannerLinkErrors, ThrowOnError>({ url: '/api/v1/admin/auth/scanner-link', ...options });
 
 /**
  * Get 2FA info for current user
  */
-export const getApiV1AdminAuth2FaInfo = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminAuth2FaInfoData, ThrowOnError>): RequestResult<GetApiV1AdminAuth2FaInfoResponses, GetApiV1AdminAuth2FaInfoErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminAuth2FaInfoResponses, GetApiV1AdminAuth2FaInfoErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/auth/2fa/info',
-    ...options
-});
+export const getApiV1AdminAuth2FaInfo = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminAuth2FaInfoData, ThrowOnError>): RequestResult<GetApiV1AdminAuth2FaInfoResponses, GetApiV1AdminAuth2FaInfoErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminAuth2FaInfoResponses, GetApiV1AdminAuth2FaInfoErrors, ThrowOnError>({ url: '/api/v1/admin/auth/2fa/info', ...options });
 
 /**
  * Start a staged two-factor method change
  */
 export const postApiV1AdminAuth2FaMethodChallenge = <ThrowOnError extends boolean = false>(options?: Options<PostApiV1AdminAuth2FaMethodChallengeData, ThrowOnError>): RequestResult<PostApiV1AdminAuth2FaMethodChallengeResponses, PostApiV1AdminAuth2FaMethodChallengeErrors, ThrowOnError> => (options?.client ?? client).post<PostApiV1AdminAuth2FaMethodChallengeResponses, PostApiV1AdminAuth2FaMethodChallengeErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }],
     url: '/api/v1/admin/auth/2fa/method-challenge',
     ...options,
     headers: {
@@ -9433,11 +5070,6 @@ export const postApiV1AdminAuth2FaMethodChallenge = <ThrowOnError extends boolea
  * Update 2FA method
  */
 export const postApiV1AdminAuth2FaMethod = <ThrowOnError extends boolean = false>(options?: Options<PostApiV1AdminAuth2FaMethodData, ThrowOnError>): RequestResult<PostApiV1AdminAuth2FaMethodResponses, PostApiV1AdminAuth2FaMethodErrors, ThrowOnError> => (options?.client ?? client).post<PostApiV1AdminAuth2FaMethodResponses, PostApiV1AdminAuth2FaMethodErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }],
     url: '/api/v1/admin/auth/2fa/method',
     ...options,
     headers: {
@@ -9450,11 +5082,6 @@ export const postApiV1AdminAuth2FaMethod = <ThrowOnError extends boolean = false
  * Verify 2FA code
  */
 export const postApiV1AdminAuth2FaVerify = <ThrowOnError extends boolean = false>(options?: Options<PostApiV1AdminAuth2FaVerifyData, ThrowOnError>): RequestResult<PostApiV1AdminAuth2FaVerifyResponses, PostApiV1AdminAuth2FaVerifyErrors, ThrowOnError> => (options?.client ?? client).post<PostApiV1AdminAuth2FaVerifyResponses, PostApiV1AdminAuth2FaVerifyErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }],
     url: '/api/v1/admin/auth/2fa/verify',
     ...options,
     headers: {
@@ -9468,103 +5095,34 @@ export const postApiV1AdminAuth2FaVerify = <ThrowOnError extends boolean = false
  *
  * A dashboard browser keeps its current session and signs out every other device. An agent credential has no browser session to preserve, so CLI and MCP calls sign out every browser session for the owner.
  */
-export const deleteApiV1AdminAuthSessions = <ThrowOnError extends boolean = false>(options?: Options<DeleteApiV1AdminAuthSessionsData, ThrowOnError>): RequestResult<DeleteApiV1AdminAuthSessionsResponses, DeleteApiV1AdminAuthSessionsErrors, ThrowOnError> => (options?.client ?? client).delete<DeleteApiV1AdminAuthSessionsResponses, DeleteApiV1AdminAuthSessionsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/auth/sessions',
-    ...options
-});
+export const deleteApiV1AdminAuthSessions = <ThrowOnError extends boolean = false>(options?: Options<DeleteApiV1AdminAuthSessionsData, ThrowOnError>): RequestResult<DeleteApiV1AdminAuthSessionsResponses, DeleteApiV1AdminAuthSessionsErrors, ThrowOnError> => (options?.client ?? client).delete<DeleteApiV1AdminAuthSessionsResponses, DeleteApiV1AdminAuthSessionsErrors, ThrowOnError>({ url: '/api/v1/admin/auth/sessions', ...options });
 
 /**
  * List active sessions for the current user
  */
-export const getApiV1AdminAuthSessions = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminAuthSessionsData, ThrowOnError>): RequestResult<GetApiV1AdminAuthSessionsResponses, GetApiV1AdminAuthSessionsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminAuthSessionsResponses, GetApiV1AdminAuthSessionsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/auth/sessions',
-    ...options
-});
+export const getApiV1AdminAuthSessions = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminAuthSessionsData, ThrowOnError>): RequestResult<GetApiV1AdminAuthSessionsResponses, GetApiV1AdminAuthSessionsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminAuthSessionsResponses, GetApiV1AdminAuthSessionsErrors, ThrowOnError>({ url: '/api/v1/admin/auth/sessions', ...options });
 
 /**
  * Revoke another session for the current user
  */
-export const deleteApiV1AdminAuthSessionsByCommandId = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminAuthSessionsByCommandIdData, ThrowOnError>): RequestResult<DeleteApiV1AdminAuthSessionsByCommandIdResponses, DeleteApiV1AdminAuthSessionsByCommandIdErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminAuthSessionsByCommandIdResponses, DeleteApiV1AdminAuthSessionsByCommandIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/auth/sessions/{commandId}',
-    ...options
-});
+export const deleteApiV1AdminAuthSessionsByCommandId = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminAuthSessionsByCommandIdData, ThrowOnError>): RequestResult<DeleteApiV1AdminAuthSessionsByCommandIdResponses, DeleteApiV1AdminAuthSessionsByCommandIdErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminAuthSessionsByCommandIdResponses, DeleteApiV1AdminAuthSessionsByCommandIdErrors, ThrowOnError>({ url: '/api/v1/admin/auth/sessions/{commandId}', ...options });
 
 /**
  * Get current user account security data
  */
-export const getApiV1AdminAuthAccountSecurity = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminAuthAccountSecurityData, ThrowOnError>): RequestResult<GetApiV1AdminAuthAccountSecurityResponses, GetApiV1AdminAuthAccountSecurityErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminAuthAccountSecurityResponses, GetApiV1AdminAuthAccountSecurityErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/auth/account-security',
-    ...options
-});
+export const getApiV1AdminAuthAccountSecurity = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminAuthAccountSecurityData, ThrowOnError>): RequestResult<GetApiV1AdminAuthAccountSecurityResponses, GetApiV1AdminAuthAccountSecurityErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminAuthAccountSecurityResponses, GetApiV1AdminAuthAccountSecurityErrors, ThrowOnError>({ url: '/api/v1/admin/auth/account-security', ...options });
 
 /**
  * List attribute groups
  *
  * Live spec-table groups in display order, each with its live attribute count.
  */
-export const getApiV1AdminAttributesGroups = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminAttributesGroupsData, ThrowOnError>): RequestResult<GetApiV1AdminAttributesGroupsResponses, GetApiV1AdminAttributesGroupsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminAttributesGroupsResponses, GetApiV1AdminAttributesGroupsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/attributes/groups',
-    ...options
-});
+export const getApiV1AdminAttributesGroups = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminAttributesGroupsData, ThrowOnError>): RequestResult<GetApiV1AdminAttributesGroupsResponses, GetApiV1AdminAttributesGroupsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminAttributesGroupsResponses, GetApiV1AdminAttributesGroupsErrors, ThrowOnError>({ url: '/api/v1/admin/attributes/groups', ...options });
 
 /**
  * Create an attribute group
  */
 export const postApiV1AdminAttributesGroups = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminAttributesGroupsData, ThrowOnError>): RequestResult<PostApiV1AdminAttributesGroupsResponses, PostApiV1AdminAttributesGroupsErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminAttributesGroupsResponses, PostApiV1AdminAttributesGroupsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/attributes/groups',
     ...options,
     headers: {
@@ -9577,15 +5135,6 @@ export const postApiV1AdminAttributesGroups = <ThrowOnError extends boolean = fa
  * Reorder attribute groups
  */
 export const putApiV1AdminAttributesGroupsOrder = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminAttributesGroupsOrderData, ThrowOnError>): RequestResult<PutApiV1AdminAttributesGroupsOrderResponses, PutApiV1AdminAttributesGroupsOrderErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminAttributesGroupsOrderResponses, PutApiV1AdminAttributesGroupsOrderErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/attributes/groups/order',
     ...options,
     headers: {
@@ -9599,33 +5148,12 @@ export const putApiV1AdminAttributesGroupsOrder = <ThrowOnError extends boolean 
  *
  * Soft-deletes the group; its attributes become ungrouped in the same batch.
  */
-export const deleteApiV1AdminAttributesGroupsByGroupId = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminAttributesGroupsByGroupIdData, ThrowOnError>): RequestResult<DeleteApiV1AdminAttributesGroupsByGroupIdResponses, DeleteApiV1AdminAttributesGroupsByGroupIdErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminAttributesGroupsByGroupIdResponses, DeleteApiV1AdminAttributesGroupsByGroupIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/attributes/groups/{groupId}',
-    ...options
-});
+export const deleteApiV1AdminAttributesGroupsByGroupId = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminAttributesGroupsByGroupIdData, ThrowOnError>): RequestResult<DeleteApiV1AdminAttributesGroupsByGroupIdResponses, DeleteApiV1AdminAttributesGroupsByGroupIdErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminAttributesGroupsByGroupIdResponses, DeleteApiV1AdminAttributesGroupsByGroupIdErrors, ThrowOnError>({ url: '/api/v1/admin/attributes/groups/{groupId}', ...options });
 
 /**
  * Rename or reorder an attribute group
  */
 export const patchApiV1AdminAttributesGroupsByGroupId = <ThrowOnError extends boolean = false>(options: Options<PatchApiV1AdminAttributesGroupsByGroupIdData, ThrowOnError>): RequestResult<PatchApiV1AdminAttributesGroupsByGroupIdResponses, PatchApiV1AdminAttributesGroupsByGroupIdErrors, ThrowOnError> => (options.client ?? client).patch<PatchApiV1AdminAttributesGroupsByGroupIdResponses, PatchApiV1AdminAttributesGroupsByGroupIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/attributes/groups/{groupId}',
     ...options,
     headers: {
@@ -9639,19 +5167,7 @@ export const patchApiV1AdminAttributesGroupsByGroupId = <ThrowOnError extends bo
  *
  * The union of the category's own set and every ancestor's, root-most first (order key (3 - depth) * 100000 + sortOrder; ties by name). `inheritedFromCategoryId` names the ancestor a row comes from, null for the category's own rows.
  */
-export const getApiV1AdminAttributesCategorySetsByCategoryId = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminAttributesCategorySetsByCategoryIdData, ThrowOnError>): RequestResult<GetApiV1AdminAttributesCategorySetsByCategoryIdResponses, GetApiV1AdminAttributesCategorySetsByCategoryIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminAttributesCategorySetsByCategoryIdResponses, GetApiV1AdminAttributesCategorySetsByCategoryIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/attributes/category-sets/{categoryId}',
-    ...options
-});
+export const getApiV1AdminAttributesCategorySetsByCategoryId = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminAttributesCategorySetsByCategoryIdData, ThrowOnError>): RequestResult<GetApiV1AdminAttributesCategorySetsByCategoryIdResponses, GetApiV1AdminAttributesCategorySetsByCategoryIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminAttributesCategorySetsByCategoryIdResponses, GetApiV1AdminAttributesCategorySetsByCategoryIdErrors, ThrowOnError>({ url: '/api/v1/admin/attributes/category-sets/{categoryId}', ...options });
 
 /**
  * Replace a category's own attribute set
@@ -9659,15 +5175,6 @@ export const getApiV1AdminAttributesCategorySetsByCategoryId = <ThrowOnError ext
  * At most 90 live attributes; inherited rows are edited on their ancestor. Returns the effective set.
  */
 export const putApiV1AdminAttributesCategorySetsByCategoryId = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminAttributesCategorySetsByCategoryIdData, ThrowOnError>): RequestResult<PutApiV1AdminAttributesCategorySetsByCategoryIdResponses, PutApiV1AdminAttributesCategorySetsByCategoryIdErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminAttributesCategorySetsByCategoryIdResponses, PutApiV1AdminAttributesCategorySetsByCategoryIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/attributes/category-sets/{categoryId}',
     ...options,
     headers: {
@@ -9681,33 +5188,12 @@ export const putApiV1AdminAttributesCategorySetsByCategoryId = <ThrowOnError ext
  *
  * Enum values (the only values products may pick) or text presets, in order, with product counts.
  */
-export const getApiV1AdminAttributesByIdNormalizedValues = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminAttributesByIdNormalizedValuesData, ThrowOnError>): RequestResult<GetApiV1AdminAttributesByIdNormalizedValuesResponses, GetApiV1AdminAttributesByIdNormalizedValuesErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminAttributesByIdNormalizedValuesResponses, GetApiV1AdminAttributesByIdNormalizedValuesErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/attributes/{id}/normalized-values',
-    ...options
-});
+export const getApiV1AdminAttributesByIdNormalizedValues = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminAttributesByIdNormalizedValuesData, ThrowOnError>): RequestResult<GetApiV1AdminAttributesByIdNormalizedValuesResponses, GetApiV1AdminAttributesByIdNormalizedValuesErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminAttributesByIdNormalizedValuesResponses, GetApiV1AdminAttributesByIdNormalizedValuesErrors, ThrowOnError>({ url: '/api/v1/admin/attributes/{id}/normalized-values', ...options });
 
 /**
  * Add a value to an attribute's vocabulary
  */
 export const postApiV1AdminAttributesByIdNormalizedValues = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminAttributesByIdNormalizedValuesData, ThrowOnError>): RequestResult<PostApiV1AdminAttributesByIdNormalizedValuesResponses, PostApiV1AdminAttributesByIdNormalizedValuesErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminAttributesByIdNormalizedValuesResponses, PostApiV1AdminAttributesByIdNormalizedValuesErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/attributes/{id}/normalized-values',
     ...options,
     headers: {
@@ -9722,15 +5208,6 @@ export const postApiV1AdminAttributesByIdNormalizedValues = <ThrowOnError extend
  * Sets the sort order of up to 90 values; enum reorders refresh the facet order of their products.
  */
 export const putApiV1AdminAttributesByIdNormalizedValuesOrder = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminAttributesByIdNormalizedValuesOrderData, ThrowOnError>): RequestResult<PutApiV1AdminAttributesByIdNormalizedValuesOrderResponses, PutApiV1AdminAttributesByIdNormalizedValuesOrderErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminAttributesByIdNormalizedValuesOrderResponses, PutApiV1AdminAttributesByIdNormalizedValuesOrderErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/attributes/{id}/normalized-values/order',
     ...options,
     headers: {
@@ -9744,19 +5221,7 @@ export const putApiV1AdminAttributesByIdNormalizedValuesOrder = <ThrowOnError ex
  *
  * Refused while products use an enum value unless `mergeIntoValueId` names another live value of the same attribute: its products are repointed to that value first.
  */
-export const deleteApiV1AdminAttributesByIdNormalizedValuesByValueId = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminAttributesByIdNormalizedValuesByValueIdData, ThrowOnError>): RequestResult<DeleteApiV1AdminAttributesByIdNormalizedValuesByValueIdResponses, DeleteApiV1AdminAttributesByIdNormalizedValuesByValueIdErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminAttributesByIdNormalizedValuesByValueIdResponses, DeleteApiV1AdminAttributesByIdNormalizedValuesByValueIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/attributes/{id}/normalized-values/{valueId}',
-    ...options
-});
+export const deleteApiV1AdminAttributesByIdNormalizedValuesByValueId = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminAttributesByIdNormalizedValuesByValueIdData, ThrowOnError>): RequestResult<DeleteApiV1AdminAttributesByIdNormalizedValuesByValueIdResponses, DeleteApiV1AdminAttributesByIdNormalizedValuesByValueIdErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminAttributesByIdNormalizedValuesByValueIdResponses, DeleteApiV1AdminAttributesByIdNormalizedValuesByValueIdErrors, ThrowOnError>({ url: '/api/v1/admin/attributes/{id}/normalized-values/{valueId}', ...options });
 
 /**
  * Rename, recolour or reorder one attribute value
@@ -9764,15 +5229,6 @@ export const deleteApiV1AdminAttributesByIdNormalizedValuesByValueId = <ThrowOnE
  * Renaming an enum value rewrites the display text of the products that use it (in bounded batches with their projection refresh); renaming to an existing value is a conflict.
  */
 export const patchApiV1AdminAttributesByIdNormalizedValuesByValueId = <ThrowOnError extends boolean = false>(options: Options<PatchApiV1AdminAttributesByIdNormalizedValuesByValueIdData, ThrowOnError>): RequestResult<PatchApiV1AdminAttributesByIdNormalizedValuesByValueIdResponses, PatchApiV1AdminAttributesByIdNormalizedValuesByValueIdErrors, ThrowOnError> => (options.client ?? client).patch<PatchApiV1AdminAttributesByIdNormalizedValuesByValueIdResponses, PatchApiV1AdminAttributesByIdNormalizedValuesByValueIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/attributes/{id}/normalized-values/{valueId}',
     ...options,
     headers: {
@@ -9787,15 +5243,6 @@ export const patchApiV1AdminAttributesByIdNormalizedValuesByValueId = <ThrowOnEr
  * Validates every product value first and refuses the whole conversion (count and up to 10 samples) when any does not convert; `dryRun` returns that preview without writing. Otherwise switches the type, then rewrites product values 90 products per batch with their projection refresh. Repeating a conversion continues with the values not yet converted.
  */
 export const postApiV1AdminAttributesByIdConvertType = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminAttributesByIdConvertTypeData, ThrowOnError>): RequestResult<PostApiV1AdminAttributesByIdConvertTypeResponses, PostApiV1AdminAttributesByIdConvertTypeErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminAttributesByIdConvertTypeResponses, PostApiV1AdminAttributesByIdConvertTypeErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/attributes/{id}/convert-type',
     ...options,
     headers: {
@@ -9807,29 +5254,12 @@ export const postApiV1AdminAttributesByIdConvertType = <ThrowOnError extends boo
 /**
  * List all product attributes
  */
-export const getApiV1AdminAttributes = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminAttributesData, ThrowOnError>): RequestResult<GetApiV1AdminAttributesResponses, GetApiV1AdminAttributesErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminAttributesResponses, GetApiV1AdminAttributesErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }],
-    url: '/api/v1/admin/attributes',
-    ...options
-});
+export const getApiV1AdminAttributes = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminAttributesData, ThrowOnError>): RequestResult<GetApiV1AdminAttributesResponses, GetApiV1AdminAttributesErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminAttributesResponses, GetApiV1AdminAttributesErrors, ThrowOnError>({ url: '/api/v1/admin/attributes', ...options });
 
 /**
  * Create a product attribute
  */
 export const postApiV1AdminAttributes = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminAttributesData, ThrowOnError>): RequestResult<PostApiV1AdminAttributesResponses, PostApiV1AdminAttributesErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminAttributesResponses, PostApiV1AdminAttributesErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/attributes',
     ...options,
     headers: {
@@ -9841,50 +5271,17 @@ export const postApiV1AdminAttributes = <ThrowOnError extends boolean = false>(o
 /**
  * List bounded attribute summaries
  */
-export const getApiV1AdminAttributesSummaries = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminAttributesSummariesData, ThrowOnError>): RequestResult<GetApiV1AdminAttributesSummariesResponses, GetApiV1AdminAttributesSummariesErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminAttributesSummariesResponses, GetApiV1AdminAttributesSummariesErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/attributes/summaries',
-    ...options
-});
+export const getApiV1AdminAttributesSummaries = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminAttributesSummariesData, ThrowOnError>): RequestResult<GetApiV1AdminAttributesSummariesResponses, GetApiV1AdminAttributesSummariesErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminAttributesSummariesResponses, GetApiV1AdminAttributesSummariesErrors, ThrowOnError>({ url: '/api/v1/admin/attributes/summaries', ...options });
 
 /**
  * Soft-delete a product attribute
  */
-export const deleteApiV1AdminAttributesById = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminAttributesByIdData, ThrowOnError>): RequestResult<DeleteApiV1AdminAttributesByIdResponses, DeleteApiV1AdminAttributesByIdErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminAttributesByIdResponses, DeleteApiV1AdminAttributesByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/attributes/{id}',
-    ...options
-});
+export const deleteApiV1AdminAttributesById = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminAttributesByIdData, ThrowOnError>): RequestResult<DeleteApiV1AdminAttributesByIdResponses, DeleteApiV1AdminAttributesByIdErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminAttributesByIdResponses, DeleteApiV1AdminAttributesByIdErrors, ThrowOnError>({ url: '/api/v1/admin/attributes/{id}', ...options });
 
 /**
  * Update a product attribute
  */
 export const putApiV1AdminAttributesById = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminAttributesByIdData, ThrowOnError>): RequestResult<PutApiV1AdminAttributesByIdResponses, PutApiV1AdminAttributesByIdErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminAttributesByIdResponses, PutApiV1AdminAttributesByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/attributes/{id}',
     ...options,
     headers: {
@@ -9896,33 +5293,12 @@ export const putApiV1AdminAttributesById = <ThrowOnError extends boolean = false
 /**
  * Permanently delete a product attribute
  */
-export const deleteApiV1AdminAttributesByIdPermanent = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminAttributesByIdPermanentData, ThrowOnError>): RequestResult<DeleteApiV1AdminAttributesByIdPermanentResponses, DeleteApiV1AdminAttributesByIdPermanentErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminAttributesByIdPermanentResponses, DeleteApiV1AdminAttributesByIdPermanentErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/attributes/{id}/permanent',
-    ...options
-});
+export const deleteApiV1AdminAttributesByIdPermanent = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminAttributesByIdPermanentData, ThrowOnError>): RequestResult<DeleteApiV1AdminAttributesByIdPermanentResponses, DeleteApiV1AdminAttributesByIdPermanentErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminAttributesByIdPermanentResponses, DeleteApiV1AdminAttributesByIdPermanentErrors, ThrowOnError>({ url: '/api/v1/admin/attributes/{id}/permanent', ...options });
 
 /**
  * Bulk delete attributes
  */
 export const postApiV1AdminAttributesBulkDelete = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminAttributesBulkDeleteData, ThrowOnError>): RequestResult<PostApiV1AdminAttributesBulkDeleteResponses, PostApiV1AdminAttributesBulkDeleteErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminAttributesBulkDeleteResponses, PostApiV1AdminAttributesBulkDeleteErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/attributes/bulk-delete',
     ...options,
     headers: {
@@ -9935,15 +5311,6 @@ export const postApiV1AdminAttributesBulkDelete = <ThrowOnError extends boolean 
  * Bulk restore attributes
  */
 export const postApiV1AdminAttributesBulkRestore = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminAttributesBulkRestoreData, ThrowOnError>): RequestResult<PostApiV1AdminAttributesBulkRestoreResponses, PostApiV1AdminAttributesBulkRestoreErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminAttributesBulkRestoreResponses, PostApiV1AdminAttributesBulkRestoreErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/attributes/bulk-restore',
     ...options,
     headers: {
@@ -9955,33 +5322,12 @@ export const postApiV1AdminAttributesBulkRestore = <ThrowOnError extends boolean
 /**
  * Restore a soft-deleted product attribute
  */
-export const postApiV1AdminAttributesByIdRestore = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminAttributesByIdRestoreData, ThrowOnError>): RequestResult<PostApiV1AdminAttributesByIdRestoreResponses, PostApiV1AdminAttributesByIdRestoreErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminAttributesByIdRestoreResponses, PostApiV1AdminAttributesByIdRestoreErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/attributes/{id}/restore',
-    ...options
-});
+export const postApiV1AdminAttributesByIdRestore = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminAttributesByIdRestoreData, ThrowOnError>): RequestResult<PostApiV1AdminAttributesByIdRestoreResponses, PostApiV1AdminAttributesByIdRestoreErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminAttributesByIdRestoreResponses, PostApiV1AdminAttributesByIdRestoreErrors, ThrowOnError>({ url: '/api/v1/admin/attributes/{id}/restore', ...options });
 
 /**
  * Delete an attribute value from all products
  */
 export const deleteApiV1AdminAttributesByIdValues = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminAttributesByIdValuesData, ThrowOnError>): RequestResult<DeleteApiV1AdminAttributesByIdValuesResponses, DeleteApiV1AdminAttributesByIdValuesErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminAttributesByIdValuesResponses, DeleteApiV1AdminAttributesByIdValuesErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/attributes/{id}/values',
     ...options,
     headers: {
@@ -9993,33 +5339,12 @@ export const deleteApiV1AdminAttributesByIdValues = <ThrowOnError extends boolea
 /**
  * List all unique values for an attribute
  */
-export const getApiV1AdminAttributesByIdValues = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminAttributesByIdValuesData, ThrowOnError>): RequestResult<GetApiV1AdminAttributesByIdValuesResponses, GetApiV1AdminAttributesByIdValuesErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminAttributesByIdValuesResponses, GetApiV1AdminAttributesByIdValuesErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/attributes/{id}/values',
-    ...options
-});
+export const getApiV1AdminAttributesByIdValues = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminAttributesByIdValuesData, ThrowOnError>): RequestResult<GetApiV1AdminAttributesByIdValuesResponses, GetApiV1AdminAttributesByIdValuesErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminAttributesByIdValuesResponses, GetApiV1AdminAttributesByIdValuesErrors, ThrowOnError>({ url: '/api/v1/admin/attributes/{id}/values', ...options });
 
 /**
  * Add a preset value to an attribute
  */
 export const postApiV1AdminAttributesByIdValues = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminAttributesByIdValuesData, ThrowOnError>): RequestResult<PostApiV1AdminAttributesByIdValuesResponses, PostApiV1AdminAttributesByIdValuesErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminAttributesByIdValuesResponses, PostApiV1AdminAttributesByIdValuesErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/attributes/{id}/values',
     ...options,
     headers: {
@@ -10032,15 +5357,6 @@ export const postApiV1AdminAttributesByIdValues = <ThrowOnError extends boolean 
  * Rename an attribute value across all products
  */
 export const putApiV1AdminAttributesByIdValues = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminAttributesByIdValuesData, ThrowOnError>): RequestResult<PutApiV1AdminAttributesByIdValuesResponses, PutApiV1AdminAttributesByIdValuesErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminAttributesByIdValuesResponses, PutApiV1AdminAttributesByIdValuesErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/attributes/{id}/values',
     ...options,
     headers: {
@@ -10055,15 +5371,6 @@ export const putApiV1AdminAttributesByIdValues = <ThrowOnError extends boolean =
  * Recomputes the stored buyer state and facet rows of the next `limit` products after `afterProductId` (product id order). Send `{}` to start, then call again with the returned cursor until `done`; the database triggers invalidate rebuilt rows. Stock and checkout are unaffected.
  */
 export const postApiV1AdminCatalogProjectionsRebuild = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminCatalogProjectionsRebuildData, ThrowOnError>): RequestResult<PostApiV1AdminCatalogProjectionsRebuildResponses, PostApiV1AdminCatalogProjectionsRebuildErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminCatalogProjectionsRebuildResponses, PostApiV1AdminCatalogProjectionsRebuildErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/catalog/projections/rebuild',
     ...options,
     headers: {
@@ -10075,46 +5382,17 @@ export const postApiV1AdminCatalogProjectionsRebuild = <ThrowOnError extends boo
 /**
  * Get the legacy aggregate tax configuration
  */
-export const getApiV1AdminTaxes = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminTaxesData, ThrowOnError>): RequestResult<GetApiV1AdminTaxesResponses, GetApiV1AdminTaxesErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminTaxesResponses, GetApiV1AdminTaxesErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }],
-    url: '/api/v1/admin/taxes',
-    ...options
-});
+export const getApiV1AdminTaxes = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminTaxesData, ThrowOnError>): RequestResult<GetApiV1AdminTaxesResponses, GetApiV1AdminTaxesErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminTaxesResponses, GetApiV1AdminTaxesErrors, ThrowOnError>({ url: '/api/v1/admin/taxes', ...options });
 
 /**
  * Get versioned tax settings
  */
-export const getApiV1AdminTaxesSettings = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminTaxesSettingsData, ThrowOnError>): RequestResult<GetApiV1AdminTaxesSettingsResponses, GetApiV1AdminTaxesSettingsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminTaxesSettingsResponses, GetApiV1AdminTaxesSettingsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/taxes/settings',
-    ...options
-});
+export const getApiV1AdminTaxesSettings = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminTaxesSettingsData, ThrowOnError>): RequestResult<GetApiV1AdminTaxesSettingsResponses, GetApiV1AdminTaxesSettingsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminTaxesSettingsResponses, GetApiV1AdminTaxesSettingsErrors, ThrowOnError>({ url: '/api/v1/admin/taxes/settings', ...options });
 
 /**
  * Update versioned tax settings
  */
 export const putApiV1AdminTaxesSettings = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminTaxesSettingsData, ThrowOnError>): RequestResult<PutApiV1AdminTaxesSettingsResponses, PutApiV1AdminTaxesSettingsErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminTaxesSettingsResponses, PutApiV1AdminTaxesSettingsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/taxes/settings',
     ...options,
     headers: {
@@ -10126,33 +5404,12 @@ export const putApiV1AdminTaxesSettings = <ThrowOnError extends boolean = false>
 /**
  * List active tax classes with bounded pagination
  */
-export const getApiV1AdminTaxesClasses = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminTaxesClassesData, ThrowOnError>): RequestResult<GetApiV1AdminTaxesClassesResponses, GetApiV1AdminTaxesClassesErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminTaxesClassesResponses, GetApiV1AdminTaxesClassesErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/taxes/classes',
-    ...options
-});
+export const getApiV1AdminTaxesClasses = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminTaxesClassesData, ThrowOnError>): RequestResult<GetApiV1AdminTaxesClassesResponses, GetApiV1AdminTaxesClassesErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminTaxesClassesResponses, GetApiV1AdminTaxesClassesErrors, ThrowOnError>({ url: '/api/v1/admin/taxes/classes', ...options });
 
 /**
  * Create a tax class
  */
 export const postApiV1AdminTaxesClasses = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminTaxesClassesData, ThrowOnError>): RequestResult<PostApiV1AdminTaxesClassesResponses, PostApiV1AdminTaxesClassesErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminTaxesClassesResponses, PostApiV1AdminTaxesClassesErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/taxes/classes',
     ...options,
     headers: {
@@ -10164,33 +5421,12 @@ export const postApiV1AdminTaxesClasses = <ThrowOnError extends boolean = false>
 /**
  * Soft-delete an unused tax class
  */
-export const deleteApiV1AdminTaxesClassesById = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminTaxesClassesByIdData, ThrowOnError>): RequestResult<DeleteApiV1AdminTaxesClassesByIdResponses, DeleteApiV1AdminTaxesClassesByIdErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminTaxesClassesByIdResponses, DeleteApiV1AdminTaxesClassesByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/taxes/classes/{id}',
-    ...options
-});
+export const deleteApiV1AdminTaxesClassesById = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminTaxesClassesByIdData, ThrowOnError>): RequestResult<DeleteApiV1AdminTaxesClassesByIdResponses, DeleteApiV1AdminTaxesClassesByIdErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminTaxesClassesByIdResponses, DeleteApiV1AdminTaxesClassesByIdErrors, ThrowOnError>({ url: '/api/v1/admin/taxes/classes/{id}', ...options });
 
 /**
  * Update a versioned tax class
  */
 export const putApiV1AdminTaxesClassesById = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminTaxesClassesByIdData, ThrowOnError>): RequestResult<PutApiV1AdminTaxesClassesByIdResponses, PutApiV1AdminTaxesClassesByIdErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminTaxesClassesByIdResponses, PutApiV1AdminTaxesClassesByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/taxes/classes/{id}',
     ...options,
     headers: {
@@ -10202,33 +5438,12 @@ export const putApiV1AdminTaxesClassesById = <ThrowOnError extends boolean = fal
 /**
  * List active tax rates with bounded pagination
  */
-export const getApiV1AdminTaxesRates = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminTaxesRatesData, ThrowOnError>): RequestResult<GetApiV1AdminTaxesRatesResponses, GetApiV1AdminTaxesRatesErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminTaxesRatesResponses, GetApiV1AdminTaxesRatesErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/taxes/rates',
-    ...options
-});
+export const getApiV1AdminTaxesRates = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminTaxesRatesData, ThrowOnError>): RequestResult<GetApiV1AdminTaxesRatesResponses, GetApiV1AdminTaxesRatesErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminTaxesRatesResponses, GetApiV1AdminTaxesRatesErrors, ThrowOnError>({ url: '/api/v1/admin/taxes/rates', ...options });
 
 /**
  * Create a merchant-configured tax rate
  */
 export const postApiV1AdminTaxesRates = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminTaxesRatesData, ThrowOnError>): RequestResult<PostApiV1AdminTaxesRatesResponses, PostApiV1AdminTaxesRatesErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminTaxesRatesResponses, PostApiV1AdminTaxesRatesErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/taxes/rates',
     ...options,
     headers: {
@@ -10240,33 +5455,12 @@ export const postApiV1AdminTaxesRates = <ThrowOnError extends boolean = false>(o
 /**
  * Soft-delete a tax rate
  */
-export const deleteApiV1AdminTaxesRatesById = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminTaxesRatesByIdData, ThrowOnError>): RequestResult<DeleteApiV1AdminTaxesRatesByIdResponses, DeleteApiV1AdminTaxesRatesByIdErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminTaxesRatesByIdResponses, DeleteApiV1AdminTaxesRatesByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/taxes/rates/{id}',
-    ...options
-});
+export const deleteApiV1AdminTaxesRatesById = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminTaxesRatesByIdData, ThrowOnError>): RequestResult<DeleteApiV1AdminTaxesRatesByIdResponses, DeleteApiV1AdminTaxesRatesByIdErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminTaxesRatesByIdResponses, DeleteApiV1AdminTaxesRatesByIdErrors, ThrowOnError>({ url: '/api/v1/admin/taxes/rates/{id}', ...options });
 
 /**
  * Update a versioned tax rate
  */
 export const putApiV1AdminTaxesRatesById = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminTaxesRatesByIdData, ThrowOnError>): RequestResult<PutApiV1AdminTaxesRatesByIdResponses, PutApiV1AdminTaxesRatesByIdErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminTaxesRatesByIdResponses, PutApiV1AdminTaxesRatesByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/taxes/rates/{id}',
     ...options,
     headers: {
@@ -10278,50 +5472,17 @@ export const putApiV1AdminTaxesRatesById = <ThrowOnError extends boolean = false
 /**
  * List active tax jurisdictions with bounded pagination
  */
-export const getApiV1AdminTaxesJurisdictions = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminTaxesJurisdictionsData, ThrowOnError>): RequestResult<GetApiV1AdminTaxesJurisdictionsResponses, GetApiV1AdminTaxesJurisdictionsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminTaxesJurisdictionsResponses, GetApiV1AdminTaxesJurisdictionsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/taxes/jurisdictions',
-    ...options
-});
+export const getApiV1AdminTaxesJurisdictions = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminTaxesJurisdictionsData, ThrowOnError>): RequestResult<GetApiV1AdminTaxesJurisdictionsResponses, GetApiV1AdminTaxesJurisdictionsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminTaxesJurisdictionsResponses, GetApiV1AdminTaxesJurisdictionsErrors, ThrowOnError>({ url: '/api/v1/admin/taxes/jurisdictions', ...options });
 
 /**
  * List product or SKU tax classifications
  */
-export const getApiV1AdminTaxesClassifications = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminTaxesClassificationsData, ThrowOnError>): RequestResult<GetApiV1AdminTaxesClassificationsResponses, GetApiV1AdminTaxesClassificationsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminTaxesClassificationsResponses, GetApiV1AdminTaxesClassificationsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/taxes/classifications',
-    ...options
-});
+export const getApiV1AdminTaxesClassifications = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminTaxesClassificationsData, ThrowOnError>): RequestResult<GetApiV1AdminTaxesClassificationsResponses, GetApiV1AdminTaxesClassificationsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminTaxesClassificationsResponses, GetApiV1AdminTaxesClassificationsErrors, ThrowOnError>({ url: '/api/v1/admin/taxes/classifications', ...options });
 
 /**
  * Update a versioned product or SKU tax classification
  */
 export const putApiV1AdminTaxesClassificationsByKindById = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminTaxesClassificationsByKindByIdData, ThrowOnError>): RequestResult<PutApiV1AdminTaxesClassificationsByKindByIdResponses, PutApiV1AdminTaxesClassificationsByKindByIdErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminTaxesClassificationsByKindByIdResponses, PutApiV1AdminTaxesClassificationsByKindByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/taxes/classifications/{kind}/{id}',
     ...options,
     headers: {
@@ -10334,15 +5495,6 @@ export const putApiV1AdminTaxesClassificationsByKindById = <ThrowOnError extends
  * Preview current tax configuration server-side
  */
 export const postApiV1AdminTaxesPreview = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminTaxesPreviewData, ThrowOnError>): RequestResult<PostApiV1AdminTaxesPreviewResponses, PostApiV1AdminTaxesPreviewErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminTaxesPreviewResponses, PostApiV1AdminTaxesPreviewErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/taxes/preview',
     ...options,
     headers: {
@@ -10356,57 +5508,21 @@ export const postApiV1AdminTaxesPreview = <ThrowOnError extends boolean = false>
  *
  * Lists bounded agent grants and credentials visible to the current administrator or agent principal. `status=current` returns pending and active grants that have not expired; `revoked` and `expired` together are exactly what the purge ceremony deletes. `canManage` says whether this caller may create, change or revoke access (a Super Admin with two-step verification done), so the dashboard asks for two-step verification before offering those forms.
  */
-export const getApiV1AdminAgentAccessConnections = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminAgentAccessConnectionsData, ThrowOnError>): RequestResult<GetApiV1AdminAgentAccessConnectionsResponses, GetApiV1AdminAgentAccessConnectionsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminAgentAccessConnectionsResponses, GetApiV1AdminAgentAccessConnectionsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/agent-access/connections',
-    ...options
-});
+export const getApiV1AdminAgentAccessConnections = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminAgentAccessConnectionsData, ThrowOnError>): RequestResult<GetApiV1AdminAgentAccessConnectionsResponses, GetApiV1AdminAgentAccessConnectionsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminAgentAccessConnectionsResponses, GetApiV1AdminAgentAccessConnectionsErrors, ThrowOnError>({ url: '/api/v1/admin/agent-access/connections', ...options });
 
 /**
  * Get an agent connection
  *
  * Returns one safe agent grant projection without exposing bearer credentials.
  */
-export const getApiV1AdminAgentAccessConnectionsByGrantId = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminAgentAccessConnectionsByGrantIdData, ThrowOnError>): RequestResult<GetApiV1AdminAgentAccessConnectionsByGrantIdResponses, GetApiV1AdminAgentAccessConnectionsByGrantIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminAgentAccessConnectionsByGrantIdResponses, GetApiV1AdminAgentAccessConnectionsByGrantIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/agent-access/connections/{grantId}',
-    ...options
-});
+export const getApiV1AdminAgentAccessConnectionsByGrantId = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminAgentAccessConnectionsByGrantIdData, ThrowOnError>): RequestResult<GetApiV1AdminAgentAccessConnectionsByGrantIdResponses, GetApiV1AdminAgentAccessConnectionsByGrantIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminAgentAccessConnectionsByGrantIdResponses, GetApiV1AdminAgentAccessConnectionsByGrantIdErrors, ThrowOnError>({ url: '/api/v1/admin/agent-access/connections/{grantId}', ...options });
 
 /**
  * List agent connection audit events
  *
  * Lists bounded, redacted audit events for one agent grant.
  */
-export const getApiV1AdminAgentAccessConnectionsByGrantIdEvents = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminAgentAccessConnectionsByGrantIdEventsData, ThrowOnError>): RequestResult<GetApiV1AdminAgentAccessConnectionsByGrantIdEventsResponses, GetApiV1AdminAgentAccessConnectionsByGrantIdEventsErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminAgentAccessConnectionsByGrantIdEventsResponses, GetApiV1AdminAgentAccessConnectionsByGrantIdEventsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/agent-access/connections/{grantId}/events',
-    ...options
-});
+export const getApiV1AdminAgentAccessConnectionsByGrantIdEvents = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminAgentAccessConnectionsByGrantIdEventsData, ThrowOnError>): RequestResult<GetApiV1AdminAgentAccessConnectionsByGrantIdEventsResponses, GetApiV1AdminAgentAccessConnectionsByGrantIdEventsErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminAgentAccessConnectionsByGrantIdEventsResponses, GetApiV1AdminAgentAccessConnectionsByGrantIdEventsErrors, ThrowOnError>({ url: '/api/v1/admin/agent-access/connections/{grantId}/events', ...options });
 
 /**
  * Create an agent personal access token
@@ -10414,15 +5530,6 @@ export const getApiV1AdminAgentAccessConnectionsByGrantIdEvents = <ThrowOnError 
  * Creates a scoped subordinate grant and returns its bearer token exactly once.
  */
 export const postApiV1AdminAgentAccessTokens = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminAgentAccessTokensData, ThrowOnError>): RequestResult<PostApiV1AdminAgentAccessTokensResponses, PostApiV1AdminAgentAccessTokensErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminAgentAccessTokensResponses, PostApiV1AdminAgentAccessTokensErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/agent-access/tokens',
     ...options,
     headers: {
@@ -10437,15 +5544,6 @@ export const postApiV1AdminAgentAccessTokens = <ThrowOnError extends boolean = f
  * Atomically replaces an active credential and returns the replacement bearer token exactly once.
  */
 export const postApiV1AdminAgentAccessTokensByCredentialIdRotate = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminAgentAccessTokensByCredentialIdRotateData, ThrowOnError>): RequestResult<PostApiV1AdminAgentAccessTokensByCredentialIdRotateResponses, PostApiV1AdminAgentAccessTokensByCredentialIdRotateErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminAgentAccessTokensByCredentialIdRotateResponses, PostApiV1AdminAgentAccessTokensByCredentialIdRotateErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/agent-access/tokens/{credentialId}/rotate',
     ...options,
     headers: {
@@ -10460,15 +5558,6 @@ export const postApiV1AdminAgentAccessTokensByCredentialIdRotate = <ThrowOnError
  * Revokes one active agent grant and its effective credentials.
  */
 export const deleteApiV1AdminAgentAccessGrantsByGrantId = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminAgentAccessGrantsByGrantIdData, ThrowOnError>): RequestResult<DeleteApiV1AdminAgentAccessGrantsByGrantIdResponses, DeleteApiV1AdminAgentAccessGrantsByGrantIdErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminAgentAccessGrantsByGrantIdResponses, DeleteApiV1AdminAgentAccessGrantsByGrantIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/agent-access/grants/{grantId}',
     ...options,
     headers: {
@@ -10483,15 +5572,6 @@ export const deleteApiV1AdminAgentAccessGrantsByGrantId = <ThrowOnError extends 
  * Narrows a grant's label, permissions, risk ceiling, or expiry; widening requires new approval.
  */
 export const patchApiV1AdminAgentAccessGrantsByGrantId = <ThrowOnError extends boolean = false>(options: Options<PatchApiV1AdminAgentAccessGrantsByGrantIdData, ThrowOnError>): RequestResult<PatchApiV1AdminAgentAccessGrantsByGrantIdResponses, PatchApiV1AdminAgentAccessGrantsByGrantIdErrors, ThrowOnError> => (options.client ?? client).patch<PatchApiV1AdminAgentAccessGrantsByGrantIdResponses, PatchApiV1AdminAgentAccessGrantsByGrantIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/agent-access/grants/{grantId}',
     ...options,
     headers: {
@@ -10506,11 +5586,6 @@ export const patchApiV1AdminAgentAccessGrantsByGrantId = <ThrowOnError extends b
  * Emergency browser-only ceremony that revokes all matching agent grants.
  */
 export const postApiV1AdminAgentAccessRevokeAll = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminAgentAccessRevokeAllData, ThrowOnError>): RequestResult<PostApiV1AdminAgentAccessRevokeAllResponses, PostApiV1AdminAgentAccessRevokeAllErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminAgentAccessRevokeAllResponses, PostApiV1AdminAgentAccessRevokeAllErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }],
     url: '/api/v1/admin/agent-access/revoke-all',
     ...options,
     headers: {
@@ -10524,30 +5599,14 @@ export const postApiV1AdminAgentAccessRevokeAll = <ThrowOnError extends boolean 
  *
  * Browser-only ceremony that permanently deletes every revoked grant and every grant whose expiry has passed, together with their credentials, artifact handles, browser handoffs, pairing records, storefront contexts, and audit history. Active and pending connections are never touched.
  */
-export const deleteApiV1AdminAgentAccessConnectionsRevoked = <ThrowOnError extends boolean = false>(options?: Options<DeleteApiV1AdminAgentAccessConnectionsRevokedData, ThrowOnError>): RequestResult<DeleteApiV1AdminAgentAccessConnectionsRevokedResponses, DeleteApiV1AdminAgentAccessConnectionsRevokedErrors, ThrowOnError> => (options?.client ?? client).delete<DeleteApiV1AdminAgentAccessConnectionsRevokedResponses, DeleteApiV1AdminAgentAccessConnectionsRevokedErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }],
-    url: '/api/v1/admin/agent-access/connections/revoked',
-    ...options
-});
+export const deleteApiV1AdminAgentAccessConnectionsRevoked = <ThrowOnError extends boolean = false>(options?: Options<DeleteApiV1AdminAgentAccessConnectionsRevokedData, ThrowOnError>): RequestResult<DeleteApiV1AdminAgentAccessConnectionsRevokedResponses, DeleteApiV1AdminAgentAccessConnectionsRevokedErrors, ThrowOnError> => (options?.client ?? client).delete<DeleteApiV1AdminAgentAccessConnectionsRevokedResponses, DeleteApiV1AdminAgentAccessConnectionsRevokedErrors, ThrowOnError>({ url: '/api/v1/admin/agent-access/connections/revoked', ...options });
 
 /**
  * Review an OAuth authorization request
  *
  * Returns the bounded safe details needed for a human OAuth consent decision.
  */
-export const getApiV1AdminAgentAccessAuthorizationRequestsByRequestId = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminAgentAccessAuthorizationRequestsByRequestIdData, ThrowOnError>): RequestResult<GetApiV1AdminAgentAccessAuthorizationRequestsByRequestIdResponses, GetApiV1AdminAgentAccessAuthorizationRequestsByRequestIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminAgentAccessAuthorizationRequestsByRequestIdResponses, GetApiV1AdminAgentAccessAuthorizationRequestsByRequestIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }],
-    url: '/api/v1/admin/agent-access/authorization-requests/{requestId}',
-    ...options
-});
+export const getApiV1AdminAgentAccessAuthorizationRequestsByRequestId = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminAgentAccessAuthorizationRequestsByRequestIdData, ThrowOnError>): RequestResult<GetApiV1AdminAgentAccessAuthorizationRequestsByRequestIdResponses, GetApiV1AdminAgentAccessAuthorizationRequestsByRequestIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminAgentAccessAuthorizationRequestsByRequestIdResponses, GetApiV1AdminAgentAccessAuthorizationRequestsByRequestIdErrors, ThrowOnError>({ url: '/api/v1/admin/agent-access/authorization-requests/{requestId}', ...options });
 
 /**
  * Approve an OAuth authorization request
@@ -10555,11 +5614,6 @@ export const getApiV1AdminAgentAccessAuthorizationRequestsByRequestId = <ThrowOn
  * Human-only consent ceremony that creates the selected grant and completes OAuth authorization.
  */
 export const postApiV1AdminAgentAccessAuthorizationRequestsByRequestIdApprove = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminAgentAccessAuthorizationRequestsByRequestIdApproveData, ThrowOnError>): RequestResult<PostApiV1AdminAgentAccessAuthorizationRequestsByRequestIdApproveResponses, PostApiV1AdminAgentAccessAuthorizationRequestsByRequestIdApproveErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminAgentAccessAuthorizationRequestsByRequestIdApproveResponses, PostApiV1AdminAgentAccessAuthorizationRequestsByRequestIdApproveErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }],
     url: '/api/v1/admin/agent-access/authorization-requests/{requestId}/approve',
     ...options,
     headers: {
@@ -10574,11 +5628,6 @@ export const postApiV1AdminAgentAccessAuthorizationRequestsByRequestIdApprove = 
  * Human-only consent ceremony that denies a pending OAuth authorization request.
  */
 export const postApiV1AdminAgentAccessAuthorizationRequestsByRequestIdDeny = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminAgentAccessAuthorizationRequestsByRequestIdDenyData, ThrowOnError>): RequestResult<PostApiV1AdminAgentAccessAuthorizationRequestsByRequestIdDenyResponses, PostApiV1AdminAgentAccessAuthorizationRequestsByRequestIdDenyErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminAgentAccessAuthorizationRequestsByRequestIdDenyResponses, PostApiV1AdminAgentAccessAuthorizationRequestsByRequestIdDenyErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }],
     url: '/api/v1/admin/agent-access/authorization-requests/{requestId}/deny',
     ...options,
     headers: {
@@ -10593,11 +5642,6 @@ export const postApiV1AdminAgentAccessAuthorizationRequestsByRequestIdDeny = <Th
  * Looks up a short-lived pairing request by the human-entered user code without exposing its device credential.
  */
 export const postApiV1AdminAgentAccessDeviceAuthorizationsLookup = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminAgentAccessDeviceAuthorizationsLookupData, ThrowOnError>): RequestResult<PostApiV1AdminAgentAccessDeviceAuthorizationsLookupResponses, PostApiV1AdminAgentAccessDeviceAuthorizationsLookupErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminAgentAccessDeviceAuthorizationsLookupResponses, PostApiV1AdminAgentAccessDeviceAuthorizationsLookupErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }],
     url: '/api/v1/admin/agent-access/device-authorizations/lookup',
     ...options,
     headers: {
@@ -10612,11 +5656,6 @@ export const postApiV1AdminAgentAccessDeviceAuthorizationsLookup = <ThrowOnError
  * Human-only ceremony that approves a scoped CLI grant and prepares one-time credential delivery.
  */
 export const postApiV1AdminAgentAccessDeviceAuthorizationsByDeviceIdApprove = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminAgentAccessDeviceAuthorizationsByDeviceIdApproveData, ThrowOnError>): RequestResult<PostApiV1AdminAgentAccessDeviceAuthorizationsByDeviceIdApproveResponses, PostApiV1AdminAgentAccessDeviceAuthorizationsByDeviceIdApproveErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminAgentAccessDeviceAuthorizationsByDeviceIdApproveResponses, PostApiV1AdminAgentAccessDeviceAuthorizationsByDeviceIdApproveErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }],
     url: '/api/v1/admin/agent-access/device-authorizations/{deviceId}/approve',
     ...options,
     headers: {
@@ -10631,11 +5670,6 @@ export const postApiV1AdminAgentAccessDeviceAuthorizationsByDeviceIdApprove = <T
  * Human-only ceremony that denies a pending CLI pairing request.
  */
 export const postApiV1AdminAgentAccessDeviceAuthorizationsByDeviceIdDeny = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminAgentAccessDeviceAuthorizationsByDeviceIdDenyData, ThrowOnError>): RequestResult<PostApiV1AdminAgentAccessDeviceAuthorizationsByDeviceIdDenyResponses, PostApiV1AdminAgentAccessDeviceAuthorizationsByDeviceIdDenyErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminAgentAccessDeviceAuthorizationsByDeviceIdDenyResponses, PostApiV1AdminAgentAccessDeviceAuthorizationsByDeviceIdDenyErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }],
     url: '/api/v1/admin/agent-access/device-authorizations/{deviceId}/deny',
     ...options,
     headers: {
@@ -10649,61 +5683,24 @@ export const postApiV1AdminAgentAccessDeviceAuthorizationsByDeviceIdDeny = <Thro
  *
  * Browser-only page for a one-use continuation bound to the same 2FA-verified administrator.
  */
-export const getApiV1AdminAgentAccessBrowserHandoffsByHandoffId = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminAgentAccessBrowserHandoffsByHandoffIdData, ThrowOnError>): RequestResult<GetApiV1AdminAgentAccessBrowserHandoffsByHandoffIdResponses, GetApiV1AdminAgentAccessBrowserHandoffsByHandoffIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminAgentAccessBrowserHandoffsByHandoffIdResponses, GetApiV1AdminAgentAccessBrowserHandoffsByHandoffIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }],
-    url: '/api/v1/admin/agent-access/browser-handoffs/{handoffId}',
-    ...options
-});
+export const getApiV1AdminAgentAccessBrowserHandoffsByHandoffId = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminAgentAccessBrowserHandoffsByHandoffIdData, ThrowOnError>): RequestResult<GetApiV1AdminAgentAccessBrowserHandoffsByHandoffIdResponses, GetApiV1AdminAgentAccessBrowserHandoffsByHandoffIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminAgentAccessBrowserHandoffsByHandoffIdResponses, GetApiV1AdminAgentAccessBrowserHandoffsByHandoffIdErrors, ThrowOnError>({ url: '/api/v1/admin/agent-access/browser-handoffs/{handoffId}', ...options });
 
 /**
  * Claim a secure agent browser handoff
  *
  * Browser-only one-use claim; sensitive POST fields remain inside the authenticated browser.
  */
-export const postApiV1AdminAgentAccessBrowserHandoffsByHandoffId = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminAgentAccessBrowserHandoffsByHandoffIdData, ThrowOnError>): RequestResult<PostApiV1AdminAgentAccessBrowserHandoffsByHandoffIdResponses, PostApiV1AdminAgentAccessBrowserHandoffsByHandoffIdErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminAgentAccessBrowserHandoffsByHandoffIdResponses, PostApiV1AdminAgentAccessBrowserHandoffsByHandoffIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }],
-    url: '/api/v1/admin/agent-access/browser-handoffs/{handoffId}',
-    ...options
-});
+export const postApiV1AdminAgentAccessBrowserHandoffsByHandoffId = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminAgentAccessBrowserHandoffsByHandoffIdData, ThrowOnError>): RequestResult<PostApiV1AdminAgentAccessBrowserHandoffsByHandoffIdResponses, PostApiV1AdminAgentAccessBrowserHandoffsByHandoffIdErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminAgentAccessBrowserHandoffsByHandoffIdResponses, PostApiV1AdminAgentAccessBrowserHandoffsByHandoffIdErrors, ThrowOnError>({ url: '/api/v1/admin/agent-access/browser-handoffs/{handoffId}', ...options });
 
 /**
  * List webhook endpoints
  */
-export const getApiV1AdminWebhooks = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminWebhooksData, ThrowOnError>): RequestResult<GetApiV1AdminWebhooksResponses, GetApiV1AdminWebhooksErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminWebhooksResponses, GetApiV1AdminWebhooksErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/webhooks',
-    ...options
-});
+export const getApiV1AdminWebhooks = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminWebhooksData, ThrowOnError>): RequestResult<GetApiV1AdminWebhooksResponses, GetApiV1AdminWebhooksErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminWebhooksResponses, GetApiV1AdminWebhooksErrors, ThrowOnError>({ url: '/api/v1/admin/webhooks', ...options });
 
 /**
  * Create a webhook endpoint (returns its signing secret once)
  */
 export const postApiV1AdminWebhooks = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminWebhooksData, ThrowOnError>): RequestResult<PostApiV1AdminWebhooksResponses, PostApiV1AdminWebhooksErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminWebhooksResponses, PostApiV1AdminWebhooksErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/webhooks',
     ...options,
     headers: {
@@ -10715,36 +5712,12 @@ export const postApiV1AdminWebhooks = <ThrowOnError extends boolean = false>(opt
 /**
  * Delete a webhook endpoint and its delivery log
  */
-export const deleteApiV1AdminWebhooksById = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminWebhooksByIdData, ThrowOnError>): RequestResult<DeleteApiV1AdminWebhooksByIdResponses, DeleteApiV1AdminWebhooksByIdErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminWebhooksByIdResponses, DeleteApiV1AdminWebhooksByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/webhooks/{id}',
-    ...options
-});
+export const deleteApiV1AdminWebhooksById = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminWebhooksByIdData, ThrowOnError>): RequestResult<DeleteApiV1AdminWebhooksByIdResponses, DeleteApiV1AdminWebhooksByIdErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminWebhooksByIdResponses, DeleteApiV1AdminWebhooksByIdErrors, ThrowOnError>({ url: '/api/v1/admin/webhooks/{id}', ...options });
 
 /**
  * Get a webhook endpoint
  */
-export const getApiV1AdminWebhooksById = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminWebhooksByIdData, ThrowOnError>): RequestResult<GetApiV1AdminWebhooksByIdResponses, GetApiV1AdminWebhooksByIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminWebhooksByIdResponses, GetApiV1AdminWebhooksByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/webhooks/{id}',
-    ...options
-});
+export const getApiV1AdminWebhooksById = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminWebhooksByIdData, ThrowOnError>): RequestResult<GetApiV1AdminWebhooksByIdResponses, GetApiV1AdminWebhooksByIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminWebhooksByIdResponses, GetApiV1AdminWebhooksByIdErrors, ThrowOnError>({ url: '/api/v1/admin/webhooks/{id}', ...options });
 
 /**
  * Edit a webhook endpoint, or turn it on or off
@@ -10752,15 +5725,6 @@ export const getApiV1AdminWebhooksById = <ThrowOnError extends boolean = false>(
  * Turning an endpoint back on clears its failure streak. `expectedVersion` must be the endpoint's current version.
  */
 export const patchApiV1AdminWebhooksById = <ThrowOnError extends boolean = false>(options: Options<PatchApiV1AdminWebhooksByIdData, ThrowOnError>): RequestResult<PatchApiV1AdminWebhooksByIdResponses, PatchApiV1AdminWebhooksByIdErrors, ThrowOnError> => (options.client ?? client).patch<PatchApiV1AdminWebhooksByIdResponses, PatchApiV1AdminWebhooksByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/webhooks/{id}',
     ...options,
     headers: {
@@ -10774,19 +5738,7 @@ export const patchApiV1AdminWebhooksById = <ThrowOnError extends boolean = false
  *
  * The previous secret stops signing immediately.
  */
-export const postApiV1AdminWebhooksByIdRotateSecret = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminWebhooksByIdRotateSecretData, ThrowOnError>): RequestResult<PostApiV1AdminWebhooksByIdRotateSecretResponses, PostApiV1AdminWebhooksByIdRotateSecretErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminWebhooksByIdRotateSecretResponses, PostApiV1AdminWebhooksByIdRotateSecretErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/webhooks/{id}/rotate-secret',
-    ...options
-});
+export const postApiV1AdminWebhooksByIdRotateSecret = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminWebhooksByIdRotateSecretData, ThrowOnError>): RequestResult<PostApiV1AdminWebhooksByIdRotateSecretResponses, PostApiV1AdminWebhooksByIdRotateSecretErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminWebhooksByIdRotateSecretResponses, PostApiV1AdminWebhooksByIdRotateSecretErrors, ThrowOnError>({ url: '/api/v1/admin/webhooks/{id}/rotate-secret', ...options });
 
 /**
  * Send a signed `webhook.test` delivery now
@@ -10794,15 +5746,6 @@ export const postApiV1AdminWebhooksByIdRotateSecret = <ThrowOnError extends bool
  * One attempt, no retries; recorded in the delivery log and never counted against the endpoint's health.
  */
 export const postApiV1AdminWebhooksByIdTest = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminWebhooksByIdTestData, ThrowOnError>): RequestResult<PostApiV1AdminWebhooksByIdTestResponses, PostApiV1AdminWebhooksByIdTestErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminWebhooksByIdTestResponses, PostApiV1AdminWebhooksByIdTestErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/webhooks/{id}/test',
     ...options,
     headers: {
@@ -10814,108 +5757,36 @@ export const postApiV1AdminWebhooksByIdTest = <ThrowOnError extends boolean = fa
 /**
  * List a webhook endpoint's deliveries, newest first
  */
-export const getApiV1AdminWebhooksByIdDeliveries = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminWebhooksByIdDeliveriesData, ThrowOnError>): RequestResult<GetApiV1AdminWebhooksByIdDeliveriesResponses, GetApiV1AdminWebhooksByIdDeliveriesErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminWebhooksByIdDeliveriesResponses, GetApiV1AdminWebhooksByIdDeliveriesErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/webhooks/{id}/deliveries',
-    ...options
-});
+export const getApiV1AdminWebhooksByIdDeliveries = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminWebhooksByIdDeliveriesData, ThrowOnError>): RequestResult<GetApiV1AdminWebhooksByIdDeliveriesResponses, GetApiV1AdminWebhooksByIdDeliveriesErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminWebhooksByIdDeliveriesResponses, GetApiV1AdminWebhooksByIdDeliveriesErrors, ThrowOnError>({ url: '/api/v1/admin/webhooks/{id}/deliveries', ...options });
 
 /**
  * Retry a failed, exhausted or cancelled delivery now
  */
-export const postApiV1AdminWebhooksByIdDeliveriesByDeliveryIdRetry = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminWebhooksByIdDeliveriesByDeliveryIdRetryData, ThrowOnError>): RequestResult<PostApiV1AdminWebhooksByIdDeliveriesByDeliveryIdRetryResponses, PostApiV1AdminWebhooksByIdDeliveriesByDeliveryIdRetryErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminWebhooksByIdDeliveriesByDeliveryIdRetryResponses, PostApiV1AdminWebhooksByIdDeliveriesByDeliveryIdRetryErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/webhooks/{id}/deliveries/{deliveryId}/retry',
-    ...options
-});
+export const postApiV1AdminWebhooksByIdDeliveriesByDeliveryIdRetry = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminWebhooksByIdDeliveriesByDeliveryIdRetryData, ThrowOnError>): RequestResult<PostApiV1AdminWebhooksByIdDeliveriesByDeliveryIdRetryResponses, PostApiV1AdminWebhooksByIdDeliveriesByDeliveryIdRetryErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminWebhooksByIdDeliveriesByDeliveryIdRetryResponses, PostApiV1AdminWebhooksByIdDeliveriesByDeliveryIdRetryErrors, ThrowOnError>({ url: '/api/v1/admin/webhooks/{id}/deliveries/{deliveryId}/retry', ...options });
 
 /**
  * List recent store events, newest first
  */
-export const getApiV1AdminEvents = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminEventsData, ThrowOnError>): RequestResult<GetApiV1AdminEventsResponses, GetApiV1AdminEventsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminEventsResponses, GetApiV1AdminEventsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/events',
-    ...options
-});
+export const getApiV1AdminEvents = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminEventsData, ThrowOnError>): RequestResult<GetApiV1AdminEventsResponses, GetApiV1AdminEventsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminEventsResponses, GetApiV1AdminEventsErrors, ThrowOnError>({ url: '/api/v1/admin/events', ...options });
 
 /**
  * List installed apps
  *
  * Apps compiled into this deployment appear as installed (not running) until a Super Admin activates them.
  */
-export const getApiV1AdminApps = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminAppsData, ThrowOnError>): RequestResult<GetApiV1AdminAppsResponses, GetApiV1AdminAppsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminAppsResponses, GetApiV1AdminAppsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/apps',
-    ...options
-});
+export const getApiV1AdminApps = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminAppsData, ThrowOnError>): RequestResult<GetApiV1AdminAppsResponses, GetApiV1AdminAppsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminAppsResponses, GetApiV1AdminAppsErrors, ThrowOnError>({ url: '/api/v1/admin/apps', ...options });
 
 /**
  * List what active apps add to the dashboard
  *
  * Pages (navigation entries), resource cards, actions and home widgets of every active app, from their manifests. Their content comes from each app's own admin routes.
  */
-export const getApiV1AdminAppsSurfaces = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminAppsSurfacesData, ThrowOnError>): RequestResult<GetApiV1AdminAppsSurfacesResponses, GetApiV1AdminAppsSurfacesErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminAppsSurfacesResponses, GetApiV1AdminAppsSurfacesErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/apps/surfaces',
-    ...options
-});
+export const getApiV1AdminAppsSurfaces = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminAppsSurfacesData, ThrowOnError>): RequestResult<GetApiV1AdminAppsSurfacesResponses, GetApiV1AdminAppsSurfacesErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminAppsSurfacesResponses, GetApiV1AdminAppsSurfacesErrors, ThrowOnError>({ url: '/api/v1/admin/apps/surfaces', ...options });
 
 /**
  * Get one app: what it asks to access, its settings and its jobs
  */
-export const getApiV1AdminAppsById = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminAppsByIdData, ThrowOnError>): RequestResult<GetApiV1AdminAppsByIdResponses, GetApiV1AdminAppsByIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminAppsByIdResponses, GetApiV1AdminAppsByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/apps/{id}',
-    ...options
-});
+export const getApiV1AdminAppsById = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminAppsByIdData, ThrowOnError>): RequestResult<GetApiV1AdminAppsByIdResponses, GetApiV1AdminAppsByIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminAppsByIdResponses, GetApiV1AdminAppsByIdErrors, ThrowOnError>({ url: '/api/v1/admin/apps/{id}', ...options });
 
 /**
  * Approve an app's access and start it (Super Admin)
@@ -10923,11 +5794,6 @@ export const getApiV1AdminAppsById = <ThrowOnError extends boolean = false>(opti
  * Records the approved grant and the approving Super Admin; the app's API writes are recorded as theirs. Runs the app's install (first time) and activate hooks; a failing hook is reported, not fatal.
  */
 export const postApiV1AdminAppsByIdActivate = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminAppsByIdActivateData, ThrowOnError>): RequestResult<PostApiV1AdminAppsByIdActivateResponses, PostApiV1AdminAppsByIdActivateErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminAppsByIdActivateResponses, PostApiV1AdminAppsByIdActivateErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }],
     url: '/api/v1/admin/apps/{id}/activate',
     ...options,
     headers: {
@@ -10940,15 +5806,6 @@ export const postApiV1AdminAppsByIdActivate = <ThrowOnError extends boolean = fa
  * Stop an app (its data and settings stay)
  */
 export const postApiV1AdminAppsByIdDeactivate = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminAppsByIdDeactivateData, ThrowOnError>): RequestResult<PostApiV1AdminAppsByIdDeactivateResponses, PostApiV1AdminAppsByIdDeactivateErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminAppsByIdDeactivateResponses, PostApiV1AdminAppsByIdDeactivateErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/apps/{id}/deactivate',
     ...options,
     headers: {
@@ -10963,15 +5820,6 @@ export const postApiV1AdminAppsByIdDeactivate = <ThrowOnError extends boolean = 
  * The whole settings document, validated against the app's schema. A secret is write-only: send a new value to set it, null to clear it, or leave it out to keep it.
  */
 export const putApiV1AdminAppsByIdSettings = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminAppsByIdSettingsData, ThrowOnError>): RequestResult<PutApiV1AdminAppsByIdSettingsResponses, PutApiV1AdminAppsByIdSettingsErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminAppsByIdSettingsResponses, PutApiV1AdminAppsByIdSettingsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/apps/{id}/settings',
     ...options,
     headers: {
@@ -10986,15 +5834,6 @@ export const putApiV1AdminAppsByIdSettings = <ThrowOnError extends boolean = fal
  * keepData false deletes the app's stored records, key/value data, logs, delivery and job history and its custom fields (with their values). An app compiled into this deployment appears again as installed; remove it from the deployment with pnpm plugin remove.
  */
 export const postApiV1AdminAppsByIdUninstall = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminAppsByIdUninstallData, ThrowOnError>): RequestResult<PostApiV1AdminAppsByIdUninstallResponses, PostApiV1AdminAppsByIdUninstallErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminAppsByIdUninstallResponses, PostApiV1AdminAppsByIdUninstallErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/apps/{id}/uninstall',
     ...options,
     headers: {
@@ -11006,72 +5845,24 @@ export const postApiV1AdminAppsByIdUninstall = <ThrowOnError extends boolean = f
 /**
  * An app's newest log lines (masked), newest first
  */
-export const getApiV1AdminAppsByIdLogs = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminAppsByIdLogsData, ThrowOnError>): RequestResult<GetApiV1AdminAppsByIdLogsResponses, GetApiV1AdminAppsByIdLogsErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminAppsByIdLogsResponses, GetApiV1AdminAppsByIdLogsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/apps/{id}/logs',
-    ...options
-});
+export const getApiV1AdminAppsByIdLogs = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminAppsByIdLogsData, ThrowOnError>): RequestResult<GetApiV1AdminAppsByIdLogsResponses, GetApiV1AdminAppsByIdLogsErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminAppsByIdLogsResponses, GetApiV1AdminAppsByIdLogsErrors, ThrowOnError>({ url: '/api/v1/admin/apps/{id}/logs', ...options });
 
 /**
  * List an app's deliveries, newest first
  */
-export const getApiV1AdminAppsByIdDeliveries = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminAppsByIdDeliveriesData, ThrowOnError>): RequestResult<GetApiV1AdminAppsByIdDeliveriesResponses, GetApiV1AdminAppsByIdDeliveriesErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminAppsByIdDeliveriesResponses, GetApiV1AdminAppsByIdDeliveriesErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/apps/{id}/deliveries',
-    ...options
-});
+export const getApiV1AdminAppsByIdDeliveries = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminAppsByIdDeliveriesData, ThrowOnError>): RequestResult<GetApiV1AdminAppsByIdDeliveriesResponses, GetApiV1AdminAppsByIdDeliveriesErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminAppsByIdDeliveriesResponses, GetApiV1AdminAppsByIdDeliveriesErrors, ThrowOnError>({ url: '/api/v1/admin/apps/{id}/deliveries', ...options });
 
 /**
  * Send a failed, exhausted or cancelled delivery to the app again
  */
-export const postApiV1AdminAppsByIdDeliveriesByDeliveryIdRetry = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminAppsByIdDeliveriesByDeliveryIdRetryData, ThrowOnError>): RequestResult<PostApiV1AdminAppsByIdDeliveriesByDeliveryIdRetryResponses, PostApiV1AdminAppsByIdDeliveriesByDeliveryIdRetryErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminAppsByIdDeliveriesByDeliveryIdRetryResponses, PostApiV1AdminAppsByIdDeliveriesByDeliveryIdRetryErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/apps/{id}/deliveries/{deliveryId}/retry',
-    ...options
-});
+export const postApiV1AdminAppsByIdDeliveriesByDeliveryIdRetry = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminAppsByIdDeliveriesByDeliveryIdRetryData, ThrowOnError>): RequestResult<PostApiV1AdminAppsByIdDeliveriesByDeliveryIdRetryResponses, PostApiV1AdminAppsByIdDeliveriesByDeliveryIdRetryErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminAppsByIdDeliveriesByDeliveryIdRetryResponses, PostApiV1AdminAppsByIdDeliveriesByDeliveryIdRetryErrors, ThrowOnError>({ url: '/api/v1/admin/apps/{id}/deliveries/{deliveryId}/retry', ...options });
 
 /**
  * List custom field definitions
  *
  * Definitions in their display order, optionally for one owner type, each with how many owners hold a value.
  */
-export const getApiV1AdminCustomFieldDefinitions = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminCustomFieldDefinitionsData, ThrowOnError>): RequestResult<GetApiV1AdminCustomFieldDefinitionsResponses, GetApiV1AdminCustomFieldDefinitionsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminCustomFieldDefinitionsResponses, GetApiV1AdminCustomFieldDefinitionsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/custom-field-definitions',
-    ...options
-});
+export const getApiV1AdminCustomFieldDefinitions = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminCustomFieldDefinitionsData, ThrowOnError>): RequestResult<GetApiV1AdminCustomFieldDefinitionsResponses, GetApiV1AdminCustomFieldDefinitionsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminCustomFieldDefinitionsResponses, GetApiV1AdminCustomFieldDefinitionsErrors, ThrowOnError>({ url: '/api/v1/admin/custom-field-definitions', ...options });
 
 /**
  * Create a custom field definition
@@ -11079,15 +5870,6 @@ export const getApiV1AdminCustomFieldDefinitions = <ThrowOnError extends boolean
  * Adds a field at the end of its owner type's order. Owner type, namespace, key and type are fixed once created.
  */
 export const postApiV1AdminCustomFieldDefinitions = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminCustomFieldDefinitionsData, ThrowOnError>): RequestResult<PostApiV1AdminCustomFieldDefinitionsResponses, PostApiV1AdminCustomFieldDefinitionsErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminCustomFieldDefinitionsResponses, PostApiV1AdminCustomFieldDefinitionsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/custom-field-definitions',
     ...options,
     headers: {
@@ -11099,36 +5881,12 @@ export const postApiV1AdminCustomFieldDefinitions = <ThrowOnError extends boolea
 /**
  * Delete a custom field definition and every value of it
  */
-export const deleteApiV1AdminCustomFieldDefinitionsById = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminCustomFieldDefinitionsByIdData, ThrowOnError>): RequestResult<DeleteApiV1AdminCustomFieldDefinitionsByIdResponses, DeleteApiV1AdminCustomFieldDefinitionsByIdErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminCustomFieldDefinitionsByIdResponses, DeleteApiV1AdminCustomFieldDefinitionsByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/custom-field-definitions/{id}',
-    ...options
-});
+export const deleteApiV1AdminCustomFieldDefinitionsById = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminCustomFieldDefinitionsByIdData, ThrowOnError>): RequestResult<DeleteApiV1AdminCustomFieldDefinitionsByIdResponses, DeleteApiV1AdminCustomFieldDefinitionsByIdErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminCustomFieldDefinitionsByIdResponses, DeleteApiV1AdminCustomFieldDefinitionsByIdErrors, ThrowOnError>({ url: '/api/v1/admin/custom-field-definitions/{id}', ...options });
 
 /**
  * Get a custom field definition
  */
-export const getApiV1AdminCustomFieldDefinitionsById = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminCustomFieldDefinitionsByIdData, ThrowOnError>): RequestResult<GetApiV1AdminCustomFieldDefinitionsByIdResponses, GetApiV1AdminCustomFieldDefinitionsByIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminCustomFieldDefinitionsByIdResponses, GetApiV1AdminCustomFieldDefinitionsByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/custom-field-definitions/{id}',
-    ...options
-});
+export const getApiV1AdminCustomFieldDefinitionsById = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminCustomFieldDefinitionsByIdData, ThrowOnError>): RequestResult<GetApiV1AdminCustomFieldDefinitionsByIdResponses, GetApiV1AdminCustomFieldDefinitionsByIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminCustomFieldDefinitionsByIdResponses, GetApiV1AdminCustomFieldDefinitionsByIdErrors, ThrowOnError>({ url: '/api/v1/admin/custom-field-definitions/{id}', ...options });
 
 /**
  * Edit a custom field definition
@@ -11136,15 +5894,6 @@ export const getApiV1AdminCustomFieldDefinitionsById = <ThrowOnError extends boo
  * Changes the name, description, validations or storefront visibility under the definition's revision. Existing values are not re-validated.
  */
 export const patchApiV1AdminCustomFieldDefinitionsById = <ThrowOnError extends boolean = false>(options: Options<PatchApiV1AdminCustomFieldDefinitionsByIdData, ThrowOnError>): RequestResult<PatchApiV1AdminCustomFieldDefinitionsByIdResponses, PatchApiV1AdminCustomFieldDefinitionsByIdErrors, ThrowOnError> => (options.client ?? client).patch<PatchApiV1AdminCustomFieldDefinitionsByIdResponses, PatchApiV1AdminCustomFieldDefinitionsByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/custom-field-definitions/{id}',
     ...options,
     headers: {
@@ -11159,15 +5908,6 @@ export const patchApiV1AdminCustomFieldDefinitionsById = <ThrowOnError extends b
  * Takes every definition of the owner type, each at its current revision, in the new order (all or none).
  */
 export const postApiV1AdminCustomFieldDefinitionsReorder = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminCustomFieldDefinitionsReorderData, ThrowOnError>): RequestResult<PostApiV1AdminCustomFieldDefinitionsReorderResponses, PostApiV1AdminCustomFieldDefinitionsReorderErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminCustomFieldDefinitionsReorderResponses, PostApiV1AdminCustomFieldDefinitionsReorderErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/custom-field-definitions/reorder',
     ...options,
     headers: {
@@ -11179,19 +5919,7 @@ export const postApiV1AdminCustomFieldDefinitionsReorder = <ThrowOnError extends
 /**
  * Get a product's custom fields
  */
-export const getApiV1AdminCustomFieldsProductByOwnerId = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminCustomFieldsProductByOwnerIdData, ThrowOnError>): RequestResult<GetApiV1AdminCustomFieldsProductByOwnerIdResponses, GetApiV1AdminCustomFieldsProductByOwnerIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminCustomFieldsProductByOwnerIdResponses, GetApiV1AdminCustomFieldsProductByOwnerIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/custom-fields/product/{ownerId}',
-    ...options
-});
+export const getApiV1AdminCustomFieldsProductByOwnerId = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminCustomFieldsProductByOwnerIdData, ThrowOnError>): RequestResult<GetApiV1AdminCustomFieldsProductByOwnerIdResponses, GetApiV1AdminCustomFieldsProductByOwnerIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminCustomFieldsProductByOwnerIdResponses, GetApiV1AdminCustomFieldsProductByOwnerIdErrors, ThrowOnError>({ url: '/api/v1/admin/custom-fields/product/{ownerId}', ...options });
 
 /**
  * Set or clear a product's custom fields
@@ -11199,15 +5927,6 @@ export const getApiV1AdminCustomFieldsProductByOwnerId = <ThrowOnError extends b
  * Validates every value and writes them in one batch (all or none). Null, an empty string or an empty list clears a value. Only `custom` namespace fields are writable here.
  */
 export const putApiV1AdminCustomFieldsProductByOwnerId = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminCustomFieldsProductByOwnerIdData, ThrowOnError>): RequestResult<PutApiV1AdminCustomFieldsProductByOwnerIdResponses, PutApiV1AdminCustomFieldsProductByOwnerIdErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminCustomFieldsProductByOwnerIdResponses, PutApiV1AdminCustomFieldsProductByOwnerIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/custom-fields/product/{ownerId}',
     ...options,
     headers: {
@@ -11219,19 +5938,7 @@ export const putApiV1AdminCustomFieldsProductByOwnerId = <ThrowOnError extends b
 /**
  * Get a product variant (SKU)'s custom fields
  */
-export const getApiV1AdminCustomFieldsVariantByOwnerId = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminCustomFieldsVariantByOwnerIdData, ThrowOnError>): RequestResult<GetApiV1AdminCustomFieldsVariantByOwnerIdResponses, GetApiV1AdminCustomFieldsVariantByOwnerIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminCustomFieldsVariantByOwnerIdResponses, GetApiV1AdminCustomFieldsVariantByOwnerIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/custom-fields/variant/{ownerId}',
-    ...options
-});
+export const getApiV1AdminCustomFieldsVariantByOwnerId = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminCustomFieldsVariantByOwnerIdData, ThrowOnError>): RequestResult<GetApiV1AdminCustomFieldsVariantByOwnerIdResponses, GetApiV1AdminCustomFieldsVariantByOwnerIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminCustomFieldsVariantByOwnerIdResponses, GetApiV1AdminCustomFieldsVariantByOwnerIdErrors, ThrowOnError>({ url: '/api/v1/admin/custom-fields/variant/{ownerId}', ...options });
 
 /**
  * Set or clear a product variant (SKU)'s custom fields
@@ -11239,15 +5946,6 @@ export const getApiV1AdminCustomFieldsVariantByOwnerId = <ThrowOnError extends b
  * Validates every value and writes them in one batch (all or none). Null, an empty string or an empty list clears a value. Only `custom` namespace fields are writable here.
  */
 export const putApiV1AdminCustomFieldsVariantByOwnerId = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminCustomFieldsVariantByOwnerIdData, ThrowOnError>): RequestResult<PutApiV1AdminCustomFieldsVariantByOwnerIdResponses, PutApiV1AdminCustomFieldsVariantByOwnerIdErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminCustomFieldsVariantByOwnerIdResponses, PutApiV1AdminCustomFieldsVariantByOwnerIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/custom-fields/variant/{ownerId}',
     ...options,
     headers: {
@@ -11259,19 +5957,7 @@ export const putApiV1AdminCustomFieldsVariantByOwnerId = <ThrowOnError extends b
 /**
  * Get a customer's custom fields
  */
-export const getApiV1AdminCustomFieldsCustomerByOwnerId = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminCustomFieldsCustomerByOwnerIdData, ThrowOnError>): RequestResult<GetApiV1AdminCustomFieldsCustomerByOwnerIdResponses, GetApiV1AdminCustomFieldsCustomerByOwnerIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminCustomFieldsCustomerByOwnerIdResponses, GetApiV1AdminCustomFieldsCustomerByOwnerIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/custom-fields/customer/{ownerId}',
-    ...options
-});
+export const getApiV1AdminCustomFieldsCustomerByOwnerId = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminCustomFieldsCustomerByOwnerIdData, ThrowOnError>): RequestResult<GetApiV1AdminCustomFieldsCustomerByOwnerIdResponses, GetApiV1AdminCustomFieldsCustomerByOwnerIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminCustomFieldsCustomerByOwnerIdResponses, GetApiV1AdminCustomFieldsCustomerByOwnerIdErrors, ThrowOnError>({ url: '/api/v1/admin/custom-fields/customer/{ownerId}', ...options });
 
 /**
  * Set or clear a customer's custom fields
@@ -11279,15 +5965,6 @@ export const getApiV1AdminCustomFieldsCustomerByOwnerId = <ThrowOnError extends 
  * Validates every value and writes them in one batch (all or none). Null, an empty string or an empty list clears a value. Only `custom` namespace fields are writable here.
  */
 export const putApiV1AdminCustomFieldsCustomerByOwnerId = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminCustomFieldsCustomerByOwnerIdData, ThrowOnError>): RequestResult<PutApiV1AdminCustomFieldsCustomerByOwnerIdResponses, PutApiV1AdminCustomFieldsCustomerByOwnerIdErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminCustomFieldsCustomerByOwnerIdResponses, PutApiV1AdminCustomFieldsCustomerByOwnerIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/custom-fields/customer/{ownerId}',
     ...options,
     headers: {
@@ -11299,19 +5976,7 @@ export const putApiV1AdminCustomFieldsCustomerByOwnerId = <ThrowOnError extends 
 /**
  * Get a order's custom fields
  */
-export const getApiV1AdminCustomFieldsOrderByOwnerId = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminCustomFieldsOrderByOwnerIdData, ThrowOnError>): RequestResult<GetApiV1AdminCustomFieldsOrderByOwnerIdResponses, GetApiV1AdminCustomFieldsOrderByOwnerIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminCustomFieldsOrderByOwnerIdResponses, GetApiV1AdminCustomFieldsOrderByOwnerIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/custom-fields/order/{ownerId}',
-    ...options
-});
+export const getApiV1AdminCustomFieldsOrderByOwnerId = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminCustomFieldsOrderByOwnerIdData, ThrowOnError>): RequestResult<GetApiV1AdminCustomFieldsOrderByOwnerIdResponses, GetApiV1AdminCustomFieldsOrderByOwnerIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminCustomFieldsOrderByOwnerIdResponses, GetApiV1AdminCustomFieldsOrderByOwnerIdErrors, ThrowOnError>({ url: '/api/v1/admin/custom-fields/order/{ownerId}', ...options });
 
 /**
  * Set or clear a order's custom fields
@@ -11319,15 +5984,6 @@ export const getApiV1AdminCustomFieldsOrderByOwnerId = <ThrowOnError extends boo
  * Validates every value and writes them in one batch (all or none). Null, an empty string or an empty list clears a value. Only `custom` namespace fields are writable here.
  */
 export const putApiV1AdminCustomFieldsOrderByOwnerId = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminCustomFieldsOrderByOwnerIdData, ThrowOnError>): RequestResult<PutApiV1AdminCustomFieldsOrderByOwnerIdResponses, PutApiV1AdminCustomFieldsOrderByOwnerIdErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminCustomFieldsOrderByOwnerIdResponses, PutApiV1AdminCustomFieldsOrderByOwnerIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/custom-fields/order/{ownerId}',
     ...options,
     headers: {
@@ -11339,19 +5995,7 @@ export const putApiV1AdminCustomFieldsOrderByOwnerId = <ThrowOnError extends boo
 /**
  * Get a category's custom fields
  */
-export const getApiV1AdminCustomFieldsCategoryByOwnerId = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminCustomFieldsCategoryByOwnerIdData, ThrowOnError>): RequestResult<GetApiV1AdminCustomFieldsCategoryByOwnerIdResponses, GetApiV1AdminCustomFieldsCategoryByOwnerIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminCustomFieldsCategoryByOwnerIdResponses, GetApiV1AdminCustomFieldsCategoryByOwnerIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/custom-fields/category/{ownerId}',
-    ...options
-});
+export const getApiV1AdminCustomFieldsCategoryByOwnerId = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminCustomFieldsCategoryByOwnerIdData, ThrowOnError>): RequestResult<GetApiV1AdminCustomFieldsCategoryByOwnerIdResponses, GetApiV1AdminCustomFieldsCategoryByOwnerIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminCustomFieldsCategoryByOwnerIdResponses, GetApiV1AdminCustomFieldsCategoryByOwnerIdErrors, ThrowOnError>({ url: '/api/v1/admin/custom-fields/category/{ownerId}', ...options });
 
 /**
  * Set or clear a category's custom fields
@@ -11359,15 +6003,6 @@ export const getApiV1AdminCustomFieldsCategoryByOwnerId = <ThrowOnError extends 
  * Validates every value and writes them in one batch (all or none). Null, an empty string or an empty list clears a value. Only `custom` namespace fields are writable here.
  */
 export const putApiV1AdminCustomFieldsCategoryByOwnerId = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminCustomFieldsCategoryByOwnerIdData, ThrowOnError>): RequestResult<PutApiV1AdminCustomFieldsCategoryByOwnerIdResponses, PutApiV1AdminCustomFieldsCategoryByOwnerIdErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminCustomFieldsCategoryByOwnerIdResponses, PutApiV1AdminCustomFieldsCategoryByOwnerIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/custom-fields/category/{ownerId}',
     ...options,
     headers: {
@@ -11379,19 +6014,7 @@ export const putApiV1AdminCustomFieldsCategoryByOwnerId = <ThrowOnError extends 
 /**
  * Get a collection's custom fields
  */
-export const getApiV1AdminCustomFieldsCollectionByOwnerId = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminCustomFieldsCollectionByOwnerIdData, ThrowOnError>): RequestResult<GetApiV1AdminCustomFieldsCollectionByOwnerIdResponses, GetApiV1AdminCustomFieldsCollectionByOwnerIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminCustomFieldsCollectionByOwnerIdResponses, GetApiV1AdminCustomFieldsCollectionByOwnerIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/custom-fields/collection/{ownerId}',
-    ...options
-});
+export const getApiV1AdminCustomFieldsCollectionByOwnerId = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminCustomFieldsCollectionByOwnerIdData, ThrowOnError>): RequestResult<GetApiV1AdminCustomFieldsCollectionByOwnerIdResponses, GetApiV1AdminCustomFieldsCollectionByOwnerIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminCustomFieldsCollectionByOwnerIdResponses, GetApiV1AdminCustomFieldsCollectionByOwnerIdErrors, ThrowOnError>({ url: '/api/v1/admin/custom-fields/collection/{ownerId}', ...options });
 
 /**
  * Set or clear a collection's custom fields
@@ -11399,15 +6022,6 @@ export const getApiV1AdminCustomFieldsCollectionByOwnerId = <ThrowOnError extend
  * Validates every value and writes them in one batch (all or none). Null, an empty string or an empty list clears a value. Only `custom` namespace fields are writable here.
  */
 export const putApiV1AdminCustomFieldsCollectionByOwnerId = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminCustomFieldsCollectionByOwnerIdData, ThrowOnError>): RequestResult<PutApiV1AdminCustomFieldsCollectionByOwnerIdResponses, PutApiV1AdminCustomFieldsCollectionByOwnerIdErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminCustomFieldsCollectionByOwnerIdResponses, PutApiV1AdminCustomFieldsCollectionByOwnerIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/custom-fields/collection/{ownerId}',
     ...options,
     headers: {
@@ -11419,19 +6033,7 @@ export const putApiV1AdminCustomFieldsCollectionByOwnerId = <ThrowOnError extend
 /**
  * Get a brand's custom fields
  */
-export const getApiV1AdminCustomFieldsBrandByOwnerId = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminCustomFieldsBrandByOwnerIdData, ThrowOnError>): RequestResult<GetApiV1AdminCustomFieldsBrandByOwnerIdResponses, GetApiV1AdminCustomFieldsBrandByOwnerIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminCustomFieldsBrandByOwnerIdResponses, GetApiV1AdminCustomFieldsBrandByOwnerIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/custom-fields/brand/{ownerId}',
-    ...options
-});
+export const getApiV1AdminCustomFieldsBrandByOwnerId = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminCustomFieldsBrandByOwnerIdData, ThrowOnError>): RequestResult<GetApiV1AdminCustomFieldsBrandByOwnerIdResponses, GetApiV1AdminCustomFieldsBrandByOwnerIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminCustomFieldsBrandByOwnerIdResponses, GetApiV1AdminCustomFieldsBrandByOwnerIdErrors, ThrowOnError>({ url: '/api/v1/admin/custom-fields/brand/{ownerId}', ...options });
 
 /**
  * Set or clear a brand's custom fields
@@ -11439,15 +6041,6 @@ export const getApiV1AdminCustomFieldsBrandByOwnerId = <ThrowOnError extends boo
  * Validates every value and writes them in one batch (all or none). Null, an empty string or an empty list clears a value. Only `custom` namespace fields are writable here.
  */
 export const putApiV1AdminCustomFieldsBrandByOwnerId = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminCustomFieldsBrandByOwnerIdData, ThrowOnError>): RequestResult<PutApiV1AdminCustomFieldsBrandByOwnerIdResponses, PutApiV1AdminCustomFieldsBrandByOwnerIdErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminCustomFieldsBrandByOwnerIdResponses, PutApiV1AdminCustomFieldsBrandByOwnerIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/custom-fields/brand/{ownerId}',
     ...options,
     headers: {
@@ -11459,19 +6052,7 @@ export const putApiV1AdminCustomFieldsBrandByOwnerId = <ThrowOnError extends boo
 /**
  * Get a page's custom fields
  */
-export const getApiV1AdminCustomFieldsPageByOwnerId = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminCustomFieldsPageByOwnerIdData, ThrowOnError>): RequestResult<GetApiV1AdminCustomFieldsPageByOwnerIdResponses, GetApiV1AdminCustomFieldsPageByOwnerIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminCustomFieldsPageByOwnerIdResponses, GetApiV1AdminCustomFieldsPageByOwnerIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/custom-fields/page/{ownerId}',
-    ...options
-});
+export const getApiV1AdminCustomFieldsPageByOwnerId = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminCustomFieldsPageByOwnerIdData, ThrowOnError>): RequestResult<GetApiV1AdminCustomFieldsPageByOwnerIdResponses, GetApiV1AdminCustomFieldsPageByOwnerIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminCustomFieldsPageByOwnerIdResponses, GetApiV1AdminCustomFieldsPageByOwnerIdErrors, ThrowOnError>({ url: '/api/v1/admin/custom-fields/page/{ownerId}', ...options });
 
 /**
  * Set or clear a page's custom fields
@@ -11479,15 +6060,6 @@ export const getApiV1AdminCustomFieldsPageByOwnerId = <ThrowOnError extends bool
  * Validates every value and writes them in one batch (all or none). Null, an empty string or an empty list clears a value. Only `custom` namespace fields are writable here.
  */
 export const putApiV1AdminCustomFieldsPageByOwnerId = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminCustomFieldsPageByOwnerIdData, ThrowOnError>): RequestResult<PutApiV1AdminCustomFieldsPageByOwnerIdResponses, PutApiV1AdminCustomFieldsPageByOwnerIdErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminCustomFieldsPageByOwnerIdResponses, PutApiV1AdminCustomFieldsPageByOwnerIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/custom-fields/page/{ownerId}',
     ...options,
     headers: {
@@ -11499,51 +6071,22 @@ export const putApiV1AdminCustomFieldsPageByOwnerId = <ThrowOnError extends bool
 /**
  * The review moderation queue, newest first (25 per page)
  */
-export const getApiV1AdminReviews = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminReviewsData, ThrowOnError>): RequestResult<GetApiV1AdminReviewsResponses, GetApiV1AdminReviewsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminReviewsResponses, GetApiV1AdminReviewsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }],
-    url: '/api/v1/admin/reviews',
-    ...options
-});
+export const getApiV1AdminReviews = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminReviewsData, ThrowOnError>): RequestResult<GetApiV1AdminReviewsResponses, GetApiV1AdminReviewsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminReviewsResponses, GetApiV1AdminReviewsErrors, ThrowOnError>({ url: '/api/v1/admin/reviews', ...options });
 
 /**
  * Review counts per status, and one product's rating stats when asked
  */
-export const getApiV1AdminReviewsSummary = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminReviewsSummaryData, ThrowOnError>): RequestResult<GetApiV1AdminReviewsSummaryResponses, GetApiV1AdminReviewsSummaryErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminReviewsSummaryResponses, GetApiV1AdminReviewsSummaryErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }],
-    url: '/api/v1/admin/reviews/summary',
-    ...options
-});
+export const getApiV1AdminReviewsSummary = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminReviewsSummaryData, ThrowOnError>): RequestResult<GetApiV1AdminReviewsSummaryResponses, GetApiV1AdminReviewsSummaryErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminReviewsSummaryResponses, GetApiV1AdminReviewsSummaryErrors, ThrowOnError>({ url: '/api/v1/admin/reviews/summary', ...options });
 
 /**
  * Review settings: on or off, moderation mode, review requests and block words
  */
-export const getApiV1AdminReviewsSettings = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminReviewsSettingsData, ThrowOnError>): RequestResult<GetApiV1AdminReviewsSettingsResponses, GetApiV1AdminReviewsSettingsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminReviewsSettingsResponses, GetApiV1AdminReviewsSettingsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }],
-    url: '/api/v1/admin/reviews/settings',
-    ...options
-});
+export const getApiV1AdminReviewsSettings = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminReviewsSettingsData, ThrowOnError>): RequestResult<GetApiV1AdminReviewsSettingsResponses, GetApiV1AdminReviewsSettingsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminReviewsSettingsResponses, GetApiV1AdminReviewsSettingsErrors, ThrowOnError>({ url: '/api/v1/admin/reviews/settings', ...options });
 
 /**
  * Save review settings against the revision the editor loaded
  */
 export const putApiV1AdminReviewsSettings = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminReviewsSettingsData, ThrowOnError>): RequestResult<PutApiV1AdminReviewsSettingsResponses, PutApiV1AdminReviewsSettingsErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminReviewsSettingsResponses, PutApiV1AdminReviewsSettingsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }],
     url: '/api/v1/admin/reviews/settings',
     ...options,
     headers: {
@@ -11556,11 +6099,6 @@ export const putApiV1AdminReviewsSettings = <ThrowOnError extends boolean = fals
  * Publish, reject (with a content reason) or restore up to 90 reviews
  */
 export const postApiV1AdminReviewsModerate = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminReviewsModerateData, ThrowOnError>): RequestResult<PostApiV1AdminReviewsModerateResponses, PostApiV1AdminReviewsModerateErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminReviewsModerateResponses, PostApiV1AdminReviewsModerateErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }],
     url: '/api/v1/admin/reviews/moderate',
     ...options,
     headers: {
@@ -11572,25 +6110,12 @@ export const postApiV1AdminReviewsModerate = <ThrowOnError extends boolean = fal
 /**
  * One review with its product, order, reply and reviewer thread
  */
-export const getApiV1AdminReviewsById = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminReviewsByIdData, ThrowOnError>): RequestResult<GetApiV1AdminReviewsByIdResponses, GetApiV1AdminReviewsByIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminReviewsByIdResponses, GetApiV1AdminReviewsByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }],
-    url: '/api/v1/admin/reviews/{id}',
-    ...options
-});
+export const getApiV1AdminReviewsById = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminReviewsByIdData, ThrowOnError>): RequestResult<GetApiV1AdminReviewsByIdResponses, GetApiV1AdminReviewsByIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminReviewsByIdResponses, GetApiV1AdminReviewsByIdErrors, ThrowOnError>({ url: '/api/v1/admin/reviews/{id}', ...options });
 
 /**
  * Set or remove the store's public reply (guarded by the review version)
  */
 export const putApiV1AdminReviewsByIdReply = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminReviewsByIdReplyData, ThrowOnError>): RequestResult<PutApiV1AdminReviewsByIdReplyResponses, PutApiV1AdminReviewsByIdReplyErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminReviewsByIdReplyResponses, PutApiV1AdminReviewsByIdReplyErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }],
     url: '/api/v1/admin/reviews/{id}/reply',
     ...options,
     headers: {
@@ -11602,34 +6127,14 @@ export const putApiV1AdminReviewsByIdReply = <ThrowOnError extends boolean = fal
 /**
  * Open (or reuse) the private conversation with the reviewer
  */
-export const postApiV1AdminReviewsByIdConversation = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminReviewsByIdConversationData, ThrowOnError>): RequestResult<PostApiV1AdminReviewsByIdConversationResponses, PostApiV1AdminReviewsByIdConversationErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminReviewsByIdConversationResponses, PostApiV1AdminReviewsByIdConversationErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }],
-    url: '/api/v1/admin/reviews/{id}/conversation',
-    ...options
-});
+export const postApiV1AdminReviewsByIdConversation = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminReviewsByIdConversationData, ThrowOnError>): RequestResult<PostApiV1AdminReviewsByIdConversationResponses, PostApiV1AdminReviewsByIdConversationErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminReviewsByIdConversationResponses, PostApiV1AdminReviewsByIdConversationErrors, ThrowOnError>({ url: '/api/v1/admin/reviews/{id}/conversation', ...options });
 
 /**
  * Delete a digital item nobody received
  *
  * Delivered files and pools holding keys are records: archive them instead.
  */
-export const deleteApiV1AdminDigitalAssetsById = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminDigitalAssetsByIdData, ThrowOnError>): RequestResult<DeleteApiV1AdminDigitalAssetsByIdResponses, DeleteApiV1AdminDigitalAssetsByIdErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminDigitalAssetsByIdResponses, DeleteApiV1AdminDigitalAssetsByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/digital-assets/{id}',
-    ...options
-});
+export const deleteApiV1AdminDigitalAssetsById = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminDigitalAssetsByIdData, ThrowOnError>): RequestResult<DeleteApiV1AdminDigitalAssetsByIdResponses, DeleteApiV1AdminDigitalAssetsByIdErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminDigitalAssetsByIdResponses, DeleteApiV1AdminDigitalAssetsByIdErrors, ThrowOnError>({ url: '/api/v1/admin/digital-assets/{id}', ...options });
 
 /**
  * Rename a digital item, change its limits, or archive or restore it
@@ -11637,15 +6142,6 @@ export const deleteApiV1AdminDigitalAssetsById = <ThrowOnError extends boolean =
  * Limits apply to new deliveries; lines already delivered keep what they got.
  */
 export const patchApiV1AdminDigitalAssetsById = <ThrowOnError extends boolean = false>(options: Options<PatchApiV1AdminDigitalAssetsByIdData, ThrowOnError>): RequestResult<PatchApiV1AdminDigitalAssetsByIdResponses, PatchApiV1AdminDigitalAssetsByIdErrors, ThrowOnError> => (options.client ?? client).patch<PatchApiV1AdminDigitalAssetsByIdResponses, PatchApiV1AdminDigitalAssetsByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/digital-assets/{id}',
     ...options,
     headers: {
@@ -11660,15 +6156,6 @@ export const patchApiV1AdminDigitalAssetsById = <ThrowOnError extends boolean = 
  * The current file keeps downloading until the new upload completes; then everyone who bought it gets the new file.
  */
 export const postApiV1AdminDigitalAssetsByIdUploads = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminDigitalAssetsByIdUploadsData, ThrowOnError>): RequestResult<PostApiV1AdminDigitalAssetsByIdUploadsResponses, PostApiV1AdminDigitalAssetsByIdUploadsErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminDigitalAssetsByIdUploadsResponses, PostApiV1AdminDigitalAssetsByIdUploadsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/digital-assets/{id}/uploads',
     ...options,
     headers: {
@@ -11680,19 +6167,7 @@ export const postApiV1AdminDigitalAssetsByIdUploads = <ThrowOnError extends bool
 /**
  * Read an upload session (to resume it)
  */
-export const getApiV1AdminDigitalAssetsByIdUploadsByUploadId = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminDigitalAssetsByIdUploadsByUploadIdData, ThrowOnError>): RequestResult<GetApiV1AdminDigitalAssetsByIdUploadsByUploadIdResponses, GetApiV1AdminDigitalAssetsByIdUploadsByUploadIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminDigitalAssetsByIdUploadsByUploadIdResponses, GetApiV1AdminDigitalAssetsByIdUploadsByUploadIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/digital-assets/{id}/uploads/{uploadId}',
-    ...options
-});
+export const getApiV1AdminDigitalAssetsByIdUploadsByUploadId = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminDigitalAssetsByIdUploadsByUploadIdData, ThrowOnError>): RequestResult<GetApiV1AdminDigitalAssetsByIdUploadsByUploadIdResponses, GetApiV1AdminDigitalAssetsByIdUploadsByUploadIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminDigitalAssetsByIdUploadsByUploadIdResponses, GetApiV1AdminDigitalAssetsByIdUploadsByUploadIdErrors, ThrowOnError>({ url: '/api/v1/admin/digital-assets/{id}/uploads/{uploadId}', ...options });
 
 /**
  * Send one 50 MiB part of a digital file
@@ -11701,11 +6176,6 @@ export const getApiV1AdminDigitalAssetsByIdUploadsByUploadId = <ThrowOnError ext
  */
 export const putApiV1AdminDigitalAssetsByIdUploadsByUploadIdPartsByPartNumber = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminDigitalAssetsByIdUploadsByUploadIdPartsByPartNumberData, ThrowOnError>): RequestResult<PutApiV1AdminDigitalAssetsByIdUploadsByUploadIdPartsByPartNumberResponses, PutApiV1AdminDigitalAssetsByIdUploadsByUploadIdPartsByPartNumberErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminDigitalAssetsByIdUploadsByUploadIdPartsByPartNumberResponses, PutApiV1AdminDigitalAssetsByIdUploadsByUploadIdPartsByPartNumberErrors, ThrowOnError>({
     bodySerializer: null,
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }],
     url: '/api/v1/admin/digital-assets/{id}/uploads/{uploadId}/parts/{partNumber}',
     ...options,
     headers: {
@@ -11719,36 +6189,12 @@ export const putApiV1AdminDigitalAssetsByIdUploadsByUploadIdPartsByPartNumber = 
  *
  * Assembles the parts; the item becomes `ready` (delivered to new orders) and buyers who already own it get this file. Safe to repeat.
  */
-export const postApiV1AdminDigitalAssetsByIdUploadsByUploadIdComplete = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminDigitalAssetsByIdUploadsByUploadIdCompleteData, ThrowOnError>): RequestResult<PostApiV1AdminDigitalAssetsByIdUploadsByUploadIdCompleteResponses, PostApiV1AdminDigitalAssetsByIdUploadsByUploadIdCompleteErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminDigitalAssetsByIdUploadsByUploadIdCompleteResponses, PostApiV1AdminDigitalAssetsByIdUploadsByUploadIdCompleteErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/digital-assets/{id}/uploads/{uploadId}/complete',
-    ...options
-});
+export const postApiV1AdminDigitalAssetsByIdUploadsByUploadIdComplete = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminDigitalAssetsByIdUploadsByUploadIdCompleteData, ThrowOnError>): RequestResult<PostApiV1AdminDigitalAssetsByIdUploadsByUploadIdCompleteResponses, PostApiV1AdminDigitalAssetsByIdUploadsByUploadIdCompleteErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminDigitalAssetsByIdUploadsByUploadIdCompleteResponses, PostApiV1AdminDigitalAssetsByIdUploadsByUploadIdCompleteErrors, ThrowOnError>({ url: '/api/v1/admin/digital-assets/{id}/uploads/{uploadId}/complete', ...options });
 
 /**
  * List a pool's licence keys (masked), oldest first
  */
-export const getApiV1AdminDigitalAssetsByIdLicenceKeys = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminDigitalAssetsByIdLicenceKeysData, ThrowOnError>): RequestResult<GetApiV1AdminDigitalAssetsByIdLicenceKeysResponses, GetApiV1AdminDigitalAssetsByIdLicenceKeysErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminDigitalAssetsByIdLicenceKeysResponses, GetApiV1AdminDigitalAssetsByIdLicenceKeysErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/digital-assets/{id}/licence-keys',
-    ...options
-});
+export const getApiV1AdminDigitalAssetsByIdLicenceKeys = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminDigitalAssetsByIdLicenceKeysData, ThrowOnError>): RequestResult<GetApiV1AdminDigitalAssetsByIdLicenceKeysResponses, GetApiV1AdminDigitalAssetsByIdLicenceKeysErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminDigitalAssetsByIdLicenceKeysResponses, GetApiV1AdminDigitalAssetsByIdLicenceKeysErrors, ThrowOnError>({ url: '/api/v1/admin/digital-assets/{id}/licence-keys', ...options });
 
 /**
  * Import licence keys into a pool (they become the variant's stock)
@@ -11756,11 +6202,6 @@ export const getApiV1AdminDigitalAssetsByIdLicenceKeys = <ThrowOnError extends b
  * One key per entry, at most 500 per request and 200 characters each. Keys already in the pool are skipped. The keys and the stock increase commit together.
  */
 export const postApiV1AdminDigitalAssetsByIdLicenceKeys = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminDigitalAssetsByIdLicenceKeysData, ThrowOnError>): RequestResult<PostApiV1AdminDigitalAssetsByIdLicenceKeysResponses, PostApiV1AdminDigitalAssetsByIdLicenceKeysErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminDigitalAssetsByIdLicenceKeysResponses, PostApiV1AdminDigitalAssetsByIdLicenceKeysErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }],
     url: '/api/v1/admin/digital-assets/{id}/licence-keys',
     ...options,
     headers: {
@@ -11775,15 +6216,6 @@ export const postApiV1AdminDigitalAssetsByIdLicenceKeys = <ThrowOnError extends 
  * Only unused keys; keys held by checkouts in progress can't be removed.
  */
 export const postApiV1AdminDigitalAssetsByIdLicenceKeysRevoke = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminDigitalAssetsByIdLicenceKeysRevokeData, ThrowOnError>): RequestResult<PostApiV1AdminDigitalAssetsByIdLicenceKeysRevokeResponses, PostApiV1AdminDigitalAssetsByIdLicenceKeysRevokeErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminDigitalAssetsByIdLicenceKeysRevokeResponses, PostApiV1AdminDigitalAssetsByIdLicenceKeysRevokeErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/digital-assets/{id}/licence-keys/revoke',
     ...options,
     headers: {
@@ -11795,67 +6227,22 @@ export const postApiV1AdminDigitalAssetsByIdLicenceKeysRevoke = <ThrowOnError ex
 /**
  * Allow more downloads: reset a delivered file's download count
  */
-export const postApiV1AdminDigitalEntitlementsByIdReset = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminDigitalEntitlementsByIdResetData, ThrowOnError>): RequestResult<PostApiV1AdminDigitalEntitlementsByIdResetResponses, PostApiV1AdminDigitalEntitlementsByIdResetErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminDigitalEntitlementsByIdResetResponses, PostApiV1AdminDigitalEntitlementsByIdResetErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/digital-entitlements/{id}/reset',
-    ...options
-});
+export const postApiV1AdminDigitalEntitlementsByIdReset = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminDigitalEntitlementsByIdResetData, ThrowOnError>): RequestResult<PostApiV1AdminDigitalEntitlementsByIdResetResponses, PostApiV1AdminDigitalEntitlementsByIdResetErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminDigitalEntitlementsByIdResetResponses, PostApiV1AdminDigitalEntitlementsByIdResetErrors, ThrowOnError>({ url: '/api/v1/admin/digital-entitlements/{id}/reset', ...options });
 
 /**
  * Revoke a buyer's access to a delivered file or licence keys
  */
-export const postApiV1AdminDigitalEntitlementsByIdRevoke = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminDigitalEntitlementsByIdRevokeData, ThrowOnError>): RequestResult<PostApiV1AdminDigitalEntitlementsByIdRevokeResponses, PostApiV1AdminDigitalEntitlementsByIdRevokeErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminDigitalEntitlementsByIdRevokeResponses, PostApiV1AdminDigitalEntitlementsByIdRevokeErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/digital-entitlements/{id}/revoke',
-    ...options
-});
+export const postApiV1AdminDigitalEntitlementsByIdRevoke = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminDigitalEntitlementsByIdRevokeData, ThrowOnError>): RequestResult<PostApiV1AdminDigitalEntitlementsByIdRevokeResponses, PostApiV1AdminDigitalEntitlementsByIdRevokeErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminDigitalEntitlementsByIdRevokeResponses, PostApiV1AdminDigitalEntitlementsByIdRevokeErrors, ThrowOnError>({ url: '/api/v1/admin/digital-entitlements/{id}/revoke', ...options });
 
 /**
  * Warranty policies by name, with how many products use each
  */
-export const getApiV1AdminWarrantyPolicies = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminWarrantyPoliciesData, ThrowOnError>): RequestResult<GetApiV1AdminWarrantyPoliciesResponses, GetApiV1AdminWarrantyPoliciesErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminWarrantyPoliciesResponses, GetApiV1AdminWarrantyPoliciesErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/warranty-policies',
-    ...options
-});
+export const getApiV1AdminWarrantyPolicies = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminWarrantyPoliciesData, ThrowOnError>): RequestResult<GetApiV1AdminWarrantyPoliciesResponses, GetApiV1AdminWarrantyPoliciesErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminWarrantyPoliciesResponses, GetApiV1AdminWarrantyPoliciesErrors, ThrowOnError>({ url: '/api/v1/admin/warranty-policies', ...options });
 
 /**
  * Add a warranty policy (its first revision)
  */
 export const postApiV1AdminWarrantyPolicies = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminWarrantyPoliciesData, ThrowOnError>): RequestResult<PostApiV1AdminWarrantyPoliciesResponses, PostApiV1AdminWarrantyPoliciesErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminWarrantyPoliciesResponses, PostApiV1AdminWarrantyPoliciesErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/warranty-policies',
     ...options,
     headers: {
@@ -11867,50 +6254,17 @@ export const postApiV1AdminWarrantyPolicies = <ThrowOnError extends boolean = fa
 /**
  * Archive a policy: buyers stop seeing it and new orders stop freezing it (orders keep theirs)
  */
-export const deleteApiV1AdminWarrantyPoliciesById = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminWarrantyPoliciesByIdData, ThrowOnError>): RequestResult<DeleteApiV1AdminWarrantyPoliciesByIdResponses, DeleteApiV1AdminWarrantyPoliciesByIdErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminWarrantyPoliciesByIdResponses, DeleteApiV1AdminWarrantyPoliciesByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/warranty-policies/{id}',
-    ...options
-});
+export const deleteApiV1AdminWarrantyPoliciesById = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminWarrantyPoliciesByIdData, ThrowOnError>): RequestResult<DeleteApiV1AdminWarrantyPoliciesByIdResponses, DeleteApiV1AdminWarrantyPoliciesByIdErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminWarrantyPoliciesByIdResponses, DeleteApiV1AdminWarrantyPoliciesByIdErrors, ThrowOnError>({ url: '/api/v1/admin/warranty-policies/{id}', ...options });
 
 /**
  * One warranty policy
  */
-export const getApiV1AdminWarrantyPoliciesById = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminWarrantyPoliciesByIdData, ThrowOnError>): RequestResult<GetApiV1AdminWarrantyPoliciesByIdResponses, GetApiV1AdminWarrantyPoliciesByIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminWarrantyPoliciesByIdResponses, GetApiV1AdminWarrantyPoliciesByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/warranty-policies/{id}',
-    ...options
-});
+export const getApiV1AdminWarrantyPoliciesById = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminWarrantyPoliciesByIdData, ThrowOnError>): RequestResult<GetApiV1AdminWarrantyPoliciesByIdResponses, GetApiV1AdminWarrantyPoliciesByIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminWarrantyPoliciesByIdResponses, GetApiV1AdminWarrantyPoliciesByIdErrors, ThrowOnError>({ url: '/api/v1/admin/warranty-policies/{id}', ...options });
 
 /**
  * Edit a policy: a change makes the next revision (orders keep the one they bought)
  */
 export const putApiV1AdminWarrantyPoliciesById = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminWarrantyPoliciesByIdData, ThrowOnError>): RequestResult<PutApiV1AdminWarrantyPoliciesByIdResponses, PutApiV1AdminWarrantyPoliciesByIdErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminWarrantyPoliciesByIdResponses, PutApiV1AdminWarrantyPoliciesByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/warranty-policies/{id}',
     ...options,
     headers: {
@@ -11922,38 +6276,14 @@ export const putApiV1AdminWarrantyPoliciesById = <ThrowOnError extends boolean =
 /**
  * Restore an archived policy; products still using it show it again
  */
-export const postApiV1AdminWarrantyPoliciesByIdRestore = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminWarrantyPoliciesByIdRestoreData, ThrowOnError>): RequestResult<PostApiV1AdminWarrantyPoliciesByIdRestoreResponses, PostApiV1AdminWarrantyPoliciesByIdRestoreErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminWarrantyPoliciesByIdRestoreResponses, PostApiV1AdminWarrantyPoliciesByIdRestoreErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/warranty-policies/{id}/restore',
-    ...options
-});
+export const postApiV1AdminWarrantyPoliciesByIdRestore = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminWarrantyPoliciesByIdRestoreData, ThrowOnError>): RequestResult<PostApiV1AdminWarrantyPoliciesByIdRestoreResponses, PostApiV1AdminWarrantyPoliciesByIdRestoreErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminWarrantyPoliciesByIdRestoreResponses, PostApiV1AdminWarrantyPoliciesByIdRestoreErrors, ThrowOnError>({ url: '/api/v1/admin/warranty-policies/{id}/restore', ...options });
 
 /**
  * List gift cards
  *
  * Newest first, keyset paginated. `q` matches the last 4 characters of a code or a customer's name, phone or email.
  */
-export const getApiV1AdminGiftCards = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminGiftCardsData, ThrowOnError>): RequestResult<GetApiV1AdminGiftCardsResponses, GetApiV1AdminGiftCardsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminGiftCardsResponses, GetApiV1AdminGiftCardsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/gift-cards',
-    ...options
-});
+export const getApiV1AdminGiftCards = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminGiftCardsData, ThrowOnError>): RequestResult<GetApiV1AdminGiftCardsResponses, GetApiV1AdminGiftCardsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminGiftCardsResponses, GetApiV1AdminGiftCardsErrors, ThrowOnError>({ url: '/api/v1/admin/gift-cards', ...options });
 
 /**
  * Issue a gift card
@@ -11961,11 +6291,6 @@ export const getApiV1AdminGiftCards = <ThrowOnError extends boolean = false>(opt
  * Issues a manual gift card. Idempotent by `requestKey`. The response carries the full code once; afterwards staff see the last 4 characters only.
  */
 export const postApiV1AdminGiftCards = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminGiftCardsData, ThrowOnError>): RequestResult<PostApiV1AdminGiftCardsResponses, PostApiV1AdminGiftCardsErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminGiftCardsResponses, PostApiV1AdminGiftCardsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }],
     url: '/api/v1/admin/gift-cards',
     ...options,
     headers: {
@@ -11979,36 +6304,12 @@ export const postApiV1AdminGiftCards = <ThrowOnError extends boolean = false>(op
  *
  * The store's liability: the balance left on active, unexpired cards, per currency.
  */
-export const getApiV1AdminGiftCardsSummary = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminGiftCardsSummaryData, ThrowOnError>): RequestResult<GetApiV1AdminGiftCardsSummaryResponses, GetApiV1AdminGiftCardsSummaryErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminGiftCardsSummaryResponses, GetApiV1AdminGiftCardsSummaryErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/gift-cards/summary',
-    ...options
-});
+export const getApiV1AdminGiftCardsSummary = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminGiftCardsSummaryData, ThrowOnError>): RequestResult<GetApiV1AdminGiftCardsSummaryResponses, GetApiV1AdminGiftCardsSummaryErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminGiftCardsSummaryResponses, GetApiV1AdminGiftCardsSummaryErrors, ThrowOnError>({ url: '/api/v1/admin/gift-cards/summary', ...options });
 
 /**
  * Get a gift card and its transactions
  */
-export const getApiV1AdminGiftCardsByGiftCardId = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminGiftCardsByGiftCardIdData, ThrowOnError>): RequestResult<GetApiV1AdminGiftCardsByGiftCardIdResponses, GetApiV1AdminGiftCardsByGiftCardIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminGiftCardsByGiftCardIdResponses, GetApiV1AdminGiftCardsByGiftCardIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/gift-cards/{giftCardId}',
-    ...options
-});
+export const getApiV1AdminGiftCardsByGiftCardId = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminGiftCardsByGiftCardIdData, ThrowOnError>): RequestResult<GetApiV1AdminGiftCardsByGiftCardIdResponses, GetApiV1AdminGiftCardsByGiftCardIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminGiftCardsByGiftCardIdResponses, GetApiV1AdminGiftCardsByGiftCardIdErrors, ThrowOnError>({ url: '/api/v1/admin/gift-cards/{giftCardId}', ...options });
 
 /**
  * Update a gift card
@@ -12016,11 +6317,6 @@ export const getApiV1AdminGiftCardsByGiftCardId = <ThrowOnError extends boolean 
  * Disable or enable, change or remove the expiry, change the owning customer or the staff note. Requires the current `version`.
  */
 export const patchApiV1AdminGiftCardsByGiftCardId = <ThrowOnError extends boolean = false>(options: Options<PatchApiV1AdminGiftCardsByGiftCardIdData, ThrowOnError>): RequestResult<PatchApiV1AdminGiftCardsByGiftCardIdResponses, PatchApiV1AdminGiftCardsByGiftCardIdErrors, ThrowOnError> => (options.client ?? client).patch<PatchApiV1AdminGiftCardsByGiftCardIdResponses, PatchApiV1AdminGiftCardsByGiftCardIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }],
     url: '/api/v1/admin/gift-cards/{giftCardId}',
     ...options,
     headers: {
@@ -12035,11 +6331,6 @@ export const patchApiV1AdminGiftCardsByGiftCardId = <ThrowOnError extends boolea
  * Adds (positive) or removes (negative) balance with a required reason, as one ledger transaction. Idempotent by `requestKey`.
  */
 export const postApiV1AdminGiftCardsByGiftCardIdAdjust = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminGiftCardsByGiftCardIdAdjustData, ThrowOnError>): RequestResult<PostApiV1AdminGiftCardsByGiftCardIdAdjustResponses, PostApiV1AdminGiftCardsByGiftCardIdAdjustErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminGiftCardsByGiftCardIdAdjustResponses, PostApiV1AdminGiftCardsByGiftCardIdAdjustErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }],
     url: '/api/v1/admin/gift-cards/{giftCardId}/adjust',
     ...options,
     headers: {
@@ -12053,59 +6344,22 @@ export const postApiV1AdminGiftCardsByGiftCardIdAdjust = <ThrowOnError extends b
  *
  * Queues the gift card email/SMS again to the card's recipient, else the order contact, else the owning customer.
  */
-export const postApiV1AdminGiftCardsByGiftCardIdResend = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminGiftCardsByGiftCardIdResendData, ThrowOnError>): RequestResult<PostApiV1AdminGiftCardsByGiftCardIdResendResponses, PostApiV1AdminGiftCardsByGiftCardIdResendErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminGiftCardsByGiftCardIdResendResponses, PostApiV1AdminGiftCardsByGiftCardIdResendErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }],
-    url: '/api/v1/admin/gift-cards/{giftCardId}/resend',
-    ...options
-});
+export const postApiV1AdminGiftCardsByGiftCardIdResend = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminGiftCardsByGiftCardIdResendData, ThrowOnError>): RequestResult<PostApiV1AdminGiftCardsByGiftCardIdResendResponses, PostApiV1AdminGiftCardsByGiftCardIdResendErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminGiftCardsByGiftCardIdResendResponses, PostApiV1AdminGiftCardsByGiftCardIdResendErrors, ThrowOnError>({ url: '/api/v1/admin/gift-cards/{giftCardId}/resend', ...options });
 
 /**
  * Warranty claims, newest first (25 per page); by status or order
  */
-export const getApiV1AdminWarrantyClaims = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminWarrantyClaimsData, ThrowOnError>): RequestResult<GetApiV1AdminWarrantyClaimsResponses, GetApiV1AdminWarrantyClaimsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminWarrantyClaimsResponses, GetApiV1AdminWarrantyClaimsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/warranty-claims',
-    ...options
-});
+export const getApiV1AdminWarrantyClaims = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminWarrantyClaimsData, ThrowOnError>): RequestResult<GetApiV1AdminWarrantyClaimsResponses, GetApiV1AdminWarrantyClaimsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminWarrantyClaimsResponses, GetApiV1AdminWarrantyClaimsErrors, ThrowOnError>({ url: '/api/v1/admin/warranty-claims', ...options });
 
 /**
  * One claim with its warranty, the policy revision the buyer bought, the order and the item
  */
-export const getApiV1AdminWarrantyClaimsById = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminWarrantyClaimsByIdData, ThrowOnError>): RequestResult<GetApiV1AdminWarrantyClaimsByIdResponses, GetApiV1AdminWarrantyClaimsByIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminWarrantyClaimsByIdResponses, GetApiV1AdminWarrantyClaimsByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/warranty-claims/{id}',
-    ...options
-});
+export const getApiV1AdminWarrantyClaimsById = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminWarrantyClaimsByIdData, ThrowOnError>): RequestResult<GetApiV1AdminWarrantyClaimsByIdResponses, GetApiV1AdminWarrantyClaimsByIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminWarrantyClaimsByIdResponses, GetApiV1AdminWarrantyClaimsByIdErrors, ThrowOnError>({ url: '/api/v1/admin/warranty-claims/{id}', ...options });
 
 /**
  * Move a claim (in progress, resolved with how, declined, reopened), optionally replying to the buyer
  */
 export const patchApiV1AdminWarrantyClaimsById = <ThrowOnError extends boolean = false>(options: Options<PatchApiV1AdminWarrantyClaimsByIdData, ThrowOnError>): RequestResult<PatchApiV1AdminWarrantyClaimsByIdResponses, PatchApiV1AdminWarrantyClaimsByIdErrors, ThrowOnError> => (options.client ?? client).patch<PatchApiV1AdminWarrantyClaimsByIdResponses, PatchApiV1AdminWarrantyClaimsByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }],
     url: '/api/v1/admin/warranty-claims/{id}',
     ...options,
     headers: {
@@ -12120,15 +6374,6 @@ export const patchApiV1AdminWarrantyClaimsById = <ThrowOnError extends boolean =
  * Creates (mode `create`), creates or updates (mode `upsert`, matched by handle, then SKU) or reprices (mode `price`, matched by SKU) up to 50 normalized products through the product editor's own services. Nothing missing from a row is removed; stock of existing SKUs is left to the inventory import. `dryRun: true` reports each item's action and the aggregate revision it saw; send that back as `expected` and the write is refused if the product changed since. Re-sending the same items is a no-op. When `processed` is less than the items sent, send the rest again. Images are attached afterwards with dashboard.import.product_images_batch.
  */
 export const postApiV1AdminImportProducts = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminImportProductsData, ThrowOnError>): RequestResult<PostApiV1AdminImportProductsResponses, PostApiV1AdminImportProductsErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminImportProductsResponses, PostApiV1AdminImportProductsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/import/products',
     ...options,
     headers: {
@@ -12143,15 +6388,6 @@ export const postApiV1AdminImportProducts = <ThrowOnError extends boolean = fals
  * Downloads each image (public HTTPS only, through the guarded media URL import) once per store, names the media after its URL, and appends the new ones to the product under its aggregate revision; a SKU without an image gets the one the file named for it. Images already on the product are left as they are, so re-sending is safe. Images left `pending` ran out of the request's time budget: send them again. Failed images say why and never fail the product.
  */
 export const postApiV1AdminImportProductImages = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminImportProductImagesData, ThrowOnError>): RequestResult<PostApiV1AdminImportProductImagesResponses, PostApiV1AdminImportProductImagesErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminImportProductImagesResponses, PostApiV1AdminImportProductImagesErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/import/product-images',
     ...options,
     headers: {
@@ -12166,15 +6402,6 @@ export const postApiV1AdminImportProductImages = <ThrowOnError extends boolean =
  * Creates (mode `create`) or creates and fills in (mode `upsert`) up to 100 customers matched by phone, then email. Phones are E.164 and checked against the store's phone policy. An existing customer only gains what it is missing (name, email, address, tags); nothing is overwritten or removed. Marketing consent is recorded only for channels marked true, with source `import` and `consentEvidence` as its note; false never unsubscribes. Re-sending is safe.
  */
 export const postApiV1AdminImportCustomers = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminImportCustomersData, ThrowOnError>): RequestResult<PostApiV1AdminImportCustomersResponses, PostApiV1AdminImportCustomersErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminImportCustomersResponses, PostApiV1AdminImportCustomersErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/import/customers',
     ...options,
     headers: {
@@ -12189,15 +6416,6 @@ export const postApiV1AdminImportCustomers = <ThrowOnError extends boolean = fal
  * Sets the units on hand of up to 100 SKUs at a location (its code or name; the default location when null) as ledger-v2 stocktakes with reason "import". A count that already matches writes nothing. `runId` names the import run: each row's operation key derives from it, so a retried request replays instead of counting twice. A dry run reports current counts; send them as `expectedOnHand` and a row whose count changed since is refused.
  */
 export const postApiV1AdminImportInventory = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminImportInventoryData, ThrowOnError>): RequestResult<PostApiV1AdminImportInventoryResponses, PostApiV1AdminImportInventoryErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminImportInventoryResponses, PostApiV1AdminImportInventoryErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/import/inventory',
     ...options,
     headers: {
@@ -12211,52 +6429,19 @@ export const postApiV1AdminImportInventory = <ThrowOnError extends boolean = fal
  *
  * One page (at most 500 products) of the catalogue in Shopify's product CSV columns, importable by Shopify and by Scalius. X-Export-Next-Cursor names the next page; join the pages for the whole file.
  */
-export const getApiV1AdminExportProducts = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminExportProductsData, ThrowOnError>): RequestResult<GetApiV1AdminExportProductsResponses, GetApiV1AdminExportProductsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminExportProductsResponses, GetApiV1AdminExportProductsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/export/products',
-    ...options
-});
+export const getApiV1AdminExportProducts = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminExportProductsData, ThrowOnError>): RequestResult<GetApiV1AdminExportProductsResponses, GetApiV1AdminExportProductsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminExportProductsResponses, GetApiV1AdminExportProductsErrors, ThrowOnError>({ url: '/api/v1/admin/export/products', ...options });
 
 /**
  * Export on-hand inventory per location as CSV
  *
  * One page (at most 1000 SKUs) of tracked SKUs with their units on hand at each active location (or one location), in the columns the inventory import reads back. X-Export-Next-Cursor names the next page.
  */
-export const getApiV1AdminExportInventory = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminExportInventoryData, ThrowOnError>): RequestResult<GetApiV1AdminExportInventoryResponses, GetApiV1AdminExportInventoryErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminExportInventoryResponses, GetApiV1AdminExportInventoryErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/export/inventory',
-    ...options
-});
+export const getApiV1AdminExportInventory = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminExportInventoryData, ThrowOnError>): RequestResult<GetApiV1AdminExportInventoryResponses, GetApiV1AdminExportInventoryErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminExportInventoryResponses, GetApiV1AdminExportInventoryErrors, ThrowOnError>({ url: '/api/v1/admin/export/inventory', ...options });
 
 /**
  * Delete abandoned checkouts by IDs
  */
 export const deleteApiV1AdminAbandonedCheckouts = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminAbandonedCheckoutsData, ThrowOnError>): RequestResult<DeleteApiV1AdminAbandonedCheckoutsResponses, unknown, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminAbandonedCheckoutsResponses, unknown, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/abandoned-checkouts',
     ...options,
     headers: {
@@ -12268,42 +6453,17 @@ export const deleteApiV1AdminAbandonedCheckouts = <ThrowOnError extends boolean 
 /**
  * List abandoned checkouts
  */
-export const getApiV1AdminAbandonedCheckouts = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminAbandonedCheckoutsData, ThrowOnError>): RequestResult<GetApiV1AdminAbandonedCheckoutsResponses, GetApiV1AdminAbandonedCheckoutsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminAbandonedCheckoutsResponses, GetApiV1AdminAbandonedCheckoutsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }],
-    url: '/api/v1/admin/abandoned-checkouts',
-    ...options
-});
+export const getApiV1AdminAbandonedCheckouts = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminAbandonedCheckoutsData, ThrowOnError>): RequestResult<GetApiV1AdminAbandonedCheckoutsResponses, GetApiV1AdminAbandonedCheckoutsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminAbandonedCheckoutsResponses, GetApiV1AdminAbandonedCheckoutsErrors, ThrowOnError>({ url: '/api/v1/admin/abandoned-checkouts', ...options });
 
 /**
  * List compact abandoned checkout summaries for agent workflows
  */
-export const getApiV1AdminAbandonedCheckoutsSummaries = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminAbandonedCheckoutsSummariesData, ThrowOnError>): RequestResult<GetApiV1AdminAbandonedCheckoutsSummariesResponses, GetApiV1AdminAbandonedCheckoutsSummariesErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminAbandonedCheckoutsSummariesResponses, GetApiV1AdminAbandonedCheckoutsSummariesErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/abandoned-checkouts/summaries',
-    ...options
-});
+export const getApiV1AdminAbandonedCheckoutsSummaries = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminAbandonedCheckoutsSummariesData, ThrowOnError>): RequestResult<GetApiV1AdminAbandonedCheckoutsSummariesResponses, GetApiV1AdminAbandonedCheckoutsSummariesErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminAbandonedCheckoutsSummariesResponses, GetApiV1AdminAbandonedCheckoutsSummariesErrors, ThrowOnError>({ url: '/api/v1/admin/abandoned-checkouts/summaries', ...options });
 
 /**
  * Bulk delete abandoned checkouts
  */
 export const postApiV1AdminAbandonedCheckoutsBulkDelete = <ThrowOnError extends boolean = false>(options?: Options<PostApiV1AdminAbandonedCheckoutsBulkDeleteData, ThrowOnError>): RequestResult<PostApiV1AdminAbandonedCheckoutsBulkDeleteResponses, unknown, ThrowOnError> => (options?.client ?? client).post<PostApiV1AdminAbandonedCheckoutsBulkDeleteResponses, unknown, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }],
     url: '/api/v1/admin/abandoned-checkouts/bulk-delete',
     ...options,
     headers: {
@@ -12316,11 +6476,6 @@ export const postApiV1AdminAbandonedCheckoutsBulkDelete = <ThrowOnError extends 
  * Register an FCM push notification token
  */
 export const postApiV1AdminFcmToken = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminFcmTokenData, ThrowOnError>): RequestResult<PostApiV1AdminFcmTokenResponses, PostApiV1AdminFcmTokenErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminFcmTokenResponses, PostApiV1AdminFcmTokenErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }],
     url: '/api/v1/admin/fcm-token',
     ...options,
     headers: {
@@ -12333,11 +6488,6 @@ export const postApiV1AdminFcmToken = <ThrowOnError extends boolean = false>(opt
  * Clean up invalid FCM tokens
  */
 export const postApiV1AdminFcmTokenCleanup = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminFcmTokenCleanupData, ThrowOnError>): RequestResult<PostApiV1AdminFcmTokenCleanupResponses, PostApiV1AdminFcmTokenCleanupErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminFcmTokenCleanupResponses, PostApiV1AdminFcmTokenCleanupErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }],
     url: '/api/v1/admin/fcm-token-cleanup',
     ...options,
     headers: {
@@ -12350,15 +6500,6 @@ export const postApiV1AdminFcmTokenCleanup = <ThrowOnError extends boolean = fal
  * Bulk soft-delete delivery locations with their thanas and areas
  */
 export const deleteApiV1AdminSettingsDeliveryLocations = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminSettingsDeliveryLocationsData, ThrowOnError>): RequestResult<DeleteApiV1AdminSettingsDeliveryLocationsResponses, DeleteApiV1AdminSettingsDeliveryLocationsErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminSettingsDeliveryLocationsResponses, DeleteApiV1AdminSettingsDeliveryLocationsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/settings/delivery-locations',
     ...options,
     headers: {
@@ -12370,33 +6511,12 @@ export const deleteApiV1AdminSettingsDeliveryLocations = <ThrowOnError extends b
 /**
  * List delivery locations
  */
-export const getApiV1AdminSettingsDeliveryLocations = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsDeliveryLocationsData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsDeliveryLocationsResponses, GetApiV1AdminSettingsDeliveryLocationsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsDeliveryLocationsResponses, GetApiV1AdminSettingsDeliveryLocationsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/settings/delivery-locations',
-    ...options
-});
+export const getApiV1AdminSettingsDeliveryLocations = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsDeliveryLocationsData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsDeliveryLocationsResponses, GetApiV1AdminSettingsDeliveryLocationsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsDeliveryLocationsResponses, GetApiV1AdminSettingsDeliveryLocationsErrors, ThrowOnError>({ url: '/api/v1/admin/settings/delivery-locations', ...options });
 
 /**
  * Create a delivery location
  */
 export const postApiV1AdminSettingsDeliveryLocations = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminSettingsDeliveryLocationsData, ThrowOnError>): RequestResult<PostApiV1AdminSettingsDeliveryLocationsResponses, PostApiV1AdminSettingsDeliveryLocationsErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminSettingsDeliveryLocationsResponses, PostApiV1AdminSettingsDeliveryLocationsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/settings/delivery-locations',
     ...options,
     headers: {
@@ -12409,15 +6529,6 @@ export const postApiV1AdminSettingsDeliveryLocations = <ThrowOnError extends boo
  * Delete all delivery locations permanently
  */
 export const deleteApiV1AdminSettingsDeliveryLocationsAll = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminSettingsDeliveryLocationsAllData, ThrowOnError>): RequestResult<DeleteApiV1AdminSettingsDeliveryLocationsAllResponses, DeleteApiV1AdminSettingsDeliveryLocationsAllErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminSettingsDeliveryLocationsAllResponses, DeleteApiV1AdminSettingsDeliveryLocationsAllErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/settings/delivery-locations/all',
     ...options,
     headers: {
@@ -12429,50 +6540,17 @@ export const deleteApiV1AdminSettingsDeliveryLocationsAll = <ThrowOnError extend
 /**
  * Soft-delete a delivery location with its thanas and areas
  */
-export const deleteApiV1AdminSettingsDeliveryLocationsById = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminSettingsDeliveryLocationsByIdData, ThrowOnError>): RequestResult<DeleteApiV1AdminSettingsDeliveryLocationsByIdResponses, DeleteApiV1AdminSettingsDeliveryLocationsByIdErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminSettingsDeliveryLocationsByIdResponses, DeleteApiV1AdminSettingsDeliveryLocationsByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/settings/delivery-locations/{id}',
-    ...options
-});
+export const deleteApiV1AdminSettingsDeliveryLocationsById = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminSettingsDeliveryLocationsByIdData, ThrowOnError>): RequestResult<DeleteApiV1AdminSettingsDeliveryLocationsByIdResponses, DeleteApiV1AdminSettingsDeliveryLocationsByIdErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminSettingsDeliveryLocationsByIdResponses, DeleteApiV1AdminSettingsDeliveryLocationsByIdErrors, ThrowOnError>({ url: '/api/v1/admin/settings/delivery-locations/{id}', ...options });
 
 /**
  * Get a delivery location by ID
  */
-export const getApiV1AdminSettingsDeliveryLocationsById = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminSettingsDeliveryLocationsByIdData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsDeliveryLocationsByIdResponses, GetApiV1AdminSettingsDeliveryLocationsByIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminSettingsDeliveryLocationsByIdResponses, GetApiV1AdminSettingsDeliveryLocationsByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/settings/delivery-locations/{id}',
-    ...options
-});
+export const getApiV1AdminSettingsDeliveryLocationsById = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminSettingsDeliveryLocationsByIdData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsDeliveryLocationsByIdResponses, GetApiV1AdminSettingsDeliveryLocationsByIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminSettingsDeliveryLocationsByIdResponses, GetApiV1AdminSettingsDeliveryLocationsByIdErrors, ThrowOnError>({ url: '/api/v1/admin/settings/delivery-locations/{id}', ...options });
 
 /**
  * Update a delivery location
  */
 export const putApiV1AdminSettingsDeliveryLocationsById = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminSettingsDeliveryLocationsByIdData, ThrowOnError>): RequestResult<PutApiV1AdminSettingsDeliveryLocationsByIdResponses, PutApiV1AdminSettingsDeliveryLocationsByIdErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminSettingsDeliveryLocationsByIdResponses, PutApiV1AdminSettingsDeliveryLocationsByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/settings/delivery-locations/{id}',
     ...options,
     headers: {
@@ -12484,101 +6562,32 @@ export const putApiV1AdminSettingsDeliveryLocationsById = <ThrowOnError extends 
 /**
  * Reset Pathao location import progress
  */
-export const deleteApiV1AdminSettingsDeliveryLocationsImportPathao = <ThrowOnError extends boolean = false>(options?: Options<DeleteApiV1AdminSettingsDeliveryLocationsImportPathaoData, ThrowOnError>): RequestResult<DeleteApiV1AdminSettingsDeliveryLocationsImportPathaoResponses, DeleteApiV1AdminSettingsDeliveryLocationsImportPathaoErrors, ThrowOnError> => (options?.client ?? client).delete<DeleteApiV1AdminSettingsDeliveryLocationsImportPathaoResponses, DeleteApiV1AdminSettingsDeliveryLocationsImportPathaoErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/settings/delivery-locations/import-pathao',
-    ...options
-});
+export const deleteApiV1AdminSettingsDeliveryLocationsImportPathao = <ThrowOnError extends boolean = false>(options?: Options<DeleteApiV1AdminSettingsDeliveryLocationsImportPathaoData, ThrowOnError>): RequestResult<DeleteApiV1AdminSettingsDeliveryLocationsImportPathaoResponses, DeleteApiV1AdminSettingsDeliveryLocationsImportPathaoErrors, ThrowOnError> => (options?.client ?? client).delete<DeleteApiV1AdminSettingsDeliveryLocationsImportPathaoResponses, DeleteApiV1AdminSettingsDeliveryLocationsImportPathaoErrors, ThrowOnError>({ url: '/api/v1/admin/settings/delivery-locations/import-pathao', ...options });
 
 /**
  * Process one bounded Pathao location import chunk
  */
-export const postApiV1AdminSettingsDeliveryLocationsImportPathao = <ThrowOnError extends boolean = false>(options?: Options<PostApiV1AdminSettingsDeliveryLocationsImportPathaoData, ThrowOnError>): RequestResult<PostApiV1AdminSettingsDeliveryLocationsImportPathaoResponses, PostApiV1AdminSettingsDeliveryLocationsImportPathaoErrors, ThrowOnError> => (options?.client ?? client).post<PostApiV1AdminSettingsDeliveryLocationsImportPathaoResponses, PostApiV1AdminSettingsDeliveryLocationsImportPathaoErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/settings/delivery-locations/import-pathao',
-    ...options
-});
+export const postApiV1AdminSettingsDeliveryLocationsImportPathao = <ThrowOnError extends boolean = false>(options?: Options<PostApiV1AdminSettingsDeliveryLocationsImportPathaoData, ThrowOnError>): RequestResult<PostApiV1AdminSettingsDeliveryLocationsImportPathaoResponses, PostApiV1AdminSettingsDeliveryLocationsImportPathaoErrors, ThrowOnError> => (options?.client ?? client).post<PostApiV1AdminSettingsDeliveryLocationsImportPathaoResponses, PostApiV1AdminSettingsDeliveryLocationsImportPathaoErrors, ThrowOnError>({ url: '/api/v1/admin/settings/delivery-locations/import-pathao', ...options });
 
 /**
  * Get Pathao location import progress
  */
-export const getApiV1AdminSettingsDeliveryLocationsImportPathaoStatus = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsDeliveryLocationsImportPathaoStatusData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsDeliveryLocationsImportPathaoStatusResponses, GetApiV1AdminSettingsDeliveryLocationsImportPathaoStatusErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsDeliveryLocationsImportPathaoStatusResponses, GetApiV1AdminSettingsDeliveryLocationsImportPathaoStatusErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/settings/delivery-locations/import-pathao/status',
-    ...options
-});
+export const getApiV1AdminSettingsDeliveryLocationsImportPathaoStatus = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsDeliveryLocationsImportPathaoStatusData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsDeliveryLocationsImportPathaoStatusResponses, GetApiV1AdminSettingsDeliveryLocationsImportPathaoStatusErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsDeliveryLocationsImportPathaoStatusResponses, GetApiV1AdminSettingsDeliveryLocationsImportPathaoStatusErrors, ThrowOnError>({ url: '/api/v1/admin/settings/delivery-locations/import-pathao/status', ...options });
 
 /**
  * Get active checkout language
  */
-export const getApiV1AdminSettingsCheckoutLanguagesActive = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsCheckoutLanguagesActiveData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsCheckoutLanguagesActiveResponses, GetApiV1AdminSettingsCheckoutLanguagesActiveErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsCheckoutLanguagesActiveResponses, GetApiV1AdminSettingsCheckoutLanguagesActiveErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/settings/checkout-languages/active',
-    ...options
-});
+export const getApiV1AdminSettingsCheckoutLanguagesActive = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsCheckoutLanguagesActiveData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsCheckoutLanguagesActiveResponses, GetApiV1AdminSettingsCheckoutLanguagesActiveErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsCheckoutLanguagesActiveResponses, GetApiV1AdminSettingsCheckoutLanguagesActiveErrors, ThrowOnError>({ url: '/api/v1/admin/settings/checkout-languages/active', ...options });
 
 /**
  * List all checkout languages with pagination
  */
-export const getApiV1AdminSettingsCheckoutLanguages = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsCheckoutLanguagesData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsCheckoutLanguagesResponses, GetApiV1AdminSettingsCheckoutLanguagesErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsCheckoutLanguagesResponses, GetApiV1AdminSettingsCheckoutLanguagesErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/settings/checkout-languages',
-    ...options
-});
+export const getApiV1AdminSettingsCheckoutLanguages = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminSettingsCheckoutLanguagesData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsCheckoutLanguagesResponses, GetApiV1AdminSettingsCheckoutLanguagesErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminSettingsCheckoutLanguagesResponses, GetApiV1AdminSettingsCheckoutLanguagesErrors, ThrowOnError>({ url: '/api/v1/admin/settings/checkout-languages', ...options });
 
 /**
  * Create a new checkout language
  */
 export const postApiV1AdminSettingsCheckoutLanguages = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminSettingsCheckoutLanguagesData, ThrowOnError>): RequestResult<PostApiV1AdminSettingsCheckoutLanguagesResponses, PostApiV1AdminSettingsCheckoutLanguagesErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminSettingsCheckoutLanguagesResponses, PostApiV1AdminSettingsCheckoutLanguagesErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/settings/checkout-languages',
     ...options,
     headers: {
@@ -12590,67 +6599,22 @@ export const postApiV1AdminSettingsCheckoutLanguages = <ThrowOnError extends boo
 /**
  * Hard delete a checkout language
  */
-export const deleteApiV1AdminSettingsCheckoutLanguagesById = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminSettingsCheckoutLanguagesByIdData, ThrowOnError>): RequestResult<DeleteApiV1AdminSettingsCheckoutLanguagesByIdResponses, DeleteApiV1AdminSettingsCheckoutLanguagesByIdErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminSettingsCheckoutLanguagesByIdResponses, DeleteApiV1AdminSettingsCheckoutLanguagesByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/settings/checkout-languages/{id}',
-    ...options
-});
+export const deleteApiV1AdminSettingsCheckoutLanguagesById = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AdminSettingsCheckoutLanguagesByIdData, ThrowOnError>): RequestResult<DeleteApiV1AdminSettingsCheckoutLanguagesByIdResponses, DeleteApiV1AdminSettingsCheckoutLanguagesByIdErrors, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AdminSettingsCheckoutLanguagesByIdResponses, DeleteApiV1AdminSettingsCheckoutLanguagesByIdErrors, ThrowOnError>({ url: '/api/v1/admin/settings/checkout-languages/{id}', ...options });
 
 /**
  * Get checkout language by ID
  */
-export const getApiV1AdminSettingsCheckoutLanguagesById = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminSettingsCheckoutLanguagesByIdData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsCheckoutLanguagesByIdResponses, GetApiV1AdminSettingsCheckoutLanguagesByIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminSettingsCheckoutLanguagesByIdResponses, GetApiV1AdminSettingsCheckoutLanguagesByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/settings/checkout-languages/{id}',
-    ...options
-});
+export const getApiV1AdminSettingsCheckoutLanguagesById = <ThrowOnError extends boolean = false>(options: Options<GetApiV1AdminSettingsCheckoutLanguagesByIdData, ThrowOnError>): RequestResult<GetApiV1AdminSettingsCheckoutLanguagesByIdResponses, GetApiV1AdminSettingsCheckoutLanguagesByIdErrors, ThrowOnError> => (options.client ?? client).get<GetApiV1AdminSettingsCheckoutLanguagesByIdResponses, GetApiV1AdminSettingsCheckoutLanguagesByIdErrors, ThrowOnError>({ url: '/api/v1/admin/settings/checkout-languages/{id}', ...options });
 
 /**
  * Soft delete a checkout language
  */
-export const patchApiV1AdminSettingsCheckoutLanguagesById = <ThrowOnError extends boolean = false>(options: Options<PatchApiV1AdminSettingsCheckoutLanguagesByIdData, ThrowOnError>): RequestResult<PatchApiV1AdminSettingsCheckoutLanguagesByIdResponses, PatchApiV1AdminSettingsCheckoutLanguagesByIdErrors, ThrowOnError> => (options.client ?? client).patch<PatchApiV1AdminSettingsCheckoutLanguagesByIdResponses, PatchApiV1AdminSettingsCheckoutLanguagesByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/settings/checkout-languages/{id}',
-    ...options
-});
+export const patchApiV1AdminSettingsCheckoutLanguagesById = <ThrowOnError extends boolean = false>(options: Options<PatchApiV1AdminSettingsCheckoutLanguagesByIdData, ThrowOnError>): RequestResult<PatchApiV1AdminSettingsCheckoutLanguagesByIdResponses, PatchApiV1AdminSettingsCheckoutLanguagesByIdErrors, ThrowOnError> => (options.client ?? client).patch<PatchApiV1AdminSettingsCheckoutLanguagesByIdResponses, PatchApiV1AdminSettingsCheckoutLanguagesByIdErrors, ThrowOnError>({ url: '/api/v1/admin/settings/checkout-languages/{id}', ...options });
 
 /**
  * Update a checkout language
  */
 export const putApiV1AdminSettingsCheckoutLanguagesById = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminSettingsCheckoutLanguagesByIdData, ThrowOnError>): RequestResult<PutApiV1AdminSettingsCheckoutLanguagesByIdResponses, PutApiV1AdminSettingsCheckoutLanguagesByIdErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminSettingsCheckoutLanguagesByIdResponses, PutApiV1AdminSettingsCheckoutLanguagesByIdErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
     url: '/api/v1/admin/settings/checkout-languages/{id}',
     ...options,
     headers: {
@@ -12662,29 +6626,12 @@ export const putApiV1AdminSettingsCheckoutLanguagesById = <ThrowOnError extends 
 /**
  * Restore a soft-deleted checkout language
  */
-export const postApiV1AdminSettingsCheckoutLanguagesByIdRestore = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminSettingsCheckoutLanguagesByIdRestoreData, ThrowOnError>): RequestResult<PostApiV1AdminSettingsCheckoutLanguagesByIdRestoreResponses, PostApiV1AdminSettingsCheckoutLanguagesByIdRestoreErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminSettingsCheckoutLanguagesByIdRestoreResponses, PostApiV1AdminSettingsCheckoutLanguagesByIdRestoreErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }, {
-            key: 'agentBearer',
-            scheme: 'bearer',
-            type: 'http'
-        }],
-    url: '/api/v1/admin/settings/checkout-languages/{id}/restore',
-    ...options
-});
+export const postApiV1AdminSettingsCheckoutLanguagesByIdRestore = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminSettingsCheckoutLanguagesByIdRestoreData, ThrowOnError>): RequestResult<PostApiV1AdminSettingsCheckoutLanguagesByIdRestoreResponses, PostApiV1AdminSettingsCheckoutLanguagesByIdRestoreErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminSettingsCheckoutLanguagesByIdRestoreResponses, PostApiV1AdminSettingsCheckoutLanguagesByIdRestoreErrors, ThrowOnError>({ url: '/api/v1/admin/settings/checkout-languages/{id}/restore', ...options });
 
 /**
  * Save or update an abandoned checkout
  */
 export const postApiV1AdminSettingsAbandonedCheckouts = <ThrowOnError extends boolean = false>(options?: Options<PostApiV1AdminSettingsAbandonedCheckoutsData, ThrowOnError>): RequestResult<PostApiV1AdminSettingsAbandonedCheckoutsResponses, PostApiV1AdminSettingsAbandonedCheckoutsErrors, ThrowOnError> => (options?.client ?? client).post<PostApiV1AdminSettingsAbandonedCheckoutsResponses, PostApiV1AdminSettingsAbandonedCheckoutsErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }],
     url: '/api/v1/admin/settings/abandoned-checkouts',
     ...options,
     headers: {
@@ -12697,11 +6644,6 @@ export const postApiV1AdminSettingsAbandonedCheckouts = <ThrowOnError extends bo
  * Delete abandoned checkout after successful order
  */
 export const postApiV1AdminSettingsAbandonedCheckoutsCleanup = <ThrowOnError extends boolean = false>(options?: Options<PostApiV1AdminSettingsAbandonedCheckoutsCleanupData, ThrowOnError>): RequestResult<PostApiV1AdminSettingsAbandonedCheckoutsCleanupResponses, PostApiV1AdminSettingsAbandonedCheckoutsCleanupErrors, ThrowOnError> => (options?.client ?? client).post<PostApiV1AdminSettingsAbandonedCheckoutsCleanupResponses, PostApiV1AdminSettingsAbandonedCheckoutsCleanupErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: 'better-auth.session_token',
-            type: 'apiKey'
-        }],
     url: '/api/v1/admin/settings/abandoned-checkouts/cleanup',
     ...options,
     headers: {
