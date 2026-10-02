@@ -5,6 +5,8 @@ remains a label. The same draft revision guards home, landing and fixed product,
 collection and search blocks; publishing is the only way draft changes go live.
 
 - Up to 20 landing pages at `/pages/<slug>` use the homepage section registry.
+  Writes cap the complete UTF-8 theme document at 512 KiB, bounding D1 rows and
+  the retained history's memory on Workers Free. Older reads still upgrade.
   A matching published CMS page at `/<slug>` can replace its body with those
   sections using `overrideCms`; CMS visibility, title, canonical and noIndex
   remain authoritative.
@@ -26,7 +28,7 @@ collection and search blocks; publishing is the only way draft changes go live.
   shared document code. A future v8 adds one upgrade step.
 - Agent page edits, draft reads/saves, history, restore/discard and previews use
   stable operations with theme RBAC and revision requirements. The curated
-  `draft-landing-page` workflow ends at review; publish is explicit.
+  `theme.draft-landing-page.v1` workflow ends at review; publish is explicit.
 
 Public landing/CMS data uses the existing section query planner with `deps.theme`
 and the planners' media, catalog, category, collection, promotion and app keys.

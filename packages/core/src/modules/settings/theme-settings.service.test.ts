@@ -26,6 +26,7 @@ import {
 import {
   DEFAULT_STOREFRONT_THEME,
   storefrontTemplateTheme,
+  storefrontSectionDefault,
   upgradeThemeDocument,
   type StorefrontThemeDocument,
 } from "@scalius/shared/storefront-theme";
@@ -215,6 +216,20 @@ describe("versioned storefront theme settings", () => {
 
     await expect(publishThemeDraft(db, 0, 1)).rejects.toMatchObject({ status: 409, code: "CONFLICT" });
     await expect(getThemeSettings(db)).resolves.toEqual({ theme: firstTheme, revision: 1 });
+  });
+
+  it("bounds stored documents by UTF-8 bytes before any draft write", async () => {
+    const theme = structuredClone(DEFAULT_STOREFRONT_THEME);
+    theme.pages.landing["large-campaign"] = {
+      title: "Campaign", overrideCms: false,
+      sections: Array.from({ length: 9 }, (_, index) => ({
+        ...storefrontSectionDefault("faq", `faq-${index}`),
+        type: "faq" as const,
+        settings: { heading: "", items: Array.from({ length: 20 }, () => ({ question: "Offer?", answer: "বাংলা".repeat(200) })) },
+      })),
+    };
+    await expect(saveThemeDraft(db, theme, 0, 0)).rejects.toMatchObject({ status: 400, message: expect.stringContaining("too large") });
+    expect(sqlite.prepare("SELECT COUNT(*) AS count FROM theme_settings_drafts").get()).toEqual({ count: 0 });
   });
 
   it("keeps every draft based on the live revision, so a stale editor can only reload", async () => {

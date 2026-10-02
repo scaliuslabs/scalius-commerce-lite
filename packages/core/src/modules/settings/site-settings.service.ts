@@ -57,6 +57,8 @@ const THEME_SETTINGS_ID = "default";
 
 /** Published versions kept for history and restore: the most the history list returns. */
 export const THEME_VERSION_HISTORY_LIMIT = 20;
+// ponytail: one JSON document, capped at 512 KiB for bounded D1 rows and 20-version history on Workers Free.
+export const THEME_DOCUMENT_MAX_BYTES = 512 * 1024;
 
 /** The revision the merchant's editor loaded; a stale one is a 409 conflict. */
 export interface SettingsSaveOptions {
@@ -184,7 +186,11 @@ function serializeThemeSettings(theme: StorefrontThemeDocument): {
       })),
     );
   }
-  return { theme: result.data, serialized: JSON.stringify(result.data) };
+  const serialized = JSON.stringify(result.data);
+  if (new TextEncoder().encode(serialized).byteLength > THEME_DOCUMENT_MAX_BYTES) {
+    throw new ValidationError("Storefront style is too large. Shorten page content or remove unused pages.");
+  }
+  return { theme: result.data, serialized };
 }
 
 const THEME_REVISION_CONFLICT_SENTINEL = "THEME_REVISION_CONFLICT";
