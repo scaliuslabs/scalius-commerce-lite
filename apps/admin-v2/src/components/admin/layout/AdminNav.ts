@@ -66,7 +66,12 @@ export const ADMIN_NAV: readonly NavItem[] = [
       ...when(GIFT_CARDS_NAV_ENABLED, { key: "giftCards", to: "/admin/gift-cards" }),
     ],
   },
-  { key: "customers", to: "/admin/customers", icon: UserRound },
+  {
+    key: "customers",
+    to: "/admin/customers",
+    icon: UserRound,
+    children: [{ key: "segments", to: "/admin/customers/segments" }],
+  },
   { key: "discounts", to: "/admin/discounts", icon: BadgePercent },
   {
     key: "content",

@@ -14,6 +14,7 @@ import {
   getApiV1AdminSettingsDeliveryLocations,
   getApiV1AdminSettingsEmail,
   getApiV1AdminSettingsFirebase,
+  getApiV1AdminSettingsMarketingConsent,
   getApiV1AdminSettingsMedia,
   getApiV1AdminSettingsMetaConversions,
   getApiV1AdminSettingsNotificationChannels,
@@ -236,6 +237,12 @@ export const signInPolicyQuery = {
       revision: auth.revision,
     };
   },
+};
+
+/** Marketing consent: the checkout checkbox and e-mail double opt-in (`{ settings, revision }`). */
+export const marketingConsentQuery = {
+  queryKey: queryKeys.settings.marketingConsent(),
+  queryFn: () => apiData(getApiV1AdminSettingsMarketingConsent()),
 };
 
 // ── Apps ─────────────────────────────────────────────────────────────────

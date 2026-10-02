@@ -29,6 +29,7 @@ export const SETTINGS_CARDS = [
   { page: "locations", card: "inventoryLocations" },
   { page: "customerAccounts", card: "customerFields" },
   { page: "customerAccounts", card: "customerSignIn" },
+  { page: "customerAccounts", card: "marketingConsent" },
   { page: "notifications", card: "customerNotifications" },
   { page: "notifications", card: "staffNotifications" },
   { page: "notifications", card: "sending" },
