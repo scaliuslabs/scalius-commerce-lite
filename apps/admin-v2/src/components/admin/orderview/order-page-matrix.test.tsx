@@ -12,6 +12,7 @@ import { inboxMessages } from "~/i18n/inbox";
 import { orderDetailMessages } from "~/i18n/order-detail";
 import { fulfillmentStatusLabel, orderMessages, orderStatusLabel, paymentStatusLabel } from "~/i18n/orders";
 import { hasDeliveryCard, hasReturnsCard } from "./card-rules";
+import { fulfilledGroups, returnedByGroup } from "./fulfilment-groups";
 import { OrderHeaderBadges } from "./OrderHeaderBadges";
 import type { Order, OrderFulfillment } from "./types";
 
@@ -93,6 +94,34 @@ describe("order page cards that may not apply", () => {
       expect(hasReturnsCard(order, 0), status).toBe(applies.has(status));
       expect(hasReturnsCard({ ...order, refundDue: 120 }, 0)).toBe(true);
       expect(hasReturnsCard(order, 1)).toBe(true);
+    }
+  });
+
+  it("shows each returned unit on exactly one hand-over card, oldest first, for every split and return count", () => {
+    const splits = [[1], [2], [1, 1], [2, 1], [1, 1, 1], [3, 2]];
+    for (const split of splits) {
+      const sent = split.reduce((sum, units) => sum + units, 0);
+      const order = {
+        items: [{ id: "k1", quantity: sent, fulfilledQuantity: sent, fulfillmentType: "ship" }],
+        fulfillments: split.map((units, index) => ({
+          ...shipped,
+          id: `ful_${index}`,
+          createdAt: `2026-09-2${index}T08:00:00.000Z`,
+          lines: [{ orderItemId: "k1", quantity: units }],
+        })),
+      } as unknown as Order;
+      const groups = fulfilledGroups(order);
+      for (let returned = 0; returned <= sent + 1; returned += 1) {
+        const shown = returnedByGroup(groups, new Map([["k1", returned]])).map((map) => map.get("k1") ?? 0);
+        const label = `${split.join("+")} sent, ${returned} returned`;
+        // Never double-counted: the cards add up to what came back, each within what it held.
+        expect(shown.reduce((sum, units) => sum + units, 0), label).toBe(Math.min(returned, sent));
+        shown.forEach((units, index) => expect(units, label).toBeLessThanOrEqual(split[index]!));
+        // Oldest first: a later card shows returns only once every earlier card is full.
+        shown.forEach((units, index) => {
+          if (index > 0 && units > 0) expect(shown[index - 1], label).toBe(split[index - 1]);
+        });
+      }
     }
   });
 

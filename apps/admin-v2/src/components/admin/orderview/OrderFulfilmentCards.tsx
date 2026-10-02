@@ -55,6 +55,7 @@ import {
   canHandOver,
   fulfilledGroups,
   isManualGroup,
+  returnedByGroup,
   isReadyForPickup,
   unfulfilledGroups,
   type FulfilledGroup,
@@ -121,6 +122,8 @@ export function OrderFulfilmentCards({ order, request, onRecordPayment }: {
   const returned = useMemo(() => returnedQuantities(returnsQuery.data?.returns ?? []), [returnsQuery.data]);
   const open = unfulfilledGroups(order);
   const done = fulfilledGroups(order);
+  // Each returned unit is shown once, on the hand-over it most likely came from (oldest first).
+  const returnedPerCard = returnedByGroup(done, returned);
   // Handed over, money still due: say so and offer the next step (a toast with an action stays 10 s).
   const awaitingPayment = () => toast.info(t("handover.awaitingPayment"), {
     duration: 10_000,
@@ -138,7 +141,7 @@ export function OrderFulfilmentCards({ order, request, onRecordPayment }: {
           group={group}
           number={index + 1}
           money={money}
-          returned={returned}
+          returned={returnedPerCard[index]!}
         />
       ))}
       <DigitalLinesCard order={order} />
