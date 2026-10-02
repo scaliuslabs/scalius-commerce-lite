@@ -188,6 +188,7 @@ function withContent(theme: StorefrontThemeDocument): StorefrontThemeDocument {
       footer: { ...theme.blocks.footer, settings: { ...theme.blocks.footer.settings, tagline: "Pure honey" } },
     } as StorefrontThemeDocument["blocks"],
     pages: {
+      ...theme.pages,
       homeMode: { kind: "product", productId: "prod_honey" },
       home: theme.pages.home.map((section) =>
         section.type === "hero" ? { ...section, settings: { ...section.settings, slides: [SLIDE] } } : section),

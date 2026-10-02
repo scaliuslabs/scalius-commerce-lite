@@ -1705,6 +1705,7 @@ describe("theme sections", () => {
   const custom = storefrontThemeDocumentSchema.parse({
     ...base,
     pages: {
+      ...base.pages,
       home: [
         {
           id: "story",

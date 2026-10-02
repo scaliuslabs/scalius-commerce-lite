@@ -57,6 +57,7 @@ function withContent(theme: StorefrontThemeDocument): StorefrontThemeDocument {
       },
     } as StorefrontThemeDocument["blocks"],
     pages: {
+      ...theme.pages,
       homeMode: { kind: "product", productId: "prod_honey" },
       home: theme.pages.home.map((section) => {
         if (section.type === "hero") return { ...section, settings: { ...section.settings, slides: [SLIDE] } };
