@@ -26,11 +26,22 @@ type NumberInputProps = Omit<React.ComponentProps<"input">, "value" | "onChange"
   /** Whole numbers only (quantities): the phone keyboard shows digits only. */
   integer?: boolean;
   /**
-   * Money in a currency paid in whole units (taka): the field takes no decimal
-   * point, and trying one shows this message at the field instead.
+   * Money in a currency paid in whole units (taka): an amount with a fraction
+   * ("1234.50") stays as typed, is reported as `NaN` so the form refuses to
+   * save it, and shows this message at the field. "1234.00" means 1234.
    */
   wholeUnitsMessage?: string;
 };
+
+function hasFraction(number: number | null): boolean {
+  return number !== null && Number.isFinite(number) && !Number.isInteger(number);
+}
+
+/** What the field reports for this text: a fraction in a whole-unit amount is `NaN`. */
+function understood(text: string, wholeUnitsMessage: string | undefined): number | null {
+  const number = parseLocaleNumber(text);
+  return wholeUnitsMessage && hasFraction(number) ? Number.NaN : number;
+}
 
 /**
  * A text field for money and quantities. Unlike `type="number"` it keeps
@@ -43,7 +54,7 @@ export const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
     const shown = value === null || value === undefined || Number.isNaN(value) ? "" : String(value);
     const [text, setText] = React.useState(shown);
     // Follow outside changes (discard, bulk edit) unless the text already means that number.
-    if (!sameNumber(parseLocaleNumber(text), value ?? null) && text !== shown) setText(shown);
+    if (!sameNumber(understood(text, wholeUnitsMessage), value ?? null) && text !== shown) setText(shown);
     return (
       <Input
         ref={ref}
@@ -55,22 +66,26 @@ export const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
         onChange={(event) => {
           const next = event.target.value;
           const input = event.currentTarget;
-          if (wholeUnitsMessage && /[.٫।]/.test(next)) {
-            // Keep what was there and say why at the field.
-            input.setCustomValidity(wholeUnitsMessage);
-            input.reportValidity();
-            return;
-          }
-          input.setCustomValidity("");
+          // Never rewrite what was typed: dropping a decimal point turns
+          // "1234.50" into 123450 as the merchant keeps typing.
           setText(next);
-          const number = parseLocaleNumber(next);
+          const number = understood(next, wholeUnitsMessage);
+          const fractional = Boolean(wholeUnitsMessage) && hasFraction(parseLocaleNumber(next));
+          if (fractional) {
+            input.setCustomValidity(wholeUnitsMessage!);
+            input.reportValidity();
+          } else {
+            input.setCustomValidity("");
+          }
           if (!sameNumber(number, value ?? null)) onValueChange(number);
         }}
         onBlur={(event) => {
-          // Show the number as it was understood ("১,২০০" becomes "1200").
+          // Show the number as it was understood ("১,২০০" becomes "1200");
+          // a fraction in a whole-unit amount stays as typed, still flagged.
           const number = parseLocaleNumber(text);
-          if (number !== null && !Number.isNaN(number)) setText(String(number));
-          event.currentTarget.setCustomValidity("");
+          const fractional = Boolean(wholeUnitsMessage) && hasFraction(number);
+          if (number !== null && !Number.isNaN(number) && !fractional) setText(String(number));
+          if (!fractional) event.currentTarget.setCustomValidity("");
           onBlur?.(event);
         }}
       />
