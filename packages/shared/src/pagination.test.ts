@@ -1,8 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   InvalidCursorError,
-  LIST_COUNT_CAP,
   buildPageInfo,
   capTotal,
   cappedCountLimit,
@@ -11,6 +10,7 @@ import {
   finishKeysetPage,
   type ListCursor,
 } from "./pagination";
+import { planLimits } from "./plan-limits";
 
 const numberShape = { sort: "createdAt", direction: "desc", kinds: ["number"] } as const;
 
@@ -102,17 +102,26 @@ describe("list cursors", () => {
 });
 
 describe("capped totals", () => {
-  it("is exact up to the cap and a lower bound above it", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it.each(["free", "paid"] as const)("is exact up to the %s plan's cap and a lower bound above it", (plan) => {
+    vi.stubGlobal("__SCALIUS_PLAN__", plan);
+    const cap = planLimits(plan).lists.countCap;
     expect(capTotal(0)).toEqual({ total: 0, totalIsCapped: false });
     expect(capTotal(37)).toEqual({ total: 37, totalIsCapped: false });
-    expect(capTotal(LIST_COUNT_CAP)).toEqual({ total: LIST_COUNT_CAP, totalIsCapped: false });
-    expect(capTotal(LIST_COUNT_CAP + 1)).toEqual({ total: LIST_COUNT_CAP, totalIsCapped: true });
+    expect(capTotal(cap)).toEqual({ total: cap, totalIsCapped: false });
+    expect(capTotal(cap + 1)).toEqual({ total: cap, totalIsCapped: true });
     expect(capTotal(Number.NaN)).toEqual({ total: 0, totalIsCapped: false });
-    expect(capTotal(120, 100)).toEqual({ total: 100, totalIsCapped: true });
   });
 
-  it("reads one row more than the cap shows", () => {
-    expect(cappedCountLimit()).toBe(LIST_COUNT_CAP + 1);
+  it("takes the cap as a value too", () => {
+    expect(capTotal(120, 100)).toEqual({ total: 100, totalIsCapped: true });
+    expect(capTotal(120, planLimits("paid").lists.countCap)).toEqual({ total: 120, totalIsCapped: false });
+  });
+
+  it.each(["free", "paid"] as const)("reads one row more than the cap shows on %s", (plan) => {
+    vi.stubGlobal("__SCALIUS_PLAN__", plan);
+    expect(cappedCountLimit()).toBe(planLimits(plan).lists.countCap + 1);
     expect(cappedCountLimit(10)).toBe(11);
   });
 });

@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, it } from "vitest";
-import { LIST_COUNT_CAP } from "@scalius/shared/pagination";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { planLimits } from "@scalius/shared/plan-limits";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { compareSqliteValues, walkBackward, walkForward, type FetchPage } from "../../../testing/keyset-walk";
 import { listProducts } from "./read";
@@ -15,6 +15,15 @@ interface Seeded {
     category: string | null;
     createdAt: number;
     updatedAt: number;
+}
+
+const PLANS = ["free", "paid"] as const;
+
+/** Runs the describe's tests under one plan profile and returns that plan's list limits. */
+function useProfile(plan: (typeof PLANS)[number]) {
+    beforeEach(() => vi.stubGlobal("__SCALIUS_PLAN__", plan));
+    afterEach(() => vi.unstubAllGlobals());
+    return planLimits(plan).lists;
 }
 
 const harnesses: Array<{ sqlite: { close(): void } }> = [];
@@ -77,7 +86,9 @@ function fetcher(db: Db, options: Parameters<typeof listProducts>[1]): FetchPage
     };
 }
 
-describe("admin product list keyset pagination", () => {
+describe.each(PLANS)("admin product list keyset pagination on the %s plan", (plan) => {
+    const lists = useProfile(plan);
+
     for (const sort of SORTS) {
         for (const direction of ["asc", "desc"] as const) {
             it(`walks every product exactly once by ${sort} ${direction}, forward and back`, async () => {
@@ -132,7 +143,7 @@ describe("admin product list keyset pagination", () => {
         for (const [label, options] of cases) {
             await expect(listProducts(db, options), label).rejects.toMatchObject({ status: 400, code: "INVALID_CURSOR" });
         }
-        await expect(listProducts(db, { page: 101, limit: 10 })).rejects.toMatchObject({ status: 400, code: "PAGE_TOO_DEEP" });
+        await expect(listProducts(db, { page: lists.maxOffset / 10 + 1, limit: 10 })).rejects.toMatchObject({ status: 400, code: "PAGE_TOO_DEEP" });
     });
 
     it("pages a text search by position and keeps every match reachable", async () => {
@@ -147,19 +158,21 @@ describe("admin product list keyset pagination", () => {
     });
 });
 
-describe("admin product list totals read a bounded number of rows", () => {
+describe.each(PLANS)("admin product list totals read a bounded number of rows on the %s plan", (plan) => {
+    const lists = useProfile(plan);
+
     it("caps the total and never issues an unbounded count", async () => {
         const queries: Array<{ query: string; values: readonly unknown[] }> = [];
-        const { db } = setup(LIST_COUNT_CAP + 120, queries);
+        const { db } = setup(lists.countCap + 120, queries);
         queries.length = 0;
         const result = await listProducts(db, { limit: 10, includeDescription: false });
-        expect(result.pagination).toMatchObject({ total: LIST_COUNT_CAP, totalIsCapped: true });
+        expect(result.pagination).toMatchObject({ total: lists.countCap, totalIsCapped: true });
         expect(result.pageInfo.hasNextPage).toBe(true);
         const counts = queries.filter(({ query }) => /count\(\*\)/i.test(query) && /from "products"/i.test(query));
         expect(counts.length).toBeGreaterThan(0);
         for (const { query, values } of counts) {
             expect(query, query).toMatch(/count\(\*\) from \(select 1 as "one" from "products" .* limit \?\)/i);
-            expect(values.at(-1)).toBe(LIST_COUNT_CAP + 1);
+            expect(values.at(-1)).toBe(lists.countCap + 1);
         }
         expect(queries.some(({ query }) => /count\(distinct/i.test(query))).toBe(false);
     });

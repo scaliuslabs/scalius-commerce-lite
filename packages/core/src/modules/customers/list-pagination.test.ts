@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, it } from "vitest";
-import { LIST_COUNT_CAP } from "@scalius/shared/pagination";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { planLimits } from "@scalius/shared/plan-limits";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { compareSqliteValues, walkBackward, walkForward, type FetchPage } from "../../testing/keyset-walk";
 import { listCustomers } from "./customers.service";
@@ -15,6 +15,15 @@ interface Seeded {
     lastOrderAt: number | null;
     createdAt: number;
     updatedAt: number;
+}
+
+const PLANS = ["free", "paid"] as const;
+
+/** Runs the describe's tests under one plan profile and returns that plan's list limits. */
+function useProfile(plan: (typeof PLANS)[number]) {
+    beforeEach(() => vi.stubGlobal("__SCALIUS_PLAN__", plan));
+    afterEach(() => vi.unstubAllGlobals());
+    return planLimits(plan).lists;
 }
 
 const harnesses: Array<{ sqlite: { close(): void } }> = [];
@@ -73,7 +82,9 @@ function fetcher(db: Db, options: NonNullable<Parameters<typeof listCustomers>[1
     };
 }
 
-describe("customer list keyset pagination", () => {
+describe.each(PLANS)("customer list keyset pagination on the %s plan", (plan) => {
+    const lists = useProfile(plan);
+
     for (const sort of SORTS) {
         for (const direction of ["asc", "desc"] as const) {
             it(`walks every customer exactly once by ${sort} ${direction}, forward and back`, async () => {
@@ -113,22 +124,24 @@ describe("customer list keyset pagination", () => {
         await expect(listCustomers(db, { after: "!!" })).rejects.toMatchObject({ status: 400, code: "INVALID_CURSOR" });
         await expect(listCustomers(db, { sort: "totalSpent", after: cursor })).rejects.toMatchObject({ code: "INVALID_CURSOR" });
         await expect(listCustomers(db, { sort: "name", after: cursor, before: cursor })).rejects.toMatchObject({ code: "INVALID_CURSOR" });
-        await expect(listCustomers(db, { page: 51, limit: 20 })).rejects.toMatchObject({ code: "PAGE_TOO_DEEP" });
+        await expect(listCustomers(db, { page: lists.maxOffset / 20 + 1, limit: 20 })).rejects.toMatchObject({ code: "PAGE_TOO_DEEP" });
     });
 });
 
-describe("customer list totals read a bounded number of rows", () => {
+describe.each(PLANS)("customer list totals read a bounded number of rows on the %s plan", (plan) => {
+    const lists = useProfile(plan);
+
     it("caps the total and never issues an unbounded count", async () => {
         const queries: Array<{ query: string; values: readonly unknown[] }> = [];
-        const { db } = setup(LIST_COUNT_CAP + 80, queries);
+        const { db } = setup(lists.countCap + 80, queries);
         queries.length = 0;
         const result = await listCustomers(db, { limit: 10 });
-        expect(result.pagination).toMatchObject({ total: LIST_COUNT_CAP, totalIsCapped: true });
+        expect(result.pagination).toMatchObject({ total: lists.countCap, totalIsCapped: true });
         const counts = queries.filter(({ query }) => /count\(\*\)/i.test(query) && /from "customers"/i.test(query));
         expect(counts.length).toBeGreaterThan(0);
         for (const { query, values } of counts) {
             expect(query, query).toMatch(/count\(\*\) from \(select 1 as "one" from "customers" .* limit \?\)/i);
-            expect(values.at(-1)).toBe(LIST_COUNT_CAP + 1);
+            expect(values.at(-1)).toBe(lists.countCap + 1);
         }
     });
 });

@@ -13,10 +13,9 @@
 import { sql, type SQL, type SQLWrapper } from "drizzle-orm";
 import type { SQLiteSelect } from "drizzle-orm/sqlite-core";
 import type { Database } from "@scalius/database/client";
+import { planLimits, type PlanLimits } from "@scalius/shared/plan-limits";
 import {
     InvalidCursorError,
-    LIST_COUNT_CAP,
-    LIST_MAX_OFFSET,
     LIST_OFFSET_ERROR_CODE,
     LIST_CURSOR_ERROR_CODE,
     buildPageInfo,
@@ -32,6 +31,9 @@ import {
     type ListCursorShape,
 } from "@scalius/shared/pagination";
 import { AppError } from "../errors";
+
+/** The plan's list limits: the count cap and the deepest numbered page. */
+export type ListLimits = PlanLimits["lists"];
 
 /** One sort: the column, its unique tiebreaker, and the direction the list reads in. */
 export interface KeysetOrder {
@@ -98,7 +100,7 @@ export function keysetCondition(
 export function cappedCountQuery(
     db: Database,
     probe: SQLiteSelect,
-    cap: number = LIST_COUNT_CAP,
+    cap: number = planLimits().lists.countCap,
 ) {
     return db
         .select({ count: sql<number>`count(*)` })
@@ -127,12 +129,12 @@ export function readListCursor(token: string, shape: ListCursorShape): ListCurso
     }
 }
 
-export function tooDeepPage(offset: number): AppError {
+export function tooDeepPage(offset: number, maxOffset: number = planLimits().lists.maxOffset): AppError {
     return new AppError(
         400,
         LIST_OFFSET_ERROR_CODE,
-        `Page numbers reach the first ${LIST_MAX_OFFSET.toLocaleString("en-US")} rows only (this page starts at row ${(offset + 1).toLocaleString("en-US")}). Walk further with the after cursor from pageInfo.endCursor.`,
-        { maxOffset: LIST_MAX_OFFSET },
+        `Page numbers reach the first ${maxOffset.toLocaleString("en-US")} rows only (this page starts at row ${(offset + 1).toLocaleString("en-US")}). Walk further with the after cursor from pageInfo.endCursor.`,
+        { maxOffset },
     );
 }
 
@@ -148,6 +150,7 @@ export type ListPaging =
 export function resolveListPaging(
     input: { page: number; limit: number; after?: string | null; before?: string | null },
     shape: ListCursorShape,
+    maxOffset: number = planLimits().lists.maxOffset,
 ): ListPaging {
     const after = input.after?.trim() || undefined;
     const before = input.before?.trim() || undefined;
@@ -160,7 +163,7 @@ export function resolveListPaging(
         return { mode: after ? "after" : "before", cursor: readListCursor(token, shape) };
     }
     const offset = Math.max(0, (input.page - 1) * input.limit);
-    if (offset >= LIST_MAX_OFFSET) throw tooDeepPage(offset);
+    if (offset >= maxOffset) throw tooDeepPage(offset, maxOffset);
     return { mode: "offset", offset };
 }
 
@@ -172,13 +175,14 @@ export function positionCursor(sort: string, position: number): string {
 /**
  * Paging for a ranked result (a text search ordered by relevance). The rank
  * is computed per row and cannot seek, so these lists page by position and
- * only inside the first `LIST_MAX_OFFSET` matches: `after`/`before` cursors
+ * only inside the first `maxOffset` matches: `after`/`before` cursors
  * carry a row position instead of a sort value. Returns the rows to skip and
  * the rows to show (a `before` page is the `limit` rows ending at the cursor).
  */
 export function resolvePositionalPaging(
     input: { page: number; limit: number; after?: string | null; before?: string | null },
     sort: string,
+    maxOffset: number = planLimits().lists.maxOffset,
 ): { offset: number; take: number } {
     const after = input.after?.trim() || undefined;
     const before = input.before?.trim() || undefined;
@@ -198,8 +202,8 @@ export function resolvePositionalPaging(
             take = position - offset;
         }
     }
-    if (offset >= LIST_MAX_OFFSET) throw tooDeepPage(offset);
-    return { offset, take: Math.min(take, LIST_MAX_OFFSET - offset) };
+    if (offset >= maxOffset) throw tooDeepPage(offset, maxOffset);
+    return { offset, take: Math.min(take, maxOffset - offset) };
 }
 
 // ─── One list's page plan ────────────────────────────────────────────────────
@@ -232,9 +236,10 @@ export interface KeysetRow {
 export function planKeysetPage(
     input: { page: number; limit: number; after?: string | null; before?: string | null },
     spec: KeysetListSpec,
+    lists: ListLimits = planLimits().lists,
 ) {
     const { limit } = input;
-    const positional = spec.ranked ? resolvePositionalPaging(input, spec.sort) : null;
+    const positional = spec.ranked ? resolvePositionalPaging(input, spec.sort, lists.maxOffset) : null;
     const paging: ListPaging = positional
         ? { mode: "offset", offset: positional.offset }
         : resolveListPaging(input, {
@@ -242,7 +247,7 @@ export function planKeysetPage(
             direction: spec.order.direction,
             kinds: [spec.kind],
             nullable: spec.order.nullable,
-        });
+        }, lists.maxOffset);
     const backward = paging.mode === "before";
     const take = positional?.take ?? limit;
 
@@ -272,13 +277,13 @@ export function planKeysetPage(
         /** Trims the fetched rows to the page and builds its `pageInfo` and start position. */
         finish<Row extends KeysetRow>(fetched: readonly Row[], positionCount?: number) {
             const page = finishKeysetPage(fetched, take, backward);
-            // A ranked search only shows its first LIST_MAX_OFFSET matches.
-            if (positional && positional.offset + take >= LIST_MAX_OFFSET) page.hasMore = false;
+            // A ranked search only shows its first `maxOffset` matches.
+            if (positional && positional.offset + take >= lists.maxOffset) page.hasMore = false;
             const rows = page.rows;
             const upToCursor = paging.mode === "offset" ? null : Number(positionCount ?? 0);
             const pageStart: number | null = paging.mode === "offset"
                 ? paging.offset
-                : upToCursor !== null && upToCursor <= LIST_COUNT_CAP
+                : upToCursor !== null && upToCursor <= lists.countCap
                     ? Math.max(0, upToCursor - (backward ? rows.length : 0))
                     : null;
             const pageInfo = buildPageInfo(
@@ -302,8 +307,13 @@ export function planKeysetPage(
 }
 
 /** The `pagination` object of a keyset-paged list. */
-export function cappedPagination(counted: number, pageStart: number | null, limit: number) {
-    const { total, totalIsCapped } = capTotal(counted);
+export function cappedPagination(
+    counted: number,
+    pageStart: number | null,
+    limit: number,
+    cap: number = planLimits().lists.countCap,
+) {
+    const { total, totalIsCapped } = capTotal(counted, cap);
     return {
         total,
         /** `total` is a lower bound: more rows match than the count reads. */

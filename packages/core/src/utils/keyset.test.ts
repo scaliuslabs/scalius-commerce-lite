@@ -1,12 +1,12 @@
 import { sql } from "drizzle-orm";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import {
-    LIST_MAX_OFFSET,
     decodeListCursor,
     encodeListCursor,
     type CursorDirection,
 } from "@scalius/shared/pagination";
+import { planLimits } from "@scalius/shared/plan-limits";
 import {
     keysetCondition,
     keysetOrderBy,
@@ -22,6 +22,7 @@ const rows = VALUES.map((value, index) => ({ id: `r${String(index).padStart(2, "
 
 const harnesses: Array<{ sqlite: { close(): void } }> = [];
 afterEach(() => {
+    vi.unstubAllGlobals();
     for (const harness of harnesses.splice(0)) harness.sqlite.close();
 });
 
@@ -92,17 +93,28 @@ describe("request paging", () => {
         }
     });
 
-    it("stops numbered pages at the offset bound and points at the cursor", () => {
-        expect(() => resolveListPaging({ page: 20, limit: 50 }, shape)).not.toThrow();
-        expect(() => resolveListPaging({ page: 21, limit: 50 }, shape)).toThrow(
-            expect.objectContaining({ status: 400, code: "PAGE_TOO_DEEP", message: expect.stringContaining("after cursor") }),
+    it.each(["free", "paid"] as const)("stops numbered pages at the %s plan's offset bound and points at the cursor", (plan) => {
+        vi.stubGlobal("__SCALIUS_PLAN__", plan);
+        const { maxOffset } = planLimits(plan).lists;
+        const lastPage = maxOffset / 50;
+        expect(() => resolveListPaging({ page: lastPage, limit: 50 }, shape)).not.toThrow();
+        expect(() => resolveListPaging({ page: lastPage + 1, limit: 50 }, shape)).toThrow(
+            expect.objectContaining({
+                status: 400,
+                code: "PAGE_TOO_DEEP",
+                details: { maxOffset },
+                message: expect.stringContaining("after cursor"),
+            }),
         );
-        expect(LIST_MAX_OFFSET).toBe(1_000);
+        // The bound is a value: the same call can name another one.
+        expect(() => resolveListPaging({ page: 3, limit: 50 }, shape, 100)).toThrow(expect.objectContaining({ code: "PAGE_TOO_DEEP" }));
     });
 });
 
 describe("positional (ranked) paging", () => {
-    it("pages by position inside the bounded window", () => {
+    it.each(["free", "paid"] as const)("pages by position inside the %s plan's bounded window", (plan) => {
+        vi.stubGlobal("__SCALIUS_PLAN__", plan);
+        const { maxOffset } = planLimits(plan).lists;
         expect(resolvePositionalPaging({ page: 1, limit: 25 }, "relevance")).toEqual({ offset: 0, take: 25 });
         expect(resolvePositionalPaging({ page: 3, limit: 25 }, "relevance")).toEqual({ offset: 50, take: 25 });
         expect(resolvePositionalPaging({ page: 1, limit: 25, after: positionCursor("relevance", 24) }, "relevance")).toEqual({ offset: 25, take: 25 });
@@ -110,11 +122,12 @@ describe("positional (ranked) paging", () => {
         // Near the top a before-page is whatever is left above the cursor.
         expect(resolvePositionalPaging({ page: 1, limit: 25, before: positionCursor("relevance", 10) }, "relevance")).toEqual({ offset: 0, take: 10 });
         // The last window page is trimmed to the bound.
-        expect(resolvePositionalPaging({ page: 1, limit: 30, after: positionCursor("relevance", 984) }, "relevance")).toEqual({ offset: 985, take: 15 });
+        expect(resolvePositionalPaging({ page: 1, limit: 30, after: positionCursor("relevance", maxOffset - 16) }, "relevance")).toEqual({ offset: maxOffset - 15, take: 15 });
     });
 
     it("rejects the window's end, other sorts and keyset cursors", () => {
-        expect(() => resolvePositionalPaging({ page: 1, limit: 25, after: positionCursor("relevance", 999) }, "relevance")).toThrow(
+        const { maxOffset } = planLimits().lists;
+        expect(() => resolvePositionalPaging({ page: 1, limit: 25, after: positionCursor("relevance", maxOffset - 1) }, "relevance")).toThrow(
             expect.objectContaining({ code: "PAGE_TOO_DEEP" }),
         );
         expect(() => resolvePositionalPaging({ page: 1, limit: 25, after: positionCursor("other", 3) }, "relevance")).toThrow(

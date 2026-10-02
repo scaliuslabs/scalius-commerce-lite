@@ -9,10 +9,15 @@
  * - walk with an opaque cursor naming the last row they showed (sort value
  *   plus id, so equal values stay in one stable order);
  * - learn "is there another page" from `limit + 1` rows, not a count;
- * - show a total that is exact up to `LIST_COUNT_CAP` and "1,000+" above it
- *   (`SELECT count(*) FROM (SELECT 1 ... LIMIT cap + 1)` reads at most
+ * - show a total that is exact up to the plan's count cap and "1,000+" above
+ *   it (`SELECT count(*) FROM (SELECT 1 ... LIMIT cap + 1)` reads at most
  *   cap + 1 index rows);
- * - keep numbered `page` requests only for shallow offsets (`LIST_MAX_OFFSET`).
+ * - keep numbered `page` requests only for shallow offsets (the plan's
+ *   `maxOffset`).
+ *
+ * The cap and the offset bound are plan values (`planLimits().lists`,
+ * `@scalius/shared/plan-limits`: 1,000 on Free, 10,000 on Paid); everything
+ * here takes them as arguments and defaults to the deployment's plan.
  *
  * This module is the pure half (cursor tokens, caps, page info); the SQL
  * half lives in `@scalius/core/utils/keyset`.
@@ -23,12 +28,7 @@
  * silently walking the wrong order.
  */
 import { z } from "zod";
-
-/** A list's total is exact up to this many rows and reported as "N+" above it. */
-export const LIST_COUNT_CAP = 1_000;
-
-/** Numbered pages (`page`) may reach this many rows deep; deeper pages need a cursor. */
-export const LIST_MAX_OFFSET = 1_000;
+import { planLimits } from "./plan-limits";
 
 export const LIST_CURSOR_VERSION = 1;
 export const LIST_CURSOR_ERROR_CODE = "INVALID_CURSOR";
@@ -156,14 +156,14 @@ export function decodeListCursor(token: string, shape: ListCursorShape): ListCur
 /** A total that is exact up to the cap and a lower bound above it. */
 export function capTotal(
   counted: number,
-  cap: number = LIST_COUNT_CAP,
+  cap: number = planLimits().lists.countCap,
 ): { total: number; totalIsCapped: boolean } {
   const rows = Math.max(0, Math.trunc(Number(counted) || 0));
   return rows > cap ? { total: cap, totalIsCapped: true } : { total: rows, totalIsCapped: false };
 }
 
 /** The number of rows to read behind a capped count: one more than the cap shows. */
-export function cappedCountLimit(cap: number = LIST_COUNT_CAP): number {
+export function cappedCountLimit(cap: number = planLimits().lists.countCap): number {
   return cap + 1;
 }
 

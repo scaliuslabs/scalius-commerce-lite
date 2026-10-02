@@ -211,7 +211,7 @@ export async function listProducts(db: Database, options: {
         .offset(plan.offset)
         .orderBy(...plan.orderBy);
 
-    // The total reads at most LIST_COUNT_CAP + 1 rows; a cursor page also
+    // The total reads at most `countCap` + 1 rows; a cursor page also
     // counts the rows leading up to it (same cap) for its "51-100 of 1,000+".
     const positionWhere = plan.positionWhere(whereClause);
     const statements: unknown[] = [

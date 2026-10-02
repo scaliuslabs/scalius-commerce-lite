@@ -39,7 +39,7 @@ export const paginatedEnvelope = (itemsKey: string, itemSchema: z.ZodTypeAny) =>
 /** How a keyset-paged list is walked, repeated on its schemas so SDK and agent docs carry it. */
 const KEYSET_PAGINATION_NOTE =
   "Large lists are walked with opaque cursors: pass pageInfo.endCursor as `after` for the next page and pageInfo.startCursor as `before` for the previous one. "
-  + "`page` still works for the first 1,000 rows. `total` is exact up to 1,000 and a lower bound above it (see totalIsCapped).";
+  + "`page` still works for the first 1,000 rows (10,000 on a Paid deployment). `total` is exact up to that many rows and a lower bound above it (see totalIsCapped).";
 
 /** The cursors and flags of one page of a keyset-paged list. */
 export const pageInfoSchema = z.object({
@@ -51,10 +51,10 @@ export const pageInfoSchema = z.object({
 
 /** Pagination counts of a keyset-paged list: `total` is capped, `offset` may be unknown. */
 export const cappedPaginationSchema = paginationSchema.extend({
-  total: z.number().openapi({ description: "Matching rows: exact up to 1,000, otherwise 1,000 with totalIsCapped true." }),
+  total: z.number().openapi({ description: "Matching rows: exact up to the count cap (1,000; 10,000 on a Paid deployment), otherwise the cap with totalIsCapped true." }),
   totalIsCapped: z.boolean().openapi({ description: "More rows match than `total` counts (show \"1,000+\")." }),
-  page: z.number().openapi({ description: "Page number of this page; 0 for a cursor page deeper than the first 1,000 rows." }),
-  offset: z.number().int().nullable().openapi({ description: "Zero-based index of the first row of this page; null deeper than the first 1,000 rows." }),
+  page: z.number().openapi({ description: "Page number of this page; 0 for a cursor page deeper than the count cap." }),
+  offset: z.number().int().nullable().openapi({ description: "Zero-based index of the first row of this page; null deeper than the count cap." }),
 });
 
 /**

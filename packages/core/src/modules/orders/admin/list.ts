@@ -263,7 +263,7 @@ export async function listOrders(db: Database, options: {
     openRequest?: boolean;
     /** Exactly these orders (an export of a page or a selection). */
     ids?: string[];
-    /** A numbered page; only the first `LIST_MAX_OFFSET` rows are reachable this way. */
+    /** A numbered page; only the first `maxOffset` rows (plan limit) are reachable this way. */
     page?: number;
     limit?: number;
     /** Rows after this cursor (`pageInfo.endCursor` of the previous page). Excludes `before` and `page`. */
@@ -407,7 +407,7 @@ export async function listOrders(db: Database, options: {
         : undefined;
 
     // A search ordered by relevance computes its rank per row and cannot
-    // seek, so it pages by position inside the first `LIST_MAX_OFFSET`
+    // seek, so it pages by position inside the first `maxOffset`
     // matches. Every other sort walks by keyset (sort value + id).
     const relevanceRanked = sort === "relevance" && rankExpression !== undefined;
     const keysetSort = sort === "relevance" ? "updatedAt" : sort;
@@ -467,7 +467,7 @@ export async function listOrders(db: Database, options: {
         .offset(plan.offset)
         .orderBy(...plan.orderBy);
 
-    // The total reads at most LIST_COUNT_CAP + 1 rows. A cursor page also
+    // The total reads at most `countCap` + 1 rows. A cursor page also
     // counts the rows up to its cursor (same cap) so the dashboard can print
     // "51-100 of 1,000+" instead of only a total.
     const countProbe = (where: SQL | undefined) =>

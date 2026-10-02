@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, it } from "vitest";
-import { LIST_COUNT_CAP, LIST_MAX_OFFSET } from "@scalius/shared/pagination";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { planLimits } from "@scalius/shared/plan-limits";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { compareSqliteValues, walkBackward, walkForward, type FetchPage } from "../../../testing/keyset-walk";
 import { listOrders } from "./list";
@@ -15,6 +15,15 @@ interface Seeded {
     totalAmount: number;
     customerName: string;
     status: string;
+}
+
+const PLANS = ["free", "paid"] as const;
+
+/** Runs the describe's tests under one plan profile and returns that plan's list limits. */
+function useProfile(plan: (typeof PLANS)[number]) {
+    beforeEach(() => vi.stubGlobal("__SCALIUS_PLAN__", plan));
+    afterEach(() => vi.unstubAllGlobals());
+    return planLimits(plan).lists;
 }
 
 const harnesses: Array<{ sqlite: { close(): void } }> = [];
@@ -69,7 +78,9 @@ function fetcher(db: Db, options: Parameters<typeof listOrders>[1]): FetchPage {
     };
 }
 
-describe("order list keyset pagination", () => {
+describe.each(PLANS)("order list keyset pagination on the %s plan", (plan) => {
+    const lists = useProfile(plan);
+
     for (const sort of SORTS) {
         for (const direction of ["asc", "desc"] as const) {
             it(`walks every order exactly once by ${sort} ${direction}, forward and back, with ties`, async () => {
@@ -177,27 +188,29 @@ describe("order list keyset pagination", () => {
 
     it("answers a numbered page beyond the offset bound with a typed error that names the cursor", async () => {
         const { db } = setup(3);
-        await expect(listOrders(db, { page: 21, limit: 50 })).rejects.toMatchObject({
+        await expect(listOrders(db, { page: lists.maxOffset / 50 + 1, limit: 50 })).rejects.toMatchObject({
             status: 400,
             code: "PAGE_TOO_DEEP",
             message: expect.stringContaining("after cursor"),
         });
         // The last numbered page below the bound still works.
-        const last = await listOrders(db, { page: Math.ceil(LIST_MAX_OFFSET / 50), limit: 50 });
+        const last = await listOrders(db, { page: lists.maxOffset / 50, limit: 50 });
         expect(last.orders).toEqual([]);
     });
 });
 
-describe("order list totals read a bounded number of rows", () => {
+describe.each(PLANS)("order list totals read a bounded number of rows on the %s plan", (plan) => {
+    const lists = useProfile(plan);
+
     it("caps the total and says so, and the count statement never scans the whole table", async () => {
         const queries: Array<{ query: string; values: readonly unknown[] }> = [];
-        const { db } = setup(LIST_COUNT_CAP + 205, queries);
+        const { db } = setup(lists.countCap + 205, queries);
         queries.length = 0;
         const result = await listOrders(db, { limit: 10 });
         expect(result.pagination).toMatchObject({
-            total: LIST_COUNT_CAP,
+            total: lists.countCap,
             totalIsCapped: true,
-            totalPages: LIST_COUNT_CAP / 10,
+            totalPages: lists.countCap / 10,
         });
         expect(result.pageInfo.hasNextPage).toBe(true);
 
@@ -206,32 +219,34 @@ describe("order list totals read a bounded number of rows", () => {
         for (const { query, values } of counts) {
             // count(*) only over a sub-select that stops after cap + 1 rows.
             expect(query, query).toMatch(/count\(\*\) from \(select 1 as "one" from "orders" .* limit \?\)/i);
-            expect(values.at(-1), query).toBe(LIST_COUNT_CAP + 1);
+            expect(values.at(-1), query).toBe(lists.countCap + 1);
         }
         expect(queries.some(({ query }) => /select count\(\*\) from "orders"/i.test(query))).toBe(false);
     });
 
     it("is exact below the cap, and a deep cursor page counts its position with the same bound", async () => {
         const queries: Array<{ query: string; values: readonly unknown[] }> = [];
-        const { db } = setup(LIST_COUNT_CAP + 205, queries);
-        // Rows 0..14 are before this cursor: exact. Rows beyond the cap: unknown.
-        const first = await listOrders(db, { limit: 15 });
-        const second = await listOrders(db, { limit: 15, after: first.pageInfo.endCursor! });
-        expect(second.pagination).toMatchObject({ offset: 15, page: 2, totalIsCapped: true });
+        const { db } = setup(lists.countCap + 205, queries);
+        // Rows 0..99 are before this cursor: exact. Rows beyond the cap: unknown.
+        const first = await listOrders(db, { limit: 100 });
+        const second = await listOrders(db, { limit: 100, after: first.pageInfo.endCursor! });
+        expect(second.pagination).toMatchObject({ offset: 100, page: 2, totalIsCapped: true });
 
         let page = second;
-        for (let hop = 0; hop < 70 && page.pagination.offset !== null; hop += 1) {
-            page = await listOrders(db, { limit: 15, after: page.pageInfo.endCursor! });
+        for (let hop = 0; hop < lists.countCap / 100 + 5 && page.pagination.offset !== null; hop += 1) {
+            page = await listOrders(db, { limit: 100, after: page.pageInfo.endCursor! });
         }
         expect(page.pagination.offset).toBeNull();
         expect(page.pagination.page).toBe(0);
-        expect(page.orders).toHaveLength(15);
+        expect(page.orders).toHaveLength(100);
         const probes = queries.filter(({ query }) => /select count\(\*\) from \(select 1/i.test(query));
-        expect(probes.every(({ values }) => values.at(-1) === LIST_COUNT_CAP + 1)).toBe(true);
+        expect(probes.every(({ values }) => values.at(-1) === lists.countCap + 1)).toBe(true);
     });
 });
 
-describe("order list relevance search", () => {
+describe.each(PLANS)("order list relevance search on the %s plan", (plan) => {
+    const lists = useProfile(plan);
+
     it("pages a ranked search by position inside the bounded window", async () => {
         const { db, rows } = setup(40);
         const matching = rows.filter((row) => row.customerName === "Karim Ali").map((row) => row.id);
@@ -254,7 +269,7 @@ describe("order list relevance search", () => {
         const first = await listOrders(db, { search: "Karim", sort: "relevance", limit: 2 });
         await expect(listOrders(db, { search: "Karim", sort: "createdAt", limit: 2, after: first.pageInfo.endCursor! }))
             .rejects.toMatchObject({ code: "INVALID_CURSOR" });
-        await expect(listOrders(db, { search: "Karim", sort: "relevance", limit: 50, page: 21 }))
+        await expect(listOrders(db, { search: "Karim", sort: "relevance", limit: 50, page: lists.maxOffset / 50 + 1 }))
             .rejects.toMatchObject({ code: "PAGE_TOO_DEEP" });
     });
 });

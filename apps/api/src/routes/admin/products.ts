@@ -384,7 +384,7 @@ const listRoute = createRoute({
     summary: "List all products",
     request: {
         query: z.object({
-            page: z.coerce.number().int().min(1).default(1).openapi({ description: "Page number; reaches the first 1,000 rows only (PAGE_TOO_DEEP beyond), use after/before to go deeper" }),
+            page: z.coerce.number().int().min(1).default(1).openapi({ description: "Page number; reaches the first 1,000 rows only, 10,000 on a Paid deployment (PAGE_TOO_DEEP beyond), use after/before to go deeper" }),
             limit: z.coerce.number().int().min(1).max(100).default(10).openapi({ description: "Items per page" }),
             ...keysetQuerySchema,
             search: z.string().trim().max(120).optional().openapi({ description: "Search term" }),
