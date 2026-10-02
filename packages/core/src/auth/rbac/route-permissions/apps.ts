@@ -1,0 +1,31 @@
+// Route permissions for installed apps (plugins, docs/platform/PLUGINS.md):
+// the management API under /api/v1/admin/apps and each app's own dashboard
+// routes under /api/v1/plugins/<id>/admin/<route>/<sub path>.
+//
+// Naming follows the `<resource>.<action>` families: `apps.view` reads (the
+// list, an app's detail, logs and deliveries, and its pages), `apps.use`
+// performs an app's own mutating dashboard actions, `apps.manage` changes the
+// installation (activate, settings, retry, deactivate, uninstall). Activation
+// is additionally Super Admin only (enforced by the route): approving an
+// app's access is approving what it may read and change.
+import { PERMISSIONS } from "../permissions";
+import type { RoutePermissionMap } from "./shared";
+
+const view = { permission: PERMISSIONS.APPS_VIEW };
+const manage = { permission: PERMISSIONS.APPS_MANAGE };
+const use = { allOf: [PERMISSIONS.APPS_VIEW, PERMISSIONS.APPS_USE] };
+
+export const APP_ROUTE_PERMISSIONS: RoutePermissionMap = {
+  "/api/v1/admin/apps": { GET: view },
+  "/api/v1/admin/apps/*": { GET: view },
+  "/api/v1/admin/apps/*/activate": { POST: manage },
+  "/api/v1/admin/apps/*/deactivate": { POST: manage },
+  "/api/v1/admin/apps/*/settings": { PUT: manage },
+  "/api/v1/admin/apps/*/uninstall": { POST: manage },
+  "/api/v1/admin/apps/*/logs": { GET: view },
+  "/api/v1/admin/apps/*/deliveries": { GET: view },
+  "/api/v1/admin/apps/*/deliveries/*/retry": { POST: manage },
+  // An app's own dashboard routes: reading its pages needs apps.view; its
+  // mutating actions also need apps.use.
+  "/api/v1/plugins/*/admin/**": { GET: view, POST: use, PUT: use, PATCH: use, DELETE: use },
+};

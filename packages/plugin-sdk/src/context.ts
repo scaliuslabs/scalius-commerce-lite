@@ -110,8 +110,28 @@ export interface PluginContext {
   log: PluginLogger;
 }
 
-/** What an event handler receives (the webhook delivery body, minus `data`). */
+/**
+ * What an event handler receives (the webhook delivery body, minus `data`:
+ * read the resource's current state with `ctx.api`).
+ *
+ * Delivery is at least once. The same event can arrive again (a retry after
+ * your handler threw or timed out, a lost acknowledgement), so make handlers
+ * idempotent: `id` is stable across every attempt, use it as your
+ * idempotency key (store it, or pass it as `idempotencyKey`/request key to
+ * `ctx.api.call`). Events are not ordered across resources.
+ *
+ * Your plugin also receives events caused by its own writes (an
+ * `order.updated` after it edits an order), as Shopify apps do. Write only
+ * when something would change, so your handler converges instead of looping.
+ * The platform bounds runaway loops with your `ctx.api` rate limit and a cap
+ * on deliveries in flight, not by filtering your own events.
+ *
+ * A handler that throws or times out is retried with backoff (1 min, 5 min,
+ * 30 min, 1 h, 3 h, 6 h, 12 h; 8 attempts), then the delivery is exhausted
+ * and the merchant can retry it from the app's page.
+ */
 export interface PluginEvent<T extends EventTopic = EventTopic> {
+  /** The event id: your idempotency key. */
   id: string;
   topic: T;
   apiVersion: EventsApiVersion;
@@ -120,20 +140,39 @@ export interface PluginEvent<T extends EventTopic = EventTopic> {
   facts: Record<string, unknown>;
 }
 
-/** A route request as the plugin sees it: headers are filtered, cookies and auth never pass. */
+/**
+ * A route request as the plugin sees it: headers are filtered, cookies and
+ * auth never pass. Admin and public routes see only `accept`,
+ * `accept-language`, `content-type`, `if-none-match`, `user-agent` and
+ * `x-requested-with`; webhook routes see every header except credentials and
+ * network headers (so provider signature headers arrive). Bodies are capped:
+ * 1 MiB admin and webhooks, 256 KiB public.
+ */
 export interface PluginRouteRequest {
   method: string;
   /** The path after the route name. */
   subpath: string;
   query: Record<string, string>;
+  /** Lowercase names. */
   headers: Record<string, string>;
-  /** Parsed JSON when the body is JSON, else null; `rawBody` is set for webhook routes. */
+  /**
+   * Parsed JSON when the body is JSON, an object of fields when it is a form
+   * (`application/x-www-form-urlencoded`), else null.
+   */
   body: unknown;
+  /** Webhook routes: the exact body text, for signature checks. Null elsewhere. */
   rawBody: string | null;
   /** Admin routes: the staff member's id. */
   staffId: string | null;
 }
 
+/**
+ * Responses are always JSON (`body`, or nothing for 204). A plugin may not
+ * set cookies, CSP, CORS, `content-type` or redirect `location` headers.
+ * Admin responses are never cached. A public or webhook response is
+ * `no-store` unless it sets exactly `cache-control: public, max-age=N` with
+ * N ≤ 300.
+ */
 export interface PluginRouteResponse {
   status?: number;
   headers?: Record<string, string>;

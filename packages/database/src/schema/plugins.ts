@@ -19,6 +19,7 @@ import { sql } from "drizzle-orm";
 import type { InferSelectModel } from "drizzle-orm";
 import { check, index, integer, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { user } from "./auth";
+import { eventOutbox } from "./events";
 import { UNIX_NOW } from "./shared";
 
 export const PLUGIN_INSTALLATION_SOURCES = ["bundled", "registry", "upload"] as const;
@@ -168,7 +169,101 @@ export const pluginLogEntries = sqliteTable("plugin_log_entries", {
     check("plugin_log_entries_fields_json", jsonObject(table.fieldsJson, 4096)),
 ]);
 
+// ── Phase 2 (0107): event deliveries and cron runs ────────────────────────
+
+export const PLUGIN_EVENT_DELIVERY_STATUSES = [
+    "pending",
+    "enqueueing",
+    "queued",
+    "processing",
+    "succeeded",
+    "failed",
+    "exhausted",
+    "cancelled",
+] as const;
+export type PluginEventDeliveryStatus = (typeof PLUGIN_EVENT_DELIVERY_STATUSES)[number];
+
+/**
+ * One row per (plugin, event): the delivery's durable state and its bounded
+ * attempt log, the plugin twin of `webhook_event_deliveries`. Keyed by plugin
+ * id (not the installation row) so an uninstall that keeps data keeps the log.
+ */
+export const pluginEventDeliveries = sqliteTable("plugin_event_deliveries", {
+    /** `pld_` + epoch milliseconds (13 digits) + 12 random hex: unique and time-sortable. */
+    id: text("id").primaryKey(),
+    pluginId: text("plugin_id").notNull(),
+    /** Set null when the event is pruned; topic and resource stay. */
+    eventId: text("event_id").references(() => eventOutbox.id, { onDelete: "set null" }),
+    topic: text("topic").notNull(),
+    resourceType: text("resource_type").notNull(),
+    resourceId: text("resource_id").notNull(),
+    status: text("status", { enum: PLUGIN_EVENT_DELIVERY_STATUSES }).notNull().default("pending"),
+    attempts: integer("attempts").notNull().default(0),
+    nextAttemptAt: integer("next_attempt_at").notNull().default(UNIX_NOW),
+    claimId: text("claim_id"),
+    claimExpiresAt: integer("claim_expires_at"),
+    queuedAt: integer("queued_at"),
+    lastAttemptAt: integer("last_attempt_at"),
+    durationMs: integer("duration_ms"),
+    /** The last attempt's failure, masked like the plugin log. */
+    lastError: text("last_error"),
+    deliveredAt: integer("delivered_at"),
+    createdAt: integer("created_at").notNull().default(UNIX_NOW),
+    updatedAt: integer("updated_at").notNull().default(UNIX_NOW),
+}, (table) => [
+    uniqueIndex("plugin_event_deliveries_plugin_event_unique")
+        .on(table.pluginId, table.eventId)
+        .where(sql`${table.eventId} IS NOT NULL`),
+    index("plugin_event_deliveries_due_idx").on(table.status, table.nextAttemptAt),
+    index("plugin_event_deliveries_claim_idx").on(table.status, table.claimExpiresAt),
+    index("plugin_event_deliveries_queued_idx").on(table.status, table.queuedAt),
+    index("plugin_event_deliveries_plugin_idx").on(table.pluginId, table.id),
+    index("plugin_event_deliveries_plugin_status_idx").on(table.pluginId, table.status, table.claimExpiresAt),
+    index("plugin_event_deliveries_event_idx").on(table.eventId).where(sql`${table.eventId} IS NOT NULL`),
+    index("plugin_event_deliveries_created_idx").on(table.createdAt),
+    check("plugin_event_deliveries_id_shape", sql`length(${table.id}) = 29 AND substr(${table.id}, 1, 4) = 'pld_'`),
+    check("plugin_event_deliveries_plugin_id_shape", pluginIdShape(table.pluginId)),
+    check("plugin_event_deliveries_status_check", sql`${table.status} IN ('pending', 'enqueueing', 'queued', 'processing', 'succeeded', 'failed', 'exhausted', 'cancelled')`),
+    check("plugin_event_deliveries_attempts_nonnegative", sql`${table.attempts} >= 0`),
+    check("plugin_event_deliveries_error_length", sql`${table.lastError} IS NULL OR length(${table.lastError}) <= 500`),
+]);
+
+export const PLUGIN_CRON_RUN_STATUSES = ["running", "succeeded", "failed"] as const;
+export type PluginCronRunStatus = (typeof PLUGIN_CRON_RUN_STATUSES)[number];
+
+/**
+ * Cron claims: a run is the row for (plugin, job, slot), inserted once, so two
+ * ticks can never both run a slot; the partial unique index allows one
+ * `running` row per job, so runs of one job never overlap. A lease bounds a
+ * run whose Worker died; the next tick marks it failed.
+ */
+export const pluginCronRuns = sqliteTable("plugin_cron_runs", {
+    pluginId: text("plugin_id").notNull(),
+    cronName: text("cron_name").notNull(),
+    /** The schedule slot this run is for (epoch seconds). */
+    scheduledFor: integer("scheduled_for").notNull(),
+    status: text("status", { enum: PLUGIN_CRON_RUN_STATUSES }).notNull().default("running"),
+    claimId: text("claim_id").notNull(),
+    startedAt: integer("started_at").notNull().default(UNIX_NOW),
+    leaseExpiresAt: integer("lease_expires_at").notNull(),
+    finishedAt: integer("finished_at"),
+    durationMs: integer("duration_ms"),
+    error: text("error"),
+}, (table) => [
+    primaryKey({ columns: [table.pluginId, table.cronName, table.scheduledFor] }),
+    uniqueIndex("plugin_cron_runs_one_running").on(table.pluginId, table.cronName).where(sql`${table.status} = 'running'`),
+    index("plugin_cron_runs_lease_idx").on(table.status, table.leaseExpiresAt),
+    index("plugin_cron_runs_started_idx").on(table.startedAt),
+    check("plugin_cron_runs_plugin_id_shape", pluginIdShape(table.pluginId)),
+    check("plugin_cron_runs_name_length", sql`length(${table.cronName}) BETWEEN 1 AND 48`),
+    check("plugin_cron_runs_status_check", sql`${table.status} IN ('running', 'succeeded', 'failed')`),
+    check("plugin_cron_runs_finished_shape", sql`(${table.status} = 'running') = (${table.finishedAt} IS NULL)`),
+    check("plugin_cron_runs_error_length", sql`${table.error} IS NULL OR length(${table.error}) <= 500`),
+]);
+
 export type PluginInstallationRow = InferSelectModel<typeof pluginInstallations>;
 export type PluginRecordRow = InferSelectModel<typeof pluginRecords>;
 export type PluginKvRow = InferSelectModel<typeof pluginKv>;
 export type PluginLogRow = InferSelectModel<typeof pluginLogEntries>;
+export type PluginEventDeliveryRow = InferSelectModel<typeof pluginEventDeliveries>;
+export type PluginCronRunRow = InferSelectModel<typeof pluginCronRuns>;

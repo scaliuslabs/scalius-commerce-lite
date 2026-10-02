@@ -108,6 +108,9 @@ const PAGE_PERMISSION_MAP: Record<string, PagePermissionConfig> = {
   // Inbox: customer conversations (replying is gated inside the page)
   "/admin/inbox": { permission: PERMISSIONS.CONVERSATIONS_VIEW },
 
+  // Apps: installed plugins (managing them is gated inside the pages)
+  "/admin/apps": { permission: PERMISSIONS.APPS_VIEW },
+
   // Discounts
   "/admin/discounts": { permission: PERMISSIONS.DISCOUNTS_VIEW },
   "/admin/discounts/new": { permission: PERMISSIONS.DISCOUNTS_CREATE },
@@ -208,6 +211,12 @@ const DYNAMIC_PAGE_PERMISSIONS: Array<{
   {
     pattern: /^\/admin\/inbox\/[^/]+$/,
     config: { permission: PERMISSIONS.CONVERSATIONS_VIEW },
+  },
+
+  // Apps: one app (activation, settings and removal are gated inside)
+  {
+    pattern: /^\/admin\/apps\/[^/]+$/,
+    config: { permission: PERMISSIONS.APPS_VIEW },
   },
 
   // Customers: one customer page; saving and order history are gated inside it.

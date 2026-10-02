@@ -188,13 +188,15 @@ describe("plugin installations", () => {
     await uninstallPlugin(db, "acme.loyalty", { keepData: true, expectedRevision: 1 });
     expect(await requirePluginInstallation(db, "acme.loyalty").catch((error: unknown) => error)).toBeInstanceOf(PluginError);
     expect(await getPluginRecord(db, "acme.loyalty", "ledger", "r1")).not.toBeNull();
-    expect(await listPluginLogs(db, "acme.loyalty")).toEqual([]);
+    // Keeping data keeps the log too (phase 2: keep or delete everything the plugin owns).
+    expect((await listPluginLogs(db, "acme.loyalty")).map((line) => line.message)).toEqual(["hi"]);
     expect(sqlite.prepare("SELECT count(*) AS n FROM plugin_registrations").get()).toEqual({ n: 0 });
 
     await installPlugin(db, { manifest: manifest({ settings: [] }), source: "upload", bundleSha256: SHA });
     await uninstallPlugin(db, "acme.loyalty", { keepData: false, expectedRevision: 1 });
     expect(await getPluginRecord(db, "acme.loyalty", "ledger", "r1")).toBeNull();
     expect(await getPluginKv(db, "acme.loyalty", "k")).toBeNull();
+    expect(await listPluginLogs(db, "acme.loyalty")).toEqual([]);
   });
 });
 

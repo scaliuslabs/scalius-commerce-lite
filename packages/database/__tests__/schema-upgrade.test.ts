@@ -444,6 +444,12 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 8,
         postgresStatements: 11,
       },
+      {
+        version: 107,
+        name: "0107_plugin_platform",
+        sqliteStatements: 14,
+        postgresStatements: 14,
+      },
     ]);
   });
 
@@ -599,6 +605,7 @@ describe("provider-neutral schema upgrades", () => {
           { version: 104, name: "0104_custom_fields" },
           { version: 105, name: "0105_plugin_runtime" },
           { version: 106, name: "0106_theme_document_v6" },
+          { version: 107, name: "0107_plugin_platform" },
         ],
       });
     } finally {

@@ -10,14 +10,14 @@ import type { PluginGrantRequest } from "@scalius/shared/plugins";
 /**
  * RBAC resources a plugin can never hold: staff and roles (`team`), agent
  * credentials (`agent_access`), webhook endpoints (a second, unaudited egress
- * path around `allowedHosts`) and plugin management (`plugins`, reserved for
- * the dashboard's plugin pages).
+ * path around `allowedHosts`) and app management (`apps`: activating,
+ * configuring or removing plugins, and using other apps, stays with people).
  */
 export const PLUGIN_RESERVED_PERMISSION_RESOURCES: ReadonlySet<string> = new Set([
   "team",
   "agent_access",
   "webhooks",
-  "plugins",
+  "apps",
 ]);
 
 type PermissionMetadataEntry = { resource: string };

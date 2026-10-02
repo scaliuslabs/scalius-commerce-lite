@@ -15,6 +15,9 @@ export type PluginErrorCode =
   | "installation.revision_conflict"
   | "installation.inactive"
   | "installation.settings_incomplete"
+  | "installation.grant_changed"
+  | "delivery.not_found"
+  | "delivery.not_retryable"
   | "settings.invalid"
   | "settings.key_unavailable"
   | "storage.undeclared_collection"
@@ -49,6 +52,9 @@ const STATUS: Partial<Record<PluginErrorCode, number>> = {
   "installation.not_found": 404,
   "installation.revision_conflict": 409,
   "installation.inactive": 409,
+  "installation.grant_changed": 409,
+  "delivery.not_found": 404,
+  "delivery.not_retryable": 409,
   "settings.key_unavailable": 503,
   "storage.unique_violation": 409,
   "storage.record_too_large": 413,

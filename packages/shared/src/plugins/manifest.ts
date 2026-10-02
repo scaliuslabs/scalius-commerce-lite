@@ -8,6 +8,7 @@
 import { z } from "zod";
 import { isEventTopicFilter, topicMatchesAnyFilter, type EventTopic, type EventTopicFilter } from "../events";
 import { SUPPORTED_PLUGIN_API_VERSIONS } from "./api-version";
+import { parsePluginCronSchedule } from "./cron";
 import { pluginSettingsSchemaSchema } from "./settings-schema";
 
 /** Date-versioned like the event catalog; a manifest names the version it was built for. */
@@ -63,8 +64,15 @@ const routeSchema = z.object({
   description: description.optional(),
 }).strict();
 
-/** Five-field cron; the platform runs schedules at most every 5 minutes. */
-const cronSchedule = z.string().trim().regex(/^(\S+\s+){4}\S+$/, "Use a five-field cron schedule.");
+/**
+ * Five-field cron in the store's time zone (cron.ts). The platform checks
+ * schedules on its scheduled tick, so a finer schedule runs once per tick.
+ */
+const cronSchedule = z.string().trim().regex(/^(\S+\s+){4}\S+$/, "Use a five-field cron schedule.")
+  .superRefine((value, context) => {
+    const parsed = parsePluginCronSchedule(value);
+    if (typeof parsed === "string") context.addIssue({ code: "custom", message: parsed });
+  });
 
 /** A top-level JSON key of a stored record. */
 const recordField = z.string().regex(/^[A-Za-z_][A-Za-z0-9_]{0,47}$/);
@@ -290,6 +298,27 @@ export function pluginGrantExpands(granted: PluginGrantRequest, next: PluginGran
     || grows(granted.storefrontScripts, next.storefrontScripts)
     || (!granted.storefrontSurfaces && next.storefrontSurfaces)
     || grows(granted.customFieldOwners, next.customFieldOwners);
+}
+
+/**
+ * What `next` asks for beyond `granted`, item by item (everything when
+ * nothing was granted): the consent screen marks these as new. Empty lists
+ * and false flags everywhere exactly when `pluginGrantExpands` is false.
+ */
+export function pluginGrantAdditions(granted: PluginGrantRequest | null, next: PluginGrantRequest): PluginGrantRequest {
+  if (!granted) return next;
+  const added = <T extends string>(before: readonly T[], after: readonly T[]) => after.filter((value) => !before.includes(value));
+  return {
+    permissions: added(granted.permissions, next.permissions),
+    allowedHosts: added(granted.allowedHosts, next.allowedHosts),
+    events: next.events.filter((filter) => !eventFilterCovered(filter, granted.events)),
+    functions: added(granted.functions, next.functions),
+    providers: added(granted.providers, next.providers),
+    publicRoutes: next.publicRoutes && !granted.publicRoutes,
+    storefrontScripts: added(granted.storefrontScripts, next.storefrontScripts),
+    storefrontSurfaces: next.storefrontSurfaces && !granted.storefrontSurfaces,
+    customFieldOwners: added(granted.customFieldOwners, next.customFieldOwners),
+  };
 }
 
 /** Whether a topic filter asks for nothing beyond the granted filters. */

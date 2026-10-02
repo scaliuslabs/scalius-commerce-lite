@@ -93,6 +93,7 @@
     "payments -> promotions",
     "payments -> settings",
     "platform -> settings",
+    "plugins -> events",
     "products -> attributes",
     "products -> inventory",
     "products -> settings",

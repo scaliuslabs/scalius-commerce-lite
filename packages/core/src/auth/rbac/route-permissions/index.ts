@@ -24,6 +24,7 @@ import { DIGITAL_ROUTE_PERMISSIONS } from "./digital";
 import { WARRANTY_ROUTE_PERMISSIONS } from "./warranty";
 import { WEBHOOK_ROUTE_PERMISSIONS } from "./webhooks";
 import { CUSTOM_FIELD_ROUTE_PERMISSIONS } from "./custom-fields";
+import { APP_ROUTE_PERMISSIONS } from "./apps";
 import type { HttpMethod, RoutePermission, RoutePermissionMap } from "./shared";
 
 /**
@@ -54,6 +55,7 @@ export const ROUTE_PERMISSION_MAPS: readonly RoutePermissionMap[] = [
   WARRANTY_ROUTE_PERMISSIONS,
   WEBHOOK_ROUTE_PERMISSIONS,
   CUSTOM_FIELD_ROUTE_PERMISSIONS,
+  APP_ROUTE_PERMISSIONS,
 ];
 
 /**
@@ -112,7 +114,8 @@ function normalizePathname(pathname: string): string {
 }
 
 /**
- * Simple pattern matching with * wildcard
+ * Simple pattern matching: `*` is one path segment, `**` one or more (only
+ * plugin route families use it, whose sub-paths belong to the plugin).
  */
 function matchPattern(pattern: string, pathname: string): boolean {
   if (!pattern.includes("*")) {
@@ -123,7 +126,9 @@ function matchPattern(pattern: string, pathname: string): boolean {
   // Escape special regex chars (including backslash) before converting globs
   const regexPattern = pattern
     .replace(/[\\^$.|?+()[\]{}]/g, "\\$&") // Escape regex special chars
+    .replace(/\*\*/g, "\uE000") // ** (one or more segments), expanded below
     .replace(/\*/g, "[^/]+") // * matches anything except /
+    .replace(/\uE000/g, "[^/]+(?:/[^/]+)*")
     .replace(/\//g, "\\/"); // Escape forward slashes
 
   const regex = new RegExp(`^${regexPattern}$`);

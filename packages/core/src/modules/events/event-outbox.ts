@@ -37,7 +37,13 @@ export interface WebhookDeliverQueueMessage {
   deliveryId: string;
 }
 
-export type EventsQueueMessage = EventsDispatchQueueMessage | WebhookDeliverQueueMessage;
+/** One plugin event delivery (`plugin_event_deliveries`), processed by the API's plugin host. */
+export interface PluginDeliverQueueMessage {
+  type: "plugins.deliver";
+  deliveryId: string;
+}
+
+export type EventsQueueMessage = EventsDispatchQueueMessage | WebhookDeliverQueueMessage | PluginDeliverQueueMessage;
 
 /** The subset of Cloudflare `Queue` the events pipeline uses. */
 export interface EventsQueue {

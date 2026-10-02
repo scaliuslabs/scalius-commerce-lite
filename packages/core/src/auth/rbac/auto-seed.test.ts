@@ -49,6 +49,9 @@ describe("system RBAC reconciliation on the real schema", () => {
     await autoSeedRbacIfNeeded(db);
     expect(grantsOf(sqlite, "super_admin")).toHaveLength(Object.values(PERMISSIONS).length);
     expect(grantsOf(sqlite, "manager")).not.toContain(PERMISSIONS.ORDERS_REFUND);
+    // Managers see and use apps; managing them stays with the Super Admin.
+    expect(grantsOf(sqlite, "manager")).toEqual(expect.arrayContaining([PERMISSIONS.APPS_VIEW, PERMISSIONS.APPS_USE]));
+    expect(grantsOf(sqlite, "manager")).not.toContain(PERMISSIONS.APPS_MANAGE);
 
     sqlite.exec(`
       INSERT INTO role_permissions (id, role_id, permission_id, created_at)
