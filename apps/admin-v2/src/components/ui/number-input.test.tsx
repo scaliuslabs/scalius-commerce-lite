@@ -80,16 +80,28 @@ describe("NumberInput", () => {
     expect(input.value).toBe("5x");
   });
 
-  it("takes no decimal point for whole-taka money and says why at the field", () => {
+  it("never drops a typed decimal point in whole-taka money: the fraction is refused, not rewritten", () => {
     act(() => root.render(<Harness initial={60} wholeUnitsMessage="Taka amounts are whole numbers." />));
     const input = host.querySelector("input")!;
     expect(input.inputMode).toBe("numeric");
-    act(() => type(input, "60.5"));
-    expect(onValueChange).not.toHaveBeenCalled();
-    expect(input.value).toBe("60");
+    // Typed key by key: the point stays, so "1234.50" can never become 123450.
+    for (const text of ["1", "12", "123", "1234", "1234.", "1234.5", "1234.50"]) act(() => type(input, text));
+    expect(input.value).toBe("1234.50");
+    expect(onValueChange).toHaveBeenLastCalledWith(Number.NaN);
+    expect(onValueChange).not.toHaveBeenCalledWith(123450);
     expect(input.validationMessage).toBe("Taka amounts are whole numbers.");
-    act(() => type(input, "65"));
-    expect(onValueChange).toHaveBeenLastCalledWith(65);
+    act(() => input.dispatchEvent(new FocusEvent("focusout", { bubbles: true })));
+    expect(input.value).toBe("1234.50");
+    expect(input.validationMessage).toBe("Taka amounts are whole numbers.");
+  });
+
+  it("reads a whole amount written with zero paisa as that amount", () => {
+    act(() => root.render(<Harness initial={60} wholeUnitsMessage="Taka amounts are whole numbers." />));
+    const input = host.querySelector("input")!;
+    act(() => type(input, "1234.00"));
+    expect(onValueChange).toHaveBeenLastCalledWith(1234);
     expect(input.validationMessage).toBe("");
+    act(() => input.dispatchEvent(new FocusEvent("focusout", { bubbles: true })));
+    expect(input.value).toBe("1234");
   });
 });
