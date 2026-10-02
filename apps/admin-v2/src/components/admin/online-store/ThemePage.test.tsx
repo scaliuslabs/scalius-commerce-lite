@@ -742,6 +742,21 @@ describe("theme page", () => {
       expect(dialog()!.textContent).toContain("Choose fonts");
     });
 
+    it("shows saved independent fonts and replaces them when the current pairing is explicitly selected", async () => {
+      const theme = structuredClone(DEFAULT_STOREFRONT_THEME);
+      theme.tokens.legacyTypography = { heading: "editorial", body: "humanist" };
+      render(theme);
+      expect(card().textContent).toContain("Saved fonts");
+      expect(card().textContent).not.toContain("Inter · Bangla");
+      choose("Heading size", "Large");
+      act(() => button(card(), "Change")!.click());
+      await flush();
+      act(() => button(dialog()!, "Select")!.click());
+      await pressSave();
+      expect(api.draft.mock.calls[0]![0].body.theme.tokens).toMatchObject({ typography: "retail", typeScale: "display" });
+      expect(api.draft.mock.calls[0]![0].body.theme.tokens.legacyTypography).toBeUndefined();
+    });
+
     it("lists every pairing drawn in its own fonts, in Latin and Bangla, with the template's preselected", async () => {
       render(storefrontTemplateTheme("heritage-editorial"));
       expect(card().textContent).toContain("HeritageTemplate default");
