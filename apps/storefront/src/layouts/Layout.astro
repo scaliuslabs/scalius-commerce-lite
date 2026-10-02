@@ -43,6 +43,7 @@ import {
 } from "@/lib/theme-preview-cookie";
 import { requestBypassesPublicStorefrontCache } from "@/lib/cache-policy";
 import { buildPrivateSessionPrefetchGuardScript } from "@/lib/private-session-prefetch-guard";
+import { AD_CLICK_ID_SCRIPT, STALE_ASSET_RECOVERY_SCRIPT } from "@/lib/inline-boot-scripts";
 import { optimizeAnalyticsScriptDelivery } from "@/lib/analytics-script-delivery";
 import {
   buildPartytownBootstrap,
@@ -290,6 +291,8 @@ const imageCdnAliases = (mediaSettings?.canonicalHostAliases ?? [])
 
 const apiOrigin = publicApiUrl ? new URL(publicApiUrl).origin : null;
 const cdnDomain = cdnDomainUrl || null;
+// Runtime API URL, CDN domain, and currency for client-side JS (the
+// per-request platform context is not available to Vite client bundles).
 const runtimeGlobalsScript = [
   `window.__API_BASE_URL__=${serializeJsonForInlineScript(publicApiUrl)};`,
   `window.__CDN_DOMAIN__=${serializeJsonForInlineScript(cdnDomainUrl || "")};`,
@@ -324,7 +327,7 @@ if (!window.$RefreshReg$) {
   <head>
     <meta charset="UTF-8" />
 
-    <!-- Preconnect: warm up DNS + TLS for API and CDN origins early -->
+    {/* Preconnect: warm up DNS + TLS for API and CDN origins early */}
     {apiOrigin && <link rel="dns-prefetch" href={apiOrigin} />}
     {/* Public pages do not call the API during their critical render. Keep DNS
         warm without opening an otherwise unused connection ahead of LCP. */}
@@ -352,7 +355,6 @@ if (!window.$RefreshReg$) {
         <style>, so this rule stays static. */}
     <noscript><style is:inline>#mobile-menu-toggle,#mobile-search-toggle,[data-drawer-close]{display:none!important}</style></noscript>
 
-    <!-- Runtime API URL, CDN domain, and currency for client-side JS (the per-request platform context is not available to Vite client bundles) -->
     <script is:inline set:html={runtimeGlobalsScript} />
     {partytownBootstrap && <script is:inline set:html={partytownBootstrap} />}
 
@@ -491,95 +493,10 @@ if (!window.$RefreshReg$) {
         UI first. The guard is installed before click IDs can create a private
         session signal. */}
     <script is:inline set:html={privateSessionPrefetchGuardScript} />
-    <script is:inline>
-      if (document.documentElement.dataset.themePreview !== "true") {
-        try {
-          const urlParams = new URLSearchParams(window.location.search);
-          const maxAge = 7776000;
-          const cookieSuffix = `; path=/; max-age=${maxAge}; SameSite=Lax${
-            window.location.protocol === "https:" ? "; Secure" : ""
-          }`;
-          const readClickId = (name) => {
-            const value = urlParams.get(name);
-            if (!value) return "";
-            const trimmed = value.trim();
-            return /^[A-Za-z0-9._~-]{1,512}$/.test(trimmed) ? trimmed : "";
-          };
-          const persistClickId = (cookieName, storageName, value) => {
-            document.cookie = `${cookieName}=${encodeURIComponent(value)}${cookieSuffix}`;
-            window.dispatchEvent(new CustomEvent("storefront-cookie-created"));
-            try {
-              sessionStorage.setItem(storageName, value);
-            } catch {
-              // Cookie persistence is enough when sessionStorage is unavailable.
-            }
-          };
+    <script is:inline set:html={AD_CLICK_ID_SCRIPT} />
 
-          const fbclid = readClickId("fbclid");
-          if (fbclid) {
-            const creationTime = Date.now();
-            const fbcValue = `fb.1.${creationTime}.${fbclid}`;
-            persistClickId("_fbc", "scalius_fbc", fbcValue);
-          }
-
-          [
-            ["gclid", "scalius_gclid"],
-            ["gbraid", "scalius_gbraid"],
-            ["wbraid", "scalius_wbraid"],
-            ["msclkid", "scalius_msclkid"],
-            ["ttclid", "scalius_ttclid"],
-          ].forEach(([paramName, storageName]) => {
-            const clickId = readClickId(paramName);
-            if (clickId) persistClickId(storageName, storageName, clickId);
-          });
-        } catch (e) {
-          console.warn("Could not process ad click id:", e);
-        }
-      }
-    </script>
-
-    <!-- Install stale-asset recovery before deferred module execution. -->
-    <script is:inline>
-      (function () {
-        const r = sessionStorage.getItem("_ar");
-        if (r && Date.now() - parseInt(r, 10) < 30000) return;
-
-        window.addEventListener(
-          "error",
-          function (e) {
-            const t = e.target;
-            if (!(
-              t instanceof HTMLScriptElement || t instanceof HTMLLinkElement
-            ))
-              return;
-            const tag = t.tagName.toUpperCase();
-            const url = t instanceof HTMLScriptElement ? t.src : t.href;
-            if (
-              (tag === "SCRIPT" || tag === "LINK") &&
-              url.indexOf("/_astro/") > -1
-            ) {
-              console.warn("[StaleAsset] 404:", url);
-              sessionStorage.setItem("_ar", Date.now().toString());
-              location.reload();
-            }
-          },
-          true,
-        );
-
-        window.addEventListener("unhandledrejection", function (e) {
-          if (
-            e.reason &&
-            e.reason.message &&
-            e.reason.message.indexOf("dynamically imported") > -1 &&
-            e.reason.message.indexOf("/_astro/") > -1
-          ) {
-            console.warn("[StaleAsset] Import failed");
-            sessionStorage.setItem("_ar", Date.now().toString());
-            location.reload();
-          }
-        });
-      })();
-    </script>
+    {/* Stale-asset recovery, installed before deferred module execution. */}
+    <script is:inline set:html={STALE_ASSET_RECOVERY_SCRIPT} />
 
     {bodyEndScripts.map((script) => <Fragment set:html={script.config} />)}
 

@@ -4,7 +4,7 @@
 // running total; the menu row sits under it and folds into the bar on
 // scroll. Kept pixel-identical to the version 3 classic header.
 import SearchBar from "../../search/SearchBar.astro";
-import { Phone, ShoppingCart, Menu, Search } from "lucide-react";
+import Icon from "@/components/icons/Icon.astro";
 import type { StorefrontNavigationRenderer } from "@scalius/shared/storefront-theme";
 import { mediaImageSrcSet, mediaImageUrl } from "@/lib/media-url";
 import {
@@ -51,7 +51,7 @@ const expandedActionsXlWidth = phoneHref ? 40 : 0;
   class="sticky top-0 z-50 w-full bg-background/95 backdrop-blur-xl border-b border-border transition-[box-shadow,background-color,border-color] duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)] group/header"
 >
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-    <!-- ROW 1 -->
+    {/* ROW 1 */}
     <div
       class="header-row flex items-center justify-between gap-4 relative z-20"
     >
@@ -65,7 +65,7 @@ const expandedActionsXlWidth = phoneHref ? 40 : 0;
           aria-controls="mobile-menu-panel"
           aria-expanded="false"
         >
-          <Menu className="h-6 w-6 stroke-[1.5]" />
+          <Icon name="menu" class="h-6 w-6 stroke-[1.5]" />
         </button>
         <noscript>
           <a
@@ -73,7 +73,7 @@ const expandedActionsXlWidth = phoneHref ? 40 : 0;
             class="-ml-2 flex h-11 w-11 items-center justify-center rounded-full text-foreground"
             aria-label="Open menu"
           >
-            <Menu className="h-6 w-6 stroke-[1.5]" />
+            <Icon name="menu" class="h-6 w-6 stroke-[1.5]" />
           </a>
         </noscript>
 
@@ -84,7 +84,7 @@ const expandedActionsXlWidth = phoneHref ? 40 : 0;
           aria-label="Search"
           aria-haspopup="dialog"
         >
-          <Search className="h-5 w-5 stroke-[1.5]" />
+          <Icon name="search" class="h-5 w-5 stroke-[1.5]" />
         </button>
         <noscript>
           <a
@@ -92,7 +92,7 @@ const expandedActionsXlWidth = phoneHref ? 40 : 0;
             class="flex h-11 w-11 items-center justify-center rounded-full text-foreground"
             aria-label="Search"
           >
-            <Search className="h-5 w-5 stroke-[1.5]" />
+            <Icon name="search" class="h-5 w-5 stroke-[1.5]" />
           </a>
         </noscript>
       </div>
@@ -125,7 +125,7 @@ const expandedActionsXlWidth = phoneHref ? 40 : 0;
         </a>
       </div>
 
-      <!-- 3. CENTER: Desktop Morphing Zone -->
+      {/* 3. CENTER: Desktop Morphing Zone */}
       <div
         class="hidden lg:flex flex-1 items-center justify-center px-8 min-w-0 relative h-full z-10"
       >
@@ -154,7 +154,7 @@ const expandedActionsXlWidth = phoneHref ? 40 : 0;
             aria-label="Search"
             aria-haspopup="dialog"
           >
-            <Search className="h-5 w-5 stroke-[1.5]" />
+            <Icon name="search" class="h-5 w-5 stroke-[1.5]" />
           </button>
 
           <div
@@ -168,7 +168,7 @@ const expandedActionsXlWidth = phoneHref ? 40 : 0;
                   aria-label={`Call ${phone}`}
                   title={phone ?? undefined}
                 >
-                  <Phone className="h-4 w-4 stroke-[1.5]" />
+                  <Icon name="phone" class="h-4 w-4 stroke-[1.5]" />
                 </a>
               )
             }
@@ -227,7 +227,7 @@ const expandedActionsXlWidth = phoneHref ? 40 : 0;
             <div
               class="relative w-7 h-7 lg:w-8 lg:h-8 shrink-0 flex items-center justify-center bg-card/10 rounded-full hover:bg-card/20 transition-colors"
             >
-              <ShoppingCart className="h-3.5 w-3.5 lg:h-4 lg:w-4 stroke-2" />
+              <Icon name="shopping-cart" class="h-3.5 w-3.5 lg:h-4 lg:w-4 stroke-2" />
               <span
                 id="cart-count"
                 aria-hidden="true"

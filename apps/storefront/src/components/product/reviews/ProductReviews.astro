@@ -22,6 +22,7 @@ import "./product-reviews.css";
 import type { Product } from "@/lib/api";
 import ReviewsOverview from "./ReviewsOverview.astro";
 import type { ReviewFormCopy } from "@/lib/account-reviews";
+import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import {
   DEFAULT_REVIEW_VIEW,
   REVIEW_SORTS,
@@ -83,20 +84,23 @@ const scriptCopy = JSON.stringify({
     data-review-copy={hasReviews ? scriptCopy : undefined}
     data-review-cursor={reviews?.nextCursor ?? ""}
   >
-    <div
-      class="product-reviews-head"
-      data-review-cta
-      data-review-form-copy={JSON.stringify({
-        ...formCopy,
-        reviewsSignInToReviewText: copy.reviewsSignInToReviewText,
-        reviewsVerifiedOnlyText: copy.reviewsVerifiedOnlyText,
-        reviewsVisibleSoonText: copy.reviewsVisibleSoonText,
-        reviewsWriteCtaText: copy.reviewsWriteCtaText,
-      })}
-    >
+    <div class="product-reviews-head" data-review-cta>
       <h2 id="reviews-heading" class="product-reviews-heading">{copy.reviewsTitleText}</h2>
       <a href="/account/reviews" class="product-reviews-write" data-review-cta-link data-astro-prefetch="false">{copy.reviewsWriteCtaText}</a>
       <p class="product-reviews-cta-note" data-review-cta-note hidden></p>
+      {/* The form's words as JSON text: an attribute would escape every quote. */}
+      <script
+        is:inline
+        type="application/json"
+        data-review-form-copy
+        set:html={serializeJsonForInlineScript({
+          ...formCopy,
+          reviewsSignInToReviewText: copy.reviewsSignInToReviewText,
+          reviewsVerifiedOnlyText: copy.reviewsVerifiedOnlyText,
+          reviewsVisibleSoonText: copy.reviewsVisibleSoonText,
+          reviewsWriteCtaText: copy.reviewsWriteCtaText,
+        })}
+      />
     </div>
     <div class="product-reviews-own" data-review-cta-panel aria-live="polite" hidden></div>
 

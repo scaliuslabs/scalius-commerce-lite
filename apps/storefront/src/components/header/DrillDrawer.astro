@@ -40,6 +40,9 @@ const link = (item: NavigationItem) => ({
   "data-astro-prefetch": getStorefrontPrefetchAttribute(item.href, Astro.url),
   ...navigationLinkAttributes(item),
 });
+// Levels stack by depth (--drill-depth); the first four come from the style
+// block below, deeper ones (rare) carry it inline.
+const DRILL_DEPTHS_IN_CSS = 4;
 const Wrapper = depth === 0 ? "div" : Fragment;
 const wrapperProps = depth === 0 ? { class: "drill", "data-menu-root": "", "data-drill": "" } : {};
 ---
@@ -53,12 +56,12 @@ const wrapperProps = depth === 0 ? { class: "drill", "data-menu-root": "", "data
     const children = navigationChildren(item);
     if (children.length === 0) {
       return (
-        <li>{item.href ? <a class="drill-link" {...link(item)}>{item.title}</a> : <span class="drill-link">{item.title}</span>}</li>
+        <li>{item.href ? <a {...link(item)}>{item.title}</a> : <span class="drill-link">{item.title}</span>}</li>
       );
     }
     return (
       <li>
-        <details class="drill-node" data-menu="drill" name={`${idPrefix}-${depth}`} style={`--drill-depth:${depth + 1}`}>
+        <details class="drill-node" data-menu="drill" name={`${idPrefix}-${depth}`} style={depth >= DRILL_DEPTHS_IN_CSS ? `--drill-depth:${depth + 1}` : undefined}>
           <summary class="drill-link drill-next"><span>{item.title}</span></summary>
           <div class="drill-level" data-menu-panel data-ghost={item.title}>
             <Astro.self items={children} idPrefix={idPrefix} depth={depth + 1} parent={item} />
@@ -105,7 +108,14 @@ const wrapperProps = depth === 0 ? { class: "drill", "data-menu-root": "", "data
     display: block;
   }
 
-  .drill-link {
+  .drill-list[data-depth="0"] > li > .drill-node { --drill-depth: 1; }
+  .drill-list[data-depth="1"] > li > .drill-node { --drill-depth: 2; }
+  .drill-list[data-depth="2"] > li > .drill-node { --drill-depth: 3; }
+  .drill-list[data-depth="3"] > li > .drill-node { --drill-depth: 4; }
+
+  /* A leaf row is a bare <a> (every rule reaches it through :where, so the
+     specificity is the class's alone). */
+  :is(.drill-link, :where(.drill-list > li > a)) {
     display: flex;
     align-items: center;
     gap: 0.5rem;
@@ -122,7 +132,7 @@ const wrapperProps = depth === 0 ? { class: "drill", "data-menu-root": "", "data
   }
 
   /* Amazon and Target list departments in regular weight (the "All" rows and the back bar stand out). */
-  .drill-list[data-depth="0"] > li > .drill-link:not(.drill-link--all),
+  .drill-list[data-depth="0"] > li > :is(.drill-link, :where(a)):not(.drill-link--all),
   .drill-list[data-depth="0"] > li > .drill-node:not([open]) > .drill-next {
     font-weight: 400;
   }
@@ -172,18 +182,18 @@ const wrapperProps = depth === 0 ? { class: "drill", "data-menu-root": "", "data
     mask-image: var(--nav-chevron-left);
   }
 
-  a.drill-link:hover,
+  a:is(.drill-link, :where(.drill-list > li > a)):hover,
   .drill-next:hover {
     background: var(--accent);
     color: var(--accent-foreground);
   }
 
-  .drill-link:focus-visible {
+  :is(.drill-link, :where(.drill-list > li > a)):focus-visible {
     outline: 2px solid currentColor;
     outline-offset: -2px;
   }
 
-  .drill-link[aria-current="page"] {
+  :is(.drill-link, :where(.drill-list > li > a))[aria-current="page"] {
     background: var(--accent);
     color: var(--accent-foreground);
     font-weight: 600;

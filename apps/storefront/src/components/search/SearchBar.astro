@@ -1,6 +1,6 @@
 ---
 // src/components/search/SearchBar.astro
-import { Search } from "lucide-react";
+import Icon from "@/components/icons/Icon.astro";
 
 interface Props {
   containerClass?: string;
@@ -28,16 +28,16 @@ const finalButtonClass = `${baseButtonClass} ${mobileView ? mobileClasses : desk
     aria-label={mobileView ? "Search for products" : "Search store"}
     aria-haspopup="dialog"
   >
-    <!-- Icon -->
-    <Search
-      className={`shrink-0 transition-colors duration-200 ${
+    {/* Icon */}
+    <Icon name="search"
+      class={`shrink-0 transition-colors duration-200 ${
         mobileView
           ? "w-5 h-5 text-muted-foreground"
           : "w-4 h-4 text-muted-foreground group-hover:text-foreground"
       }`}
     />
 
-    <!-- Placeholder Text -->
+    {/* Placeholder Text */}
     <span
       aria-hidden="true"
       class={`ml-3 text-sm truncate font-medium select-none flex-1 ${
@@ -47,7 +47,7 @@ const finalButtonClass = `${baseButtonClass} ${mobileView ? mobileClasses : desk
       {mobileView ? "Search for products..." : "Search store..."}
     </span>
 
-    <!-- Keyboard Shortcut Hint (Desktop Only) -->
+    {/* Keyboard Shortcut Hint (Desktop Only) */}
     {
       !mobileView && (
         <div aria-hidden="true" class="hidden xl:flex items-center gap-1 ml-auto pl-3 pointer-events-none opacity-50 group-hover:opacity-100 transition-opacity">

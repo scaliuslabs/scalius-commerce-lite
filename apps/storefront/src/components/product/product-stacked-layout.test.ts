@@ -27,7 +27,7 @@ describe("stacked and grid product pages", () => {
 
   it("lists every photo on computers, two across on the grid", () => {
     expect(gallery).toContain('<ul class="gallery-list hidden gap-2 lg:grid"');
-    expect(gallery).toMatch(/\[data-gallery="grid"\] \.gallery-list \{\s*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/);
+    expect(gallery).toMatch(/\[data-gallery="grid"\](?::not\(\.\\#\))? \.gallery-list(?::not\(\.\\#\))? \{\s*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/);
   });
 
   it("centres only the resolved 3:4 portrait stage at Aarong's desktop width", () => {
@@ -36,7 +36,7 @@ describe("stacked and grid product pages", () => {
     expect(gallery).toContain("const portraitMaxPx = productGalleryPortraitMaxPx(layout);");
     expect(gallery).toContain('data-portrait-stage={portraitMaxPx === null ? undefined : ""}');
     expect(gallery).toContain("style={portraitMaxPx === null ? undefined : `--gallery-portrait-max: ${portraitMaxPx}px;`}");
-    expect(gallery).toMatch(/@media \(min-width: 64rem\) \{\s*#product-gallery\[data-portrait-stage\] \{\s*max-width: var\(--gallery-portrait-max\);\s*justify-self: center;/);
+    expect(gallery).toMatch(/@media \(min-width: 64rem\) \{\s*#product-gallery\[data-portrait-stage\](?::not\(\.\\#\))? \{\s*max-width: var\(--gallery-portrait-max\);\s*justify-self: center;/);
     expect(gallery).not.toMatch(/\b404px\b/);
   });
 });

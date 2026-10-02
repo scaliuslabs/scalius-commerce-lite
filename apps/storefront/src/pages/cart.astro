@@ -274,7 +274,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
   hideFooter
 >
   <CheckoutHeader layoutData={layoutData} copy={copy} />
-  <!-- Hidden checkout meta for client-side JS -->
+  {/* Hidden checkout meta for client-side JS */}
   <script
     is:inline
     set:html={`window.__CHECKOUT_CONFIG__=${serializedCheckoutConfig};window.__CHECKOUT_LANGUAGE__=${serializedCheckoutLanguage};`}
@@ -425,7 +425,7 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
       </div>
     </aside>
 
-    <!-- The form comes first in reading and keyboard order; on phones the cart shows above it. -->
+    {/* The form comes first in reading and keyboard order; on phones the cart shows above it. */}
     {/* The grid holds a screen of space from first paint, so the footer stays
         below the fold and does not move when the lines render (CLS). */}
     <div class="grid min-h-[100svh] content-start gap-4 lg:grid-cols-12 lg:gap-8" data-cart-grid>
