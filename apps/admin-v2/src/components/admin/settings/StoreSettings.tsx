@@ -576,12 +576,6 @@ function currencySymbol(code: string): string {
   }
 }
 
-export function isValidUsdExchangeRate(value: string): boolean {
-  const trimmed = value.trim();
-  const rate = Number(trimmed);
-  return trimmed.length > 0 && Number.isFinite(rate) && rate > 0;
-}
-
 function CurrencyFields() {
   const t = useMessages(storeSettingsMessages);
   const common = useMessages(settingsMessages);
@@ -593,14 +587,12 @@ function CurrencyFields() {
         body: normalizeCurrencySettingsInput({
           currencyCode: draft.currencyCode,
           currencySymbol: draft.currencySymbol,
-          usdExchangeRate: draft.usdExchangeRate,
           expectedRevision,
         }),
       })),
-    defaultValues: { currencyCode: "BDT", currencySymbol: "৳", usdExchangeRate: "1", currencyCodeLocked: false, revision: 0 },
+    defaultValues: { currencyCode: "BDT", currencySymbol: "৳", currencyCodeLocked: false, revision: 0 },
     errorMessage: common("saveFailed"),
     canEdit: useCanEditStore(),
-    isValid: (draft) => isValidUsdExchangeRate(draft.usdExchangeRate),
   });
   const options = useMemo(
     () =>
@@ -611,7 +603,6 @@ function CurrencyFields() {
       })),
     [],
   );
-  const rateValid = isValidUsdExchangeRate(values.usdExchangeRate);
   return (
     <>
       <SettingsField
@@ -639,25 +630,6 @@ function CurrencyFields() {
           value={values.currencySymbol}
           className="max-w-40"
           onChange={(event) => setValue("currencySymbol", event.target.value)}
-        />
-      </SettingsField>
-      <SettingsField
-        id="currency-usd-rate"
-        label={t("usdRate")}
-        help={t("usdRateHelp", { code: values.currencyCode })}
-        error={rateValid ? null : t("usdRateInvalid")}
-      >
-        <Input
-          id="currency-usd-rate"
-          type="number"
-          inputMode="decimal"
-          min="0"
-          step="any"
-          value={values.usdExchangeRate}
-          aria-invalid={!rateValid}
-          aria-describedby="currency-usd-rate-note"
-          className="max-w-40"
-          onChange={(event) => setValue("usdExchangeRate", event.target.value)}
         />
       </SettingsField>
     </>

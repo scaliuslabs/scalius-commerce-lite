@@ -46,9 +46,6 @@ interface Env {
   // Service binding to the standalone API worker
   BACKEND_API: Fetcher;
 
-  // Shared with the API Worker; read only for the public cache generation.
-  CACHE?: KVNamespace;
-
   // This Worker version (`version_metadata`), part of every page cache key
   // (src/lib/public-worker-cache.ts). Without it pages render uncached.
   CF_VERSION_METADATA?: { id: string; tag: string; timestamp: string };

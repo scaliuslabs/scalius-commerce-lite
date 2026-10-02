@@ -48,7 +48,7 @@ function settingsDocument(category: string, value: Record<string, unknown>) {
 function authorityRows(): Record<string, unknown>[][] {
   return [
     [
-      settingsDocument("currency", { currencyCode: "BDT", currencySymbol: "৳", usdExchangeRate: "1" }),
+      settingsDocument("currency", { currencyCode: "BDT", currencySymbol: "৳" }),
       settingsDocument("customer_countries", { allowedCountries: ["BD"], allowedCountriesMode: "include" }),
       settingsDocument("payment_methods", { enabledMethods: ["cod"], defaultMethod: "cod" }),
     ],

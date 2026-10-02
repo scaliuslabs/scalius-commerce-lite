@@ -156008,10 +156008,6 @@
                           "type": "string",
                           "maxLength": 16
                         },
-                        "usdExchangeRate": {
-                          "type": "string",
-                          "maxLength": 64
-                        },
                         "currencyCodeLocked": {
                           "type": "boolean"
                         },
@@ -156023,7 +156019,6 @@
                       "required": [
                         "currencyCode",
                         "currencySymbol",
-                        "usdExchangeRate",
                         "currencyCodeLocked",
                         "revision"
                       ]
@@ -156570,10 +156565,6 @@
                   "currencySymbol": {
                     "type": "string",
                     "maxLength": 16
-                  },
-                  "usdExchangeRate": {
-                    "type": "string",
-                    "maxLength": 64
                   }
                 },
                 "required": [

@@ -161,7 +161,7 @@ describe("worker env check: per-store resource shape", () => {
     const api = readRepoJsonc("apps/api/wrangler.jsonc");
     expect(api.queues.consumers.map((consumer) => consumer.queue)).toEqual(["jobs", "jobs-dlq"]);
     expect(api.queues.consumers[0].max_batch_timeout).toBeLessThanOrEqual(2);
-    expect(readRepoJsonc("apps/storefront/wrangler.jsonc").kv_namespaces.map((kv) => kv.binding)).toEqual(["CACHE"]);
+    expect(readRepoJsonc("apps/storefront/wrangler.jsonc").kv_namespaces).toBeUndefined();
   });
 
   it("fails on a second namespace, bucket, queue, or limiter", () => {

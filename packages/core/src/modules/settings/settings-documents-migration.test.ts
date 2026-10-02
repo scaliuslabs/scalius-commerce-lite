@@ -316,7 +316,7 @@ describe.each(["d1", "turso"] as const)("0065 settings documents migration (%s)"
       autoFulfilMode: "after_payment",
       revision: 0,
     });
-    expect(await getCurrencySettings(db)).toEqual({ currencyCode: "BDT", currencySymbol: "৳", usdExchangeRate: "1" });
+    expect(await getCurrencySettings(db)).toEqual({ currencyCode: "BDT", currencySymbol: "৳" });
   });
 });
 
@@ -327,7 +327,7 @@ async function expectCommonSettings(db: Parameters<typeof getBusinessSettings>[0
     invoicePrefix: "SL",
     invoiceLogoUrl: "media/invoice.png",
   });
-  expect(await getCurrencySettings(db)).toEqual({ currencyCode: "USD", currencySymbol: "$", usdExchangeRate: "1" });
+  expect(await getCurrencySettings(db)).toEqual({ currencyCode: "USD", currencySymbol: "$" });
   expect(await getCheckoutFlowSettingsDocument(db)).toEqual({
     guestCheckoutEnabled: false,
     checkoutMode: "gateways_only",

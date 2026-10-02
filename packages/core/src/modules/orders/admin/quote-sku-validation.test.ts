@@ -94,7 +94,6 @@ beforeEach(() => {
     settingsMocks.getCurrencySettings.mockResolvedValue({
         currencyCode: "BDT",
         currencySymbol: "৳",
-        usdExchangeRate: "1",
     });
     settingsMocks.getAllowedCountries.mockResolvedValue({
         allowedCountries: [],
@@ -854,7 +853,6 @@ describe("resolveAdminOrderItemInventory", () => {
             settingsMocks.getCurrencySettings.mockResolvedValue({
                 currencyCode,
                 currencySymbol: currencyCode,
-                usdExchangeRate: "1",
             });
             const { db, insertValues } = createOrderDbWithSkuRows([{
                 id: "var_untracked",

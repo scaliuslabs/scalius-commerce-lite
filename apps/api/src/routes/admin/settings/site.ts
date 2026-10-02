@@ -62,7 +62,6 @@ const savedRevisionResponse = successEnvelope(z.object({ message: z.string(), re
 // ─────────────────────────────────────────
 
 const CURRENCY_SYMBOL_MAX_LENGTH = 16;
-const CURRENCY_EXCHANGE_RATE_MAX_LENGTH = 64;
 
 const supportedCurrencyCodeSchema = z.preprocess(
   (value) => (typeof value === "string" ? value.trim().toUpperCase() : value),
@@ -74,7 +73,6 @@ const supportedCurrencyCodeSchema = z.preprocess(
 const currencySettingsSchema = z.object({
   currencyCode: z.enum(SUPPORTED_CURRENCY_CODES),
   currencySymbol: z.string().max(CURRENCY_SYMBOL_MAX_LENGTH),
-  usdExchangeRate: z.string().max(CURRENCY_EXCHANGE_RATE_MAX_LENGTH),
   currencyCodeLocked: z.boolean(),
   revision: revisionSchema,
 });
@@ -104,10 +102,6 @@ app.openapi(getCurrencyRoute, async (c) => {
     ...result,
     revision,
     currencySymbol: result.currencySymbol.slice(0, CURRENCY_SYMBOL_MAX_LENGTH),
-    usdExchangeRate: result.usdExchangeRate.slice(
-      0,
-      CURRENCY_EXCHANGE_RATE_MAX_LENGTH,
-    ),
     currencyCodeLocked,
   });
 });
@@ -116,15 +110,6 @@ const saveCurrencySchema = z.object({
   expectedRevision: revisionSchema,
   currencyCode: supportedCurrencyCodeSchema.optional(),
   currencySymbol: z.string().max(CURRENCY_SYMBOL_MAX_LENGTH).optional(),
-  usdExchangeRate: z
-    .string()
-    .trim()
-    .max(CURRENCY_EXCHANGE_RATE_MAX_LENGTH)
-    .refine((value) => {
-      const rate = Number(value);
-      return value.length > 0 && Number.isFinite(rate) && rate > 0;
-    }, "USD exchange rate must be a finite number greater than 0.")
-    .optional(),
 });
 
 const saveCurrencyRoute = createRoute({

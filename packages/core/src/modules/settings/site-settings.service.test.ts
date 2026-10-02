@@ -112,7 +112,7 @@ describe("store social profiles", () => {
 });
 
 describe("site currency settings", () => {
-  it("normalizes a supported legacy lowercase code on read", async () => {
+  it("normalizes a supported legacy lowercase code and drops the retired USD rate on read", async () => {
     const { db, sqlite } = createSqliteD1Database();
     storeDocument(sqlite, "currency", JSON.stringify({
       currencyCode: " bdt ",
@@ -123,7 +123,6 @@ describe("site currency settings", () => {
     await expect(getCurrencySettings(db)).resolves.toEqual({
       currencyCode: "BDT",
       currencySymbol: "Tk",
-      usdExchangeRate: "120",
     });
   });
 
@@ -138,45 +137,36 @@ describe("site currency settings", () => {
     await expect(getCurrencySettings(db)).resolves.toEqual({
       currencyCode: "BDT",
       currencySymbol: "৳",
-      usdExchangeRate: "1",
     });
   });
 
-  it("canonicalizes codes and rates before persisting the initial setup", async () => {
+  it("canonicalizes codes before persisting the initial setup", async () => {
     const { db } = createSqliteD1Database();
-    await saveCurrencySettings(db, { currencyCode: " usd ", currencySymbol: "$", usdExchangeRate: " 1.25 " });
+    await saveCurrencySettings(db, { currencyCode: " usd ", currencySymbol: "$" });
     await expect(getCurrencySettings(db)).resolves.toEqual({
       currencyCode: "USD",
       currencySymbol: "$",
-      usdExchangeRate: "1.25",
     });
   });
 
-  it("rejects unsupported codes and invalid rates before any write", async () => {
+  it("rejects unsupported codes before any write", async () => {
     const { db, sqlite } = createSqliteD1Database();
     await expect(saveCurrencySettings(db, { currencyCode: "USDT" }))
       .rejects.toBeInstanceOf(ValidationError);
-    for (const usdExchangeRate of ["", "0", "-1", "Infinity", "NaN", "1foo"]) {
-      await expect(saveCurrencySettings(db, { usdExchangeRate })).rejects.toMatchObject({
-        name: "ValidationError",
-        message: "USD exchange rate must be a finite number greater than 0.",
-      });
-    }
     expect(documentCount(sqlite, "currency")).toBe(0);
   });
 
-  it("locks the code once money-bearing rows exist but still accepts symbol and rate updates", async () => {
+  it("locks the code once money-bearing rows exist but still accepts symbol updates", async () => {
     const { db, sqlite } = createSqliteD1Database();
     sqlite.exec("INSERT INTO products (id, name, price_minor, slug) VALUES ('p1', 'Product', 1000, 'product')");
 
     await expect(saveCurrencySettings(db, { currencyCode: "USD" })).rejects.toBeInstanceOf(ConflictError);
-    await saveCurrencySettings(db, { currencyCode: "BDT", currencySymbol: "Tk", usdExchangeRate: "120" });
+    await saveCurrencySettings(db, { currencyCode: "BDT", currencySymbol: "Tk" });
     sqlite.exec("DELETE FROM product_variants; DELETE FROM products; INSERT INTO shipping_methods (id, name, fee_minor) VALUES ('ship', 'Standard', 6000)");
     await expect(saveCurrencySettings(db, { currencyCode: "JPY" })).rejects.toBeInstanceOf(ConflictError);
     await expect(getCurrencySettings(db)).resolves.toEqual({
       currencyCode: "BDT",
       currencySymbol: "Tk",
-      usdExchangeRate: "120",
     });
   });
 });

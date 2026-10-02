@@ -262,13 +262,11 @@ export const businessDocument = defineSettingsDocument<BusinessInfo>({
 export interface CurrencySettings {
   currencyCode: SupportedCurrencyCode;
   currencySymbol: string;
-  usdExchangeRate: string;
 }
 
 const DEFAULT_CURRENCY_SETTINGS: CurrencySettings = {
   currencyCode: "BDT",
   currencySymbol: "৳",
-  usdExchangeRate: "1",
 };
 
 /** An unsupported stored code means the whole document falls back to BDT. */
@@ -284,7 +282,6 @@ export const currencyDocument = defineSettingsDocument<CurrencySettings>({
     z.object({
       currencyCode: z.string().transform((code) => code as SupportedCurrencyCode),
       currencySymbol: z.string(),
-      usdExchangeRate: z.string(),
     }),
   ) as unknown as z.ZodType<CurrencySettings>,
   defaults: DEFAULT_CURRENCY_SETTINGS,

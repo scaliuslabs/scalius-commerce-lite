@@ -35,17 +35,14 @@ import {
 export interface CurrencyConfig {
     code: string;
     symbol: string;
-    usdExchangeRate: number;
     decimalPlaces: number;
 }
 
 export async function getCurrencyConfig(db: Database): Promise<CurrencyConfig> {
     const currency = await currencyDocument.read(db);
-    const usdExchangeRate = Number(currency.usdExchangeRate);
     return {
         code: currency.currencyCode,
         symbol: currency.currencySymbol,
-        usdExchangeRate: Number.isFinite(usdExchangeRate) && usdExchangeRate > 0 ? usdExchangeRate : 1,
         decimalPlaces: getDecimalPlaces(currency.currencyCode),
     };
 }

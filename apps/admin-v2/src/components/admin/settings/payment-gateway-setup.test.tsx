@@ -78,7 +78,7 @@ describe("payment gateway setup", () => {
     page = null;
     sdk.getApiV1AdminSettingsCheckoutFlow.mockImplementation(() =>
       envelope({ guestCheckoutEnabled: true, checkoutMode: "all", partialPaymentEnabled: false, partialPaymentAmount: 0, revision: 1 }));
-    sdk.getApiV1AdminSettingsCurrency.mockImplementation(() => envelope({ currencyCode: "BDT", currencySymbol: "৳", usdExchangeRate: "1" }));
+    sdk.getApiV1AdminSettingsCurrency.mockImplementation(() => envelope({ currencyCode: "BDT", currencySymbol: "৳" }));
     sdk.getApiV1AdminSettingsPlatform.mockImplementation(() => envelope({ apiUrl: "https://api.example.com" }));
     sdk.getApiV1AdminSettingsStripe.mockImplementation(() =>
       envelope({ secretKey: MASKED, publishableKey: "", webhookSecret: "", enabled: false }));
