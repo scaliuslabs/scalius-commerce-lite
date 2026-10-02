@@ -27,6 +27,7 @@ import {
   isCacheFrontierFresh,
   readStoredCacheFrontier,
   refreshCacheFrontier,
+  singleFlight,
   storeCacheFrontier,
   type CacheFrontierClient,
 } from "@/lib/cache-frontier";
@@ -372,10 +373,34 @@ export async function servePublicStorefrontRequest(
 }
 
 /**
+ * One refresh of this data center's frontier per isolate at a time, stored
+ * once by the request that started it. Concurrent requests join it instead of
+ * each asking the API (and D1) for the same delta.
+ */
+function refreshFrontierOnce(
+  context: PublicStorefrontCacheContext,
+  client: CacheFrontierClient,
+  key: string,
+  stored: CacheFrontier | null,
+) {
+  const now = context.now ?? Date.now;
+  const flight = singleFlight(`frontier:${key}`, () => refreshCacheFrontier(stored, client, now), now);
+  if (flight.created) {
+    // The refresh outlives the request that started it: others await it.
+    context.waitUntil(flight.promise
+      .then((next) => next ? storeCacheFrontier(context.cache, key, next) : undefined)
+      .catch(() => undefined));
+  }
+  return flight;
+}
+
+/**
  * The data center's frontier, fresh enough to validate a hit now: refreshed
  * (blocking) when missing, older than Δ, or behind the request's `_sv`;
  * refreshed ahead in the background once it is older than Δ/2. Null when it
- * cannot be refreshed: the page then renders.
+ * cannot be refreshed: the page then renders. At most one refresh runs per
+ * isolate; a request whose `_sv` is newer than the refresh it joined (the
+ * write it saw may postdate that refresh's start) asks for one more.
  */
 async function freshFrontier(
   context: PublicStorefrontCacheContext,
@@ -388,16 +413,18 @@ async function freshFrontier(
   const started = now();
   if (isCacheFrontierFresh(stored, started, seenSeq)) {
     if (started - stored.sentAt > CACHE_FRONTIER_DELTA_MS / 2) {
-      context.waitUntil(refreshCacheFrontier(stored, client, now)
-        .then((next) => next ? storeCacheFrontier(context.cache, key, next) : undefined)
-        .catch(() => undefined));
+      refreshFrontierOnce(context, client, key, stored).promise.catch(() => undefined);
     }
     return stored;
   }
   try {
-    const next = await refreshCacheFrontier(stored, client, now);
+    let flight = refreshFrontierOnce(context, client, key, stored);
+    let next = await flight.promise;
+    if (next && !flight.created && seenSeq !== null && next.S < seenSeq) {
+      flight = refreshFrontierOnce(context, client, key, next);
+      next = await flight.promise;
+    }
     if (!next) return null;
-    context.waitUntil(storeCacheFrontier(context.cache, key, next).catch(() => undefined));
     // An `_sv` still ahead of a fresh frontier names no commit yet: ignore it.
     return isCacheFrontierFresh(next, now(), null) ? next : null;
   } catch {
@@ -435,8 +462,11 @@ async function serveFrontierValidated(
       return fromStoredResponse(stored, request, canonical.pathname);
     }
     if (decision === "slow") {
-      const checkedAt = (context.now ?? Date.now)();
-      const check = await client.check(entry.s0, entry.depHashes).catch(() => null);
+      // Concurrent hits of one stored entry share one check (and one D1 scan);
+      // the proof is only as fresh as the check's own start.
+      const flight = singleFlight(`check:${key}:${entry.s0}:${entry.renderedAt}`,() => client.check(entry.s0, entry.depHashes), context.now ?? Date.now);
+      const checkedAt = flight.startedAt;
+      const check = await flight.promise.catch(() => null);
       const finishedAt = (context.now ?? Date.now)();
       // The slow proof is only fresh from when its request started. Scheduled
       // transitions can pass while that request is in flight, without a write.
@@ -444,8 +474,11 @@ async function serveFrontierValidated(
         && finishedAt >= checkedAt && finishedAt - checkedAt <= CACHE_FRONTIER_DELTA_MS
         && (entry.validUntil === null || finishedAt < entry.validUntil)
         && (entry.softMaxAgeSeconds === null || finishedAt - entry.renderedAt < entry.softMaxAgeSeconds * 1000)) {
-        const copy = stored.clone();
-        context.waitUntil(context.cache.put(key, toStoredResponse(copy, { ...entry, s0: check.S })).catch(() => undefined));
+        // Only the request that ran the check rebases the stored entry.
+        if (flight.created) {
+          const copy = stored.clone();
+          context.waitUntil(context.cache.put(key, toStoredResponse(copy, { ...entry, s0: check.S })).catch(() => undefined));
+        }
         return fromStoredResponse(stored, request, canonical.pathname);
       }
     }

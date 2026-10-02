@@ -22,6 +22,7 @@
 //       src/modules/notifications/otp.handler.ts
 
 import { getDb } from "@scalius/database/client";
+import { deleteKvHint, putKvHint } from "@scalius/shared/kv-hints";
 import type { CatalogQueueMessage } from "./utils/catalog-jobs";
 import {
   customerAuthOtpChallenges,
@@ -83,6 +84,7 @@ import {
 } from "@scalius/core/modules/media";
 import { getCredentialEncryptionKey } from "./utils/encryption-key";
 import { enqueueOrderAutoFulfil } from "./utils/auto-fulfil-queue";
+import { queueLaneOrder } from "./utils/queue-lanes";
 import { autoFulfilOrder, type OrderAutoFulfilQueueMessage } from "@scalius/core/modules/fulfilment";
 import { logOpsEvent } from "./utils/ops-log";
 import {
@@ -276,16 +278,21 @@ export async function handleQueueBatch(
   logQueueBatchStarted(batchContext);
   logQueueBatchConcurrency(batchContext);
 
-  const results = await runSettledWithConcurrency(
-    batch.messages,
+  // Urgent messages (OTP, payments, notifications) start before bulk ones
+  // (renditions, catalogue refreshes) whatever order the batch arrived in.
+  const order = queueLaneOrder(batch.messages.map((message) => message.body));
+  const processed = await runSettledWithConcurrency(
+    order,
     QUEUE_BATCH_CONCURRENCY_LIMIT,
-    (msg) => processQueueMessage(
-      msg as unknown as Message<QueueBody>,
+    (index) => processQueueMessage(
+      batch.messages[index] as unknown as Message<QueueBody>,
       db,
       env,
       executionCtx,
     ),
   );
+  const results: Array<PromiseSettledResult<void>> = new Array(batch.messages.length);
+  order.forEach((index, position) => { results[index] = processed[position]!; });
 
   let acked = 0;
   let retried = 0;
@@ -565,10 +572,6 @@ async function storeAuthOtpAcceptedHint(
   target: { deliveryKey: string; channel: AuthOtpDeliveryChannel },
   result: AuthOtpDeliveryReceiptResult,
 ): Promise<void> {
-  if (!env.CACHE) {
-    throw new Error("CACHE binding is required to preserve accepted OTP delivery recovery hints");
-  }
-
   const hint: AuthOtpAcceptedHint = {
     deliveryKey: target.deliveryKey,
     channel: target.channel,
@@ -579,11 +582,17 @@ async function storeAuthOtpAcceptedHint(
     createdAt: Math.floor(Date.now() / 1000),
   };
 
-  await env.CACHE.put(
+  // Written only when marking the delivery accepted failed after the provider
+  // took the message, so a retry does not send the code twice. Not written
+  // (no binding, KV refusing writes): the retry sends again, which costs one
+  // duplicate message and nothing else.
+  const stored = await putKvHint(
+    env.CACHE,
     authOtpAcceptedHintKey(target.deliveryKey),
     JSON.stringify(hint),
     { expirationTtl: AUTH_OTP_ACCEPTED_HINT_TTL_SECONDS },
   );
+  if (!stored) throw new Error("The accepted OTP recovery hint was not written");
 }
 
 async function recoverAuthOtpAcceptedDeliveryFromHint(
@@ -621,13 +630,9 @@ async function readAuthOtpAcceptedHint(
 }
 
 async function deleteAuthOtpAcceptedHint(env: Env, deliveryKey: string): Promise<void> {
-  if (!env.CACHE) return;
-  await env.CACHE.delete(authOtpAcceptedHintKey(deliveryKey)).catch((error: unknown) => {
-    console.warn(
-      `[Queue] Failed to delete accepted OTP recovery hint delivery=${deliveryKey}:`,
-      error instanceof Error ? error.message : error,
-    );
-  });
+  if (!(await deleteKvHint(env.CACHE, authOtpAcceptedHintKey(deliveryKey)))) {
+    console.warn(`[Queue] Accepted OTP recovery hint delivery=${deliveryKey} not deleted; it expires on its own`);
+  }
 }
 
 function authOtpAcceptedHintKey(deliveryKey: string): string {
@@ -1216,7 +1221,9 @@ async function processAuthOtpQueueMessage(
     const result = await sendAuthOtpByChannel(resolvedPayload, code, target, db, env);
     try {
       await markAuthOtpDeliveryReceiptAcceptedWithRetries(db, claim.receipt, result);
-      await deleteAuthOtpAcceptedHint(env, target.deliveryKey);
+      // Only an earlier attempt can have left a recovery hint: the first one
+      // never costs a KV call (Workers Free allows 1,000 writes and deletes a day).
+      if (claim.receipt.attempts > 1) await deleteAuthOtpAcceptedHint(env, target.deliveryKey);
     } catch (acceptedMarkError) {
       await storeAuthOtpAcceptedHint(env, target, result).catch((hintError: unknown) => {
         console.error(
@@ -1266,6 +1273,19 @@ async function processAuthOtpQueueMessage(
       getAuthOtpDeliveryRetryDelaySeconds(claim.receipt.attempts),
     );
   }
+}
+
+/**
+ * Delivers an OTP message without the queue: the fallback of a handoff the
+ * queue refused (utils/otp-queue.ts). The delivery receipt makes it safe: it is
+ * claimed once, so a message the queue did take after all finds it accepted.
+ */
+export async function deliverAuthOtpDirect(
+  payload: AuthOtpQueueMessage,
+  db: ReturnType<typeof getDb>,
+  env: Env,
+): Promise<void> {
+  await processAuthOtpQueueMessage(payload, `direct_${crypto.randomUUID()}`, db, env);
 }
 
 async function sendAuthOtpByChannel(

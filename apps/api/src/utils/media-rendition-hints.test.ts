@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   MEDIA_RENDITION_HINT_KV_PREFIX,
@@ -55,9 +55,14 @@ describe("findStillOriginalMedia", () => {
   });
 });
 
+// Queueing a rendition from a public read (and its KV dedupe marker) is the
+// Paid profile's behaviour (queue.renditionsFromPublicReads); the Free
+// profile's is the describe after this one.
 describe("queueRenditionsForRenderedOriginals", () => {
+  beforeEach(() => { vi.stubGlobal("__SCALIUS_PLAN__", "paid"); });
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it("queues the render job at once, once per original, and marks it in KV with a short TTL", async () => {
@@ -110,5 +115,17 @@ describe("queueRenditionsForRenderedOriginals", () => {
 
     kv.get.mockRejectedValueOnce(new Error("kv down"));
     await expect(queueRenditionsForRenderedOriginals(body({ u: `${CDN}/media/media_legacy01.jpg` }), env)).resolves.toBeDefined();
+  });
+});
+
+describe("queueRenditionsForRenderedOriginals on the Free profile", () => {
+  it("queues nothing and touches neither KV nor the queue: the scheduled backfill renders", async () => {
+    const { env, kv, queue } = fakeEnv();
+    const read = body({ imageUrl: `${CDN}/media/media_legacy01.jpg` });
+
+    expect(await queueRenditionsForRenderedOriginals(read, env)).toEqual([]);
+    expect(queue.send).not.toHaveBeenCalled();
+    expect(kv.get).not.toHaveBeenCalled();
+    expect(kv.put).not.toHaveBeenCalled();
   });
 });

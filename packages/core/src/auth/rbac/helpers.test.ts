@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getAllPermissionNames, PERMISSIONS } from "./permissions";
 import {
   clearPermissionCache,
@@ -7,6 +7,7 @@ import {
   getUserPermissions,
 } from "./helpers";
 import { getRbacSeedCacheKey } from "./auto-seed";
+import { resetKvHintBreaker } from "@scalius/shared/kv-hints";
 
 function createSelectChain() {
   const chain = {
@@ -18,7 +19,12 @@ function createSelectChain() {
   return chain;
 }
 
+// The KV snapshot is the Paid profile's accelerator (kv.permissionCache); the
+// Free profile resolves from D1 and is covered by the describe at the end.
 describe("RBAC permission cache", () => {
+  beforeEach(() => { vi.stubGlobal("__SCALIUS_PLAN__", "paid"); });
+  afterEach(() => { vi.unstubAllGlobals(); });
+
   it("loads a bounded role page and only its permissions", async () => {
     const rolesResult = [
       { id: "role_a", name: "catalog", displayName: "Catalog", description: null, isSystem: false, createdAt: 1, updatedAt: 1 },
@@ -260,5 +266,40 @@ describe("RBAC permission cache", () => {
     expect(db.batch).toHaveBeenCalledTimes(1);
     expect(kv.get).toHaveBeenCalledTimes(1);
     expect(kv.put).not.toHaveBeenCalled();
+  });
+});
+
+describe("RBAC permissions on the Free profile", () => {
+  afterEach(() => resetKvHintBreaker());
+
+  const resolvedBatch = () => vi.fn().mockResolvedValue([
+    [{ id: "user_1", isSuperAdmin: false }],
+    [{ permissionName: PERMISSIONS.ORDERS_VIEW }],
+    [],
+  ]);
+
+  it("resolves every check from D1 and neither reads nor writes the KV snapshot", async () => {
+    const db = { batch: resolvedBatch(), select: vi.fn(() => createSelectChain()) };
+    const kv = {
+      get: vi.fn().mockResolvedValue([PERMISSIONS.PRODUCTS_VIEW]),
+      put: vi.fn().mockResolvedValue(undefined),
+      delete: vi.fn().mockResolvedValue(undefined),
+    };
+
+    // A snapshot that says otherwise is never consulted.
+    expect(await getUserPermissions(db as never, "user_1", kv as never)).toEqual(new Set([PERMISSIONS.ORDERS_VIEW]));
+    expect(await getUserPermissions(db as never, "user_1", kv as never)).toEqual(new Set([PERMISSIONS.ORDERS_VIEW]));
+    expect(db.batch).toHaveBeenCalledTimes(2);
+    expect(kv.get).not.toHaveBeenCalled();
+    expect(kv.put).not.toHaveBeenCalled();
+  });
+
+  it("still sweeps a leftover snapshot on a role change, and never fails the change over KV", async () => {
+    const kv = { delete: vi.fn().mockResolvedValue(undefined) };
+    await clearPermissionCache("user_1", kv as never);
+    expect(kv.delete).toHaveBeenCalledWith(`rbac:perms:user_1:${getRbacSeedCacheKey()}`);
+
+    const refusing = { delete: vi.fn().mockRejectedValue(new Error("KV DELETE failed: 429 Too Many Requests")) };
+    await expect(clearPermissionCache("user_1", refusing as never)).resolves.toBeUndefined();
   });
 });

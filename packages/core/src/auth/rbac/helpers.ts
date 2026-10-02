@@ -2,6 +2,8 @@
 import { eq, and, desc, inArray } from "drizzle-orm";
 import { safeBatch, type Database } from "@scalius/database/client";
 import { NotFoundError } from "@scalius/core/errors";
+import { deleteKvHint, putKvHint } from "@scalius/shared/kv-hints";
+import { planLimits } from "@scalius/shared/plan-limits";
 import { getRbacSeedCacheKey } from "./auto-seed";
 import {
   user,
@@ -36,8 +38,14 @@ function getPermCacheKey(userId: string): string {
  * Clear the shared permission cache for a specific user.
  */
 export async function clearPermissionCache(userId: string, kv?: KVNamespace): Promise<void> {
-  if (kv) {
+  if (!kv) return;
+  if (planLimits().kv.permissionCache) {
+    // Authoritative invalidation: a revoked grant must not outlive its entry.
     await kv.delete(getPermCacheKey(userId));
+  } else {
+    // Nothing reads the snapshot here, but a store that left a plan that
+    // cached it may still have one: sweep it, and never fail the mutation.
+    await deleteKvHint(kv, getPermCacheKey(userId));
   }
 }
 
@@ -96,7 +104,11 @@ export async function getUserPermissions(
 
   // KV is the cross-isolate source of truth. If a mutation deletes the KV
   // entry, this isolate must not keep serving its stale local memory value.
-  if (kv) {
+  // Where the plan profile turns the snapshot off (Workers Free: 1,000 KV
+  // writes a day) every check resolves from D1, one batch, which is the
+  // authority anyway.
+  const cached = Boolean(kv) && planLimits().kv.permissionCache;
+  if (kv && cached) {
     const kvCached = await kv.get<string[]>(getPermCacheKey(userId), "json");
     if (kvCached) {
       return new Set(kvCached);
@@ -110,8 +122,8 @@ export async function getUserPermissions(
   const effectivePermissions = resolution.permissions;
 
   // Cache the result in KV for other isolates.
-  if (kv) {
-    await kv.put(getPermCacheKey(userId), JSON.stringify(Array.from(effectivePermissions)), { expirationTtl: CACHE_TTL });
+  if (kv && cached) {
+    await putKvHint(kv, getPermCacheKey(userId), JSON.stringify(Array.from(effectivePermissions)), { expirationTtl: CACHE_TTL });
   }
 
   return effectivePermissions;

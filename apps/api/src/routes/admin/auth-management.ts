@@ -60,6 +60,7 @@ import { createScannerTokenClaim } from "@scalius/core/auth/scanner-token-claims
 import { SCANNER_TOKEN_TTL_SECONDS } from "@scalius/shared/scanner-auth";
 
 import { ok, created } from "../../utils/api-response";
+import { getCredentialEncryptionKey } from "../../utils/encryption-key";
 import { AppError, UnauthorizedError, ForbiddenError, NotFoundError, ValidationError, ConflictError, ServiceUnavailableError } from "../../utils/api-error";
 import {
     conflictResponse,
@@ -492,7 +493,7 @@ app.openapi(createUserRoute, async (c) => {
             name,
             email: normalizedEmail,
             password: bootstrapPassword,
-        });
+        }, { pepperKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>) });
         const createdAdmin = await createInvitedAdminCredentialAccount(
             db,
             credential,
@@ -2325,7 +2326,7 @@ setupApp.openapi(setupRoute, async (c) => {
                 name,
                 email: normalizedEmail,
                 password,
-            });
+            }, { pepperKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>) });
             await completeAdminSetupClaimWithCredentialIdentity(
                 db,
                 setupClaim,

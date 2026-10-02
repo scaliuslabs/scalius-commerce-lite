@@ -44,8 +44,13 @@ function createListCustomersDb(options: {
       limit: ReturnType<typeof vi.fn>;
       offset: ReturnType<typeof vi.fn>;
       orderBy: ReturnType<typeof vi.fn>;
+      $dynamic: ReturnType<typeof vi.fn>;
+      as: ReturnType<typeof vi.fn>;
     };
     builder.from = vi.fn(() => builder);
+    builder.$dynamic = vi.fn(() => builder);
+    // The capped count reads from a `select 1 ... limit` sub-select.
+    builder.as = vi.fn(() => builder);
     builder.leftJoin = vi.fn((_table: unknown, condition: unknown) => {
       query.joins.push(condition);
       return builder;
@@ -114,7 +119,7 @@ describe("admin customer list location projection", () => {
       areaName: "area_missing",
     });
 
-    const resultQuery = queries[1]!;
+    const resultQuery = queries.find((query) => "latestOrderName" in query.fields)!;
     expect(resultQuery.joins).toHaveLength(4);
     const dialect = new SQLiteSyncDialect();
     for (const [field, aliasName, idColumn] of [
@@ -145,14 +150,17 @@ describe("admin customer list location projection", () => {
     const result = await listCustomers(db as never, { page: 2, limit: 10 });
 
     expect(batch.mock.calls[0]?.[0]).toHaveLength(2);
-    // The count joins only the stored order facts (segment filters read them), never locations.
-    expect(queries[0]?.joins).toHaveLength(1);
-    expect(queries[1]).toMatchObject({ limit: 10, offset: 10 });
+    // The count joins only the stored order facts (segment filters read them), never locations,
+    // and reads a capped `select 1` sub-select, not every row.
+    expect(queries.find((query) => "one" in query.fields)?.joins).toHaveLength(1);
+    expect(queries.find((query) => "latestOrderName" in query.fields)).toMatchObject({ limit: 11, offset: 10 });
     expect(result.pagination).toEqual({
       total: 25,
+      totalIsCapped: false,
       page: 2,
       limit: 10,
       totalPages: 3,
+      offset: 10,
     });
   });
 });

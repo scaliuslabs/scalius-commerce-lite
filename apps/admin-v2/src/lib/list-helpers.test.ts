@@ -1,10 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_LIST_MAX_LIMIT,
+  NO_CURSOR,
+  createDataSelector,
   createListSearchValidator,
   getCanonicalPageForPagination,
+  isPagingRefusal,
+  normalizeCursorSearchParam,
   normalizeOptionalEnumSearchParam,
   normalizeListPositiveInteger,
+  resetCursorUnlessPaging,
   type SearchValidatorInput,
 } from "./list-helpers";
 
@@ -62,5 +67,50 @@ describe("list helpers", () => {
     expect(normalizeOptionalEnumSearchParam("paid", options)).toBe("paid");
     expect(normalizeOptionalEnumSearchParam("unknown", options)).toBeUndefined();
     expect(normalizeOptionalEnumSearchParam(undefined, options)).toBeUndefined();
+  });
+});
+
+describe("cursor paging URL state", () => {
+  const validateSearch = createListSearchValidator(["createdAt", "updatedAt"] as const, { limit: 10 });
+
+  it("keeps an opaque cursor from the URL and drops anything that is not URL-safe or too long", () => {
+    expect(validateSearch(searchInput({ after: "eyJ2IjoxfQ" }))).toMatchObject({ after: "eyJ2IjoxfQ" });
+    expect(validateSearch(searchInput({ before: "abc_DEF-123" }))).toMatchObject({ before: "abc_DEF-123" });
+    expect(validateSearch(searchInput({ after: "not a cursor!" }))).not.toHaveProperty("after");
+    expect(validateSearch(searchInput({ after: "a".repeat(1_025) }))).not.toHaveProperty("after");
+    expect(validateSearch(searchInput({ after: "", before: 7 }))).not.toHaveProperty("before");
+    expect(normalizeCursorSearchParam(undefined)).toBeUndefined();
+  });
+
+  it("uses after when a hand-edited URL carries both cursors", () => {
+    const search = validateSearch(searchInput({ after: "first", before: "second" }));
+    expect(search.after).toBe("first");
+    expect(search).not.toHaveProperty("before");
+  });
+
+  it("drops the cursor on any change that is not a Previous/Next move", () => {
+    expect(resetCursorUnlessPaging({ sort: "createdAt", page: 1 })).toEqual({ sort: "createdAt", page: 1, ...NO_CURSOR });
+    expect(resetCursorUnlessPaging({ after: "next-page", page: 1 })).toEqual({ after: "next-page", page: 1 });
+    expect(resetCursorUnlessPaging({ before: "prev-page", after: undefined })).toEqual({ before: "prev-page", after: undefined });
+  });
+
+  it("recognises the API's paging refusals", () => {
+    expect(isPagingRefusal({ code: "INVALID_CURSOR" })).toBe(true);
+    expect(isPagingRefusal({ code: "PAGE_TOO_DEEP" })).toBe(true);
+    expect(isPagingRefusal({ code: "VALIDATION_ERROR" })).toBe(false);
+    expect(isPagingRefusal(new Error("boom"))).toBe(false);
+    expect(isPagingRefusal(null)).toBe(false);
+  });
+
+  it("hands the list's pageInfo to the table beside its rows and counts", () => {
+    const pageInfo = { hasNextPage: true, hasPreviousPage: false, startCursor: "a", endCursor: "b" };
+    const selected = createDataSelector<{ id: string }>("orders")({
+      orders: [{ id: "o1" }],
+      pagination: { total: 1_000, page: 1, limit: 10, totalPages: 100, totalIsCapped: true, offset: 0 },
+      pageInfo,
+    });
+    expect(selected.pageInfo).toEqual(pageInfo);
+    expect(selected.pagination).toMatchObject({ totalIsCapped: true, offset: 0 });
+    expect(createDataSelector("orders")({}).pageInfo).toBeUndefined();
   });
 });

@@ -22,6 +22,7 @@ export const orderListMessages = defineMessages({
     "exportScope.page": "Current page ({count})",
     "exportScope.all": "All {count} matching orders",
     "exportScope.allOne": "All {count} matching order",
+    "exportScope.allCapped": "All matching orders (up to {count})",
     "exportScope.selected": "Selected orders ({count})",
     exportFormat: "Rows",
     "exportFormat.summary": "One row per order",
@@ -136,6 +137,8 @@ export const orderListMessages = defineMessages({
 
     allSelected: "All {count} orders selected",
     selectAllMatching: "Select all {count} orders",
+    firstSelected: "First {count} orders selected",
+    selectFirstMatching: "Select the first {count} orders",
     clearSelection: "Clear",
     confirm: "Confirm",
     markAsSent: "Mark as sent",
@@ -268,6 +271,7 @@ export const orderListMessages = defineMessages({
     "exportScope.page": "এই পাতা ({count})",
     "exportScope.all": "মিলে যাওয়া সব {count}টি অর্ডার",
     "exportScope.allOne": "মিলে যাওয়া {count}টি অর্ডার",
+    "exportScope.allCapped": "মিলে যাওয়া সব অর্ডার (সর্বোচ্চ {count}টি)",
     "exportScope.selected": "বাছাই করা অর্ডার ({count})",
     exportFormat: "সারি",
     "exportFormat.summary": "প্রতি অর্ডারে এক সারি",
@@ -382,6 +386,8 @@ export const orderListMessages = defineMessages({
 
     allSelected: "সব {count}টি অর্ডার বাছাই করা",
     selectAllMatching: "সব {count}টি অর্ডার বাছাই করুন",
+    firstSelected: "প্রথম {count}টি অর্ডার বাছাই করা",
+    selectFirstMatching: "প্রথম {count}টি অর্ডার বাছাই করুন",
     clearSelection: "বাদ দিন",
     confirm: "কনফার্ম",
     markAsSent: "পাঠানো হয়েছে",

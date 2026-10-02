@@ -24,7 +24,9 @@ import {
 import {
   AUTH_PASSWORD_MAX_LENGTH,
   AUTH_PASSWORD_MIN_LENGTH,
+  upgradeStoredPasswordHash,
 } from "./credential-account";
+import { hashPassword, verifyPassword } from "./password-hash";
 import { retryTransientD1 } from "../utils/transient-d1";
 import { readStoreName } from "../modules/notifications/store-messages";
 
@@ -107,6 +109,20 @@ export function createAuth(env: Env) {
       requireEmailVerification: false,
       minPasswordLength: AUTH_PASSWORD_MIN_LENGTH,
       maxPasswordLength: AUTH_PASSWORD_MAX_LENGTH,
+      // Self-describing hashes sized to the plan (auth/password-hash.ts): Free
+      // cannot spend Better Auth's ~80 ms of scrypt inside a 10 ms request. A
+      // password that verifies against a hash this deployment would not write
+      // now (another plan's cost, Better Auth's own format) is rewritten.
+      password: {
+        hash: (password: string) => hashPassword(password, { pepperKey: emailRuntimeContext.encryptionKey }),
+        verify: async ({ hash, password }: { hash: string; password: string }) => {
+          const verdict = await verifyPassword(hash, password, { pepperKey: emailRuntimeContext.encryptionKey });
+          if (verdict.needsRehash) {
+            await upgradeStoredPasswordHash(db, hash, password, { pepperKey: emailRuntimeContext.encryptionKey });
+          }
+          return verdict.valid;
+        },
+      },
       // Staff invites reuse this token; sendResetPassword extends theirs to 7 days.
       resetPasswordTokenExpiresIn: PASSWORD_RESET_TTL_SECONDS,
       revokeSessionsOnPasswordReset: true,

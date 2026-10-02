@@ -32,6 +32,7 @@ Customer Auth Flow (storefront):
 | File | Purpose |
 |------|---------|
 | `auth.ts` | `createAuth()` / `getAuth()` -- request-scoped Better Auth factory with Drizzle adapter, email/password, 2FA (TOTP + email OTP), and admin plugin. It must not be cached because the instance closes over the request database adapter and Worker bindings. |
+| `password-hash.ts` | Self-describing, versioned password hashes sized to the Workers plan (`$sc1$pbkdf2-sha256$...` on Free, `$sc1$scrypt$...` on Paid), keyed with a pepper derived from `CREDENTIAL_ENCRYPTION_KEY`; Better Auth's own scrypt hashes still verify. A hash the deployment would not write now is rewritten at the next successful verify (`upgradeStoredPasswordHash` in `credential-account.ts`). See `docs/FREE-PLAN.md`. |
 | `admin-setup.ts` | D1-backed first-admin setup coordination. Owns the singleton setup claim, setup attempt rate limit, and guarded admin promotion/claim completion helper used by `/api/v1/setup`. |
 | `scanner-token-claims.ts` | D1-backed scanner QR-token claim helpers. Minting stores only a token hash, exchange atomically consumes an unexpired/unconsumed claim before a scanner KV session is written, and scheduled maintenance prunes expired/old claims. |
 | `index.ts` | Barrel re-export of `createAuth`, `getAuth`, `Auth` type, and setup coordination helpers. |

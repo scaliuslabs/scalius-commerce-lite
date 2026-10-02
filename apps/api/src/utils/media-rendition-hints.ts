@@ -17,6 +17,8 @@
  * marker). Never throws.
  */
 
+import { putKvHint } from "@scalius/shared/kv-hints";
+import { planLimits } from "@scalius/shared/plan-limits";
 import type { MediaVariantsQueue } from "@scalius/core/modules/media";
 
 export const MEDIA_RENDITION_HINT_KV_PREFIX = "media:rendition-hint:";
@@ -104,8 +106,11 @@ export async function queueRenditionsForRenderedOriginals(
   try {
     const queue = env.JOBS_QUEUE;
     const kv = env.CACHE;
-    // Without Images nothing could render the job; the queue drops it.
-    if (!queue || !kv || !env.IMAGES) {
+    // Without Images nothing could render the job; the queue drops it. Where
+    // the plan profile leaves renditions to the scheduled backfill (Workers
+    // Free: a message and a KV write per image on the buyer's path), a read
+    // queues nothing.
+    if (!queue || !kv || !env.IMAGES || !planLimits().queue.renditionsFromPublicReads) {
       await response.body?.cancel().catch(() => undefined);
       return [];
     }
@@ -124,7 +129,7 @@ export async function queueRenditionsForRenderedOriginals(
         variantWidth: null,
       }, { delaySeconds: 0 });
       if (!sent) return null;
-      await kv.put(key, "1", { expirationTtl: MEDIA_RENDITION_HINT_TTL_SECONDS }).catch(() => undefined);
+      await putKvHint(kv, key, "1", { expirationTtl: MEDIA_RENDITION_HINT_TTL_SECONDS });
       return ref.id;
     }));
     const queued = outcomes.filter((id): id is string => id !== null);

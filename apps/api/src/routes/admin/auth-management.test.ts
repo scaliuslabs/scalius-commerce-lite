@@ -1270,7 +1270,7 @@ describe("admin auth management team invites", () => {
       name: "Ops Admin",
       email: "ops@example.com",
       password: expect.any(String),
-    });
+    }, { pepperKey: undefined });
     const generatedPassword = mocks.prepareCredentialIdentity.mock.calls[0]?.[0]?.password;
     expect(generatedPassword).toHaveLength(32);
     expect(mocks.createInvitedAdminCredentialAccount).toHaveBeenCalledWith(

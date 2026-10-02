@@ -1,5 +1,6 @@
 // src/server/routes/meta-conversions.ts
 
+import { putKvHint } from "@scalius/shared/kv-hints";
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { createId } from "@paralleldrive/cuid2";
 import {
@@ -128,21 +129,17 @@ async function openMetaCapiBrowserCircuit(
 ) {
   if (!kv || result.success || result.retryable !== false) return;
 
-  try {
-    await kv.put(
-      META_CAPI_BROWSER_CIRCUIT_KEY,
-      JSON.stringify({
-        reason: result.error || "non-retryable Meta CAPI failure",
-        eventName,
-        openedAt: Date.now(),
-      }),
-      { expirationTtl: META_CAPI_BROWSER_CIRCUIT_TTL_SECONDS },
-    );
-  } catch (error) {
-    console.warn("[Meta CAPI] Failed to open browser event circuit", {
-      error: error instanceof Error ? error.message : String(error),
-    });
-  }
+  const opened = await putKvHint(
+    kv,
+    META_CAPI_BROWSER_CIRCUIT_KEY,
+    JSON.stringify({
+      reason: result.error || "non-retryable Meta CAPI failure",
+      eventName,
+      openedAt: Date.now(),
+    }),
+    { expirationTtl: META_CAPI_BROWSER_CIRCUIT_TTL_SECONDS },
+  );
+  if (!opened) console.warn("[Meta CAPI] Browser event circuit not opened");
 }
 
 // ─── POST /events ────────────────────────────────────────────────────────────
