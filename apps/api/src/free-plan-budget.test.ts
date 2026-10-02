@@ -11,6 +11,7 @@ import {
   queueOperations,
   type FreePlanCounters,
 } from "./testing/free-plan-meter";
+import { DVC_AUDIT_RATE } from "./public-read";
 import { STORE, createFreePlanStore, type FreePlanStore } from "./testing/free-plan-store";
 import { cartItems, seedCatalog, seedMediaBacklog, seedOrders } from "./testing/free-plan-seed";
 import { BUDGETS, type Budget } from "./testing/free-plan-budgets";
@@ -225,8 +226,16 @@ describe.each(PLANS)("Workers %s plan budget", (plan) => {
     return { batch: { queue, messages, ackAll: () => undefined, retryAll: () => undefined } as unknown as MessageBatch<Record<string, unknown>>, outcome };
   }
 
+  let randomSpy: ReturnType<typeof vi.spyOn> | undefined;
+
   beforeAll(async () => {
     vi.stubGlobal("__SCALIUS_PLAN__", plan);
+    // One validated hit in DVC_AUDIT_RATE (1 in 1,000) is rendered again after the
+    // response to audit its dependencies. That is real and random, and a counter
+    // gate must not be: left alone, a hit's D1 count jumps once in ~10 full runs.
+    // The draws stay random but never land in the audit's sampled range.
+    const draw = Math.random.bind(Math);
+    randomSpy = vi.spyOn(Math, "random").mockImplementation(() => DVC_AUDIT_RATE + draw() * (1 - DVC_AUDIT_RATE));
     store = await createFreePlanStore();
     seedCatalog(store.sqlite);
     seedOrders(store.sqlite, 1000);
@@ -237,6 +246,7 @@ describe.each(PLANS)("Workers %s plan budget", (plan) => {
     const target = process.env.FREE_PLAN_BUDGET_REPORT;
     if (target && plan === PLANS[PLANS.length - 1]) writeFileSync(target, `${JSON.stringify(report, null, 2)}\n`);
     store?.close();
+    randomSpy?.mockRestore();
     vi.unstubAllGlobals();
   });
 
