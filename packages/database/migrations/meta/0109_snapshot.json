@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "1cd34e4e-1f90-4350-b54e-2cbce6e6147f",
+  "id": "62a617dd-01b3-4939-aa0a-4ec809dc7e52",
   "prevId": "73bac36d-656b-41a1-8555-e8f382a30681",
   "tables": {
     "account": {
@@ -13456,6 +13456,13 @@
           "notNull": true,
           "autoincrement": false
         },
+        "subject_revision": {
+          "name": "subject_revision",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
         "result_payload": {
           "name": "result_payload",
           "type": "text",
@@ -13480,19 +13487,23 @@
         }
       },
       "indexes": {
-        "inventory_commands_subject_idx": {
-          "name": "inventory_commands_subject_idx",
+        "inventory_commands_subject_revision_unique": {
+          "name": "inventory_commands_subject_revision_unique",
           "columns": [
             "subject_id",
-            "created_at"
+            "subject_revision"
           ],
-          "isUnique": false
+          "isUnique": true
         }
       },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {
+        "inventory_commands_subject_revision_positive": {
+          "name": "inventory_commands_subject_revision_positive",
+          "value": "\"inventory_commands\".\"subject_revision\" >= 1"
+        },
         "inventory_commands_type_check": {
           "name": "inventory_commands_type_check",
           "value": "\"inventory_commands\".\"command_type\" IN ('purchase_order_receive', 'transfer_ship', 'transfer_receive', 'transfer_cancel')"

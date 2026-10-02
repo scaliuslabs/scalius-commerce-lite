@@ -93,14 +93,16 @@ CREATE TABLE "inventory_commands" (
 	"request_hash" text NOT NULL,
 	"command_type" text NOT NULL,
 	"subject_id" text NOT NULL,
+	"subject_revision" bigint NOT NULL,
 	"result_payload" text NOT NULL,
 	"created_by" text,
 	"created_at" bigint DEFAULT (cast(strftime('%s','now') as bigint)) NOT NULL,
+	CONSTRAINT "inventory_commands_subject_revision_positive" CHECK("inventory_commands"."subject_revision" >= 1),
 	CONSTRAINT "inventory_commands_type_check" CHECK("inventory_commands"."command_type" IN ('purchase_order_receive', 'transfer_ship', 'transfer_receive', 'transfer_cancel')),
 	CONSTRAINT "inventory_commands_payload_json" CHECK(json_valid("inventory_commands"."result_payload"))
 );
 --> statement-breakpoint
-CREATE INDEX "inventory_commands_subject_idx" ON "inventory_commands" ("subject_id","created_at");
+CREATE UNIQUE INDEX "inventory_commands_subject_revision_unique" ON "inventory_commands" ("subject_id","subject_revision");
 --> statement-breakpoint
 CREATE TABLE "purchase_order_receipt_lines" (
 	"id" text PRIMARY KEY NOT NULL,
@@ -730,4 +732,4 @@ FOR EACH ROW
 EXECUTE FUNCTION scalius_compat."evt_inventory_transfers_deleted_fn"();
 -- <<< 0109
 --> statement-breakpoint
-INSERT INTO "scalius_schema_migrations" ("version", "name", "source_sha256") VALUES (109, '0109_inventory_purchasing', '79ffcab6ba85f5285d4fbf9029a42ce82ea1d23845bfd3742465646904cff740');
+INSERT INTO "scalius_schema_migrations" ("version", "name", "source_sha256") VALUES (109, '0109_inventory_purchasing', '3aa95b32b38c1dd3a94562822ab76ede11ea56829df22f337443fb375fc08aa1');

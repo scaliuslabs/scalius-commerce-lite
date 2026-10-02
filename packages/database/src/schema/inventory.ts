@@ -201,13 +201,16 @@ export const inventoryCommands = sqliteTable("inventory_commands", {
     commandType: text("command_type", { enum: INVENTORY_COMMAND_TYPES }).notNull(),
     /** The purchase order or transfer the command acted on. */
     subjectId: text("subject_id").notNull(),
+    /** The subject's revision this command produced: commands of one subject in order. */
+    subjectRevision: integer("subject_revision").notNull(),
     resultPayload: text("result_payload").notNull(),
     createdBy: text("created_by"),
     createdAt: integer("created_at", { mode: "timestamp" })
         .notNull()
         .default(UNIX_NOW),
 }, (table) => [
-    index("inventory_commands_subject_idx").on(table.subjectId, table.createdAt),
+    uniqueIndex("inventory_commands_subject_revision_unique").on(table.subjectId, table.subjectRevision),
+    check("inventory_commands_subject_revision_positive", sql`${table.subjectRevision} >= 1`),
     check(
         "inventory_commands_type_check",
         sql`${table.commandType} IN ('purchase_order_receive', 'transfer_ship', 'transfer_receive', 'transfer_cancel')`,

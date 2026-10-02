@@ -160,8 +160,8 @@ describe(`${NAME} over a populated 0108 store`, () => {
 
     movement(db, "mv_po", "received", 5, 5, "loc_b");
     db.exec(`
-      INSERT INTO inventory_commands (operation_key, request_hash, command_type, subject_id, result_payload)
-        VALUES ('op_1', 'h', 'purchase_order_receive', 'po_1', '{}');
+      INSERT INTO inventory_commands (operation_key, request_hash, command_type, subject_id, subject_revision, result_payload)
+        VALUES ('op_1', 'h', 'purchase_order_receive', 'po_1', 3, '{}');
       INSERT INTO purchase_order_receipt_lines (id, operation_key, purchase_order_id, purchase_order_line_id, variant_id, location_id, movement_id, quantity, unit_cost_minor)
         VALUES ('porl_1', 'op_1', 'po_1', 'pol_1', 'var_a', 'loc_b', 'mv_po', 5, 40000);
     `);

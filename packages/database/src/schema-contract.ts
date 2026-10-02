@@ -325,7 +325,7 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
   {
     version: 109,
     name: "0109_inventory_purchasing",
-    sourceSha256: "79ffcab6ba85f5285d4fbf9029a42ce82ea1d23845bfd3742465646904cff740",
+    sourceSha256: "3aa95b32b38c1dd3a94562822ab76ede11ea56829df22f337443fb375fc08aa1",
   },
 ] as const;
 
