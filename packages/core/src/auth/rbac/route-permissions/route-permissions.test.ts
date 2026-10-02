@@ -138,9 +138,9 @@ describe("route permissions", () => {
   });
 
   it("reads purchasing, transfers, costs and value with products.view and writes them with products.edit", () => {
-    const view = { permission: PERMISSIONS.PRODUCTS_VIEW };
-    const edit = { permission: PERMISSIONS.PRODUCTS_EDIT };
-    const cases: Array<[string, "GET" | "POST" | "PUT" | "PATCH" | "DELETE", typeof view]> = [
+    const view: { permission: string } = { permission: PERMISSIONS.PRODUCTS_VIEW };
+    const edit: { permission: string } = { permission: PERMISSIONS.PRODUCTS_EDIT };
+    const cases: Array<[string, "GET" | "POST" | "PUT" | "PATCH" | "DELETE", { permission: string }]> = [
       ["/api/v1/admin/inventory/valuation", "GET", view],
       ["/api/v1/admin/inventory/costs", "PUT", edit],
       ["/api/v1/admin/inventory/suppliers", "GET", view],

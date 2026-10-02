@@ -60201,6 +60201,7 @@ export type GetApiV1AdminOrdersByIdFormDataResponses = {
                     weight: number | null;
                     sku: string;
                     price: number;
+                    cost?: number | null;
                     stock: number;
                     reservedStock: number;
                     preorderStock?: number;
@@ -64260,6 +64261,7 @@ export type GetApiV1AdminProductsByIdResponses = {
                 weight: number | null;
                 sku: string;
                 price: number;
+                cost?: number | null;
                 stock: number;
                 reservedStock: number;
                 preorderStock?: number;
@@ -64931,6 +64933,7 @@ export type GetApiV1AdminProductsByIdVariantsResponses = {
                 weight: number | null;
                 sku: string;
                 price: number;
+                cost?: number | null;
                 stock: number;
                 reservedStock: number;
                 preorderStock?: number;
@@ -65123,6 +65126,7 @@ export type PostApiV1AdminProductsByIdVariantsResponses = {
             weight: number | null;
             sku: string;
             price: number;
+            cost?: number | null;
             stock: number;
             reservedStock: number;
             preorderStock?: number;
@@ -65456,6 +65460,7 @@ export type PutApiV1AdminProductsByIdVariantsByVariantIdResponses = {
             weight: number | null;
             sku: string;
             price: number;
+            cost?: number | null;
             stock: number;
             reservedStock: number;
             preorderStock?: number;

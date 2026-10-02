@@ -221459,6 +221459,10 @@
                                     "price": {
                                       "type": "number"
                                     },
+                                    "cost": {
+                                      "type": "number",
+                                      "nullable": true
+                                    },
                                     "stock": {
                                       "type": "number"
                                     },
@@ -236539,6 +236543,10 @@
                               "price": {
                                 "type": "number"
                               },
+                              "cost": {
+                                "type": "number",
+                                "nullable": true
+                              },
                               "stock": {
                                 "type": "number"
                               },
@@ -239379,6 +239387,10 @@
                         "price": {
                           "type": "number"
                         },
+                        "cost": {
+                          "type": "number",
+                          "nullable": true
+                        },
                         "stock": {
                           "type": "number"
                         },
@@ -240037,6 +240049,10 @@
                               },
                               "price": {
                                 "type": "number"
+                              },
+                              "cost": {
+                                "type": "number",
+                                "nullable": true
                               },
                               "stock": {
                                 "type": "number"
@@ -240818,6 +240834,10 @@
                         },
                         "price": {
                           "type": "number"
+                        },
+                        "cost": {
+                          "type": "number",
+                          "nullable": true
                         },
                         "stock": {
                           "type": "number"
