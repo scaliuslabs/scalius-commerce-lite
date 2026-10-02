@@ -1,0 +1,97 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { PLAN_LIMITS, deployedPlan, planLimits } from "./plan-limits";
+
+/**
+ * What the code did before the plan profile existed. A Paid store must keep
+ * at least this: lowering any of these values for Paid is a regression, and
+ * this test fails on it. (The Free profile may be lighter.)
+ */
+const BEFORE_THE_PROFILE = {
+  /** apps/api/wrangler.jsonc `limits.cpu_ms`. */
+  cpuMs: 30_000,
+  /** better-auth's own `hashPassword`: scrypt N=16384, r=16, p=1. */
+  scrypt: { N: 16_384, r: 16, p: 1 },
+  /** apps/api/wrangler.jsonc `queues.consumers[jobs].max_batch_size` and the DLQ consumer's. */
+  consumerBatchSize: 10,
+  dlqBatchSize: 10,
+  /** MEDIA_RENDITION_FANOUT_MAX_PER_RUN: media jobs enqueued by one 15-minute run. */
+  mediaFanOutPerRun: 1_000,
+  /** NIGHTLY_RECOMMENDATION_REFRESH_LIMIT. */
+  nightlyRecommendationRefreshLimit: 3_000,
+} as const;
+
+describe("plan profile", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("is Free unless the deploy defined the plan", () => {
+    expect(deployedPlan()).toBe("free");
+    expect(planLimits()).toBe(PLAN_LIMITS.free);
+    vi.stubGlobal("__SCALIUS_PLAN__", "paid");
+    expect(deployedPlan()).toBe("paid");
+    expect(planLimits()).toBe(PLAN_LIMITS.paid);
+    // Anything but the exact word is Free: a typo must never grant Paid values.
+    vi.stubGlobal("__SCALIUS_PLAN__", "Paid");
+    expect(deployedPlan()).toBe("free");
+    vi.stubGlobal("__SCALIUS_PLAN__", "enterprise");
+    expect(deployedPlan()).toBe("free");
+  });
+
+  it("reads the plan per call, never at module load", () => {
+    expect(planLimits().plan).toBe("free");
+    vi.stubGlobal("__SCALIUS_PLAN__", "paid");
+    expect(planLimits().plan).toBe("paid");
+    vi.unstubAllGlobals();
+    expect(planLimits().plan).toBe("free");
+  });
+
+  describe("Paid keeps at least what the code did before the profile", () => {
+    const paid = PLAN_LIMITS.paid;
+
+    it("CPU stays at 30 s", () => {
+      expect(paid.cpuMs).toBe(BEFORE_THE_PROFILE.cpuMs);
+    });
+
+    it("password hashing is at least as strong as scrypt N=16384 r=16 p=1", () => {
+      expect(paid.password.algorithm).toBe("scrypt");
+      if (paid.password.algorithm !== "scrypt") return;
+      expect(paid.password.N).toBeGreaterThanOrEqual(BEFORE_THE_PROFILE.scrypt.N);
+      expect(paid.password.r).toBeGreaterThanOrEqual(BEFORE_THE_PROFILE.scrypt.r);
+      expect(paid.password.p).toBeGreaterThanOrEqual(BEFORE_THE_PROFILE.scrypt.p);
+    });
+
+    it("queue batches and bulk throughput are no smaller", () => {
+      expect(paid.queue.consumerBatchSize).toBeGreaterThanOrEqual(BEFORE_THE_PROFILE.consumerBatchSize);
+      expect(paid.queue.dlqBatchSize).toBeGreaterThanOrEqual(BEFORE_THE_PROFILE.dlqBatchSize);
+      expect(paid.queue.bulkPageSize).toBeGreaterThanOrEqual(BEFORE_THE_PROFILE.mediaFanOutPerRun);
+      expect(paid.queue.bulkBacklogLimit).toBeGreaterThanOrEqual(BEFORE_THE_PROFILE.mediaFanOutPerRun);
+      expect(paid.queue.nightlyRecommendationRefreshLimit).toBeGreaterThanOrEqual(BEFORE_THE_PROFILE.nightlyRecommendationRefreshLimit);
+    });
+
+    it("every KV hint stays on", () => {
+      expect(Object.values(paid.kv)).toEqual(Object.values(paid.kv).map(() => true));
+    });
+
+    it("every sweep runs on every cron tick", () => {
+      expect(paid.maintenance.slices).toBe(1);
+    });
+  });
+
+  it("Free is never heavier than Paid, and fits Free's published limits", () => {
+    const { free, paid } = { free: PLAN_LIMITS.free, paid: PLAN_LIMITS.paid };
+    expect(free.cpuMs).toBeNull();
+    expect(free.queue.consumerBatchSize).toBeLessThanOrEqual(paid.queue.consumerBatchSize);
+    expect(free.queue.bulkPageSize).toBeLessThanOrEqual(paid.queue.bulkPageSize);
+    expect(free.queue.bulkBacklogLimit).toBeLessThanOrEqual(paid.queue.bulkBacklogLimit);
+    expect(free.lists.countCap).toBeLessThanOrEqual(paid.lists.countCap);
+    expect(free.lists.maxOffset).toBeLessThanOrEqual(paid.lists.maxOffset);
+    expect(free.maintenance.slices).toBeGreaterThanOrEqual(paid.maintenance.slices);
+    // A fixed Free CPU of 10 ms leaves no room for a memory-hard hash.
+    expect(free.password.algorithm).toBe("pbkdf2-sha256");
+  });
+
+  it("is frozen", () => {
+    expect(Object.isFrozen(PLAN_LIMITS)).toBe(true);
+    expect(Object.isFrozen(PLAN_LIMITS.paid)).toBe(true);
+    expect(Object.isFrozen(PLAN_LIMITS.paid.queue)).toBe(true);
+  });
+});
