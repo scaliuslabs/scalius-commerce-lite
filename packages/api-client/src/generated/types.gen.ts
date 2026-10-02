@@ -806,6 +806,9 @@ export type StorefrontThemeDocument = {
             settings: {
                 heading: string;
                 text: string;
+                email?: 'optional' | 'required' | 'hidden';
+                whatsapp?: boolean;
+                buttonLabel?: string;
             };
         }>;
         homeMode: {
@@ -31762,6 +31765,10 @@ export type GetApiV1AdminDiscountsResponses = {
                         [key: string]: unknown;
                     };
                 }>;
+                /**
+                 * Only signed-in customers in any of these customer segments get this discount; empty means every customer.
+                 */
+                customerSegmentIds: Array<string>;
             }>;
         };
     };
@@ -31846,6 +31853,7 @@ export type PostApiV1AdminDiscountsData = {
                 [key: string]: never;
             };
         }>;
+        customerSegmentIds?: Array<string>;
     };
     path?: never;
     query?: never;
@@ -32191,6 +32199,10 @@ export type GetApiV1AdminDiscountsByIdResponses = {
                     [key: string]: unknown;
                 };
             }>;
+            /**
+             * Only signed-in customers in any of these customer segments get this discount; empty means every customer.
+             */
+            customerSegmentIds: Array<string>;
         };
     };
 };
@@ -32275,6 +32287,7 @@ export type PutApiV1AdminDiscountsByIdData = {
                 [key: string]: never;
             };
         }>;
+        customerSegmentIds?: Array<string>;
     };
     path: {
         id: string;
@@ -32384,6 +32397,9 @@ export type PutApiV1AdminDiscountsByIdResponse = PutApiV1AdminDiscountsByIdRespo
 export type PostApiV1AdminDiscountsByIdPreviewData = {
     body: {
         expectedRevision: number;
+        /**
+         * Preview as this customer, signed in: their usage and customer segments. Without one, a discount limited to segments does not apply.
+         */
         customerId?: string | null;
         cart: {
             currencyCode: string;

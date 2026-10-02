@@ -8,6 +8,8 @@ import Layout from "@/layouts/Layout.astro";
 import CheckoutHeader from "@/components/CheckoutHeader.astro";
 import CheckoutProgress from "@/components/CheckoutProgress.astro";
 import LocationFields from "@/components/checkout/LocationFields.astro";
+import MarketingConsentField from "@/components/checkout/MarketingConsentField.astro";
+import { marketingConsentCheckbox } from "@/lib/checkout/marketing-consent";
 import {
   getActiveCheckoutLanguage,
   getCheckoutConfig,
@@ -129,6 +131,9 @@ const quote = quoteResult?.ok ? quoteResult.quote : null;
 
 // Settings → Customer accounts decides the contact fields (phone always).
 const contactFields = checkoutContactFields(checkoutConfig.customerIdentity ?? DEFAULT_CUSTOMER_IDENTITY);
+// Settings → Customers: the marketing consent box (unchecked, never required;
+// a ticked box stays ticked across this form's steps).
+const marketingConsent = marketingConsentCheckbox(checkoutConfig, lang.code);
 let errorMessage = "";
 let fieldErrors: QuickCheckoutFieldError[] = [];
 if (quoteResult && !quoteResult.ok) {
@@ -370,6 +375,8 @@ const secondaryButtonClass =
             <textarea id="notes" name="notes" rows={2} maxlength="500" placeholder={copy.orderNotesPlaceholder} class={`${fieldClass} h-auto min-h-16 resize-none py-2`}>{form.notes}</textarea>
           </div>
         )}
+
+        <MarketingConsentField consent={marketingConsent} checked={form.marketingConsent !== ""} idPrefix="quick" />
 
         {quote && codAvailable ? (
           <div class="space-y-2">

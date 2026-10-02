@@ -160,14 +160,15 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
       },
       footer: ["minimal-columns"],
     }),
-    // Dawn ends with an email signup; it joins once the store keeps a
-    // subscriber list with marketing consent (the newsletter section).
+    // Dawn ends with an email signup: the newsletter section (phone first,
+    // the e-mail optional, as everywhere in this market).
     home: [
       home("hero", "hero", { layout: "split" }),
       home("editorial", "intro"),
       home("product-grid", "featured", { columns: 4, rows: 2 }),
       home("editorial", "values", { layout: "multicolumn", heading: "", columns: [] }),
       home("editorial", "testimonials", { layout: "testimonial", quotes: [] }),
+      home("newsletter", "newsletter"),
     ],
   },
   {
@@ -234,7 +235,7 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
       },
       footer: ["newsletter-grey"],
     }),
-    // Fabrilife's newsletter band joins once the store keeps a subscriber list.
+    // Fabrilife ends the page with its newsletter band above the footer.
     home: [
       home("hero", "hero", { layout: "full-bleed" }),
       home("usp-strip", "usp"),
@@ -242,6 +243,7 @@ const TEMPLATES: readonly StorefrontTemplate[] = [
       home("banner", "promos", { layout: "two-up" }),
       home("category-tiles", "categories", { style: "photo" }),
       home("lookbook", "lookbook", { photo: "square" }),
+      home("newsletter", "newsletter"),
     ],
   },
   {

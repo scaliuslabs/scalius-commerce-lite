@@ -1,0 +1,76 @@
+---
+// /newsletter/confirm: the double opt-in e-mail's link (`?token=…`). Opening
+// it never confirms anything (mail scanners open links): the page shows a
+// "Confirm subscription" button that posts the token in the form body. The
+// post confirms through the API and answers a 303 to /newsletter with only
+// the outcome. The page is private, never cached, sends no referrer, loads
+// no analytics (the token is in its URL) and takes the token out of the
+// address bar once it has loaded. Tokens are never logged.
+import Layout from "@/layouts/Layout.astro";
+import { getLayoutData } from "@/lib/api";
+import { newsletterCopy, newsletterLanguage } from "@/lib/newsletter-copy";
+import { NEWSLETTER_CONFIRM_PATH, NEWSLETTER_RESULT_PATH } from "@/lib/newsletter-form";
+import {
+  NEWSLETTER_TOKEN_PAGE_HEADERS,
+  confirmNewsletterSubscription,
+  isCrossOriginPost,
+  isNewsletterConfirmToken,
+  newsletterForbidden,
+  newsletterRedirect,
+  readNewsletterForm,
+} from "@/lib/newsletter-server";
+import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
+
+export const prerender = false;
+
+const method = Astro.request.method;
+if (method === "POST") {
+  if (shouldRejectCrossOriginCookieRequest(Astro.request) || isCrossOriginPost(Astro.request)) {
+    return newsletterForbidden(Astro.request);
+  }
+  const form = await readNewsletterForm(Astro.request);
+  const outcome = await confirmNewsletterSubscription(Astro.request, form?.get("token"));
+  return newsletterRedirect(outcome.status, { "Referrer-Policy": "no-referrer" });
+}
+if (method !== "GET" && method !== "HEAD") {
+  return new Response(null, { status: 405, headers: { Allow: "GET, HEAD, POST", ...NEWSLETTER_TOKEN_PAGE_HEADERS } });
+}
+for (const [name, value] of Object.entries(NEWSLETTER_TOKEN_PAGE_HEADERS)) Astro.response.headers.set(name, value);
+
+const token = Astro.url.searchParams.get("token");
+const linkWorks = isNewsletterConfirmToken(token);
+const layoutData = await getLayoutData();
+const language = newsletterLanguage(layoutData?.storefrontCopy?.languageCode);
+const copy = newsletterCopy(language);
+const invalid = copy.status.link_invalid;
+---
+
+<Layout title={linkWorks ? copy.confirmTitle : invalid.title} layoutData={layoutData} documentLanguage={language} noindex hideNavigationSidebar analytics={false}>
+  <meta slot="head" name="referrer" content="no-referrer" />
+  <script is:inline>
+    // The token stays in the form, not in the address bar or history.
+    if (location.search) history.replaceState(null, "", location.pathname);
+  </script>
+  <section class="container mx-auto px-4 py-10 sm:py-14" data-newsletter-confirm>
+    <div class="mx-auto w-full max-w-xl text-center">
+      {linkWorks ? (
+        <>
+          <h1 class="text-2xl font-semibold text-foreground">{copy.confirmTitle}</h1>
+          <p class="mt-2 text-base text-muted-foreground">{copy.confirmText}</p>
+          <form method="post" action={NEWSLETTER_CONFIRM_PATH} class="mt-6">
+            <input type="hidden" name="token" value={token} />
+            <button type="submit" class="inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-primary px-5 text-sm font-semibold text-primary-foreground hover:bg-primary/90 sm:w-auto">
+              {copy.confirmButton}
+            </button>
+          </form>
+        </>
+      ) : (
+        <>
+          <h1 class="text-2xl font-semibold text-foreground">{invalid.title}</h1>
+          <p class="mt-2 text-base text-muted-foreground">{invalid.text}</p>
+          <a href={NEWSLETTER_RESULT_PATH} class="mt-6 inline-flex min-h-11 items-center justify-center rounded-lg border border-border bg-background px-5 text-sm font-medium text-foreground hover:bg-muted">{copy.button}</a>
+        </>
+      )}
+    </div>
+  </section>
+</Layout>

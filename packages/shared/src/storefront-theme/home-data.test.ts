@@ -128,12 +128,26 @@ describe("homepage section data requests", () => {
     expect(requests.lists.every((list) => list.limit <= HOME_PRODUCT_LIST_LIMIT)).toBe(true);
   });
 
-  it("renders every section type whose data exists today", () => {
+  it("renders every registered section type", () => {
     const waiting = STOREFRONT_SECTION_TYPES.filter((type) => !(STOREFRONT_SECTION_RENDERERS as readonly string[]).includes(type));
-    expect(waiting.sort()).toEqual(["newsletter"]);
+    expect(waiting).toEqual([]);
     for (const type of STOREFRONT_SECTION_TYPES) {
-      const expected = waiting.includes(type) ? null : type;
-      expect(storefrontSectionRenderer(storefrontSectionDefault(type, "x"))).toBe(expected);
+      expect(storefrontSectionRenderer(storefrontSectionDefault(type, "x"))).toBe(type);
+    }
+  });
+
+  it("keeps stored newsletters valid and bounds the signup's own settings", () => {
+    const parse = (settings: object) => storefrontSectionListSchema.safeParse([{ id: "n", type: "newsletter", version: 1, settings }]).success;
+    // A version 1 newsletter saved before the form had its own settings.
+    expect(parse({ heading: "Join", text: "" })).toBe(true);
+    expect(parse({ heading: "", text: "", email: "required", whatsapp: true, buttonLabel: "Subscribe" })).toBe(true);
+    expect(parse({ heading: "", text: "", email: "hidden" })).toBe(true);
+    expect(parse({ heading: "", text: "", email: "never" })).toBe(false);
+    expect(parse({ heading: "", text: "", buttonLabel: "x".repeat(41) })).toBe(false);
+    expect(parse({ heading: "", text: "", phone: "hidden" })).toBe(false);
+    expect(storefrontSectionNeedsContent(storefrontSectionDefault("newsletter", "n"))).toBe(false);
+    for (const template of ["boutique", "fashion-value"] as const) {
+      expect(storefrontTemplateTheme(template).pages.home.at(-1)?.type, template).toBe("newsletter");
     }
   });
 

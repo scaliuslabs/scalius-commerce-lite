@@ -48,6 +48,16 @@ export interface CheckoutConfig {
   };
   unavailable?: boolean;
   unavailableMessage?: string;
+  /**
+   * Settings → Customers → Marketing consent: the checkbox checkout shows
+   * (unchecked, never required) with the merchant's label per language.
+   * Absent from an older API: no checkbox.
+   */
+  marketingConsent?: {
+    enabled: boolean;
+    channels: Array<"email" | "sms" | "whatsapp">;
+    label: { en: string; bn: string };
+  };
 }
 
 const CHECKOUT_UNAVAILABLE: CheckoutConfig = {

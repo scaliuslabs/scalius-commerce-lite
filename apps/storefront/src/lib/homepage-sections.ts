@@ -336,6 +336,9 @@ export function homepageSectionRenders(section: StorefrontSection, content: Home
       return section.settings.cards.length > 0;
     case "seo-text":
       return seoTextBlocks(section.settings.body).length > 0;
+    // The signup form reads no store data: it always has its form and words.
+    case "newsletter":
+      return true;
     default:
       return false;
   }

@@ -1,0 +1,209 @@
+---
+// The newsletter signup form (homepage section, newsletter-grey footer,
+// /newsletter). A plain POST to the storefront endpoint, so it works without
+// JavaScript: labelled phone (always) and e-mail (as the theme asks) fields,
+// the optional WhatsApp box, the consent line naming the channels, and an
+// off-screen honeypot people never see or fill. The endpoint answers a 303 to
+// /newsletter?status=… (the outcome only, never a contact). With JavaScript
+// the same post goes by fetch (asking for JSON) and the outcome shows here in
+// a live region; the fields stay as typed when something needs fixing.
+// Nothing buyer-specific is rendered: the cached page carries the same form
+// for everyone.
+import { NEWSLETTER_HONEYPOT_FIELD } from "@scalius/shared/customer-marketing";
+import { NEWSLETTER_SUBSCRIBE_ENDPOINT, type NewsletterFormModel } from "@/lib/newsletter-form";
+
+interface Props {
+  model: NewsletterFormModel;
+  /** Unique per form on the page (ids and labels). */
+  idPrefix: string;
+  /** `inline`: fields and button in one row from 640px (section, page); `stacked`: one column (footer). */
+  layout?: "inline" | "stacked";
+  class?: string;
+}
+
+const { model, idPrefix, layout = "inline", class: className } = Astro.props;
+const { copy } = model;
+const emailShown = model.email !== "hidden";
+const ids = {
+  phone: `${idPrefix}-phone`,
+  email: `${idPrefix}-email`,
+  whatsapp: `${idPrefix}-whatsapp`,
+  consent: `${idPrefix}-consent`,
+  message: `${idPrefix}-message`,
+  honeypot: `${idPrefix}-website`,
+};
+// What the script shows for each outcome (the same words as /newsletter).
+const scriptCopy = JSON.stringify({ sending: copy.sending, status: copy.status });
+const field =
+  "block min-h-11 w-full rounded-lg border border-input bg-background px-3 text-base text-foreground shadow-sm outline-none transition placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/20 aria-[invalid=true]:border-destructive";
+const label = "mb-1 block text-sm font-medium";
+const inline = layout === "inline";
+---
+
+<form
+  method="post"
+  action={NEWSLETTER_SUBSCRIBE_ENDPOINT}
+  class:list={["newsletter-form relative text-left", className]}
+  data-newsletter-form
+  data-newsletter-copy={scriptCopy}
+>
+  <input type="hidden" name="language" value={model.language} />
+  <div
+    data-newsletter-fields
+    class:list={[
+      "grid gap-3",
+      inline && (emailShown ? "sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end" : "sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end"),
+    ]}
+  >
+    <div>
+      <label for={ids.phone} class={label}>{copy.phoneLabel}</label>
+      <input
+        id={ids.phone}
+        name="phone"
+        type="tel"
+        inputmode="tel"
+        autocomplete="tel"
+        required
+        maxlength="32"
+        placeholder={copy.phonePlaceholder}
+        class={field}
+      />
+    </div>
+    {emailShown && (
+      <div>
+        <label for={ids.email} class={label}>{model.email === "required" ? copy.emailLabel : copy.emailOptionalLabel}</label>
+        <input
+          id={ids.email}
+          name="email"
+          type="email"
+          inputmode="email"
+          autocomplete="email"
+          required={model.email === "required"}
+          maxlength="254"
+          placeholder={copy.emailPlaceholder}
+          class={field}
+        />
+      </div>
+    )}
+    <button
+      type="submit"
+      class="inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-primary px-5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-wait disabled:opacity-60 sm:w-auto"
+      aria-describedby={ids.consent}
+      data-newsletter-submit
+    >
+      {model.buttonLabel}
+    </button>
+    {model.whatsapp && (
+      <label for={ids.whatsapp} class:list={["flex min-h-11 cursor-pointer items-center gap-2 text-sm", inline && "sm:col-span-full"]}>
+        <input id={ids.whatsapp} name="whatsapp" type="checkbox" value="1" class="size-4 shrink-0 accent-primary" />
+        <span>{copy.whatsappLabel}</span>
+      </label>
+    )}
+    <p id={ids.consent} class:list={["text-xs", inline && "sm:col-span-full"]}>{model.consentLine}</p>
+  </div>
+  {/* Off-screen, never focusable: only a bot fills it. */}
+  <div class="newsletter-hp" aria-hidden="true">
+    <label for={ids.honeypot}>Company website</label>
+    <input id={ids.honeypot} name={NEWSLETTER_HONEYPOT_FIELD} type="text" tabindex="-1" autocomplete="off" />
+  </div>
+  <p id={ids.message} class="mt-3 text-sm" role="status" aria-live="polite" tabindex="-1" data-newsletter-message hidden></p>
+</form>
+
+<style>
+  .newsletter-hp {
+    position: absolute;
+    left: -10000px;
+    top: auto;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+  }
+
+  .newsletter-form [data-newsletter-message][data-tone="error"] {
+    color: var(--destructive);
+  }
+</style>
+
+<script>
+  // Progressive enhancement: the same post by fetch, the outcome in place.
+  // One listener for every newsletter form on the page.
+  type Outcome = { status?: string; field?: string };
+  type FormCopy = { sending: string; status: Record<string, { title: string; text: string }> };
+  const DONE = new Set(["subscribed", "pending"]);
+
+  function show(form: HTMLFormElement, copy: FormCopy, status: string) {
+    const message = form.querySelector<HTMLElement>("[data-newsletter-message]");
+    const words = copy.status[status] ?? copy.status.error;
+    if (!message || !words) return;
+    const title = document.createElement("strong");
+    title.className = "font-semibold";
+    title.textContent = words.title;
+    message.replaceChildren(title, document.createTextNode(` ${words.text}`));
+    message.dataset.tone = DONE.has(status) ? "done" : "error";
+    message.hidden = false;
+  }
+
+  async function submit(form: HTMLFormElement) {
+    let copy: FormCopy;
+    try {
+      copy = JSON.parse(form.dataset.newsletterCopy ?? "") as FormCopy;
+    } catch {
+      return form.submit();
+    }
+    const button = form.querySelector<HTMLButtonElement>("[data-newsletter-submit]");
+    const label = button?.textContent ?? "";
+    if (button) {
+      button.disabled = true;
+      button.textContent = copy.sending;
+    }
+    for (const input of form.querySelectorAll<HTMLInputElement>("input[aria-invalid]")) input.removeAttribute("aria-invalid");
+    let outcome: Outcome = { status: "error" };
+    try {
+      const response = await fetch(form.action, {
+        method: "POST",
+        body: new URLSearchParams(new FormData(form) as unknown as Record<string, string>),
+        headers: { Accept: "application/json" },
+        credentials: "same-origin",
+      });
+      outcome = (await response.json().catch(() => null) as Outcome | null) ?? { status: "error" };
+    } catch {
+      outcome = { status: "error" };
+    }
+    if (button) {
+      button.disabled = false;
+      button.textContent = label;
+    }
+    const status = outcome.status ?? "error";
+    show(form, copy, status);
+    const message = form.querySelector<HTMLElement>("[data-newsletter-message]");
+    if (DONE.has(status)) {
+      form.querySelector<HTMLElement>("[data-newsletter-fields]")?.setAttribute("hidden", "");
+      message?.focus();
+      return;
+    }
+    const invalid = status === "invalid"
+      ? form.querySelector<HTMLInputElement>(`input[name="${outcome.field === "email" ? "email" : "phone"}"]`)
+      : null;
+    if (invalid) {
+      invalid.setAttribute("aria-invalid", "true");
+      invalid.focus();
+    } else {
+      message?.focus();
+    }
+  }
+
+  const root = window as Window & { __newsletterForms?: boolean };
+  if (!root.__newsletterForms) {
+    root.__newsletterForms = true;
+    document.addEventListener("submit", (event) => {
+      const form = event.target;
+      if (!(form instanceof HTMLFormElement) || !form.hasAttribute("data-newsletter-form")) return;
+      event.preventDefault();
+      if (form.dataset.busy === "true") return;
+      form.dataset.busy = "true";
+      void submit(form).finally(() => {
+        delete form.dataset.busy;
+      });
+    });
+  }
+</script>

@@ -9,6 +9,7 @@ import { cartItemVariantLabel } from "../cart/item-options";
 import { cartLineInputs, readDiscountCodes } from "./tax-quote-client";
 import { checkoutAddressForMode, isCheckoutDeliveryMode } from "./delivery-mode";
 import { giftCardRequestFields } from "./gift-cards";
+import { MARKETING_CONSENT_FIELD, marketingConsentOrderField } from "./marketing-consent";
 
 /**
  * The order body the storefront sends: the generated request plus the
@@ -195,6 +196,8 @@ export async function createOrder(
     discountCodes: readDiscountCodes(checkoutData),
     paymentMethod,
     ...tender,
+    // Only when the buyer ticked the marketing consent box on the cart page.
+    ...marketingConsentOrderField(checkoutData[MARKETING_CONSENT_FIELD]),
   };
 
   const res = await fetch("/api/checkout/create-order", {

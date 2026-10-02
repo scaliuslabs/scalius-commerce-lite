@@ -1,0 +1,32 @@
+---
+// The checkout's marketing consent checkbox: the merchant's label in the
+// checkout language, unchecked unless the buyer ticked it on this form
+// (a no-JavaScript step re-rendered), never required. Its value is the
+// label's language, which the order carries as `marketingConsent.language`.
+import { MARKETING_CONSENT_FIELD, type MarketingConsentCheckbox } from "@/lib/checkout/marketing-consent";
+
+interface Props {
+  consent: MarketingConsentCheckbox | null;
+  checked?: boolean;
+  idPrefix?: string;
+}
+
+const { consent, checked = false, idPrefix = "checkout" } = Astro.props;
+const id = `${idPrefix}-marketing-consent`;
+---
+
+{consent && (
+  <div data-marketing-consent>
+    <label for={id} class="flex min-h-11 cursor-pointer items-start gap-3 py-1 text-sm text-foreground">
+      <input
+        id={id}
+        type="checkbox"
+        name={MARKETING_CONSENT_FIELD}
+        value={consent.language}
+        checked={checked}
+        class="mt-0.5 size-4 shrink-0 accent-primary"
+      />
+      <span class="[overflow-wrap:anywhere]" lang={consent.language}>{consent.label}</span>
+    </label>
+  </div>
+)}

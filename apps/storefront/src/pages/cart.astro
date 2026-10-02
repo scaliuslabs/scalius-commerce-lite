@@ -8,6 +8,8 @@ import CheckoutShippingMethods from "@/components/checkout/CheckoutShippingMetho
 import CheckoutPhoneField from "@/components/CheckoutPhoneField.astro";
 import CheckoutLoadingOverlay from "@/components/CheckoutLoadingOverlay.astro";
 import CheckoutProgress from "@/components/CheckoutProgress.astro";
+import MarketingConsentField from "@/components/checkout/MarketingConsentField.astro";
+import { marketingConsentCheckbox } from "@/lib/checkout/marketing-consent";
 import { processOrder } from "@/lib/cart/server";
 import {
   getCities,
@@ -263,6 +265,8 @@ const fieldClass =
   "block h-11 w-full rounded-lg border border-input bg-background px-3 text-base text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/30 aria-[invalid=true]:border-destructive";
 const errorClass = "mt-1 hidden text-sm font-medium text-destructive";
 const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
+// Settings → Customers: the marketing consent box (unchecked, never required).
+const marketingConsent = marketingConsentCheckbox(checkoutConfig, lang.code);
 ---
 
 <Layout
@@ -675,6 +679,8 @@ const serializedCheckoutLanguage = serializeJsonForInlineScript(lang);
                 </div>
               )
             }
+
+            <MarketingConsentField consent={marketingConsent} />
 
             <div>
               <p

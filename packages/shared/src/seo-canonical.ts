@@ -20,6 +20,8 @@ const RESERVED_PAGE_CANONICAL_SEGMENTS = new Set([
   "checkout",
   "collections",
   "health",
+  // Newsletter result, confirmation and unsubscribe pages (/newsletter/*).
+  "newsletter",
   "404",
   "500",
   "order-success",

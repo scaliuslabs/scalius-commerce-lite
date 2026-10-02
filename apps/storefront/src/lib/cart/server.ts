@@ -8,6 +8,7 @@ import {
 import { validateCartItems as validateCartItemsWithApi, type CartValidationIssue } from "@/lib/api/orders";
 import { validateAndFormatPhone } from "@scalius/shared/customer-utils";
 import { readDiscountCodes } from "@/lib/checkout/tax-quote-client";
+import { MARKETING_CONSENT_FIELD, marketingConsentOrderField } from "@/lib/checkout/marketing-consent";
 import { parseRequestProperties } from "@/lib/checkout/tax-quote-contract";
 import {
   checkoutAddressForMode,
@@ -181,6 +182,8 @@ export async function processOrder(
       };
     }
     const customerEmail = (formData.get("customerEmail") as string) || null;
+    // The optional WhatsApp number goes with the order as on the payment step.
+    const customerWhatsapp = (formData.get("customerWhatsapp") as string | null)?.trim().slice(0, 32) || null;
     const shippingAddress = formData.get("shippingAddress") as string;
     const cityId = formData.get("city") as string;
     const zoneId = formData.get("zone") as string;
@@ -306,6 +309,7 @@ export async function processOrder(
       customerName,
       customerPhone,
       customerEmail,
+      customerWhatsapp,
       ...address,
       notes,
       items: processedItems,
@@ -313,6 +317,8 @@ export async function processOrder(
       shippingMethodId: mode === "none" ? null : shippingLocationId,
       discountCodes,
       paymentMethod: "cod",
+      // Only when the buyer ticked the marketing consent box.
+      ...marketingConsentOrderField(formData.get(MARKETING_CONSENT_FIELD)),
     };
 
     const result = await createOrder(payload, {

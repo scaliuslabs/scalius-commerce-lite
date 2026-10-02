@@ -74,6 +74,12 @@ interface Props {
   ogCurrency?: string;
   noindex?: boolean;
   documentLanguage?: string;
+  /**
+   * False leaves the store's analytics and pixels off this page: a page
+   * opened from a link that carries a token in its URL (the newsletter's
+   * confirm and unsubscribe pages), so no third party reads the token.
+   */
+  analytics?: boolean;
 }
 
 const {
@@ -91,6 +97,7 @@ const {
   ogCurrency,
   noindex,
   documentLanguage = "en",
+  analytics = true,
 } = Astro.props;
 
 // Use provided layout data when pages load it in parallel; otherwise fetch here.
@@ -122,7 +129,7 @@ if (themePreviewToken) {
   }
 }
 
-const analyticsScripts: AnalyticsConfig[] = isThemePreview
+const analyticsScripts: AnalyticsConfig[] = isThemePreview || !analytics
   ? []
   : (layoutData?.analytics || []).map(optimizeAnalyticsScriptDelivery);
 const tiktokPixelEnabled = analyticsScripts.some((script) => {
@@ -296,7 +303,7 @@ const runtimeGlobalsScript = [
   `window.__CURRENCY_SYMBOL__=${serializeJsonForInlineScript(currencySymbol)};`,
   `window.__CURRENCY_CODE__=${serializeJsonForInlineScript(currencyCode)};`,
   `window.__CURRENCY_DECIMAL_PLACES__=${serializeJsonForInlineScript(currencyDecimalPlaces)};`,
-  `window.__META_CAPI_BROWSER_EVENTS_ENABLED__=${serializeJsonForInlineScript(!isThemePreview && layoutData?.metaCapi?.browserEventsEnabled === true)};`,
+  `window.__META_CAPI_BROWSER_EVENTS_ENABLED__=${serializeJsonForInlineScript(!isThemePreview && analytics && layoutData?.metaCapi?.browserEventsEnabled === true)};`,
   `window.__TIKTOK_PIXEL_ENABLED__=${serializeJsonForInlineScript(tiktokPixelEnabled)};`,
 ].join("");
 const privateSessionPrefetchGuardScript =
@@ -464,6 +471,7 @@ if (!window.$RefreshReg$) {
             policies={layoutData?.policies ?? []}
             variant={themeLayout.footer}
             business={businessInfo}
+            languageCode={layoutData?.storefrontCopy?.languageCode}
           />
         </div>
       )

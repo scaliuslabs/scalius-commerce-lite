@@ -108,4 +108,14 @@ describe("checkout without JavaScript", () => {
     expect(pickup.get("discountCodes")).toBe("");
     expect(quickCheckoutOrderForm(form, "none", "", { items: quoteItems, discounts: [] }).get("shippingLocation")).toBeNull();
   });
+
+  it("carries a ticked marketing consent box to the order, and nothing when it is unticked", () => {
+    const base = { cartItems: line(), customerName: "STAB Buyer", customerPhone: "01700000000", expectedQuoteFingerprint: "taxq_abcdefghijklmnopqrstuv" };
+    const ticked = readQuickCheckoutForm(posted({ ...base, marketingConsent: "bn" }));
+    expect(ticked.marketingConsent).toBe("bn");
+    expect(quickCheckoutOrderForm(ticked, "none", "", { items: quoteItems, discounts: [] }).get("marketingConsent")).toBe("bn");
+    const unticked = readQuickCheckoutForm(posted(base));
+    expect(unticked.marketingConsent).toBe("");
+    expect(quickCheckoutOrderForm(unticked, "none", "", { items: quoteItems, discounts: [] }).has("marketingConsent")).toBe(false);
+  });
 });

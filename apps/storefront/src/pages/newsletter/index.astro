@@ -1,0 +1,57 @@
+---
+// /newsletter: where a newsletter form post, an e-mail confirmation and an
+// unsubscribe land (Post/Redirect/Get), and the store's signup page. The URL
+// carries only the outcome flag (`?status=subscribed|pending|confirmed|
+// unsubscribed|invalid|link_invalid|rate_limited|error`): never a phone, an
+// e-mail or a token. A finished outcome says so with a way back to the
+// store; anything else shows the signup form again (the theme's newsletter
+// settings, the store's language). Private and not indexed.
+import Layout from "@/layouts/Layout.astro";
+import NewsletterForm from "@/components/newsletter/NewsletterForm.astro";
+import { getLayoutData } from "@/lib/api";
+import { newsletterLanguage, type NewsletterStatus } from "@/lib/newsletter-copy";
+import { newsletterFormModel, readNewsletterStatus, themeNewsletterSettings } from "@/lib/newsletter-form";
+import { PRIVATE_NO_STORE_CACHE_CONTROL } from "@/lib/cache-policy";
+import { resolveRequestTheme } from "@/lib/storefront-theme-context";
+
+export const prerender = false;
+
+if (Astro.request.method !== "GET" && Astro.request.method !== "HEAD") {
+  return new Response(null, { status: 405, headers: { Allow: "GET, HEAD", "Cache-Control": PRIVATE_NO_STORE_CACHE_CONTROL } });
+}
+Astro.response.headers.set("Cache-Control", PRIVATE_NO_STORE_CACHE_CONTROL);
+
+const layoutData = await getLayoutData();
+const language = newsletterLanguage(layoutData?.storefrontCopy?.languageCode);
+const { resolved } = await resolveRequestTheme(Astro, layoutData);
+const model = newsletterFormModel(themeNewsletterSettings(resolved.pages.home), language);
+const { copy } = model;
+const status = readNewsletterStatus(Astro.url.searchParams);
+const FINISHED: readonly NewsletterStatus[] = ["subscribed", "pending", "confirmed", "unsubscribed"];
+const finished = status !== null && FINISHED.includes(status);
+const words = status ? copy.status[status] : null;
+---
+
+<Layout title={words?.title ?? copy.pageTitle} layoutData={layoutData} documentLanguage={language} noindex hideNavigationSidebar>
+  <section class="container mx-auto px-4 py-10 sm:py-14" data-newsletter-page data-newsletter-status={status ?? undefined}>
+    <div class="mx-auto w-full max-w-xl">
+      {finished && words ? (
+        <div class="text-center">
+          <h1 class="text-2xl font-semibold text-foreground [overflow-wrap:anywhere]">{words.title}</h1>
+          <p class="mt-2 text-base text-muted-foreground">{words.text}</p>
+          <a href="/" class="mt-6 inline-flex min-h-11 items-center justify-center rounded-lg bg-primary px-5 text-sm font-semibold text-primary-foreground hover:bg-primary/90">{copy.continueShopping}</a>
+        </div>
+      ) : (
+        <>
+          <h1 class="text-2xl font-semibold text-foreground [overflow-wrap:anywhere]">{words?.title ?? model.heading}</h1>
+          {words ? (
+            <p class="mt-2 text-base text-destructive" role="alert">{words.text}</p>
+          ) : (
+            <p class="mt-2 whitespace-pre-line text-base text-muted-foreground [overflow-wrap:anywhere]">{model.text}</p>
+          )}
+          <NewsletterForm model={model} idPrefix="page-newsletter" class="mt-6" />
+        </>
+      )}
+    </div>
+  </section>
+</Layout>
