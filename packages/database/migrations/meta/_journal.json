@@ -764,6 +764,13 @@
       "when": 1790953279918,
       "tag": "0108_customer_marketing",
       "breakpoints": true
+    },
+    {
+      "idx": 109,
+      "version": "6",
+      "when": 1790963920688,
+      "tag": "0109_inventory_purchasing",
+      "breakpoints": true
     }
   ]
 }

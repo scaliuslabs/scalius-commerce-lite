@@ -233,6 +233,15 @@ export const productVariants = sqliteTable("product_variants", {
     sku: text("sku").notNull(),
     /** Integer minor units of the store currency. */
     priceMinor: integer("price_minor").notNull().default(0),
+    /**
+     * The SKU's current unit cost ("cost per item") in minor units of the
+     * store currency; NULL when the merchant has not set one. Staff-only:
+     * never read by a buyer-facing projection. Receiving a purchase order can
+     * move it to the weighted average (migration 0109); a guard trigger keeps
+     * it a non-negative safe integer. `order_items.unit_cost_minor` snapshots
+     * it when a line is created.
+     */
+    costMinor: integer("cost_minor"),
     stock: integer("stock").notNull().default(0),
     reservedStock: integer("reserved_stock").notNull().default(0),
     preorderStock: integer("preorder_stock").notNull().default(0),

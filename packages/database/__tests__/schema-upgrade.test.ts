@@ -457,6 +457,13 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 56,
         postgresStatements: 33,
       },
+      {
+        version: 109,
+        name: "0109_inventory_purchasing",
+        // PostgreSQL replaces the two ledger semantics functions in place (no DROP TRIGGER).
+        sqliteStatements: 58,
+        postgresStatements: 56,
+      },
     ]);
   });
 
@@ -614,6 +621,7 @@ describe("provider-neutral schema upgrades", () => {
           { version: 106, name: "0106_theme_document_v6" },
           { version: 107, name: "0107_plugin_platform" },
           { version: 108, name: "0108_customer_marketing" },
+          { version: 109, name: "0109_inventory_purchasing" },
         ],
       });
     } finally {

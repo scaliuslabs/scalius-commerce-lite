@@ -336,6 +336,14 @@ export const orderItems = sqliteTable("order_items", {
     inventoryTracked: integer("inventory_tracked", { mode: "boolean" }).notNull().default(true),
     /** Integer minor units of the order currency. */
     unitPriceMinor: integer("unit_price_minor").notNull().default(0),
+    /**
+     * The SKU's `cost_minor` when this line was created (migration 0109), so
+     * a later cost change never rewrites past margins. Written by the
+     * `order_items_unit_cost_snapshot` trigger on every insert path (checkout,
+     * staff orders, amendments); NULL when the SKU had no cost. Immutable once
+     * set. Staff and analytics only: never in a buyer-facing projection.
+     */
+    unitCostMinor: integer("unit_cost_minor"),
     lineSubtotalMinor: integer("line_subtotal_minor").notNull().default(0),
     discountAmountMinor: integer("discount_amount_minor").notNull().default(0),
     taxableAmountMinor: integer("taxable_amount_minor").notNull().default(0),
