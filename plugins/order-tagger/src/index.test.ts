@@ -26,7 +26,7 @@ describe("scalius.order-tagger", () => {
     const comment = calls.calls.find((call) => call.operationId === "dashboard.orders.comment_add");
     expect(comment?.input).toMatchObject({
       path: { id: "ord_1" },
-      body: { body: "#vip · Payment received. Ready to pack.", requestKey: expect.stringMatching(/^order-tagger_evt_test_\d+$/) },
+      body: { body: "#vip · Payment received. Ready to pack.", requestKey: expect.stringMatching(/^order-tagger_evt_test_[0-9a-f]+$/) },
     });
     expect(harness.customFields.get("order:ord_1")).toEqual({ tag: "vip" });
     expect(harness.records.get("tagged")?.get("ord_1")).toMatchObject({ orderId: "ord_1", tag: "vip" });

@@ -51,9 +51,11 @@ describe("scalius.hello", () => {
 
   it("counts each created order once, even when the event is redelivered", async () => {
     const harness = createPluginTestHarness(hello);
-    const first = await harness.event("order.created", { type: "order", id: "o1" });
-    expect(first.ok).toBe(true);
+    expect((await harness.event("order.created", { type: "order", id: "o1" }, {}, { id: "evt_1" })).ok).toBe(true);
+    expect((await harness.event("order.created", { type: "order", id: "o1" }, {}, { id: "evt_1" })).ok).toBe(true);
     expect(harness.kv.get("created_count")).toBe(1);
+    expect((await harness.event("order.created", { type: "order", id: "o2" }, {}, { id: "evt_2" })).ok).toBe(true);
+    expect(harness.kv.get("created_count")).toBe(2);
   });
 
   it("accepts a ping only with a valid HMAC of the raw body", async () => {
