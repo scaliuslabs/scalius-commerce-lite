@@ -7,6 +7,14 @@ import { getDb } from "@scalius/database/client";
 import { rebuildCatalogProjections } from "@scalius/core/modules/products";
 import { refreshProductRecommendations, refreshProductSalesStats } from "@scalius/core/modules/catalog";
 import {
+  createNavigationMenu,
+  createNavigationMenuItem,
+  publishNavigationMenu,
+  saveNavigationPlacement,
+} from "@scalius/core/modules/navigation";
+import type { Database } from "@scalius/database/client";
+import type { NavigationMenuItemInput } from "@scalius/core/modules/navigation";
+import {
   STOREFRONT_SECTION_TYPES,
   storefrontSectionDefault,
   storefrontThemeDocumentSchema,
@@ -230,10 +238,15 @@ class MemoryCache {
   }
 }
 
-async function renderPage(page: keyof typeof PAGE_PARTS, extraSeed = "") {
+async function renderPage(
+  page: keyof typeof PAGE_PARTS,
+  extraSeed = "",
+  options: { paths?: readonly string[]; prepare?: (db: Database) => Promise<void> } = {},
+) {
   const { sqlite, binding, db } = createSqliteD1Database();
   sqlite.exec(SEED);
   if (extraSeed) sqlite.exec(extraSeed);
+  await options.prepare?.(db);
   if (page === "home") {
     sqlite.exec(HOME_SEED);
     sqlite.prepare("INSERT INTO theme_settings (id, colors, revision, created_at, updated_at) VALUES ('default', ?, 1, 1, 1)")
@@ -276,7 +289,8 @@ async function renderPage(page: keyof typeof PAGE_PARTS, extraSeed = "") {
     return { parts, bodies };
   };
   const env = { ...baseEnv, DB: meter.binding } as unknown as Env;
-  const { parts, bodies } = await readBatch(env, PAGE_PARTS[page]);
+  const paths = options.paths ?? PAGE_PARTS[page];
+  const { parts, bodies } = await readBatch(env, paths);
   const miss = { roundTrips: meter.roundTrips, waves: meter.waves };
   const validationCalls = meter.calls.filter((call) => call.kind === "validation");
   const renderCalls = meter.calls.filter((call) => call.kind === "render");
@@ -290,7 +304,7 @@ async function renderPage(page: keyof typeof PAGE_PARTS, extraSeed = "") {
     waves: new Set(renderCalls.map((call) => call.wave)).size,
     firstWave: renderCalls[0]?.wave,
   };
-  const again = await readBatch(env, PAGE_PARTS[page]);
+  const again = await readBatch(env, paths);
   return {
     statuses: parts.map((part) => part.response.status),
     bodies,
@@ -375,6 +389,85 @@ describe("storefront page render D1 budget", () => {
     expect(body.ratingFacet).toEqual([{ min: 4, count: 1 }, { min: 3, count: 1 }, { min: 2, count: 1 }]);
     expect(reviewed.render.roundTrips).toBeLessThanOrEqual(PAGE_D1_BUDGETS.category.roundTrips);
     expect(reviewed.render.waves).toBeLessThanOrEqual(PAGE_D1_BUDGETS.category.waves);
+  });
+
+  it("reads a layout with header and footer menus and linked policies in two waves", async () => {
+    // Policy pages, a published category, collection and page for menu targets.
+    const seed = `
+      INSERT INTO pages (id, content_type, title, slug, content, is_published) VALUES
+        ('page_refund', 'page', 'Refund policy', 'refund-policy', '', 1),
+        ('page_privacy', 'page', 'Privacy policy', 'privacy-policy', '', 1),
+        ('page_about', 'page', 'About us', 'about-us', '', 1);
+      INSERT INTO collections (id, name, presentation, config, sort_order) VALUES
+        ('col_new', 'New in', 'grid', '{"source":"manual","productIds":["p_linen"],"maxProducts":8}', 0);
+      INSERT INTO settings (id, key, value, type, category) VALUES
+        ('policies', 'document', '{"refund":"page_refund","privacy":"page_privacy"}', 'json', 'policies');
+    `;
+    const resource = (resourceType: "page" | "category" | "collection" | "product", resourceId: string) =>
+      ({ type: "resource", resourceType, resourceId }) as const;
+    const placeMenu = async (
+      db: Database,
+      name: string,
+      placement: { id: string; surface: "header" | "footer"; slot: "primary" | "column"; position: number },
+      items: Array<{ label: string; target: NavigationMenuItemInput["target"]; children?: Array<{ label: string; target: NavigationMenuItemInput["target"] }> }>,
+    ) => {
+      const menu = await createNavigationMenu(db, { name });
+      let revision = menu.revision;
+      for (const item of items) {
+        const created = await createNavigationMenuItem(db, menu.id, { expectedRevision: revision, label: item.label, labelMode: "custom", target: item.target });
+        revision = created.revision;
+        const parentId = (created.item as { id: string }).id;
+        for (const child of item.children ?? []) {
+          revision = (await createNavigationMenuItem(db, menu.id, { expectedRevision: revision, parentId, label: child.label, labelMode: "custom", target: child.target })).revision;
+        }
+      }
+      await publishNavigationMenu(db, menu.id, { expectedRevision: revision });
+      await saveNavigationPlacement(db, { ...placement, expectedRevision: 0, menuId: menu.id });
+    };
+    const result = await renderPage("search", seed, {
+      paths: ["/api/v1/storefront/layout"],
+      prepare: async (db) => {
+        await placeMenu(db, "Main", { id: "placement_header", surface: "header", slot: "primary", position: 0 }, [
+          { label: "Panjabi", target: resource("category", "cat_panjabi"), children: [
+            { label: "Linen", target: resource("product", "p_linen") },
+            { label: "New in", target: resource("collection", "col_new") },
+          ] },
+          { label: "About", target: resource("page", "page_about") },
+        ]);
+        await placeMenu(db, "Help", { id: "placement_footer_help", surface: "footer", slot: "column", position: 0 }, [
+          { label: "Refunds", target: resource("page", "page_refund") },
+          { label: "Search", target: { type: "internal_path", path: "/search" } },
+        ]);
+        await placeMenu(db, "Shop", { id: "placement_footer_shop", surface: "footer", slot: "column", position: 1 }, [
+          { label: "Cotton", target: resource("product", "p_cotton") },
+        ]);
+      },
+    });
+    const layout = (result.bodies[0] as { data: {
+      navigation: Array<{ title: string; href?: string; subMenu?: Array<{ title: string; href?: string }> }>;
+      footerMenus: Array<{ title: string; links: Array<{ title: string; href?: string }> }>;
+      policies: Array<{ kind: string; title: string; path: string }>;
+    } }).data;
+    expect(layout.navigation).toEqual([
+      expect.objectContaining({ title: "Panjabi", href: "/categories/panjabi", subMenu: [
+        expect.objectContaining({ title: "Linen", href: "/products/linen-panjabi" }),
+        expect.objectContaining({ title: "New in", href: "/collections/col_new" }),
+      ] }),
+      expect.objectContaining({ title: "About", href: "/about-us" }),
+    ]);
+    expect(layout.footerMenus.map((menu) => [menu.title, menu.links.map((link) => link.href)])).toEqual([
+      ["Help", ["/refund-policy", "/search"]],
+      ["Shop", ["/products/cotton-panjabi"]],
+    ]);
+    expect(layout.policies).toEqual([
+      { kind: "refund", title: "Refund policy", path: "/refund-policy" },
+      { kind: "privacy", title: "Privacy policy", path: "/privacy-policy" },
+    ]);
+    // The layout batch carries the placed menus; the policy pages and every
+    // linked resource ride one second batch.
+    expect({ roundTrips: result.render.roundTrips, waves: result.render.waves }).toEqual({ roundTrips: 2, waves: 2 });
+    expect(result.stored).toEqual(["miss"]);
+    expect(result.hit).toEqual({ roundTrips: 1, waves: 1, statuses: ["hit"], sameBodies: true });
   });
 
   // Load every route module first: a first dynamic import would otherwise

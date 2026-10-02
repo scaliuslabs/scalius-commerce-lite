@@ -39,7 +39,7 @@ import {
   securityDocument,
   seoDocument,
 } from "../settings/documents";
-import { resolvePublicStorePolicies } from "../settings/store-policies.service";
+import { planPublicStorePolicies } from "../settings/store-policies.service";
 import {
   selectSettingsDocuments,
   type SettingsDocumentRow,
@@ -54,7 +54,8 @@ import { getDecimalPlaces } from "@scalius/shared/currency";
 import { getPublicPageBySlug } from "../pages/pages.service";
 import { safeBatch, type Database } from "@scalius/database/client";
 import { selectStoreShapeCounts, storeShapeFromCounts, type StoreShapeCountsRow } from "./store-shape";
-import { getPublishedNavigationPlacements } from "../navigation/navigation.authority.service";
+import { planPublishedNavigationPlacements } from "../navigation/navigation.authority.service";
+import { planNavigationResourceSnapshots } from "../navigation/navigation.resolver";
 import { categoryNavigationFromRows, selectCategoryNavigationRows, trimCategoryNavigation } from "../navigation/navigation.categories";
 import { publicCategoryConditions } from "../categories/categories.publication";
 import { deps } from "../../cache-deps";
@@ -314,6 +315,9 @@ export async function getPageRenderData(db: Database, slug: string) {
 
 // ── Layout data ───────────────────────────────────────────────────────────────
 
+/** Where the navigation plan's statements start in the layout batch. */
+const LAYOUT_NAVIGATION_OFFSET = 7;
+
 const LAYOUT_DOCUMENTS = [
   currencyDocument,
   mediaDocument,
@@ -325,7 +329,40 @@ const LAYOUT_DOCUMENTS = [
 ];
 
 /**
- * Fetch and shape all layout data in a single batched D1 round-trip.
+ * Whether the storefront sends Meta browser events: an enabled pixel whose
+ * access token reads strictly. The token is decrypted only when the stored
+ * document turns the pixel on (the full read then decides), so a store
+ * without Meta pays no key derivation per layout read.
+ */
+async function metaCapiBrowserEventsEnabled(
+  rows: readonly SettingsDocumentRow[],
+  ctx: { encryptionKey?: string },
+): Promise<boolean> {
+  const row = rows.find((each) => each.category === metaConversionsDocument.key);
+  let stored: { isEnabled?: unknown; pixelId?: unknown } | null = null;
+  try {
+    stored = row ? JSON.parse(row.value) : null;
+  } catch {
+    stored = null;
+  }
+  if (stored?.isEnabled !== true || typeof stored.pixelId !== "string" || !stored.pixelId.trim()) return false;
+  const settings = await metaConversionsDocument.fromRows([row!], ctx);
+  return Boolean(
+    settings.value.isEnabled &&
+    settings.value.pixelId.trim() &&
+    settings.value.accessToken.trim(),
+  );
+}
+
+/**
+ * Fetch and shape all layout data in two batched D1 round trips:
+ *
+ * 1. Analytics, the settings documents, the published theme and its brand
+ *    images, the checkout language, the store shape counts, the category
+ *    tree, and the placed menus with their published items.
+ * 2. The pages the linked store policies name and the resources the menu
+ *    items link to (skipped when there are none).
+ *
  * Returns { analytics, navigation, footerMenus, categoryTree, currency,
  * theme, brand, storeShape, ..., cspAllowedDomains }. The look (logo,
  * announcement, footer words) is the theme document and its brand images;
@@ -336,6 +373,7 @@ export async function getLayoutData(
   options: { credentialEncryptionKey?: string } = {},
 ) {
   const brandMedia = planPublishedThemeBrandMedia(db);
+  const navigationPlan = planPublishedNavigationPlacements(db);
   const batchResults = await db.batch([
     // 0. Analytics configurations
     db.select({
@@ -381,6 +419,9 @@ export async function getLayoutData(
 
     // 6. The published theme's brand images (logo, footer logo, tab icon)
     brandMedia.statement,
+
+    // 7-8. The placement manifest and the placed menus' published items
+    ...navigationPlan.statements,
   ]);
 
   deps.analytics();
@@ -397,17 +438,32 @@ export async function getLayoutData(
   ] = batchResults;
   const rows = documentRows as SettingsDocumentRow[];
   const ctx = { encryptionKey: options.credentialEncryptionKey };
-  const [currency, media, metaCapiSettings, seo, business, security, policies] = await Promise.all([
+  const [currency, media, browserEventsEnabled, seo, business, security, policies] = await Promise.all([
     currencyDocument.fromRows(rows, ctx),
     mediaDocument.fromRows(rows, ctx),
-    metaConversionsDocument.fromRows(rows, ctx),
+    metaCapiBrowserEventsEnabled(rows, ctx),
     seoDocument.fromRows(rows, ctx),
     businessDocument.fromRows(rows, ctx),
     securityDocument.fromRows(rows, ctx),
     policiesDocument.fromRows(rows, ctx),
   ]);
-  // Only linked policies whose pages are published; nothing to read when none are linked.
-  const publicPolicies = await resolvePublicStorePolicies(db, policies.value);
+
+  // Navigation is independently versioned presentation. A corrupt placement
+  // must not take down checkout, account, or the rest of the storefront.
+  let placedNavigation: ReturnType<typeof navigationPlan.resolve> | null = null;
+  try {
+    placedNavigation = navigationPlan.resolve(batchResults, LAYOUT_NAVIGATION_OFFSET);
+  } catch {
+    console.warn("[Storefront] Published navigation could not be loaded.");
+  }
+
+  // === BATCH 2: policy pages and the menus' linked resources ===
+  // Only linked policies whose pages are published.
+  const policyPlan = planPublicStorePolicies(db, policies.value);
+  const resourcePlan = planNavigationResourceSnapshots(db, placedNavigation?.targets ?? []);
+  const secondStatements: BatchItem[] = [...policyPlan.statements, ...resourcePlan.statements];
+  const secondResults = secondStatements.length > 0 ? await safeBatch(db, secondStatements) : [];
+  const publicPolicies = policyPlan.resolve(secondResults, 0);
   // Process Analytics
   const processedAnalytics = analyticsResults
     .filter(shouldInjectAnalyticsScript)
@@ -434,12 +490,12 @@ export async function getLayoutData(
     });
 
   // Process Header + Navigation
-  let navigationPlacements: Awaited<ReturnType<typeof getPublishedNavigationPlacements>> = [];
+  let navigationPlacements: ReturnType<NonNullable<typeof placedNavigation>["publish"]> = [];
   try {
-    navigationPlacements = await getPublishedNavigationPlacements(db);
+    navigationPlacements = placedNavigation?.publish(
+      resourcePlan.resolve(secondResults, policyPlan.statements.length),
+    ) ?? [];
   } catch {
-    // Navigation is independently versioned presentation. A corrupt placement
-    // must not take down checkout, account, or the rest of the storefront.
     console.warn("[Storefront] Published navigation could not be loaded.");
   }
   const headerPlacement = navigationPlacements.find((placement) => (
@@ -474,13 +530,7 @@ export async function getLayoutData(
     (storeShapeResults as StoreShapeCountsRow[])[0],
     navigationData,
   );
-  const metaCapi = {
-    browserEventsEnabled: Boolean(
-      metaCapiSettings.value.isEnabled &&
-      metaCapiSettings.value.pixelId.trim() &&
-      metaCapiSettings.value.accessToken.trim(),
-    ),
-  };
+  const metaCapi = { browserEventsEnabled };
   const publicBusiness = {
     companyName: business.value.companyName,
     legalName: business.value.legalName,

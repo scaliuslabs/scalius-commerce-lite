@@ -1,5 +1,5 @@
 import { categories, collections, pages, products } from "@scalius/database/schema";
-import type { Database } from "@scalius/database/client";
+import { safeBatch, type Database } from "@scalius/database/client";
 import { inArray } from "drizzle-orm";
 import {
     getNavigationItemLabel,
@@ -76,73 +76,58 @@ function configItems(
     });
 }
 
-/**
- * Load all typed resource targets for a header/footer pair. Each D1 statement
- * binds at most 90 IDs and every wave is awaited before the next starts.
- */
-export async function loadNavigationResourceSnapshots(
-    db: Database,
-    headerConfig: Record<string, unknown>,
-    footerConfig: Record<string, unknown>,
-): Promise<Map<string, NavigationResourceSnapshot>> {
-    const idsByType = new Map<NavigationResourceType, Set<string>>([
-        ["page", new Set()],
-        ["category", new Set()],
-        ["collection", new Set()],
-        ["product", new Set()],
-    ]);
-    collectResourceIds(configItems("header", headerConfig), idsByType);
-    collectResourceIds(configItems("footer", footerConfig), idsByType);
-    // Every target id asked for, found or not: a later create, rename,
-    // publish or trash of that row advances its own key.
-    deps.pages(idsByType.get("page") ?? []);
-    deps.categories(idsByType.get("category") ?? []);
-    deps.collections(idsByType.get("collection") ?? []);
-    deps.products(idsByType.get("product") ?? []);
+type BatchItem = Parameters<typeof safeBatch>[1][number];
 
-    const snapshots = new Map<string, NavigationResourceSnapshot>();
+/** One chunked statement and how its rows become snapshots. */
+interface ResourceReader {
+    statement: BatchItem;
+    snapshots(rows: unknown): NavigationResourceSnapshot[];
+}
 
-    for (const ids of chunkNavigationResourceIds([...idsByType.get("page") ?? []])) {
-        const rows = await db.select({
-            id: pages.id,
-            title: pages.title,
-            slug: pages.slug,
-            contentType: pages.contentType,
-            canonicalPath: pages.canonicalPath,
-            isPublished: pages.isPublished,
-            deletedAt: pages.deletedAt,
-        }).from(pages).where(inArray(pages.id, ids));
-        for (const row of rows) {
-            snapshots.set(resourceKey("page", row.id), {
-                id: row.id,
-                resourceType: "page",
-                title: row.title,
-                route: normalizeResourceCanonicalPath(
-                    row.contentType,
-                    row.canonicalPath,
-                ) ?? contentEntryPath(row.contentType, row.slug),
-                readiness: row.deletedAt
-                    ? "resource_trashed"
-                    : row.isPublished
-                        ? "ready"
-                        : "resource_draft_or_internal",
-            });
-        }
-    }
+function pageReader(db: Database, ids: string[]): ResourceReader {
+    const statement = db.select({
+        id: pages.id,
+        title: pages.title,
+        slug: pages.slug,
+        contentType: pages.contentType,
+        canonicalPath: pages.canonicalPath,
+        isPublished: pages.isPublished,
+        deletedAt: pages.deletedAt,
+    }).from(pages).where(inArray(pages.id, ids));
+    return {
+        statement,
+        snapshots: (rows) => (rows as Awaited<typeof statement>).map((row) => ({
+            id: row.id,
+            resourceType: "page",
+            title: row.title,
+            route: normalizeResourceCanonicalPath(
+                row.contentType,
+                row.canonicalPath,
+            ) ?? contentEntryPath(row.contentType, row.slug),
+            readiness: row.deletedAt
+                ? "resource_trashed"
+                : row.isPublished
+                    ? "ready"
+                    : "resource_draft_or_internal",
+        })),
+    };
+}
 
-    for (const ids of chunkNavigationResourceIds([...idsByType.get("category") ?? []])) {
-        const rows = await db.select({
-            id: categories.id,
-            name: categories.name,
-            slug: categories.slug,
-            canonicalPath: categories.canonicalPath,
-            imageUrl: categories.imageUrl,
-            status: categories.status,
-            deletedAt: categories.deletedAt,
-        }).from(categories).where(inArray(categories.id, ids));
-        for (const row of rows) {
+function categoryReader(db: Database, ids: string[]): ResourceReader {
+    const statement = db.select({
+        id: categories.id,
+        name: categories.name,
+        slug: categories.slug,
+        canonicalPath: categories.canonicalPath,
+        imageUrl: categories.imageUrl,
+        status: categories.status,
+        deletedAt: categories.deletedAt,
+    }).from(categories).where(inArray(categories.id, ids));
+    return {
+        statement,
+        snapshots: (rows) => (rows as Awaited<typeof statement>).map((row) => {
             const imageUrl = row.imageUrl?.trim();
-            snapshots.set(resourceKey("category", row.id), {
+            return {
                 id: row.id,
                 resourceType: "category",
                 title: row.name,
@@ -154,60 +139,128 @@ export async function loadNavigationResourceSnapshots(
                         ? "ready"
                         : "resource_draft_or_internal",
                 ...(imageUrl ? { imageUrl } : {}),
-            });
-        }
-    }
+            };
+        }),
+    };
+}
 
-    for (const ids of chunkNavigationResourceIds([...idsByType.get("collection") ?? []])) {
-        const rows = await db.select({
-            id: collections.id,
-            name: collections.name,
-            canonicalPath: collections.canonicalPath,
-            isActive: collections.isActive,
-            deletedAt: collections.deletedAt,
-        }).from(collections).where(inArray(collections.id, ids));
-        for (const row of rows) {
-            snapshots.set(resourceKey("collection", row.id), {
-                id: row.id,
-                resourceType: "collection",
-                title: row.name,
-                route: normalizeResourceCanonicalPath("collection", row.canonicalPath)
-                    ?? `/collections/${row.id}`,
-                readiness: row.deletedAt
-                    ? "resource_trashed"
-                    : row.isActive
-                        ? "ready"
-                        : "resource_draft_or_internal",
-            });
-        }
-    }
+function collectionReader(db: Database, ids: string[]): ResourceReader {
+    const statement = db.select({
+        id: collections.id,
+        name: collections.name,
+        canonicalPath: collections.canonicalPath,
+        isActive: collections.isActive,
+        deletedAt: collections.deletedAt,
+    }).from(collections).where(inArray(collections.id, ids));
+    return {
+        statement,
+        snapshots: (rows) => (rows as Awaited<typeof statement>).map((row) => ({
+            id: row.id,
+            resourceType: "collection",
+            title: row.name,
+            route: normalizeResourceCanonicalPath("collection", row.canonicalPath)
+                ?? `/collections/${row.id}`,
+            readiness: row.deletedAt
+                ? "resource_trashed"
+                : row.isActive
+                    ? "ready"
+                    : "resource_draft_or_internal",
+        })),
+    };
+}
 
-    for (const ids of chunkNavigationResourceIds([...idsByType.get("product") ?? []])) {
-        const rows = await db.select({
-            id: products.id,
-            name: products.name,
-            slug: products.slug,
-            canonicalPath: products.canonicalPath,
-            isActive: products.isActive,
-            deletedAt: products.deletedAt,
-        }).from(products).where(inArray(products.id, ids));
-        for (const row of rows) {
-            snapshots.set(resourceKey("product", row.id), {
-                id: row.id,
-                resourceType: "product",
-                title: row.name,
-                route: normalizeResourceCanonicalPath("product", row.canonicalPath)
-                    ?? `/products/${row.slug}`,
-                readiness: row.deletedAt
-                    ? "resource_trashed"
-                    : row.isActive
-                        ? "ready"
-                        : "resource_draft_or_internal",
-            });
-        }
-    }
+function productReader(db: Database, ids: string[]): ResourceReader {
+    const statement = db.select({
+        id: products.id,
+        name: products.name,
+        slug: products.slug,
+        canonicalPath: products.canonicalPath,
+        isActive: products.isActive,
+        deletedAt: products.deletedAt,
+    }).from(products).where(inArray(products.id, ids));
+    return {
+        statement,
+        snapshots: (rows) => (rows as Awaited<typeof statement>).map((row) => ({
+            id: row.id,
+            resourceType: "product",
+            title: row.name,
+            route: normalizeResourceCanonicalPath("product", row.canonicalPath)
+                ?? `/products/${row.slug}`,
+            readiness: row.deletedAt
+                ? "resource_trashed"
+                : row.isActive
+                    ? "ready"
+                    : "resource_draft_or_internal",
+        })),
+    };
+}
 
-    return snapshots;
+const RESOURCE_READERS: Record<NavigationResourceType, (db: Database, ids: string[]) => ResourceReader> = {
+    page: pageReader,
+    category: categoryReader,
+    collection: collectionReader,
+    product: productReader,
+};
+
+/**
+ * The statements that read every typed resource these items link to, each
+ * binding at most 90 IDs, and how to turn their results into snapshots.
+ * They go in one batch (one round trip; its statements run in order), so a
+ * caller can send them together with its own reads.
+ */
+export function planNavigationResourceSnapshots(
+    db: Database,
+    items: readonly NavigationTargetItem[],
+): {
+    statements: BatchItem[];
+    resolve(results: readonly unknown[], offset: number): Map<string, NavigationResourceSnapshot>;
+} {
+    const idsByType = new Map<NavigationResourceType, Set<string>>([
+        ["page", new Set()],
+        ["category", new Set()],
+        ["collection", new Set()],
+        ["product", new Set()],
+    ]);
+    collectResourceIds(items, idsByType);
+    // Every target id asked for, found or not: a later create, rename,
+    // publish or trash of that row advances its own key.
+    deps.pages(idsByType.get("page") ?? []);
+    deps.categories(idsByType.get("category") ?? []);
+    deps.collections(idsByType.get("collection") ?? []);
+    deps.products(idsByType.get("product") ?? []);
+
+    const readers = [...idsByType].flatMap(([resourceType, ids]) => (
+        chunkNavigationResourceIds([...ids]).map((chunk) => RESOURCE_READERS[resourceType](db, chunk))
+    ));
+    return {
+        statements: readers.map((reader) => reader.statement),
+        resolve(results, offset) {
+            const snapshots = new Map<string, NavigationResourceSnapshot>();
+            readers.forEach((reader, index) => {
+                for (const snapshot of reader.snapshots(results[offset + index])) {
+                    snapshots.set(resourceKey(snapshot.resourceType, snapshot.id), snapshot);
+                }
+            });
+            return snapshots;
+        },
+    };
+}
+
+/**
+ * Load all typed resource targets for a header/footer pair in one batch
+ * (every statement binds at most 90 IDs).
+ */
+export async function loadNavigationResourceSnapshots(
+    db: Database,
+    headerConfig: Record<string, unknown>,
+    footerConfig: Record<string, unknown>,
+): Promise<Map<string, NavigationResourceSnapshot>> {
+    const plan = planNavigationResourceSnapshots(db, [
+        ...configItems("header", headerConfig),
+        ...configItems("footer", footerConfig),
+    ]);
+    const results = plan.statements.length > 0 ? await safeBatch(db, plan.statements) : [];
+    return plan.resolve(results, 0);
 }
 
 function appendQuery(route: string, value: string | undefined): string {

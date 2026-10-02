@@ -39,6 +39,22 @@ describe("storefront layout data", () => {
     expect((await getLayoutData(db)).metaCapi).toEqual({ browserEventsEnabled: false });
   });
 
+  it("reads no Meta access token while the pixel is off", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const { db } = createSqliteD1Database();
+    await metaConversionsDocument.write(db, {
+      pixelId: "123456",
+      accessToken: "token-value",
+      isEnabled: false,
+    }, { encryptionKey: KEY });
+    warn.mockClear();
+
+    // A key that cannot read the token: a disabled pixel never tries to.
+    expect((await getLayoutData(db, { credentialEncryptionKey: OTHER_KEY })).metaCapi).toEqual({ browserEventsEnabled: false });
+    expect(warn.mock.calls.filter(([message]) => String(message).includes("meta_conversions"))).toEqual([]);
+    warn.mockRestore();
+  });
+
   it("normalizes an unsupported saved currency to the platform default", async () => {
     const { sqlite, db } = createSqliteD1Database();
     sqlite.exec(`INSERT INTO settings (id, key, value, category, type)
