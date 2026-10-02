@@ -1009,7 +1009,7 @@ export function getDistSecretCommands(targets) {
     ...(targets.includes("api")
       ? [{
           cmd: "node scripts/check-api-bundle.mjs --dist apps/api/dist",
-          label: "Verify the API Worker (with bundled plugins) fits the Workers Free size limit",
+          label: "Verify the API Worker (with bundled plugins) fits the Workers script size limit",
         }]
       : []),
   ];
