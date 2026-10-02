@@ -89,6 +89,9 @@ interface Props {
   /** The listing's own `listing_template` (category, collection or brand). */
   listingTemplate?: string | null;
   band: CatalogBand;
+  /** Fixed page blocks render in server order while retaining native filter forms. */
+  templateBlock?: "breadcrumbs" | "filters" | "grid";
+  templateFilters?: boolean;
 }
 
 const {
@@ -112,7 +115,11 @@ const {
   pills = [],
   listingTemplate = null,
   band,
+  templateBlock,
+  templateFilters = true,
 } = Astro.props;
+const showGrid = !templateBlock || templateBlock === "grid";
+const showFilterBlock = !templateBlock || templateBlock === "filters";
 const { currentFilters, sortBy, defaultSort, query, limit } = queryState;
 const { resolved } = await currentRequestTheme(Astro.locals);
 const listingPresentation = catalogListingPresentation(resolved, listingTemplate);
@@ -120,8 +127,10 @@ const listingPresentation = catalogListingPresentation(resolved, listingTemplate
 const { band: bandStyle, phoneBar, links } = resolved.blocks.listing;
 // A search can spend the results width on products (Star Tech): a sidebar's
 // facets move into the drawer; category pages keep the column.
-const specSearch = kind === "search" && listingPresentation.filters.placement === "sidebar" && listingPresentation.filters.searchPlacement === "drawer";
-const presentation = specSearch
+const specSearch = !templateBlock && kind === "search" && listingPresentation.filters.placement === "sidebar" && listingPresentation.filters.searchPlacement === "drawer";
+const presentation = templateBlock
+  ? { ...listingPresentation, filters: { ...listingPresentation.filters, placement: "bar" as const, columnPx: 0 } }
+  : specSearch
   ? { ...listingPresentation, filters: { ...listingPresentation.filters, placement: "drawer" as const, columnPx: 0 } }
   : listingPresentation;
 const specSearchShowsQuery = specSearch && Boolean(query) && resolved.blocks.header.variant === "spec-two-row";
@@ -157,12 +166,12 @@ const controls = catalogListingControls({
   storeShown: resolved.blocks.listing.filters.shown,
 });
 const showSort = controls.sort && piece("sort");
-const showFilters = controls.filters;
+const showFilters = templateFilters && controls.filters;
 // Fabrilife: a ruled rail that scrolls on its own, and the phone row pinned to the bottom.
 const ruledRail = showFilters && placement === "sidebar" && presentation.filters.ruled;
 const bottomPhoneBar = showFilters && phoneBar === "bottom";
 // Star Tech: the breadcrumb above, the title band in the results column beside the facets.
-const specRail = bandStyle === "beside-filters" && (placement === "sidebar" || specSearch);
+const specRail = !templateBlock && bandStyle === "beside-filters" && (placement === "sidebar" || specSearch);
 // Amazon and Daraz: the phone's chip row, the facets in a split sheet.
 const marketplacePhoneFilters = phoneBar === "split-sheet" && showFilters;
 const sortOptions = [
@@ -241,11 +250,11 @@ const phoneDefaultView = results === "list" || (results !== "quick" && presentat
 const showPhoneBar = showSort || showFilters || showViewToggle;
 const paging = shelves.length > 0 ? "numbered" : presentation.paging;
 const countLabel = piece("result-count") ? band.countLabel : null;
-const breadcrumbVisible = piece("breadcrumb");
+const breadcrumbVisible = templateBlock === "breadcrumbs" || piece("breadcrumb");
 const visibleBreadcrumb = breadcrumbVisible && Boolean(band.breadcrumb?.length);
 ---
 
-{specRail && band.breadcrumb && band.breadcrumb.length > 0 && (
+{(specRail || templateBlock === "breadcrumbs") && band.breadcrumb && band.breadcrumb.length > 0 && (
   <nav aria-label="Breadcrumb" class:list={["catalog-band-crumbs mb-3 py-3", !breadcrumbVisible && "sr-only"]}>
     <ol>
       {band.breadcrumb.map((crumb) => (
@@ -259,14 +268,14 @@ const visibleBreadcrumb = breadcrumbVisible && Boolean(band.breadcrumb?.length);
   </nav>
 )}
 
-{!specRail && <div
+{showGrid && !specRail && <div
   class="catalog-band"
   data-catalog-band
   data-placement={placement}
   data-boutique-bar={boutiqueBar ? "" : undefined}
 >
   <div class="catalog-band-heading">
-    {band.breadcrumb && band.breadcrumb.length > 0 && (
+    {!templateBlock && band.breadcrumb && band.breadcrumb.length > 0 && (
       // The breadcrumb stays in the page for assistive technology (it matches
       // the BreadcrumbList JSON-LD) when the template hides it visually.
       <nav aria-label="Breadcrumb" class:list={["catalog-band-crumbs", !breadcrumbVisible && "sr-only"]}>
@@ -312,9 +321,9 @@ const visibleBreadcrumb = breadcrumbVisible && Boolean(band.breadcrumb?.length);
   </div>
 </div>}
 
-{specRail && <CatalogChipLinks label={pillLabel} links={pillLinks} class={specSearch ? "catalog-spec-pills catalog-spec-search-pills mb-2 pb-1" : "catalog-spec-pills mb-3 pb-1"} />}
+{showGrid && specRail && <CatalogChipLinks label={pillLabel} links={pillLinks} class={specSearch ? "catalog-spec-pills catalog-spec-search-pills mb-2 pb-1" : "catalog-spec-pills mb-3 pb-1"} />}
 
-{showPhoneBar && (
+{showGrid && showPhoneBar && (
   <div
     class:list={[
       specSearch ? "z-30 mb-2 bg-background lg:hidden" : "sticky z-30 mb-3 bg-background/95 backdrop-blur lg:hidden",
@@ -415,12 +424,12 @@ const visibleBreadcrumb = breadcrumbVisible && Boolean(band.breadcrumb?.length);
   </div>
 )}
 
-{!specRail && <CatalogChipLinks label={pillLabel} links={pillLinks} class={showcaseTabs && pillLinks.length > 1 ? "catalog-showcase-tabs mb-3" : "mb-3 pb-1"} />}
-{!phoneChips && <CatalogAspectChips chips={aspectChips} />}
-<CatalogChipLinks label="Popular filters" links={popularFilters} class={massRetailPhoneBar ? "catalog-mass-retail-desktop-chips mb-3 pb-1" : "mb-3 pb-1"} />
+{showGrid && !specRail && <CatalogChipLinks label={pillLabel} links={pillLinks} class={showcaseTabs && pillLinks.length > 1 ? "catalog-showcase-tabs mb-3" : "mb-3 pb-1"} />}
+{showGrid && !phoneChips && <CatalogAspectChips chips={aspectChips} />}
+{showGrid && <CatalogChipLinks label="Popular filters" links={popularFilters} class={massRetailPhoneBar ? "catalog-mass-retail-desktop-chips mb-3 pb-1" : "mb-3 pb-1"} />}
 
 <div class:list={["flex flex-col", placement === "sidebar" ? "gap-6 lg:flex-row" : "gap-3"]} data-catalog-layout={placement} data-catalog-kind={kind} data-catalog-rail={ruledRail ? "fashion" : undefined} data-catalog-boutique={boutiqueBar ? "" : undefined}>
-  {showFilters && (
+  {showFilterBlock && showFilters && (
     <aside
       id="filter-section"
       aria-labelledby="mobile-filter-title"
@@ -475,7 +484,7 @@ const visibleBreadcrumb = breadcrumbVisible && Boolean(band.breadcrumb?.length);
     </aside>
   )}
 
-  <div class="min-w-0 flex-1">
+  {showGrid && <div class="min-w-0 flex-1">
     {specRail && (
       <div class="catalog-band catalog-spec-results-band" data-catalog-band data-catalog-kind={kind} data-spec-search={specSearchShowsQuery ? "" : undefined} data-visible-breadcrumb={visibleBreadcrumb ? "" : undefined} data-placement={placement}>
         <div class="catalog-band-heading">
@@ -556,10 +565,10 @@ const visibleBreadcrumb = breadcrumbVisible && Boolean(band.breadcrumb?.length);
         />
       </Fragment>
     )}
-  </div>
+  </div>}
 </div>
 
-{showFilters && (
+{showFilterBlock && showFilters && (
   <noscript>
     <style>
       #filter-section.hidden { display: block; position: static; background: transparent; margin-bottom: 1rem; }

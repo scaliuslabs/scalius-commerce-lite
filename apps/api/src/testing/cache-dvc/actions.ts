@@ -21,6 +21,7 @@ import {
 import { adjustStock } from "@scalius/core/modules/inventory";
 import { moveCategory } from "@scalius/core/modules/categories";
 import { refreshProductRecommendations, refreshProductSalesStats } from "@scalius/core/modules/catalog";
+import { getThemeWorkspace, publishThemeDraft, saveThemePageDraft } from "@scalius/core/modules/settings";
 import type { Rng } from "./rng";
 
 export interface CuratedAction {
@@ -45,6 +46,29 @@ function productClaim(sqlite: DatabaseSync, id: string): { id: string; expectedA
 }
 
 export const CURATED_ACTIONS: readonly CuratedAction[] = [
+  {
+    name: "theme-page-draft-publish",
+    weight: 2,
+    async run({ db, rng }) {
+      const workspace = await getThemeWorkspace(db);
+      const page = rng.pick(["landing", "product", "collection", "search"] as const);
+      const value = structuredClone(page === "landing" ? workspace.draft.theme.pages.landing.eid : workspace.draft.theme.pages[page]);
+      if (!value) return null;
+      if ("sections" in value) {
+        value.title += "!";
+        value.sections.reverse();
+      } else {
+        value.blocks.reverse();
+        value.blocks[0]!.hidden = !value.blocks[0]!.hidden;
+      }
+      const draft = await saveThemePageDraft(db, page, value, workspace.draft.revision, workspace.published.revision, null, page === "landing" ? "eid" : undefined);
+      if (rng.chance(0.5)) {
+        await publishThemeDraft(db, workspace.published.revision, draft.revision);
+        return `publishThemeDraft ${page}`;
+      }
+      return `saveThemePageDraft ${page}`;
+    },
+  },
   {
     name: "adjust-stock",
     weight: 6,

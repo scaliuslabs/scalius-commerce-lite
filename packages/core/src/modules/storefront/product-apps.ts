@@ -10,6 +10,7 @@ import {
   DEFAULT_STOREFRONT_THEME,
   parseStoredStorefrontThemeDocument,
   type StorefrontProductAppBlock,
+  type StorefrontThemeDocument,
 } from "@scalius/shared/storefront-theme";
 import { and, eq } from "drizzle-orm";
 import { deps } from "../../cache-deps";
@@ -31,7 +32,7 @@ export interface ProductAppContext {
  * never stored). One batch whether or not the theme has app blocks: the
  * store facts ride along so drawing adds no round trip.
  */
-export async function readProductAppContext(db: Database, slug: string): Promise<ProductAppContext | null> {
+export async function readProductAppContext(db: Database, slug: string, previewTheme?: StorefrontThemeDocument): Promise<ProductAppContext | null> {
   deps.theme();
   const facts = planPluginRenderStoreFacts(db);
   const results = await safeBatch(db, [
@@ -49,10 +50,10 @@ export async function readProductAppContext(db: Database, slug: string): Promise
   const product = (productRows as ProductAppContext["product"][])[0];
   if (!product) return null;
   deps.product(product.id);
-  const theme = parseStoredStorefrontThemeDocument((themeRows as Array<{ value?: string }>)[0]?.value) ?? DEFAULT_STOREFRONT_THEME;
+  const theme = previewTheme ?? parseStoredStorefrontThemeDocument((themeRows as Array<{ value?: string }>)[0]?.value) ?? DEFAULT_STOREFRONT_THEME;
   return {
     product,
-    blocks: theme.blocks.product.apps ?? [],
+    blocks: theme.pages.product.blocks.find((block) => block.id === "apps")?.hidden ? [] : theme.blocks.product.apps ?? [],
     installations: activePluginInstallationsFromRows(pluginRows as PluginInstallationRow[]),
     store: await facts.resolve(results, 3),
   };

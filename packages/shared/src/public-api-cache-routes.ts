@@ -39,6 +39,7 @@ export const PUBLIC_API_CACHE_ROUTES: readonly PublicApiCacheRoute[] = [
   { path: "/api/v1/seo" },
   { path: "/api/v1/navigation" },
   { path: "/api/v1/storefront/pages/slug" },
+  { path: "/api/v1/storefront/landing", isEligible: (url) => url.searchParams.size === 0 },
   { path: "/api/v1/storefront/layout", exact: true },
   // A product page's app blocks (`/product-apps/<slug>`); a query string is rejected by the route.
   { path: "/api/v1/storefront/product-apps", isEligible: (url) => url.searchParams.size === 0 },

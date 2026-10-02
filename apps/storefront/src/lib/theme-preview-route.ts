@@ -2,6 +2,7 @@ const PUBLIC_RESOURCE_PREFIXES = new Set([
   "products",
   "categories",
   "collections",
+  "pages",
 ]);
 
 const RESERVED_SINGLE_SEGMENT_PATHS = new Set([
@@ -19,6 +20,7 @@ const RESERVED_SINGLE_SEGMENT_PATHS = new Set([
   "payment-recovery",
   "robots.txt",
   "search",
+  "pages",
   "theme-preview",
   "track-order",
   "ucp",

@@ -3,7 +3,15 @@
 // Dynamic route for CMS pages
 
 import Layout from "../layouts/Layout.astro";
-import { getPageRenderData, getLayoutData } from "../lib/api";
+import { getPageRenderData, getLayoutData, getShippingMethods, getCheckoutConfig, getThemePreviewHomepageSections } from "../lib/api";
+import LandingSections from "@/components/homepage/LandingSections.astro";
+import AppHeadTags from "@/components/apps/AppHeadTags.astro";
+import { resolveRequestTheme } from "@/lib/storefront-theme-context";
+import { EMPTY_HOMEPAGE_SECTION_DATA, homepageAppHeads, homepageContent } from "@/lib/homepage-sections";
+import { buildDeliveryFacts } from "@/lib/delivery-facts";
+import { formatMoney } from "@/lib/currency";
+import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
+import { homeSectionsShowDeliveryFacts } from "@scalius/shared/storefront-theme";
 import { processShortcodes } from "../lib/shortcodes";
 import { isStandaloneShortcodeContent } from "../lib/shortcode-content";
 import {
@@ -63,6 +71,8 @@ if (!validSlugPattern.test(slug)) {
 
 // === NOW SAFE TO MAKE API CALL ===
 // Parallel fetch: layout + page render data
+const shippingPromise = getShippingMethods();
+const checkoutPromise = getCheckoutConfig();
 const [layoutData, pageRenderData] = await Promise.all([
   getLayoutData(),
   getPageRenderData(slug),
@@ -94,6 +104,18 @@ if (!layoutData) {
   return response;
 }
 const title = page.metaTitle || page.title;
+const requestTheme = await resolveRequestTheme(Astro, layoutData);
+const draftLanding = requestTheme.preview ? requestTheme.theme.pages.landing[slug] : null;
+const landing = requestTheme.preview ? (draftLanding?.overrideCms ? draftLanding : null) : pageRenderData?.template?.landing;
+const landingData = landing && requestTheme.previewToken && requestTheme.preview
+  ? await getThemePreviewHomepageSections(requestTheme.previewToken, slug) ?? EMPTY_HOMEPAGE_SECTION_DATA
+  : pageRenderData?.template?.sections ?? EMPTY_HOMEPAGE_SECTION_DATA;
+const currency = layoutData.currency ?? DEFAULT_CURRENCY;
+const [shippingMethods, checkoutConfig] = await Promise.all([shippingPromise, checkoutPromise]);
+const deliveryFacts = landing && homeSectionsShowDeliveryFacts(landing.sections)
+  ? buildDeliveryFacts({ shippingMethods, checkoutConfig, returnPolicy: layoutData.seo?.returnPolicy,
+      formatMoney: (amount) => formatMoney(amount, { code: currency.code, symbol: currency.symbol }) })
+  : [];
 const description =
   page.metaDescription || htmlToPlainText(page.content).slice(0, 160).trim();
 const sanitizedPageContent = sanitizeHtml(page.content || "");
@@ -101,7 +123,7 @@ const isStandaloneShortcodePage =
   isStandaloneShortcodeContent(sanitizedPageContent);
 
 let processedContent = sanitizedPageContent;
-if (sanitizedPageContent) {
+if (sanitizedPageContent && !landing) {
   try {
     processedContent = await processShortcodes(sanitizedPageContent);
   } catch (error: unknown) {
@@ -153,9 +175,19 @@ const richContentClasses =
   ogType="website"
   noindex={page.noIndex === true}
 >
-  <RichTextStyles slot="head" />
+  <Fragment slot="head">
+    <RichTextStyles />
+    {landing && !page.noIndex && <AppHeadTags heads={homepageAppHeads(landing.sections, homepageContent(landingData, deliveryFacts))} />}
+  </Fragment>
   {
-    isStandaloneShortcodePage ? (
+    landing ? (
+      <>
+        {!page.hideTitle && <h1 class="mx-auto max-w-7xl px-4 py-6 text-3xl font-semibold">{page.title}</h1>}
+        <LandingSections sections={landing.sections} data={landingData} deliveryFacts={deliveryFacts}
+          currencySymbol={currency.symbol} currencyCode={currency.code} previewMarks={requestTheme.preview !== null}
+          languageCode={layoutData.storefrontCopy?.languageCode} />
+      </>
+    ) : isStandaloneShortcodePage ? (
       <>
         {featuredImageUrl && (
           <div class="mx-auto w-full max-w-7xl px-4 pt-6">

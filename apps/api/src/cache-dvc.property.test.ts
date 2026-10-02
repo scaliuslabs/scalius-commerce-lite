@@ -252,6 +252,42 @@ describe("DVC directed scenarios", () => {
     });
     expect(verdict).toEqual({ cached: true, valid: true, equal: true });
   }, 120_000);
+
+  it.each([
+    ["merchant title", "UPDATE theme_settings SET colors = json_set(colors, '$.pages.landing.eid.title', 'Eid campaign II') WHERE id = 'default'"],
+    ["section visibility", "UPDATE theme_settings SET colors = json_set(colors, '$.pages.landing.eid.sections[0].hidden', json('true')) WHERE id = 'default'"],
+    ["section media", "UPDATE media SET alt_text = 'New campaign photo' WHERE id = 'media_hero'"],
+    ["product title", "UPDATE products SET name = name || ' II' WHERE id = 'p_linen'"],
+    ["referenced collection", "UPDATE collections SET name = name || ' II' WHERE id = 'col_manual'"],
+    ["category tile", "UPDATE categories SET name = name || ' II' WHERE id = 'cat_panjabi'"],
+  ])("landing page: %s invalidates its composed section read", async (name, sql) => {
+    const verdict = await staleAfter(`scenario-landing-${name}`, "/api/v1/storefront/landing/eid", (sqlite) => sqlite.exec(sql));
+    expect(verdict).toEqual({ cached: true, valid: false, equal: false });
+  }, 120_000);
+
+  it("CMS override: disabling its section template restores the CMS body on the next read", async () => {
+    const verdict = await staleAfter("scenario-cms-override", "/api/v1/storefront/pages/slug/about", (sqlite) => {
+      sqlite.exec("UPDATE theme_settings SET colors = json_set(colors, '$.pages.landing.about.overrideCms', json('false')) WHERE id = 'default'");
+    });
+    expect(verdict).toEqual({ cached: true, valid: false, equal: false });
+  }, 120_000);
+
+  it.each(["product", "collection", "search"])("%s template: block visibility invalidates the layout's theme", async (page) => {
+    const verdict = await staleAfter(`scenario-template-${page}`, "/api/v1/storefront/layout", (sqlite) => {
+      sqlite.prepare("UPDATE theme_settings SET colors = json_set(colors, ?, json('true')) WHERE id = 'default'")
+        .run(`$.pages.${page}.blocks[0].hidden`);
+    });
+    expect(verdict).toEqual({ cached: true, valid: false, equal: false });
+  }, 120_000);
+
+  it("landing page: a merchant's draft edit leaves the live cached page valid", async () => {
+    const verdict = await staleAfter("scenario-landing-draft", "/api/v1/storefront/landing/eid", (sqlite) => {
+      sqlite.exec(`INSERT INTO theme_settings_drafts (id, theme, revision, base_published_revision, created_at, updated_at)
+        SELECT 'default', json_set(colors, '$.pages.landing.eid.title', 'Unpublished campaign'), 1, revision, ${DVC_SEED_EPOCH}, ${DVC_SEED_EPOCH}
+        FROM theme_settings WHERE id = 'default'`);
+    });
+    expect(verdict).toEqual({ cached: true, valid: true, equal: true });
+  }, 120_000);
 });
 
 describe(`DVC differential property (${MODE}, ${PROVIDER})`, () => {

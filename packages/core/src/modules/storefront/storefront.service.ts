@@ -181,6 +181,10 @@ export async function getHomepageData(
   db: Database,
   options: {
     requests?: HomeSectionRequests;
+    /** A landing page uses the same bounded section planner as home. */
+    pageSlug?: string;
+    /** A CMS body only reads section resources after the merchant opts in. */
+    cmsOverride?: boolean;
     /**
      * Draws the page's app sections (the API's plugin host); runs beside the
      * second batch, so a homepage with app sections adds no wave before its
@@ -192,7 +196,7 @@ export async function getHomepageData(
   // === BATCH 1: Independent top-level queries ===
   const batchResults = await safeBatch(db, [
     // 0. SEO document (homepage title and description)
-    selectSettingsDocuments(db, [seoDocument]),
+    ...(options.pageSlug ? [] : [selectSettingsDocuments(db, [seoDocument])]),
 
     // 1. Active collections (metadata only): the ones the sections name.
     db
@@ -215,21 +219,30 @@ export async function getHomepageData(
       .where(eq(themeSettings.id, "default"))
       .limit(1),
   ]);
-  deps.anyCollection();
   deps.theme();
 
-  const [documentRows, collectionResults, themeResults] = batchResults;
-  const seo = await seoDocument.fromRows(documentRows as SettingsDocumentRow[]);
+  const collectionResults = batchResults[batchResults.length - 2];
+  const themeResults = batchResults[batchResults.length - 1];
+  const seo = options.pageSlug ? null : await seoDocument.fromRows(batchResults[0] as SettingsDocumentRow[]);
   // Unset copy stays null: the storefront titles the homepage with the
   // store name instead of inventing a platform-branded headline.
   const seoSettings = {
-    homepageTitle: seo.value.homepageTitle.trim() || null,
-    homepageMetaDescription: seo.value.homepageMetaDescription.trim() || null,
+    homepageTitle: seo?.value.homepageTitle.trim() || null,
+    homepageMetaDescription: seo?.value.homepageMetaDescription.trim() || null,
   };
   // An unreadable theme renders the default whole (as the layout read does).
   const theme = parseStoredStorefrontThemeDocument((themeResults as { value?: string }[])[0]?.value)
     ?? DEFAULT_STOREFRONT_THEME;
-  const requests = options.requests ?? homeSectionRequests(theme.pages.home, theme.pages.homeMode);
+  const candidate = options.pageSlug ? theme.pages.landing[options.pageSlug] ?? null : null;
+  const landing = candidate && (!options.cmsOverride || candidate.overrideCms) ? candidate : null;
+  const requests = options.requests ?? (options.pageSlug
+    ? homeSectionRequests(landing?.sections ?? [], { kind: "sections" })
+    : homeSectionRequests(theme.pages.home, theme.pages.homeMode));
+  if (options.pageSlug) deps.collections([
+    ...requests.collectionIds,
+    ...requests.lists.flatMap((list) => list.source.kind === "collection" ? [list.source.collectionId] : []),
+  ]);
+  else deps.anyCollection();
   // The apps draw their sections while batch 2 reads the platform sections' data.
   const appSections: Promise<HomepageAppSection[]> = (requests.apps ?? []).length > 0 && options.renderApps
     ? options.renderApps(requests.apps ?? []).catch((error: unknown) => {
@@ -325,6 +338,7 @@ export async function getHomepageData(
 
   return {
     seo: seoSettings,
+    ...(options.pageSlug ? { landing } : {}),
     sections: {
       lists,
       media: mediaPlan.resolve(results, mediaOffset),
@@ -343,11 +357,27 @@ export async function getHomepageData(
 
 // ── CMS page render data ────────────────────────────────────────────────────
 
-export async function getPageRenderData(db: Database, slug: string) {
-  const page = await getPublicPageBySlug(db, slug);
+export async function getLandingPageData(
+  db: Database,
+  slug: string,
+  options: Pick<NonNullable<Parameters<typeof getHomepageData>[1]>, "renderApps"> = {},
+) {
+  const data = await getHomepageData(db, { ...options, pageSlug: slug });
+  return data.landing ? { landing: data.landing, sections: data.sections } : null;
+}
+
+export async function getPageRenderData(
+  db: Database,
+  slug: string,
+  options: Pick<NonNullable<Parameters<typeof getHomepageData>[1]>, "renderApps"> = {},
+) {
+  const [page, landing] = await Promise.all([
+    getPublicPageBySlug(db, slug),
+    getHomepageData(db, { ...options, pageSlug: slug, cmsOverride: true }),
+  ]);
   if (!page) return null;
 
-  return { page };
+  return { page, ...(landing.landing ? { template: { landing: landing.landing, sections: landing.sections } } : {}) };
 }
 
 // ── Layout data ───────────────────────────────────────────────────────────────

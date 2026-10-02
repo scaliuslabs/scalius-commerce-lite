@@ -141,7 +141,7 @@ describe("storefront layout data", () => {
 /** Publish a theme with these homepage sections (and home mode) as the stored row. */
 function publishTheme(sqlite: DatabaseSync, home: StorefrontSection[], homeMode: StorefrontThemeDocument["pages"]["homeMode"] = { kind: "sections" }, edit?: (theme: StorefrontThemeDocument) => void) {
   const theme = storefrontTemplateTheme("boutique");
-  theme.pages = { home, homeMode };
+  theme.pages = { ...theme.pages, home, homeMode };
   edit?.(theme);
   sqlite.prepare("DELETE FROM theme_settings").run();
   sqlite.prepare(`INSERT INTO theme_settings (id, colors, revision, created_at, updated_at) VALUES ('default', ?, 1, 1, 1)`)

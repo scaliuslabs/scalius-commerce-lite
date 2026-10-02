@@ -16,7 +16,7 @@ import { EMPTY_HOMEPAGE_SECTION_DATA, homepageContent, homepageLeadSection } fro
 import { resolveRequestTheme } from "@/lib/storefront-theme-context";
 import { clearThemePreviewCookieHeader, readThemePreviewCookie } from "@/lib/theme-preview-cookie";
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
-import { homeSectionsShowDeliveryFacts } from "@scalius/shared/storefront-theme";
+import { homeSectionsShowDeliveryFacts, storefrontLandingSlugSchema } from "@scalius/shared/storefront-theme";
 
 const PRIVATE = {
   "Cache-Control": "private, no-cache, no-store, must-revalidate",
@@ -32,6 +32,8 @@ if (Astro.request.method !== "GET") return refuse(405, { Allow: "GET" });
 const token = readThemePreviewCookie(Astro.request.headers.get("cookie"));
 if (!token) return refuse(401);
 const sectionId = Astro.url.searchParams.get("id") ?? "";
+const pageSlug = Astro.url.searchParams.get("page") ?? undefined;
+if (pageSlug && !storefrontLandingSlugSchema.safeParse(pageSlug).success) return refuse(400);
 if (!/^[a-z0-9][a-z0-9_-]{0,39}$/.test(sectionId)) return refuse(400);
 
 const layoutData = await getLayoutData();
@@ -39,11 +41,11 @@ if (!layoutData) return refuse(503);
 const requestTheme = await resolveRequestTheme(Astro, layoutData);
 if (!requestTheme.preview) return refuse(401, { "Set-Cookie": clearThemePreviewCookieHeader() });
 
-const homeSections = requestTheme.resolved.pages.home;
+const homeSections = pageSlug ? requestTheme.theme.pages.landing[pageSlug]?.sections ?? [] : requestTheme.resolved.pages.home;
 // A section the draft no longer has: the bridge loads the page again.
 if (!homeSections.some((section) => section.id === sectionId)) return refuse(404);
 
-const sectionData = (await getThemePreviewHomepageSections(token)) ?? EMPTY_HOMEPAGE_SECTION_DATA;
+const sectionData = (await getThemePreviewHomepageSections(token, pageSlug)) ?? EMPTY_HOMEPAGE_SECTION_DATA;
 const currencySymbol = layoutData.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
 const currencyCode = layoutData.currency?.code ?? DEFAULT_CURRENCY.code;
 const showsDeliveryFacts = homeSectionsShowDeliveryFacts(homeSections);

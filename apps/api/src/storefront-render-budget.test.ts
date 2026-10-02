@@ -24,6 +24,7 @@ import {
   storefrontThemeDocumentSchema,
   storefrontTemplateTheme,
   type StorefrontSection,
+  type StorefrontThemeDocument,
 } from "@scalius/shared/storefront-theme";
 
 /**
@@ -48,6 +49,9 @@ const PAGE_D1_BUDGETS = {
   product: { roundTrips: 21, waves: 3 },
   category: { roundTrips: 7, waves: 3 },
   search: { roundTrips: 7, waves: 2 },
+  collection: { roundTrips: 7, waves: 3 },
+  landing: { roundTrips: 13, waves: 2 },
+  cms: { roundTrips: 13, waves: 2 },
 } as const;
 
 /**
@@ -69,6 +73,9 @@ const PAGE_PARTS: Record<keyof typeof PAGE_D1_BUDGETS, string[]> = {
   product: ["/api/v1/storefront/layout", "/api/v1/products/linen-panjabi", "/api/v1/shipping-methods", "/api/v1/checkout/config", "/api/v1/storefront/product-apps/linen-panjabi"],
   category: ["/api/v1/storefront/layout", "/api/v1/categories/panjabi/products?page=1&limit=20&sort=newest"],
   search: ["/api/v1/storefront/layout", "/api/v1/products?page=1&limit=20&sort=relevance&search=linen"],
+  collection: ["/api/v1/storefront/layout", "/api/v1/collections/col_grid?page=1&limit=20&sort=newest"],
+  landing: ["/api/v1/storefront/layout", "/api/v1/storefront/landing/eid", "/api/v1/shipping-methods", "/api/v1/checkout/config"],
+  cms: ["/api/v1/storefront/layout", "/api/v1/storefront/pages/slug/about", "/api/v1/shipping-methods", "/api/v1/checkout/config"],
 };
 
 const SEED = `
@@ -259,7 +266,7 @@ class MemoryCache {
 async function renderPage(
   page: keyof typeof PAGE_PARTS,
   extraSeed = "",
-  options: { paths?: readonly string[]; prepare?: (db: Database) => Promise<void>; apps?: boolean } = {},
+  options: { paths?: readonly string[]; prepare?: (db: Database) => Promise<void>; apps?: boolean; editTheme?: (theme: StorefrontThemeDocument) => void } = {},
 ) {
   const { sqlite, binding, db } = createSqliteD1Database();
   sqlite.exec(SEED);
@@ -271,18 +278,27 @@ async function renderPage(
     const wishlist = await installPlugin(db, { manifest: wishlistManifest, source: "bundled", bundleSha256: BUNDLED_PLUGINS["scalius.wishlist"]!.sha256, actorUserId: "owner" });
     await activatePlugin(db, "scalius.wishlist", { actorUserId: "owner", expectedRevision: wishlist.revision });
   }
-  if (page === "home") {
+  const sectionPage = page === "home" || page === "landing" || page === "cms";
+  const theme = sectionPage ? everySectionTheme() : storefrontTemplateTheme("department-mall");
+  if (sectionPage) {
     sqlite.exec(HOME_SEED);
-    const theme = everySectionTheme();
     if (options.apps) theme.pages.home.push({ id: "hello", type: "app", version: 1, settings: { app: "scalius.hello/greeting", values: { heading: "Eid Mubarak" } } });
-    sqlite.prepare("INSERT INTO theme_settings (id, colors, revision, created_at, updated_at) VALUES ('default', ?, 1, 1, 1)")
-      .run(JSON.stringify(theme));
-  } else if (options.apps) {
-    const theme = storefrontTemplateTheme("department-mall");
-    theme.blocks.product.apps = [{ id: "wish", app: "scalius.wishlist/button", values: {} }];
-    sqlite.prepare("INSERT INTO theme_settings (id, colors, revision, created_at, updated_at) VALUES ('default', ?, 1, 1, 1)")
-      .run(JSON.stringify(theme));
+    theme.pages.landing.eid = { title: "ঈদের বাছাই", sections: structuredClone(theme.pages.home), overrideCms: false };
+    theme.pages.landing.about = { title: "Our story", sections: structuredClone(theme.pages.home), overrideCms: true };
+  } else if (page === "collection") {
+    sqlite.exec(`INSERT INTO collections (id, name, presentation, config, sort_order) VALUES
+      ('col_grid', 'Best sellers', 'grid', '{"source":"manual","productIds":["p_linen","p_cotton"],"maxProducts":8}', 0)`);
   }
+  if (page === "cms") {
+    sqlite.exec("INSERT INTO pages (id, content_type, title, slug, content, is_published) VALUES ('page_about', 'page', 'About us', 'about', '<p>Original CMS body</p>', 1)");
+  }
+  if (options.apps && !sectionPage) {
+    theme.blocks.product.apps = [{ id: "wish", app: "scalius.wishlist/button", values: {} }];
+  }
+  options.editTheme?.(theme);
+  expect(storefrontThemeDocumentSchema.safeParse(theme).error?.issues ?? []).toEqual([]);
+  sqlite.prepare("INSERT INTO theme_settings (id, colors, revision, created_at, updated_at) VALUES ('default', ?, 1, 1, 1)")
+    .run(JSON.stringify(theme));
   // The steady state of a live store (unmetered): the catalogue projections
   // and sales stats a release rebuild and the nightly run keep, and every
   // product's stored recommendations.
@@ -401,6 +417,42 @@ describe("storefront page render D1 budget", () => {
     ]);
     // ৳2,500 + 3% = ৳2,575 over 6 months = ৳429.17 -> ৳430.
     expect(product.emi).toEqual({ provider: "City Bank", months: 6, monthly: 430, monthlyMinor: 43_000 });
+  });
+
+  it.each(["landing", "cms"] as const)("%s sections use the home planner, including media and every product source", async (page) => {
+    const result = await renderPage(page);
+    const body = (result.bodies[1] as { data: {
+      landing?: { title: string; sections: StorefrontSection[] };
+      sections?: { lists: Array<{ key: string; products: unknown[] }>; media: unknown[]; homeProduct: unknown };
+      page?: { content: string };
+      template?: { landing: { title: string; sections: StorefrontSection[] }; sections: { lists: Array<{ key: string; products: unknown[] }>; media: unknown[]; homeProduct: unknown } };
+    } }).data;
+    const template = page === "cms" ? body.template! : { landing: body.landing!, sections: body.sections! };
+    expect(new Set(template.landing.sections.map((section) => section.type))).toEqual(new Set(STOREFRONT_SECTION_TYPES));
+    expect(Object.fromEntries(template.sections.lists.map((list) => [list.key, list.products.length]))).toMatchObject({
+      newest: 2, "on-sale": 1, popular: 1, "category:cat_panjabi": 2, "collection:col_grid": 2,
+    });
+    expect(template.sections.media).toHaveLength(5);
+    expect(template.sections.homeProduct).toBeNull();
+    if (page === "cms") expect(body.page?.content).toBe("<p>Original CMS body</p>");
+  });
+
+  it.each(["product", "category", "collection", "search"] as const)("%s block reorder and visibility use the existing page parts and budget", async (page) => {
+    const key = page === "category" ? "collection" : page;
+    const result = await renderPage(page, "", {
+      editTheme: (theme) => {
+        theme.pages[key].blocks.reverse();
+        theme.pages[key].blocks[0]!.hidden = true;
+      },
+    });
+    const theme = (result.bodies[0] as { data: { theme: StorefrontThemeDocument } }).data.theme;
+    const expected = storefrontTemplateTheme("department-mall").pages[key].blocks.slice().reverse();
+    expected[0]!.hidden = true;
+    expect(theme.pages[key].blocks).toEqual(expected);
+    expect(result.statuses).toEqual(PAGE_PARTS[page].map(() => 200));
+    expect(result.render.roundTrips).toBeLessThanOrEqual(PAGE_D1_BUDGETS[page].roundTrips);
+    expect(result.render.waves).toBeLessThanOrEqual(PAGE_D1_BUDGETS[page].waves);
+    expect(result.hit).toEqual({ roundTrips: 1, waves: 1, statuses: PAGE_PARTS[page].map(() => "hit"), sameBodies: true });
   });
 
   it("reads a reviewed product's summary and first five reviews in its existing render budget (22 round trips, 3 waves) plus authoritative validation", async () => {
@@ -527,6 +579,7 @@ describe("storefront page render D1 budget", () => {
       });
       // Every part was stored with its dependency proof.
       expect(result.stored).toEqual(PAGE_PARTS[page].map(() => "miss"));
+      console.info(`[storefront budget] ${page}: render ${result.render.roundTrips} trips/${result.render.waves} waves; validation ${result.validation.roundTrips}/${result.validation.waves}; hit ${result.hit.roundTrips}/${result.hit.waves}`);
     },
   );
 

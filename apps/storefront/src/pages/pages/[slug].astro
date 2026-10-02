@@ -1,0 +1,41 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import LandingSections from "@/components/homepage/LandingSections.astro";
+import AppHeadTags from "@/components/apps/AppHeadTags.astro";
+import { getLandingPageData, getThemePreviewHomepageSections, getShippingMethods, getCheckoutConfig } from "@/lib/api";
+import { loadPageWithLayout } from "@/lib/page-data";
+import { resolveRequestTheme } from "@/lib/storefront-theme-context";
+import { EMPTY_HOMEPAGE_SECTION_DATA, homepageAppHeads, homepageContent } from "@/lib/homepage-sections";
+import { buildDeliveryFacts } from "@/lib/delivery-facts";
+import { formatMoney } from "@/lib/currency";
+import { buildAbsoluteStorefrontSeoUrl } from "@/lib/seo-base-url";
+import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
+import { homeSectionsShowDeliveryFacts, storefrontLandingSlugSchema } from "@scalius/shared/storefront-theme";
+import { storefrontDataUnavailableResponse } from "@/lib/storefront-unavailable-response";
+
+const { slug } = Astro.params;
+if (!storefrontLandingSlugSchema.safeParse(slug).success || !slug) return new Response(null, { status: 404 });
+const shippingPromise = getShippingMethods();
+const checkoutPromise = getCheckoutConfig();
+const { layoutData, pageData } = await loadPageWithLayout(() => getLandingPageData(slug));
+if (!layoutData) return storefrontDataUnavailableResponse("We could not load this page. Please try again shortly.");
+const requestTheme = await resolveRequestTheme(Astro, layoutData);
+const landing = requestTheme.preview ? requestTheme.theme.pages.landing[slug] : pageData?.landing;
+if (!landing) return new Response(null, { status: 404 });
+const sections = landing.sections;
+const data = requestTheme.preview && requestTheme.previewToken
+  ? await getThemePreviewHomepageSections(requestTheme.previewToken, slug) ?? EMPTY_HOMEPAGE_SECTION_DATA
+  : pageData?.sections ?? EMPTY_HOMEPAGE_SECTION_DATA;
+const currency = layoutData.currency ?? DEFAULT_CURRENCY;
+const showsDelivery = homeSectionsShowDeliveryFacts(sections);
+const [shippingMethods, checkoutConfig] = await Promise.all([shippingPromise, checkoutPromise]);
+const deliveryFacts = showsDelivery ? buildDeliveryFacts({ shippingMethods, checkoutConfig, returnPolicy: layoutData.seo?.returnPolicy,
+  formatMoney: (amount) => formatMoney(amount, { code: currency.code, symbol: currency.symbol }),
+}) : [];
+---
+<Layout title={landing.title} layoutData={layoutData} canonicalUrl={buildAbsoluteStorefrontSeoUrl(`/pages/${slug}`) ?? undefined} ogType="website">
+  <Fragment slot="head"><AppHeadTags heads={homepageAppHeads(sections, homepageContent(data, deliveryFacts))} /></Fragment>
+  <h1 class="sr-only">{landing.title}</h1>
+  <LandingSections sections={sections} data={data} deliveryFacts={deliveryFacts} currencySymbol={currency.symbol} currencyCode={currency.code}
+    previewMarks={requestTheme.preview !== null} languageCode={layoutData.storefrontCopy?.languageCode} />
+</Layout>

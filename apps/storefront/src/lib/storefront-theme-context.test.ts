@@ -113,7 +113,7 @@ describe("request theme", () => {
     expect(preview.brand).toEqual(draftBrand);
 
     // An invalid draft renders the default theme, which names no images.
-    resolveThemePreview.mockResolvedValue({ theme: { ...draft, version: 5 }, brand: draftBrand });
+    resolveThemePreview.mockResolvedValue({ theme: { ...draft, version: 99 }, brand: draftBrand });
     const invalid = await resolveRequestTheme({ request: request(previewCookie), locals: {} }, { theme: published, storeShape: SHAPE, brand });
     expect(invalid.theme).toBe(DEFAULT_STOREFRONT_THEME);
     expect(invalid.brand).toEqual({ logo: null, footerLogo: null, favicon: null });
@@ -157,6 +157,7 @@ describe("readStorefrontTheme", () => {
     const withStory = {
       ...storefrontTemplateTheme("fashion-value"),
       pages: {
+        ...storefrontTemplateTheme("fashion-value").pages,
         home: [
           { id: "story", type: "editorial" as const, version: 1 as const, settings: { layout: "rich-text" as const, heading: "Our story", body: "Made in Dhaka." } },
           { id: "hero", type: "hero" as const, version: 1 as const, settings: { layout: "split" as const, slides: [] } },

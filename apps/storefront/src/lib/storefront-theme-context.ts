@@ -13,6 +13,7 @@ import {
   resolveStorefrontTheme,
   storeShapeSchema,
   storefrontThemeDocumentSchema,
+  upgradeThemeDocument,
   type ResolvedStorefrontTheme,
   type ResolvedStorefrontThemeLayout,
   type StoreShape,
@@ -43,11 +44,13 @@ interface ThemeLocals {
 
 /**
  * The theme document the storefront renders for a value from the API. The
- * value must pass the strict v6 schema; anything else renders
+ * Older documents upgrade in memory before the current schema is checked; anything invalid renders
  * `DEFAULT_STOREFRONT_THEME` whole (a fail-safe, never a per-field repair).
  */
 export function readStorefrontTheme(value: unknown): StorefrontThemeDocument {
-  const result = storefrontThemeDocumentSchema.safeParse(value);
+  let upgraded: unknown = value;
+  try { upgraded = upgradeThemeDocument(value); } catch { /* Invalid documents fail closed below. */ }
+  const result = storefrontThemeDocumentSchema.safeParse(upgraded);
   if (result.success) return result.data;
   if (value !== undefined && value !== null) {
     const paths = result.error.issues

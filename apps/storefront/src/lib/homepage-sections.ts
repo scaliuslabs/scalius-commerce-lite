@@ -97,7 +97,7 @@ export function homepageAppHeads(
   content: HomepageContent,
 ): PluginHead[] {
   return sections.flatMap((section) => {
-    const surface = homepageAppSurface(section, content);
+    const surface = section.hidden ? null : homepageAppSurface(section, content);
     return surface ? [surface.head] : [];
   });
 }
@@ -307,6 +307,7 @@ export function homepageMosaicTiles(section: StorefrontSectionOf<"banner-mosaic"
 
 /** Whether a section has anything to show on this store (sections without data render nothing). */
 export function homepageSectionRenders(section: StorefrontSection, content: HomepageContent): boolean {
+  if (section.hidden) return false;
   // An app section has no platform renderer: it shows what its app drew.
   if (section.type === "app") return homepageAppSurface(section, content) !== null;
   if (storefrontSectionRenderer(section) === null || storefrontSectionNeedsContent(section)) return false;

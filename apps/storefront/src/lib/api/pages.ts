@@ -5,10 +5,13 @@ import type { Page, PaginatedResponse } from "./types";
 import { withEdgeCache, CACHE_TTL } from "@/lib/api/transport";
 import { unwrapData, unwrapEnvelope } from "./unwrap";
 import { BUILD_ID } from "@/config/build-id";
+import type { StorefrontLandingPage } from "@scalius/shared/storefront-theme";
+import type { HomepageSectionData } from "./storefront";
 import {
   getApiV1PagesSlugBySlug,
   getApiV1Pages,
   getApiV1StorefrontPagesSlugBySlug,
+  getApiV1StorefrontLandingBySlug,
 } from "@scalius/api-client/sdk";
 
 /**
@@ -46,6 +49,23 @@ export async function getPageBySlug(slug: string): Promise<Page | null> {
 
 export interface PageRenderData {
   page: Page;
+  template?: LandingPageData;
+}
+
+export interface LandingPageData {
+  landing: StorefrontLandingPage;
+  sections: HomepageSectionData;
+}
+
+/** Starts beside the layout read and joins its one public batch. */
+export async function getLandingPageData(slug: string): Promise<LandingPageData | null> {
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) return null;
+  return withEdgeCache(`landing_${slug}_${BUILD_ID}`, async () => {
+    const { data, error } = await getApiV1StorefrontLandingBySlug({
+      client: getConfiguredSdkClient(), path: { slug },
+    });
+    return error ? null : unwrapEnvelope<LandingPageData>(data);
+  }, { ttlSeconds: CACHE_TTL.LONG });
 }
 
 export async function getPageRenderData(
