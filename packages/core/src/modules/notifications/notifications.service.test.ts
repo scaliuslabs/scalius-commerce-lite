@@ -92,8 +92,8 @@ function createDb(input: string | {
                     all: vi.fn(async () => []),
                     // No discount allocations.
                     groupBy: vi.fn(() => ({ orderBy: vi.fn(async () => []) })),
-                    // No parcel on file for shipped messages.
-                    orderBy: vi.fn(() => ({ limit: vi.fn(async () => []) })),
+                    // No parcel on file for shipped messages; no app discount facts.
+                    orderBy: vi.fn(() => ({ limit: vi.fn(async () => []), all: vi.fn(async () => []) })),
                 })),
                 leftJoin: vi.fn(() => ({
                     where: vi.fn(() => ({
