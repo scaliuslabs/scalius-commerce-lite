@@ -5,6 +5,11 @@
 import type { BundledPluginEntry } from "./loaders/bundled";
 
 export const BUNDLED_PLUGINS: Readonly<Record<string, BundledPluginEntry>> = {
+  "scalius.bulk-discount": {
+    version: "0.1.0",
+    sha256: "5dbf2cc5545c38de70b2e52d46f2b0e87670369bab2dd2527d1d9b9cd9157005",
+    load: () => import("../../../../plugins/bulk-discount/src/index"),
+  },
   "scalius.hello": {
     version: "0.2.0",
     sha256: "b6a2d34a5144a7a042ec8405c6a57c12079a627244c5101b93a8c572baf9c258",

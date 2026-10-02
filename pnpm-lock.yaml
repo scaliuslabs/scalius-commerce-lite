@@ -718,6 +718,19 @@ importers:
 
   packages/tsconfig: {}
 
+  plugins/bulk-discount:
+    dependencies:
+      '@scalius/plugin-sdk':
+        specifier: workspace:*
+        version: link:../../packages/plugin-sdk
+    devDependencies:
+      '@scalius/tsconfig':
+        specifier: workspace:*
+        version: link:../../packages/tsconfig
+      vitest:
+        specifier: ^4.1.11
+        version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.2.0)(happy-dom@20.14.0)(vite@8.2.2(@types/node@26.2.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.0))
+
   plugins/hello:
     dependencies:
       '@scalius/plugin-sdk':
