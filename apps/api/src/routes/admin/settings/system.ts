@@ -1,6 +1,7 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { getCredentialEncryptionKey, requireEncryptionKey } from "../../../utils/encryption-key";
 import {
+    BUILT_IN_EMAIL_PROVIDER_IDS,
     getEmailProviderReadiness,
     getEmailRuntimeSettings,
 } from "@scalius/core/integrations/email";
@@ -12,7 +13,10 @@ import {
     firstWhatsAppPlaceholderConfigError,
     getWhatsAppCloudApiSettings,
 } from "@scalius/core/integrations/whatsapp";
-import { getActivePaymentMethods, filterPaymentMethodsForCurrency } from "@scalius/core/modules/payments";
+import { getActivePaymentMethods } from "@scalius/core/modules/payments";
+import { requestPaymentProviders } from "../../../plugins/providers/payment";
+import { assertAppProviderInstalled, requestAppProviders } from "../../../plugins/providers/app-providers";
+import { isQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
 import {
     CUSTOMER_AUTH_OTP_CHANNELS,
     EMAIL_COLLECTION_MODES,
@@ -281,6 +285,7 @@ app.openapi(getCheckoutReadinessRoute, async (c) => {
     return ok(c, await getCheckoutReadiness(db, {
         encryptionKey: getCredentialEncryptionKey(c.env as Record<string, unknown>),
         runtimeEnv: c.env as Record<string, unknown>,
+        appProviders: requestAppProviders(c),
         inspectOptionalCustomerSignIn: true,
     }));
 });
@@ -364,22 +369,25 @@ app.openapi(saveCheckoutFlowRoute, async (c) => {
         const signInReadiness = await getCustomerSignInReadiness(db, {
             encryptionKey: credentialEncryptionKey,
             runtimeEnv: c.env as Record<string, unknown>,
+            appProviders: requestAppProviders(c),
             customerSignInRequiredOverride: true,
         });
         if (!signInReadiness.hasUsableCustomerSignIn) {
             throw new ValidationError(CHECKOUT_READINESS_CUSTOMER_SIGN_IN_ISSUE.message);
         }
     }
+    const paymentProviders = await requestPaymentProviders(c);
     const [activePaymentMethods, currencySettings] = await Promise.all([
-        getActivePaymentMethods(db, credentialEncryptionKey),
+        getActivePaymentMethods(db, credentialEncryptionKey, paymentProviders),
         getCurrencySettings(db),
     ]);
     const saved = await saveCheckoutFlowSettingsDocument(db, {
         ...body,
-        availablePaymentMethods: filterPaymentMethodsForCurrency(
+        availablePaymentMethods: paymentProviders.filterForCurrency(
             activePaymentMethods.enabledMethods,
             currencySettings.currencyCode,
         ),
+        paymentProviders,
     });
 
     return ok(c, saved);
@@ -505,7 +513,7 @@ app.openapi(saveAuthRoute, async (c) => {
     const effectiveIdentity = requestedIdentity ?? existingAuth;
     for (const channel of requestedIdentity?.channels ?? []) {
         if (channel === "whatsapp") continue;
-        if (!(await isCustomerAuthChannelReady(db, channel, { encryptionKey: credentialEncryptionKey, runtimeEnv: env }))) {
+        if (!(await isCustomerAuthChannelReady(db, channel, { encryptionKey: credentialEncryptionKey, runtimeEnv: env, appProviders: requestAppProviders(c) }))) {
             throw new ValidationError(CHANNEL_NOT_READY[channel]);
         }
     }
@@ -669,6 +677,12 @@ app.openapi(saveSecurityRoute, async (c) => {
 // EMAIL
 // ─────────────────────────────────────────
 
+/** A built-in sender, or an installed app's email provider (`<plugin id>:<provider id>`). */
+const emailProviderChoiceSchema = z.union([
+    z.enum(BUILT_IN_EMAIL_PROVIDER_IDS),
+    z.string().max(160).refine(isQualifiedProviderId, "Name an app provider as <plugin id>:<provider id>."),
+]);
+
 const getEmailRoute = createRoute({
     method: "get",
     path: "/email",
@@ -677,7 +691,7 @@ const getEmailRoute = createRoute({
     summary: "Get email settings (system)",
     responses: {
         200: { description: "Email settings", content: { "application/json": { schema: successEnvelope(z.object({
-            provider: z.enum(["cloudflare", "resend"]),
+            provider: emailProviderChoiceSchema,
             apiKey: z.string().max(MASKED.length),
             sender: z.string().max(EMAIL_SENDER_MAX_LENGTH),
             senderConfigured: z.boolean(),
@@ -702,6 +716,7 @@ app.openapi(getEmailRoute, async (c) => {
             env: c.env as Record<string, unknown>,
             encryptionKey: getCredentialEncryptionKey(c.env as Record<string, unknown>),
             settings: emailSettings,
+            appProviders: requestAppProviders(c),
         });
         const { value: { sender }, revision } = await emailDocument.readDetailed(db, {
             encryptionKey: getCredentialEncryptionKey(c.env as Record<string, unknown>),
@@ -721,7 +736,7 @@ app.openapi(getEmailRoute, async (c) => {
 
 const saveEmailSchema = z.object({
     expectedRevision: revisionSchema,
-    provider: z.enum(["cloudflare", "resend"]).optional(),
+    provider: emailProviderChoiceSchema.optional(),
     apiKey: z.string().max(EMAIL_API_KEY_MAX_LENGTH).optional(),
     sender: z.string().max(EMAIL_SENDER_MAX_LENGTH).refine(
         (value) => value.trim() === "" || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value),
@@ -760,6 +775,7 @@ app.openapi(saveEmailRoute, async (c) => {
         ]);
 
         if (provider) {
+            if (isQualifiedProviderId(provider)) await assertAppProviderInstalled(db, "email", provider);
             patch.provider = provider;
         }
 
@@ -788,6 +804,7 @@ app.openapi(saveEmailRoute, async (c) => {
             const nextSender = typeof sender === "string" ? sender.trim() : currentEmailSettings.sender;
             const nextReadiness = await getEmailProviderReadiness({
                 env: c.env as Record<string, unknown>,
+                appProviders: requestAppProviders(c),
                 settings: {
                     ...currentEmailSettings,
                     provider: provider ?? currentEmailSettings.provider,

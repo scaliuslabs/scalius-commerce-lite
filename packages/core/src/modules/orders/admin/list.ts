@@ -40,7 +40,7 @@ import {
 } from "../../payments/refund-attempt-visibility";
 import { activePaymentSessionAttemptExistsCondition } from "../../payments/payment-session-attempts";
 import {
-    HOSTED_PAYMENT_METHODS,
+    onlinePaymentMethod,
     paymentRecoveryLifecycleCondition,
     orderListFactsSelection,
     type OrderListFactsRow,
@@ -109,7 +109,7 @@ function paymentRecoveryFilterCondition(filter: OrderPaymentRecoveryFilter) {
     const orderIdSql = sql`${orders.id}`;
     const activeAttempt = activePaymentSessionAttemptExistsCondition(orderIdSql);
     const staleOrFailedAttempt = staleOrFailedPaymentSessionAttemptExistsCondition(orderIdSql);
-    const hostedMethod = inArray(orders.paymentMethod, [...HOSTED_PAYMENT_METHODS]);
+    const hostedMethod = onlinePaymentMethod(orders.paymentMethod);
     const needsAttention = sql`(
         ${hostedMethod}
         AND ${paymentRecoveryLifecycleCondition()} = 1

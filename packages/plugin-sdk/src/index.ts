@@ -7,10 +7,12 @@
 //     functions: { "checkout.discounts": (input, settings) => ({ discounts: [] }) },
 //     routes: { admin: { dashboard: async (request, ctx) => ({ body: … }) } },
 //     cron: { "expire-points": async (ctx) => { … } },
+//     providers: { wallet: definePaymentProvider({ createSession: async (input, ctx) => { … }, … }) },
 //   });
 //
 // The manifest declares everything; handlers for undeclared events, routes,
-// functions or cron jobs are rejected when the plugin is packed or loaded.
+// functions, cron jobs or provider operations are rejected when the plugin
+// is packed or loaded.
 
 import type { EventTopic, EventTopicFilter } from "@scalius/shared/events";
 import type {
@@ -20,12 +22,48 @@ import type {
   PluginManifestInput,
   PluginSettingValue,
 } from "@scalius/shared/plugins";
+import type { ProviderImplementation, ProviderKind } from "@scalius/shared/plugins/providers";
 import type { PluginContext, PluginEvent, PluginRouteRequest, PluginRouteResponse } from "./context";
 
 export type * from "./context";
 // The root entry stays free of schema code (zod), so a packed plugin carries
 // only its own logic; `@scalius/plugin-sdk/manifest` has the manifest parser.
 export { PLUGIN_API_VERSION } from "@scalius/shared/plugins/api-version";
+export { ProviderError, type ProviderErrorCategory } from "@scalius/shared/plugins/providers/kinds";
+export type {
+  CourierFind,
+  CourierRecipient,
+  CourierShipment,
+  CourierShipmentInput,
+  CourierShipmentStatus,
+  CourierTracking,
+  CourierWebhook,
+  EmailSend,
+  EmailSendInput,
+  FraudCheck,
+  FraudCheckInput,
+  MessageStatus,
+  PaymentEvent,
+  PaymentQuery,
+  PaymentQueryInput,
+  PaymentRefund,
+  PaymentRefundInput,
+  PaymentRefundProbe,
+  PaymentRefundProbeInput,
+  PaymentSession,
+  PaymentSessionInput,
+  PaymentSettlement,
+  PaymentVerification,
+  ProviderConnection,
+  ProviderHttpRequest,
+  ProviderImplementation,
+  ProviderKind,
+  ProviderOperationInput,
+  ProviderOperationOutput,
+  ProviderWireAmount,
+  SmsSend,
+  SmsSendInput,
+} from "@scalius/shared/plugins/providers";
 export type {
   PluginManifest,
   PluginManifestInput,
@@ -68,8 +106,8 @@ export interface PluginDefinition {
     webhooks?: Record<string, PluginRouteHandler>;
   };
   cron?: Record<string, PluginCronHandler>;
-  /** Provider implementations keyed by the manifest provider id; their interfaces are per kind (providers.ts). */
-  providers?: Record<string, unknown>;
+  /** Provider implementations keyed by the manifest's provider id (`definePaymentProvider`, …). */
+  providers?: Record<string, PluginProvider>;
   lifecycle?: {
     install?: PluginLifecycleHandler;
     activate?: PluginLifecycleHandler;
@@ -83,3 +121,33 @@ export interface PluginDefinition {
 export function definePlugin<const T extends PluginDefinition>(definition: T): T {
   return definition;
 }
+
+// ── Providers ───────────────────────────────────────────────────────────────
+//
+// A provider implements one port: the same interface the platform's own
+// adapters implement (`@scalius/shared/plugins/providers`). Each operation
+// gets its input and the full `ctx` (settings with decrypted secrets, http,
+// storage, kv, log). Inputs and outputs are validated by the platform on
+// both sides. Raise `ProviderError` to fail: `retryable` (with `uncertain:
+// true` when the provider may already have acted), `declined` or
+// `misconfigured`. Never put credentials or buyer contact data in a message.
+
+/** One port's implementation, tagged with its kind. */
+export type PluginProviderOf<K extends ProviderKind> = { readonly kind: K } & ProviderImplementation<K, PluginContext>;
+export type PluginProvider = { [K in ProviderKind]: PluginProviderOf<K> }[ProviderKind];
+
+function provider<K extends ProviderKind>(kind: K) {
+  return <const T extends ProviderImplementation<K, PluginContext>>(implementation: T): { readonly kind: K } & T =>
+    Object.freeze({ ...implementation, kind });
+}
+
+/** Hosted or instruction payments: sessions, returns, webhooks, status queries and refunds. */
+export const definePaymentProvider = provider("payment");
+/** Parcel booking, tracking, cancellation, quotes, tracking webhooks and COD reconciliation. */
+export const defineCourierProvider = provider("courier");
+export const defineSmsProvider = provider("sms");
+export const defineEmailProvider = provider("email");
+/** A phone lookup the merchant runs from the order page. */
+export const defineFraudProvider = provider("fraud");
+/** Tax calculation (contract only in this API version: the platform does not call it yet). */
+export const defineTaxProvider = provider("tax");

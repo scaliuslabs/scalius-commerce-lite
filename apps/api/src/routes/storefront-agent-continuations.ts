@@ -40,6 +40,7 @@ import {
   getCredentialEncryptionKey,
   getCustomerSessionHashKey,
 } from "../utils/encryption-key";
+import { requestAppProviders } from "../plugins/providers/app-providers";
 import {
   conflictResponse,
   errorResponses,
@@ -52,6 +53,7 @@ import {
 } from "./payment/payment-session-create";
 import { acceptedPaymentSessionProcessing, paymentSessionProcessingResponse } from "./payment/payment-session-response";
 import { reconcileOrderPayment } from "./payment/payment-events";
+import { requestPaymentProviders } from "../plugins/providers/payment";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -248,6 +250,7 @@ app.openapi(sendCustomerOtpRoute, async (c) => {
     emailEnv: c.env as unknown as Record<string, unknown>,
     encryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
     credentialEncryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
+    appProviders: requestAppProviders(c),
   });
   try {
     await enqueueAuthOtp(c, result.queuePayload);
@@ -386,6 +389,7 @@ app.openapi(reconcilePaymentRoute, async (c) => {
     db: c.get("db"),
     env: c.env,
     orderId: access.orderId,
+    providers: () => requestPaymentProviders(c),
   });
   return accepted
     ? c.json({ success: true as const, data: {
@@ -424,6 +428,7 @@ app.openapi(sendRecoveryOtpRoute, async (c) => {
     emailEnv: c.env as unknown as Record<string, unknown>,
     encryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
     credentialEncryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
+    appProviders: requestAppProviders(c),
   });
   if (result.queuePayload) {
     try {

@@ -23,6 +23,7 @@ import {
   type FraudCheckProviderType,
 } from "@scalius/core/modules/fraud-checker/browser";
 import { readQuotedHtmlAttribute } from "@scalius/shared/html-attributes";
+import { isQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
 import { SCANNER_TOKEN_TTL_SECONDS } from "@scalius/shared/scanner-auth";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -41,20 +42,28 @@ import { Textarea } from "~/components/ui/textarea";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { useSettingsForm } from "~/hooks/use-settings-form";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
+import { useProviderPortAccess } from "~/lib/provider-port-access";
 import { analyticsScriptTypes, type AnalyticsScriptType } from "~/lib/analytics-script-types";
 import { apiData, type ApiResult } from "~/lib/api";
 import {
   fraudCheckerProvidersQueryOptions,
   type FraudCheckerProvider,
 } from "~/lib/api-query-options/fraud-checker";
-import { metaQuery, trackingQuery } from "~/lib/api-query-options/settings-screens";
+import {
+  appProvidersQuery,
+  metaQuery,
+  trackingQuery,
+  type AppProvider,
+} from "~/lib/api-query-options/settings-screens";
 import { withDashboardBasePath } from "~/lib/dashboard-base-path";
 import { analyticsFormSchema } from "~/lib/form-schemas";
 import { queryKeys } from "~/lib/query-keys";
 import { formatDateTime, useMessages } from "~/i18n";
 import { settingsMessages } from "~/i18n/settings";
 import { appsMessages } from "~/i18n/settings-apps";
+import { appProvidersMessages } from "~/i18n/settings-app-providers";
 import { ConfirmDialog } from "../shared/ConfirmDialog";
+import { AppProviderStatus } from "./AppProviderStatus";
 import { useSaveBar } from "../shared/SaveBar";
 import { OfficialProviderMark, type ProviderMarkId } from "./provider-marks";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
@@ -687,7 +696,12 @@ const FRAUD_FIELD_LABELS: Record<FraudCheckProviderType, Record<FraudField, Apps
 };
 
 function fraudType(provider: FraudCheckerProvider | null, fallback: FraudCheckProviderType): FraudCheckProviderType {
-  return provider?.providerType ?? fallback;
+  return (provider?.providerType as FraudCheckProviderType | undefined) ?? fallback;
+}
+
+/** A saved checker that names an installed app's fraud provider (its keys live in the app). */
+function isAppChecker(provider: FraudCheckerProvider): boolean {
+  return isQualifiedProviderId(provider.providerType);
 }
 
 interface FraudDraft {
@@ -828,25 +842,116 @@ function FraudProviderForm({
   );
 }
 
+/**
+ * An app's fraud provider: whether lookups on the order page use it, its
+ * readiness and connection test. Saving keeps only the choice; the app's own
+ * settings hold its keys.
+ */
+function AppFraudProviderForm({
+  appProvider,
+  provider,
+  providerType,
+  name,
+}: {
+  appProvider: AppProvider | null;
+  provider: FraudCheckerProvider | null;
+  providerType: string;
+  name: string;
+}) {
+  const t = useMessages(appsMessages);
+  const common = useMessages(settingsMessages);
+  const queryClient = useQueryClient();
+  const canEdit = usePermissions().hasPermission(ADMIN_PERMISSIONS.SETTINGS_FRAUD_CHECKER_EDIT);
+  // An app not saved yet is off: switching it on is the change Save keeps.
+  const [saved] = useState(() => ({ isActive: provider?.isActive ?? false }));
+  const [draft, setDraft] = useState(saved);
+  const [confirmRemove, setConfirmRemove] = useState(false);
+  const refresh = () => queryClient.invalidateQueries({ queryKey: queryKeys.fraudChecker.all });
+  const save = useMutation({
+    mutationFn: () => {
+      const body = { name: provider?.name || name, providerType, isActive: draft.isActive };
+      return provider
+        ? apiData(putApiV1AdminFraudChecker({ body: { ...body, id: provider.id } }))
+        : apiData(postApiV1AdminFraudChecker({ body }));
+    },
+    onSuccess: refresh,
+  });
+  const remove = useMutation({
+    mutationFn: () => apiData(deleteApiV1AdminFraudCheckerById({ path: { id: provider!.id } })),
+    onSuccess: async () => {
+      toast.success(t("providerRemoved", { name }));
+      await refresh();
+    },
+    onError: () => toast.error(t("removeFailed")),
+  });
+  useSaveBar({
+    dirty: draft.isActive !== saved.isActive,
+    saving: save.isPending,
+    invalid: !canEdit,
+    save: () => save.mutateAsync(),
+    discard: () => setDraft(saved),
+  });
+
+  return (
+    <>
+      {appProvider ? <AppProviderStatus provider={appProvider} /> : null}
+      <label className="flex min-h-11 items-center justify-between gap-4 text-body font-medium">
+        {t("useOnOrders")}
+        <Switch checked={draft.isActive} onCheckedChange={(on) => setDraft({ isActive: on })} />
+      </label>
+      {provider && canEdit ? (
+        <>
+          <div>
+            <Button type="button" variant="ghost" onClick={() => setConfirmRemove(true)}>
+              {t("removeProvider", { name })}
+            </Button>
+          </div>
+          <ConfirmDialog
+            open={confirmRemove}
+            onOpenChange={setConfirmRemove}
+            title={t("removeProvider", { name })}
+            description={t("removeConfirm", { name })}
+            confirmLabel={common("remove")}
+            cancelLabel={common("cancel")}
+            isLoading={remove.isPending}
+            onConfirm={() => remove.mutate()}
+          />
+        </>
+      ) : null}
+    </>
+  );
+}
+
 function FraudCardBody() {
   const t = useMessages(appsMessages);
   const common = useMessages(settingsMessages);
   const canEdit = usePermissions().hasPermission(ADMIN_PERMISSIONS.SETTINGS_FRAUD_CHECKER_EDIT);
+  const appT = useMessages(appProvidersMessages);
   const { data, isError, refetch } = useQuery(fraudCheckerProvidersQueryOptions());
+  // Installed apps' fraud providers sit beside the built-in checkers.
+  const apps = useQuery({ ...appProvidersQuery("fraud"), enabled: useProviderPortAccess("fraud").canView }).data ?? [];
   if (isError) return <SettingsLoadFailure title={t("fraudTitle")} onRetry={refetch} />;
   if (!data) return <SettingsCardLoading />;
+  const builtInSaved = data.filter((provider) => !isAppChecker(provider));
   // Every saved checker, plus one "not set up" row for each checker not saved yet.
   const rows = [
-    ...data.map((provider) => ({ key: provider.id, type: fraudType(provider, "default"), provider })),
+    ...builtInSaved.map((provider) => ({ key: provider.id, type: fraudType(provider, "default"), provider })),
     ...FRAUD_CHECK_PROVIDER_TYPES
-      .filter((type) => !data.some((provider) => fraudType(provider, "default") === type))
+      .filter((type) => !builtInSaved.some((provider) => fraudType(provider, "default") === type))
       .map((type) => ({ key: type, type, provider: null })),
   ].sort((a, b) => FRAUD_ORDER.indexOf(a.type) - FRAUD_ORDER.indexOf(b.type));
+  // Each installed app provider, saved or not, and saved app checkers whose app is gone.
+  const appRows = [
+    ...apps.map((appProvider) => ({ appProvider, provider: data.find((saved) => saved.providerType === appProvider.id) ?? null })),
+    ...data
+      .filter((saved) => isAppChecker(saved) && !apps.some((appProvider) => appProvider.id === saved.providerType))
+      .map((provider) => ({ appProvider: null, provider })),
+  ];
   return (
     <SettingsCard id="fraudCheck"
       title={t("fraudTitle")}
       description={t("fraudDescription")}
-      rows={rows.map(({ key, type, provider }) => {
+      rows={[...rows.map(({ key, type, provider }) => {
         const name = type === "default"
           ? provider?.name || t("customChecker")
           : getFraudCheckProviderDefinition(type).label;
@@ -865,7 +970,31 @@ function FraudCardBody() {
             <FraudProviderForm type={type} provider={provider} name={name} />
           </SettingsDialog>
         );
-      })}
+      }), ...appRows.map(({ appProvider, provider }) => {
+        const name = appProvider?.name ?? provider?.name ?? "";
+        const providerType = appProvider?.id ?? provider!.providerType!;
+        const value = !provider
+          ? t("notSetUp")
+          : !provider.isActive
+            ? common("off")
+            : appProvider?.readiness.usable ? t("connected") : appT("notReady");
+        return (
+          <SettingsDialog
+            key={providerType}
+            title={name}
+            description={appProvider ? appT("fromApp", { app: appProvider.appName }) : undefined}
+            trigger={
+              <SettingsRow
+                disabled={!canEdit}
+                label={<MarkLabel mark={<Mark fallback={<ShieldCheck className="size-4" />} />}>{name}</MarkLabel>}
+                value={value}
+              />
+            }
+          >
+            <AppFraudProviderForm appProvider={appProvider} provider={provider} providerType={providerType} name={name} />
+          </SettingsDialog>
+        );
+      })]}
     />
   );
 }

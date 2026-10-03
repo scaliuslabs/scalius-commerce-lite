@@ -11,7 +11,7 @@ import { setLocale, translate } from "~/i18n";
 import { inboxMessages } from "~/i18n/inbox";
 import { orderDetailMessages } from "~/i18n/order-detail";
 import { fulfillmentStatusLabel, orderMessages, orderStatusLabel, paymentStatusLabel } from "~/i18n/orders";
-import { hasDeliveryCard, hasReturnsCard } from "./card-rules";
+import { hasDeliveryCard, hasHoldCard, hasReturnsCard } from "./card-rules";
 import { fulfilledGroups, returnedByGroup } from "./fulfilment-groups";
 import { OrderHeaderBadges } from "./OrderHeaderBadges";
 import type { Order, OrderFulfillment } from "./types";
@@ -87,6 +87,16 @@ describe("order page cards that may not apply", () => {
     }
   });
 
+  it("shows Hold for review only while an app's hold is open", () => {
+    const hold = (releasedAt: number | null) => ({
+      id: "ohd_1", appId: "acme.radar", appName: "Risk radar", reason: "Returned before", placedAt: 1_790_000_000, releasedAt,
+    });
+    expect(hasHoldCard({ holds: [] })).toBe(false);
+    expect(hasHoldCard({ holds: undefined } as never)).toBe(false);
+    expect(hasHoldCard({ holds: [hold(1_790_000_600)] })).toBe(false);
+    expect(hasHoldCard({ holds: [hold(1_790_000_600), hold(null)] })).toBe(true);
+  });
+
   it("shows Returns only once the order was delivered, money is owed back, or a return exists", () => {
     const applies = new Set(["delivered", "completed", "returned", "refunded"]);
     for (const status of ORDER_STATUSES) {
@@ -138,6 +148,7 @@ describe("order page cards that may not apply", () => {
         translate(orderDetailMessages, "timeline.title"),
         translate(orderDetailMessages, "customer.title"),
         translate(orderDetailMessages, "notes.title"),
+        translate(orderDetailMessages, "holds.title"),
       ];
       expect(new Set(titles).size, titles.join(" | ")).toBe(titles.length);
     }

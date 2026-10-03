@@ -1,5 +1,12 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { getSmsSettings, saveSmsSettings, SMS_PROVIDER_IDS } from "@scalius/core/integrations/sms";
+import {
+    BUILT_IN_SMS_PROVIDER_IDS,
+    getSmsSettings,
+    isSmsProviderChoice,
+    saveSmsSettings,
+} from "@scalius/core/integrations/sms";
+import { isQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
+import { assertAppProviderInstalled, requestAppProviders } from "../../../plugins/providers/app-providers";
 import { getCredentialEncryptionKey, requireEncryptionKey } from "../../../utils/encryption-key";
 import { ok } from "../../../utils/api-response";
 import { successEnvelope, errorResponses, conflictResponse, serviceUnavailableResponse } from "../../../schemas/responses";
@@ -13,12 +20,19 @@ const SMS_SENDER_MAX_LENGTH = 128;
 const SMS_BASE_URL_MAX_LENGTH = 2_048;
 const SMS_PROVIDER_ERROR_MAX_LENGTH = 1_000;
 
+/** A built-in gateway, or an installed app's SMS provider (`<plugin id>:<provider id>`). */
+const smsProviderChoiceSchema = z.union([
+    z.enum(BUILT_IN_SMS_PROVIDER_IDS),
+    z.string().max(160).refine(isQualifiedProviderId, "Name an app provider as <plugin id>:<provider id>."),
+]);
+
 // ─────────────────────────────────────────
 // GET /sms — returns SMS provider settings with masked credentials
 // ─────────────────────────────────────────
 
 const smsSettingsSchema = z.object({
-    activeProvider: z.enum(SMS_PROVIDER_IDS).nullable(),
+    /** A built-in gateway id or an app provider's `<plugin id>:<provider id>`. */
+    activeProvider: z.string().max(160).nullable(),
     activeProviderConfigured: z.boolean(),
     activeProviderError: z.string().max(SMS_PROVIDER_ERROR_MAX_LENGTH).nullable(),
     bdbulksmsToken: z.string().max(MASKED.length),
@@ -38,7 +52,7 @@ function projectSmsSettings(
 ) {
     const masked = (value: string) => (value ? MASKED : "");
     return {
-        activeProvider: SMS_PROVIDER_IDS.includes(data.activeProvider as never)
+        activeProvider: data.activeProvider && isSmsProviderChoice(data.activeProvider)
             ? data.activeProvider
             : null,
         activeProviderConfigured: data.activeProviderConfigured,
@@ -73,7 +87,7 @@ const getSmsRoute = createRoute({
 
 app.openapi(getSmsRoute, async (c) => {
     const db = c.get("db");
-    const data = await getSmsSettings(db, getCredentialEncryptionKey(c.env as Record<string, unknown>));
+    const data = await getSmsSettings(db, getCredentialEncryptionKey(c.env as Record<string, unknown>), requestAppProviders(c));
     return ok(c, projectSmsSettings(data));
 });
 
@@ -82,7 +96,7 @@ app.openapi(getSmsRoute, async (c) => {
 // ─────────────────────────────────────────
 
 const saveSmsSchema = z.object({
-    activeProvider: z.enum(SMS_PROVIDER_IDS).optional(),
+    activeProvider: smsProviderChoiceSchema.optional(),
     bdbulksmsToken: z.string().max(SMS_SECRET_MAX_LENGTH).optional(),
     mimsmsUsername: z.string().max(SMS_USERNAME_MAX_LENGTH).optional(),
     mimsmsApiKey: z.string().max(SMS_SECRET_MAX_LENGTH).optional(),
@@ -127,6 +141,9 @@ const saveSmsRoute = createRoute({
 app.openapi(saveSmsRoute, async (c) => {
     const db = c.get("db");
     const { expectedRevision, ...body } = c.req.valid("json");
+    if (body.activeProvider && isQualifiedProviderId(body.activeProvider)) {
+        await assertAppProviderInstalled(db, "sms", body.activeProvider);
+    }
     const encKey = hasSmsSecretWrite(body)
         ? requireEncryptionKey(c.env as Record<string, unknown>)
         : getCredentialEncryptionKey(c.env as Record<string, unknown>);
@@ -135,7 +152,7 @@ app.openapi(saveSmsRoute, async (c) => {
     // SMS provider readiness participates in public checkout readiness when
     // customer sign-in is required; do not leave the cached projection stale.
 
-    return ok(c, projectSmsSettings(await getSmsSettings(db, getCredentialEncryptionKey(c.env as Record<string, unknown>))));
+    return ok(c, projectSmsSettings(await getSmsSettings(db, getCredentialEncryptionKey(c.env as Record<string, unknown>), requestAppProviders(c))));
 });
 
 export { app as smsSettingsRoutes };

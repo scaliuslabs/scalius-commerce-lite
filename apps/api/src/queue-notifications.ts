@@ -38,12 +38,24 @@ import { resolveDigitalDeliveryContent } from "./notification-content/digital";
 import { resolveGiftCardIssuedContent, resolveGiftCardSentContent } from "./notification-content/gift-card";
 import { resolveReviewRequestContent } from "./notification-content/review-request";
 import { getCredentialEncryptionKey } from "./utils/encryption-key";
+import { detachedAppProviders } from "./plugins/providers/app-providers";
 import { sendMarketingOptInEmail } from "@scalius/core/modules/customer-marketing";
 import { logOpsEvent } from "./utils/ops-log";
 
 type Db = ReturnType<typeof getDb>;
 
 type DispatchOutcome = { channel: string; provider: string; error?: string; providerStatus?: string | null; retryable: boolean };
+
+/**
+ * What a notification send needs besides its content: the env, the
+ * credential key, and the app providers a saved SMS or email choice may name
+ * (on a detached context: queue work has no request). Nothing is read until
+ * a send needs it.
+ */
+function messagingRuntime(db: Db, env: Env) {
+  const encryptionKey = getCredentialEncryptionKey(env as unknown as Record<string, unknown>);
+  return { env, encryptionKey, appProviders: detachedAppProviders(env, db, encryptionKey) };
+}
 
 /** Dispatches one order notification to buyer channels, staff push and staff email. Returns retryable failures. */
 async function dispatchOrderNotification(
@@ -58,7 +70,7 @@ async function dispatchOrderNotification(
     data?: Record<string, unknown>;
   },
 ): Promise<string[]> {
-  const encryptionKey = getCredentialEncryptionKey(env as unknown as Record<string, unknown>);
+  const { encryptionKey, appProviders } = messagingRuntime(db, env);
   const customerNotificationResult = await sendOrderNotificationEmail(
     input.customerEmail,
     input.customerName,
@@ -70,6 +82,7 @@ async function dispatchOrderNotification(
       encryptionKey,
       env: env as unknown as Record<string, unknown>,
       outboxId: input.outboxId,
+      appProviders,
     },
   );
   const retryableFailures: string[] = customerNotificationResult?.hasRetryableFailure
@@ -122,6 +135,7 @@ async function dispatchOrderNotification(
       encryptionKey,
       env: env as unknown as Record<string, unknown>,
       outboxId: input.outboxId,
+      appProviders,
     });
     if (staffEmailResult.hasRetryableFailure) {
       retryableFailures.push(`staff email: ${summarizeNotificationFailures(staffEmailResult.outcomes)}`);
@@ -284,10 +298,7 @@ async function dispatchResolvedOrderNotification(
     orderNumber: formatOrderNumber(order.orderNumber, claim.subjectId),
     recipient: { name: order.customerName, email: order.customerEmail, phone: order.customerPhone },
     extraTemplateData,
-  }, {
-    env,
-    encryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
-  }));
+  }, messagingRuntime(db, env)));
 }
 
 /** An issued gift card: the domain's content, to the card's delivery contact. */
@@ -316,10 +327,7 @@ async function dispatchGiftCardNotification(
     orderNumber: content.orderNumber,
     recipient: content.recipient,
     extraTemplateData: content.extraTemplateData,
-  }, {
-    env,
-    encryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
-  }));
+  }, messagingRuntime(db, env)));
 }
 
 async function dispatchClaimedNotification(
@@ -341,10 +349,7 @@ async function dispatchClaimedNotification(
         outboxId: claim.outboxId,
         orderId: claim.subjectId,
         notificationType: type,
-      }, {
-        env,
-        encryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
-      }));
+      }, messagingRuntime(db, env)));
     }
     if (!isOrderNotificationType(claim.notificationType)) {
       return { kind: "unsupported", reason: `unsupported_notification_type: ${claim.notificationType}` };
@@ -377,8 +382,8 @@ async function dispatchClaimedNotification(
       customerId: claim.subjectId,
       data: claim.data,
     }, {
+      ...messagingRuntime(db, env),
       env: env as never,
-      encryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
       storefrontUrl: env.STOREFRONT_URL,
     }));
   }
@@ -392,10 +397,7 @@ async function dispatchClaimedNotification(
       conversationId: claim.subjectId,
       notificationType: claim.notificationType,
       seq: Number(claim.data.seq),
-    }, {
-      env,
-      encryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
-    });
+    }, messagingRuntime(db, env));
     if (outcome.kind === "nothing_to_send") {
       // Ids only: the line's text never reaches a log.
       console.log(`[Queue] Conversation notification ${claim.outboxId} had nothing to send: ${outcome.reason}`);

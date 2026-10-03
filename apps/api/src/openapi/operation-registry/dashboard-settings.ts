@@ -172,6 +172,12 @@ export const DASHBOARD_SETTINGS_OPERATIONS = {
     reason:
       "Legacy dashboard-prefix mount of storefront abandoned-checkout snapshot persistence; no merchant UI invokes it, and agents must use protected context and cart operations rather than manufacture browser recovery snapshots.",
   },
+  "dashboard.settings_providers.list": { limits: { request: 16_384, response: 65_536 } },
+  "dashboard.settings_providers.test": {
+    risk: "security",
+    openWorld: true,
+    limits: { request: 16_384, response: 8_192 },
+  },
   "dashboard.settings_sms.get_sms": {
     risk: "security",
     limits: { request: 16_384, response: 8_192 },

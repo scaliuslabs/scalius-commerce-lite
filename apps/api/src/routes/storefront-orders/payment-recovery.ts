@@ -9,6 +9,7 @@ import {
 import { CUSTOMER_AUTH_OTP_CHANNELS } from "@scalius/shared/customer-auth-policy";
 import { NotFoundError, ValidationError, ServiceUnavailableError } from "../../utils/api-error";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
+import { requestAppProviders } from "../../plugins/providers/app-providers";
 import { ok } from "../../utils/api-response";
 import { successEnvelope, errorResponses, serviceUnavailableResponse } from "../../schemas/responses";
 import { authMiddleware } from "../../middleware/auth";
@@ -75,6 +76,7 @@ app.openapi(sendOrderPaymentRecoveryOtpRoute, async (c) => {
       emailEnv: c.env as unknown as Record<string, unknown>,
       encryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
       credentialEncryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
+      appProviders: requestAppProviders(c),
     });
   } catch (error) {
     if (error instanceof ValidationError || error instanceof NotFoundError) {

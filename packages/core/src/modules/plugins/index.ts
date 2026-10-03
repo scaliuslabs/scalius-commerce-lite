@@ -5,7 +5,6 @@
 // The host runtime (loaders, bridge, principal, routes, delivery and cron
 // runners) lives in apps/api/src/plugins.
 
-export * from "./cache-deps";
 export * from "./cron-runs";
 export * from "./errors";
 export * from "./event-deliveries";

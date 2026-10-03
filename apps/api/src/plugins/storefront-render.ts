@@ -9,8 +9,8 @@
 //   plgs:<id>:<collection>      each storage collection the section declares in `reads`
 //   theme / p:<id> / set:...    the placement and its values, the product, ctx.store
 //
-// The plugin module advances `plg` and `plgs` keys in the batch of every
-// write (core plugins/cache-deps.ts). While drawing, the bridge refuses
+// Generated triggers on the plugin tables advance `plg` and `plgs` keys
+// with every committed write (migration 0110). While drawing, the bridge refuses
 // everything the keys do not cover (KV, `ctx.api`, `ctx.http`, custom
 // fields, messaging, writes, undeclared collections), so a validated entry is
 // exactly what the app would draw now, and a cache hit runs no plugin code.

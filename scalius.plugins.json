@@ -4,28 +4,46 @@
   "sandbox": false,
   "plugins": [
     {
+      "id": "scalius.bkash",
+      "version": "0.1.1",
+      "source": "plugins/bkash",
+      "sha256": "aa2fb378b16f559c57c015553c25a01f2cb2224831de5816a233fccba38e20f4"
+    },
+    {
       "id": "scalius.bulk-discount",
       "version": "0.1.1",
       "source": "plugins/bulk-discount",
-      "sha256": "1636b4d354b6d8a5e0e349c0fb1b8b195a52373e77927b25f1b352a0921bafe6"
+      "sha256": "17e4bc680643b1d649cf252ea7b6d56fdf724e3c620b63da93666af7d0d7afd2"
     },
     {
       "id": "scalius.hello",
       "version": "0.3.1",
       "source": "plugins/hello",
-      "sha256": "87bb9e19ea17c73d9a682fff3ce6eed7dac520cf1d20e34b377e7fa9177d69b6"
+      "sha256": "e6b07fc8a14735a67d679ec60cf47a60b8b1305242341f82b4666fc6f391b80b"
+    },
+    {
+      "id": "scalius.loyalty",
+      "version": "0.1.1",
+      "source": "plugins/loyalty",
+      "sha256": "6610a06873ed6f4ddd20b2590c74f21c52fd0c98abc410d60fff78f647007953"
+    },
+    {
+      "id": "scalius.nagad",
+      "version": "0.1.1",
+      "source": "plugins/nagad",
+      "sha256": "7f7cb0934620c15a561e17c48e14a07bca1d4d461c03971e82ee305bf30d82f6"
     },
     {
       "id": "scalius.order-tagger",
       "version": "0.1.2",
       "source": "plugins/order-tagger",
-      "sha256": "979af1334a4a2bf02dcb36a08085577d864d473adb342a8e697864823a75f492"
+      "sha256": "ff1704a0929a77a444283df3824cb3f69ac7b2a7ad259f11bcafcd393bef6eea"
     },
     {
       "id": "scalius.wishlist",
       "version": "0.1.1",
       "source": "plugins/wishlist",
-      "sha256": "f688b0717064653f876cf713988d64cc87784872f21a51e301bf5fd7351b451b"
+      "sha256": "21d4227b0842638d2910edc05a5542cf8cfbab705a750b72e2447989b927e645"
     }
   ]
 }

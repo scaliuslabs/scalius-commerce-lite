@@ -1,63 +1,47 @@
 // src/modules/fraud-checker/fraud-checker.service.ts
-// Fraud checker provider management and phone lookup service.
-// Moved from src/lib/fraud-checker/service.ts.
+// The merchant's fraud checkers (`fraud-checker` settings rows, each value
+// encrypted whole) and the phone lookup through the fraud port. A row is a
+// built-in checker with its credentials, or an app provider
+// (`providerType: "<plugin id>:<provider id>"`) whose credentials live in the
+// app's settings; the lookup goes through the first active row, reaching an
+// app through the request's AppProviders. A manual tool on the order page:
+// it advises, it never blocks.
 
 import { settings } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
+import { providerErrorOf, type FraudCheck } from "@scalius/shared/plugins/providers";
 import { encryptCredentials, readStoredCredentialStrict } from "@scalius/core/utils/credential-encryption";
 import {
   NotFoundError,
   ValidationError,
   ServiceUnavailableError,
 } from "@scalius/core/errors";
-import { getFraudCheckProvider } from "./provider";
-import type { FraudCheckResult as ProviderFraudCheckResult } from "./provider";
+import { bindProvider, isAppProviderId, resolveAppProvider, type AppProviders } from "../../integrations/provider-port";
+import { builtInFraudChecker, type FraudProvider } from "./provider";
 import {
   getFraudCheckProviderDefinition,
   isFraudCheckProviderType,
-  type FraudCheckProviderType,
 } from "./provider-definitions";
 
 export interface FraudCheckerProvider {
   id: string;
   name: string;
+  /** Built-in checkers only; empty for an app provider. */
   apiUrl: string;
+  /** Built-in checkers only; empty for an app provider. */
   apiKey: string;
   apiSecret?: string;
   userId?: string;
   isActive: boolean;
-  /** Optional provider type key — defaults to "default". */
-  providerType?: FraudCheckProviderType;
-}
-
-export interface FraudCheckResult {
-  success: boolean;
-  data?: {
-    mobile_number: string;
-    total_parcels: number;
-    total_delivered: number;
-    total_cancel: number;
-    provider_status?: string;
-    message?: string;
-    customer_tag?: string;
-    success_rate?: number;
-    cancel_rate?: number;
-    apis?: Record<
-      string,
-      {
-        total_parcels: number;
-        total_delivered_parcels: number;
-        total_cancelled_parcels: number;
-      }
-    >;
-  };
-  riskLevel?: ProviderFraudCheckResult["riskLevel"];
-  error?: string;
+  /** A built-in type (absent: "default") or an app provider's `<plugin id>:<provider id>`. */
+  providerType?: string;
 }
 
 const CATEGORY = "fraud-checker";
+/** The number a connection test looks up when the provider has no testConnection. */
+const TEST_PHONE = "+8801700000000";
 
 export function getFraudProviderUrlIssue(value: string): string | null {
   try {
@@ -166,25 +150,19 @@ export async function getFraudProvider(
   };
 }
 
-/**
- * Save a fraud checker provider (create or update)
- */
-export async function saveFraudProvider(
-  db: Database,
-  provider: Omit<FraudCheckerProvider, "id"> & { id?: string },
-  encryptionKey: string,
-): Promise<FraudCheckerProvider> {
-  if (!encryptionKey) {
-    throw new ServiceUnavailableError("CREDENTIAL_ENCRYPTION_KEY is required to store provider credentials.");
+/** What a row stores: a built-in checker's credentials, or only the app provider it names. */
+function storedProviderData(provider: Omit<FraudCheckerProvider, "id">): Omit<FraudCheckerProvider, "id"> {
+  const providerType = provider.providerType ?? "default";
+  if (isAppProviderId(providerType)) {
+    if (!provider.name?.trim()) throw new ValidationError("Missing required fields: name");
+    // The app's own settings hold its credentials (encrypted, masked).
+    return { name: provider.name, apiUrl: "", apiKey: "", isActive: provider.isActive, providerType };
   }
 
   assertFraudProviderUrl(provider.apiUrl);
-
-  const providerType = provider.providerType ?? "default";
   if (!isFraudCheckProviderType(providerType)) {
     throw new ValidationError(`Unsupported fraud checker provider type: ${providerType}`);
   }
-
   const definition = getFraudCheckProviderDefinition(providerType);
   const requiredFields = [
     ["name", provider.name],
@@ -201,9 +179,7 @@ export async function saveFraudProvider(
     );
   }
 
-  const providerId = provider.id || nanoid();
-
-  const providerData = {
+  return {
     name: provider.name,
     apiUrl: provider.apiUrl,
     apiKey: provider.apiKey,
@@ -212,6 +188,23 @@ export async function saveFraudProvider(
     isActive: provider.isActive,
     providerType,
   };
+}
+
+/**
+ * Save a fraud checker provider (create or update). An app provider row
+ * names the app only; the caller checks that an installed app declares it.
+ */
+export async function saveFraudProvider(
+  db: Database,
+  provider: Omit<FraudCheckerProvider, "id"> & { id?: string },
+  encryptionKey: string,
+): Promise<FraudCheckerProvider> {
+  if (!encryptionKey) {
+    throw new ServiceUnavailableError("CREDENTIAL_ENCRYPTION_KEY is required to store provider credentials.");
+  }
+
+  const providerData = storedProviderData(provider);
+  const providerId = provider.id || nanoid();
   const storedValue = await encryptCredentials(JSON.stringify(providerData), encryptionKey);
 
   // Check if provider exists
@@ -270,26 +263,49 @@ export async function deleteFraudProvider(db: Database, id: string): Promise<boo
 }
 
 /**
- * Test a provider connection
+ * A saved checker as the fraud port: a built-in one with the row's
+ * credentials, or the app provider it names (through `apps`, failing closed
+ * when the app cannot run or is not set up).
+ */
+async function fraudProviderFor(row: FraudCheckerProvider, apps: AppProviders | undefined): Promise<FraudProvider> {
+  const providerType = row.providerType || "default";
+  if (isAppProviderId(providerType)) {
+    const choice = await resolveAppProvider(apps, "fraud", providerType);
+    if (!choice.provider) throw new ServiceUnavailableError(choice.issue);
+    return choice.provider;
+  }
+  assertFraudProviderUrl(row.apiUrl);
+  return bindProvider("fraud", builtInFraudChecker(providerType), {
+    apiUrl: row.apiUrl,
+    apiKey: row.apiKey,
+    apiSecret: row.apiSecret,
+    userId: row.userId,
+  });
+}
+
+/**
+ * Test a provider connection: its own testConnection, else a lookup of a
+ * test number.
  */
 export async function testFraudProvider(
   db: Database,
   id: string,
   encryptionKey?: string,
+  apps?: AppProviders,
 ): Promise<{ success: boolean; message: string }> {
-  const provider = await getFraudProvider(db, id, encryptionKey);
-  if (!provider) {
+  const row = await getFraudProvider(db, id, encryptionKey);
+  if (!row) {
     throw new NotFoundError(`Fraud checker provider "${id}" not found`);
   }
 
   try {
-    const result = await fraudLookup(provider, "+8801700000000");
-    return {
-      success: result.success,
-      message: result.success
-        ? "Connection successful"
-        : result.error || "Connection failed",
-    };
+    const provider = await fraudProviderFor(row, apps);
+    if (provider.testConnection) {
+      const result = await provider.testConnection({}, {});
+      return { success: result.ok, message: result.message };
+    }
+    await provider.check({ phone: TEST_PHONE }, {});
+    return { success: true, message: "Connection successful" };
   } catch (error: unknown) {
     return {
       success: false,
@@ -300,35 +316,20 @@ export async function testFraudProvider(
 }
 
 /**
- * Lookup fraud data for a phone number using a specific provider
+ * Look a phone up with one saved checker. A provider's own merchant-facing
+ * error (the port's ProviderError) is kept; anything else is masked.
  */
 export async function fraudLookup(
-  provider: FraudCheckerProvider,
+  row: FraudCheckerProvider,
   phone: string,
-): Promise<FraudCheckResult> {
-  assertFraudProviderUrl(provider.apiUrl);
-  const checkProvider = getFraudCheckProvider(
-    provider.providerType ?? "default",
-  );
-
+  apps?: AppProviders,
+): Promise<FraudCheck> {
+  const provider = await fraudProviderFor(row, apps);
   try {
-    const result = await checkProvider.lookup(
-      phone,
-      {
-        apiUrl: provider.apiUrl,
-        apiKey: provider.apiKey,
-        apiSecret: provider.apiSecret,
-        userId: provider.userId,
-      },
-    );
-
-    return {
-      success: true,
-      riskLevel: result.riskLevel,
-      data: result.details as FraudCheckResult["data"],
-    };
-  } catch {
-    throw new ServiceUnavailableError("Fraud check lookup failed");
+    return await provider.check({ phone }, {});
+  } catch (error: unknown) {
+    const failure = providerErrorOf(error);
+    throw new ServiceUnavailableError(failure ? failure.message : "Fraud check lookup failed");
   }
 }
 
@@ -339,7 +340,8 @@ export async function fraudLookupWithActiveProvider(
   db: Database,
   phone: string,
   encryptionKey?: string,
-): Promise<FraudCheckResult> {
+  apps?: AppProviders,
+): Promise<FraudCheck> {
   const providers = await getFraudProviders(db, encryptionKey);
   const activeProvider = providers.find((p) => p.isActive);
 
@@ -349,5 +351,5 @@ export async function fraudLookupWithActiveProvider(
     );
   }
 
-  return fraudLookup(activeProvider, phone);
+  return fraudLookup(activeProvider, phone, apps);
 }

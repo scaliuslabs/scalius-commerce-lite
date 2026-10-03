@@ -47,6 +47,7 @@ const grant = (overrides: Record<string, unknown> = {}) => ({
   allowedHosts: ["api.acme.example"],
   events: ["order.created"],
   functions: ["checkout.discounts"],
+  blockingFunctions: [],
   providers: [],
   publicRoutes: true,
   storefrontScripts: [],
@@ -310,6 +311,21 @@ describe("App page", () => {
     expect(text()).toContain("Customers");
     // Nothing is marked new before the first approval.
     expect(text()).not.toContain("New");
+  });
+
+  it("says when an app can pause checkout or updates a buyer's record with each order", async () => {
+    await renderApp(
+      detail({
+        request: grant({ functions: ["cart.validate", "checkout.discounts"], blockingFunctions: ["cart.validate"] }),
+        functions: [
+          { point: "cart.validate", priority: 5, onError: "block", snapshotCollection: null },
+          { point: "checkout.discounts", priority: 10, onError: "skip", snapshotCollection: "balances" },
+        ],
+      }),
+      VIEWER,
+    );
+    expect(text()).toContain("Can pause checkout when it can't answer: Check carts");
+    expect(text()).toContain("Reads and updates each signed-in buyer's \"balances\" record with their order");
   });
 
   it("lists its checkout functions in plain words with their priority, in checkout order", async () => {

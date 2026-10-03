@@ -1,47 +1,18 @@
 // src/integrations/sms/index.ts
-// Barrel file for SMS provider abstraction.
+// The SMS port: the merchant's chosen provider (a built-in gateway or an
+// app's), resolved per send from the `sms` settings document.
 
-export type {
-  SendSmsOptions,
-  SendSmsResult,
-  SmsProvider,
-  SmsProviderId,
-} from "./provider";
 export {
-  registerSmsProvider,
-  getSmsProvider,
-  SMS_PROVIDER_IDS,
-} from "./provider";
-
+  BUILT_IN_SMS_PROVIDER_IDS,
+  type BuiltInSmsProviderId,
+  type SmsProvider,
+} from "./port";
 export {
   getActiveSmsProvider,
   getSmsProviderReadiness,
   getSmsSettings,
+  isSmsProviderChoice,
   saveSmsSettings,
+  SMS_READINESS_CODE,
 } from "./sms-settings";
-export type { SmsProviderReadiness, SmsSettingsData } from "./sms-settings";
-
-// ── Register built-in providers ─────────────────────────────────────
-// These are placeholder registrations for type checking / registry enumeration.
-// The queue consumer MUST call getActiveSmsProvider(db, encryptionKey) to get
-// a provider instantiated with real (decrypted) credentials from the DB.
-
-import { registerSmsProvider } from "./provider";
-import { SmsNetBdProvider } from "./providers/smsnetbd";
-import { BdBulkSmsProvider } from "./providers/bdbulksms";
-import { MimSmsProvider } from "./providers/mimsms";
-import { GennetProvider } from "./providers/gennet";
-
-registerSmsProvider("smsnetbd", new SmsNetBdProvider({ apiKey: "" }));
-registerSmsProvider(
-  "bdbulksms",
-  new BdBulkSmsProvider({ token: "" }),
-);
-registerSmsProvider(
-  "mimsms",
-  new MimSmsProvider({ userName: "", apiKey: "", senderName: "" }),
-);
-registerSmsProvider(
-  "gennet",
-  new GennetProvider({ apiToken: "", baseUrl: "", sid: "" }),
-);
+export type { SmsProviderReadiness, SmsSettingsData, SmsSettingsInput } from "./sms-settings";

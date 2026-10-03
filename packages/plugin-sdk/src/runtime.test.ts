@@ -18,8 +18,8 @@ function bridge(overrides: Partial<PluginRuntimeBridge> = {}): PluginRuntimeBrid
     throw new Error("[storage.undeclared_collection] Collection is not declared.");
   };
   return {
-    apiCall: vi.fn(), storageGet: vi.fn(refuse), storagePut: vi.fn(), storageDelete: vi.fn(), storageQuery: vi.fn(), storageCount: vi.fn(),
-    kvGet: vi.fn(async () => 3), kvSet: vi.fn(), kvDelete: vi.fn(), kvList: vi.fn(), httpFetch: vi.fn(async () => ({ status: 201, headers: {}, body: "{\"a\":1}" })),
+    apiCall: vi.fn(), storageGet: vi.fn(refuse), storageWrite: vi.fn(), storageQuery: vi.fn(), storageCount: vi.fn(),
+    kvGet: vi.fn(async () => ({ value: 3, revision: 1 })), kvSet: vi.fn(), kvDelete: vi.fn(), kvList: vi.fn(), httpFetch: vi.fn(async () => ({ status: 201, headers: {}, body: "{\"a\":1}" })),
     customFieldsGet: vi.fn(), customFieldsSet: vi.fn(), messagingEmail: vi.fn(), messagingSms: vi.fn(), messagingNotifyStaff: vi.fn(),
     ...overrides,
   } as PluginRuntimeBridge;

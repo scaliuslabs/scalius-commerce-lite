@@ -59,6 +59,8 @@ import {
 } from "./attempts";
 import { MAX_ORDER_LINE_ITEMS } from "../orders/validation";
 import { buildAppDiscountFactInserts } from "../orders/app-facts";
+import { appStorageCommitStatements, isAppStorageCommitConflict } from "../plugins/storage";
+import { readCheckoutCopy } from "./store-copy";
 import type { StorefrontOrderCommitReads, SQLiteBatchItem } from "./reads";
 import {
     GiftCardChangedError,
@@ -121,6 +123,8 @@ export const ORDER_ITEM_INSERT_PARAMETERS_PER_ROW = 19;
 const ORDER_ITEM_TAX_INSERT_PARAMETERS_PER_ROW = 6;
 const ORDER_DISCOUNT_ALLOCATION_INSERT_PARAMETERS_PER_ROW = 18;
 const CHECKOUT_AUTHORITY_CHANGED = "CHECKOUT_AUTHORITY_CHANGED";
+/** An app's offer (its snapshot record) changed between the quote and the commit. */
+export const APP_OFFER_CHANGED_REASON = "APP_OFFER_CHANGED";
 const CHECKOUT_AUTHORITY_CHANGED_MESSAGE =
     "Checkout details changed while the order was being placed. Return to your cart to review them and try again.";
 // Checked before the inventory classifier, whose Turso matcher treats any
@@ -710,6 +714,18 @@ function buildOrderWriteBatch(
         }) as SQLiteBatchItem[]);
     }
 
+    // App snapshot writes (a balance the discount spends) commit with the
+    // order, each at the revision its app saw: a lost race fails the order.
+    const storageCommits = payload.appStorageCommits ?? [];
+    if (storageCommits.length > 0) {
+        const discounted = new Set(appDiscounts.map((discount) => discount.pluginId));
+        if (storageCommits.some((commit) => !discounted.has(commit.pluginId))) {
+            throw new ValidationError("Committed app storage write has no applied discount.");
+        }
+        const { guards, writes: commitWrites } = appStorageCommitStatements(db, storageCommits);
+        writes.push(...guards as SQLiteBatchItem[], ...commitWrites as SQLiteBatchItem[]);
+    }
+
     // The gift-card hold (§4.3): after the order row, which it references.
     const redemptions = payload.giftCardRedemptions ?? [];
     if (redemptions.length > 0) {
@@ -892,6 +908,10 @@ export async function commitStorefrontOrderPayload(
                 };
             }
 
+            // Checked first: its marker is specific; the others' fallbacks are not.
+            if (isAppStorageCommitConflict(error)) {
+                throw new ValidationError(await readCheckoutCopy(db, "checkoutAppOfferChangedText"), { reason: APP_OFFER_CHANGED_REASON });
+            }
             const guardError = checkoutGuardError(error);
             if (guardError) throw guardError;
 

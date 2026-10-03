@@ -22,6 +22,8 @@ import {
   storefrontTemplateTheme,
   type StorefrontSection,
 } from "@scalius/shared/storefront-theme";
+import { PLUGIN_API_VERSION, parsePluginManifest, pluginGrantKey, pluginGrantRequest } from "@scalius/shared/plugins";
+import { recordIndexColumns } from "@scalius/core/modules/plugins";
 
 /** Seconds; 2026-09-21T14:13:20Z. Simulated time starts here. */
 export const DVC_SEED_EPOCH = 1_790_000_000;
@@ -77,6 +79,48 @@ export function everySectionTheme() {
 }
 const q = (value: unknown) => `'${(typeof value === "string" ? value : JSON.stringify(value)).replace(/'/g, "''")}'`;
 const T = DVC_SEED_EPOCH;
+
+/**
+ * Installed apps and their records (0110 registers the plugin tables): an
+ * active app with every index slot filled and a disabled one, so the
+ * generator can insert, update and delete each plugin table and move every
+ * noise column (revisions, index columns, timestamps, actors).
+ */
+function pluginSeedSql(): string {
+  const storage = { notes: { indexes: ["owner", "kind", "at", "tag"], unique: ["ref", "code"] } };
+  const manifestOf = (id: string) => {
+    const parsed = parsePluginManifest({
+      id, name: `DVC app ${id}`, version: "1.0.0", apiVersion: PLUGIN_API_VERSION, description: "A DVC seed app.",
+      author: { name: "DVC" }, events: ["order.paid"], functions: [{ point: "checkout.discounts" }], storage,
+    });
+    if (!parsed.ok) throw new Error(`DVC seed manifest: ${JSON.stringify(parsed.issues)}`);
+    return parsed.manifest;
+  };
+  const active = manifestOf("acme.dvc-active");
+  const disabled = manifestOf("acme.dvc-disabled");
+  const grant = (manifest: ReturnType<typeof manifestOf>) => pluginGrantRequest(manifest);
+  const record = (id: string, data: Record<string, unknown>, at: number) => {
+    const columns = recordIndexColumns(storage.notes, data);
+    const value = (column: string) => (columns[column] === null ? "NULL" : q(columns[column]));
+    return `('acme.dvc-active', 'notes', ${q(id)}, ${q(data)}, ${at - T + 1}, ${value("idx1")}, ${value("idx2")}, ${value("idx3")}, ${value("idx4")}, ${value("uq1")}, ${value("uq2")}, ${at}, ${at})`;
+  };
+  return `
+  INSERT INTO user (id, name, email, email_verified, role, is_super_admin) VALUES
+    ('usr_dvc_owner', 'Owner', 'owner@dvc.test', 1, 'admin', 1),
+    ('usr_dvc_staff', 'Staff', 'staff@dvc.test', 1, 'admin', 0);
+  INSERT INTO plugin_installations (plugin_id, version, source, bundle_sha256, manifest_json, grant_json, grant_key, status, failure_reason, settings_json, revision, installed_by, activated_by, installed_at, activated_at, updated_at) VALUES
+    ('acme.dvc-active', '1.0.0', 'upload', '${"a".repeat(64)}', ${q(active)}, ${q(grant(active))}, ${q(pluginGrantKey(grant(active)))}, 'active', NULL, '{}', 2, 'usr_dvc_owner', 'usr_dvc_owner', ${T}, ${T + 60}, ${T + 60}),
+    ('acme.dvc-disabled', '1.0.0', 'upload', '${"b".repeat(64)}', ${q(disabled)}, ${q(grant(disabled))}, ${q(pluginGrantKey(grant(disabled)))}, 'disabled', 'The app could not be loaded.', '{}', 3, 'usr_dvc_staff', 'usr_dvc_staff', ${T + 10}, ${T + 70}, ${T + 90});
+  INSERT INTO plugin_registrations (kind, name, plugin_id, priority) VALUES
+    ('function', 'checkout.discounts', 'acme.dvc-active', 100),
+    ('event', 'order.paid', 'acme.dvc-active', 100),
+    ('function', 'checkout.discounts', 'acme.dvc-disabled', 200);
+  INSERT INTO plugin_records (plugin_id, collection, id, data_json, revision, idx1, idx2, idx3, idx4, uq1, uq2, created_at, updated_at) VALUES
+    ${record("n1", { owner: "c1", kind: "earn", at: 1, tag: "eid", ref: "r1", code: "A" }, T + 1)},
+    ${record("n2", { owner: "c2", kind: "spend", at: 2, tag: "vip", ref: "r2", code: "B" }, T + 2)},
+    ${record("n3", { owner: "c3", kind: "earn", at: 3, tag: "new", ref: "r3", code: "C" }, T + 3)};
+  `;
+}
 
 function seedSql(): string {
   const promoStart = DVC_IDS.promotionBoundaries[0];
@@ -337,6 +381,7 @@ function seedSql(): string {
 /** Seed the store into a freshly migrated database, then build the projections a live store keeps. */
 export async function seedDvcStore(sqlite: DatabaseSync, db: Database): Promise<void> {
   sqlite.exec(seedSql());
+  sqlite.exec(pluginSeedSql());
   await rebuildCatalogProjections(db);
   await refreshProductSalesStats(db);
   await refreshProductRecommendations(db, [...DVC_IDS.products]);

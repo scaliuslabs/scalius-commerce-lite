@@ -16,7 +16,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("../../integrations/email", () => ({ sendEmail: mocks.sendEmail }));
 vi.mock("../../integrations/sms", () => ({
   getSmsProviderReadiness: vi.fn(async () => ({ status: "ready", activeProvider: "gennet", issues: [] })),
-  getActiveSmsProvider: vi.fn(async () => ({ name: "gennet", sendSms: mocks.sendSms })),
+  getActiveSmsProvider: vi.fn(async () => ({ id: "gennet", label: "GenNet iSMS", send: (input: unknown) => mocks.sendSms(input) })),
 }));
 vi.mock("../../integrations/firebase/settings", () => ({ readFirebaseServiceAccountJson: vi.fn(async () => "{}") }));
 vi.mock("../../integrations/firebase/admin", () => ({

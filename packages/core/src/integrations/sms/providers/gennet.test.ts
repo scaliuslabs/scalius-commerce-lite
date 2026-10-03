@@ -1,17 +1,38 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { GennetProvider } from "./gennet";
+import type { StoredSms } from "../port";
+import { gennetSms } from "./gennet";
 
-describe("GennetProvider", () => {
+function stored(values: { gennetApiToken: string; gennetBaseUrl: string; gennetSid: string }): StoredSms {
+  return {
+    value: {
+      activeProvider: "gennet",
+      bdbulksmsToken: "",
+      mimsmsUsername: "",
+      mimsmsApiKey: "",
+      mimsmsSenderName: "",
+      smsnetbdApiKey: "",
+      smsnetbdSenderId: "",
+      ...values,
+    },
+    revision: 1,
+    stored: true,
+    invalid: false,
+    secretErrors: {},
+    secretsConfigured: {},
+  };
+}
+
+describe("GenNet SMS", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
   it("rejects unsafe provider base URLs before dispatch", () => {
-    expect(new GennetProvider({
-      apiToken: "merchant-token",
-      baseUrl: "http://localhost:8787?token=secret",
-      sid: "BRAND",
-    }).validateConfig()).toContain("absolute HTTPS URL");
+    expect(gennetSms.configure(stored({
+      gennetApiToken: "merchant-token",
+      gennetBaseUrl: "http://localhost:8787?token=secret",
+      gennetSid: "BRAND",
+    }))).toEqual({ error: expect.stringContaining("absolute HTTPS URL") });
   });
 
   it("uses the deterministic client reference as csms_id", async () => {
@@ -31,16 +52,16 @@ describe("GennetProvider", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const provider = new GennetProvider({
-      apiToken: "token",
-      baseUrl: "https://sms.example.com/",
-      sid: "BRAND",
-    });
-
-    const result = await provider.sendSms({
+    const result = await gennetSms.send({
       to: "+8801700000000",
       message: "Order update",
       clientReference: "outbox_sms:recipient_hash",
+    }, {
+      settings: {
+        apiToken: "token",
+        baseUrl: "https://sms.example.com/",
+        sid: "BRAND",
+      },
     });
 
     expect(result).toMatchObject({
@@ -65,16 +86,16 @@ describe("GennetProvider", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const provider = new GennetProvider({
-      apiToken: "token",
-      baseUrl: "https://sms.example.com",
-      sid: "BRAND",
-    });
-
-    const result = await provider.sendSms({
+    const result = await gennetSms.send({
       to: "+8801700000000",
       message: "Order update",
       clientReference: "outbox_sms:recipient_hash",
+    }, {
+      settings: {
+        apiToken: "token",
+        baseUrl: "https://sms.example.com",
+        sid: "BRAND",
+      },
     });
 
     expect(result).toMatchObject({

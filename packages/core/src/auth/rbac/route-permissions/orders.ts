@@ -37,6 +37,9 @@ export const ORDER_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/orders/*/payment-recovery-link": {
     POST: { permission: PERMISSIONS.ORDERS_EDIT },
   },
+  "/api/v1/admin/orders/*/holds/*/release": {
+    POST: { permission: PERMISSIONS.ORDERS_CHANGE_STATUS },
+  },
   "/api/v1/admin/orders/*/amendments": {
     POST: { permission: PERMISSIONS.ORDERS_EDIT },
   },

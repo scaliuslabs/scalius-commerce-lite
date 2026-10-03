@@ -10,7 +10,7 @@ import {
     PaymentRecordStatus,
     PaymentStatus,
 } from "@scalius/database/schema";
-import { getPaymentGateway } from "../../payments/gateways/registry";
+import { paymentProvidersFor, type PaymentProviders, type PaymentProvidersSource } from "../../payments/gateways/registry";
 import { eq } from "drizzle-orm";
 import { fromMinor } from "@scalius/shared/money";
 import { NotFoundError, ValidationError, ConflictError } from "@scalius/core/errors";
@@ -26,6 +26,12 @@ import {
 
 /** Buyer recovery links continue a hosted (redirect) gateway checkout. */
 export type BuyerRecoveryPaymentMethod = string;
+
+export interface RecoveryLinkOptions {
+    nowSeconds?: number;
+    /** The request's gateways (an app's hosted gateway qualifies); built-in ones alone by default. */
+    paymentProviders?: PaymentProvidersSource;
+}
 export type RecoveryLinkPaymentType = "full" | "deposit" | "balance";
 
 export interface OrderPaymentRecoveryLink {
@@ -47,8 +53,11 @@ export interface OrderPaymentRecoveryPreview {
     paymentRecovery: OrderPaymentRecoverySummary;
 }
 
-function isBuyerRecoveryPaymentMethod(method: string | null | undefined): method is BuyerRecoveryPaymentMethod {
-    return getPaymentGateway(method)?.flow === "hosted";
+function isBuyerRecoveryPaymentMethod(
+    method: string | null | undefined,
+    providers: PaymentProviders,
+): method is BuyerRecoveryPaymentMethod {
+    return providers.get(method)?.flow === "hosted";
 }
 
 function isRecoveryLinkPaymentType(value: string | null | undefined): value is RecoveryLinkPaymentType {
@@ -58,7 +67,7 @@ function isRecoveryLinkPaymentType(value: string | null | undefined): value is R
 async function resolveOrderPaymentRecoveryPreview(
     db: Database,
     orderId: string,
-    options: { nowSeconds?: number } = {},
+    options: RecoveryLinkOptions = {},
 ): Promise<OrderPaymentRecoveryPreview> {
     const nowSeconds = options.nowSeconds ?? Math.floor(Date.now() / 1000);
     const order = await db
@@ -87,7 +96,7 @@ async function resolveOrderPaymentRecoveryPreview(
     if (order.status !== OrderStatus.INCOMPLETE) {
         throw new ValidationError("Only incomplete hosted-payment orders can receive a buyer recovery link.");
     }
-    if (!isBuyerRecoveryPaymentMethod(order.paymentMethod)) {
+    if (!isBuyerRecoveryPaymentMethod(order.paymentMethod, await paymentProvidersFor(options.paymentProviders, order.paymentMethod))) {
         throw new ValidationError("Order is not eligible for buyer hosted-payment recovery.");
     }
     if (
@@ -192,7 +201,7 @@ async function resolveOrderPaymentRecoveryPreview(
 export async function previewOrderPaymentRecoveryLink(
     db: Database,
     orderId: string,
-    options: { nowSeconds?: number } = {},
+    options: RecoveryLinkOptions = {},
 ): Promise<OrderPaymentRecoveryPreview> {
     return resolveOrderPaymentRecoveryPreview(db, orderId, options);
 }
@@ -204,10 +213,10 @@ export async function previewOrderPaymentRecoveryLink(
 export async function createOrderPaymentRecoveryLink(
     db: Database,
     orderId: string,
-    options: { nowSeconds?: number; source?: string } = {},
+    options: RecoveryLinkOptions & { source?: string } = {},
 ): Promise<OrderPaymentRecoveryLink> {
     const nowSeconds = options.nowSeconds ?? Math.floor(Date.now() / 1000);
-    const preview = await resolveOrderPaymentRecoveryPreview(db, orderId, { nowSeconds });
+    const preview = await resolveOrderPaymentRecoveryPreview(db, orderId, { ...options, nowSeconds });
     const receiptToken = createOrderReceiptToken();
     const receipt = await recordOrderReceipt(db, {
         orderId,

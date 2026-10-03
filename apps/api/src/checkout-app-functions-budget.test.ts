@@ -3,9 +3,10 @@
 // and `waves` the dependent rounds, metered the way the storefront render
 // budget meters pages. The guarantees:
 //
-// - No app implements a point: the registration read rides the route's first
-//   wave (one more round trip, zero more waves), and the order's read batch
-//   carries it as one more statement (zero more round trips). No app call.
+// - No app implements a point: the registration read (checkout functions and
+//   payment providers, one statement) rides the route's first wave (one more
+//   round trip, zero more waves), and the order's read batch carries it as one
+//   more statement (zero more round trips). No app call.
 // - An app implements a point: one more wave for the app cart's facts (one
 //   batch); the app calls themselves read nothing.
 import { OpenAPIHono } from "@hono/zod-openapi";
@@ -28,6 +29,8 @@ vi.mock("@scalius/core/modules/plugins", async (importOriginal) => {
     ...actual,
     listActiveFunctionRegistrations: (db: Parameters<typeof actual.listActiveFunctionRegistrations>[0]) =>
       mocks.skipRegistrationRead ? Promise.resolve([]) : actual.listActiveFunctionRegistrations(db),
+    listActiveCheckoutRegistrations: (db: Parameters<typeof actual.listActiveCheckoutRegistrations>[0]) =>
+      mocks.skipRegistrationRead ? Promise.resolve([]) : actual.listActiveCheckoutRegistrations(db),
   };
 });
 

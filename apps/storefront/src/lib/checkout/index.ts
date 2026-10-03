@@ -43,6 +43,7 @@ import {
 import { normalizeCheckoutRedirectUrl } from "./redirect-url";
 import {
   getGatewayPresentation,
+  isAppGatewayId,
   type GatewayPresentation,
 } from "./gateway-presentation";
 import { isGatewayEligibleForPaymentAmount } from "./gateway-amount-eligibility";
@@ -939,6 +940,21 @@ function paymentActionLabel(methodId: string): string {
     : formatCheckoutLanguageText(checkoutCopy.payAmountText, { amount: formatted });
 }
 
+/**
+ * An app's wallet (bKash, Nagad, …) opens the provider's own page: the buyer
+ * is told they are leaving the store to pay, and, when the page is slow to
+ * open on a phone network, that it is still on its way (so they don't pay
+ * twice). Built-in gateways keep their own copy.
+ */
+function appRedirectOverlay(methodId: string) {
+  const provider = { provider: providerLabelFor(methodId) };
+  return {
+    title: formatCheckoutLanguageText(checkoutCopy.openingProviderTitle, provider),
+    message: formatCheckoutLanguageText(checkoutCopy.leavingToPayMessage, provider),
+    slowMessage: formatCheckoutLanguageText(checkoutCopy.redirectSlowMessage, provider),
+  };
+}
+
 function hostedRedirectMessage(methodId: string): string | null {
   return isHostedMethod(methodId)
     ? formatCheckoutLanguageText(checkoutCopy.providerRedirectText, { provider: providerLabelFor(methodId) })
@@ -1156,10 +1172,12 @@ async function processPayment(): Promise<void> {
           title: checkoutCopy.placingOrderTitle,
           message: checkoutCopy.placingOrderMessage,
         }
-      : {
-          title: checkoutCopy.openingSecurePaymentTitle,
-          message: checkoutCopy.openingSecurePaymentMessage,
-        },
+      : isAppGatewayId(processingMethod)
+        ? appRedirectOverlay(processingMethod)
+        : {
+            title: checkoutCopy.openingSecurePaymentTitle,
+            message: checkoutCopy.openingSecurePaymentMessage,
+          },
   );
 
   const handler = handlerFor(processingMethod);

@@ -464,6 +464,13 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 58,
         postgresStatements: 56,
       },
+      {
+        version: 110,
+        name: "0110_plugin_providers",
+        // SQLite rebuilds plugin_registrations (create, copy, drop, rename, index); PostgreSQL swaps its CHECK.
+        sqliteStatements: 22,
+        postgresStatements: 18,
+      },
     ]);
   });
 
@@ -622,6 +629,7 @@ describe("provider-neutral schema upgrades", () => {
           { version: 107, name: "0107_plugin_platform" },
           { version: 108, name: "0108_customer_marketing" },
           { version: 109, name: "0109_inventory_purchasing" },
+          { version: 110, name: "0110_plugin_providers" },
         ],
       });
     } finally {

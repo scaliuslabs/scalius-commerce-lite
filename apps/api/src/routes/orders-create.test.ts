@@ -38,13 +38,13 @@ const mocks = vi.hoisted(() => ({
   calculateStorefrontTaxQuote: vi.fn(),
   quoteStorefrontDiscount: vi.fn(),
   // No app implements a checkout function unless a test says so.
-  listActiveFunctionRegistrations: vi.fn(async () => [] as unknown[]),
+  listActiveCheckoutRegistrations: vi.fn(async () => [] as unknown[]),
 
 }));
 
 vi.mock("@scalius/core/modules/plugins", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@scalius/core/modules/plugins")>()),
-  listActiveFunctionRegistrations: mocks.listActiveFunctionRegistrations,
+  listActiveCheckoutRegistrations: mocks.listActiveCheckoutRegistrations,
 }));
 
 vi.mock("@scalius/core/modules/orders", async (importOriginal) => {
@@ -108,6 +108,7 @@ vi.mock("@scalius/core/modules/checkout", async (importOriginal) => {
         existingAttempt,
         commitReads: PREFETCHED_COMMIT_READS,
         functionRegistrations: [],
+        paymentProviders: (await import("@scalius/core/modules/payments")).BUILT_IN_PAYMENT_PROVIDERS,
         authority: () => {
           if (!snapshot) throw new Error("replay");
           if ("error" in snapshot) throw snapshot.error;
@@ -1650,7 +1651,7 @@ describe("create order commit/KV ordering", () => {
         expect.objectContaining({ partialPaymentEnabled: false }),
         expect.objectContaining({ classes: [], rates: [] }),
         { masterSecret: expect.toBeOneOf([null, expect.any(String)]) },
-        { apps: expect.objectContaining({ points: new Set() }), channel: "online_store" },
+        { apps: expect.objectContaining({ points: new Set() }), channel: "online_store", paymentProviders: expect.anything() },
     );
     } finally {
       consoleError.mockRestore();
@@ -2299,7 +2300,7 @@ describe("create order commit/KV ordering", () => {
       expect.anything(),
       expect.anything(),
       { masterSecret: expect.toBeOneOf([null, expect.any(String)]) },
-      { apps: expect.objectContaining({ points: new Set() }), channel: "online_store" },
+      { apps: expect.objectContaining({ points: new Set() }), channel: "online_store", paymentProviders: expect.anything() },
     );
     expect(mocks.commitStorefrontOrderPayload).toHaveBeenCalledOnce();
   });
@@ -2390,7 +2391,7 @@ describe("create order commit/KV ordering", () => {
       expect.objectContaining({ partialPaymentEnabled: false }),
       expect.objectContaining({ classes: [], rates: [] }),
       { masterSecret: expect.toBeOneOf([null, expect.any(String)]) },
-      { apps: expect.objectContaining({ points: new Set() }), channel: "online_store" },
+      { apps: expect.objectContaining({ points: new Set() }), channel: "online_store", paymentProviders: expect.anything() },
     );
     expect(mocks.commitStorefrontOrderPayload).toHaveBeenCalledOnce();
   });
@@ -2436,7 +2437,7 @@ describe("create order commit/KV ordering", () => {
       expect.anything(),
       expect.anything(),
       { masterSecret: expect.toBeOneOf([null, expect.any(String)]) },
-      { apps: expect.objectContaining({ points: new Set() }), channel: "online_store" },
+      { apps: expect.objectContaining({ points: new Set() }), channel: "online_store", paymentProviders: expect.anything() },
     );
     expect(mocks.commitStorefrontOrderPayload).toHaveBeenCalledOnce();
   });

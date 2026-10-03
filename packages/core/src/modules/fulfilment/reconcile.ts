@@ -8,6 +8,7 @@ import {
     ShipmentStatus,
 } from "@scalius/database/schema";
 import { lookupShipmentByMerchantOrderId } from "../delivery/delivery.service";
+import type { CourierProvidersSource } from "../delivery/couriers/registry";
 import { PROVIDER_OUTCOME_UNKNOWN } from "../delivery/types";
 import {
     assertNoActiveRefundAttempt,
@@ -243,6 +244,8 @@ export async function lookupUnknownOrderShipment(
         operationKey: string;
         actorId: string | null;
         encryptionKey?: string;
+        /** The request's couriers (app couriers join here); absent: the built-in couriers. */
+        couriers?: CourierProvidersSource;
     },
 ): Promise<Extract<UnknownShipmentResolutionResult, { status: "repaired" }>> {
     let target = await readUnknownShipmentResolutionTarget(db, input.orderId, input.shipmentId);
@@ -258,16 +261,17 @@ export async function lookupUnknownOrderShipment(
         target.shipment.providerId!,
         input.orderId,
         input.encryptionKey,
+        input.couriers,
     );
     if (!lookup.confirmed) throw new ConflictError(lookup.message);
     if (lookup.status === ShipmentStatus.UNKNOWN) {
         throw new ConflictError(
-            "Steadfast did not return a recognized shipment state. The recovery lock remains active.",
+            `${lookup.courier} did not return a recognized shipment state. The recovery lock remains active.`,
         );
     }
     if (lookup.status === ShipmentStatus.CANCELLED) {
         throw new ConflictError(
-            "Steadfast confirms this order's booking was cancelled. Record a courier-confirmed cancellation to release the shipment lock.",
+            `${lookup.courier} confirms this order's booking was cancelled. Record a courier-confirmed cancellation to release the shipment lock.`,
         );
     }
 
@@ -287,6 +291,7 @@ export async function lookupUnknownOrderShipment(
         },
         lookup.status,
         lookup.rawStatus,
+        lookup.externalId ?? undefined,
     );
     return finishConfirmedExistingShipment(db, input.orderId, input.shipmentId, "provider_confirmed_existing");
 }
@@ -298,6 +303,8 @@ export async function resolveUnknownOrderShipment(
         shipmentId: string;
         actorId: string | null;
         encryptionKey?: string;
+        /** The request's couriers (app couriers join here); absent: the built-in couriers. */
+        couriers?: CourierProvidersSource;
     },
 ): Promise<UnknownShipmentResolutionResult> {
     const target = await readUnknownShipmentResolutionTarget(db, input.orderId, input.shipmentId);
@@ -323,16 +330,18 @@ export async function resolveUnknownOrderShipment(
     if (replay) throw new ConflictError("This unknown shipment outcome was already resolved.");
     assertCurrentUnknownShipmentResolutionTarget(target, input.expectedOrderVersion);
 
-    if (input.outcome === "confirmed_not_created" && target.shipment.providerType === "steadfast") {
+    // A courier that can look the order up gets the last word on "not created".
+    if (input.outcome === "confirmed_not_created") {
         const lookup = await lookupShipmentByMerchantOrderId(
             db,
             target.shipment.providerId!,
             input.orderId,
             input.encryptionKey,
+            input.couriers,
         );
         if (lookup.confirmed) {
             throw new ConflictError(
-                "Steadfast confirms a shipment for this order. Record the confirmed shipment or a courier-confirmed cancellation; it cannot be marked not created.",
+                `${lookup.courier} confirms a shipment for this order. Record the confirmed shipment or a courier-confirmed cancellation; it cannot be marked not created.`,
             );
         }
     }

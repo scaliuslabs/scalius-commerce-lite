@@ -1,6 +1,7 @@
 import type { Database } from "@scalius/database/client";
 import { ValidationError } from "@scalius/core/errors";
 
+import type { PaymentProviders } from "../payments/gateways/registry";
 import { getCheckoutFlowValidationIssues } from "./checkout-flow";
 import { checkoutDocument, type AutoFulfilMode, type CheckoutFlowSettings, type CheckoutMode } from "./documents";
 import { readStoreCurrency, toStoreMinor } from "./store-money";
@@ -19,6 +20,8 @@ export interface SaveCheckoutFlowSettingsInput {
     autoFulfilMode?: AutoFulfilMode;
     expectedRevision: number;
     availablePaymentMethods: readonly string[];
+    /** The request's gateways, for app gateways' amount limits. */
+    paymentProviders?: PaymentProviders;
 }
 
 export async function getCheckoutFlowSettingsDocument(
@@ -41,6 +44,7 @@ export async function saveCheckoutFlowSettingsDocument(
         partialPaymentEnabled: input.partialPaymentEnabled,
         partialPaymentAmount: input.partialPaymentAmount,
         availablePaymentMethods: input.availablePaymentMethods,
+        paymentProviders: input.paymentProviders,
     });
     if (issues.length > 0) throw new ValidationError(issues.join(" "));
     // The advance a buyer pays online is money like any other: whole taka in BDT.

@@ -13,6 +13,7 @@ import {
   type OrderContactForCodes,
 } from "@scalius/shared/customer-auth-policy";
 import type { EmailRuntimeContext } from "../../integrations/email";
+import type { AppProviders } from "../../integrations/provider-port";
 import { isCustomerAuthChannelReady } from "../settings/checkout-readiness";
 import { customerAuthDocument } from "../settings/documents";
 import { maskContact } from "./customer-identity";
@@ -27,11 +28,12 @@ const CHANNEL_UNAVAILABLE: Record<CustomerAuthOtpChannel, string> = {
 export async function assertCustomerChannelReady(
   db: Database,
   channel: CustomerAuthOtpChannel,
-  input: { emailEnv?: EmailRuntimeContext["env"]; credentialEncryptionKey?: string },
+  input: { emailEnv?: EmailRuntimeContext["env"]; credentialEncryptionKey?: string; appProviders?: AppProviders },
 ): Promise<void> {
   const ready = await isCustomerAuthChannelReady(db, channel, {
     encryptionKey: input.credentialEncryptionKey,
     runtimeEnv: input.emailEnv,
+    appProviders: input.appProviders,
   });
   if (!ready) throw new ServiceUnavailableError(CHANNEL_UNAVAILABLE[channel]);
 }
@@ -44,10 +46,11 @@ export async function phoneCodeChannel(
   db: Database,
   identity: CustomerIdentitySettings,
   credentialEncryptionKey: string | undefined,
+  appProviders?: AppProviders,
 ): Promise<CustomerAuthOtpChannel | null> {
   const channel = resolveSignInChannel(identity.channels, "phone");
   if (!channel) return null;
-  const ready = await isCustomerAuthChannelReady(db, channel, { encryptionKey: credentialEncryptionKey });
+  const ready = await isCustomerAuthChannelReady(db, channel, { encryptionKey: credentialEncryptionKey, appProviders });
   return ready ? channel : null;
 }
 
@@ -94,7 +97,7 @@ export function listOrderCodeOptions(
 export async function chooseOrderCodeChannel(
   db: Database,
   order: OrderContactForCodes,
-  input: { channel?: CustomerAuthOtpChannel; emailEnv?: EmailRuntimeContext["env"]; credentialEncryptionKey?: string },
+  input: { channel?: CustomerAuthOtpChannel; emailEnv?: EmailRuntimeContext["env"]; credentialEncryptionKey?: string; appProviders?: AppProviders },
 ): Promise<{ channel: CustomerAuthOtpChannel; method: "email" | "phone"; target: string; destination: string }> {
   const identity = await readCustomerIdentity(db);
   const options = orderCodeChannels(identity, order);
@@ -103,6 +106,7 @@ export async function chooseOrderCodeChannel(
   const ready = await isCustomerAuthChannelReady(db, chosen.channel, {
     encryptionKey: input.credentialEncryptionKey,
     runtimeEnv: input.emailEnv,
+    appProviders: input.appProviders,
   });
   if (!ready) throw new OrderCodeChannelUnavailableError(chosen.channel);
   const method = channelRequestMethod(chosen.channel);

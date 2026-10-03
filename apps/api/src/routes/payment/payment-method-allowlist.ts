@@ -1,10 +1,11 @@
 import type { Database } from "@scalius/database/client";
 import { checkoutDocument, isCheckoutGatewayUsableForFlow } from "@scalius/core/modules/settings";
 import {
+  BUILT_IN_PAYMENT_PROVIDERS,
   getPaymentMethodPreferences,
-  paymentMethodLabel,
   type GatewaySettings,
   type PaymentGateway,
+  type PaymentProviders,
 } from "@scalius/core/modules/payments";
 import { ServiceUnavailableError } from "../../utils/api-error";
 
@@ -17,6 +18,7 @@ export interface CheckoutFlowSettings {
 export async function assertGatewaySelectedForCheckout(
   db: Database,
   method: string,
+  providers: PaymentProviders = BUILT_IN_PAYMENT_PROVIDERS,
 ): Promise<CheckoutFlowSettings> {
   const [preferences, settings] = await Promise.all([
     getPaymentMethodPreferences(db),
@@ -24,7 +26,7 @@ export async function assertGatewaySelectedForCheckout(
   ]);
 
   if (!(preferences.enabledMethods as readonly string[]).includes(method)) {
-    throw new ServiceUnavailableError(`${paymentMethodLabel(method)} gateway is not enabled for checkout.`);
+    throw new ServiceUnavailableError(`${providers.label(method)} gateway is not enabled for checkout.`);
   }
 
   const checkoutSettings: CheckoutFlowSettings = {
@@ -39,7 +41,7 @@ export async function assertGatewaySelectedForCheckout(
     partialPaymentEnabled: checkoutSettings.partialPaymentEnabled,
     partialPaymentAmount: checkoutSettings.partialPaymentAmount,
   })) {
-    throw new ServiceUnavailableError(`${paymentMethodLabel(method)} gateway is not available for the current checkout settings.`);
+    throw new ServiceUnavailableError(`${providers.label(method)} gateway is not available for the current checkout settings.`);
   }
 
   return checkoutSettings;

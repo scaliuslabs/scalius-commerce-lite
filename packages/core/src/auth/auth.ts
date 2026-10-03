@@ -11,6 +11,7 @@ import {
   joinPlatformUrl,
   type PlatformConfig,
 } from "@scalius/shared/platform-config";
+import type { AppProviders } from "../integrations/provider-port";
 import { identityHandoff } from "./identity-handoff";
 import { createTwoFactorRecoveryCodeStorage, generateRecoveryCodes } from "./two-factor-method-challenge";
 import {
@@ -30,12 +31,18 @@ import { hashPassword, verifyPassword } from "./password-hash";
 import { retryTransientD1 } from "../utils/transient-d1";
 import { readStoreName } from "../modules/notifications/store-messages";
 
-function getEmailRuntimeContext(env: Env) {
+function getEmailRuntimeContext(env: Env, appProviders: AppProviders | undefined) {
   const source = env as Record<string, unknown>;
   return {
     env: source,
     encryptionKey: source.CREDENTIAL_ENCRYPTION_KEY as string | undefined,
+    appProviders,
   };
+}
+
+export interface CreateAuthOptions {
+  /** The request's app providers: staff email (sign-in codes, invites, resets) goes through an app sender the merchant chose. */
+  appProviders?: AppProviders;
 }
 
 function readString(env: Env, key: string): string | undefined {
@@ -67,7 +74,7 @@ function originOf(url: string | undefined): string | undefined {
  * joined onto the full URL so the prefix survives. Nothing is read from
  * `process.env`; the request `Env` is the only source.
  */
-export function createAuth(env: Env) {
+export function createAuth(env: Env, options: CreateAuthOptions = {}) {
   const db = getDb(env);
 
   const secret = readString(env, "BETTER_AUTH_SECRET");
@@ -77,7 +84,7 @@ export function createAuth(env: Env) {
   const dashboardBasePath = dashboardBasePathFromUrl(dashboardUrl);
   const storefrontURL = originOf(readString(env, "STOREFRONT_URL"));
   const appName = "Scalius Commerce";
-  const emailRuntimeContext = getEmailRuntimeContext(env);
+  const emailRuntimeContext = getEmailRuntimeContext(env, options.appProviders);
   const platform = readPlatformConfig(env);
   const handoffConfig = platform?.identityHandoff ?? EMPTY_IDENTITY_HANDOFF_CONFIG;
 
@@ -240,7 +247,7 @@ export function createAuth(env: Env) {
         }
         // Accepting an invite sets a first password; only a real reset gets the notice.
         if (!wasInvite) {
-          await sendStaffPasswordChangedEmail({ db, env: emailRuntimeContext.env, dashboardUrl, user });
+          await sendStaffPasswordChangedEmail({ db, env: emailRuntimeContext.env, dashboardUrl, user, appProviders: options.appProviders });
         }
       },
     },
@@ -356,6 +363,6 @@ export type Auth = ReturnType<typeof createAuth>;
  * context into a later request. Keep this alias request-scoped like
  * `createAuth()`.
  */
-export function getAuth(env: Env): Auth {
-  return createAuth(env);
+export function getAuth(env: Env, options: CreateAuthOptions = {}): Auth {
+  return createAuth(env, options);
 }

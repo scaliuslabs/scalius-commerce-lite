@@ -1,5 +1,6 @@
 import type { CustomerPaymentRecovery } from "./api/customer-auth";
 import { normalizeHostedCheckoutUrl } from "./checkout/redirect-url";
+import { isPaymentMethodIdShape } from "./payment-method-id";
 
 export type AccountPaymentRecoveryAction = {
   visible: boolean;
@@ -68,7 +69,7 @@ export function getAccountPaymentReturnNotice(
   result: string | null | undefined,
 ): AccountPaymentReturnNotice {
   const gateway = normalize(payment);
-  if (!/^[a-z][a-z0-9_-]{0,63}$/.test(gateway) || gateway === "cod") {
+  if (!isPaymentMethodIdShape(gateway) || gateway === "cod") {
     return null;
   }
 

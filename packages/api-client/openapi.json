@@ -8227,11 +8227,26 @@
                 "priority": {
                   "type": "integer",
                   "description": "Lower runs first among apps at the same point."
+                },
+                "onError": {
+                  "type": "string",
+                  "enum": [
+                    "skip",
+                    "block"
+                  ],
+                  "description": "block: the app pauses checkout when it cannot answer (needs approval)."
+                },
+                "snapshotCollection": {
+                  "type": "string",
+                  "nullable": true,
+                  "description": "checkout.discounts: the app reads and updates the signed-in buyer's record in this collection with each order."
                 }
               },
               "required": [
                 "point",
-                "priority"
+                "priority",
+                "onError",
+                "snapshotCollection"
               ]
             },
             "description": "The checkout function points the app implements (cart rules, discounts, delivery options, payment methods, order risk)."
@@ -8933,6 +8948,13 @@
               "type": "string"
             }
           },
+          "blockingFunctions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Function points where the app may pause checkout when it cannot answer."
+          },
           "providers": {
             "type": "array",
             "items": {
@@ -8963,6 +8985,7 @@
           "allowedHosts",
           "events",
           "functions",
+          "blockingFunctions",
           "providers",
           "publicRoutes",
           "storefrontScripts",
@@ -31143,12 +31166,8 @@
                   },
                   "paymentMethod": {
                     "type": "string",
-                    "enum": [
-                      "stripe",
-                      "sslcommerz",
-                      "cod"
-                    ],
-                    "description": "Selected active checkout payment method. Online methods continue through storefront.orders.payment.begin."
+                    "maxLength": 160,
+                    "description": "Selected active checkout payment method (`cod`, a gateway id, or an app provider's `<plugin id>:<provider id>`). Online methods continue through storefront.orders.payment.begin."
                   }
                 },
                 "required": [
@@ -76069,12 +76088,7 @@
                   },
                   "paymentMethod": {
                     "type": "string",
-                    "enum": [
-                      "stripe",
-                      "sslcommerz",
-                      "cod",
-                      "gift_card"
-                    ],
+                    "maxLength": 160,
                     "default": "cod"
                   },
                   "inventoryPool": {
@@ -161673,12 +161687,20 @@
                                 "type": "boolean"
                               },
                               "providerType": {
-                                "type": "string",
-                                "enum": [
-                                  "default",
-                                  "fraudbd",
-                                  "fraudguard",
-                                  "ecourier"
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "default",
+                                      "fraudbd",
+                                      "fraudguard",
+                                      "ecourier"
+                                    ]
+                                  },
+                                  {
+                                    "type": "string",
+                                    "maxLength": 160
+                                  }
                                 ]
                               }
                             },
@@ -161998,50 +162020,77 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object",
-                "properties": {
-                  "name": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 100
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 100
+                      },
+                      "apiUrl": {
+                        "type": "string",
+                        "maxLength": 2048,
+                        "format": "uri"
+                      },
+                      "apiKey": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 4096
+                      },
+                      "apiSecret": {
+                        "type": "string",
+                        "maxLength": 4096
+                      },
+                      "userId": {
+                        "type": "string",
+                        "maxLength": 4096
+                      },
+                      "isActive": {
+                        "type": "boolean",
+                        "default": true
+                      },
+                      "providerType": {
+                        "type": "string",
+                        "enum": [
+                          "default",
+                          "fraudbd",
+                          "fraudguard",
+                          "ecourier"
+                        ],
+                        "default": "default"
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "apiUrl",
+                      "apiKey"
+                    ]
                   },
-                  "apiUrl": {
-                    "type": "string",
-                    "maxLength": 2048,
-                    "format": "uri"
-                  },
-                  "apiKey": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 4096
-                  },
-                  "apiSecret": {
-                    "type": "string",
-                    "maxLength": 4096
-                  },
-                  "userId": {
-                    "type": "string",
-                    "maxLength": 4096
-                  },
-                  "isActive": {
-                    "type": "boolean",
-                    "default": true
-                  },
-                  "providerType": {
-                    "type": "string",
-                    "enum": [
-                      "default",
-                      "fraudbd",
-                      "fraudguard",
-                      "ecourier"
+                  {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 100
+                      },
+                      "isActive": {
+                        "type": "boolean",
+                        "default": true
+                      },
+                      "providerType": {
+                        "type": "string",
+                        "maxLength": 160
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "providerType"
                     ],
-                    "default": "default"
+                    "additionalProperties": false
                   }
-                },
-                "required": [
-                  "name",
-                  "apiUrl",
-                  "apiKey"
                 ]
               }
             }
@@ -162093,12 +162142,20 @@
                           "type": "boolean"
                         },
                         "providerType": {
-                          "type": "string",
-                          "enum": [
-                            "default",
-                            "fraudbd",
-                            "fraudguard",
-                            "ecourier"
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "default",
+                                "fraudbd",
+                                "fraudguard",
+                                "ecourier"
+                              ]
+                            },
+                            {
+                              "type": "string",
+                              "maxLength": 160
+                            }
                           ]
                         }
                       },
@@ -162426,55 +162483,87 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object",
-                "properties": {
-                  "id": {
-                    "type": "string",
-                    "minLength": 1
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 100
+                      },
+                      "apiUrl": {
+                        "type": "string",
+                        "maxLength": 2048,
+                        "format": "uri"
+                      },
+                      "apiKey": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 4096
+                      },
+                      "apiSecret": {
+                        "type": "string",
+                        "maxLength": 4096
+                      },
+                      "userId": {
+                        "type": "string",
+                        "maxLength": 4096
+                      },
+                      "isActive": {
+                        "type": "boolean",
+                        "default": true
+                      },
+                      "providerType": {
+                        "type": "string",
+                        "enum": [
+                          "default",
+                          "fraudbd",
+                          "fraudguard",
+                          "ecourier"
+                        ],
+                        "default": "default"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "name",
+                      "apiUrl",
+                      "apiKey"
+                    ]
                   },
-                  "name": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 100
-                  },
-                  "apiUrl": {
-                    "type": "string",
-                    "maxLength": 2048,
-                    "format": "uri"
-                  },
-                  "apiKey": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 4096
-                  },
-                  "apiSecret": {
-                    "type": "string",
-                    "maxLength": 4096
-                  },
-                  "userId": {
-                    "type": "string",
-                    "maxLength": 4096
-                  },
-                  "isActive": {
-                    "type": "boolean",
-                    "default": true
-                  },
-                  "providerType": {
-                    "type": "string",
-                    "enum": [
-                      "default",
-                      "fraudbd",
-                      "fraudguard",
-                      "ecourier"
+                  {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 100
+                      },
+                      "isActive": {
+                        "type": "boolean",
+                        "default": true
+                      },
+                      "providerType": {
+                        "type": "string",
+                        "maxLength": 160
+                      },
+                      "id": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "providerType",
+                      "id"
                     ],
-                    "default": "default"
+                    "additionalProperties": false
                   }
-                },
-                "required": [
-                  "id",
-                  "name",
-                  "apiUrl",
-                  "apiKey"
                 ]
               }
             }
@@ -162526,12 +162615,20 @@
                           "type": "boolean"
                         },
                         "providerType": {
-                          "type": "string",
-                          "enum": [
-                            "default",
-                            "fraudbd",
-                            "fraudguard",
-                            "ecourier"
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "default",
+                                "fraudbd",
+                                "fraudguard",
+                                "ecourier"
+                              ]
+                            },
+                            {
+                              "type": "string",
+                              "maxLength": 160
+                            }
                           ]
                         }
                       },
@@ -177213,6 +177310,62 @@
                         "activeDefaultMethod": {
                           "type": "string"
                         },
+                        "gateways": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "label": {
+                                "type": "string"
+                              },
+                              "checkoutName": {
+                                "type": "string"
+                              },
+                              "flow": {
+                                "type": "string",
+                                "enum": [
+                                  "card",
+                                  "hosted"
+                                ]
+                              },
+                              "pluginId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "supportsRefund": {
+                                "type": "boolean"
+                              },
+                              "chargeCurrencies": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "any"
+                                    ]
+                                  },
+                                  {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  }
+                                ]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "label",
+                              "checkoutName",
+                              "flow",
+                              "pluginId",
+                              "supportsRefund",
+                              "chargeCurrencies"
+                            ]
+                          }
+                        },
                         "gatewayStatus": {
                           "type": "object",
                           "properties": {
@@ -177377,13 +177530,66 @@
                             "stripe",
                             "sslcommerz",
                             "cod"
-                          ]
+                          ],
+                          "additionalProperties": {
+                            "type": "object",
+                            "properties": {
+                              "configured": {
+                                "type": "boolean"
+                              },
+                              "enabled": {
+                                "type": "boolean"
+                              },
+                              "usable": {
+                                "type": "boolean"
+                              },
+                              "missingFields": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "credentialErrors": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "blockedReason": {
+                                "type": "string"
+                              },
+                              "providerEnabled": {
+                                "type": "boolean"
+                              },
+                              "checkoutSelected": {
+                                "type": "boolean"
+                              },
+                              "checkoutVisible": {
+                                "type": "boolean"
+                              },
+                              "environment": {
+                                "type": "string",
+                                "enum": [
+                                  "test",
+                                  "live",
+                                  "mixed",
+                                  "unknown",
+                                  "not_applicable"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "configured",
+                              "enabled"
+                            ]
+                          }
                         }
                       },
                       "required": [
                         "enabledMethods",
                         "defaultMethod",
                         "revision",
+                        "gateways",
                         "gatewayStatus"
                       ],
                       "additionalProperties": {}
@@ -177673,22 +177879,14 @@
                     "type": "array",
                     "items": {
                       "type": "string",
-                      "enum": [
-                        "stripe",
-                        "sslcommerz",
-                        "cod"
-                      ]
+                      "maxLength": 160
                     },
                     "minItems": 1,
-                    "maxItems": 3
+                    "maxItems": 20
                   },
                   "defaultMethod": {
                     "type": "string",
-                    "enum": [
-                      "stripe",
-                      "sslcommerz",
-                      "cod"
-                    ]
+                    "maxLength": 160
                   },
                   "expectedRevision": {
                     "type": "integer",
@@ -183184,10 +183382,18 @@
                       "type": "object",
                       "properties": {
                         "provider": {
-                          "type": "string",
-                          "enum": [
-                            "cloudflare",
-                            "resend"
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "cloudflare",
+                                "resend"
+                              ]
+                            },
+                            {
+                              "type": "string",
+                              "maxLength": 160
+                            }
                           ]
                         },
                         "apiKey": {
@@ -183547,10 +183753,18 @@
                     "minimum": 0
                   },
                   "provider": {
-                    "type": "string",
-                    "enum": [
-                      "cloudflare",
-                      "resend"
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "cloudflare",
+                          "resend"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "maxLength": 160
+                      }
                     ]
                   },
                   "apiKey": {
@@ -188135,7 +188349,7 @@
                               },
                               "type": {
                                 "type": "string",
-                                "maxLength": 50
+                                "maxLength": 160
                               },
                               "credentials": {
                                 "type": "string",
@@ -188616,7 +188830,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "oneOf": [
+                "anyOf": [
                   {
                     "type": "object",
                     "properties": {
@@ -188829,6 +189043,30 @@
                       "credentials",
                       "config"
                     ]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 100
+                      },
+                      "type": {
+                        "type": "string",
+                        "maxLength": 160,
+                        "description": "An installed app courier, <plugin id>:<provider id> (GET /admin/settings/providers?kind=courier lists them). Set it up in the app's settings."
+                      },
+                      "isActive": {
+                        "type": "boolean",
+                        "default": false
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "type"
+                    ],
+                    "additionalProperties": false
                   }
                 ]
               }
@@ -188863,7 +189101,7 @@
                         },
                         "type": {
                           "type": "string",
-                          "maxLength": 50
+                          "maxLength": 160
                         },
                         "credentials": {
                           "type": "string",
@@ -189349,7 +189587,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "oneOf": [
+                "anyOf": [
                   {
                     "type": "object",
                     "properties": {
@@ -189568,6 +189806,35 @@
                       "name",
                       "type"
                     ]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 100
+                      },
+                      "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 100
+                      },
+                      "type": {
+                        "type": "string",
+                        "maxLength": 160,
+                        "description": "An installed app courier, <plugin id>:<provider id> (GET /admin/settings/providers?kind=courier lists them). Set it up in the app's settings."
+                      },
+                      "isActive": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "name",
+                      "type"
+                    ],
+                    "additionalProperties": false
                   }
                 ]
               }
@@ -189602,7 +189869,7 @@
                         },
                         "type": {
                           "type": "string",
-                          "maxLength": 50
+                          "maxLength": 160
                         },
                         "credentials": {
                           "type": "string",
@@ -189807,7 +190074,7 @@
                         },
                         "type": {
                           "type": "string",
-                          "maxLength": 50
+                          "maxLength": 160
                         },
                         "credentials": {
                           "type": "string",
@@ -190847,7 +191114,7 @@
                         },
                         "type": {
                           "type": "string",
-                          "maxLength": 50
+                          "maxLength": 160
                         },
                         "credentials": {
                           "type": "string",
@@ -198419,13 +198686,7 @@
                         "activeProvider": {
                           "type": "string",
                           "nullable": true,
-                          "enum": [
-                            "smsnetbd",
-                            "bdbulksms",
-                            "mimsms",
-                            "gennet",
-                            null
-                          ]
+                          "maxLength": 160
                         },
                         "activeProviderConfigured": {
                           "type": "boolean"
@@ -198774,12 +199035,20 @@
                 "type": "object",
                 "properties": {
                   "activeProvider": {
-                    "type": "string",
-                    "enum": [
-                      "smsnetbd",
-                      "bdbulksms",
-                      "mimsms",
-                      "gennet"
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "smsnetbd",
+                          "bdbulksms",
+                          "mimsms",
+                          "gennet"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "maxLength": 160
+                      }
                     ]
                   },
                   "bdbulksmsToken": {
@@ -198851,13 +199120,7 @@
                         "activeProvider": {
                           "type": "string",
                           "nullable": true,
-                          "enum": [
-                            "smsnetbd",
-                            "bdbulksms",
-                            "mimsms",
-                            "gennet",
-                            null
-                          ]
+                          "maxLength": 160
                         },
                         "activeProviderConfigured": {
                           "type": "boolean"
@@ -202585,6 +202848,744 @@
         "x-scalius-rbac": {
           "type": "permission",
           "permission": "settings.general.edit"
+        }
+      }
+    },
+    "/api/v1/admin/settings/providers": {
+      "get": {
+        "operationId": "dashboard.settings_providers.list",
+        "tags": [
+          "Admin - Settings"
+        ],
+        "summary": "List the app providers of a port with their readiness",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "payment",
+                "courier",
+                "sms",
+                "email",
+                "fraud",
+                "tax"
+              ]
+            },
+            "required": true,
+            "name": "kind",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "App providers",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "providers": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "payment",
+                                  "courier",
+                                  "sms",
+                                  "email",
+                                  "fraud",
+                                  "tax"
+                                ]
+                              },
+                              "pluginId": {
+                                "type": "string"
+                              },
+                              "appName": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "operations": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "canTestConnection": {
+                                "type": "boolean"
+                              },
+                              "readiness": {
+                                "type": "object",
+                                "properties": {
+                                  "configured": {
+                                    "type": "boolean"
+                                  },
+                                  "enabled": {
+                                    "type": "boolean"
+                                  },
+                                  "usable": {
+                                    "type": "boolean"
+                                  },
+                                  "missingFields": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "credentialErrors": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "blockedReason": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "configured",
+                                  "enabled",
+                                  "usable",
+                                  "missingFields",
+                                  "credentialErrors"
+                                ]
+                              },
+                              "environment": {
+                                "type": "string",
+                                "enum": [
+                                  "test",
+                                  "live",
+                                  "unknown"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "kind",
+                              "pluginId",
+                              "appName",
+                              "name",
+                              "operations",
+                              "canTestConnection",
+                              "readiness",
+                              "environment"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "providers"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 16384,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "anyOf",
+          "permissions": [
+            "settings.delivery_providers.view",
+            "settings.fraud_checker.view",
+            "settings.general.view",
+            "taxes.view"
+          ]
+        }
+      }
+    },
+    "/api/v1/admin/settings/providers/{id}/test": {
+      "post": {
+        "operationId": "dashboard.settings_providers.test",
+        "tags": [
+          "Admin - Settings"
+        ],
+        "summary": "Test an app provider's connection",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 160
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The provider's answer",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "ok": {
+                          "type": "boolean"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "ok",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "security",
+          "openWorld": true,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "sequential",
+          "transport": "json",
+          "maximumResponseBytes": 8192,
+          "maxRequestBytes": 16384,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "anyOf",
+          "permissions": [
+            "settings.delivery_providers.edit",
+            "settings.fraud_checker.view",
+            "settings.general.edit",
+            "settings.notifications.edit",
+            "taxes.manage"
+          ]
         }
       }
     },
@@ -206954,13 +207955,8 @@
                   },
                   "gateway": {
                     "type": "string",
-                    "enum": [
-                      "gift_card",
-                      "stripe",
-                      "sslcommerz",
-                      "cod"
-                    ],
-                    "description": "Refund only payments taken by this method (gift_card: only the gift-card tenders)."
+                    "maxLength": 160,
+                    "description": "Refund only payments taken by this method (`cod`, a gateway id, an app provider's `<plugin id>:<provider id>`, or gift_card: only the gift-card tenders)."
                   },
                   "manualSettlementConfirmed": {
                     "type": "boolean"
@@ -214195,11 +215191,7 @@
           {
             "schema": {
               "type": "string",
-              "enum": [
-                "stripe",
-                "sslcommerz",
-                "cod"
-              ],
+              "maxLength": 160,
               "description": "Filter by payment method"
             },
             "required": false,
@@ -214787,6 +215779,10 @@
                                   null
                                 ]
                               },
+                              "onHold": {
+                                "type": "boolean",
+                                "description": "An app's hold for staff review is open: the order is not shipped or moved on until staff release it."
+                              },
                               "cod": {
                                 "type": "object",
                                 "nullable": true,
@@ -214862,6 +215858,7 @@
                               "channel",
                               "channelSource",
                               "openRequestType",
+                              "onHold",
                               "cod",
                               "refundDue",
                               "refundedAmount",
@@ -215695,11 +216692,7 @@
           {
             "schema": {
               "type": "string",
-              "enum": [
-                "stripe",
-                "sslcommerz",
-                "cod"
-              ]
+              "maxLength": 160
             },
             "required": false,
             "name": "paymentMethod",
@@ -216214,11 +217207,7 @@
           {
             "schema": {
               "type": "string",
-              "enum": [
-                "stripe",
-                "sslcommerz",
-                "cod"
-              ],
+              "maxLength": 160,
               "description": "Filter by payment gateway"
             },
             "required": false,
@@ -216717,6 +217706,10 @@
                                   null
                                 ]
                               },
+                              "onHold": {
+                                "type": "boolean",
+                                "description": "An app's hold for staff review is open: the order is not shipped or moved on until staff release it."
+                              },
                               "cod": {
                                 "type": "object",
                                 "nullable": true,
@@ -216792,6 +217785,7 @@
                               "channel",
                               "channelSource",
                               "openRequestType",
+                              "onHold",
                               "cod",
                               "refundDue",
                               "refundedAmount",
@@ -217207,11 +218201,7 @@
           {
             "schema": {
               "type": "string",
-              "enum": [
-                "stripe",
-                "sslcommerz",
-                "cod"
-              ],
+              "maxLength": 160,
               "description": "Filter by payment gateway"
             },
             "required": false,
@@ -221064,6 +222054,310 @@
         }
       }
     },
+    "/api/v1/admin/orders/{id}/holds/{holdId}/release": {
+      "post": {
+        "operationId": "dashboard.orders.release_hold",
+        "tags": [
+          "Admin - Orders"
+        ],
+        "summary": "Release an app's hold after staff review",
+        "description": "The order can be shipped, handed over and moved on again once no hold is open. Releasing a released hold changes nothing.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "holdId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The released hold",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "appId": {
+                          "type": "string"
+                        },
+                        "appName": {
+                          "type": "string"
+                        },
+                        "reason": {
+                          "type": "string"
+                        },
+                        "placedAt": {
+                          "type": "string"
+                        },
+                        "releasedAt": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "appId",
+                        "appName",
+                        "reason",
+                        "placedAt",
+                        "releasedAt"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        false
+                      ]
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "details": {}
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "security",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "orders.change_status"
+        }
+      }
+    },
     "/api/v1/admin/orders/{id}/payment-recovery-link": {
       "post": {
         "operationId": "dashboard.orders.payment_recovery_link",
@@ -221738,6 +223032,55 @@
                               "level",
                               "reasons",
                               "checkedAt"
+                            ]
+                          }
+                        },
+                        "holds": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "appId": {
+                                "type": "string"
+                              },
+                              "appName": {
+                                "type": "string"
+                              },
+                              "reason": {
+                                "type": "string"
+                              },
+                              "placedAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ]
+                              },
+                              "releasedAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  },
+                                  {}
+                                ]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "appId",
+                              "appName",
+                              "reason",
+                              "placedAt",
+                              "releasedAt"
                             ]
                           }
                         },
@@ -222439,6 +223782,10 @@
                             null
                           ]
                         },
+                        "onHold": {
+                          "type": "boolean",
+                          "description": "An app's hold for staff review is open: the order is not shipped or moved on until staff release it."
+                        },
                         "cod": {
                           "type": "object",
                           "nullable": true,
@@ -222845,6 +224192,7 @@
                         "pricesIncludeTax",
                         "discounts",
                         "appRiskChecks",
+                        "holds",
                         "status",
                         "paymentStatus",
                         "paymentMethod",
@@ -222875,6 +224223,7 @@
                         "channel",
                         "channelSource",
                         "openRequestType",
+                        "onHold",
                         "cod",
                         "refundDue",
                         "refundedAmount",
@@ -315823,7 +317172,7 @@
             "schema": {
               "type": "string",
               "minLength": 1,
-              "maxLength": 64
+              "maxLength": 160
             },
             "required": true,
             "name": "provider",
@@ -316351,7 +317700,7 @@
             "schema": {
               "type": "string",
               "minLength": 1,
-              "maxLength": 64
+              "maxLength": 160
             },
             "required": true,
             "name": "provider",
@@ -325761,6 +327110,14 @@
           ]
         },
         {
+          "operationId": "dashboard.orders.release_hold",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.orders.release_hold"
+          ]
+        },
+        {
           "operationId": "dashboard.orders.restore",
           "surface": "dashboard",
           "mode": "operation-fallback",
@@ -326344,6 +327701,22 @@
           "mode": "operation-fallback",
           "workflowIds": [
             "operation.dashboard.settings_emi.update"
+          ]
+        },
+        {
+          "operationId": "dashboard.settings_providers.list",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.settings_providers.list"
+          ]
+        },
+        {
+          "operationId": "dashboard.settings_providers.test",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.settings_providers.test"
           ]
         },
         {

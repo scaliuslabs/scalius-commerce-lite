@@ -28,9 +28,15 @@ export type PluginErrorCode =
   | "storage.unindexed_query"
   | "storage.invalid_cursor"
   | "storage.unique_violation"
+  /** A conditional write found the record changed (or present when it must not be). */
+  | "storage.conflict"
+  | "storage.invalid_batch"
   | "kv.invalid_key"
   | "kv.value_too_large"
   | "kv.invalid_ttl"
+  /** compareAndSet found another revision: the entry changed since it was read. */
+  | "kv.conflict"
+  | "kv.invalid_revision"
   | "api.unknown_operation"
   | "api.operation_forbidden"
   | "api.invalid_input"
@@ -59,8 +65,10 @@ const STATUS: Partial<Record<PluginErrorCode, number>> = {
   "delivery.not_retryable": 409,
   "settings.key_unavailable": 503,
   "storage.unique_violation": 409,
+  "storage.conflict": 409,
   "storage.record_too_large": 413,
   "kv.value_too_large": 413,
+  "kv.conflict": 409,
   "api.unknown_operation": 404,
   "api.operation_forbidden": 403,
   "http.not_allowed": 403,

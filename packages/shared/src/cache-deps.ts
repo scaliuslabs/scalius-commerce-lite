@@ -86,12 +86,12 @@ export const CACHE_DEP_KINDS = [
   "cf",
   /**
    * `plg:<pluginId>`: one app installation (status, version, grant,
-   * manifest, settings); `plg:*`: any installation (which apps are active).
-   * Advanced by the plugin module's own writes (core plugins/cache-deps.ts),
-   * in the same batch as the write: storefront app output is cached on it.
+   * manifest, settings) and its registrations; `plg:*`: any installation
+   * (which apps are active, which provide what). Storefront app output is
+   * cached on it.
    */
   "plg",
-  /** `plgs:<pluginId>:<collection>`: one storage collection of an app, advanced with every write to it. */
+  /** `plgs:<pluginId>:<collection>`: one storage collection of an app, advanced with every record write in it. */
   "plgs",
   /** `t:<table>`: coarse fallback, any buyer-visible change of the table. */
   "t",
@@ -708,6 +708,26 @@ const CACHE_DEP_TABLE_RULES = {
       })),
     ],
   },
+  // --- Apps (docs/platform/PLUGINS.md) -------------------------------------------
+  plugin_installations: {
+    kinds: ["plg"],
+    noise: ["revision", "updated_at", "installed_by", "activated_by", "installed_at", "activated_at", "failure_reason"],
+    note: "Storefront app output (sections, product blocks, scripts) and the checkout's app payment methods read the installation's status, version, grant, manifest and settings.",
+    rules: everyChange(own("plg", "plugin_id")),
+  },
+  plugin_registrations: {
+    kinds: ["plg"],
+    noise: [],
+    note: "Derived from the manifest in the batch of every installation write; read with the installation (which providers and functions an active app has).",
+    rules: everyChange(own("plg", "plugin_id")),
+  },
+  plugin_records: {
+    kinds: ["plgs"],
+    noise: ["revision", "created_at", "updated_at", "idx1", "idx2", "idx3", "idx4", "uq1", "uq2"],
+    note: "A storefront render reads only the collections its section declares in reads; the index columns are derived from data_json.",
+    rules: everyChange([{ prefix: "plgs:", columns: ["plugin_id", "collection"] }]),
+  },
+
   orders: {
     kinds: ["recommendation-signals"], noise: [],
     note: "Only live fallback ranking reads private order signals; no order or buyer identifier enters a dependency key.",
@@ -812,6 +832,7 @@ export const CACHE_DEP_EXEMPT_TABLES: Readonly<Record<string, string>> = {
   order_support_requests: PRIVATE,
   order_events: PRIVATE,
   payment_session_attempts: PRIVATE,
+  order_holds: PRIVATE,
   payment_plans: PRIVATE,
   cod_tracking: PRIVATE,
   webhook_events: PRIVATE,
@@ -840,12 +861,7 @@ export const CACHE_DEP_EXEMPT_TABLES: Readonly<Record<string, string>> = {
   event_outbox: PRIVATE,
   webhook_subscriptions: PRIVATE,
   webhook_event_deliveries: PRIVATE,
-  // Plugin runtime. Storefront app output (sections, product blocks, scripts)
-  // reads installations and declared collections and declares their keys
-  // itself; the plugin module advances those keys in the batch of each write.
-  plugin_installations: "App installations: storefront app output declares plg:<id> and plg:*, which every installation write advances in its own batch.",
-  plugin_registrations: PRIVATE,
-  plugin_records: "App storage: a storefront render reads only the collections its section declares, keyed plgs:<id>:<collection>, which every record write advances in its own batch.",
+  // Plugin runtime (installations, registrations and records are registered above).
   plugin_kv: "App key/value store: never readable while rendering storefront output (the bridge refuses it), so no public entry depends on it.",
   plugin_log_entries: PRIVATE,
   // Plugin event deliveries and cron claims (0107): platform bookkeeping.

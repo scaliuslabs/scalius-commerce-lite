@@ -18,7 +18,7 @@ Status reads are `GET /status_by_cid/{id}`, `/status_by_invoice/{invoice}`, and,
 
 The documentation calls invoice values unique, but a published bulk example repeats invoice values. Scalius therefore does not treat `invoice` as provider idempotency and does not issue speculative duplicate creates.
 
-Owning code/tests: [`providers/steadfast.ts`](../../packages/core/src/modules/delivery/providers/steadfast.ts), [`delivery.create-outcome.d1.test.ts`](../../packages/core/src/modules/delivery/delivery.create-outcome.d1.test.ts), and [`orders.fulfillment.ts`](../../packages/core/src/modules/orders/orders.fulfillment.ts).
+Owning code/tests: [`couriers/steadfast.ts`](../../packages/core/src/modules/delivery/couriers/steadfast.ts), [`delivery.create-outcome.d1.test.ts`](../../packages/core/src/modules/delivery/delivery.create-outcome.d1.test.ts), and [`orders.fulfillment.ts`](../../packages/core/src/modules/orders/orders.fulfillment.ts).
 
 ## Status and recovery
 

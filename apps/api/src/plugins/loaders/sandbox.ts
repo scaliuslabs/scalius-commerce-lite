@@ -23,6 +23,7 @@ export function pluginBundleKey(pluginId: string, version: string, sha256: strin
 interface SandboxEntrypoint {
   invokeEvent(bridge: unknown, seed: unknown, event: unknown): Promise<PluginInvocationResult>;
   invokeFunction(seed: unknown, point: string, input: unknown): Promise<PluginInvocationResult>;
+  invokeProvider(bridge: unknown, seed: unknown, provider: string, operation: string, input: unknown): Promise<PluginInvocationResult>;
   invokeRoute(bridge: unknown, seed: unknown, surface: string, name: string, request: unknown): Promise<PluginInvocationResult>;
   invokeCron(bridge: unknown, seed: unknown, name: string, scheduledAt: string): Promise<PluginInvocationResult>;
   invokeLifecycle(bridge: unknown, seed: unknown, hook: string, options: { keepData?: boolean }): Promise<PluginInvocationResult>;
@@ -96,6 +97,8 @@ export class SandboxLoader implements PluginLoader {
     switch (invocation.kind) {
       case "function":
         return entrypoint.invokeFunction(seed, invocation.point, invocation.input);
+      case "provider":
+        return entrypoint.invokeProvider(bridge, seed, invocation.provider, invocation.operation, invocation.input);
       case "event":
         return entrypoint.invokeEvent(bridge, seed, invocation.event);
       case "route":

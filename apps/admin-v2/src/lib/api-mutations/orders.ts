@@ -13,6 +13,7 @@ import {
   postApiV1AdminOrdersByIdCod,
   postApiV1AdminOrdersByIdFulfillments,
   postApiV1AdminOrdersByIdFulfillmentsByFulfillmentIdVoid,
+  postApiV1AdminOrdersByIdHoldsByHoldIdRelease,
   postApiV1AdminOrdersByIdMarkDelivered,
   postApiV1AdminOrdersByIdNotificationsByOutboxIdResend,
   postApiV1AdminOrdersByIdNotificationsByOutboxIdRetry,
@@ -381,6 +382,23 @@ export function useMarkOrderDelivered() {
       toast.success(msg("toast.status.delivered"));
     },
     onError: (err, variables) => void onOrderError(queryClient, variables.orderId, err, { banner: true }),
+  });
+}
+
+/**
+ * Release an app's hold after staff review (orders.change_status). The
+ * confirm dialog closes on click, so a refusal goes to the page banner.
+ */
+export function useReleaseOrderHold() {
+  const queryClient = useQueryClient();
+  return useSingleFlightMutation({
+    mutationFn: ({ orderId, holdId }: { orderId: string; holdId: string }) =>
+      apiData(postApiV1AdminOrdersByIdHoldsByHoldIdRelease({ path: { id: orderId, holdId } })),
+    onSuccess: (_data, variables) => {
+      invalidateOrder(queryClient, variables.orderId);
+      toast.success(msg("toast.holdReleased"));
+    },
+    onError: (err, variables) => void onOrderError(queryClient, variables.orderId, err, { banner: true, refresh: true }),
   });
 }
 

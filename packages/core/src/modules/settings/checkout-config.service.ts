@@ -8,12 +8,14 @@ import {
 } from "@scalius/shared/currency";
 import type { CustomerIdentitySettings } from "@scalius/shared/customer-auth-policy";
 import { isReady } from "@scalius/shared/readiness";
+import { isQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
+import type { AppProviders } from "../../integrations/provider-port";
 import {
+    BUILT_IN_PAYMENT_PROVIDERS,
     COD_LABEL,
     COD_PAYMENT_METHOD,
-    getPaymentGateway,
-    isPaymentMethodCurrencyEligible,
     publicAmountLimits,
+    type PaymentProvidersSource,
 } from "../payments/gateways/registry";
 import type { GatewaySettings } from "../payments/gateways/port";
 import { getPaymentGatewaySettingsSnapshot } from "../payments/gateway-settings";
@@ -72,6 +74,13 @@ export async function getCheckoutConfig(
     db: Database,
     encryptionKey?: string,
     runtimeEnv?: Record<string, unknown>,
+    /**
+     * The request's gateways (built-in and active app providers), asked for
+     * only when the merchant enabled an app's method; built-in ones alone by default.
+     */
+    paymentProviders?: PaymentProvidersSource,
+    /** The app providers a saved SMS or email choice may name (customer sign-in channels). */
+    appProviders?: AppProviders,
 ): Promise<CheckoutConfig> {
     const rows = await selectSettingsDocuments(db, [
         checkoutDocument,
@@ -98,8 +107,8 @@ export async function getCheckoutConfig(
     const currencyDecimalPlaces = getDecimalPlaces(localCurrencyCode);
     const { checkoutMode, partialPaymentEnabled, partialPaymentAmount } = checkout;
     const [customerIdentity, checkoutReadiness] = await Promise.all([
-        getOfferedCustomerIdentity(db, customerAuth, { encryptionKey, runtimeEnv }),
-        getCheckoutReadiness(db, { encryptionKey, runtimeEnv }),
+        getOfferedCustomerIdentity(db, customerAuth, { encryptionKey, runtimeEnv, appProviders }),
+        getCheckoutReadiness(db, { encryptionKey, runtimeEnv, appProviders }),
     ]);
 
     if (!isReady(checkoutReadiness)) {
@@ -124,21 +133,25 @@ export async function getCheckoutConfig(
         };
     }
 
-    const gatewaySnapshot = await getPaymentGatewaySettingsSnapshot(db, encryptionKey);
+    const gatewaySnapshot = await getPaymentGatewaySettingsSnapshot(db, encryptionKey, paymentProviders);
     const activePaymentMethods = gatewaySnapshot.activePaymentMethods;
+    const providers = gatewaySnapshot.providers ?? BUILT_IN_PAYMENT_PROVIDERS;
     const savedGatewaySettings = gatewaySnapshot.settings as unknown as Record<string, GatewaySettings | null | undefined>;
     // The merchant's saved order is both the allowlist and the buyer-visible
     // presentation order. Each method must still be ready right now.
     const gateways: Array<Record<string, unknown>> = [];
     for (const methodId of activePaymentMethods.enabledMethods) {
-        if (!isPaymentMethodCurrencyEligible(methodId, localCurrencyCode)) continue;
+        if (providers.currencyIssue(methodId, localCurrencyCode) !== null) continue;
         if (!isCheckoutGatewayUsableForFlow({ gatewayId: methodId, checkoutMode, partialPaymentEnabled, partialPaymentAmount })) continue;
         if (methodId === COD_PAYMENT_METHOD) {
             gateways.push({ id: methodId, name: COD_LABEL, flow: "cod", currencies: [localCurrencyCode] });
             continue;
         }
-        const gateway = getPaymentGateway(methodId);
-        const settings = savedGatewaySettings[methodId] ?? null;
+        const gateway = providers.get(methodId);
+        // Built-in settings come with the snapshot; an active app method's gateway loads its own.
+        const settings = savedGatewaySettings[methodId] ?? (gateway && isQualifiedProviderId(methodId)
+            ? await gateway.loadSettings(db, encryptionKey)
+            : null);
         if (!gateway || !settings || !gateway.readiness(settings).usable) continue;
         const amountLimits = publicAmountLimits(gateway);
         gateways.push({

@@ -79,6 +79,7 @@ const grantSchema = z.object({
   allowedHosts: z.array(z.string()),
   events: z.array(z.string()),
   functions: z.array(z.string()),
+  blockingFunctions: z.array(z.string()).openapi({ description: "Function points where the app may pause checkout when it cannot answer." }),
   providers: z.array(z.string()),
   publicRoutes: z.boolean(),
   storefrontScripts: z.array(z.string()),
@@ -117,6 +118,8 @@ const appSummarySchema = z.object({
   functions: z.array(z.object({
     point: z.enum(PLUGIN_FUNCTION_POINTS),
     priority: z.number().int().openapi({ description: "Lower runs first among apps at the same point." }),
+    onError: z.enum(["skip", "block"]).openapi({ description: "block: the app pauses checkout when it cannot answer (needs approval)." }),
+    snapshotCollection: z.string().nullable().openapi({ description: "checkout.discounts: the app reads and updates the signed-in buyer's record in this collection with each order." }),
   })).openapi({ description: "The checkout function points the app implements (cart rules, discounts, delivery options, payment methods, order risk)." }),
 }).openapi("AppSummary");
 
@@ -220,7 +223,12 @@ function summary(installation: PluginInstallation) {
     installedAt: iso(installation.installedAt),
     activatedAt: isoOrNull(installation.activatedAt),
     updatedAt: iso(installation.updatedAt),
-    functions: manifest.functions.map((fn) => ({ point: fn.point, priority: fn.priority })),
+    functions: manifest.functions.map((fn) => ({
+      point: fn.point,
+      priority: fn.priority,
+      onError: fn.onError,
+      snapshotCollection: fn.snapshot?.collection ?? null,
+    })),
   };
 }
 

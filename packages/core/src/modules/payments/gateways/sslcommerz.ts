@@ -15,7 +15,6 @@ import {
   PaymentProviderError,
   isProviderTimeoutError,
   majorStringToMinor,
-  minorToMajorString,
   type GatewayRequest,
   type GatewayVerification,
   type PaymentGateway,
@@ -148,7 +147,7 @@ export const sslcommerzGateway: PaymentGateway<SSLCommerzSettings> = {
   label: "SSLCommerz",
   checkoutName: "Online Payment",
   flow: "hosted",
-  currencies: ["BDT"],
+  chargeCurrencies: ["BDT"],
   amountLimits: {
     currency: SSL_COMMERZ_BDT_AMOUNT_LIMITS.currency,
     minMinor: SSL_COMMERZ_BDT_AMOUNT_LIMITS.min * 100,
@@ -162,11 +161,11 @@ export const sslcommerzGateway: PaymentGateway<SSLCommerzSettings> = {
   environment: (settings) => (settings?.sandbox ?? true) ? "test" : "live",
   publicConfig: (settings) => ({ testMode: settings.sandbox === true }),
 
-  async createSession(settings, input) {
+  async createSession(input, { settings, signal }) {
     const body = new URLSearchParams({
       store_id: settings.storeId,
       store_passwd: settings.storePassword,
-      total_amount: minorToMajorString(input.amountMinor, getDecimalPlaces(input.currency)),
+      total_amount: input.wireAmount.decimal,
       currency: input.currency,
       tran_id: input.correlationId,
       success_url: input.urls.success,
@@ -196,13 +195,13 @@ export const sslcommerzGateway: PaymentGateway<SSLCommerzSettings> = {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: body.toString(),
-        signal: input.signal,
+        signal,
       });
       if (!response.ok) throw new PaymentProviderError(`SSLCommerz API error: HTTP ${response.status}`);
       data = await response.json() as Record<string, string>;
     } catch (error) {
       if (error instanceof PaymentProviderError) throw error;
-      if (isProviderTimeoutError(error, input.signal)) {
+      if (isProviderTimeoutError(error, signal)) {
         throw new PaymentProviderError("SSLCommerz did not respond before the payment timeout. Please try again.", { timedOut: true });
       }
       throw new PaymentProviderError(error instanceof Error ? error.message : "Network error contacting SSLCommerz");
@@ -213,7 +212,7 @@ export const sslcommerzGateway: PaymentGateway<SSLCommerzSettings> = {
     return { providerRef: data.sessionkey, redirectUrl: data.GatewayPageURL };
   },
 
-  async verifyWebhook(settings, request) {
+  async verifyWebhook(request, { settings }) {
     const valId = clean(formOf(request).val_id);
     if (!valId) return { status: "ignored", reason: "IPN missing val_id" };
     const validation = await validate(settings, valId);
@@ -221,7 +220,7 @@ export const sslcommerzGateway: PaymentGateway<SSLCommerzSettings> = {
     return validatedEvent(validation, valId);
   },
 
-  async verifyReturn(settings, request, signal) {
+  async verifyReturn(request, { settings, signal }) {
     const form = formOf(request);
     const tranId = clean(form.tran_id || request.query.tran_id);
     const valId = clean(form.val_id || request.query.val_id);
@@ -239,13 +238,13 @@ export const sslcommerzGateway: PaymentGateway<SSLCommerzSettings> = {
 
   returnCorrelationId: (request) => clean(formOf(request).tran_id),
 
-  async refund(settings, input) {
+  async refund(input, { settings }) {
     if (!input.secondaryRef) throw new ValidationError("No SSLCommerz bank_tran_id found on payment record");
     // refund_trans_id: at most 30 characters, deterministic so retries reuse it.
     const refundTranId = input.reference.replace(/[^A-Za-z0-9]/g, "").slice(0, 30);
     const data = await merchantApi(settings, {
       bank_tran_id: input.secondaryRef,
-      refund_amount: minorToMajorString(input.amountMinor, getDecimalPlaces(input.currency)),
+      refund_amount: input.wireAmount.decimal,
       refund_remarks: input.reason || "Refund requested",
       refund_trans_id: refundTranId,
       v: "1",
@@ -256,7 +255,7 @@ export const sslcommerzGateway: PaymentGateway<SSLCommerzSettings> = {
     return { refundId: data.refund_ref_id ?? refundTranId };
   },
 
-  async refundStatus(settings, input) {
+  async refundStatus(input, { settings }) {
     if (!input.providerRefundId) {
       return { outcome: "unknown", error: "SSLCommerz refund reference is missing. Manual provider review required before retrying.", manualReview: true };
     }

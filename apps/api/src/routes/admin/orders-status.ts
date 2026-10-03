@@ -38,6 +38,7 @@ import {
     enqueueOrderNotificationsForStatus,
 } from "../../utils/order-notification-queue";
 import { checkAndSyncShipmentStatus } from "./shipment-status-sync";
+import { requestCourierProviders } from "../../plugins/providers/courier";
 import { ORDER_STATUSES } from "@scalius/shared/order-state";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -466,6 +467,7 @@ app.openapi(createShipmentRoute, async (c) => {
         data.providerId,
         data.options ?? {},
         encryptionKey,
+        requestCourierProviders(c),
     );
 
     if (!shipmentResult?.success) {
@@ -613,6 +615,7 @@ app.openapi(checkShipmentStatusRoute, (async (c: AdminRouteContext<typeof checkS
         db,
         shipment,
         encryptionKey,
+        couriers: requestCourierProviders(c),
         c,
         source: "orders-shipment-status",
     });
@@ -652,6 +655,7 @@ app.openapi(refreshShipmentRoute, async (c) => {
         db,
         shipment,
         encryptionKey,
+        couriers: requestCourierProviders(c),
         c,
         source: "orders-shipment-refresh",
     });
@@ -742,6 +746,7 @@ app.openapi(unknownShipmentLookupRoute, async (c) => {
         shipmentId,
         actorId: user?.id ?? null,
         encryptionKey: getCredentialEncryptionKey(c.env as Record<string, unknown>),
+        couriers: requestCourierProviders(c),
     });
     const { availabilityTransitionVariantIds: _availabilityTransitionVariantIds, ...responseData } = result;
 
@@ -791,6 +796,7 @@ app.openapi(resolveUnknownShipmentRoute, async (c) => {
         shipmentId,
         actorId: user?.id ?? null,
         encryptionKey: getCredentialEncryptionKey(c.env as Record<string, unknown>),
+        couriers: requestCourierProviders(c),
     });
     if (result.status === "released") return ok(c, result);
 

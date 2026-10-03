@@ -78,7 +78,7 @@ describe("admin order payment recovery link route", () => {
         };
 
         expect(response.status).toBe(201);
-        expect(mocks.previewOrderPaymentRecoveryLink).toHaveBeenCalledWith(db, "order_1");
+        expect(mocks.previewOrderPaymentRecoveryLink).toHaveBeenCalledWith(db, "order_1", { paymentProviders: expect.any(Function) });
         expect(body.data).toMatchObject({
             orderId: "order_1",
             url: "https://shop.example.test/payment-recovery?orderId=order_1&payment=sslcommerz&result=failed&paymentType=deposit&depositAmount=60",

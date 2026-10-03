@@ -15,6 +15,7 @@ import {
 import { getWhatsAppCloudApiSettings } from "../../integrations/whatsapp";
 import { getSmsProviderReadiness } from "../../integrations/sms";
 import { getEmailProviderReadiness } from "../../integrations/email";
+import type { AppProviders } from "../../integrations/provider-port";
 import {
     currencyDocument,
     ADMIN_CHANNEL_ALLOWANCE,
@@ -82,7 +83,12 @@ export async function updateNotificationChannels(
     input: Record<string, unknown>,
     encryptionKey?: string,
     env?: Record<string, unknown>,
-    options: { whatsappTemplate?: OrderWhatsAppTemplateSettings; expectedRevision?: number } = {},
+    options: {
+        whatsappTemplate?: OrderWhatsAppTemplateSettings;
+        expectedRevision?: number;
+        /** The app providers a saved SMS or email choice may name. */
+        appProviders?: AppProviders;
+    } = {},
 ): Promise<NotificationChannelRules> {
     const currentChannels = await getNotificationChannels(db);
     const requested = normalizeNotificationChannelRules(input, DEFAULT_CUSTOMER_NOTIFICATION_CHANNELS, null);
@@ -93,7 +99,7 @@ export async function updateNotificationChannels(
     const template = options.whatsappTemplate ? normalizeWhatsAppTemplate(options.whatsappTemplate) : null;
 
     if (channelWasEnabled(channels, currentChannels, "email")) {
-        const emailReadiness = await getEmailProviderReadiness({ db, encryptionKey, env });
+        const emailReadiness = await getEmailProviderReadiness({ db, encryptionKey, env, appProviders: options.appProviders });
         if (!isReady(emailReadiness)) {
             throw new ValidationError(
                 emailReadiness.issues[0]?.message
@@ -105,7 +111,7 @@ export async function updateNotificationChannels(
     }
 
     if (channelWasEnabled(channels, currentChannels, "sms")) {
-        const smsReadiness = await getSmsProviderReadiness(db, encryptionKey);
+        const smsReadiness = await getSmsProviderReadiness(db, encryptionKey, options.appProviders);
         if (!isReady(smsReadiness)) {
             const detail = smsReadiness.issues[0]?.message;
             throw new ValidationError(

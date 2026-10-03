@@ -1,14 +1,31 @@
 let previousFocus: HTMLElement | null = null;
 let previousBodyOverflow = "";
 let previousMainInert = false;
+let slowTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** How long a redirect may take before the buyer is told it is still on its way. */
+export const SLOW_REDIRECT_AFTER_MS = 8_000;
 
 function getOverlay(): HTMLElement | null {
   return document.getElementById("loadingOverlay");
 }
 
+function clearSlowTimer(): void {
+  if (slowTimer !== null) clearTimeout(slowTimer);
+  slowTimer = null;
+}
+
+/**
+ * Shows the overlay. With `slowMessage`, the message changes to it once
+ * `slowAfterMs` pass with the overlay still up (a hosted payment page that is
+ * slow to open on a phone network), so the buyer keeps waiting instead of
+ * paying twice. The overlay is a polite live region: the change is announced.
+ */
 export function showCheckoutLoadingOverlay(options: {
   title: string;
   message: string;
+  slowMessage?: string;
+  slowAfterMs?: number;
 }): void {
   const overlay = getOverlay();
   if (!overlay) return;
@@ -26,6 +43,15 @@ export function showCheckoutLoadingOverlay(options: {
   if (title) title.textContent = options.title;
   if (message) message.textContent = options.message;
 
+  clearSlowTimer();
+  const { slowMessage } = options;
+  if (slowMessage && message) {
+    slowTimer = setTimeout(() => {
+      slowTimer = null;
+      if (!overlay.classList.contains("hidden")) message.textContent = slowMessage;
+    }, options.slowAfterMs ?? SLOW_REDIRECT_AFTER_MS);
+  }
+
   overlay.classList.remove("hidden");
   overlay.classList.add("flex");
   overlay.setAttribute("aria-hidden", "false");
@@ -39,6 +65,7 @@ export function showCheckoutLoadingOverlay(options: {
 export function hideCheckoutLoadingOverlay(options: {
   restoreFocus?: boolean;
 } = {}): void {
+  clearSlowTimer();
   const overlay = getOverlay();
   if (!overlay) return;
 

@@ -1,28 +1,10 @@
-import type { OrderEditLockMessageKey } from "~/i18n/order-edit-locks";
+import { editLockMessageKey, type OrderEditLockMessageKey } from "~/i18n/order-edit-locks";
 import { translate } from "~/i18n";
 import { orderFormMessages } from "~/i18n/order-form";
 
 interface EditState {
   allowed: boolean;
   reason: string | null;
-}
-
-const LOCK_MESSAGE: Record<string, OrderEditLockMessageKey> = {
-  shipped: "lockShipped",
-  closed: "lockClosed",
-  paid: "lockPaid",
-  online_payment: "lockOnlinePayment",
-  discount: "lockDiscount",
-  history: "lockHistory",
-  inventory: "lockInventory",
-  archived: "lockArchived",
-  busy: "lockBusy",
-  unavailable: "lockUnavailable",
-};
-
-/** The plain sentence for a server edit-lock reason code. */
-export function editLockMessageKey(reason: string | null): OrderEditLockMessageKey {
-  return (reason && LOCK_MESSAGE[reason]) || "lockUnknown";
 }
 
 /**

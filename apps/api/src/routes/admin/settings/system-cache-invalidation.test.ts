@@ -43,6 +43,7 @@ vi.mock("@scalius/core/modules/payments", async (importOriginal) => ({
 }));
 
 vi.mock("@scalius/core/integrations/email", () => ({
+  BUILT_IN_EMAIL_PROVIDER_IDS: ["cloudflare", "resend"],
   getEmailProviderReadiness: mocks.getEmailProviderReadiness,
   getEmailRuntimeSettings: mocks.getEmailRuntimeSettings,
 }));
@@ -462,6 +463,7 @@ describe("system settings write behavior", () => {
       db: expect.anything(),
       env,
       encryptionKey: CREDENTIAL_KEY,
+      appProviders: expect.objectContaining({ resolve: expect.any(Function) }),
     });
     expect(stored(database, "customer_auth")).toEqual({ email: "required", whatsapp: "off", channels: ["email"] });
   });

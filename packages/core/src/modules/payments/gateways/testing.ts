@@ -1,9 +1,10 @@
-// Test-only: a complete hosted gateway adapter with no provider behind it.
-// Registering it is the proof that a new gateway needs one adapter plus one
-// registry line. Never import this from Worker code.
+// Test-only: a complete hosted gateway with no provider behind it, under an
+// app provider id. Passing it in a request's providers is the proof that a
+// new gateway needs nothing else from the kernel. Never import this from
+// Worker code.
 
 import { ValidationError } from "@scalius/core/errors";
-import { PAYMENT_GATEWAYS } from "./registry";
+import { createPaymentProviders, type PaymentProviders } from "./registry";
 import type {
   GatewayProviderRefund,
   GatewayRefundProbe,
@@ -12,6 +13,9 @@ import type {
   PaymentEvent,
   PaymentGateway,
 } from "./port";
+
+/** An app provider id: the fake joins a request's providers the way an app does. */
+export const FAKE_GATEWAY_ID = "acme.fake:pay";
 
 export interface FakeGatewaySettings extends GatewaySettings {
   apiKey: string;
@@ -27,7 +31,12 @@ export interface FakeGatewayState {
   providerRefunds: GatewayProviderRefund[];
 }
 
-export function createFakeGateway(id = "fakepay"): { gateway: PaymentGateway<FakeGatewaySettings>; state: FakeGatewayState } {
+export function createFakeGateway(id = FAKE_GATEWAY_ID): {
+  gateway: PaymentGateway<FakeGatewaySettings>;
+  state: FakeGatewayState;
+  /** The built-in gateways plus this one: what a request with the app installed sees. */
+  providers: PaymentProviders;
+} {
   const state: FakeGatewayState = {
     settings: { enabled: true, apiKey: "live_key" },
     sessions: [],
@@ -42,7 +51,7 @@ export function createFakeGateway(id = "fakepay"): { gateway: PaymentGateway<Fak
     label: "FakePay",
     checkoutName: "FakePay wallet",
     flow: "hosted",
-    currencies: ["BDT"],
+    chargeCurrencies: ["BDT"],
     amountLimits: { currency: "BDT", minMinor: 1_000, maxMinor: 10_000_000 },
     supportsRefund: true,
 
@@ -68,22 +77,22 @@ export function createFakeGateway(id = "fakepay"): { gateway: PaymentGateway<Fak
     environment: () => "test",
     publicConfig: () => ({ testMode: true }),
 
-    async createSession(_settings, input) {
+    async createSession(input) {
       state.sessions.push(input);
       return { providerRef: `fs_${input.attemptKey.slice(-8)}`, redirectUrl: `https://pay.fake.test/${input.correlationId}` };
     },
 
     // The "signature" is a shared-secret header; the body is the normalized event.
-    async verifyWebhook(settings, request) {
-      if (request.headers.get("x-fake-signature") !== settings.apiKey) return { status: "invalid", reason: "bad signature" };
+    async verifyWebhook(request, { settings }) {
+      if (request.headers["x-fake-signature"] !== settings.apiKey) return { status: "invalid", reason: "bad signature" };
       return { status: "event", event: JSON.parse(request.rawBody) as PaymentEvent };
     },
-    async verifyReturn(settings, request) {
-      return this.verifyWebhook(settings, request);
+    async verifyReturn(request, call) {
+      return gateway.verifyWebhook(request, call);
     },
     returnCorrelationId: (request) => new URLSearchParams(request.rawBody).get("tran_id") ?? "",
 
-    async refund(_settings, input) {
+    async refund(input) {
       if (!input.secondaryRef) throw new ValidationError("No FakePay transaction reference on payment record");
       state.refunds.push({
         amountMinor: input.amountMinor,
@@ -101,12 +110,5 @@ export function createFakeGateway(id = "fakepay"): { gateway: PaymentGateway<Fak
     refundStatus: async () => state.refundStatus,
     listRefunds: async () => state.providerRefunds,
   };
-  return { gateway, state };
-}
-
-/** Register the fake adapter (the one registry line) and return its handle plus an unregister function. */
-export function registerFakeGateway(id = "fakepay") {
-  const fake = createFakeGateway(id);
-  PAYMENT_GATEWAYS[id] = fake.gateway as PaymentGateway;
-  return { ...fake, unregister: () => { delete PAYMENT_GATEWAYS[id]; } };
+  return { gateway, state, providers: createPaymentProviders([gateway]) };
 }

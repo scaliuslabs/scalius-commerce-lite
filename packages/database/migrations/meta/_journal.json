@@ -771,6 +771,13 @@
       "when": 1790965517317,
       "tag": "0109_inventory_purchasing",
       "breakpoints": true
+    },
+    {
+      "idx": 110,
+      "version": "6",
+      "when": 1790985657147,
+      "tag": "0110_plugin_providers",
+      "breakpoints": true
     }
   ]
 }

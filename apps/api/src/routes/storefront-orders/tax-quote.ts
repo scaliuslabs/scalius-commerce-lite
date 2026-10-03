@@ -26,7 +26,7 @@ import {
     validateStorefrontDeliveryPreflight,
     validateStorefrontCartItems,
 } from "@scalius/core/modules/checkout";
-import { listActiveFunctionRegistrations } from "@scalius/core/modules/plugins";
+import { listActiveCheckoutRegistrations } from "@scalius/core/modules/plugins";
 import { GIFT_CARD_PAYMENT_METHOD } from "@scalius/core/modules/gift-cards";
 import { readMasterSecret } from "@scalius/shared/runtime-secrets";
 import { getActivePaymentMethods } from "@scalius/core/modules/payments";
@@ -42,6 +42,7 @@ import { buildStorefrontTaxAllocationLineId } from "@scalius/core/modules/tax";
 import { ValidationError } from "../../utils/api-error";
 import { getOptionalExecutionContext } from "../../utils/execution-context";
 import { createCheckoutAppFunctions } from "../../plugins/checkout-functions";
+import { checkoutPaymentMethods } from "../../plugins/providers/payment";
 import { getCustomerSessionHashKey } from "../../utils/encryption-key";
 import { ok } from "../../utils/api-response";
 import { successEnvelope, errorResponses } from "../../schemas/responses";
@@ -207,10 +208,11 @@ app.openapi(taxQuoteRoute, async (c) => {
   // The apps' checkout functions ride the first read wave (none, no app work),
   // beside the signed-in buyer: their per-customer limits, their segments for
   // segment-limited promotions (automatic ones need no code) and apps' facts.
-  const [currency, paymentMethods, registrations, sessionCustomer] = await Promise.all([
+  const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
+  const [currency, builtInPaymentMethods, registrations, sessionCustomer] = await Promise.all([
     getCurrencySettings(db),
-    getActivePaymentMethods(db, getCredentialEncryptionKey(c.env as Record<string, unknown>)),
-    listActiveFunctionRegistrations(db),
+    getActivePaymentMethods(db, encryptionKey),
+    listActiveCheckoutRegistrations(db),
     customerSessionToken
       ? getCustomerBySession(db, customerSessionToken, getCustomerSessionHashKey(c.env as unknown as Record<string, unknown>))
       : null,
@@ -221,6 +223,8 @@ app.openapi(taxQuoteRoute, async (c) => {
     db,
     registrations,
   });
+  // App payment methods join only when an app provides payment (then one more read).
+  const { providers: paymentProviders, paymentMethods } = await checkoutPaymentMethods(c, registrations, builtInPaymentMethods, encryptionKey);
   const cartValidation = await validateStorefrontCartItems(db, data.items, {
     inventoryPool: data.inventoryPool,
     currencyCode: currency.currencyCode,
@@ -268,7 +272,7 @@ app.openapi(taxQuoteRoute, async (c) => {
   // Apps narrow and present the methods checkout allows; gift-card cover is tender, not a method.
   const payment = coveredByGiftCards
     ? { methods: [], changed: false }
-    : await resolveAppPaymentMethods(apps, pricing.appCart, resolveCartPaymentMethods(paymentMethods.enabledMethods, delivery.fulfilment));
+    : await resolveAppPaymentMethods(apps, pricing.appCart, resolveCartPaymentMethods(paymentMethods.enabledMethods, delivery.fulfilment), paymentProviders);
   const toAmount = (minor: number) => fromMinor(minor, quote.decimalPlaces);
   return ok(c, {
     valid: true as const,

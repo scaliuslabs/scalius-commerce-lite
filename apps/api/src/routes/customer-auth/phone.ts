@@ -15,6 +15,7 @@ import {
 } from "../../schemas/responses";
 import { ok } from "../../utils/api-response";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
+import { requestAppProviders } from "../../plugins/providers/app-providers";
 import { getTrustedClientIp } from "../../utils/client-ip";
 import { setPrivateNoStoreHeaders, requireCustomerSession } from "./shared";
 
@@ -54,6 +55,7 @@ app.openapi(sendAccountPhoneCodeRoute, async (c) => {
     emailEnv: env,
     encryptionKey: getCredentialEncryptionKey(env),
     credentialEncryptionKey: getCredentialEncryptionKey(env),
+    appProviders: requestAppProviders(c),
   });
   try {
     await enqueueAuthOtp(c, result.queuePayload);

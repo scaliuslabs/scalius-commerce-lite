@@ -10,6 +10,8 @@ import type { ColumnDef } from "~/components/admin/data-table/table-config";
 import { createSelectColumn } from "~/components/admin/data-table/columns/column-factories";
 import { DataTableRowActions } from "~/components/admin/data-table/DataTableRowActions";
 import { statusBadgeVariant } from "~/components/admin/orderview/status-badges";
+import { isQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
+import { useAppPaymentMethodNames } from "~/hooks/use-app-payment-method-names";
 import { useCurrency } from "~/hooks/use-currency";
 import { useMessages } from "~/i18n";
 import {
@@ -170,8 +172,20 @@ export function PaymentCell({ order }: { order: Pick<OrderListItem, "status" | "
   const t = useMessages(orderMessages);
   const status = paymentShown(order);
   if (!status) return <Empty />;
+  // An app's method (`<plugin id>:<provider id>`) is named by its provider; only those rows read the names.
+  if (isQualifiedProviderId(order.paymentMethod)) return <AppPaymentBadge status={status} method={order.paymentMethod} />;
   return (
     <Badge data-part="value" variant={statusBadgeVariant(status, "payment")} title={paymentMethodLabel(t, order.paymentMethod)}>
+      {paymentStatusLabel(t, status)}
+    </Badge>
+  );
+}
+
+function AppPaymentBadge({ status, method }: { status: string; method: string }) {
+  const t = useMessages(orderMessages);
+  const appNames = useAppPaymentMethodNames(true);
+  return (
+    <Badge data-part="value" variant={statusBadgeVariant(status, "payment")} title={paymentMethodLabel(t, method, appNames)}>
       {paymentStatusLabel(t, status)}
     </Badge>
   );

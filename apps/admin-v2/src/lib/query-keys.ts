@@ -254,6 +254,8 @@ export const queryKeys = {
     paymentMethods: () => ["settings", "payment-methods"] as const,
     paymentGateway: (gateway: string) =>
       ["settings", "payment-gateway", gateway] as const,
+    /** Installed apps' providers of one port (payment, courier, sms, email, fraud), with readiness. */
+    appProviders: (kind: string) => ["settings", "app-providers", kind] as const,
     notificationChannels: () => ["settings", "notification-channels"] as const,
     adminNotificationChannels: () =>
       ["settings", "admin-notification-channels"] as const,

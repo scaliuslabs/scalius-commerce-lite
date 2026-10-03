@@ -20,6 +20,7 @@ import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { isReady } from "@scalius/shared/readiness";
 import { eq } from "drizzle-orm";
 import { sendEmail, type EmailRuntimeContext } from "../../integrations/email";
+import type { AppProviders } from "../../integrations/provider-port";
 import {
   DEFAULT_ADMIN_NOTIFICATION_CHANNELS,
   DEFAULT_CUSTOMER_NOTIFICATION_CHANNELS,
@@ -92,6 +93,8 @@ export interface ResolvedNotificationOptions {
   env: Env;
   /** Must be the dedicated CREDENTIAL_ENCRYPTION_KEY. */
   encryptionKey?: string;
+  /** The app providers a saved SMS or email choice may name. */
+  appProviders?: AppProviders;
 }
 
 function receiptSubject(input: Pick<ResolvedNotificationSend, "subjectType" | "subjectId" | "orderId">): DeliveryReceiptSubject {
@@ -171,6 +174,7 @@ export async function sendResolvedNotification(
     db,
     env: options.env as unknown as Record<string, unknown>,
     encryptionKey: options.encryptionKey,
+    appProviders: options.appProviders,
   };
 
   if (channels.includes("email")) {
@@ -236,7 +240,7 @@ async function sendResolvedSms(
   }
   try {
     const { getActiveSmsProvider, getSmsProviderReadiness } = await import("../../integrations/sms");
-    const readiness = await getSmsProviderReadiness(db, options.encryptionKey);
+    const readiness = await getSmsProviderReadiness(db, options.encryptionKey, options.appProviders);
     const providerName = readiness.activeProvider ?? "sms";
     if (!isReady(readiness)) {
       return recordSkippedDelivery({
@@ -248,11 +252,11 @@ async function sendResolvedSms(
         reason: readiness.issues[0]?.message ?? "SMS provider is not configured",
       });
     }
-    const provider = await getActiveSmsProvider(db, options.encryptionKey);
+    const provider = await getActiveSmsProvider(db, options.encryptionKey, options.appProviders);
     const target = {
       ...base,
       channel: "sms" as const,
-      provider: provider?.name ?? providerName,
+      provider: provider?.id ?? providerName,
       recipient: phone,
       recipientMasked: maskPhone(phone),
     };
@@ -265,14 +269,14 @@ async function sendResolvedSms(
         if (!provider) {
           return { success: false, provider: "sms", providerStatus: "missing_sms_provider", rawResponse: "No active SMS provider configured", retryable: false };
         }
-        const result = await provider.sendSms({
+        const result = await provider.send({
           to: phone,
           message,
           clientReference: createProviderClientReference(delivery),
-        });
+        }, {});
         return {
           success: result.success,
-          provider: provider.name,
+          provider: provider.id,
           providerMessageId: result.providerRef,
           providerStatus: result.rawStatus,
           rawResponse: result.rawStatus,
@@ -343,6 +347,7 @@ export async function sendStaffAlertNotification(
       db,
       env: options.env as unknown as Record<string, unknown>,
       encryptionKey: options.encryptionKey,
+      appProviders: options.appProviders,
     };
     for (const recipient of recipients) {
       const target = {

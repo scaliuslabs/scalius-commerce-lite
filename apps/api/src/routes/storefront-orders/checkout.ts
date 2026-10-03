@@ -3,12 +3,7 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import type { Database } from "@scalius/database/client";
 import { PaymentMethod, PaymentStatus, InventoryPool } from "@scalius/database/schema";
 import { discountCodesSchema } from "../../schemas/storefront-discounts";
-import {
-    getCheckoutGatewayPrecommitIssue,
-    getPaymentMethodCurrencyIssue,
-    isOnlinePaymentMethod,
-    listPaymentMethodIds,
-} from "@scalius/core/modules/payments";
+import { isOnlinePaymentMethod, isPaymentMethodId, type PaymentProviders } from "@scalius/core/modules/payments";
 import { assertPhoneCountryAllowed, phoneNumberSchema } from "@scalius/shared/customer-utils";
 import { readMasterSecret } from "@scalius/shared/runtime-secrets";
 import { GIFT_CARD_PAYMENT_METHOD } from "@scalius/core/modules/gift-cards";
@@ -38,6 +33,8 @@ import {
     type StorefrontCheckoutSettingsSnapshot,
 } from "@scalius/core/modules/checkout";
 import { createCheckoutAppFunctions } from "../../plugins/checkout-functions";
+import { paymentProvidersFromRegistrations } from "../../plugins/providers/payment";
+import { requestProviderRuntime } from "../../plugins/providers/runtime";
 import { runOrderRiskChecks } from "../../plugins/order-risk";
 import { getOptionalExecutionContext } from "../../utils/execution-context";
 import { enqueueOrderAutoFulfil } from "../../utils/auto-fulfil-queue";
@@ -132,6 +129,7 @@ async function assertCheckoutOrderPolicy(
     StorefrontCheckoutAuthoritySnapshot,
     "checkoutSettings" | "allowedCountries" | "activePaymentMethods"
   >,
+  providers: PaymentProviders,
 ): Promise<CheckoutOrderPolicyResult> {
   const db = c.get("db");
   const checkoutSettings = authority.checkoutSettings;
@@ -141,6 +139,7 @@ async function assertCheckoutOrderPolicy(
       customerPhone,
       paymentMethod,
       authority,
+      providers,
     );
 
   const sessionToken = getCustomerSessionTokenFromRequest(c);
@@ -267,9 +266,15 @@ const createOrderSchema = z.object({
     .min(0, "Shipping charge must be greater than or equal to 0"),
   /** A delivery or pickup rate; required when a line is physical. */
   shippingMethodId: z.string().optional().nullable(),
-  /** `gift_card` only when the applied gift cards cover the whole order. */
+  /**
+   * `cod`, a gateway id (`stripe`, `sslcommerz`, or an app provider's
+   * `<plugin id>:<provider id>`), or `gift_card` only when the applied gift
+   * cards cover the whole order. Checkout accepts only methods enabled now.
+   */
   paymentMethod: z
-    .enum([...(listPaymentMethodIds() as [string, ...string[]]), GIFT_CARD_PAYMENT_METHOD])
+    .string()
+    .max(160)
+    .refine((method) => isPaymentMethodId(method) || method === GIFT_CARD_PAYMENT_METHOD, "Unsupported payment method")
     .default(PaymentMethod.COD),
   inventoryPool: z
     .enum([InventoryPool.REGULAR, InventoryPool.PREORDER, InventoryPool.BACKORDER])
@@ -296,9 +301,9 @@ const createOrderSchema = z.object({
 
 type CreateOrderInput = z.infer<typeof createOrderSchema>;
 
-function assertGatewayCurrencyReadiness(data: CreateOrderInput, currencyCode: string): void {
+function assertGatewayCurrencyReadiness(data: CreateOrderInput, currencyCode: string, providers: PaymentProviders): void {
   if (!isOnlinePaymentMethod(data.paymentMethod)) return;
-  const issue = getPaymentMethodCurrencyIssue(data.paymentMethod, currencyCode);
+  const issue = providers.currencyIssue(data.paymentMethod, currencyCode);
   if (issue) throw new ValidationError(issue);
 }
 
@@ -308,13 +313,14 @@ function assertGatewayCurrencyReadiness(data: CreateOrderInput, currencyCode: st
  * is refused while cards are applied (Wave B §4.3).
  */
 function assertGatewayPrecommitReadiness(
+  providers: PaymentProviders,
   paymentMethod: string,
   checkoutSettings: CheckoutSettingsSnapshot,
   amountDueMinor: number,
   currencyCode: string,
   giftCardsApplied: boolean,
 ): void {
-  const issue = getCheckoutGatewayPrecommitIssue({
+  const issue = providers.precommitIssue({
     paymentMethod,
     currencyCode,
     totalAmountMinor: amountDueMinor,
@@ -431,8 +437,11 @@ app.openapi(createOrderRoute, async (c) => {
         customerPhone: data.customerPhone,
       },
       getCredentialEncryptionKey(c.env as Record<string, unknown>),
+      // App payment providers join from the registrations the read batch carries.
+      { paymentProviders: (registrations) => paymentProvidersFromRegistrations(requestProviderRuntime(c), registrations) },
     );
     const existingAttempt = checkoutReads.existingAttempt;
+    const paymentProviders = checkoutReads.paymentProviders;
     diagnostics?.mark("attempt");
 
     if (existingAttempt?.status === "replay") {
@@ -475,8 +484,9 @@ app.openapi(createOrderRoute, async (c) => {
       data.customerPhone,
       data.paymentMethod as CheckoutPaymentMethodId,
       checkoutAuthority,
+      paymentProviders,
     );
-    assertGatewayCurrencyReadiness(data, currency.currencyCode);
+    assertGatewayCurrencyReadiness(data, currency.currencyCode, paymentProviders);
     diagnostics?.mark("policy");
 
     // This remains memory-only until the authoritative order batch. The
@@ -509,7 +519,7 @@ app.openapi(createOrderRoute, async (c) => {
       }),
       checkoutAuthority.taxAuthority,
       { masterSecret: readMasterSecret(c.env) },
-      { apps, channel: "online_store" },
+      { apps, channel: "online_store", paymentProviders },
     );
 
     assertStorefrontCheckoutQuoteFingerprint(
@@ -526,12 +536,13 @@ app.openapi(createOrderRoute, async (c) => {
       await assertStorefrontAppPaymentMethod(apps, result.appCart, result.paymentMethod, resolveCartPaymentMethods(
         checkoutAuthority.activePaymentMethods.enabledMethods,
         deliveryPreflight.fulfilment,
-      ));
+      ), paymentProviders);
     }
     // Then the gift cards: still usable, and the amount due the buyer reviewed.
     assertStorefrontGiftCardTenderReviewed(result.giftCardTender, data.expectedAmountDueMinor);
 
     assertGatewayPrecommitReadiness(
+      paymentProviders,
       result.paymentMethod,
       checkoutSettings,
       result.giftCardTender.amountDueMinor,

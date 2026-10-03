@@ -19,6 +19,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
+import { isQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
+import { hasAppPaymentMethod, useAppPaymentMethodNames } from "~/hooks/use-app-payment-method-names";
 import { useCurrency } from "~/hooks/use-currency";
 import { useHydrated } from "~/hooks/use-hydrated";
 import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions";
@@ -73,8 +75,10 @@ const REFUND_REASONS = ["requested_by_customer", "returned_items", "duplicate", 
 const MANUAL_REFUND_CHECK_STATUSES = new Set(["processing", "provider_unknown", "reconcile_required", "pending"]);
 const RECOVERY_LINK_GATEWAYS = new Set(["sslcommerz"]);
 
+/** A hosted gateway the buyer can be sent back to: SSLCommerz, or any app's (apps are hosted only). */
 function isRecoveryLinkGateway(value: string | null | undefined): boolean {
-  return typeof value === "string" && RECOVERY_LINK_GATEWAYS.has(value.trim().toLowerCase());
+  return typeof value === "string"
+    && (RECOVERY_LINK_GATEWAYS.has(value.trim().toLowerCase()) || isQualifiedProviderId(value.trim()));
 }
 
 /** Fallback when the server did not decide: only unpaid, failed hosted payments. */
@@ -162,8 +166,19 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
   const webhookIssues = paymentsResult?.paymentWebhookIssues ?? [];
   const refundAttempts: OrderRefundAttempt[] = paymentsResult?.refundAttempts ?? order.refundAttempts ?? [];
   const activeRefund = paymentsResult?.activeRefundOperation ?? order.activeRefundOperation ?? null;
+  // An app's method reads as its provider's name (orders store `<plugin id>:<provider id>`).
+  const appNames = useAppPaymentMethodNames(isHydrated && hasAppPaymentMethod([
+    order.paymentMethod,
+    order.paymentRecovery?.gateway,
+    activeRefund?.gateway,
+    ...payments.map((payment) => payment.paymentMethod),
+    ...sessionAttempts.map((attempt) => attempt.gateway),
+    ...webhookIssues.map((issue) => issue.provider),
+    ...refundAttempts.map((attempt) => attempt.gateway),
+  ]));
+  const methodLabel = (method: string) => paymentMethodLabel(o, method, isHydrated ? appNames : undefined);
   const activeRefundCopy = activeRefund
-    ? refundStateCopy(t, activeRefund.status, activeRefund.gateway, paymentMethodLabel(o, activeRefund.gateway))
+    ? refundStateCopy(t, activeRefund.status, activeRefund.gateway, methodLabel(activeRefund.gateway))
     : null;
   const isRefundLocked = Boolean(activeRefund?.active);
   const plan = paymentsResult?.plan ?? null;
@@ -364,9 +379,9 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
         <dl className="space-y-1 tabular-nums">
           <OrderSummaryRows order={order} />
           {methodPaidMinor > 0 ? (
-            <Row label={t("payment.paidWith", { method: paymentMethodLabel(o, order.paymentMethod ?? "cod") })} value={money(methodPaid)} />
+            <Row label={t("payment.paidWith", { method: methodLabel(order.paymentMethod ?? "cod") })} value={money(methodPaid)} />
           ) : order.paymentMethod === "gift_card" && giftCardHeldMinor > 0 ? null : (
-            <Row label={t("payment.method")} value={paymentMethodLabel(o, order.paymentMethod ?? "cod")} />
+            <Row label={t("payment.method")} value={methodLabel(order.paymentMethod ?? "cod")} />
           )}
           <GiftCardTenderRows order={order} payments={payments} />
           {refundedAmount > 0 ? (
@@ -438,8 +453,8 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
             <ul className="divide-y text-muted-foreground">
               {webhookIssues.map((issue) => (
                 <li key={issue.id} className="py-2">
-                  <p>{[paymentMethodLabel(o, issue.provider), time(issue.processedAt)].filter(Boolean).join(" · ")}</p>
-                  <p>{t(`webhook.reason.${issue.reason}`, { gateway: paymentMethodLabel(o, issue.provider) })}</p>
+                  <p>{[methodLabel(issue.provider), time(issue.processedAt)].filter(Boolean).join(" · ")}</p>
+                  <p>{t(`webhook.reason.${issue.reason}`, { gateway: methodLabel(issue.provider) })}</p>
                   {issue.error ? <p className="break-words">{issue.error}</p> : null}
                 </li>
               ))}
@@ -465,7 +480,7 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
                     {attempt.activeProcessing ? <p className="text-muted-foreground">{t("session.processingHelp")}</p> : null}
                     <p className="text-muted-foreground">
                       {[
-                        paymentMethodLabel(o, attempt.gateway),
+                        methodLabel(attempt.gateway),
                         time(attempt.createdAt),
                         attempt.claimExpiresAt && !attempt.activeProcessing ? t("session.expires", { date: time(attempt.claimExpiresAt) ?? "" }) : null,
                       ].filter(Boolean).join(" · ")}
@@ -531,7 +546,7 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
               {refundAttempts.map((attempt) => {
                 const checking = refundCheckMutation.isPending && refundCheckMutation.variables?.attemptId === attempt.id;
                 const when = time(attempt.refundedAt ?? attempt.failedAt ?? attempt.nextProbeAt ?? attempt.createdAt);
-                const copy = refundStateCopy(t, attempt.status, attempt.gateway, paymentMethodLabel(o, attempt.gateway));
+                const copy = refundStateCopy(t, attempt.status, attempt.gateway, methodLabel(attempt.gateway));
                 return (
                   <li key={attempt.id} className="space-y-1 py-2">
                     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -573,7 +588,7 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
                   <li key={payment.id} className="space-y-1 py-2">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <span className="font-medium">
-                        {orderDetailLabel(t, "payment.type.", payment.paymentType)} · {paymentMethodLabel(o, payment.paymentMethod)}
+                        {orderDetailLabel(t, "payment.type.", payment.paymentType)} · {methodLabel(payment.paymentMethod)}
                       </span>
                       <span className="tabular-nums">{formatCurrencyAmount(payment.amount, payment.currency)}</span>
                     </div>

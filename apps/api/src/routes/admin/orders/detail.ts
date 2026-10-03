@@ -1,5 +1,6 @@
 // One order: detail, items, payments, timeline and comments, notifications, edits, restore, recovery links and form data.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { requestPaymentProviders } from "../../../plugins/providers/payment";
 import {
     ORDER_COMMENT_MAX_LENGTH,
     ORDER_EVENT_KINDS,
@@ -9,6 +10,7 @@ import {
     getOrderEditReadiness,
     listOrderTimeline,
     previewOrderPaymentRecoveryLink,
+    releaseOrderHold,
     recordOrderEvent,
     restoreOrder,
     updateOrderDetails,
@@ -422,6 +424,50 @@ app.openapi(deleteCommentRoute, (async (c: AdminRouteContext<typeof deleteCommen
     return ok(c, { deleted: true as const });
 }) as unknown as AdminRouteHandler<typeof deleteCommentRoute>);
 
+// ─── POST /:id/holds/:holdId/release ─────────────────────────────────────────
+
+const holdSchema = z.object({
+    id: z.string(),
+    appId: z.string(),
+    appName: z.string(),
+    reason: z.string(),
+    placedAt: z.string(),
+    releasedAt: z.string().nullable(),
+});
+
+const releaseHoldRoute = createRoute({
+    operationId: "dashboard.orders.release_hold",
+    method: "post",
+    path: "/{id}/holds/{holdId}/release",
+    tags: ["Admin - Orders"],
+    summary: "Release an app's hold after staff review",
+    description: "The order can be shipped, handed over and moved on again once no hold is open. Releasing a released hold changes nothing.",
+    request: {
+        params: z.object({ id: z.string(), holdId: z.string().max(64) }),
+    },
+    responses: {
+        200: {
+            description: "The released hold",
+            content: { "application/json": { schema: successEnvelope(holdSchema) } },
+        },
+        ...adminOrderResourceMutationErrorResponses,
+    },
+});
+
+app.openapi(releaseHoldRoute, async (c) => {
+    const { id, holdId } = c.req.valid("param");
+    const user = c.get("user") as { id?: string } | undefined;
+    const hold = await releaseOrderHold(c.get("db"), id, holdId, user?.id ?? null);
+    return ok(c, {
+        id: hold.id,
+        appId: hold.pluginId,
+        appName: hold.appName,
+        reason: hold.reason,
+        placedAt: new Date(hold.createdAt * 1000).toISOString(),
+        releasedAt: hold.releasedAt === null ? null : new Date(hold.releasedAt * 1000).toISOString(),
+    });
+});
+
 // ─── POST /:id/payment-recovery-link ─────────────────────────────────────────
 
 const createPaymentRecoveryLinkRoute = createRoute({
@@ -447,7 +493,10 @@ app.openapi(createPaymentRecoveryLinkRoute, async (c) => {
     const db = c.get("db");
     const orderId = c.req.valid("param").id;
     const storefrontUrl = resolveStorefrontUrl(c.env);
-    const recoveryLink = await previewOrderPaymentRecoveryLink(db, orderId);
+    const recoveryLink = await previewOrderPaymentRecoveryLink(db, orderId, {
+        // An app's hosted gateway can be recovered like a built-in one (read only when one is named).
+        paymentProviders: () => requestPaymentProviders(c),
+    });
     const url = buildPaymentRecoveryUrl(storefrontUrl, recoveryLink);
 
     return created(c, {

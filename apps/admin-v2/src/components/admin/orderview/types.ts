@@ -219,6 +219,8 @@ export interface Order {
   discounts: OrderDiscount[];
   /** Apps' advisory risk checks (never acted on automatically); empty when none. */
   appRiskChecks: OrderAppRiskCheck[];
+  /** Apps' holds for staff review, open ones first (absent on reads that predate holds). */
+  holds?: OrderHold[];
   customerId: string | null;
   /** The customer record the order is filed under (a guest record, an account or a merchant-added customer). */
   customerRecord?: OrderCustomerRecord | null;
@@ -306,6 +308,21 @@ export interface OrderAppRiskCheck {
   reasons: string[];
   /** When the app checked: an ISO string or unix seconds, like every order timestamp. */
   checkedAt: OrderTimestamp;
+}
+
+/**
+ * An app's hold (`order.risk` with hold). While open (`releasedAt` null) the
+ * order is not shipped, handed over or moved on; cancelling stays possible.
+ * Staff release it, and the app never holds that order again.
+ */
+export interface OrderHold {
+  id: string;
+  appId: string;
+  appName: string;
+  /** The app's reasons, one per line. */
+  reason: string;
+  placedAt: OrderTimestamp;
+  releasedAt: OrderTimestamp | null;
 }
 
 export type OrderEditLockReason =

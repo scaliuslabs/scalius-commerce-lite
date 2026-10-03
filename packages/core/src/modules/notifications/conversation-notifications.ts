@@ -24,6 +24,7 @@ import { isReady } from "@scalius/shared/readiness";
 import { normalizeStorefrontOrigin } from "@scalius/shared/storefront-url";
 import { and, eq, gt } from "drizzle-orm";
 import { sendEmail, type EmailRuntimeContext } from "../../integrations/email";
+import type { AppProviders } from "../../integrations/provider-port";
 import { notificationsDocument } from "../settings/documents";
 import { MESSAGE_COPY, type MessageLanguage } from "./message-copy";
 import { storeHeaderHtml, type EmailStore } from "./notification-templates";
@@ -42,6 +43,7 @@ import {
   type OrderNotificationChannelOutcome,
   type OrderNotificationDispatchResult,
 } from "./notifications.service";
+import { createProviderClientReference } from "./order-notification-delivery-receipts";
 import { readStoreIdentity } from "./store-messages";
 
 /** An SMS reply alert goes out at most once per thread per hour (§15 q8). */
@@ -58,6 +60,8 @@ export interface ConversationNotificationClaim {
 export interface ConversationNotificationOptions {
   encryptionKey?: string;
   env: Env;
+  /** The app providers a saved SMS or email choice may name. */
+  appProviders?: AppProviders;
 }
 
 export type ConversationNotificationResult =
@@ -283,7 +287,7 @@ async function sendReplyToBuyer(
   const store = await readStoreIdentity(db);
   const copy = MESSAGE_COPY[store.language].conversation;
   const order = party?.orderNumber ?? null;
-  const emailContext: EmailRuntimeContext = { db, env: options.env as unknown as Record<string, unknown>, encryptionKey: options.encryptionKey };
+  const emailContext: EmailRuntimeContext = { db, env: options.env as unknown as Record<string, unknown>, encryptionKey: options.encryptionKey, appProviders: options.appProviders };
 
   if (channels.includes("email")) {
     const email = party?.email ?? null;
@@ -362,7 +366,7 @@ async function sendReplySms(
   }
   try {
     const { getActiveSmsProvider, getSmsProviderReadiness } = await import("../../integrations/sms");
-    const readiness = await getSmsProviderReadiness(db, options.encryptionKey);
+    const readiness = await getSmsProviderReadiness(db, options.encryptionKey, options.appProviders);
     const providerName = readiness.activeProvider ?? "sms";
     if (!isReady(readiness)) {
       return recordSkippedDelivery({
@@ -374,21 +378,26 @@ async function sendReplySms(
         reason: readiness.issues[0]?.message ?? "SMS provider is not configured",
       });
     }
-    const provider = await getActiveSmsProvider(db, options.encryptionKey);
-    const target = { ...base, channel: "sms" as const, provider: provider?.name ?? providerName, recipient: phone, recipientMasked: maskPhone(phone) };
+    const provider = await getActiveSmsProvider(db, options.encryptionKey, options.appProviders);
+    const target = { ...base, channel: "sms" as const, provider: provider?.id ?? providerName, recipient: phone, recipientMasked: maskPhone(phone) };
     const blocked = await recordProviderBlockedDeliveryIfNeeded(target);
     if (blocked) return blocked;
     const copy = MESSAGE_COPY[(await readStoreIdentity(db)).language].conversation;
     return await dispatchWithReceipt({
       ...target,
-      send: async () => {
+      send: async (delivery) => {
         if (!provider) {
           return { success: false, provider: "sms", providerStatus: "missing_sms_provider", rawResponse: "No active SMS provider configured", retryable: false };
         }
-        const result = await provider.sendSms({ to: phone, message: copy.replySms(storeName, order) });
+        // The receipt's reference keys the provider's idempotency, as for every other SMS.
+        const result = await provider.send({
+          to: phone,
+          message: copy.replySms(storeName, order),
+          clientReference: createProviderClientReference(delivery),
+        }, {});
         return {
           success: result.success,
-          provider: provider.name,
+          provider: provider.id,
           providerMessageId: result.providerRef,
           providerStatus: result.rawStatus,
           rawResponse: result.rawStatus,
@@ -450,7 +459,7 @@ async function sendMessageToStaff(
   if (channels.includes("email")) {
     const recipients = (await notificationsDocument.read(db)).staffEmailRecipients;
     const customer = party?.name ?? "Customer";
-    const emailContext: EmailRuntimeContext = { db, env: options.env as unknown as Record<string, unknown>, encryptionKey: options.encryptionKey };
+    const emailContext: EmailRuntimeContext = { db, env: options.env as unknown as Record<string, unknown>, encryptionKey: options.encryptionKey, appProviders: options.appProviders };
     for (const recipient of recipients) {
       const target = {
         db,

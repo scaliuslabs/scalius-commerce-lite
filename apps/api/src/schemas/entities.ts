@@ -309,6 +309,7 @@ const orderListFactsShape = {
     description: "Where it came in within the channel, as a lowercase slug: facebook, instagram, whatsapp, phone, walk_in, the merchant's own label, or an app id.",
   }),
   openRequestType: z.enum(["cancel_pre_shipment", "return", "refund"]).nullable(),
+  onHold: z.boolean().openapi({ description: "An app's hold for staff review is open: the order is not shipped or moved on until staff release it." }),
   cod: z.object({ status: z.string(), deliveryAttempts: z.number().int() }).nullable(),
   refundDue: z.number().openapi({ description: "Value of received returns not refunded yet." }),
   refundedAmount: z.number(),
@@ -495,6 +496,19 @@ export const orderDetailSchema = z.object({
     level: z.enum(["low", "medium", "high"]),
     reasons: z.array(z.string()),
     checkedAt: timestampSchema,
+  })),
+  /**
+   * Apps' holds for staff review (`order.risk` with hold), open ones first.
+   * While one is open the order is not shipped, handed over or moved on
+   * (cancelling stays possible); staff release it.
+   */
+  holds: z.array(z.object({
+    id: z.string(),
+    appId: z.string(),
+    appName: z.string(),
+    reason: z.string(),
+    placedAt: timestampSchema,
+    releasedAt: timestampSchema.nullable(),
   })),
   status: z.string(),
   paymentStatus: z.string().nullable(),

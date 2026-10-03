@@ -34,6 +34,13 @@ import { PLUGIN_API_VERSION } from "@scalius/shared/plugins";
 import { packPlugin } from "../../../../scripts/plugin-build.mjs";
 import { pluginBundleKey } from "./loaders/sandbox";
 import { PLUGIN_TEST_CREDENTIAL_KEY, testCart } from "./testing/fixtures";
+import {
+  WALLET_FIXTURE_CODE,
+  WALLET_FIXTURE_ID,
+  WALLET_FIXTURE_MANIFEST,
+  WALLET_FIXTURE_SECRET,
+  walletSessionInput,
+} from "./testing/provider-fixture";
 
 const apiDir = resolve(import.meta.dirname, "../..");
 const HARNESS = resolve(import.meta.dirname, "testing/sandbox-harness.worker.ts");
@@ -165,6 +172,16 @@ describe("plugins in the sandbox loader (Miniflare workerLoaders)", () => {
       actorUserId: "owner",
     });
     await activatePlugin(db, "acme.probe", { actorUserId: "owner", expectedRevision: 1 });
+
+    // The payment provider fixture: the same bytes the bundled provider tests run.
+    const walletSha = sha256(WALLET_FIXTURE_CODE);
+    await bucket.put(pluginBundleKey(WALLET_FIXTURE_ID, "1.0.0", walletSha), WALLET_FIXTURE_CODE);
+    const walletInstalled = await installPlugin(db, { manifest: WALLET_FIXTURE_MANIFEST, source: "upload", bundleSha256: walletSha, actorUserId: "owner" });
+    const walletConfigured = await writePluginSettings(db, WALLET_FIXTURE_ID, { secret: WALLET_FIXTURE_SECRET }, {
+      expectedRevision: walletInstalled.revision,
+      credentialEncryptionKey: PLUGIN_TEST_CREDENTIAL_KEY,
+    });
+    await activatePlugin(db, WALLET_FIXTURE_ID, { actorUserId: "owner", expectedRevision: walletConfigured.revision });
   }, 180_000);
 
   afterAll(async () => {
@@ -224,6 +241,30 @@ describe("plugins in the sandbox loader (Miniflare workerLoaders)", () => {
     expect(priced).toMatchObject({ ruleErrors: [], discountMinor: 48_000, totalMinor: 200_000 + 6_000 - 48_000 });
     const blocked = await send({ action: "price", pluginId: "scalius.bulk-discount", input: { ...order, items: [{ ...order.items[0], quantity: 11 }] } });
     expect(blocked.ruleErrors).toEqual([{ code: "max_quantity", message: "You can buy at most 10 of this item in one order.", index: 0, cartKey: null }]);
+  });
+
+  it("runs provider operations in the isolate with the same answers and errors as bundled", async () => {
+    const provider = (operation: string, input: unknown) => send({ action: "provider", pluginId: WALLET_FIXTURE_ID, kind: "payment", provider: "wallet", operation, input });
+    const session = await provider("createSession", walletSessionInput(12_550));
+    expect(session).toEqual({
+      ok: true,
+      value: { providerRef: "W-ORD1_full_12550", redirectUrl: "https://wallet.acme.test/pay?amount=125.50&currency=BDT" },
+    });
+    expect(await provider("createSession", walletSessionInput(12_550))).toEqual(session);
+    expect(await getPluginRecord(db, WALLET_FIXTURE_ID, "sessions", "attempt-12550")).toMatchObject({ orderId: "ORD1" });
+
+    const webhook = { method: "POST", rawBody: JSON.stringify({ id: "evt1", orderId: "ORD1", ref: "W-1", amountMinor: 12_550 }), headers: { "x-wallet-signature": WALLET_FIXTURE_SECRET }, query: {} };
+    expect((await provider("verifyWebhook", webhook)).value).toMatchObject({ status: "event", event: { kind: "confirmed", amountMinor: 12_550 } });
+
+    expect(await provider("createSession", walletSessionInput(1300)))
+      .toEqual({ ok: false, error: { name: "ProviderError", category: "declined", uncertain: false, code: "wallet.declined", message: "The wallet declined the payment." } });
+    const timeout = await provider("createSession", walletSessionInput(1400));
+    expect(timeout.error).toMatchObject({ category: "retryable", uncertain: true, code: "wallet.timeout" });
+    expect(timeout.error.message).not.toContain(WALLET_FIXTURE_SECRET);
+    expect((await provider("createSession", walletSessionInput(1500))).error).toMatchObject({ category: "retryable", uncertain: true, code: "provider.invalid_response" });
+    expect((await provider("createSession", walletSessionInput(1600))).error).toMatchObject({ category: "retryable", uncertain: true, code: "provider.error" });
+    expect((await provider("listRefunds", { sourceRef: "W-1" })).error)
+      .toMatchObject({ category: "misconfigured", code: "provider.unsupported" });
   });
 
   it("gives the isolate no network: direct fetch fails and the bridge refuses undeclared hosts", async () => {

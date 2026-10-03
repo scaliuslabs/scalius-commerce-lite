@@ -12,7 +12,7 @@ const s = (key: string, vars?: Record<string, string | number>) => translate(shi
 const order = (overrides: Partial<OrderListItem>) => ({
   status: "confirmed", paymentStatus: "unpaid", paymentMethod: "cod", fulfillmentStatus: "pending", totalAmount: 680, paidAmount: 0,
   latestShipment: null, shipmentRecovery: { state: "none", severity: "info", activeLock: false },
-  paymentRecovery: { state: "none" }, activeRefundOperation: null, openRequestType: null, refundDue: 0, cod: null,
+  paymentRecovery: { state: "none" }, activeRefundOperation: null, openRequestType: null, onHold: false, refundDue: 0, cod: null,
   requiresShipping: true, shippingMethodKind: "delivery", pickupReadyAt: null,
   ...overrides,
 }) as unknown as OrderListItem;
@@ -30,6 +30,10 @@ describe("orders list row facts", () => {
       t("courierCheck"), t("recovery.awaiting_payment"), o("request.cancel_pre_shipment"), o("refundOwed"),
     ]);
     expect(items[0]!.tone).toBe("critical");
+
+    // An app's hold leads: nothing moves on until staff release it.
+    const held = orderAttention(order({ onHold: true, refundDue: 120 }), t, o);
+    expect(held).toEqual([{ tone: "critical", text: t("onHold") }, { tone: "warning", text: o("refundOwed") }]);
   });
 
   it("says where the parcel is, never a stale In transit for a returned order or a failed cash attempt", () => {

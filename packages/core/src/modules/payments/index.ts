@@ -14,15 +14,17 @@ export type {
   PaymentGateway,
 } from "./gateways/port";
 export {
+  BUILT_IN_PAYMENT_GATEWAY_IDS,
+  BUILT_IN_PAYMENT_PROVIDERS,
   COD_PAYMENT_METHOD,
-  getPaymentGateway,
+  createPaymentProviders,
   isOnlinePaymentMethod,
   isPaymentMethodId,
-  listPaymentGateways,
-  listPaymentMethodIds,
+  onlinePaymentMethodCondition,
   paymentMethodLabel,
-  requirePaymentGateway,
+  paymentProvidersFor,
 } from "./gateways/registry";
+export type { CheckoutGatewayPrecommitInput, PaymentProviders, PaymentProvidersSource } from "./gateways/registry";
 
 // --- Gateway settings ---
 export {
@@ -124,9 +126,16 @@ export type {
   PaymentSessionAttemptClaimResult,
 } from "./payment-session-attempts";
 export { PartialRefundProcessedError } from "./refund-service";
-export { getPaymentGatewaySettingsSnapshot, getPaymentMethodPreferences, getSSLCommerzCheckoutReadiness, getStripeCheckoutReadiness, resolveActivePaymentMethodsFromRows } from "./gateway-settings";
-export type { GatewaySettingsStoredRow } from "./gateway-settings";
-export { COD_LABEL, filterPaymentMethodsForCurrency, getCheckoutGatewayPrecommitIssue, getGatewayAmountIssue, getPaymentMethodCurrencyIssue, isPaymentMethodCurrencyEligible, publicAmountLimits } from "./gateways/registry";
+export {
+  getPaymentGatewaySettingsSnapshot,
+  getPaymentMethodPreferences,
+  getSSLCommerzCheckoutReadiness,
+  getStripeCheckoutReadiness,
+  resolveActivePaymentMethodsFromRows,
+  resolveAppPaymentUsability,
+} from "./gateway-settings";
+export type { AppPaymentUsability, GatewaySettingsStoredRow } from "./gateway-settings";
+export { COD_LABEL, getGatewayAmountIssue, publicAmountLimits } from "./gateways/registry";
 export { REFUND_OBSERVED_EVENT_TYPE } from "./refund-reconciliation";
 export { reconcileHostedPaymentReturn } from "./hosted-payment-return";
 export type { HostedPaymentReturnResult } from "./hosted-payment-return";

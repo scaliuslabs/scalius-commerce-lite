@@ -1,7 +1,7 @@
 // Test fixture: orders-list rows in every state combination that can co-occur.
 // Every order status meets every payment and fulfilment status; every courier
 // state meets every fulfilment type and channel; the flags (locks, requests,
-// money owed back, failed cash attempts, junk and long names, long totals) are
+// money owed back, failed cash attempts, apps' holds, junk and long names, long totals) are
 // spread across them. Used by the list's render tests in both languages.
 import type { OrderListItem } from "@scalius/core/modules/orders/browser";
 import { FULFILLMENT_STATUSES, ORDER_STATUSES, PAYMENT_STATUSES } from "@scalius/shared/order-state";
@@ -103,6 +103,7 @@ function row(index: number, dims: {
     channel: dims.channel.channel,
     channelSource: dims.channel.channelSource,
     openRequestType: REQUESTS[index % REQUESTS.length]!,
+    onHold: index % 5 === 0,
     cod: COD[index % COD.length]!,
     refundDue: index % 7 === 0 ? 450 : 0,
     refundedAmount: dims.paymentStatus.includes("refunded") ? 100 : 0,

@@ -15,6 +15,11 @@ export function hasDeliveryCard(order: Pick<Order, "fulfillments" | "shipments" 
     || (order.shipmentRecovery?.state ?? "none") !== "none";
 }
 
+/** Hold for review: while an app's hold is open (nothing ships or moves on until staff release it). */
+export function hasHoldCard(order: Pick<Order, "holds">): boolean {
+  return (order.holds ?? []).some((hold) => hold.releasedAt === null);
+}
+
 /** Orders a return can be started on, or whose return is already the story. */
 const RETURN_STATUSES = new Set(["delivered", "completed", "returned", "refunded"]);
 

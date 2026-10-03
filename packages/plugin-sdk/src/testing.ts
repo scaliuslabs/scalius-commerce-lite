@@ -7,6 +7,7 @@
 // callbacks you pass; messages are recorded, not sent.
 
 import {
+  isPluginHostAllowed,
   parsePluginManifest,
   pluginHandlerInventory,
   pluginSettingDefaults,
@@ -15,6 +16,7 @@ import {
   type PluginRenderContext,
   type PluginSettingValue,
 } from "@scalius/shared/plugins";
+import { providerOperationSchemas } from "@scalius/shared/plugins/providers";
 import type { EventTopic } from "@scalius/shared/events";
 import type { PluginApiCallInput, PluginApiResult, PluginRouteRequest, PluginStoreInfo } from "./context";
 import {
@@ -77,6 +79,10 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
   const manifest: PluginManifest = parsed.manifest;
   const records = new Map<string, Map<string, Record<string, unknown>>>(Object.keys(manifest.storage).map((name) => [name, new Map()]));
   const kv = new Map<string, unknown>();
+  // Revisions, as the platform keeps them: every write advances one.
+  const revisions = new Map<string, number>();
+  const kvRevisions = new Map<string, number>();
+  const revisionKey = (name: string, id: string) => `${name}\u0000${id}`;
   const customFields = new Map<string, Record<string, unknown>>();
   const logs: PluginLogRecord[] = [];
   const sent = { emails: [] as unknown[], sms: [] as unknown[], notices: [] as unknown[] };
@@ -98,23 +104,67 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
     apiCall: async (operationId, input) => copy(options.api
       ? await options.api(operationId, input as PluginApiCallInput | undefined)
       : { ok: false, status: 404, data: null, error: { code: "api.unknown_operation", message: `Unknown operation ${operationId}.` } }),
-    storageGet: async (name, id) => copy(collection(name).get(id) ?? null),
-    storagePut: async (name, id, record) => {
-      const store = collection(name);
-      if (typeof record !== "object" || record === null || Array.isArray(record)) refuse("storage.invalid_record", "A record is a plain JSON object.");
-      const data = copy(record as Record<string, unknown>);
-      for (const entry of manifest.storage[name]!.unique) {
-        const fields = fieldsOf(entry);
-        if (fields.some((field) => scalar(data[field]) === null)) continue;
-        for (const [otherId, other] of store) {
-          if (otherId !== id && fields.every((field) => compare(scalar(other[field]), scalar(data[field])) === 0)) {
-            refuse("storage.unique_violation", `Another record already has this ${fields.join(" + ")}.`);
+    storageGet: async (name, id) => {
+      const data = collection(name).get(id);
+      return data ? copy({ data, revision: revisions.get(revisionKey(name, id)) ?? 1 }) : null;
+    },
+    // All-or-nothing, as one platform batch: every condition and unique index
+    // is checked against the state the whole batch leaves before anything changes.
+    storageWrite: async (operations) => {
+      if (!Array.isArray(operations) || operations.length < 1 || operations.length > 25) refuse("storage.invalid_batch", "A batch has 1 to 25 operations.");
+      const staged = new Map([...records].map(([name, store]) => [name, new Map(store)]));
+      const seen = new Set<string>();
+      const touched: Array<{ name: string; id: string; written: boolean }> = [];
+      for (const operation of operations as Array<Record<string, unknown>>) {
+        const { op, collection: name, id, expectedRevision } = operation as { op?: unknown; collection: string; id: string; expectedRevision?: unknown };
+        if (op !== "put" && op !== "delete" && op !== "check") refuse("storage.invalid_batch", "Each operation is a put, delete or check.");
+        const store = staged.get(name) ?? refuse("storage.undeclared_collection", `Collection "${name}" is not declared in the manifest.`);
+        if (typeof id !== "string" || id.length < 1 || id.length > 128) refuse("storage.invalid_id", "Record ids are 1 to 128 printable characters.");
+        if (seen.has(revisionKey(name, id))) refuse("storage.invalid_batch", "A batch writes each record once.");
+        seen.add(revisionKey(name, id));
+        if (expectedRevision !== undefined || op === "check") {
+          if (expectedRevision !== null && !(typeof expectedRevision === "number" && Number.isSafeInteger(expectedRevision) && expectedRevision >= 1)) {
+            refuse("storage.invalid_batch", "expectedRevision is a revision you read, or null for a record that must not exist.");
+          }
+          const current = records.get(name)!.has(id) ? revisions.get(revisionKey(name, id)) ?? 1 : null;
+          if (current !== expectedRevision) refuse("storage.conflict", `${name}/${id} changed since it was read (or exists when it must not): read it again and retry.`);
+        }
+        if (op === "check") {
+          touched.push({ name, id, written: false });
+        } else if (op === "delete") {
+          store.delete(id);
+          touched.push({ name, id, written: false });
+        } else {
+          const record = operation.record;
+          if (typeof record !== "object" || record === null || Array.isArray(record)) refuse("storage.invalid_record", "A record is a plain JSON object.");
+          store.set(id, copy(record as Record<string, unknown>));
+          touched.push({ name, id, written: true });
+        }
+      }
+      for (const [name, store] of staged) {
+        for (const entry of manifest.storage[name]!.unique) {
+          const fields = fieldsOf(entry);
+          const values = new Set<string>();
+          for (const data of store.values()) {
+            if (fields.some((field) => scalar(data[field]) === null)) continue;
+            const key = JSON.stringify(fields.map((field) => scalar(data[field])));
+            if (values.has(key)) refuse("storage.unique_violation", `Another record already has this ${fields.join(" + ")}.`);
+            values.add(key);
           }
         }
       }
-      store.set(id, data);
+      for (const [name, store] of staged) records.set(name, store);
+      return touched.map(({ name, id, written }) => {
+        const key = revisionKey(name, id);
+        if (!written) {
+          if (!records.get(name)!.has(id)) revisions.delete(key);
+          return null;
+        }
+        const revision = (records.get(name)!.has(id) && revisions.has(key) ? revisions.get(key)! : 0) + 1;
+        revisions.set(key, revision);
+        return revision;
+      });
     },
-    storageDelete: async (name, id) => collection(name).delete(id),
     storageQuery: async (name, query) => {
       const { where = {}, orderBy, limit = 50, cursor } = (query ?? {}) as { where?: Record<string, Scalar>; orderBy?: { field: string; direction?: string }; limit?: number; cursor?: string | null };
       const store = collection(name);
@@ -135,22 +185,37 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
       if (!indexFor(name, Object.keys(filter), undefined)) refuse("storage.unindexed_query", "Count by the leading fields of a declared index.");
       return [...collection(name).values()].filter((data) => Object.entries(filter).every(([key, value]) => compare(scalar(data[key]), scalar(value)) === 0)).length;
     },
-    kvGet: async (key) => copy(kv.get(key) ?? null),
-    kvSet: async (key, value) => void kv.set(key, copy(value)),
-    kvDelete: async (key) => void kv.delete(key),
+    kvGet: async (key) => (kv.has(key) ? copy({ value: kv.get(key), revision: kvRevisions.get(key) ?? 1 }) : null),
+    kvSet: async (key, value, options) => {
+      const expected = options?.expectedRevision;
+      if (expected !== undefined && (kv.has(key) ? kvRevisions.get(key) ?? 1 : null) !== expected) {
+        refuse("kv.conflict", `${key} changed since it was read: read it again and retry.`);
+      }
+      const revision = (kv.has(key) ? kvRevisions.get(key) ?? 1 : 0) + 1;
+      kv.set(key, copy(value));
+      kvRevisions.set(key, revision);
+      return { revision };
+    },
+    kvDelete: async (key) => {
+      kv.delete(key);
+      kvRevisions.delete(key);
+    },
     kvList: async (prefix) => [...kv.keys()].filter((key) => key.startsWith(prefix ?? "")).sort(),
     httpFetch: async (url, init) => {
       let host = "";
+      let port = "";
       try {
         const parsedUrl = new URL(url);
         if (parsedUrl.protocol !== "https:") refuse("http.not_allowed", "The URL must start with https://.");
         host = parsedUrl.hostname;
+        port = parsedUrl.port;
       } catch (error) {
         if (error instanceof Error && error.message.startsWith("[")) throw error;
         refuse("http.not_allowed", "Enter a full URL.");
       }
-      const allowed = manifest.allowedHosts.some((pattern) => pattern.startsWith("*.") ? host.endsWith(pattern.slice(1)) : host === pattern);
-      if (!allowed) refuse("http.not_allowed", `${host} is not in the plugin's allowedHosts.`);
+      if (!isPluginHostAllowed(host, manifest.allowedHosts, port)) {
+        refuse("http.not_allowed", `${port ? `${host}:${port}` : host} is not in the plugin's allowedHosts.`);
+      }
       if (!options.fetch) refuse("http.failed", `The request to ${host} failed.`);
       const response = await options.fetch(url, copy(init));
       return { status: response.status, headers: response.headers ?? {}, body: response.body };
@@ -226,6 +291,41 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
       },
     }),
     fn: (point: string, input: unknown) => run({ kind: "function", point, input }),
+    /**
+     * Runs one provider operation the way the platform does: the input must
+     * match the port (a mismatch throws, as it would be a platform bug), the
+     * answer is validated (an invalid one fails as `provider.invalid_response`)
+     * and the store's messaging is refused. A `ProviderError` the operation
+     * raises comes back as `error.category` / `error.uncertain`.
+     */
+    provider: async (providerId: string, operation: string, input: unknown): Promise<PluginInvocationResult> => {
+      const declaration = manifest.providers.find((entry) => entry.id === providerId);
+      if (!declaration) throw new Error(`The manifest declares no provider ${providerId}.`);
+      const schemas = providerOperationSchemas(declaration.kind, operation);
+      if (!schemas) throw new Error(`The ${declaration.kind} port has no ${operation} operation.`);
+      const checked = schemas.input.safeParse(input);
+      if (!checked.success) throw new TypeError(`Invalid ${declaration.kind}.${operation} input: ${checked.error.issues[0]?.path.join(".")} ${checked.error.issues[0]?.message}`);
+      const notAllowed = async () => refuse("messaging.not_allowed", "Provider operations reach their provider with ctx.http, not the store's messaging.");
+      const result = await run(
+        { kind: "provider", provider: providerId, operation, input: checked.data },
+        { ...bridge, messagingEmail: notAllowed, messagingSms: notAllowed, messagingNotifyStaff: notAllowed },
+      );
+      if (!result.ok) return result;
+      const answer = schemas.output.safeParse(result.value);
+      if (answer.success) return { ...result, value: answer.data };
+      const issue = answer.error.issues[0];
+      return {
+        ...result,
+        ok: false,
+        value: null,
+        error: {
+          code: "provider.invalid_response",
+          message: `Invalid ${operation} answer at ${issue?.path.join(".") || "(root)"}: ${issue?.message ?? "invalid"}.`,
+          category: "retryable",
+          uncertain: true,
+        },
+      };
+    },
     route: (surface: "admin" | "public" | "webhooks", name: string, request: Partial<PluginRouteRequest> = {}) => run({
       kind: "route",
       surface,

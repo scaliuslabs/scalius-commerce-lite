@@ -351,9 +351,9 @@ describe("customer order email composition and delivery", () => {
     const sendSms = vi.fn(async () => ({ success: true, providerRef: "sms_1", rawStatus: "sent" }));
     const sms = await import("../../integrations/sms");
     vi.spyOn(sms, "getSmsProviderReadiness").mockResolvedValue({ status: "ready", issues: [], activeProvider: "test" } as never);
-    vi.spyOn(sms, "getActiveSmsProvider").mockResolvedValue({ name: "test", sendSms } as never);
+    vi.spyOn(sms, "getActiveSmsProvider").mockResolvedValue({ id: "test", label: "Test", send: sendSms } as never);
     await sendOrderNotificationEmail(null, "Queue name", "order_email", "order_confirmed", undefined, db, {});
-    expect(sendSms).toHaveBeenCalledWith(expect.objectContaining({ message: "River & Loom: #order_email confirmed, pay ৳258" }));
+    expect(sendSms).toHaveBeenCalledWith(expect.objectContaining({ message: "River & Loom: #order_email confirmed, pay ৳258" }), {});
     vi.restoreAllMocks();
   });
 

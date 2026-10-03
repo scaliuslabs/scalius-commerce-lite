@@ -1,26 +1,34 @@
+// Delivery providers: a merchant's couriers. Pathao and Steadfast rows keep
+// their (encrypted) credentials here; an installed app courier's row names
+// it as `<plugin id>:<provider id>` and keeps none, its settings live in the
+// app (GET/POST /admin/settings/providers lists and tests them). Readiness,
+// activation and tests go through the courier port for every row.
 import { OpenAPIHono, createRoute, z, type RouteConfig, type RouteHandler } from "@hono/zod-openapi";
 import {
+    assertDeliveryProviderActivatable,
     getDeliveryProviders,
     getDeliveryProvider,
+    getDeliveryProviderReadiness,
     saveDeliveryProvider,
     testDeliveryProvider,
-    createProvider,
+    testDeliveryProviderSetup,
+    type CourierProvidersSource,
 } from "@scalius/core/modules/delivery";
-import {
-    assertDeliveryProviderReadyForActivation,
-    getDeliveryProviderReadinessSummary,
-    getDeliveryProviderSetupFingerprint,
-} from "@scalius/core/modules/delivery/browser";
+import { isQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
 import { deliveryProviders } from "@scalius/database/schema";
 import { eq } from "drizzle-orm";
 import { readStoredCredentialStrict } from "@scalius/core/utils/credential-encryption";
 import { NotFoundError, ValidationError } from "../../../utils/api-error";
 import { getCredentialEncryptionKey, requireEncryptionKey } from "../../../utils/encryption-key";
+import { requestCourierProviders } from "../../../plugins/providers/courier";
 
 import { ok, created } from "../../../utils/api-response";
 import { successEnvelope, errorResponses, serviceUnavailableResponse } from "../../../schemas/responses";
 import { readinessSchema } from "../../../schemas/readiness";
 const app = new OpenAPIHono<{ Bindings: Env }>();
+
+/** `pathao`, `steadfast`, or an installed app courier's `<plugin id>:<provider id>`. */
+const PROVIDER_TYPE_MAX = 160;
 
 const MASKED_VALUE = "••••••••••••";
 const SENSITIVE_CREDENTIAL_KEYS = [
@@ -189,42 +197,18 @@ function requiredTimestampForClient(value: Date | number | string): string | num
 async function serializeProviderForClient(
     provider: DeliveryProviderRouteRecord,
     env: Record<string, unknown>,
+    couriers: CourierProvidersSource,
 ) {
-    const credentialsForReadiness = await decryptStoredCredentials(provider.credentials, env).catch(() => null);
-    const credentialsReadable = credentialsForReadiness !== null;
-    const maskedCredentials = credentialsForReadiness
-        ? await maskCredentialsForClient(provider.type, provider.credentials, env).catch(() => "{}")
-        : "{}";
-
-    let currentFingerprint: string | null = null;
-    const fingerprintKey = env.CREDENTIAL_ENCRYPTION_KEY as string | undefined;
-    if (fingerprintKey && credentialsForReadiness) {
-        try {
-            currentFingerprint = await getDeliveryProviderSetupFingerprint({
-                type: provider.type,
-                credentials: credentialsForReadiness,
-                config: provider.config,
-            }, fingerprintKey);
-        } catch { /* unreadable setup remains untested */ }
-    }
-
-    const readiness = getDeliveryProviderReadinessSummary({
-        type: provider.type,
-        credentials: credentialsForReadiness,
-        credentialsReadable,
-        config: provider.config,
-        isActive: provider.isActive,
-        currentFingerprint,
-        lastTestAttemptAt: provider.lastTestAttemptAt,
-        lastTestSuccessAt: provider.lastTestSuccessAt,
-        lastTestFailureAt: provider.lastTestFailureAt,
-        lastTestSuccessFingerprint: provider.lastTestSuccessFingerprint,
-    });
+    // Unreadable credentials mask to nothing; the courier judges readiness.
+    const [maskedCredentials, readiness] = await Promise.all([
+        maskCredentialsForClient(provider.type, provider.credentials, env).catch(() => "{}"),
+        getDeliveryProviderReadiness(provider, getCredentialEncryptionKey(env), couriers),
+    ]);
 
     return {
         id: provider.id.slice(0, 100),
         name: provider.name.slice(0, 100),
-        type: provider.type.slice(0, 50),
+        type: provider.type.slice(0, PROVIDER_TYPE_MAX),
         isActive: provider.isActive,
         credentials: maskedCredentials,
         config: projectProviderConfig(provider.type, provider.config),
@@ -259,7 +243,8 @@ async function serializeProviderForClient(
 const deliveryProviderSchema = z.object({
     id: z.string().max(100),
     name: z.string().max(100),
-    type: z.string().max(50),
+    /** `pathao`, `steadfast`, or an app courier's `<plugin id>:<provider id>`. */
+    type: z.string().max(PROVIDER_TYPE_MAX),
     credentials: z.string().max(4096),
     config: z.string().max(4096),
     isActive: z.boolean(),
@@ -315,7 +300,8 @@ app.openapi(listRoute, async (c) => {
     const providerRows = await getDeliveryProviders(db, { limit: limit + 1, offset: (page - 1) * limit });
     const providers = providerRows.slice(0, limit);
     const env = c.env as Record<string, unknown>;
-    const maskedProviders = await Promise.all(providers.map((provider) => serializeProviderForClient(provider, env)));
+    const couriers = requestCourierProviders(c);
+    const maskedProviders = await Promise.all(providers.map((provider) => serializeProviderForClient(provider, env, couriers)));
 
     return ok(c, {
         providers: maskedProviders,
@@ -355,7 +341,12 @@ const steadfastConfigSchema = z.object({
 const providerObjectInput = <T extends z.ZodTypeAny>(schema: T) =>
     z.union([encodedProviderObjectSchema, schema]);
 
-const createDeliveryProviderSchema = z.discriminatedUnion("type", [
+/** An installed app courier: its credentials and options live in the app's settings, never on the row. */
+const appCourierTypeSchema = z.string().max(PROVIDER_TYPE_MAX)
+    .refine(isQualifiedProviderId, "Name an app courier as <plugin id>:<provider id>.")
+    .describe("An installed app courier, <plugin id>:<provider id> (GET /admin/settings/providers?kind=courier lists them). Set it up in the app's settings.");
+
+const createDeliveryProviderSchema = z.union([
     z.object({
         name: z.string().min(1).max(100),
         type: z.literal("pathao"),
@@ -370,7 +361,20 @@ const createDeliveryProviderSchema = z.discriminatedUnion("type", [
         config: providerObjectInput(steadfastConfigSchema),
         isActive: z.boolean().optional().default(false),
     }),
+    z.object({
+        name: z.string().min(1).max(100),
+        type: appCourierTypeSchema,
+        isActive: z.boolean().optional().default(false),
+    }).strict(),
 ]);
+
+/** The row-held setup of a request body: an app courier's row holds none. */
+function bodySetup(body: { credentials?: string | Record<string, unknown>; config?: string | Record<string, unknown> } | object) {
+    return {
+        credentials: "credentials" in body ? stringifyJsonInput(body.credentials as string | Record<string, unknown> | undefined) : undefined,
+        config: "config" in body ? stringifyJsonInput(body.config as string | Record<string, unknown> | undefined) : undefined,
+    };
+}
 
 const createProviderRoute = createRoute({
     method: "post",
@@ -393,15 +397,13 @@ app.openapi(createProviderRoute, (async (c: AppRouteContext<typeof createProvide
     const validated = c.req.valid("json");
     const env = c.env as Record<string, unknown>;
     const encryptionKey = requireEncryptionKey(env);
-    const credentials = stringifyJsonInput(validated.credentials) ?? "{}";
-    const config = stringifyJsonInput(validated.config) ?? "{}";
+    const couriers = requestCourierProviders(c);
+    const setup = bodySetup(validated);
+    const credentials = setup.credentials ?? "{}";
+    const config = setup.config ?? "{}";
 
     if (validated.isActive) {
-        assertDeliveryProviderReadyForActivation({
-            type: validated.type,
-            credentials,
-            config,
-        });
+        await assertDeliveryProviderActivatable({ type: validated.type, credentials, config }, encryptionKey, couriers);
     }
 
     const provider = {
@@ -413,17 +415,17 @@ app.openapi(createProviderRoute, (async (c: AppRouteContext<typeof createProvide
         config,
     };
 
-    const savedProvider = await saveDeliveryProvider(db, provider, encryptionKey);
+    const savedProvider = await saveDeliveryProvider(db, provider, encryptionKey, couriers);
     const reloadedProvider = await getDeliveryProvider(db, savedProvider.id);
     if (!reloadedProvider) throw new NotFoundError("Provider not found after save");
-    const maskedResponse = await serializeProviderForClient(reloadedProvider, env);
+    const maskedResponse = await serializeProviderForClient(reloadedProvider, env, couriers);
 
     return created(c, maskedResponse);
 }) as unknown as AppRouteHandler<typeof createProviderRoute>);
 
 // ── Update Provider ──
 
-const updateDeliveryProviderSchema = z.discriminatedUnion("type", [
+const updateDeliveryProviderSchema = z.union([
     z.object({
         id: z.string().min(1).max(100),
         name: z.string().min(1).max(100),
@@ -440,6 +442,12 @@ const updateDeliveryProviderSchema = z.discriminatedUnion("type", [
         config: providerObjectInput(steadfastConfigSchema).optional(),
         isActive: z.boolean().optional(),
     }),
+    z.object({
+        id: z.string().min(1).max(100),
+        name: z.string().min(1).max(100),
+        type: appCourierTypeSchema,
+        isActive: z.boolean().optional(),
+    }).strict(),
 ]);
 
 const updateProviderRoute = createRoute({
@@ -464,8 +472,8 @@ app.openapi(updateProviderRoute, (async (c: AppRouteContext<typeof updateProvide
     const validated = c.req.valid("json");
     const env = c.env as Record<string, unknown>;
     const encryptionKey = requireEncryptionKey(env);
-    const credentials = stringifyJsonInput(validated.credentials);
-    const config = stringifyJsonInput(validated.config);
+    const couriers = requestCourierProviders(c);
+    const { credentials, config } = bodySetup(validated);
 
     const existingProvider = await getDeliveryProvider(db, validated.id);
     if (!existingProvider) {
@@ -473,11 +481,11 @@ app.openapi(updateProviderRoute, (async (c: AppRouteContext<typeof updateProvide
         const providerCredentials = credentials || "{}";
         const providerConfig = config || "{}";
         if (isActive) {
-            assertDeliveryProviderReadyForActivation({
+            await assertDeliveryProviderActivatable({
                 type: validated.type,
                 credentials: providerCredentials,
                 config: providerConfig,
-            });
+            }, encryptionKey, couriers);
         }
 
         const savedProvider = await saveDeliveryProvider(db, {
@@ -487,10 +495,10 @@ app.openapi(updateProviderRoute, (async (c: AppRouteContext<typeof updateProvide
             isActive,
             credentials: providerCredentials,
             config: providerConfig,
-        }, encryptionKey);
+        }, encryptionKey, couriers);
         const reloadedProvider = await getDeliveryProvider(db, savedProvider.id);
         if (!reloadedProvider) throw new NotFoundError("Provider not found after save");
-        const maskedResponse = await serializeProviderForClient(reloadedProvider, env);
+        const maskedResponse = await serializeProviderForClient(reloadedProvider, env, couriers);
 
         return created(c, maskedResponse);
     }
@@ -504,11 +512,11 @@ app.openapi(updateProviderRoute, (async (c: AppRouteContext<typeof updateProvide
     const nextIsActive = validated.isActive !== undefined ? validated.isActive : existingProvider.isActive;
 
     if (nextIsActive) {
-        assertDeliveryProviderReadyForActivation({
+        await assertDeliveryProviderActivatable({
             type: validated.type,
             credentials: unmaskedCreds,
             config: nextConfig,
-        });
+        }, encryptionKey, couriers);
     }
 
     const savedProvider = await saveDeliveryProvider(db, {
@@ -518,11 +526,11 @@ app.openapi(updateProviderRoute, (async (c: AppRouteContext<typeof updateProvide
         isActive: nextIsActive,
         credentials: unmaskedCreds,
         config: nextConfig,
-    }, encryptionKey);
+    }, encryptionKey, couriers);
 
     const reloadedProvider = await getDeliveryProvider(db, savedProvider.id);
     if (!reloadedProvider) throw new NotFoundError("Provider not found after save");
-    const maskedResponse = await serializeProviderForClient(reloadedProvider, env);
+    const maskedResponse = await serializeProviderForClient(reloadedProvider, env, couriers);
 
     return ok(c, maskedResponse);
 }) as unknown as AppRouteHandler<typeof updateProviderRoute>);
@@ -565,13 +573,11 @@ const createTestRoute = createRoute({
 });
 
 app.openapi(createTestRoute, async (c) => {
-    const { type, credentials, config, name } = c.req.valid("json");
-
-    assertDeliveryProviderReadyForActivation({ type, credentials, config });
-
-    const mockProvider = {
+    const { type, credentials, config } = c.req.valid("json");
+    const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
+    const couriers = requestCourierProviders(c);
+    const draft = {
         id: "test_" + Date.now().toString(),
-        name,
         type,
         isActive: true,
         credentials: typeof credentials === "string" ? credentials : JSON.stringify(credentials),
@@ -580,15 +586,12 @@ app.openapi(createTestRoute, async (c) => {
         lastTestSuccessAt: null,
         lastTestFailureAt: null,
         lastTestSuccessFingerprint: null,
-        createdAt: new Date(),
-        updatedAt: new Date()
     };
 
-    try {
-        const providerInstance = await createProvider(mockProvider, getCredentialEncryptionKey(c.env as Record<string, unknown>), c.get("db"));
-        const result = await providerInstance.testConnection();
+    await assertDeliveryProviderActivatable(draft, encryptionKey, couriers);
 
-        return ok(c, safeProviderTestResult(result));
+    try {
+        return ok(c, safeProviderTestResult(await testDeliveryProviderSetup(c.get("db"), draft, encryptionKey, couriers)));
     } catch {
         return ok(c, safeProviderTestResult({ success: false }));
     }
@@ -616,7 +619,7 @@ app.openapi(getProviderRoute, async (c) => {
     const { id } = c.req.valid("param");
     const provider = await getDeliveryProvider(db, id);
     if (!provider) throw new NotFoundError("Provider not found");
-    return ok(c, await serializeProviderForClient(provider, c.env as Record<string, unknown>));
+    return ok(c, await serializeProviderForClient(provider, c.env as Record<string, unknown>, requestCourierProviders(c)));
 });
 
 // ── Test Existing Provider ──
@@ -641,7 +644,7 @@ app.openapi(testExistingRoute, async (c) => {
     const { id } = c.req.valid("param");
     const provider = await getDeliveryProvider(db, id);
     if (!provider) throw new NotFoundError("Provider not found");
-    const result = await testDeliveryProvider(db, id, getCredentialEncryptionKey(c.env as Record<string, unknown>));
+    const result = await testDeliveryProvider(db, id, getCredentialEncryptionKey(c.env as Record<string, unknown>), requestCourierProviders(c));
 
     return ok(c, safeProviderTestResult(result));
 });

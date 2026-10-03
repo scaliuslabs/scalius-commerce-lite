@@ -13,6 +13,7 @@ import {
     markShipmentReconciliationRequired,
 } from "../delivery/delivery.service";
 import { PROVIDER_OUTCOME_UNKNOWN } from "../delivery/types";
+import type { CourierProvidersSource } from "../delivery/couriers/registry";
 import {
     assertNoActiveRefundAttempt,
     noActiveRefundAttemptForOrderIdCondition,
@@ -31,6 +32,7 @@ import {
     SHIPMENT_CLAIM_LEASE_SECONDS,
 } from "../orders/shipment-claim";
 import { bulkShipOrderSchema, type ShipmentCreationOptionsInput } from "../orders/validation";
+import { assertOrderNotOnHold, noOpenOrderHoldCondition } from "../orders/holds";
 import {
     clearShipmentClaim,
     findShipmentByRequestKey,
@@ -110,6 +112,8 @@ export async function bulkShipOrders(
     providerId: string,
     options: ShipmentCreationOptionsInput | undefined,
     encryptionKey?: string,
+    /** The request's couriers (app couriers join here); absent: the built-in couriers. */
+    couriers?: CourierProvidersSource,
 ) {
     const parsedInput = bulkShipOrderSchema.safeParse({
         orderIds,
@@ -129,6 +133,7 @@ export async function bulkShipOrders(
         db,
         validatedProviderId,
         encryptionKey,
+        couriers,
     );
     if (!providerReadiness.ready) {
         return validatedOrderIds.map((orderId) => ({
@@ -181,6 +186,7 @@ export async function bulkShipOrders(
                 }
             }
             validateTransition("order", order.status, OrderStatus.SHIPPED);
+            await assertOrderNotOnHold(db, orderId);
 
             const claimId = createShipmentClaimId();
             const claimResult = await db.update(orders).set({
@@ -193,6 +199,7 @@ export async function bulkShipOrders(
                 eq(orders.version, order.version),
                 eq(orders.status, order.status),
                 noActiveShipmentClaimCondition(),
+                noOpenOrderHoldCondition(orderId),
                 noActiveRefundAttemptForOrderIdCondition(orderId),
                 noActivePaymentSessionAttemptForOrderIdCondition(orderId),
             )).returning({ id: orders.id });
@@ -208,7 +215,7 @@ export async function bulkShipOrders(
                 validatedProviderId,
                 validatedOptions,
                 encryptionKey,
-                { shipmentId: claimId },
+                { shipmentId: claimId, couriers },
             );
             if (shipment.reconciliationRequired) {
                 await holdShipmentClaimForReconciliation(db, orderId, claimId);
