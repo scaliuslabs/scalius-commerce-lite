@@ -17,20 +17,18 @@ import {
     type CanonicalLineProperty,
     type ResolvedLineProperty,
 } from "@scalius/shared/line-properties";
-import { variantOptionLabelSql } from "../products/option-model";
-import { hasFulfiller } from "../fulfilment/registry";
+import {
+  loadProductMediaProjections,
+  type ProductBundleRow,
+  productBundleTiersByProduct,
+  type ProductMediaProjection,
+  resolveSkuImageRepresentation,
+  selectActiveProductBundleRows,
+  variantOptionLabelSql,
+} from "../products";
+import { hasFulfiller } from "../fulfilment";
 import { giftCardLineRecipientIssue } from "../gift-cards";
-import { digitalDeliverableSql } from "../digital/deliverable";
-import {
-    loadProductMediaProjections,
-    type ProductMediaProjection,
-    resolveSkuImageRepresentation,
-} from "../products/media";
-import {
-    productBundleTiersByProduct,
-    selectActiveProductBundleRows,
-    type ProductBundleRow,
-} from "../products/bundles";
+import { digitalDeliverableSql } from "../digital";
 import { bundleGroupPricing } from "@scalius/shared/product-bundles";
 import {
     GIFT_CARD_MAX_QUANTITY_PER_LINE,

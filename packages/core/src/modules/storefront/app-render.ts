@@ -10,12 +10,14 @@ import { checkoutLanguageBaseCode } from "@scalius/shared/checkout-language";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { and, eq, isNull } from "drizzle-orm";
 import { deps } from "../../cache-deps";
-import { activePluginInstallationsFromRows, selectActivePluginInstallations } from "../plugins/storefront";
-import type { PluginInstallation } from "../plugins/installations";
-import { businessDocument, currencyDocument } from "../settings/documents";
-import { platformDocument } from "../platform/document";
+import {
+  activePluginInstallationsFromRows,
+  type PluginInstallation,
+  selectActivePluginInstallations,
+} from "../plugins";
+import { businessDocument, currencyDocument, storeDisplayName } from "../settings";
+import { platformDocument } from "../platform";
 import { selectSettingsDocuments, type SettingsDocumentRow } from "../../settings-store";
-import { storeDisplayName } from "../settings/store-name";
 
 /** The store facts a storefront render's `ctx.store` carries. */
 export interface PluginRenderStoreFacts {

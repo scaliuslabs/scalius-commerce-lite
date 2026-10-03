@@ -7,8 +7,7 @@
 import { products, productBuyerState, productVariants } from "@scalius/database/schema";
 import { sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
-import { resolvedBuyerDiscountSql } from "../products/buyer-projection";
-import type { BuyerPricingMinor } from "../products/money";
+import { type BuyerPricingMinor, resolvedBuyerDiscountSql } from "../products";
 
 export const buyerState = productBuyerState;
 

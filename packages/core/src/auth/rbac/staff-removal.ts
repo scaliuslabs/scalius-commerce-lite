@@ -22,7 +22,7 @@ import {
   verification,
 } from "@scalius/database/schema";
 import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
-import { deleteStaffShortcutsStatement } from "../../modules/settings/staff-shortcuts";
+import { deleteStaffShortcutsStatement } from "../../modules/settings";
 import { clearPermissionCache } from "./helpers";
 
 /** The removed person's email is released so the address can be invited again. */

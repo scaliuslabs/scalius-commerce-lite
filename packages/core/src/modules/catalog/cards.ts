@@ -4,14 +4,17 @@
 // own richer projection (listing.ts).
 import { products } from "@scalius/database/schema";
 import { sql } from "drizzle-orm";
-import { quickAddEligibleSql, type BuyerCatalogPricingProjection } from "../products/buyer-projection";
-import { buyerPricingSelection, presentBuyerPricing, type BuyerPricingMinor } from "../products/money";
-import { storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../settings/store-money";
 import {
-    resolveProductCardImages,
-    type ProductCardImages,
-    type ProductMediaProjection,
-} from "../products/media";
+  type BuyerCatalogPricingProjection,
+  type BuyerPricingMinor,
+  buyerPricingSelection,
+  presentBuyerPricing,
+  type ProductCardImages,
+  type ProductMediaProjection,
+  quickAddEligibleSql,
+  resolveProductCardImages,
+} from "../products";
+import { storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../settings";
 import { presentCardRating, reviewStats, reviewStatsJoin, type CardRating } from "./shared";
 import { EMPTY_PRODUCT_CARD_FACTS, type ProductCardFacts } from "./card-facts";
 

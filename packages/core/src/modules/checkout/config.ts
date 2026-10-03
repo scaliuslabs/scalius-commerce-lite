@@ -11,28 +11,28 @@ import { isReady } from "@scalius/shared/readiness";
 import { isQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
 import type { AppProviders } from "../../integrations/provider-port";
 import {
-    BUILT_IN_PAYMENT_PROVIDERS,
-    COD_LABEL,
-    COD_PAYMENT_METHOD,
-    publicAmountLimits,
-    type PaymentProvidersSource,
-} from "../payments/gateways/registry";
-import type { GatewaySettings } from "../payments/gateways/port";
-import { getPaymentGatewaySettingsSnapshot } from "../payments/gateway-settings";
+  BUILT_IN_PAYMENT_PROVIDERS,
+  COD_LABEL,
+  COD_PAYMENT_METHOD,
+  type GatewaySettings,
+  getPaymentGatewaySettingsSnapshot,
+  type PaymentProvidersSource,
+  publicAmountLimits,
+} from "../payments";
 import { isCheckoutGatewayUsableForFlow } from "./flow";
 import {
     CHECKOUT_READINESS_PUBLIC_UNAVAILABLE_MESSAGE,
     type CheckoutReadiness,
 } from "@scalius/shared/checkout-readiness";
 import { getCheckoutReadiness } from "./readiness";
-import { getOfferedCustomerIdentity } from "../customers/sign-in-readiness";
+import { getOfferedCustomerIdentity } from "../customers";
 import {
-    checkoutDocument,
-    currencyDocument,
-    customerAuthDocument,
-    customerCountriesDocument,
-    marketingConsentDocument,
-} from "../settings/documents";
+  checkoutDocument,
+  currencyDocument,
+  customerAuthDocument,
+  customerCountriesDocument,
+  marketingConsentDocument,
+} from "../settings";
 import { selectSettingsDocuments } from "../../settings-store";
 
 export interface CheckoutConfig {

@@ -1,6 +1,6 @@
 import { validateAndFormatPhone } from "@scalius/shared/customer-utils";
 import type { Database } from "@scalius/database/client";
-import { whatsappDocument } from "../modules/settings/documents";
+import { whatsappDocument } from "../modules/settings";
 import { META_GRAPH_API_VERSION } from "./meta/conversions-api";
 
 export interface SendWhatsAppTemplateMessageInput {

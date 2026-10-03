@@ -1,7 +1,7 @@
 // The words around buyer and staff messages (order email frame, support
 // request names, one-time codes), in the store's checkout language. The
 // message text itself is the merchant's template (notification-templates.ts).
-import type { CustomerRequestType } from "../settings/customer-request-policy.shared";
+import type { CustomerRequestType } from "../settings/browser";
 
 export type MessageLanguage = "en" | "bn";
 

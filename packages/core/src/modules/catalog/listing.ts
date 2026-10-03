@@ -13,15 +13,16 @@ import { fromMinor } from "@scalius/shared/money";
 import { planLimits } from "@scalius/shared/plan-limits";
 import { cappedCountLimit, capTotal, encodeListCursor } from "@scalius/shared/pagination";
 import { invalidCursor, keysetCondition, readListCursor, type KeysetOrder } from "../../utils/keyset";
-import { quickAddEligibleSql } from "../products/buyer-projection";
+import {
+  presentBuyerPricing,
+  quickAddEligibleSql,
+  resolveProductCardImages,
+  type StorefrontProductFilterInput,
+} from "../products";
 import type { ProductCondition } from "@scalius/shared/product-condition";
-import type { StorefrontProductFilterInput } from "../products/types";
 import type { Database } from "@scalius/database/client";
-import { presentBuyerPricing } from "../products/money";
-import { storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../settings/store-money";
-import { publicCategoryConditions } from "../categories/categories.publication";
-import { publicCategorySubtreeCondition } from "../categories/categories.tree";
-import { resolveProductCardImages } from "../products/media";
+import { storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../settings";
+import { publicCategoryConditions, publicCategorySubtreeCondition } from "../categories";
 import { loadCatalogCardData } from "./card-facts";
 import {
     buildCatalogFacetCountQuery,

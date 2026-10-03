@@ -10,7 +10,7 @@ import { buildBatchGuard, isBatchGuardError, safeBatch, type Database } from "@s
 import { productVariants } from "@scalius/database/schema";
 import { fromMinor, toMinor } from "@scalius/shared/money";
 import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
-import { readStoreCurrency, type StoreCurrency } from "../settings/store-money";
+import { readStoreCurrency, type StoreCurrency } from "../settings";
 
 /** Largest cost the API accepts, in major units (matches the money range of `toMinor`). */
 export const UNIT_COST_MAX = 9_000_000_000;

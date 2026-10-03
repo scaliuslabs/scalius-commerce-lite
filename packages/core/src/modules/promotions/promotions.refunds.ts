@@ -1,6 +1,6 @@
 import type { Database } from "@scalius/database/client";
 import { orderDiscountAllocations, orderItems } from "@scalius/database/schema";
-import { listOrderAppFacts } from "../order-kernel/app-facts";
+import { listOrderAppFacts } from "../order-kernel";
 import { ServiceUnavailableError } from "@scalius/core/errors";
 import { asc, eq } from "drizzle-orm";
 

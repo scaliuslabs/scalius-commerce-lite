@@ -1,5 +1,5 @@
 // Delivery outcomes: delivered, and COD collected, failed or returned.
-import { toStoreMinor } from "../settings/store-money";
+import { toStoreMinor } from "../settings";
 import type { Database } from "@scalius/database/client";
 import {
     orders,
@@ -10,38 +10,37 @@ import {
     ShipmentStatus,
 } from "@scalius/database/schema";
 import {
-    markCODReturned,
-    recordCODCollection,
-    recordCODFailure,
-    validateCODCollectionDetails,
-} from "../payments/cod";
+  markCODReturned,
+  recordCODCollection,
+  recordCODFailure,
+  resolveOrderCurrencySnapshot,
+  validateCODCollectionDetails,
+} from "../payments";
 import {
-    assertNoActiveRefundAttempt,
-    noActiveRefundAttemptForOrderIdCondition,
-} from "../order-kernel/refund-attempt-guard";
-import { assertNoActivePaymentSessionAttempt, noActivePaymentSessionAttemptForOrderIdCondition } from "../order-kernel/payment-session-guard";
+  assertNoActivePaymentSessionAttempt,
+  assertNoActiveRefundAttempt,
+  assertNoActiveShipmentClaim,
+  noActivePaymentSessionAttemptForOrderIdCondition,
+  noActiveRefundAttemptForOrderIdCondition,
+  validateTransition,
+} from "../order-kernel";
 import { sql, eq, and, inArray, notInArray } from "drizzle-orm";
 import { NotFoundError, ValidationError, ConflictError } from "@scalius/core/errors";
-import { resolveOrderCurrencySnapshot } from "../payments/order-currency";
 import { fromMinor } from "@scalius/shared/money";
-import { validateTransition } from "../order-kernel/state-machine";
-import type { StatusUpdateResult } from "../orders/types";
-import { assertNoActiveShipmentClaim } from "../order-kernel/shipment-claim";
-import { rollbackOrderStatusIfInventoryUnchanged } from "../orders/status/claim";
 import {
-    approveOrderReturn,
-    createOrderReturn,
-    getOrderReturn,
-    listOrderReturns,
-} from "../orders/returns/returns";
-import {
-    assertOrderCodActionAllowed,
-    getRecordedCodCollection,
-    reconcileInventoryForStatus,
-    markManualDeliveryEvidence,
-    applyOrderStatusChange,
-    assertOrderLinesHandedOver,
-} from "../orders/status/lifecycle";
+  applyOrderStatusChange,
+  approveOrderReturn,
+  assertOrderCodActionAllowed,
+  assertOrderLinesHandedOver,
+  createOrderReturn,
+  getOrderReturn,
+  getRecordedCodCollection,
+  listOrderReturns,
+  markManualDeliveryEvidence,
+  reconcileInventoryForStatus,
+  rollbackOrderStatusIfInventoryUnchanged,
+  type StatusUpdateResult,
+} from "../orders";
 
 export async function processCodAction(db: Database, orderId: string, body: Record<string, unknown>) {
     const order = await db.select({

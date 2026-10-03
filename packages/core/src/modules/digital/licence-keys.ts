@@ -22,7 +22,7 @@ import { AppError, ConflictError, NotFoundError, ValidationError } from "@scaliu
 import type { BatchItem } from "drizzle-orm/batch";
 import { and, asc, eq, gt, inArray, or, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import { executeInventoryOperation } from "../inventory/inventory-operations";
+import { executeInventoryOperation } from "../inventory";
 import { licenceKeyCrypto } from "./secrets";
 import { sha256Hex } from "@scalius/shared/hash";
 

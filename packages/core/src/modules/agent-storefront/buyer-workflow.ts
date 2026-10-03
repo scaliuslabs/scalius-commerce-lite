@@ -27,13 +27,13 @@ import {
   type CheckoutAppFunctions,
 } from "@scalius/core/modules/checkout";
 import { type StorefrontOrderCommitPayload } from "@scalius/core/modules/orders/browser";
-import type { CreateStorefrontOrderResult } from "../orders/types";
+import type { CreateStorefrontOrderResult } from "../orders";
 import {
   BUILT_IN_PAYMENT_PROVIDERS,
   isOnlinePaymentMethod,
   type PaymentProviders,
-} from "../payments/gateways/registry";
-import { resolveAppPaymentUsability } from "../payments/gateway-settings";
+  resolveAppPaymentUsability,
+} from "../payments";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { fromMinor } from "@scalius/shared/money";
 import { and, eq, gt, isNull, sql } from "drizzle-orm";

@@ -2,12 +2,12 @@
 import { safeBatch, type Database } from "@scalius/database/client";
 import { orders, customers, deliveryShipments, FulfillmentStatus } from "@scalius/database/schema";
 import { sql, eq, inArray, isNull, and } from "drizzle-orm";
-import { guestRecordForPhone } from "../../customers/customer-identity";
+import { guestRecordForPhone } from "../../customers";
 import { nanoid } from "nanoid";
 import type { UpdateOrderDetailsInput } from "../validation";
 import { NotFoundError, ConflictError, ValidationError } from "@scalius/core/errors";
-import { validateCustomerPhoneCountry } from "../../settings/phone-country-policy";
-import { resolveActiveDeliveryLocationNames } from "../../delivery/location-validation";
+import { validateCustomerPhoneCountry } from "../../settings";
+import { resolveActiveDeliveryLocationNames } from "../../delivery";
 import { getOrderEditReadiness, orderEditLockMessage } from "./readiness";
 import { type SQLiteBatchItem, OPEN_ORDER_STATUSES, updateCustomerStatsService } from "./shared";
 

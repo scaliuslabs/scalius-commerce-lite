@@ -23,7 +23,7 @@ import { iterateReportRows, runReportPage, type ReportPage, type ReportSort } fr
 import { REPORT_IMPLEMENTATIONS } from "./definitions";
 import { getAnalyticsOverview, type AnalyticsOverview } from "./overview";
 import { createReportCsvBuilder } from "./csv";
-import type { OrderCsvArtifact } from "../../orders/csv-export";
+import type { OrderCsvArtifact } from "../../orders";
 
 /** What the caller may see beyond sales numbers. */
 export interface AnalyticsAccess {

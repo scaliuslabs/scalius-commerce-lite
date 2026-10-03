@@ -1,5 +1,5 @@
 // The single storefront order commit: one guarded batch for the order, lines, stock, discounts and receipt.
-import { nextOrderNumberSql } from "../orders/number";
+import { MAX_ORDER_LINE_ITEMS, nextOrderNumberSql, type StorefrontOrderCommitPayload } from "../orders";
 import { buildBatchGuard, chunkRowsForD1, isBatchGuardError, safeBatch, type Database } from "@scalius/database/client";
 import {
     agentStorefrontContexts,
@@ -33,22 +33,21 @@ import {
     buildMetaPurchaseOutboxClaimInsert,
     isOrderEligibleForMetaPurchase,
 } from "../../integrations/meta/purchase-outbox";
-import { createCODTrackingInsertValues } from "../payments/cod";
+import { createCODTrackingInsertValues } from "../payments";
 import {
-    buildOrderCreatedNotificationDedupeKey,
-    createOrderNotificationOutboxInsertValues,
-    type OrderNotificationQueue,
-} from "../notifications/order-notification-outbox";
+  buildOrderCreatedNotificationDedupeKey,
+  createOrderNotificationOutboxInsertValues,
+  type OrderNotificationQueue,
+} from "../notifications";
 import { shouldCreateOrderCreatedNotification } from "./created-notification-policy";
-import type { StorefrontOrderCommitPayload } from "../orders/types";
 import {
-    chooseOrderCustomer,
-    linkedOrderHistory,
-    normalizeContactEmail,
-    type VerifiedContact,
-    selectContactCustomerCandidates,
-    type OrderContact,
-} from "../customers/customer-identity";
+  chooseOrderCustomer,
+  linkedOrderHistory,
+  normalizeContactEmail,
+  type OrderContact,
+  selectContactCustomerCandidates,
+  type VerifiedContact,
+} from "../customers";
 import type { StorefrontCartItemIssue } from "./cart-validation";
 import { getPromotionRedemptionConstraintError, verifyPromotionCheckoutSnapshot } from "../promotions";
 import { type AppliedPromotion } from "../promotions/browser";
@@ -57,9 +56,8 @@ import {
     isCheckoutAttemptCommitConflictError,
     type AtomicCheckoutAttempt,
 } from "./attempts";
-import { MAX_ORDER_LINE_ITEMS } from "../orders/validation";
-import { buildAppDiscountFactInserts } from "../order-kernel/app-facts";
-import { appStorageCommitStatements, isAppStorageCommitConflict } from "../plugins/storage";
+import { buildAppDiscountFactInserts } from "../order-kernel";
+import { appStorageCommitStatements, isAppStorageCommitConflict } from "../plugins";
 import { readCheckoutCopy } from "./store-copy";
 import type { StorefrontOrderCommitReads, SQLiteBatchItem } from "./reads";
 import {

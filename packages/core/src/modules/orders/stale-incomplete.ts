@@ -12,8 +12,8 @@ import {
     PaymentStatus,
 } from "@scalius/database/schema";
 import { applyInventoryForStatusChange } from "../inventory";
-import { hasActiveShipmentClaim, noActiveShipmentClaimCondition } from "../order-kernel/shipment-claim";
-import { isOnlinePaymentMethod, onlinePaymentMethodCondition } from "../payments/gateways/registry";
+import { hasActiveShipmentClaim, noActiveShipmentClaimCondition } from "../order-kernel";
+import { isOnlinePaymentMethod, onlinePaymentMethodCondition } from "../payments";
 import {
     GIFT_CARD_PAYMENT_METHOD,
     buildGiftCardReleaseStatements,

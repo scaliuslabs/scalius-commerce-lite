@@ -12,17 +12,19 @@ import {
   PaymentStatus,
 } from "@scalius/database/schema";
 import { getCurrentPublicMediaUrl } from "@scalius/core/integrations/storage";
-import { publishedMediaObjectKey } from "../media-references/presentation";
+import { publishedMediaObjectKey } from "../media-references";
+import { type CustomerSession, updateCustomerProfile } from "../customers";
 import {
-  updateCustomerProfile,
-  type CustomerSession,
-} from "../customers/customer-auth.service";
-import { getCustomerOrderDetailForOrder, getCustomerOrders, getCustomerOwnedOrderForDetail } from "../orders/account-orders";
-import { getReceiptOrderSupportRequestStateForOrder } from "../orders/order-support-requests";
+  getCustomerOrderDetailForOrder,
+  getCustomerOrders,
+  getCustomerOwnedOrderForDetail,
+  getReceiptOrderSupportRequestStateForOrder,
+  orderMoneyAmounts,
+  orderMoneySelection,
+} from "../orders";
 import { createCustomerOrderSupportRequest, createReceiptOrderSupportRequest } from "../conversations";
 import { and, desc, eq, gt, isNull, sql } from "drizzle-orm";
 import { fromMinor } from "@scalius/shared/money";
-import { orderMoneyAmounts, orderMoneySelection } from "../orders/money";
 import type { BatchItem } from "drizzle-orm/batch";
 import {
   ConflictError,

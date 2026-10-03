@@ -1,6 +1,6 @@
 import { AppError } from "@scalius/core/errors";
 import type { TaxQuote } from "@scalius/core/modules/tax/browser";
-import type { StorefrontOrderShippingMethodSnapshot } from "../orders/types";
+import type { StorefrontOrderShippingMethodSnapshot } from "../orders/browser";
 
 export const STOREFRONT_CHECKOUT_QUOTE_FINGERPRINT_PATTERN =
   /^taxq_[A-Za-z0-9_-]{22}$/;

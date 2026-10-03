@@ -21,7 +21,7 @@ import { getSmsProviderReadiness } from "../../integrations/sms";
 import type { AppProviders } from "../../integrations/provider-port";
 import { getWhatsAppCloudApiSettings } from "../../integrations/whatsapp";
 import { selectSettingsDocuments } from "../../settings-store";
-import { checkoutDocument, customerAuthDocument } from "../settings/documents";
+import { checkoutDocument, customerAuthDocument } from "../settings";
 
 export interface CheckoutReadinessOptions {
     excludeShippingMethodIds?: readonly string[];

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { percentToBps, toMinor } from "@scalius/shared/money";
-import { readStoreCurrency, toStoreMinor } from "../settings/store-money";
+import { readStoreCurrency, toStoreMinor } from "../settings";
 import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
 import {
     buildBatchGuard,
@@ -23,19 +23,22 @@ import { and, eq, getTableColumns, inArray, isNull, not, sql } from "drizzle-orm
 import type { BatchItem } from "drizzle-orm/batch";
 import { nanoid } from "nanoid";
 import {
-    MAX_PRODUCT_OPTION_AXES,
-    MAX_PRODUCT_OPTION_COMBINATIONS,
-    loadVariantSelectedOptions,
-    normalizeOptionIdentity,
-} from "../products/option-model";
-import {
-    catalogMoneySchema,
-    skuStockSchema,
-    skuWeightSchema,
-    STOCK_CHANGED_MESSAGE,
-    expectedProductAggregateRevisionSchema,
-    expectedStockVersionSchema,
-} from "../products/types";
+  catalogMoneySchema,
+  DIGITAL_STOCK_CANT_SPLIT_MESSAGE,
+  digitalStockError,
+  editableFulfillmentKindSchema,
+  expectedProductAggregateRevisionSchema,
+  expectedStockVersionSchema,
+  isDigitalKind,
+  loadVariantSelectedOptions,
+  MAX_PRODUCT_OPTION_AXES,
+  MAX_PRODUCT_OPTION_COMBINATIONS,
+  normalizeOptionIdentity,
+  planDigitalSkuWrites,
+  skuStockSchema,
+  skuWeightSchema,
+  STOCK_CHANGED_MESSAGE,
+} from "../products";
 import {
     normalizeVariantBarcode,
     resolveNewVariantBarcode,
@@ -47,16 +50,12 @@ import {
     executeProductAggregateMutationBatch,
     isProductAggregateRevisionConflict,
 } from "./aggregate-revision";
-import { buildStockMovementClaim } from "../inventory/stock-movement-claims";
-import { getDefaultInventoryLocation, readVariantStockAwayFromDefault } from "../inventory/locations";
-import { editableFulfillmentKindSchema } from "../products/customization-schema";
 import {
-    DIGITAL_STOCK_CANT_SPLIT_MESSAGE,
-    digitalStockError,
-    isDigitalKind,
-    planDigitalSkuWrites,
-} from "../products/digital-stock-rules";
-import { unitCostAmountSchema } from "../inventory/unit-costs";
+  buildStockMovementClaim,
+  getDefaultInventoryLocation,
+  readVariantStockAwayFromDefault,
+  unitCostAmountSchema,
+} from "../inventory";
 
 const optionValueInputSchema = z.object({
     id: z.string().trim().min(1),

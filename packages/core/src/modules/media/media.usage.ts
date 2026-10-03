@@ -15,7 +15,7 @@ import {
 } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import { sql, type SQL, type SQLWrapper } from "drizzle-orm";
-import { businessDocument, seoDocument } from "../settings/documents";
+import { businessDocument, seoDocument } from "../settings";
 import { SETTINGS_DOCUMENT_ROW_KEY } from "../../settings-store";
 
 /**

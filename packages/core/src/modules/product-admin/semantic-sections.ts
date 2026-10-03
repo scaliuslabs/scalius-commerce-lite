@@ -1,5 +1,5 @@
 import type { BatchItem } from "drizzle-orm/batch";
-import { readStoreCurrency } from "../settings/store-money";
+import { readStoreCurrency, storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../settings";
 import { nanoid } from "nanoid";
 import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { isBatchGuardError, type Database } from "@scalius/database/client";
@@ -26,26 +26,25 @@ import {
 } from "@scalius/shared/seo-canonical";
 import { PRODUCT_CONDITION_VALUES } from "@scalius/shared/product-condition";
 import { templateAssignmentSchema } from "@scalius/shared/catalog-tree";
-import { defaultProductSkuValues } from "../products/public-eligibility";
 import {
-    PRODUCT_CONTENT_BLOCK_MEDIA_GUARD,
-    PRODUCT_CONTENT_BLOCK_MEDIA_UNAVAILABLE_MESSAGE,
-    buildProductContentBlockReplaceStatements,
-    productContentBlockInputListSchema,
-    readProductContentBlockChunk,
-    readProductContentBlockSection,
-} from "../products/content-blocks";
-import {
-    buildProductBundleReplaceStatements,
-    productBundleTierInputListSchema,
-    readProductBundleSection,
-} from "../products/bundles";
-import { catalogPriceColumns, presentCatalogPrice, readStoreDecimalPlaces } from "../products/money";
-import { storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../settings/store-money";
+  buildProductBundleReplaceStatements,
+  buildProductContentBlockReplaceStatements,
+  catalogPriceColumns,
+  defaultProductSkuValues,
+  MAX_PRODUCT_MEDIA_ASSOCIATIONS,
+  MAX_PRODUCT_PRICE,
+  presentCatalogPrice,
+  PRODUCT_CONTENT_BLOCK_MEDIA_GUARD,
+  PRODUCT_CONTENT_BLOCK_MEDIA_UNAVAILABLE_MESSAGE,
+  productBundleTierInputListSchema,
+  productContentBlockInputListSchema,
+  readProductBundleSection,
+  readProductContentBlockChunk,
+  readProductContentBlockSection,
+  readStoreDecimalPlaces,
+} from "../products";
 import { executeProductAggregateMutationBatch } from "./aggregate-revision";
 import { updateProductMediaSection } from "./write";
-import { MAX_PRODUCT_MEDIA_ASSOCIATIONS } from "../products/media";
-import { MAX_PRODUCT_PRICE } from "../products/types";
 import {
     productBrandIdSchema,
     productMediaAssociationIdSchema,

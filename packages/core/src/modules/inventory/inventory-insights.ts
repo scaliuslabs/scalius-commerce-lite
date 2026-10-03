@@ -23,7 +23,7 @@ import {
   purchaseOrders,
 } from "@scalius/database/schema";
 import { fromMinor } from "@scalius/shared/money";
-import { readStoreCurrency } from "../settings/store-money";
+import { readStoreCurrency } from "../settings";
 
 const ID_CHUNK = 90;
 

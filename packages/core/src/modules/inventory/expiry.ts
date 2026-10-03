@@ -2,7 +2,7 @@
 // Reservation timeout logic: releases orphaned/expired reservations.
 // Designed to be called from a queue consumer or cron trigger.
 
-import { effectiveLowStockThresholdSql } from "../products/low-stock-policy";
+import { catalogBuyerStateRefreshStatementsForSkus, effectiveLowStockThresholdSql } from "../products";
 import { eq, and, sql, lt } from "drizzle-orm";
 import {
   inventoryMovements,
@@ -11,7 +11,6 @@ import {
 } from "@scalius/database/schema";
 import { safeBatch, type Database } from "@scalius/database/client";
 import { buildInventoryLedgerV2Edge, type InventoryLedgerPool } from "./ledger-v2";
-import { catalogBuyerStateRefreshStatementsForSkus } from "../products/catalog-projections";
 import { resolveTrackedBuyerAvailabilityBand } from "@scalius/shared/buyer-availability";
 
 export const DEFAULT_EXPIRY_SWEEP_LIMIT = 50;

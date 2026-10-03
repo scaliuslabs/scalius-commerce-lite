@@ -1,14 +1,15 @@
 import { deliveryShipments, orders, ShipmentStatus } from "@scalius/database/schema";
 import { eq, and, sql } from "drizzle-orm";
-import { applyInventoryForStatusChangeWithImpact } from "../inventory/inventory-transitions";
-import { canTransitionTo } from "../order-kernel/state-machine";
-import type { Database } from "@scalius/database/client";
-import { assertNoActiveShipmentClaim } from "../order-kernel/shipment-claim";
+import { applyInventoryForStatusChangeWithImpact } from "../inventory";
 import {
+  assertNoActivePaymentSessionAttempt,
   assertNoActiveRefundAttempt,
+  assertNoActiveShipmentClaim,
+  canTransitionTo,
+  noActivePaymentSessionAttemptForOrderIdCondition,
   noActiveRefundAttemptForOrderIdCondition,
-} from "../order-kernel/refund-attempt-guard";
-import { assertNoActivePaymentSessionAttempt, noActivePaymentSessionAttemptForOrderIdCondition } from "../order-kernel/payment-session-guard";
+} from "../order-kernel";
+import type { Database } from "@scalius/database/client";
 import { markShipmentReconciliationRequired } from "./delivery.service";
 
 function parseShipmentMetadata(metadata: unknown): Record<string, unknown> {

@@ -47,10 +47,10 @@ import { and, desc, eq, sql, type SQL } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { NotFoundError, ValidationError } from "@scalius/core/errors";
 import {
-    createNotificationOutboxInsertValues,
-    enqueueNotificationOutboxById,
-    type NotificationQueue,
-} from "../notifications/notification-outbox";
+  createNotificationOutboxInsertValues,
+  enqueueNotificationOutboxById,
+  type NotificationQueue,
+} from "../notifications";
 import { deriveOptInToken, hashOptInToken, newOptInNonce, type MarketingLinkEnv } from "./links";
 
 export const MARKETING_OPT_IN_NOTIFICATION = "marketing_opt_in" as const;

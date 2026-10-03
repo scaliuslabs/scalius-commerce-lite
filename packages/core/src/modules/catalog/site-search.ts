@@ -6,15 +6,15 @@ import {
   isFts5SearchEnabled,
   sanitizeFtsQuery,
 } from "../../search/fts5";
-import { publicProductBaseConditions } from "../products/public-eligibility";
 import {
   buildBuyerCatalogPricingProjection,
   buyerCatalogHasSkuInPriceRange,
+  publicProductBaseConditions,
   quickAddEligibleSql,
-} from "../products/buyer-projection";
-import { publicCategoryConditions } from "../categories/categories.publication";
-import { storeDecimalToMinorSql } from "../products/money";
-import { storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../settings/store-money";
+  storeDecimalToMinorSql,
+} from "../products";
+import { publicCategoryConditions } from "../categories";
+import { storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../settings";
 import { fromMinor } from "@scalius/shared/money";
 import { getCurrentMediaUrl } from "../../integrations/storage";
 import { suggestSearchCorrection } from "./search-correction";

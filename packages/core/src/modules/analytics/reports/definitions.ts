@@ -13,13 +13,13 @@ import {
   type AnalyticsRange,
 } from "@scalius/shared/analytics-period";
 import type { AnalyticsReportId } from "@scalius/shared/analytics-reports";
-import { collectionMembershipForConfig } from "../../collections/collection-config";
+import { collectionMembershipForConfig } from "../../collections";
 import {
   buildNeedsRestockCondition,
   effectiveLowStockThresholdSql,
-} from "../../products/low-stock-policy";
-import { operationalSkuRowPredicate } from "../../products/public-eligibility";
-import { variantOptionLabelSql } from "../../products/option-model";
+  operationalSkuRowPredicate,
+  variantOptionLabelSql,
+} from "../../products";
 import {
   bucketStartSql,
   isFirstSalesOrderSql,

@@ -20,7 +20,7 @@ import {
 import { normalizeStorefrontOrigin } from "@scalius/shared/storefront-url";
 import { ValidationError } from "@scalius/core/errors";
 import type { SettingsDocumentWriteResult, SettingsStoreKv } from "../../settings-store";
-import type { SettingsSaveOptions } from "../settings/site-settings.service";
+import type { SettingsSaveOptions } from "../settings";
 import { platformDocument } from "./document";
 
 type PlatformKv = SettingsStoreKv;

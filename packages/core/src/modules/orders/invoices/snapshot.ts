@@ -2,10 +2,7 @@ import {
   ServiceUnavailableError,
   ValidationError,
 } from "@scalius/core/errors";
-import {
-  normalizeBusinessEmail,
-  type BusinessInfo,
-} from "../../settings/business-settings.service";
+import { type BusinessInfo, normalizeBusinessEmail } from "../../settings";
 
 export const INVOICE_RENDER_VERSION = "invoice-v1" as const;
 

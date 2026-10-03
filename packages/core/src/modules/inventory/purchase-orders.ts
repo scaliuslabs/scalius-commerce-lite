@@ -33,9 +33,8 @@ import {
 import { fromMinor } from "@scalius/shared/money";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
-import { variantOptionLabelSql } from "../products/option-model";
-import { digitalStockError, isDigitalKind } from "../products/digital-stock-rules";
-import { readStoreCurrency, type StoreCurrency } from "../settings/store-money";
+import { digitalStockError, isDigitalKind, variantOptionLabelSql } from "../products";
+import { readStoreCurrency, type StoreCurrency } from "../settings";
 import { inventoryOperationKeySchema } from "./inventory.validation";
 import { resolveActiveInventoryLocation } from "./locations";
 import { assertActiveSupplier } from "./suppliers";

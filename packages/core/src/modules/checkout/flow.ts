@@ -1,12 +1,12 @@
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import {
-    BUILT_IN_PAYMENT_PROVIDERS,
-    COD_PAYMENT_METHOD,
-    getGatewayAmountIssue,
-    isOnlinePaymentMethod,
-    type PaymentProviders,
-} from "../payments/gateways/registry";
-import type { CheckoutMode } from "../settings/documents";
+  BUILT_IN_PAYMENT_PROVIDERS,
+  COD_PAYMENT_METHOD,
+  getGatewayAmountIssue,
+  isOnlinePaymentMethod,
+  type PaymentProviders,
+} from "../payments";
+import type { CheckoutMode } from "../settings";
 
 /** `cod`, a built-in gateway id or an app provider id (`<plugin id>:<provider id>`). */
 export type CheckoutPaymentMethodId = string;

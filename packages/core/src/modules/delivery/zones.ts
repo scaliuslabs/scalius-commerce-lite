@@ -29,7 +29,7 @@ import {
     shippingMethods,
 } from "@scalius/database/schema";
 import { fromMinor, isWholeCashAmountMinor, toMinor, WHOLE_TAKA_MESSAGE } from "@scalius/shared/money";
-import type { StoreCurrency } from "../settings/store-money";
+import type { StoreCurrency } from "../settings";
 import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
 import { defineSettingsDocument, SettingsRevisionConflictError } from "../../settings-store";
 

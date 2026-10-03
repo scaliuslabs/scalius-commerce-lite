@@ -29,7 +29,7 @@ import {
 } from "./credential-account";
 import { hashPassword, verifyPassword } from "./password-hash";
 import { retryTransientD1 } from "../utils/transient-d1";
-import { readStoreName } from "../modules/notifications/store-messages";
+import { readStoreName } from "../modules/notifications";
 
 function getEmailRuntimeContext(env: Env, appProviders: AppProviders | undefined) {
   const source = env as Record<string, unknown>;

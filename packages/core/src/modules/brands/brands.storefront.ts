@@ -9,10 +9,10 @@ import { and, asc, eq, isNull, notInArray, sql, type SQL, type SQLWrapper } from
 import { getCurrentMediaUrl } from "../../integrations/storage";
 import { deps } from "../../cache-deps";
 import {
-    presentStorefrontCustomFields,
-    selectStorefrontCustomFieldRows,
-    type StorefrontCustomFieldRow,
-} from "../custom-fields/custom-fields.storefront";
+  presentStorefrontCustomFields,
+  selectStorefrontCustomFieldRows,
+  type StorefrontCustomFieldRow,
+} from "../custom-fields";
 
 export const PUBLIC_BRAND_PAGE_LIMIT = 100;
 /** Brand URLs one sitemap document lists at most (the sitemap protocol allows 50k). */

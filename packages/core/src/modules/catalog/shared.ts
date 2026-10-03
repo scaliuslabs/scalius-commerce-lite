@@ -3,17 +3,18 @@ import { products, categories, productReviewStats } from "@scalius/database/sche
 import { and, sql, eq, or, type AnyColumn, type SQL } from "drizzle-orm";
 import { ftsMatch } from "../../search/fts5";
 import { productCategoryNameMatch } from "./search-relevance";
-import type { StorefrontProductFilterInput } from "../products/types";
-import type { Database } from "@scalius/database/client";
-import { publicProductBaseConditions } from "../products/public-eligibility";
-import { reviewsEnabledSql } from "../settings/documents";
 import {
-    buyerCatalogHasSkuInPriceRange,
-    type BuyerCatalogPricingProjection,
-} from "../products/buyer-projection";
-import { storeDecimalToMinorSql } from "../products/money";
-import { publicCategoryConditions } from "../categories/categories.publication";
-import { resolveProductImageRepresentation, type ProductMediaProjection } from "../products/media";
+  buyerCatalogHasSkuInPriceRange,
+  type BuyerCatalogPricingProjection,
+  type ProductMediaProjection,
+  publicProductBaseConditions,
+  resolveProductImageRepresentation,
+  storeDecimalToMinorSql,
+  type StorefrontProductFilterInput,
+} from "../products";
+import type { Database } from "@scalius/database/client";
+import { reviewsEnabledSql } from "../settings";
+import { publicCategoryConditions } from "../categories";
 import { buyerState, publicBuyerStateCondition } from "./buyer-state";
 
 type StorefrontProductConditionOptions = {

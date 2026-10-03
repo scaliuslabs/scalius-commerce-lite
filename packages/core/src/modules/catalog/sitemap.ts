@@ -3,7 +3,7 @@
 import { products } from "@scalius/database/schema";
 import { and, sql, desc, eq } from "drizzle-orm";
 import { unixToDate } from "@scalius/shared/utils";
-import type { StorefrontProductFilterInput } from "../products/types";
+import type { StorefrontProductFilterInput } from "../products";
 import type { Database } from "@scalius/database/client";
 import { getPagination } from "./shared";
 import { buyerState, publicBuyerStateCondition } from "./buyer-state";

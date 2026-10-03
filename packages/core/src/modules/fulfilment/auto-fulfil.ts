@@ -14,9 +14,8 @@ import {
 import { nanoid } from "nanoid";
 import { autoFulfillerFor, FULFILLER_REGISTRY, type AutoFulfilRuntime, type FulfillerRegistry } from "./registry";
 import { buildFulfilmentInsertStatements, deriveOrderFulfilmentStatus } from "./ledger";
-import { applyOrderStatusChange } from "../orders/status/lifecycle";
-import { checkoutDocument, type AutoFulfilMode } from "../settings/documents";
-import { listOrderHolds } from "../orders/holds";
+import { applyOrderStatusChange, listOrderHolds } from "../orders";
+import { type AutoFulfilMode, checkoutDocument } from "../settings";
 
 /** Queue message: hand an order's automatic lines over (ids only, no buyer data). */
 export interface OrderAutoFulfilQueueMessage {

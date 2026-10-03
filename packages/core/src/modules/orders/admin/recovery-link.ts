@@ -10,12 +10,12 @@ import {
     PaymentRecordStatus,
     PaymentStatus,
 } from "@scalius/database/schema";
-import { paymentProvidersFor, type PaymentProviders, type PaymentProvidersSource } from "../../payments/gateways/registry";
+import { type PaymentProviders, paymentProvidersFor, type PaymentProvidersSource } from "../../payments";
 import { eq } from "drizzle-orm";
 import { fromMinor } from "@scalius/shared/money";
 import { NotFoundError, ValidationError, ConflictError } from "@scalius/core/errors";
 import type { OrderPaymentRecoverySummary } from "../types";
-import { hasActiveShipmentClaim } from "../../order-kernel/shipment-claim";
+import { hasActiveShipmentClaim } from "../../order-kernel";
 import { createOrderReceiptToken, recordOrderReceipt } from "../receipts";
 import {
     findLatestAttempt,

@@ -28,8 +28,7 @@ import {
 import { getCurrencySettings } from "@scalius/core/modules/settings";
 import { assertDiscountCodesApplied, quoteStorefrontDiscount } from "@scalius/core/modules/promotions";
 import { buildStorefrontTaxAllocationLineId } from "@scalius/core/modules/tax";
-import { getActivePaymentMethods } from "../payments/gateway-settings";
-import { BUILT_IN_PAYMENT_PROVIDERS, type PaymentProviders } from "../payments/gateways/registry";
+import { BUILT_IN_PAYMENT_PROVIDERS, getActivePaymentMethods, type PaymentProviders } from "../payments";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { fromMinor } from "@scalius/shared/money";
 import { and, eq, gt, isNull, sql } from "drizzle-orm";

@@ -4,7 +4,7 @@
 // integer minor-unit rounding the storefront uses.
 
 import { discountedPriceMinor, fromMinor, percentToBps, toMinor } from "@scalius/shared/money";
-import type { StoreCurrency } from "../settings/store-money";
+import type { StoreCurrency } from "../settings";
 
 export interface StoredPricing {
   price: number;

@@ -5,10 +5,15 @@
 import { eq, and, ne, isNull, sql } from "drizzle-orm";
 import { productVariants, productLowStockAlerts } from "@scalius/database/schema";
 import { safeBatch, type Database } from "@scalius/database/client";
-import { catalogBuyerStateRefreshStatementsForSkus } from "../products/catalog-projections";
+import {
+  catalogBuyerStateRefreshStatementsForSkus,
+  effectiveLowStockThresholdSql,
+  inventorySettingsDocument,
+  isLowStockThresholdEnabled,
+  lowStockThresholdSchema,
+  operationalSkuRowPredicate,
+} from "../products";
 import { NotFoundError, ValidationError } from "@scalius/core/errors";
-import { effectiveLowStockThresholdSql, inventorySettingsDocument, isLowStockThresholdEnabled, lowStockThresholdSchema } from "../products/low-stock-policy";
-import { operationalSkuRowPredicate } from "../products/public-eligibility";
 
 /**
  * Result of a low-stock check, for observability.

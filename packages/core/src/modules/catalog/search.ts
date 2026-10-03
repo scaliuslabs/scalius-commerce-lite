@@ -1,18 +1,19 @@
 // Storefront product search.
-import { effectiveLowStockThresholdSql } from "../products/low-stock-policy";
+import {
+  effectiveLowStockThresholdSql,
+  loadProductMediaProjections,
+  loadVariantSelectedOptions,
+  normalizeDefaultSkuOptions,
+  presentCatalogPrice,
+  publicProductBaseConditions,
+  type SelectedProductOption,
+} from "../products";
 import { products, productVariants } from "@scalius/database/schema";
 import { and, sql, desc, isNull, inArray, type SQL } from "drizzle-orm";
 import { ftsMatch } from "../../search/fts5";
 import { maskPublicBuyerAvailability } from "@scalius/shared/buyer-availability";
 import type { Database } from "@scalius/database/client";
-import {
-    publicProductBaseConditions,
-    normalizeDefaultSkuOptions,
-} from "../products/public-eligibility";
-import { presentCatalogPrice } from "../products/money";
-import { storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../settings/store-money";
-import { loadVariantSelectedOptions, type SelectedProductOption } from "../products/option-model";
-import { loadProductMediaProjections } from "../products/media";
+import { storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../settings";
 import { productImageMapFromMedia, STOREFRONT_ENRICHMENT_ID_CHUNK_SIZE } from "./shared";
 import { declareProductCards, deps } from "./declare-deps";
 

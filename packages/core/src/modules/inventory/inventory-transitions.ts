@@ -5,14 +5,13 @@
 // order status transitions. Every endpoint that changes order status must
 // call applyInventoryForStatusChange() instead of manually adjusting stock.
 
-import { effectiveLowStockThresholdSql } from "../products/low-stock-policy";
+import { catalogBuyerStateRefreshStatementsForSkus, effectiveLowStockThresholdSql } from "../products";
 import { and, eq, gte, inArray, sql, type SQL } from "drizzle-orm";
 import { inventoryMovements, orders, orderItems, orderReturns, InventoryPool, productVariants } from "@scalius/database/schema";
 import { safeBatch, type Database } from "@scalius/database/client";
 import { ValidationError } from "@scalius/core/errors";
 import { reserveStockBatch, type ReservationBatchItem } from "./reserve";
 import { checkAndAlertLowStock } from "./alerts";
-import { catalogBuyerStateRefreshStatementsForSkus } from "../products/catalog-projections";
 import type { ReservationEntry, StockOperationResult } from "./types";
 import { validatePositiveQuantity } from "./validation";
 import {

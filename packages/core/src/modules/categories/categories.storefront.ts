@@ -7,10 +7,10 @@ import type { Database } from "@scalius/database/client";
 import { publicCategoryConditions } from "./categories.publication";
 import { deps } from "../../cache-deps";
 import {
-    presentStorefrontCustomFields,
-    selectStorefrontCustomFieldRows,
-    type StorefrontCustomFieldRow,
-} from "../custom-fields/custom-fields.storefront";
+  presentStorefrontCustomFields,
+  selectStorefrontCustomFieldRows,
+  type StorefrontCustomFieldRow,
+} from "../custom-fields";
 import {
     publicCategoryTreeContextQueries,
     type CategoryBreadcrumbItem,

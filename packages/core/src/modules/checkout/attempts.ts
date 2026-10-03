@@ -8,12 +8,12 @@ import { and, eq, isNull, lte, or, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import { generateOrderId } from "@scalius/shared/order-utils";
 import { ConflictError, ServiceUnavailableError } from "@scalius/core/errors";
-import type { CreateStorefrontOrderInput } from "../orders/types";
 import {
   createOrderReceiptToken,
+  type CreateStorefrontOrderInput,
   hashOrderReceiptToken,
   ORDER_RECEIPT_TOKEN_TTL_SECONDS,
-} from "../orders/receipts";
+} from "../orders";
 import { sha256Hex } from "@scalius/shared/hash";
 
 export interface CheckoutAttemptIdentity {

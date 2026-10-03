@@ -20,16 +20,19 @@ import {
   resolveCheckoutLanguageData,
 } from "@scalius/shared/checkout-language";
 import {
+  normalizeCloudflareWebAnalyticsConfig,
   processAnalyticsScript,
   shouldInjectAnalyticsScript,
   shouldUsePartytown,
-} from "../analytics/analytics-scripts";
-import { normalizeCloudflareWebAnalyticsConfig } from "../analytics/analytics.validation";
-import { planCollectionProducts } from "../catalog/collections";
-import { planHomeProductLists, type HomeProductList } from "../catalog/home-lists";
-import { planHomeBrands } from "../catalog/home-brands";
+} from "../analytics";
+import {
+  type HomeProductList,
+  planCollectionProducts,
+  planHomeBrands,
+  planHomeProductLists,
+} from "../catalog";
 import { planHomeMedia, planHomePromotions, planPublishedThemeBrandMedia } from "./homepage-sections";
-import { normalizeCollectionConfig, publicCollectionConfig } from "../collections/collection-config";
+import { normalizeCollectionConfig, publicCollectionConfig } from "../collections";
 import {
   businessDocument,
   currencyDocument,
@@ -38,8 +41,8 @@ import {
   policiesDocument,
   securityDocument,
   seoDocument,
-} from "../settings/documents";
-import { planPublicStorePolicies } from "../pages/store-policies";
+} from "../settings";
+import { getPublicPageBySlug, planPublicStorePolicies } from "../pages";
 import {
   selectSettingsDocuments,
   type SettingsDocumentRow,
@@ -52,18 +55,21 @@ import {
   type HomeSectionRequests,
 } from "@scalius/shared/storefront-theme";
 import { getDecimalPlaces } from "@scalius/shared/currency";
-import { getPublicPageBySlug } from "../pages/pages.service";
 import { safeBatch, type Database } from "@scalius/database/client";
 import { selectStoreShapeCounts, storeShapeFromCounts, type StoreShapeCountsRow } from "./store-shape";
-import { planPublishedNavigationPlacements } from "../navigation/navigation.authority.service";
-import { planNavigationResourceSnapshots } from "../navigation/navigation.resolver";
-import { categoryNavigationFromRows, selectCategoryNavigationRows, trimCategoryNavigation } from "../navigation/navigation.categories";
-import { publicCategoryConditions } from "../categories/categories.publication";
+import {
+  categoryNavigationFromRows,
+  planNavigationResourceSnapshots,
+  planPublishedNavigationPlacements,
+  selectCategoryNavigationRows,
+  trimCategoryNavigation,
+} from "../navigation";
+import { publicCategoryConditions } from "../categories";
 import {
   activePluginInstallationsFromRows,
   activePluginStorefrontScripts,
   selectActivePluginInstallations,
-} from "../plugins/storefront";
+} from "../plugins";
 import type { PluginInstallationRow } from "@scalius/database/schema";
 import { PLUGIN_RENDER_RETRY_SECONDS } from "@scalius/shared/plugins";
 import { deps } from "../../cache-deps";

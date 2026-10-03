@@ -6,8 +6,8 @@ import { and, asc, eq, gt, isNull, or, sql, type SQL } from "drizzle-orm";
 import type { AnySQLiteColumn } from "drizzle-orm/sqlite-core";
 import { ValidationError } from "@scalius/core/errors";
 import { ftsMatch } from "../../search/fts5";
-import { contentEntryPath } from "../pages/pages.validation";
-import { publicCategoryConditions } from "../categories/categories.publication";
+import { contentEntryPath } from "../pages";
+import { publicCategoryConditions } from "../categories";
 
 const DEFAULT_RESOURCE_PAGE_SIZE = 20;
 const MAX_RESOURCE_PAGE_SIZE = 100;

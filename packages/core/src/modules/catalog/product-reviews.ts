@@ -8,7 +8,7 @@
 import { and, asc, desc, eq, gt, isNull, lt, or, sql, type SQL } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import { productReviews, productReviewStats, products } from "@scalius/database/schema";
-import { reviewsEnabledSql } from "../settings/documents";
+import { reviewsEnabledSql } from "../settings";
 import { deps } from "./declare-deps";
 
 export const PUBLIC_REVIEW_SORTS = ["recent", "highest", "lowest"] as const;

@@ -3,32 +3,33 @@ import { checkoutAuthority } from "@scalius/database/schema";
 import { inArray, sql } from "drizzle-orm";
 import { ValidationError } from "@scalius/core/errors";
 import {
-    resolveActivePaymentMethodsFromRows,
-    type AppPaymentUsability,
-    type GatewaySettingsStoredRow,
-    type PaymentMethodsConfig,
-} from "../payments/gateway-settings";
+  type AppPaymentUsability,
+  type GatewaySettingsStoredRow,
+  type PaymentMethodsConfig,
+  resolveActivePaymentMethodsFromRows,
+} from "../payments";
 import {
-    checkoutDocument,
-    currencyDocument,
-    customerAuthDocument,
-    customerCountriesDocument,
-    metaConversionsDocument,
-    paymentMethodsDocument,
-    sslcommerzDocument,
-    stripeDocument,
-    type CurrencySettings,
-    type CustomerCountries,
-} from "../settings/documents";
+  checkoutDocument,
+  currencyDocument,
+  type CurrencySettings,
+  customerAuthDocument,
+  type CustomerCountries,
+  customerCountriesDocument,
+  metaConversionsDocument,
+  paymentMethodsDocument,
+  sslcommerzDocument,
+  stripeDocument,
+} from "../settings";
 import type { CheckoutContactFieldSettings } from "./contact-fields";
 import { selectSettingsDocuments } from "../../settings-store";
-import { notificationsDocument } from "../notifications/documents";
+import { notificationsDocument } from "../notifications";
 import {
-    resolveProductMediaProjectionRows,
-    selectCheckoutProductMediaProjectionRows,
-    type ProductMediaProjectionRow,
-} from "../products/media";
-import { selectActiveProductBundleRows, type ProductBundleRow } from "../products/bundles";
+  type ProductBundleRow,
+  type ProductMediaProjectionRow,
+  resolveProductMediaProjectionRows,
+  selectActiveProductBundleRows,
+  selectCheckoutProductMediaProjectionRows,
+} from "../products";
 import {
     resolveStorefrontCartValidationFromRows,
     selectStorefrontCartProductRows,
@@ -42,15 +43,13 @@ import {
     resolveStorefrontDeliveryPreflightFromRows,
     type StorefrontDeliveryPreflightResult,
 } from "./prepare";
-import { selectDeliveryRateRowsByIds, type DeliveryRateRow } from "../delivery/zones";
 import {
-    selectActiveDeliveryLocationRowsByIds,
-    type ActiveDeliveryLocationRow,
-} from "../delivery/location-validation";
-import {
-    createStorefrontTaxAuthorityReadPlan,
-    type StorefrontTaxAuthoritySnapshot,
-} from "../tax/tax.service";
+  type ActiveDeliveryLocationRow,
+  type DeliveryRateRow,
+  selectActiveDeliveryLocationRowsByIds,
+  selectDeliveryRateRowsByIds,
+} from "../delivery";
+import { createStorefrontTaxAuthorityReadPlan, type StorefrontTaxAuthoritySnapshot } from "../tax";
 
 /** Settings documents every checkout snapshot reads in its first statement. */
 const CHECKOUT_SETTINGS_DOCUMENTS = [

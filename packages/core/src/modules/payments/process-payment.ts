@@ -19,16 +19,16 @@ import {
 } from "@scalius/database/client";
 import type { BatchItem } from "drizzle-orm/batch";
 import { ConflictError } from "@scalius/core/errors";
-import { applyInventoryForStatusChange } from "../inventory/inventory-transitions";
+import { applyInventoryForStatusChange } from "../inventory";
 import type { PaymentType, ProcessPaymentParams } from "./types";
 import { GIFT_CARD_TENDER_METHOD, isOnlinePaymentMethod } from "./gateways/registry";
-import { validateTransition } from "../order-kernel/state-machine";
 import {
   assertNoActiveShipmentClaim,
   hasActiveShipmentClaim,
   noActiveShipmentClaimCondition,
   SHIPMENT_CLAIM_CONFLICT_MESSAGE,
-} from "../order-kernel/shipment-claim";
+  validateTransition,
+} from "../order-kernel";
 import { buildMetaPurchaseOutboxClaimInsert } from "../../integrations/meta/purchase-outbox";
 import {
   getUnpayableOrderReason,

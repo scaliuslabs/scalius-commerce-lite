@@ -13,7 +13,7 @@ import { and, asc, count, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import { nanoid } from "nanoid";
 
-import { customerSegmentMembership, readSegmentDefinitions } from "../customers/customer-segments";
+import { customerSegmentMembership, readSegmentDefinitions } from "../customers";
 import {
     evaluatePromotionCandidates,
     promotionCandidateSchema,

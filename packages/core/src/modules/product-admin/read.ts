@@ -19,28 +19,29 @@ import {
 } from "../../utils/keyset";
 import { ftsMatch, isFts5SearchEnabled, sanitizeFtsQuery } from "../../search/fts5";
 import { ValidationError } from "@scalius/core/errors";
-import type { ProductWithDetails } from "../products/types";
+import {
+  buildBuyerCatalogPricingProjection,
+  type BuyerPriceRange,
+  buyerPriceRangeColumns,
+  loadProductMediaProjections,
+  loadProductOptions,
+  loadProductVariantSelectedOptions,
+  presentBuyerPriceRange,
+  presentCatalogPrice,
+  type ProductMediaProjection,
+  type ProductMediaProjectionRow,
+  productVariantBarcodeIdentityEquals,
+  type ProductWithDetails,
+  readStoredCustomization,
+  readStoreDecimalPlaces,
+  resolveProductImageRepresentation,
+  resolveProductMediaProjectionRows,
+  selectProductMediaProjectionRows,
+} from "../products";
 import { safeBatch, type Database } from "@scalius/database/client";
-import { presentCatalogPrice, readStoreDecimalPlaces } from "../products/money";
-import { readStoredCustomization } from "../products/customization";
 import { bpsToPercent, fromMinor } from "@scalius/shared/money";
 import { unixToDate } from "@scalius/shared/timestamps";
 import { getBarcodeIdentityKey } from "@scalius/shared/barcode-identity";
-import { loadProductOptions, loadProductVariantSelectedOptions } from "../products/option-model";
-import { productVariantBarcodeIdentityEquals } from "../products/variant-identity";
-import {
-    loadProductMediaProjections,
-    resolveProductMediaProjectionRows,
-    resolveProductImageRepresentation,
-    selectProductMediaProjectionRows,
-} from "../products/media";
-import type { ProductMediaProjection, ProductMediaProjectionRow } from "../products/media";
-import {
-    buildBuyerCatalogPricingProjection,
-    buyerPriceRangeColumns,
-    presentBuyerPriceRange,
-    type BuyerPriceRange,
-} from "../products/buyer-projection";
 
 function requireProductTimestamp(
     value: Date | number | string | null | undefined,

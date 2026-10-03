@@ -14,12 +14,12 @@ import { sql, type SQL, type SQLWrapper } from "drizzle-orm";
 import { safeBatch, type Database } from "@scalius/database/client";
 import { fromMinor } from "@scalius/shared/money";
 import {
-    PRODUCT_MEDIA_QUERY_CHUNK,
-    resolveProductMediaProjectionRows,
-    selectProductMediaProjectionRows,
-    type ProductMediaProjection,
-    type ProductMediaProjectionRow,
-} from "../products/media";
+  PRODUCT_MEDIA_QUERY_CHUNK,
+  type ProductMediaProjection,
+  type ProductMediaProjectionRow,
+  resolveProductMediaProjectionRows,
+  selectProductMediaProjectionRows,
+} from "../products";
 import { deps } from "../../cache-deps";
 
 /** Key specs a card lists (Star Tech shows four). */

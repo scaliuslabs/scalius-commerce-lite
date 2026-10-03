@@ -16,10 +16,7 @@ import {
 } from "@scalius/shared/readiness";
 import type { Database } from "@scalius/database/client";
 import { ValidationError } from "@scalius/core/errors";
-import {
-  smsDocument,
-  type SmsSettings,
-} from "../../modules/settings/documents";
+import { smsDocument, type SmsSettings } from "../../modules/settings";
 import { bindProvider, isAppProviderId, resolveAppProvider, type AppProviders } from "../provider-port";
 import { MASKED_SMS_SECRET as MASKED, firstPlaceholderConfigError } from "./credentials";
 import {

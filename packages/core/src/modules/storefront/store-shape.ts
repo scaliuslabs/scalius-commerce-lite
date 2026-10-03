@@ -19,10 +19,10 @@ import {
   type StoreShape,
   type StoreShapeMenuItem,
 } from "@scalius/shared/storefront-theme";
-import { getPublishedNavigationPlacements } from "../navigation/navigation.authority.service";
+import { getPublishedNavigationPlacements } from "../navigation";
 import { cacheDep } from "@scalius/shared/cache-deps";
 import { deps } from "../../cache-deps";
-import { emiDocument, reviewsEnabledSql } from "../settings/documents";
+import { emiDocument, reviewsEnabledSql } from "../settings";
 import { SETTINGS_DOCUMENT_ROW_KEY } from "../../settings-store";
 
 const cap = STORE_SHAPE_COUNT_CAP;

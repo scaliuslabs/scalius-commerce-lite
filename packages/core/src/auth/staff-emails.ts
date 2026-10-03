@@ -6,7 +6,7 @@ import type { Database } from "@scalius/database/client";
 import { escapeHtml } from "@scalius/shared/html-escape";
 import { joinPlatformUrl } from "@scalius/shared/platform-config";
 import type { AppProviders } from "../integrations/provider-port";
-import { readStoreName } from "../modules/notifications/store-messages";
+import { readStoreName } from "../modules/notifications";
 
 export const STAFF_INVITE_TTL_SECONDS = 7 * 24 * 60 * 60;
 export const PASSWORD_RESET_TTL_SECONDS = 60 * 60;

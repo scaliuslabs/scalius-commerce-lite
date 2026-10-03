@@ -25,7 +25,11 @@ import {
     PaymentStatus,
     ShipmentStatus,
 } from "@scalius/database/schema";
-import { isOnlinePaymentMethod, onlinePaymentMethodCondition } from "../../payments/gateways/registry";
+import {
+  isOnlinePaymentMethod,
+  onlinePaymentMethodCondition,
+  PAYMENT_BLOCKED_ORDER_STATUSES,
+} from "../../payments";
 import { sql, eq, inArray, isNull, and, type SQL } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import { calculateCustomerStats } from "@scalius/shared/customer-utils";
@@ -38,10 +42,8 @@ import type {
     OrderShipmentRecoverySummary,
     OrderShipmentSummary,
 } from "../types";
-import { hasActiveShipmentClaim } from "../../order-kernel/shipment-claim";
-import { PROVIDER_OUTCOME_UNKNOWN } from "../../delivery/types";
-import { noActiveRefundAttemptForOrderColumnCondition } from "../../order-kernel/refund-attempt-guard";
-import { PAYMENT_BLOCKED_ORDER_STATUSES } from "../../payments/payable-order";
+import { hasActiveShipmentClaim, noActiveRefundAttemptForOrderColumnCondition } from "../../order-kernel";
+import { PROVIDER_OUTCOME_UNKNOWN } from "../../delivery";
 
 // ─────────────────────────────────────────
 // Service functions

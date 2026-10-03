@@ -17,14 +17,13 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { NotFoundError, ValidationError } from "@scalius/core/errors";
 import {
-    chooseOrderCustomer,
-    normalizeContactEmail,
-    selectContactCustomerCandidates,
-} from "../customers/customer-identity";
-import { enforceNewsletterSignupRateLimits } from "../customers/customer-auth-rate-limit";
-import type { NotificationQueue } from "../notifications/notification-outbox";
-import { marketingConsentDocument } from "../settings/documents";
-import { validateCustomerPhoneCountry } from "../settings/phone-country-policy";
+  chooseOrderCustomer,
+  enforceNewsletterSignupRateLimits,
+  normalizeContactEmail,
+  selectContactCustomerCandidates,
+} from "../customers";
+import type { NotificationQueue } from "../notifications";
+import { marketingConsentDocument, validateCustomerPhoneCountry } from "../settings";
 import {
     applyConsentChanges,
     getCustomerMarketingConsents,

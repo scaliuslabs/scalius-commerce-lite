@@ -63,9 +63,8 @@ import {
     type CheckoutRateOption,
 } from "./app-functions";
 import { checkoutPaymentMethodName, presentCheckoutRateOptions } from "./pricing";
-import { DELIVERY_RATE_UNAVAILABLE_REASON, listDeliveryRatesForAddress } from "../delivery/zones";
-import { buildStorefrontDiscountAllocation } from "../tax/discount-allocation";
-import type { TaxDiscountAllocationInput } from "../tax/types";
+import { DELIVERY_RATE_UNAVAILABLE_REASON, listDeliveryRatesForAddress } from "../delivery";
+import { buildStorefrontDiscountAllocation, type TaxDiscountAllocationInput } from "../tax";
 
 /** The one payment method a manual order takes. */
 export const MANUAL_ORDER_PAYMENT_METHOD = "cod";

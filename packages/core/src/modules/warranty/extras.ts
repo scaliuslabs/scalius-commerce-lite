@@ -14,7 +14,7 @@ import {
 } from "@scalius/database/schema";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { and, desc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
-import { publishedMediaObjectKey } from "../media-references/presentation";
+import { publishedMediaObjectKey } from "../media-references";
 import type { LineExtrasInput } from "../../utils/line-extras";
 import type { LineWarrantyClaim, LineWarrantyExtra, WarrantyDurationUnit, WarrantyProvider } from "./browser";
 import { nowSeconds } from "./shared";

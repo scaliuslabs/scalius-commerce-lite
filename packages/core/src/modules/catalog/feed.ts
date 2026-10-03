@@ -1,5 +1,23 @@
 // Product feed rows for the Google/Base and Meta catalogue feeds.
-import { effectiveLowStockThresholdSql } from "../products/low-stock-policy";
+import {
+  buildBuyerCatalogPricingProjection,
+  catalogDiscountedPrice,
+  effectiveLowStockThresholdSql,
+  loadProductMediaProjections,
+  loadProductOptions,
+  loadVariantSelectedOptions,
+  normalizeDefaultSkuOptions,
+  presentCatalogPrice,
+  type ProductMediaProjection,
+  publicProductHasBuyerResolvableSku,
+  publicProductHasPrimaryDiscoveryImage,
+  resolveSkuImageRepresentation,
+  type StorefrontFeedProduct,
+  type StorefrontFeedProductAttribute,
+  type StorefrontFeedProductFilterInput,
+  type StorefrontFeedProductPage,
+  type StorefrontFeedProductVariant,
+} from "../products";
 import {
     products,
     categories,
@@ -11,26 +29,11 @@ import {
 import { and, sql, desc, eq, isNull, inArray, or, lt, type SQL } from "drizzle-orm";
 import { unixToDate } from "@scalius/shared/utils";
 import { maskPublicBuyerAvailability } from "@scalius/shared/buyer-availability";
-import type {
-    StorefrontFeedProduct,
-    StorefrontFeedProductAttribute,
-    StorefrontFeedProductFilterInput,
-    StorefrontFeedProductPage,
-    StorefrontFeedProductVariant,
-} from "../products/types";
 import type { Database } from "@scalius/database/client";
 import { ValidationError } from "@scalius/core/errors";
-import {
-    publicProductHasBuyerResolvableSku,
-    publicProductHasPrimaryDiscoveryImage,
-    normalizeDefaultSkuOptions,
-} from "../products/public-eligibility";
-import { buildBuyerCatalogPricingProjection } from "../products/buyer-projection";
-import { catalogDiscountedPrice, presentCatalogPrice } from "../products/money";
-import { storeCurrencyCodeSql, storeCurrencyFromCode, storeDecimalPlacesFromCode } from "../settings/store-money";
-import { loadProductOptions, loadVariantSelectedOptions } from "../products/option-model";
-import { publicCategoryConditions } from "../categories/categories.publication";
-import { publicBrandJoinCondition } from "../brands/brands.storefront";
+import { storeCurrencyCodeSql, storeCurrencyFromCode, storeDecimalPlacesFromCode } from "../settings";
+import { publicCategoryConditions } from "../categories";
+import { publicBrandJoinCondition } from "../brands";
 import { hasRequiredCustomization, parseStoredCustomizationSchema } from "@scalius/shared/line-properties";
 import { deps } from "./declare-deps";
 
@@ -78,11 +81,6 @@ function requiresBuyerInput(stored: string | null): boolean {
     const parsed = parseStoredCustomizationSchema(stored);
     return !parsed.ok || hasRequiredCustomization(parsed.schema);
 }
-import {
-    loadProductMediaProjections,
-    resolveSkuImageRepresentation,
-    type ProductMediaProjection,
-} from "../products/media";
 import {
     STOREFRONT_ENRICHMENT_ID_CHUNK_SIZE,
     buildStorefrontProductConditions,

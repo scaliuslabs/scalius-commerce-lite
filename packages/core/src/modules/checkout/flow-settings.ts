@@ -1,10 +1,16 @@
 import type { Database } from "@scalius/database/client";
 import { ValidationError } from "@scalius/core/errors";
 
-import type { PaymentProviders } from "../payments/gateways/registry";
+import type { PaymentProviders } from "../payments";
 import { getCheckoutFlowValidationIssues } from "./flow";
-import { checkoutDocument, type AutoFulfilMode, type CheckoutFlowSettings, type CheckoutMode } from "../settings/documents";
-import { readStoreCurrency, toStoreMinor } from "../settings/store-money";
+import {
+  type AutoFulfilMode,
+  checkoutDocument,
+  type CheckoutFlowSettings,
+  type CheckoutMode,
+  readStoreCurrency,
+  toStoreMinor,
+} from "../settings";
 
 export interface CheckoutFlowSettingsDocument extends CheckoutFlowSettings {
     /** 0 until the first save. */

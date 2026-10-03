@@ -7,7 +7,7 @@ import type {
   AnalyticsEnumVocabulary,
   AnalyticsReportDefinition,
 } from "@scalius/shared/analytics-reports";
-import { createCsvArtifactBuilder, type OrderCsvArtifact } from "../../orders/csv-export";
+import { createCsvArtifactBuilder, type OrderCsvArtifact } from "../../orders";
 import type { ReportCell, ReportRow } from "./engine";
 
 export const REPORT_CSV_MAX_BYTES = 16 * 1024 * 1024;

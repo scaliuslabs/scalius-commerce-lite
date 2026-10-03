@@ -26,15 +26,15 @@ import { nanoid } from "nanoid";
 import { validateAndFormatPhone } from "@scalius/shared/customer-utils";
 import { CUSTOMER_TAGS_PER_CUSTOMER_MAX, type MarketingChannel } from "@scalius/shared/customer-marketing";
 import type { CustomerImportBatch, CustomerImportItem } from "@scalius/shared/store-transfer/customers";
-import { getAllowedCountries } from "../settings/site-settings.service";
+import { getAllowedCountries } from "../settings";
 import {
-  enqueueConsentNotifications,
-  prepareConsentChanges,
-  readConsentChangeResults,
   type ConsentChange,
+  enqueueConsentNotifications,
+  type MarketingLinkEnv,
+  prepareConsentChanges,
   type PreparedConsentChanges,
-} from "../customer-marketing/consent";
-import type { MarketingLinkEnv } from "../customer-marketing/links";
+  readConsentChangeResults,
+} from "../customer-marketing";
 import { ImportBudget, isWorkerLimitError } from "./budget";
 
 export type CustomerImportStatus = "created" | "updated" | "unchanged" | "skipped" | "failed" | "would_create" | "would_update" | "would_skip";

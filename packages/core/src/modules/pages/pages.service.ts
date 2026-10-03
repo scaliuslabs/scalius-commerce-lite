@@ -32,7 +32,7 @@ import {
   presentStorefrontCustomFields,
   selectStorefrontCustomFieldRows,
   type StorefrontCustomFieldRow,
-} from "../custom-fields/custom-fields.storefront";
+} from "../custom-fields";
 import {
   createPageSchema,
   updatePageSchema,
@@ -57,7 +57,7 @@ import {
   isMediaReferenceDeletingGuardError,
   MEDIA_REFERENCE_DELETING_MESSAGE,
   noDeletingMediaReferences,
-} from "../media-references/reference-guard";
+} from "../media-references";
 import { deps } from "../../cache-deps";
 import { truthfulUpdatedAt } from "../../utils/truthful-updated-at";
 

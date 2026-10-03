@@ -21,11 +21,11 @@
 //
 // Amounts are integer minor units; with BDT's whole-taka catalog prices every
 // bundle share is whole taka.
-import type { RejectedDiscountCode, StorefrontDiscountQuote } from "../promotions/promotions.checkout";
+import type { RejectedDiscountCode, StorefrontDiscountQuote } from "../promotions";
 
 /** How a typed code that the bundle saving beat is named to the buyer. */
 export const BUNDLE_SAVING_NAME = "Bundle saving";
-import type { TaxDiscountAllocationInput } from "../tax/types";
+import type { TaxDiscountAllocationInput } from "../tax";
 
 export interface BundleDiscountLine {
     /** The tax allocation line id (`buildStorefrontTaxAllocationLineId`). */

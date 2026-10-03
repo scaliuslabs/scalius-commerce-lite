@@ -17,18 +17,18 @@ import type { Database } from "@scalius/database/client";
 import type { safeBatch } from "@scalius/database/client";
 import { and, asc, desc, eq, gte, inArray, sql, type SQL, type SQLWrapper } from "drizzle-orm";
 import type { HomeProductListRequest } from "@scalius/shared/storefront-theme";
-import { buildBuyerCatalogPricingProjection } from "../products/buyer-projection";
 import {
-    resolveProductMediaProjectionRows,
-    selectProductMediaProjectionRows,
-    type ProductMediaProjection,
-    type ProductMediaProjectionRow,
-} from "../products/media";
+  buildBuyerCatalogPricingProjection,
+  type ProductMediaProjection,
+  type ProductMediaProjectionRow,
+  publicProductHasBuyerResolvableSku,
+  resolveProductMediaProjectionRows,
+  selectProductMediaProjectionRows,
+} from "../products";
 import { categoryScope, declareProductCards, deps } from "./declare-deps";
-import { publicProductHasBuyerResolvableSku } from "../products/public-eligibility";
-import { storeDecimalPlacesFromCode } from "../settings/store-money";
+import { storeDecimalPlacesFromCode } from "../settings";
 import { resolveProductCardFacts, selectProductCardFactRows, type ProductCardFactRow } from "./card-facts";
-import { publicCategoryConditions, publishedCategoryIdExists } from "../categories/categories.publication";
+import { publicCategoryConditions, publishedCategoryIdExists } from "../categories";
 import {
     buildCollectionProductSelect,
     resolveProductCards,

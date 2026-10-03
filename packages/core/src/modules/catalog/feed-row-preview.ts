@@ -11,7 +11,7 @@ import { normalizeCatalogDiscoveryBaseUrl } from "@scalius/shared/catalog-discov
 import { resolveMediaUrl } from "@scalius/shared/media-url";
 import type { SeoDiscoverySettings } from "@scalius/shared/seo-discovery";
 import { ServiceUnavailableError, ValidationError } from "@scalius/core/errors";
-import type { StorefrontFeedProduct } from "../products/types";
+import type { StorefrontFeedProduct } from "../products";
 import {
   getEligibleStorefrontFeedProductById,
   getFeedProjectionDiagnosticById,

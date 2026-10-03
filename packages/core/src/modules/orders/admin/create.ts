@@ -16,15 +16,14 @@ import {
 import { prepareStockReservationBatch } from "../../inventory";
 import type { ReservationEntry } from "../../inventory";
 import { sql, eq } from "drizzle-orm";
-import { guestRecordForPhone } from "../../customers/customer-identity";
+import { guestRecordForPhone } from "../../customers";
 import { generateOrderId } from "@scalius/shared/order-utils";
 import { normalizeOrderChannelSource } from "@scalius/shared/order-channel-source";
 import { nanoid } from "nanoid";
 import type { CreateOrderInput } from "../validation";
 import { ValidationError, ConflictError, ServiceUnavailableError } from "@scalius/core/errors";
-import { computeOrderPaymentState } from "../../payments/payment-state";
-import { createCODTrackingInsertValues } from "../../payments/cod";
-import { validateCustomerPhoneCountry } from "../../settings/phone-country-policy";
+import { computeOrderPaymentState, createCODTrackingInsertValues } from "../../payments";
+import { validateCustomerPhoneCountry } from "../../settings";
 import {
     buildAdminOrderCreateAttemptCommit,
     buildAdminOrderCreateAttemptGuard,
@@ -38,7 +37,7 @@ import { prepareManualOrderQuote } from "./quote";
 import type { SQLiteBatchItem } from "./shared";
 import type { FunctionCart } from "@scalius/shared/plugins";
 import type { AppliedAppDiscount, ManualOrderAppFunctions } from "@scalius/shared/checkout-app-facts";
-import { buildAppDiscountFactInserts } from "../../order-kernel/app-facts";
+import { buildAppDiscountFactInserts } from "../../order-kernel";
 import { manualOrderAppLines } from "./app-lines";
 
 /**

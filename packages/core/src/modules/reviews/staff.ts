@@ -25,11 +25,8 @@ import {
 } from "@scalius/shared/reviews";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { AppError, ConflictError, NotFoundError, ValidationError } from "../../errors";
-import { publishedMediaObjectKey } from "../media-references/presentation";
-import {
-  reviewsDocument,
-  type ReviewSettings,
-} from "../settings/documents";
+import { publishedMediaObjectKey } from "../media-references";
+import { reviewsDocument, type ReviewSettings } from "../settings";
 import { readSettingsDocumentStrict } from "../../settings-store";
 import {
   ADMIN_REVIEW_PAGE_SIZE,

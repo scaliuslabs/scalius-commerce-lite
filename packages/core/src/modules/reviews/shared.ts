@@ -16,7 +16,7 @@ import {
   REVIEWABLE_FULFILLMENT_TYPES,
 } from "@scalius/shared/reviews";
 import { AppError, NotFoundError, ServiceUnavailableError } from "../../errors";
-import { readReviewSettings, type ReviewSettings } from "../settings/documents";
+import { readReviewSettings, type ReviewSettings } from "../settings";
 
 export const DAY_SECONDS = 24 * 60 * 60;
 /** Order statuses whose handed-over lines may be reviewed. */

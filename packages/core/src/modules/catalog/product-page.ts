@@ -1,5 +1,30 @@
 // The buyer product page read.
-import { effectiveLowStockThresholdSql } from "../products/low-stock-policy";
+import {
+  catalogDiscountedPrice,
+  effectiveLowStockThresholdSql,
+  loadProductMediaProjections,
+  loadProductOptions,
+  loadProductPageBlockMedia,
+  loadVariantSelectedOptions,
+  normalizeDefaultSkuOptions,
+  parseStoredEmiSettings,
+  presentCatalogPrice,
+  presentProductBundleTier,
+  type ProductBundleRow,
+  productBundleTiersByProduct,
+  productEmiOffer,
+  type ProductMediaProjection,
+  type ProductPageBlockMedia,
+  type ProductPageContentBlockRow,
+  publicProductHasBuyerResolvableSku,
+  readStoredCustomization,
+  resolveProductImageRepresentation,
+  resolveProductPageContentBlocks,
+  resolveSkuImageRepresentation,
+  selectActiveProductBundleRows,
+  selectProductPageContentBlockRows,
+  storeEmiSettingsSql,
+} from "../products";
 import {
     products,
     categories,
@@ -15,39 +40,12 @@ import {
 import { and, asc, sql, eq, isNull } from "drizzle-orm";
 import { unixToDate } from "@scalius/shared/utils";
 import { fromMinor } from "@scalius/shared/money";
-import { listProductBuyGetOffers } from "../promotions/promotions.checkout";
+import { listProductBuyGetOffers } from "../promotions";
 import { maskPublicBuyerAvailability } from "@scalius/shared/buyer-availability";
 import type { Database } from "@scalius/database/client";
-import {
-    publicProductHasBuyerResolvableSku,
-    normalizeDefaultSkuOptions,
-} from "../products/public-eligibility";
-import { catalogDiscountedPrice, presentCatalogPrice } from "../products/money";
-import { storeCurrencyCodeSql, storeCurrencyFromCode, storeDecimalPlacesFromCode } from "../settings/store-money";
-import { loadProductOptions, loadVariantSelectedOptions } from "../products/option-model";
-import { publicCategoryConditions } from "../categories/categories.publication";
-import { publicBrandJoinCondition } from "../brands/brands.storefront";
-import {
-    loadProductMediaProjections,
-    resolveProductImageRepresentation,
-    resolveSkuImageRepresentation,
-    type ProductMediaProjection,
-} from "../products/media";
-import { readStoredCustomization } from "../products/customization";
-import {
-    loadProductPageBlockMedia,
-    resolveProductPageContentBlocks,
-    selectProductPageContentBlockRows,
-    type ProductPageBlockMedia,
-    type ProductPageContentBlockRow,
-} from "../products/content-blocks";
-import {
-    presentProductBundleTier,
-    productBundleTiersByProduct,
-    selectActiveProductBundleRows,
-    type ProductBundleRow,
-} from "../products/bundles";
-import { parseStoredEmiSettings, productEmiOffer, storeEmiSettingsSql } from "../products/emi";
+import { storeCurrencyCodeSql, storeCurrencyFromCode, storeDecimalPlacesFromCode } from "../settings";
+import { publicCategoryConditions } from "../categories";
+import { publicBrandJoinCondition } from "../brands";
 import { productPageReviews, reviewStatsSelection } from "./product-reviews";
 import {
     DEFAULT_RECOMMENDATION_LIMIT,
@@ -56,12 +54,12 @@ import {
 } from "./recommendations";
 import { declareProductGallery, deps } from "./declare-deps";
 import {
-    groupStorefrontCustomFields,
-    presentStorefrontCustomFields,
-    selectStorefrontCustomFieldRows,
-    selectStorefrontVariantCustomFieldRows,
-    type StorefrontCustomFieldRow,
-} from "../custom-fields/custom-fields.storefront";
+  groupStorefrontCustomFields,
+  presentStorefrontCustomFields,
+  selectStorefrontCustomFieldRows,
+  selectStorefrontVariantCustomFieldRows,
+  type StorefrontCustomFieldRow,
+} from "../custom-fields";
 
 // ─────────────────────────────────────────
 // Private helpers

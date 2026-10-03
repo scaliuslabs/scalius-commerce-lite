@@ -8,7 +8,7 @@ import { inventoryLevels, inventoryLocations, productVariants, products } from "
 import { and, asc, eq, gt, isNull, sql } from "drizzle-orm";
 import { csvCell, spreadsheetSafeText } from "@scalius/shared/store-transfer/csv";
 import { SCALIUS_INVENTORY_COLUMNS } from "@scalius/shared/store-transfer/inventory";
-import { variantOptionLabelSql } from "../products/option-model";
+import { variantOptionLabelSql } from "../products";
 import type { CsvPage } from "./product-export";
 
 export const INVENTORY_EXPORT_PAGE_DEFAULT = 500;

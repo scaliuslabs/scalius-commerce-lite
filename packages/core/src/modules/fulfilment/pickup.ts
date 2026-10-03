@@ -13,10 +13,10 @@ import type { BatchItem } from "drizzle-orm/batch";
 import { and, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
 import {
-    buildOrderReadyForPickupNotificationDedupeKey,
-    createOrderNotificationOutboxInsertValues,
-} from "../notifications/order-notification-outbox";
-import { assertNoActiveShipmentClaim, noActiveShipmentClaimCondition } from "../order-kernel/shipment-claim";
+  buildOrderReadyForPickupNotificationDedupeKey,
+  createOrderNotificationOutboxInsertValues,
+} from "../notifications";
+import { assertNoActiveShipmentClaim, noActiveShipmentClaimCondition } from "../order-kernel";
 
 const PICKUP_READY_GUARD = "ORDER_PICKUP_READY_CONFLICT";
 const OPEN_PICKUP_STATUSES = [OrderStatus.PENDING, OrderStatus.PROCESSING, OrderStatus.CONFIRMED] as const;

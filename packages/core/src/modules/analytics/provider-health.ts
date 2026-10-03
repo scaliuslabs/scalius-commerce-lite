@@ -4,7 +4,7 @@ import { analytics } from "@scalius/database/schema";
 import { readQuotedHtmlAttribute } from "@scalius/shared/html-attributes";
 
 import { readStoredCredentialStrict } from "../../utils/credential-encryption";
-import { metaConversionsDocument } from "../settings/documents";
+import { metaConversionsDocument } from "../settings";
 import {
   CLOUDFLARE_WEB_ANALYTICS_SCRIPT_SRC,
   analyticsScriptTypes,

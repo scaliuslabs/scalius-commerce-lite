@@ -22,11 +22,13 @@ import {
 import { and, eq, desc, getTableColumns, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { NotFoundError, ValidationError, ServiceUnavailableError, ConflictError } from "@scalius/core/errors";
-import { assertNoActiveShipmentClaim, hasActiveShipmentClaim } from "../order-kernel/shipment-claim";
-import { assertNoActiveRefundAttempt } from "../order-kernel/refund-attempt-guard";
-import { assertNoActivePaymentSessionAttempt } from "../order-kernel/payment-session-guard";
-import { assertOrderStockCoverable } from "../inventory/inventory-transitions";
-import { InventoryLocationShortfallError } from "../inventory/locations";
+import {
+  assertNoActivePaymentSessionAttempt,
+  assertNoActiveRefundAttempt,
+  assertNoActiveShipmentClaim,
+  hasActiveShipmentClaim,
+} from "../order-kernel";
+import { assertOrderStockCoverable, InventoryLocationShortfallError } from "../inventory";
 import {
   getDeliveryProviderReadinessSummary,
   getDeliveryProviderSetupFingerprint,

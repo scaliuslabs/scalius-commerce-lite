@@ -10,23 +10,23 @@ import {
     codTracking,
     inventoryLocations,
 } from "@scalius/database/schema";
-import { listOrderDiscountLines } from "../../promotions/order-discount-lines";
-import { resolveOrderAppFacts, selectOrderAppFactRows, type OrderAppFactRow } from "../../order-kernel/app-facts";
+import { listOrderDiscountLines } from "../../promotions";
+import { type OrderAppFactRow, resolveOrderAppFacts, selectOrderAppFactRows } from "../../order-kernel";
 import { listOrderHolds } from "../holds";
 import { sql, desc, eq } from "drizzle-orm";
-import { customerKind } from "../../customers/customer-identity";
+import { customerKind } from "../../customers";
 import { fromMinor } from "@scalius/shared/money";
 import { unixToDate } from "@scalius/shared/utils";
 import type { OrderDetails, OrderShipmentSummary } from "../types";
 import { orderMoneyAmounts, orderMoneySelection } from "../money";
 import {
-    listOrderRefundAttempts,
-    summarizeActiveRefundOperation,
-} from "../../payments/refund-attempt-visibility";
-import { listOrderPaymentSessionAttempts } from "../../payments/payment-session-attempts";
+  listOrderPaymentSessionAttempts,
+  listOrderRefundAttempts,
+  summarizeActiveRefundOperation,
+} from "../../payments";
 import { listOrderSupportRequests } from "../order-support-requests";
 import { getCurrentPublicMediaUrl } from "../../../integrations/storage";
-import { publishedMediaObjectKey } from "../../media-references/presentation";
+import { publishedMediaObjectKey } from "../../media-references";
 import { retryTransientD1 } from "../../../utils/transient-d1";
 import {
     paymentRecoveryLifecycleCondition,

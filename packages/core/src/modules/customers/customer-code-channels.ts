@@ -15,7 +15,7 @@ import {
 import type { EmailRuntimeContext } from "../../integrations/email";
 import type { AppProviders } from "../../integrations/provider-port";
 import { isCustomerAuthChannelReady } from "./sign-in-readiness";
-import { customerAuthDocument } from "../settings/documents";
+import { customerAuthDocument } from "../settings";
 import { maskContact } from "./customer-identity";
 
 const CHANNEL_UNAVAILABLE: Record<CustomerAuthOtpChannel, string> = {

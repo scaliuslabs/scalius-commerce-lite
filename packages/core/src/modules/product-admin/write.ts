@@ -26,10 +26,37 @@ import { nanoid } from "nanoid";
 import { AppError, NotFoundError, ConflictError, ValidationError } from "@scalius/core/errors";
 import { buildBatchGuard, isBatchGuardError, safeBatch, type Database } from "@scalius/database/client";
 import type { BatchItem } from "drizzle-orm/batch";
-import { defaultProductSkuValues } from "../products/public-eligibility";
-import { catalogPriceColumns } from "../products/money";
-import { storeCurrencyCodeSql, storeCurrencyFromCode, storeDecimalPlacesFromCode } from "../settings/store-money";
-import { readStoreCurrency, toStoreMinor } from "../settings/store-money";
+import {
+  assertDigitalStockInput,
+  buildGiftCardProductRulesGuard,
+  buildProductBundleCopyStatements,
+  buildProductBundleReplaceStatements,
+  buildProductContentBlockCopyStatements,
+  buildProductContentBlockReplaceStatements,
+  catalogPriceColumns,
+  catalogProjectionRefreshStatements,
+  type CustomizationSchemaInput,
+  type CustomizationView,
+  defaultProductSkuValues,
+  GIFT_CARD_PRODUCT_RULES_MESSAGE,
+  MAX_PRODUCT_MEDIA_ASSOCIATIONS,
+  normalizeOptionIdentity,
+  planDigitalSkuWrites,
+  PRODUCT_CONTENT_BLOCK_MEDIA_GUARD,
+  PRODUCT_CONTENT_BLOCK_MEDIA_UNAVAILABLE_MESSAGE,
+  PRODUCT_MEDIA_REORDER_OFFSET,
+  rethrowDigitalStockRuleViolation,
+  rethrowGiftCardProductRuleViolation,
+  STOCK_CHANGED_MESSAGE,
+  toStoredCustomizationSchema,
+} from "../products";
+import {
+  readStoreCurrency,
+  storeCurrencyCodeSql,
+  storeCurrencyFromCode,
+  storeDecimalPlacesFromCode,
+  toStoreMinor,
+} from "../settings";
 import { percentToBps } from "@scalius/shared/money";
 import {
     buildProductAggregateRevisionBump,
@@ -41,7 +68,6 @@ import {
     rethrowProductAggregateRevisionConflictIfStale,
     type ProductAggregateRevisionResult,
 } from "./aggregate-revision";
-import { normalizeOptionIdentity } from "../products/option-model";
 import { optionMatrixBatchConflict, planProductOptionMatrix } from "./option-matrix";
 import {
     resolveNewVariantBarcode,
@@ -52,44 +78,16 @@ import {
     readableDefaultSku,
     reconcileVariantLowStockAlerts,
 } from "./variants";
-import { STOCK_CHANGED_MESSAGE } from "../products/types";
-import { unitCostToMinor } from "../inventory/unit-costs";
 import {
-    inventoryLocationErrorFrom,
-    isInventoryLevelShortfallError,
-    isInventoryLocationRequiredError,
-} from "../inventory/locations";
-import { buildStockMovementClaim } from "../inventory/stock-movement-claims";
-import { catalogProjectionRefreshStatements } from "../products/catalog-projections";
-import {
-    prepareProductAttributeValueRows,
-    type PlannedProductAttributeValue,
-} from "../attributes/product-attribute-values";
+  buildStockMovementClaim,
+  inventoryLocationErrorFrom,
+  isInventoryLevelShortfallError,
+  isInventoryLocationRequiredError,
+  unitCostToMinor,
+} from "../inventory";
+import { type PlannedProductAttributeValue, prepareProductAttributeValueRows } from "../attributes";
 import { insertWithDerivedHandle } from "../../utils/derived-handle";
-import { MAX_PRODUCT_MEDIA_ASSOCIATIONS, PRODUCT_MEDIA_REORDER_OFFSET } from "../products/media";
 import { getProductDetails } from "./read";
-import {
-    PRODUCT_CONTENT_BLOCK_MEDIA_GUARD,
-    PRODUCT_CONTENT_BLOCK_MEDIA_UNAVAILABLE_MESSAGE,
-    buildProductContentBlockCopyStatements,
-    buildProductContentBlockReplaceStatements,
-} from "../products/content-blocks";
-import { buildProductBundleCopyStatements, buildProductBundleReplaceStatements } from "../products/bundles";
-import {
-    GIFT_CARD_PRODUCT_RULES_MESSAGE,
-    buildGiftCardProductRulesGuard,
-    rethrowGiftCardProductRuleViolation,
-} from "../products/gift-card-rules";
-import {
-    assertDigitalStockInput,
-    planDigitalSkuWrites,
-    rethrowDigitalStockRuleViolation,
-} from "../products/digital-stock-rules";
-import {
-    toStoredCustomizationSchema,
-    type CustomizationSchemaInput,
-    type CustomizationView,
-} from "../products/customization";
 
 export type SQLiteBatchItem = BatchItem<"sqlite">;
 

@@ -13,31 +13,26 @@ import { fromMinor } from "@scalius/shared/money";
 import { categoryScope } from "@scalius/shared/cache-deps";
 import { deps } from "../../cache-deps";
 import { ftsMatch } from "../../search/fts5";
-import { collectionMembershipForConfig, normalizeCollectionConfig } from "../collections/collection-config";
-import { publicCollectionProductConditions } from "../products/public-eligibility";
+import { collectionMembershipForConfig, normalizeCollectionConfig } from "../collections";
 import {
-    buildBuyerCatalogPricingProjection,
-    buyerPriceRangeColumns,
-    presentBuyerPriceRange,
-} from "../products/buyer-projection";
+  buildBuyerCatalogPricingProjection,
+  buyerPriceRangeColumns,
+  loadProductMediaProjections,
+  presentBuyerPriceRange,
+  type ProductMediaProjectionRow,
+  publicCollectionProductConditions,
+  resolveProductImageRepresentation,
+  resolveProductMediaProjectionRows,
+  selectProductMediaProjectionRows,
+  type StorefrontProductFilterInput,
+} from "../products";
+import { storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../settings";
+import { publicCategoryConditions, publishedCategoryIdExists } from "../categories";
 import {
-    loadProductMediaProjections,
-    resolveProductImageRepresentation,
-    resolveProductMediaProjectionRows,
-    selectProductMediaProjectionRows,
-    type ProductMediaProjectionRow,
-} from "../products/media";
-import type { StorefrontProductFilterInput } from "../products/types";
-import { storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../settings/store-money";
-import {
-    publicCategoryConditions,
-    publishedCategoryIdExists,
-} from "../categories/categories.publication";
-import {
-    presentStorefrontCustomFields,
-    selectStorefrontCustomFieldRows,
-    type StorefrontCustomFieldRow,
-} from "../custom-fields/custom-fields.storefront";
+  presentStorefrontCustomFields,
+  selectStorefrontCustomFieldRows,
+  type StorefrontCustomFieldRow,
+} from "../custom-fields";
 import { getStorefrontCollectionProducts, storefrontCollectionVisibleCountQuery } from "./listing";
 import { resolveProductCardFacts, selectProductCardFactRows, type ProductCardFactRow } from "./card-facts";
 import {

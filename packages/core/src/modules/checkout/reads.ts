@@ -3,10 +3,10 @@ import { safeBatch, type Database } from "@scalius/database/client";
 import type { BatchItem } from "drizzle-orm/batch";
 import { selectReservationVariantStates, type ReservationVariantState } from "../inventory";
 import {
-    selectContactCustomerCandidates,
-    type ContactCustomerCandidate,
-    type OrderContact,
-} from "../customers/customer-identity";
+  type ContactCustomerCandidate,
+  type OrderContact,
+  selectContactCustomerCandidates,
+} from "../customers";
 import {
     resolveCheckoutAttemptRow,
     selectCheckoutAttemptByKey,
@@ -15,13 +15,12 @@ import {
     type ExistingCheckoutAttemptResult,
 } from "./attempts";
 import {
-    resolveActiveFunctionRegistrations,
-    selectActiveCheckoutRegistrations,
-    type ActiveFunctionRegistrationRow,
-    type RegisteredPlugin,
-} from "../plugins/registry";
-import { resolveAppPaymentUsability } from "../payments/gateway-settings";
-import { BUILT_IN_PAYMENT_PROVIDERS, type PaymentProviders } from "../payments/gateways/registry";
+  type ActiveFunctionRegistrationRow,
+  type RegisteredPlugin,
+  resolveActiveFunctionRegistrations,
+  selectActiveCheckoutRegistrations,
+} from "../plugins";
+import { BUILT_IN_PAYMENT_PROVIDERS, type PaymentProviders, resolveAppPaymentUsability } from "../payments";
 import {
     createStorefrontCheckoutAuthorityReadPlan,
     type StorefrontCheckoutAuthorityInput,

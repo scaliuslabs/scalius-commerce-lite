@@ -7,7 +7,7 @@ import { sql } from "drizzle-orm";
 import { settings } from "@scalius/database/schema";
 import { fromMinor } from "@scalius/shared/money";
 import { lowestEmiQuote, normalizeEmiSettings, type EmiSettings } from "@scalius/shared/emi";
-import { emiDocument } from "../settings/documents";
+import { emiDocument } from "../settings";
 import { SETTINGS_DOCUMENT_ROW_KEY } from "../../settings-store";
 import { deps } from "../../cache-deps";
 

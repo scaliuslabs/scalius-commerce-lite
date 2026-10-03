@@ -31,8 +31,7 @@ import {
   type InventoryTransferStatus,
 } from "@scalius/database/schema";
 import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
-import { variantOptionLabelSql } from "../products/option-model";
-import { digitalStockError, isDigitalKind } from "../products/digital-stock-rules";
+import { digitalStockError, isDigitalKind, variantOptionLabelSql } from "../products";
 import { inventoryOperationKeySchema } from "./inventory.validation";
 import { resolveActiveInventoryLocation, type InventoryLocationRef } from "./locations";
 import { addedQuantitySql, commandActorUserIdSql, executeStockCommand, idsFromJsonSql, readStockCommandSkus, type StockCommandEdge } from "./stock-commands";

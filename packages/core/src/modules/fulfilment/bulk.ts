@@ -8,34 +8,38 @@ import {
     ShipmentStatus,
 } from "@scalius/database/schema";
 import {
-    createShipment,
-    getDeliveryProviderActionReadiness,
-    markShipmentReconciliationRequired,
-} from "../delivery/delivery.service";
-import { PROVIDER_OUTCOME_UNKNOWN } from "../delivery/types";
-import type { CourierProvidersSource } from "../delivery/couriers/registry";
+  type CourierProvidersSource,
+  createShipment,
+  getDeliveryProviderActionReadiness,
+  markShipmentReconciliationRequired,
+  PROVIDER_OUTCOME_UNKNOWN,
+} from "../delivery";
 import {
-    assertNoActiveRefundAttempt,
-    noActiveRefundAttemptForOrderIdCondition,
-} from "../order-kernel/refund-attempt-guard";
-import { assertNoActivePaymentSessionAttempt, noActivePaymentSessionAttemptForOrderIdCondition } from "../order-kernel/payment-session-guard";
+  assertNoActivePaymentSessionAttempt,
+  assertNoActiveRefundAttempt,
+  hasActiveShipmentClaim,
+  noActivePaymentSessionAttemptForOrderIdCondition,
+  noActiveRefundAttemptForOrderIdCondition,
+  noActiveShipmentClaimCondition,
+  SHIPMENT_CLAIM_CONFLICT_MESSAGE,
+  SHIPMENT_CLAIM_LEASE_SECONDS,
+  validateTransition,
+} from "../order-kernel";
 import { sql, eq, and } from "drizzle-orm";
 import { NotFoundError, ValidationError } from "@scalius/core/errors";
-import { validateTransition } from "../order-kernel/state-machine";
 import {
-    hasActiveShipmentClaim,
-    noActiveShipmentClaimCondition,
-    SHIPMENT_CLAIM_CONFLICT_MESSAGE,
-    SHIPMENT_CLAIM_LEASE_SECONDS,
-} from "../order-kernel/shipment-claim";
-import { bulkShipOrderSchema, type ShipmentCreationOptionsInput } from "../orders/validation";
-import { assertOrderNotOnHold, noOpenOrderHoldCondition } from "../orders/holds";
+  assertOrderNotOnHold,
+  type BulkOrderActionResult,
+  bulkShipOrderSchema,
+  noOpenOrderHoldCondition,
+  reconcileInventoryForStatus,
+  type ShipmentCreationOptionsInput,
+} from "../orders";
 import {
     clearShipmentClaim,
     findShipmentByRequestKey,
     SENDABLE_ORDER_STATUSES,
 } from "./shared";
-import { reconcileInventoryForStatus, type BulkOrderActionResult } from "../orders/status/lifecycle";
 import { recordCourierBookingFulfilment, recordOrderFulfilment } from "./ledger";
 
 function createShipmentClaimId(): string {

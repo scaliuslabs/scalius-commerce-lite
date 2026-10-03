@@ -8,7 +8,7 @@
 // run fails, so the line stays owed and the 15-minute sweep retries after keys
 // are imported. The outbox rows carry ids only; keys and file names are
 // resolved when the message is sent.
-import { DIGITAL_KEYS_EXHAUSTED, planDigitalDelivery } from "../../digital/fulfiller";
+import { DIGITAL_KEYS_EXHAUSTED, planDigitalDelivery } from "../../digital";
 import { buildNotificationOutboxInsert } from "../../notifications";
 import type { AutoFulfiller } from "../registry";
 

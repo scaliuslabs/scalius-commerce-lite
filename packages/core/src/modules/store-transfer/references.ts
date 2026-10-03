@@ -12,11 +12,9 @@ import type { Database } from "@scalius/database/client";
 import { brands, categories, productAttributes } from "@scalius/database/schema";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { AppError } from "@scalius/core/errors";
-import { createBrand } from "../brands/brands.service";
-import { createBrandSchema } from "../brands/brands.validation";
-import { createCategory } from "../categories/categories.service";
-import { createCategorySchema } from "../categories/categories.validation";
-import { createAttribute } from "../attributes/attributes.service";
+import { createBrand, createBrandSchema } from "../brands";
+import { createCategory, createCategorySchema } from "../categories";
+import { createAttribute } from "../attributes";
 
 const key = (value: string) => value.normalize("NFC").trim().toLocaleLowerCase("en-US");
 

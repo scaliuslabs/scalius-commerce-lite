@@ -38,9 +38,8 @@ import {
 } from "@scalius/shared/plugins";
 import { cashRoundingMinor, percentOfMinor, roundToCashMinor } from "@scalius/shared/money";
 import { and, eq, isNull, sql, type AnyColumn, type SQL } from "drizzle-orm";
-import { collectionMembershipForConfig } from "../collections/collection-config";
-import { allocateMinorAmount } from "../tax/money";
-import type { TaxDiscountAllocationInput } from "../tax/types";
+import { collectionMembershipForConfig } from "../collections";
+import { allocateMinorAmount, type TaxDiscountAllocationInput } from "../tax";
 import type { AppDiscountTarget, AppliedAppDiscount, AppStorageCommit, CheckoutRateOption } from "@scalius/shared/checkout-app-facts";
 export type { AppDiscountTarget, AppliedAppDiscount, AppStorageCommit, CheckoutRateOption };
 

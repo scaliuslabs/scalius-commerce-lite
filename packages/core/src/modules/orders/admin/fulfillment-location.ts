@@ -8,11 +8,11 @@ import { and, eq, isNull, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 import { ConflictError, NotFoundError } from "@scalius/core/errors";
 import {
-    getDefaultInventoryLocation,
-    orderFulfillmentLocationChangeBlockedSql,
-    resolveActiveInventoryLocation,
-    type InventoryLocationRef,
-} from "../../inventory/locations";
+  getDefaultInventoryLocation,
+  type InventoryLocationRef,
+  orderFulfillmentLocationChangeBlockedSql,
+  resolveActiveInventoryLocation,
+} from "../../inventory";
 import { buildOrderEventInsert, orderEventIdForRequest } from "../timeline";
 import { getOrderEditReadiness, orderEditLockMessage } from "./readiness";
 

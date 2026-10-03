@@ -1,11 +1,8 @@
 // Side effects that run after a storefront order commits.
 import type { Database } from "@scalius/database/client";
 import { processExistingMetaPurchaseOutboxForOrder } from "../../integrations/meta/purchase-outbox";
-import {
-    buildOrderCreatedNotificationDedupeKey,
-    recordAndEnqueueOrderNotification,
-} from "../notifications/order-notification-outbox";
-import type { StorefrontOrderCommitPayload } from "../orders/types";
+import { buildOrderCreatedNotificationDedupeKey, recordAndEnqueueOrderNotification } from "../notifications";
+import type { StorefrontOrderCommitPayload } from "../orders";
 import { type StorefrontOrderCommitRuntime, wantsOrderCreatedNotification } from "./commit";
 
 export async function runStorefrontOrderPostCommitSideEffects(

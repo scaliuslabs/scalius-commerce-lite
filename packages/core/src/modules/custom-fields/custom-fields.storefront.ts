@@ -13,7 +13,7 @@ import {
     type CustomFieldType,
 } from "@scalius/shared/custom-fields";
 import { deps } from "../../cache-deps";
-import { storeCurrencyCodeSql, storeCurrencyFromCode, storeDecimalPlacesFromCode } from "../settings/store-money";
+import { storeCurrencyCodeSql, storeCurrencyFromCode, storeDecimalPlacesFromCode } from "../settings";
 
 /** Owner types whose values a buyer can see. */
 export type StorefrontCustomFieldOwnerType = "product" | "variant" | "category" | "collection" | "brand" | "page";

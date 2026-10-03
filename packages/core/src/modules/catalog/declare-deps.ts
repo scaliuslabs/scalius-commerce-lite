@@ -4,13 +4,13 @@
 // scope, so the reads behave the same with and without one. Not exported from
 // the domain entry.
 import { brandScope, categoryScope, type CacheDepScope } from "@scalius/shared/cache-deps";
-import type { StorefrontProductFilterInput } from "../products/types";
-import { deps } from "../../cache-deps";
 import {
-    productCardImageMediaIds,
-    productGalleryMediaIds,
-    type ProductMediaProjection,
-} from "../products/media";
+  productCardImageMediaIds,
+  productGalleryMediaIds,
+  type ProductMediaProjection,
+  type StorefrontProductFilterInput,
+} from "../products";
+import { deps } from "../../cache-deps";
 
 export { brandScope, categoryScope, deps };
 

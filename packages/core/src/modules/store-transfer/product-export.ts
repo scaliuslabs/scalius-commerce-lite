@@ -31,9 +31,9 @@ import { bpsToPercent, fromMinor } from "@scalius/shared/money";
 import { csvCell, spreadsheetSafeText } from "@scalius/shared/store-transfer/csv";
 import { SHOPIFY_PRODUCT_COLUMNS } from "@scalius/shared/store-transfer/shopify-products";
 import { getCurrentPublicMediaUrl } from "../../integrations/storage";
-import { readStoreCurrency } from "../settings/store-money";
+import { readStoreCurrency } from "../settings";
 import { exportPricing } from "./pricing";
-import { unitCostFromMinor } from "../inventory/unit-costs";
+import { unitCostFromMinor } from "../inventory";
 
 export const PRODUCT_EXPORT_PAGE_DEFAULT = 250;
 export const PRODUCT_EXPORT_PAGE_MAX = 500;

@@ -46,11 +46,7 @@ import {
 import type { EmailRuntimeContext } from "../../integrations/email";
 import type { AppProviders } from "../../integrations/provider-port";
 import { assertCustomerChannelReady, phoneCodeChannel } from "./customer-code-channels";
-import { getAllowedCountries } from "../settings/site-settings.service";
-import {
-    customerAuthDocument,
-    customerCountriesDocument,
-} from "../settings/documents";
+import { customerAuthDocument, customerCountriesDocument, getAllowedCountries } from "../settings";
 import { selectSettingsDocuments } from "../../settings-store";
 
 // ─────────────────────────────────────────

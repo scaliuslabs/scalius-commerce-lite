@@ -37,11 +37,11 @@ import {
     assertCategoryClaimsCurrent,
 } from "./categories.revision";
 import {
-    hasDeletingMediaReference,
-    isMediaReferenceDeletingGuardError,
-    MEDIA_REFERENCE_DELETING_MESSAGE,
-    noDeletingMediaReferences,
-} from "../media-references/reference-guard";
+  hasDeletingMediaReference,
+  isMediaReferenceDeletingGuardError,
+  MEDIA_REFERENCE_DELETING_MESSAGE,
+  noDeletingMediaReferences,
+} from "../media-references";
 import {
     assertCategoryPlacement,
     categoriesHaveNoChildrenOutsideCondition,

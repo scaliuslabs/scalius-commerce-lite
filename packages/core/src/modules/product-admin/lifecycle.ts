@@ -23,7 +23,7 @@ import {
     type ProductAggregateRevisionResult,
 } from "./aggregate-revision";
 import { type SQLiteBatchItem, defaultVariantValues } from "./write";
-import { catalogProjectionRefreshStatements } from "../products/catalog-projections";
+import { catalogProjectionRefreshStatements } from "../products";
 
 /**
  * Soft-deletes a product by setting deletedAt.

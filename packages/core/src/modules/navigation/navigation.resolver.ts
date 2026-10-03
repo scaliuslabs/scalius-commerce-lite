@@ -12,7 +12,7 @@ import {
 } from "@scalius/shared/navigation-target";
 import { parseNavigationHref } from "@scalius/shared/navigation-href";
 import { normalizeResourceCanonicalPath } from "@scalius/shared/seo-canonical";
-import { contentEntryPath } from "../pages/pages.validation";
+import { contentEntryPath } from "../pages";
 import { deps } from "../../cache-deps";
 
 export const NAVIGATION_RESOURCE_READ_CHUNK_SIZE = 90;

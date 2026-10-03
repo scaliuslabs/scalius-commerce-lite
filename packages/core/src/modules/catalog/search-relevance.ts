@@ -2,7 +2,7 @@ import type { Database } from "@scalius/database/client";
 import { categories, products } from "@scalius/database/schema";
 import { and, eq, or, sql, type SQL } from "drizzle-orm";
 
-import { publicCategoryConditions } from "../categories/categories.publication";
+import { publicCategoryConditions } from "../categories";
 import { ftsMatch, isFts5SearchEnabled, sanitizeFtsQuery } from "../../search/fts5";
 
 const MAX_CATEGORY_SLUG_SEARCH_LENGTH = 160;

@@ -14,12 +14,13 @@ import {
   buildStorefrontTaxAllocationLineId,
   calculateStorefrontTaxQuote,
   type StorefrontTaxAuthoritySnapshot,
+  type TaxDiscountAllocationInput,
+  type TaxQuote,
 } from "../tax";
-import type { TaxDiscountAllocationInput, TaxQuote } from "../tax/types";
-import { DELIVERY_RATE_UNAVAILABLE_REASON, listDeliveryRatesForAddress } from "../delivery/zones";
-import { BUILT_IN_PAYMENT_PROVIDERS, COD_LABEL, type PaymentProviders } from "../payments/gateways/registry";
-import { GIFT_CARD_PAYMENT_METHOD } from "../gift-cards/ledger";
-import type { StorefrontOrderCommitPayload, StorefrontOrderShippingMethodSnapshot } from "../orders/types";
+import { DELIVERY_RATE_UNAVAILABLE_REASON, listDeliveryRatesForAddress } from "../delivery";
+import { BUILT_IN_PAYMENT_PROVIDERS, COD_LABEL, type PaymentProviders } from "../payments";
+import { GIFT_CARD_PAYMENT_METHOD } from "../gift-cards";
+import type { StorefrontOrderCommitPayload, StorefrontOrderShippingMethodSnapshot } from "../orders";
 import { resolveBundlePromotionInterplay, type BundlePromotionInterplay } from "./bundle-discounts";
 import type { StorefrontCartValidationResult } from "./cart-validation";
 import {

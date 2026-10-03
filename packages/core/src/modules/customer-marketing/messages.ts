@@ -9,18 +9,18 @@ import { marketingConsentContact, type MarketingChannel } from "@scalius/shared/
 import { and, eq } from "drizzle-orm";
 import { sendEmail, type EmailRuntimeContext } from "../../integrations/email";
 import type { AppProviders } from "../../integrations/provider-port";
-import { MESSAGE_COPY } from "../notifications/message-copy";
-import { renderMessageEmail } from "../notifications/notification-templates";
 import {
-    buildDispatchResult,
-    dispatchWithReceipt,
-    emailResultToDeliveryResult,
-    maskEmail,
-    recordProviderBlockedDeliveryIfNeeded,
-    recordSkippedDelivery,
-    type OrderNotificationDispatchResult,
-} from "../notifications/notifications.service";
-import { readStoreIdentity } from "../notifications/store-messages";
+  buildDispatchResult,
+  dispatchWithReceipt,
+  emailResultToDeliveryResult,
+  maskEmail,
+  MESSAGE_COPY,
+  type OrderNotificationDispatchResult,
+  readStoreIdentity,
+  recordProviderBlockedDeliveryIfNeeded,
+  recordSkippedDelivery,
+  renderMessageEmail,
+} from "../notifications";
 import { MARKETING_OPT_IN_NOTIFICATION } from "./consent";
 import {
     deriveOptInToken,

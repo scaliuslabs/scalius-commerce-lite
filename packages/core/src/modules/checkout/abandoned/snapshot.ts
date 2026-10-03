@@ -1,5 +1,5 @@
 import { validateAndFormatPhone } from "@scalius/shared/customer-utils";
-import { isOnlinePaymentMethod } from "../../payments/gateways/registry";
+import { isOnlinePaymentMethod } from "../../payments";
 
 const MAX_TEXT_LENGTH = 500;
 const MAX_NOTES_LENGTH = 1_000;

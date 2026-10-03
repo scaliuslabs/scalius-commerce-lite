@@ -1,13 +1,13 @@
 import type { Database } from "@scalius/database/client";
 import { deliveryShipments, orderDiscountAllocations, orders, orderItems } from "@scalius/database/schema";
-import { resolveOrderAppFacts, selectOrderAppFactRows, type OrderAppFactRow } from "../order-kernel/app-facts";
+import { type OrderAppFactRow, resolveOrderAppFacts, selectOrderAppFactRows } from "../order-kernel";
 import { formatMoney, normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
 import { fromMinor } from "@scalius/shared/money";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { formatBdMobile } from "@scalius/shared/phone-input";
 import { normalizeStorefrontOrigin } from "@scalius/shared/storefront-url";
 import { asc, desc, eq, sql } from "drizzle-orm";
-import { getTrackingUrl } from "../delivery/tracking-url";
+import { getTrackingUrl } from "../delivery";
 import { MESSAGE_COPY, requestCopy, type MessageLanguage } from "./message-copy";
 import type { OrderNotificationType } from "./notification-types";
 import {

@@ -36,7 +36,7 @@ import {
 } from "../../utils/keyset";
 import type { Database } from "@scalius/database/client";
 import { NotFoundError, ValidationError } from "@scalius/core/errors";
-import { validateCustomerPhoneCountry } from "../settings/phone-country-policy";
+import { validateCustomerPhoneCountry } from "../settings";
 
 // Re-export schemas from the canonical validation module
 export {

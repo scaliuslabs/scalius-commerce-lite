@@ -8,12 +8,16 @@ import { RateLimitError, ServiceUnavailableError, ValidationError } from "@scali
 import type { CustomerAuthOtpChannel } from "@scalius/shared/customer-auth-policy";
 import type { EmailRuntimeContext } from "../../integrations/email";
 import type { AppProviders } from "../../integrations/provider-port";
-import { createAuthOtpDeliveryKey, maskOtpIdentifier } from "../customers/otp-delivery-receipts";
-import { buildOtpQueuePayload, type OtpQueuePayload } from "../customers/otp-transport";
-import { enforceOtpSendRateLimits } from "../customers/customer-auth-rate-limit";
-import { OTP_LOCKED_MESSAGE } from "../customers/customer-auth-otp-challenges";
-import { chooseOrderCodeChannel } from "../customers/customer-code-channels";
-import { deriveCustomerAuthOtpDeliveryCode } from "../customers/customer-auth.service";
+import {
+  buildOtpQueuePayload,
+  chooseOrderCodeChannel,
+  createAuthOtpDeliveryKey,
+  deriveCustomerAuthOtpDeliveryCode,
+  enforceOtpSendRateLimits,
+  maskOtpIdentifier,
+  OTP_LOCKED_MESSAGE,
+  type OtpQueuePayload,
+} from "../customers";
 import { createOrderPaymentRecoveryLink, previewOrderPaymentRecoveryLink } from "./admin/recovery-link";
 import {
     encodeEncryptedCredential,

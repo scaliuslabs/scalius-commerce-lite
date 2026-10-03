@@ -2,7 +2,7 @@
 // CREDENTIAL_ENCRYPTION_KEY) and not an obvious placeholder. Shared by the
 // gateways' `configure` and the settings save.
 
-import type { SmsSettings } from "../../modules/settings/documents";
+import type { SmsSettings } from "../../modules/settings";
 import type { StoredSms } from "./port";
 
 /** Masked secrets as the dashboard shows them (12 bullets). */

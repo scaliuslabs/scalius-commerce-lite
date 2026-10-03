@@ -13,8 +13,8 @@ import {
   orders,
   productReviewStats,
 } from "@scalius/database/schema";
-import { readReviewSettings } from "../settings/documents";
-import { buildNotificationOutboxInsert } from "../notifications/notification-outbox";
+import { readReviewSettings } from "../settings";
+import { buildNotificationOutboxInsert } from "../notifications";
 import {
   DAY_SECONDS,
   nowSeconds,

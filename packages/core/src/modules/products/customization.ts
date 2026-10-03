@@ -15,7 +15,7 @@ import {
 } from "@scalius/shared/line-properties";
 import { fromMinor } from "@scalius/shared/money";
 import { ValidationError } from "@scalius/core/errors";
-import { toStoreMinor, type StoreCurrency } from "../settings/store-money";
+import { type StoreCurrency, toStoreMinor } from "../settings";
 import type { CustomizationSchemaInput } from "./customization-schema";
 
 export * from "./customization-schema";

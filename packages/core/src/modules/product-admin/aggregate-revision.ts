@@ -8,14 +8,17 @@ import {
 import type { BatchItem } from "drizzle-orm/batch";
 import { eq, sql, type SQL } from "drizzle-orm";
 import { AppError, ConflictError } from "@scalius/core/errors";
-import { catalogProjectionRefreshStatements } from "../products/catalog-projections";
-import { buildGiftCardProductRulesGuard, rethrowGiftCardProductRuleViolation } from "../products/gift-card-rules";
-import { rethrowDigitalStockRuleViolation } from "../products/digital-stock-rules";
 import {
-    inventoryLocationErrorFrom,
-    isInventoryLevelShortfallError,
-    isInventoryLocationRequiredError,
-} from "../inventory/locations";
+  buildGiftCardProductRulesGuard,
+  catalogProjectionRefreshStatements,
+  rethrowDigitalStockRuleViolation,
+  rethrowGiftCardProductRuleViolation,
+} from "../products";
+import {
+  inventoryLocationErrorFrom,
+  isInventoryLevelShortfallError,
+  isInventoryLocationRequiredError,
+} from "../inventory";
 
 export const PRODUCT_AGGREGATE_REVISION_CONFLICT =
     "PRODUCT_AGGREGATE_REVISION_CONFLICT";

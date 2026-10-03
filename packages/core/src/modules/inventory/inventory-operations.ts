@@ -22,13 +22,13 @@ import {
   resolveActiveInventoryLocation,
   type InventoryLocationRef,
 } from "./locations";
-import { catalogBuyerStateRefreshStatementsForSkus } from "../products/catalog-projections";
 import {
   buildNotDigitalSkuGuard,
+  catalogBuyerStateRefreshStatementsForSkus,
   digitalStockError,
   isDigitalKind,
   rethrowDigitalStockRuleViolation,
-} from "../products/digital-stock-rules";
+} from "../products";
 import {
   validateAbsoluteStockCount,
   validateSignedStockAdjustment,

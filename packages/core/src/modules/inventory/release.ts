@@ -12,7 +12,7 @@ import {
 } from "@scalius/database/client";
 import type { BatchItem } from "drizzle-orm/batch";
 import { recordMovement } from "./movements";
-import { catalogBuyerStateRefreshStatementsForSkus } from "../products/catalog-projections";
+import { catalogBuyerStateRefreshStatementsForSkus } from "../products";
 import { checkAndAlertLowStock } from "./alerts";
 import { mapWithBoundedConcurrency } from "../../utils/bounded-concurrency";
 import type { ReservationEntry, StockOperationResult } from "./types";

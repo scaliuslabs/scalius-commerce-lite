@@ -1,7 +1,12 @@
 // Manual order quotes: SKU resolution, inventory facts and money for staff-created orders.
 import type { Database } from "@scalius/database/client";
 import { products, productVariants, shippingMethods } from "@scalius/database/schema";
-import { toStoreMinor } from "../../settings/store-money";
+import {
+  getCurrencySettings,
+  storeCurrencyCodeSql,
+  storeCurrencyFromCode,
+  toStoreMinor,
+} from "../../settings";
 import { and, sql, eq, inArray, isNull } from "drizzle-orm";
 import {
     isAutoFulfillmentType,
@@ -17,16 +22,17 @@ import {
     serializeOrderLineProperties,
 } from "@scalius/shared/line-properties";
 import { discountedPriceMinor, fromMinor } from "@scalius/shared/money";
-import { storeCurrencyCodeSql, storeCurrencyFromCode } from "../../settings/store-money";
 import type { QuoteManualOrderInput } from "../validation";
 import { ValidationError } from "@scalius/core/errors";
-import { createOrderCurrencySnapshot, type OrderCurrencySnapshot } from "../../payments/order-currency";
-import { getCurrencySettings } from "../../settings/site-settings.service";
+import { createOrderCurrencySnapshot, type OrderCurrencySnapshot } from "../../payments";
 import { buildStorefrontTaxAllocationLineId, calculateStorefrontTaxQuote } from "../../tax";
 import { type TaxQuote } from "../../tax/browser";
-import { variantOptionLabelSql } from "../../products/option-model";
-import { loadProductMediaProjections, resolveSkuImageRepresentation } from "../../products/media";
-import { resolveActiveDeliveryLocationNames } from "../../delivery/location-validation";
+import {
+  loadProductMediaProjections,
+  resolveSkuImageRepresentation,
+  variantOptionLabelSql,
+} from "../../products";
+import { resolveActiveDeliveryLocationNames } from "../../delivery";
 import type { FunctionCart } from "@scalius/shared/plugins";
 import type {
     AppliedAppDiscount,

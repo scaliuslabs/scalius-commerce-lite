@@ -34,11 +34,11 @@ import { buildPhoneSearchTerms, isEmailSearch, isLikelyPhoneSearch } from "../se
 import { orderMoneyAmounts, orderMoneySelection } from "../money";
 import { formatOrderCsvLineProperties } from "../csv-export";
 import {
-    resolveActiveRefundOperationsForOrders,
-    selectActiveRefundAttemptRowsForOrders,
-    type RefundAttemptVisibilityRow,
-} from "../../payments/refund-attempt-visibility";
-import { activePaymentSessionAttemptExistsCondition } from "../../order-kernel/payment-session-guard";
+  type RefundAttemptVisibilityRow,
+  resolveActiveRefundOperationsForOrders,
+  selectActiveRefundAttemptRowsForOrders,
+} from "../../payments";
+import { activePaymentSessionAttemptExistsCondition } from "../../order-kernel";
 import {
     onlinePaymentMethod,
     paymentRecoveryLifecycleCondition,

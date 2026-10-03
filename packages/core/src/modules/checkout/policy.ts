@@ -9,7 +9,7 @@ import {
   ValidationError,
 } from "../../errors";
 import type { StorefrontCheckoutAuthoritySnapshot } from "./authority";
-import { BUILT_IN_PAYMENT_PROVIDERS, type PaymentProviders } from "../payments/gateways/registry";
+import { BUILT_IN_PAYMENT_PROVIDERS, type PaymentProviders } from "../payments";
 
 export interface StorefrontCheckoutSettingsSnapshot {
   checkoutMode: "guest_cod_only" | "gateways_only" | "all";

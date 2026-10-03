@@ -18,8 +18,8 @@ import { nanoid } from "nanoid";
 import type { BatchItem } from "drizzle-orm/batch";
 import type { ProductImageBatch } from "@scalius/shared/store-transfer/products";
 import { AppError } from "@scalius/core/errors";
-import { executeProductAggregateMutationBatch, ProductRevisionConflictError } from "../product-admin/aggregate-revision";
-import { MAX_PRODUCT_MEDIA_ASSOCIATIONS } from "../products/media";
+import { executeProductAggregateMutationBatch, ProductRevisionConflictError } from "../product-admin";
+import { MAX_PRODUCT_MEDIA_ASSOCIATIONS } from "../products";
 import { ImportBudget, isWorkerLimitError } from "./budget";
 import { sha256Hex } from "@scalius/shared/hash";
 

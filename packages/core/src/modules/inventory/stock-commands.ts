@@ -39,8 +39,7 @@ import {
 } from "./locations";
 import { normalizeInventoryOperationKey } from "./inventory-operations";
 import { checkAndAlertLowStock } from "./alerts";
-import { catalogBuyerStateRefreshStatementsForSkus } from "../products/catalog-projections";
-import { digitalStockError, isDigitalKind } from "../products/digital-stock-rules";
+import { catalogBuyerStateRefreshStatementsForSkus, digitalStockError, isDigitalKind } from "../products";
 import { mapWithBoundedConcurrency } from "../../utils/bounded-concurrency";
 
 const MAX_ATTEMPTS = 3;

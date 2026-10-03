@@ -25,7 +25,7 @@ import {
   ServiceUnavailableError,
   ValidationError,
 } from "@scalius/core/errors";
-import { applyClaimedInventoryEntryBatchWithImpact } from "../../inventory/inventory-transitions";
+import { applyClaimedInventoryEntryBatchWithImpact } from "../../inventory";
 import type {
   ApproveOrderReturnInput,
   CancelOrderReturnInput,

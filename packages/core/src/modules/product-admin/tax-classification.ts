@@ -6,8 +6,8 @@ import { buildBatchGuard, isBatchGuardError, type Database } from "@scalius/data
 import { productVariants, products, taxClasses } from "@scalius/database/schema";
 import { ConflictError } from "@scalius/core/errors";
 import { and, asc, desc, eq, isNull, like, or, sql } from "drizzle-orm";
-import { assertActiveTaxClass } from "../tax/tax-admin.service";
-import { variantOptionLabelSql } from "../products/option-model";
+import { assertActiveTaxClass } from "../tax";
+import { variantOptionLabelSql } from "../products";
 import { executeProductAggregateMutationBatch } from "./aggregate-revision";
 
 export type TaxClassificationKind = "product" | "variant";

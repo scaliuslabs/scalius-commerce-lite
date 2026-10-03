@@ -10,11 +10,7 @@ import { isQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
 import { isPaymentMethodId } from "./gateways/identity";
 import type { PaymentGateway } from "./gateways/port";
 import type { PaymentProviders, PaymentProvidersSource } from "./gateways/registry";
-import {
-  paymentMethodsDocument,
-  sslcommerzDocument,
-  stripeDocument,
-} from "../settings/documents";
+import { paymentMethodsDocument, sslcommerzDocument, stripeDocument } from "../settings";
 import {
   selectSettingsDocuments,
   type SettingsDocumentRow,

@@ -1,4 +1,17 @@
-import { effectiveLowStockThresholdSql } from "../products/low-stock-policy";
+import {
+  catalogDiscountedPrice,
+  effectiveLowStockThresholdSql,
+  loadVariantSelectedOptions,
+  normalizeDefaultSkuOptions,
+  presentCatalogPrice,
+  type ProductMediaProjection,
+  type ProductMediaProjectionRow,
+  publicProductHasBuyerResolvableSku,
+  resolveProductImageRepresentation,
+  resolveProductMediaProjectionRows,
+  resolveSkuImageRepresentation,
+  selectCheckoutProductMediaProjectionRows,
+} from "../products";
 import type { Database } from "@scalius/database/client";
 import { ValidationError } from "@scalius/core/errors";
 import {
@@ -13,8 +26,7 @@ import {
     productVariants,
     products,
 } from "@scalius/database/schema";
-import { catalogDiscountedPrice, presentCatalogPrice } from "../products/money";
-import { storeCurrencyCodeSql, storeCurrencyFromCode, storeDecimalPlacesFromCode } from "../settings/store-money";
+import { storeCurrencyCodeSql, storeCurrencyFromCode, storeDecimalPlacesFromCode } from "../settings";
 import { maskPublicBuyerAvailability } from "@scalius/shared/buyer-availability";
 import { and, asc, count, eq, isNull, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
@@ -22,20 +34,7 @@ import { z } from "zod";
 import {
     getCurrentMediaUrl,
 } from "../../integrations/storage";
-import {
-    publicProductHasBuyerResolvableSku,
-    normalizeDefaultSkuOptions,
-} from "../products/public-eligibility";
-import { publicCategoryConditions } from "../categories/categories.publication";
-import { loadVariantSelectedOptions } from "../products/option-model";
-import {
-    resolveProductImageRepresentation,
-    resolveProductMediaProjectionRows,
-    resolveSkuImageRepresentation,
-    selectCheckoutProductMediaProjectionRows,
-} from "../products/media";
-import type { ProductMediaProjection } from "../products/media";
-import type { ProductMediaProjectionRow } from "../products/media";
+import { publicCategoryConditions } from "../categories";
 import {
     MAX_RECOMMENDATION_LIMIT,
     getStorefrontProductRecommendations,

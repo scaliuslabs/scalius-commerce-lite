@@ -3,7 +3,7 @@
 // Allocates a refund across the order's captured payments, claims it locally,
 // then dispatches each allocation through its gateway adapter (gateways/port.ts).
 
-import { toStoreMinor } from "../settings/store-money";
+import { readGiftCardSettings, toStoreMinor } from "../settings";
 import { eq, sql, desc, and, inArray } from "drizzle-orm";
 import {
     orders,
@@ -23,11 +23,19 @@ import {
 } from "./gateways/registry";
 import { encodeProviderAmount } from "@scalius/shared/plugins/providers/amount";
 import { providerErrorOf } from "@scalius/shared/plugins/providers/kinds";
-import { applyInventoryForStatusChangeWithImpact } from "../inventory/inventory-transitions";
+import { applyInventoryForStatusChangeWithImpact } from "../inventory";
 import type { Database } from "@scalius/database/client";
 import { NotFoundError, ValidationError, ConflictError, ServiceUnavailableError } from "@scalius/core/errors";
-import { canTransitionTo } from "../order-kernel/state-machine";
-import { assertNoActiveShipmentClaim } from "../order-kernel/shipment-claim";
+import {
+  ACTIVE_REFUND_ATTEMPT_STATUSES,
+  assertNoActivePaymentSessionAttempt,
+  assertNoActiveRefundAttempt,
+  assertNoActiveShipmentClaim,
+  canTransitionTo,
+  noActivePaymentSessionAttemptForOrderIdCondition,
+  noActiveRefundAttemptForOrderIdCondition,
+  REFUND_IN_PROGRESS_MESSAGE,
+} from "../order-kernel";
 import { fromMinor, toMinor } from "@scalius/shared/money";
 import { computeOrderPaymentState } from "./payment-state";
 import {
@@ -35,17 +43,8 @@ import {
     resolveOrderCurrencySnapshot,
     type OrderCurrencySnapshot,
 } from "./order-currency";
-import {
-    ACTIVE_REFUND_ATTEMPT_STATUSES,
-    REFUND_IN_PROGRESS_MESSAGE,
-    assertNoActiveRefundAttempt,
-    noActiveRefundAttemptForOrderIdCondition,
-} from "../order-kernel/refund-attempt-guard";
-import { assertNoActivePaymentSessionAttempt, noActivePaymentSessionAttemptForOrderIdCondition } from "../order-kernel/payment-session-guard";
-import type { OrderNotificationType } from "../notifications/notification-types";
-import { buildNotificationOutboxInsert } from "../notifications/notification-outbox";
-import { readPromotionRefundSnapshot } from "../promotions/promotions.refunds";
-import { readGiftCardSettings } from "../settings/documents";
+import { buildNotificationOutboxInsert, type OrderNotificationType } from "../notifications";
+import { readPromotionRefundSnapshot } from "../promotions";
 import {
     GIFT_CARD_PAYMENT_METHOD,
     buildGiftCardRefundStatement,

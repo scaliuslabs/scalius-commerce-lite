@@ -14,22 +14,19 @@ import {
   PaymentStatus,
 } from "@scalius/database/schema";
 import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
+import { listOrderRefundAttempts, summarizeActiveRefundOperation } from "../payments";
 import {
-  listOrderRefundAttempts,
-  summarizeActiveRefundOperation,
-} from "../payments/refund-attempt-visibility";
-import {
+  cancellationUnavailableReason,
   CUSTOMER_REQUEST_ACTION_COPY,
   CUSTOMER_REQUEST_STATE_REASONS,
   CUSTOMER_REQUEST_TYPES,
-  cancellationUnavailableReason,
   customerRequestDeliveryMode,
+  type CustomerRequestPolicy,
+  type CustomerRequestType,
   getCustomerRequestIntro,
   getCustomerRequestPolicy,
   projectCustomerRequestActions,
-  type CustomerRequestPolicy,
-  type CustomerRequestType,
-} from "../settings/customer-request-policy";
+} from "../settings";
 import type { OrderSupportRequestView } from "./types";
 
 export type { OrderSupportRequestView };

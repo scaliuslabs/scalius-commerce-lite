@@ -13,11 +13,14 @@ import { parseOrderNumberSearch } from "@scalius/shared/order-utils";
 import type { CustomerAuthOtpChannel } from "@scalius/shared/customer-auth-policy";
 import type { EmailRuntimeContext } from "../../integrations/email";
 import type { AppProviders } from "../../integrations/provider-port";
-import { enforceOtpSendRateLimits } from "../customers/customer-auth-rate-limit";
-import { createAuthOtpDeliveryKey } from "../customers/otp-delivery-receipts";
-import { buildOtpQueuePayload, type OtpQueuePayload } from "../customers/otp-transport";
-import { deriveCustomerAuthOtpDeliveryCode } from "../customers/customer-auth.service";
-import { chooseOrderCodeChannel } from "../customers/customer-code-channels";
+import {
+  buildOtpQueuePayload,
+  chooseOrderCodeChannel,
+  createAuthOtpDeliveryKey,
+  deriveCustomerAuthOtpDeliveryCode,
+  enforceOtpSendRateLimits,
+  type OtpQueuePayload,
+} from "../customers";
 import {
     consumeLatestOrderOtpChallenge,
     persistOrderOtpChallenge,

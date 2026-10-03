@@ -5,10 +5,10 @@ import { z } from "zod";
 import { buildBatchGuard, type Database } from "@scalius/database/client";
 import { ConflictError, ValidationError } from "../../errors";
 import {
-    isMediaReferenceDeletingGuardError,
-    MEDIA_REFERENCE_DELETING_MESSAGE,
-    noDeletingMediaReferences,
-} from "../media-references/reference-guard";
+  isMediaReferenceDeletingGuardError,
+  MEDIA_REFERENCE_DELETING_MESSAGE,
+  noDeletingMediaReferences,
+} from "../media-references";
 import { normalizeBdLandline, validateAndFormatPhone } from "@scalius/shared/customer-utils";
 import { normalizeBdMobile } from "@scalius/shared/phone-input";
 import { normalizePublicMediaUrl } from "@scalius/shared/media-url";

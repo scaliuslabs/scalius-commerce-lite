@@ -5,10 +5,8 @@ import { categories, collections, pages, products } from "@scalius/database/sche
 import { and, sql } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import { NotFoundError } from "@scalius/core/errors";
-import { getPublicCategoryById } from "../categories/categories.storefront";
-import { getStorefrontProducts } from "../catalog/listing";
-import { resolvePublicAttributeFilters } from "../catalog/facets";
-import { publicCategoryConditions } from "../categories/categories.publication";
+import { getPublicCategoryById, publicCategoryConditions } from "../categories";
+import { getStorefrontProducts, resolvePublicAttributeFilters } from "../catalog";
 import { resolveNavigationConfigs } from "./navigation.resolver";
 import type {
     NavigationTargetItem,

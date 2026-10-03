@@ -2,7 +2,7 @@ import type { Database } from "@scalius/database/client";
 import { categories, products } from "@scalius/database/schema";
 import { and, desc, eq, isNull } from "drizzle-orm";
 
-import { publicCategoryConditions } from "../categories/categories.publication";
+import { publicCategoryConditions } from "../categories";
 import { sanitizeSearchTokens } from "../../search/fts5";
 
 // The vocabulary is read only after a search returned nothing, and is bounded

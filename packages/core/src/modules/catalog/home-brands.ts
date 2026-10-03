@@ -3,13 +3,13 @@ import { brands, media, productBuyerState } from "@scalius/database/schema";
 import type { Database, safeBatch } from "@scalius/database/client";
 import { and, asc, eq, sql } from "drizzle-orm";
 import {
-    brandLogoColumns,
-    brandLogoJoinCondition,
-    presentBrandLogo,
-    publicBrandConditions,
-    type BrandLogo,
-    type BrandLogoRow,
-} from "../brands/brands.storefront";
+  type BrandLogo,
+  brandLogoColumns,
+  brandLogoJoinCondition,
+  type BrandLogoRow,
+  presentBrandLogo,
+  publicBrandConditions,
+} from "../brands";
 import { deps } from "../../cache-deps";
 
 type BatchStatement = Parameters<typeof safeBatch>[1][number];

@@ -1,13 +1,13 @@
 // src/modules/orders/types.ts
 // Shared TypeScript interfaces for the orders module.
 
-import type { OrderNotificationType } from "../notifications/notification-types";
-import type { ActiveRefundOperationView, OrderRefundAttemptView } from "../payments/refund-attempt-views";
-import type { TaxQuote } from "../tax/types";
-import type { PromotionCheckoutSnapshot } from "../promotions/checkout-snapshot";
+import type { OrderNotificationType } from "../notifications/browser";
+import type { ActiveRefundOperationView, OrderRefundAttemptView } from "../payments/browser";
+import type { TaxQuote } from "../tax/browser";
+import type { PromotionCheckoutSnapshot } from "../promotions/browser";
 import type { AppliedAppDiscount, AppStorageCommit, CheckoutRateOption } from "@scalius/shared/checkout-app-facts";
 import type { FunctionCart } from "@scalius/shared/plugins";
-import type { CustomerRequestType } from "../settings/customer-request-policy.shared";
+import type { CustomerRequestType } from "../settings/browser";
 import type { DeliveryMethodKind, FulfillmentType } from "@scalius/shared/fulfilment";
 import type { OrderChannel } from "@scalius/shared/order-channel";
 import type {

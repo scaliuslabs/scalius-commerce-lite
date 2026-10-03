@@ -7,24 +7,27 @@ import {
     FulfillmentStatus,
     ShipmentStatus,
 } from "@scalius/database/schema";
-import { lookupShipmentByMerchantOrderId } from "../delivery/delivery.service";
-import type { CourierProvidersSource } from "../delivery/couriers/registry";
-import { PROVIDER_OUTCOME_UNKNOWN } from "../delivery/types";
 import {
-    assertNoActiveRefundAttempt,
-    noActiveRefundAttemptForOrderIdCondition,
-} from "../order-kernel/refund-attempt-guard";
-import { assertNoActivePaymentSessionAttempt, noActivePaymentSessionAttemptForOrderIdCondition } from "../order-kernel/payment-session-guard";
+  type CourierProvidersSource,
+  lookupShipmentByMerchantOrderId,
+  PROVIDER_OUTCOME_UNKNOWN,
+} from "../delivery";
+import {
+  assertNoActivePaymentSessionAttempt,
+  assertNoActiveRefundAttempt,
+  noActivePaymentSessionAttemptForOrderIdCondition,
+  noActiveRefundAttemptForOrderIdCondition,
+  validateTransition,
+} from "../order-kernel";
 import { sql, eq, and } from "drizzle-orm";
 import { NotFoundError, ValidationError, ConflictError } from "@scalius/core/errors";
-import { validateTransition } from "../order-kernel/state-machine";
-import type {
-    OrderShipmentReconciliationResult,
-    UnknownShipmentResolutionResult,
-} from "../orders/types";
-import type { UnknownShipmentResolutionInput } from "../orders/validation";
+import {
+  type OrderShipmentReconciliationResult,
+  reconcileInventoryForStatus,
+  type UnknownShipmentResolutionInput,
+  type UnknownShipmentResolutionResult,
+} from "../orders";
 import { parseShipmentMetadata, clearShipmentClaim } from "./shared";
-import { reconcileInventoryForStatus } from "../orders/status/lifecycle";
 import { recordCourierBookingFulfilment } from "./ledger";
 
 function asRecord(value: unknown): Record<string, unknown> | null {

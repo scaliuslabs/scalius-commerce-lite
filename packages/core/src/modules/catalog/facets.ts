@@ -27,12 +27,12 @@ import {
 import { normalizeProductOptionIdentity } from "@scalius/shared/product-options";
 import { ValidationError } from "@scalius/core/errors";
 import type { Database } from "@scalius/database/client";
-import type { CatalogFacetFilter } from "../products/types";
-import { publicCategorySubtreeCondition } from "../categories/categories.tree";
+import type { CatalogFacetFilter } from "../products";
+import { publicCategorySubtreeCondition } from "../categories";
 import { buyerState, publicBuyerStateCondition } from "./buyer-state";
 import { buildStorefrontBuyerStateConditions, reviewStats } from "./shared";
 import { categoryScope, deps } from "./declare-deps";
-import { reviewsEnabledSql } from "../settings/documents";
+import { reviewsEnabledSql } from "../settings";
 import { REVIEW_RATING_FACET_STARS } from "@scalius/shared/reviews";
 
 /** URL/facet key prefix for merchant option axes, e.g. `option.size`. */

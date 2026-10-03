@@ -1,4 +1,4 @@
-import type { StorefrontOrderCommitPayload } from "../orders/types";
+import type { StorefrontOrderCommitPayload } from "../orders";
 
 const INCOMPLETE_ORDER_STATUS = "incomplete";
 

@@ -4,18 +4,17 @@ import type { Database } from "@scalius/database/client";
 import type { SQL } from "drizzle-orm";
 import { ValidationError } from "@scalius/core/errors";
 import { discountedPriceMinor, fromMinor } from "@scalius/shared/money";
-import { storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../settings/store-money";
-import { getCurrencyConfig } from "../settings/settings.service";
+import { getCurrencyConfig, storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../settings";
 import {
-    buildInventoryLowStockCondition,
-    buildNeedsRestockCondition,
-    effectiveLowStockThresholdSql,
-    storeDefaultLowStockThresholdSql,
-} from "../products/low-stock-policy";
-import { operationalSkuRowPredicate } from "../products/public-eligibility";
+  buildInventoryLowStockCondition,
+  buildNeedsRestockCondition,
+  effectiveLowStockThresholdSql,
+  operationalSkuRowPredicate,
+  storeDefaultLowStockThresholdSql,
+  variantOptionLabelSql,
+} from "../products";
 
 const availableStockSql = sql<number>`(${productVariants.stock} - ${productVariants.reservedStock})`;
-import { variantOptionLabelSql } from "../products/option-model";
 import { adjustInventorySchema } from "./inventory.validation";
 import { executeInventoryOperation } from "./inventory-operations";
 import { locationOnHandSql } from "./locations";

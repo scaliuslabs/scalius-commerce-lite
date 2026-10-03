@@ -15,7 +15,7 @@ import {
     type CheckoutReadiness,
 } from "@scalius/shared/checkout-readiness";
 import { deps } from "../../cache-deps";
-import { getCustomerSignInReadiness, type CheckoutReadinessOptions } from "../customers/sign-in-readiness";
+import { type CheckoutReadinessOptions, getCustomerSignInReadiness } from "../customers";
 
 function uniqueIds(ids: readonly string[] | undefined): string[] {
     return [...new Set((ids ?? []).map((id) => id.trim()).filter(Boolean))];

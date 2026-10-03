@@ -26,7 +26,7 @@ import {
   buildNotificationOutboxInsert,
   enqueueNotificationOutboxById,
   type NotificationQueue,
-} from "../notifications/notification-outbox";
+} from "../notifications";
 import type { ReviewStatus } from "./browser";
 import { findReviewableLineForProduct, readBuyerLine } from "./lines";
 import {

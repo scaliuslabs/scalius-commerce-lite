@@ -16,13 +16,8 @@ import { inventoryLocations, productVariants, products } from "@scalius/database
 import { sql } from "drizzle-orm";
 import type { InventoryImportBatch } from "@scalius/shared/store-transfer/inventory";
 import { AppError } from "@scalius/core/errors";
-import { executeInventoryOperation } from "../inventory/inventory-operations";
-import {
-  DIGITAL_STOCK_IS_KEYS_MESSAGE,
-  DIGITAL_STOCK_IS_KEYS_REASON,
-  isDigitalKind,
-} from "../products/digital-stock-rules";
-import { readLocationOnHand } from "../inventory/locations";
+import { executeInventoryOperation, readLocationOnHand } from "../inventory";
+import { DIGITAL_STOCK_IS_KEYS_MESSAGE, DIGITAL_STOCK_IS_KEYS_REASON, isDigitalKind } from "../products";
 import { ImportBudget, isWorkerLimitError } from "./budget";
 import { sha256Hex } from "@scalius/shared/hash";
 

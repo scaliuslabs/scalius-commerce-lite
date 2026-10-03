@@ -5,7 +5,7 @@
 // (sms-settings.ts); app providers (`<plugin id>:<provider id>`) join through
 // the request's AppProviders. Senders call `send` and never ask which it is.
 
-import type { SmsSettings } from "../../modules/settings/documents";
+import type { SmsSettings } from "../../modules/settings";
 import type { SettingsDocumentReadResult } from "../../settings-store";
 import type { BoundProvider, BuiltInAdapter } from "../provider-port";
 

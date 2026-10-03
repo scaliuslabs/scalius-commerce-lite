@@ -11,7 +11,7 @@ import {
 } from "@scalius/database/schema";
 import { fromMinor } from "@scalius/shared/money";
 import type { InvoiceOrderSnapshot } from "./snapshot";
-import { listOrderDiscountLines } from "../../promotions/order-discount-lines";
+import { listOrderDiscountLines } from "../../promotions";
 import { orderMoneyAmounts, orderMoneySelection } from "../money";
 import { parseOrderLineProperties } from "../line-presentation";
 

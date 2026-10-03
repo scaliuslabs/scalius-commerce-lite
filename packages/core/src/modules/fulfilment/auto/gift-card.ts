@@ -21,8 +21,8 @@ import {
     normalizeGiftCardRecipient,
     type GiftCardRecipient,
 } from "../../gift-cards";
-import { buildNotificationOutboxInsert } from "../../notifications/notification-outbox";
-import { readGiftCardSettings } from "../../settings/documents";
+import { buildNotificationOutboxInsert } from "../../notifications";
+import { readGiftCardSettings } from "../../settings";
 import { ServiceUnavailableError } from "../../../errors";
 import type { AutoFulfiller } from "../registry";
 

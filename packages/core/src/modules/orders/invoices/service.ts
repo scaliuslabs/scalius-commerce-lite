@@ -14,7 +14,7 @@ import {
   ServiceUnavailableError,
   ValidationError,
 } from "@scalius/core/errors";
-import { getBusinessSettings } from "../../settings/business-settings.service";
+import { getBusinessSettings } from "../../settings";
 import { readInvoiceOrderSource, readOrderRefundedAmount } from "./order-reader";
 import {
   INVOICE_RENDER_VERSION,

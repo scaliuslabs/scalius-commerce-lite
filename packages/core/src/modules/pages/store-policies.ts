@@ -7,12 +7,7 @@ import { safeBatch, type Database } from "@scalius/database/client";
 import { pages } from "@scalius/database/schema";
 import { ValidationError } from "../../errors";
 import { planPublicPagesByIdDeclaration, publicPageVisibilityCondition } from "./pages.service";
-import {
-  policiesDocument,
-  STORE_POLICY_KINDS,
-  type StorePolicies,
-  type StorePolicyKind,
-} from "../settings/documents";
+import { policiesDocument, STORE_POLICY_KINDS, type StorePolicies, type StorePolicyKind } from "../settings";
 
 /** A policy a buyer can open: its page title and same-store path. */
 export interface PublicStorePolicy {

@@ -31,7 +31,7 @@ import {
     type ReservationEntry,
 } from "../../inventory";
 import { sql, eq, inArray, isNull, and } from "drizzle-orm";
-import { guestRecordForPhone } from "../../customers/customer-identity";
+import { guestRecordForPhone } from "../../customers";
 import { fromMinor } from "@scalius/shared/money";
 import { nanoid } from "nanoid";
 import type {
@@ -40,8 +40,8 @@ import type {
 } from "../validation";
 import { NotFoundError, ValidationError, ConflictError, ServiceUnavailableError } from "@scalius/core/errors";
 import { recordOrderEvent } from "../timeline";
-import { resolveOrderCurrencySnapshot } from "../../payments/order-currency";
-import { validateCustomerPhoneCountry } from "../../settings/phone-country-policy";
+import { resolveOrderCurrencySnapshot } from "../../payments";
+import { validateCustomerPhoneCountry } from "../../settings";
 import type { TaxQuote } from "../../tax/browser";
 import { sha256Hex } from "@scalius/shared/hash";
 import { stableStringify } from "./create-attempts";

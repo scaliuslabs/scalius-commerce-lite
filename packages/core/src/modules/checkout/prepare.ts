@@ -6,10 +6,10 @@ import { resolveCheckoutContact, type CheckoutContactFieldSettings } from "./con
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 import { fromMinor } from "@scalius/shared/money";
 import {
-    buildStorefrontTaxAllocationLineId,
-    type StorefrontTaxAuthoritySnapshot,
+  buildStorefrontTaxAllocationLineId,
+  type StorefrontTaxAuthoritySnapshot,
+  type TaxQuote,
 } from "../tax";
-import type { TaxQuote } from "../tax/types";
 import {
     GIFT_CARD_PAYMENT_METHOD,
     GIFT_CARD_UNUSABLE_CODE,
@@ -18,7 +18,7 @@ import {
     quoteGiftCardTender,
 } from "../gift-cards";
 import { isGiftCardTenderBlocked } from "@scalius/shared/gift-card-tender";
-import { BUILT_IN_PAYMENT_PROVIDERS, type PaymentProviders } from "../payments/gateways/registry";
+import { BUILT_IN_PAYMENT_PROVIDERS, type PaymentProviders } from "../payments";
 import { assertDiscountCodesApplied } from "../promotions";
 import type { CheckoutAppFunctions } from "./app-functions";
 import { assertNoCheckoutRuleErrors, priceStorefrontCheckout } from "./pricing";
@@ -31,17 +31,18 @@ import {
 import { nanoid } from "nanoid";
 
 import { generateOrderId } from "@scalius/shared/order-utils";
-import { checkoutDocument } from "../settings/documents";
+import { checkoutDocument } from "../settings";
 import { ValidationError } from "@scalius/core/errors";
-import type {
-    CreateStorefrontOrderCustomerIdentity,
-    CreateStorefrontOrderIdentity,
-    CreateStorefrontOrderInput,
-    CreateStorefrontOrderResult,
-    StorefrontGiftCardIssue,
-    StorefrontGiftCardTenderSummary,
-    StorefrontOrderShippingMethodSnapshot,
-} from "../orders/types";
+import {
+  type CreateStorefrontOrderCustomerIdentity,
+  type CreateStorefrontOrderIdentity,
+  type CreateStorefrontOrderInput,
+  type CreateStorefrontOrderResult,
+  MAX_ORDER_LINE_ITEMS,
+  type StorefrontGiftCardIssue,
+  type StorefrontGiftCardTenderSummary,
+  type StorefrontOrderShippingMethodSnapshot,
+} from "../orders";
 import {
     isTrustedStorefrontCartValidationResult,
     summarizeStorefrontCartFulfilment,
@@ -53,20 +54,17 @@ import {
 } from "./cart-validation";
 import { linePropertiesHash, serializeOrderLineProperties } from "@scalius/shared/line-properties";
 import type { FulfillmentType } from "@scalius/shared/fulfilment";
-import { hasFulfiller } from "../fulfilment/registry";
+import { hasFulfiller } from "../fulfilment";
 import {
-    resolveActiveDeliveryLocationNamesFromRows,
-    selectActiveDeliveryLocationRowsByIds,
-    type ActiveDeliveryLocationRow,
-} from "../delivery/location-validation";
-import { MAX_ORDER_LINE_ITEMS } from "../orders/validation";
-import {
-    resolveAddressZoneId,
-    resolveDeliveryRate,
-    selectDeliveryRateRowsByIds,
-    type DeliveryRateKind,
-    type DeliveryRateRow,
-} from "../delivery/zones";
+  type ActiveDeliveryLocationRow,
+  type DeliveryRateKind,
+  type DeliveryRateRow,
+  resolveActiveDeliveryLocationNamesFromRows,
+  resolveAddressZoneId,
+  resolveDeliveryRate,
+  selectActiveDeliveryLocationRowsByIds,
+  selectDeliveryRateRowsByIds,
+} from "../delivery";
 
 export interface StorefrontDeliveryPreflightInput {
     /** Needed only for a `delivery` rate; pickup and no-method carts omit it. */

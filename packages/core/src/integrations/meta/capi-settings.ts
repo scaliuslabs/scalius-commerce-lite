@@ -1,6 +1,6 @@
 import { type Database } from "@scalius/database/client";
 import { metaConversionsLogs } from "@scalius/database/schema";
-import { metaConversionsDocument, type MetaConversionsSettings } from "../../modules/settings/documents";
+import { metaConversionsDocument, type MetaConversionsSettings } from "../../modules/settings";
 import { eq, lt } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
 

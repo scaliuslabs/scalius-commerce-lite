@@ -38,17 +38,21 @@ import {
   type ProductImportVariant,
 } from "@scalius/shared/store-transfer/products";
 import { AppError } from "@scalius/core/errors";
-import { createProduct, updateProduct } from "../product-admin/write";
-import { getProductDetails } from "../product-admin/read";
-import { saveProductOptionMatrix } from "../product-admin/option-matrix";
-import { updateVariant } from "../product-admin/variants";
-import { createProductSchema, updateProductSchema } from "../product-admin/validation";
-import type { ProductWithDetails } from "../products/types";
-import { readStoreCurrency, type StoreCurrency } from "../settings/store-money";
+import {
+  createProduct,
+  createProductSchema,
+  getProductDetails,
+  saveProductOptionMatrix,
+  updateProduct,
+  updateProductSchema,
+  updateVariant,
+} from "../product-admin";
+import type { ProductWithDetails } from "../products";
+import { readStoreCurrency, type StoreCurrency } from "../settings";
 import { ImportReferenceResolver, type ReferenceCreationRights, type ReferencePlan } from "./references";
 import { ImportBudget, isWorkerLimitError } from "./budget";
 import { effectivePrice, type StoredPricing } from "./pricing";
-import { SKU_COST_BATCH_LIMIT, setSkuCosts, unitCostFromMinor, unitCostToMinor } from "../inventory/unit-costs";
+import { setSkuCosts, SKU_COST_BATCH_LIMIT, unitCostFromMinor, unitCostToMinor } from "../inventory";
 
 export type ProductImportStatus =
   | "created"

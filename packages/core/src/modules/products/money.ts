@@ -11,15 +11,15 @@ import {
     normalizeSupportedCurrencyCode,
     SUPPORTED_CURRENCY_CODES,
 } from "@scalius/shared/currency";
-import { currencyDocument } from "../settings/documents";
-import { getCurrencyConfig } from "../settings/settings.service";
 import {
-    storeCurrencyCodeSql,
-    storeCurrencyFromCode,
-    storeDecimalPlacesFromCode,
-    toStoreMinor,
-    type StoreCurrency,
-} from "../settings/store-money";
+  currencyDocument,
+  getCurrencyConfig,
+  type StoreCurrency,
+  storeCurrencyCodeSql,
+  storeCurrencyFromCode,
+  storeDecimalPlacesFromCode,
+  toStoreMinor,
+} from "../settings";
 import { SETTINGS_DOCUMENT_ROW_KEY } from "../../settings-store";
 import { deps } from "../../cache-deps";
 import type { BuyerCatalogPricingProjection } from "./buyer-projection";
