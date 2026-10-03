@@ -1,3 +1,5 @@
+import { isQualifiedProviderId, parseQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
+
 export type GatewayPresentation = {
   buyerLabel: string;
   description: string;
@@ -40,11 +42,56 @@ export const GATEWAY_PRESENTATION: Record<string, GatewayPresentation> = {
   },
 };
 
+/**
+ * A neutral wallet: an app's payment method (bKash, Nagad, …) ships no
+ * audited mark, so it never borrows a brand asset or shows a broken image.
+ */
+export const APP_GATEWAY_MARK_SRC = "/payment-marks/wallet.svg";
+
+/** A payment method an app provides: `<plugin id>:<provider id>`. */
+export function isAppGatewayId(gatewayId: string): boolean {
+  return isQualifiedProviderId(gatewayId);
+}
+
+/**
+ * The name buyers read for an app's method: the checkout name the store
+ * serves (`GET /checkout/config`), else the provider id in words ("Bkash"
+ * for `scalius.bkash:bkash`); never the stored id. Null for other methods.
+ */
+export function appGatewayName(
+  gatewayId: string,
+  gateways?: readonly { id: string; name?: unknown }[] | null,
+): string | null {
+  const app = parseQualifiedProviderId(gatewayId);
+  if (!app) return null;
+  const configured = gateways?.find((gateway) => gateway.id === gatewayId)?.name;
+  if (typeof configured === "string" && configured.trim()) return configured.trim();
+  const words = app.providerId.replace(/-/g, " ");
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
 export function getGatewayPresentation(
   gatewayId: string,
   fallbackLabel: string,
 ): GatewayPresentation {
-  return GATEWAY_PRESENTATION[gatewayId] ?? {
+  const known = GATEWAY_PRESENTATION[gatewayId];
+  if (known) return known;
+  if (isAppGatewayId(gatewayId)) {
+    // An app's hosted wallet: its own checkout name and a neutral mark. The
+    // name doubles as the provider in "Continue to …" copy.
+    const name = fallbackLabel.trim() && fallbackLabel !== gatewayId
+      ? fallbackLabel.trim()
+      : appGatewayName(gatewayId) ?? fallbackLabel;
+    return {
+      buyerLabel: name,
+      description: "",
+      providerLabel: null,
+      markSrc: APP_GATEWAY_MARK_SRC,
+      markKind: "icon",
+      hosted: true,
+    };
+  }
+  return {
     buyerLabel: fallbackLabel,
     description: "",
     providerLabel: null,

@@ -1565,3 +1565,77 @@ describe("payment page with store app checkout functions", () => {
     expect(repair.ruleErrors).toEqual([appRule]);
   });
 });
+
+describe("an app's wallet at checkout", () => {
+  const BKASH = "scalius.bkash:bkash";
+
+  it("shows its checkout name with a neutral mark and tells the buyer they leave the store to pay", async () => {
+    let finishOrder: (response: Response) => void = () => undefined;
+    vi.stubGlobal("fetch", vi.fn(async (input) => {
+      const url = String(input);
+      if (url === "/api/checkout/tax-quote") {
+        return new Response(JSON.stringify({ success: true, data: taxQuote({ allowedPaymentMethods: ["cod", BKASH] }) }));
+      }
+      if (url === "/api/checkout/create-order") {
+        return new Promise<Response>((resolve) => { finishOrder = resolve; });
+      }
+      return new Response(JSON.stringify({ success: true, data: {} }));
+    }));
+    document.body.innerHTML = `
+      <main>
+        <section id="orderSummary" class="hidden"><div id="summaryDetails"></div></section>
+        <div id="errorMsg" class="hidden"></div>
+        <div id="paymentMethods"></div>
+        <div id="paymentActionParking" class="hidden">
+          <div id="testModeNotice" class="hidden"></div>
+          <div id="stripeSection" class="hidden"></div>
+          <div id="paymentActionHost" class="hidden">
+            <p id="hostedRedirectNote" class="hidden"></p>
+            <button id="payButton" disabled><span id="payButtonText">Select a payment method</span></button>
+          </div>
+        </div>
+      </main>
+      <div id="loadingOverlay" class="hidden" aria-hidden="true" tabindex="-1">
+        <span id="loadingTitle"></span><span id="loadingMsg"></span>
+      </div>
+    `;
+    sessionStorage.setItem("scalius_checkout_data", JSON.stringify({
+      cartItems: JSON.stringify({ line_1: { id: "prod_1", variantId: "var_1", price: 100, quantity: 1 } }),
+      customerName: "Buyer",
+      customerPhone: "+8801700000000",
+      shippingAddress: "Dhaka",
+      city: "city_1",
+      zone: "zone_1",
+      shippingMethodId: "ship_1",
+    }));
+    (window as unknown as { __CHECKOUT_CONFIG__: CheckoutConfig }).__CHECKOUT_CONFIG__ = {
+      ...baseConfig,
+      activeDefaultMethod: BKASH,
+      gateways: [
+        { id: "cod", name: "Cash on Delivery" },
+        { id: BKASH, name: "bKash", flow: "hosted", testMode: false },
+      ],
+    };
+
+    await initCheckoutPage();
+
+    const row = document.querySelector<HTMLElement>(`[data-method="${BKASH}"]`)!;
+    expect(row.textContent).toContain("bKash");
+    expect(row.textContent).not.toContain("scalius");
+    expect(row.querySelector("img")?.getAttribute("src")).toBe("/payment-marks/wallet.svg");
+    expect(row.querySelector(".payment-method-control")?.getAttribute("aria-label")).toBe("bKash");
+    expect(document.getElementById("payButtonText")?.textContent).toBe("Continue to bKash");
+    expect(document.getElementById("hostedRedirectNote")?.textContent)
+      .toBe("You'll be redirected to bKash to complete your payment.");
+
+    document.getElementById("payButton")!.click();
+    await vi.waitFor(() => expect(document.getElementById("loadingTitle")?.textContent).toBe("Opening bKash"));
+    expect(document.getElementById("loadingMsg")?.textContent)
+      .toBe("You'll leave this store to pay with bKash, then come back here for your receipt.");
+
+    // The order is refused: the overlay goes and the buyer stays on checkout.
+    finishOrder(new Response(JSON.stringify({ success: false, error: "Checkout is unavailable." }), { status: 503 }));
+    await vi.waitFor(() => expect(document.getElementById("loadingOverlay")?.classList.contains("hidden")).toBe(true));
+    expect(window.location.pathname).not.toContain("order-success");
+  });
+});

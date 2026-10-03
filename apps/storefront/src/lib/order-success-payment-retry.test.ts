@@ -143,6 +143,35 @@ describe("order success payment retry", () => {
     ]);
   });
 
+  it("retries an app's wallet by its checkout name at its own session endpoint", () => {
+    const bkash = "scalius.bkash:bkash";
+    expect(isRetryableHostedPaymentMethod(bkash)).toBe(true);
+    expect(getOrderSuccessRetryEndpoint(bkash)).toBe(`/api/checkout/payment-session/${bkash}`);
+    expect(
+      getOrderSuccessRetryOptions(
+        makeRetryOrder({ paymentMethod: bkash, paymentStatus: "failed" }),
+        "payment_issue",
+        "cancelled",
+        [
+          { id: "cod", name: "Cash on Delivery" },
+          { id: bkash, name: "bKash" },
+          { id: "scalius.nagad:nagad", name: "Nagad" },
+          { id: "sslcommerz", name: "SSLCommerz" },
+        ],
+      ),
+    ).toEqual([
+      { gateway: bkash, endpoint: `/api/checkout/payment-session/${bkash}`, current: true, label: "bKash", requiresCardForm: false },
+      {
+        gateway: "scalius.nagad:nagad",
+        endpoint: "/api/checkout/payment-session/scalius.nagad:nagad",
+        current: false,
+        label: "Nagad",
+        requiresCardForm: false,
+      },
+      { gateway: "sslcommerz", endpoint: "/api/checkout/payment-session/sslcommerz", current: false, label: "Pay online", requiresCardForm: false },
+    ]);
+  });
+
   it("fails closed when checkout config exposes only COD", () => {
     expect(
       getOrderSuccessRetryOptions(

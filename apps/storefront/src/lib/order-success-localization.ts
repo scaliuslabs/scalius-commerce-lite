@@ -7,7 +7,7 @@ import {
   formatCheckoutLanguageText,
   type CheckoutLanguageData,
 } from "@scalius/shared/checkout-language";
-import type { GatewayPresentation } from "./checkout/gateway-presentation";
+import { appGatewayName, type GatewayPresentation } from "./checkout/gateway-presentation";
 
 function normalize(value: string | null | undefined): string {
   return (value ?? "").trim().toLowerCase();
@@ -64,6 +64,8 @@ export function formatOrderSuccessPaymentMethod(
   value: string | null | undefined,
   copy: CheckoutLanguageData,
   delivery?: { shippingMethodKind?: string | null; requiresShipping?: boolean | null },
+  /** The store's checkout gateways, for an app wallet's checkout name. */
+  gateways?: readonly { id: string; name?: unknown }[] | null,
 ): string {
   switch (normalize(value)) {
     case "cod":
@@ -75,7 +77,8 @@ export function formatOrderSuccessPaymentMethod(
     case "sslcommerz":
       return copy.orderReceiptPaymentMethodSslcommerzText;
     default:
-      return copy.orderReceiptStatusNotAvailableText;
+      // An app's wallet (`<plugin id>:<provider id>`) by its checkout name.
+      return appGatewayName(normalize(value), gateways) ?? copy.orderReceiptStatusNotAvailableText;
   }
 }
 

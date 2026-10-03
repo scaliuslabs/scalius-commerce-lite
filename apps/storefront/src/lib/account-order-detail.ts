@@ -28,7 +28,7 @@ import {
 import { addOrderToCart } from "@/lib/account-buy-again";
 import { accountPill, orderStatusTone } from "@/lib/account-ui";
 import { getProductImageUrl } from "@/lib/product-media";
-import { getGatewayPresentation } from "@/lib/checkout/gateway-presentation";
+import { appGatewayName, getGatewayPresentation } from "@/lib/checkout/gateway-presentation";
 import { isPaymentMethodIdShape } from "@/lib/payment-method-id";
 import { isGatewayEligibleForPaymentAmount } from "@/lib/checkout/gateway-amount-eligibility";
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
@@ -174,7 +174,8 @@ function isOnlineGateway(value: string): boolean {
 }
 
 function gatewayMarkup(gateway: string): string {
-  const presentation = getGatewayPresentation(gateway, gateway);
+  // An app's wallet reads by the store's checkout name, never its stored id.
+  const presentation = getGatewayPresentation(gateway, appGatewayName(gateway, currentCheckoutConfig?.gateways) ?? gateway);
   const lightMark = presentation.markSrc
     ? `<img src="${escapeHtml(presentation.markSrc)}" alt="" aria-hidden="true" class="h-5 w-auto max-w-24 object-contain ${presentation.darkMarkSrc ? "dark:hidden" : ""}">`
     : "";
@@ -208,7 +209,8 @@ function recoveryButtonLabel(gateway: string): string {
   if (gateway === "stripe") return "Enter card details";
   if (currentDetail?.paymentRecovery.paymentType === "balance") return "Pay balance";
   const name = currentCheckoutConfig?.gateways?.find((candidate) => candidate.id === gateway)?.name;
-  return `Continue with ${getGatewayPresentation(gateway, name ?? gateway).providerLabel ?? name ?? gateway}`;
+  const presentation = getGatewayPresentation(gateway, name ?? gateway);
+  return `Continue with ${presentation.providerLabel ?? presentation.buyerLabel}`;
 }
 
 function resetStripe(): void {

@@ -34,7 +34,7 @@ import type {
 import type { getCountries } from "@scalius/shared/customer-utils";
 import { parseMerchantCspSources } from "@scalius/shared/security-csp";
 import { countClearableAgentConnections, listAgentConnections } from "~/components/admin/agent-access/api";
-import type { GatewayStatus, MethodKey } from "~/components/admin/settings/payment-method-outcome";
+import type { GatewayStatus } from "~/components/admin/settings/payment-method-outcome";
 import type { PolicyKind } from "~/components/admin/settings/policy-templates";
 import { apiClient, apiData, type ApiResult } from "../api";
 import { queryKeys } from "../query-keys";
@@ -76,10 +76,19 @@ export const countriesQuery = {
 
 // ── Payments ─────────────────────────────────────────────────────────────
 
-export type PaymentMethods = Omit<ApiResult<typeof getApiV1AdminSettingsPaymentMethods>, "enabledMethods" | "defaultMethod" | "gatewayStatus"> & {
-  enabledMethods: MethodKey[];
-  defaultMethod: MethodKey;
-  gatewayStatus: Partial<Record<MethodKey, GatewayStatus>>;
+/**
+ * Method ids are `cod`, built-in gateway ids and app providers'
+ * `<plugin id>:<provider id>`; `gateways` lists every gateway the store can
+ * offer (built in first, then active apps' providers).
+ */
+export type PaymentMethods = {
+  enabledMethods: string[];
+  defaultMethod: string;
+  revision: number;
+  activeMethods?: string[];
+  activeDefaultMethod?: string;
+  gateways: ApiResult<typeof getApiV1AdminSettingsPaymentMethods>["gateways"];
+  gatewayStatus: Partial<Record<string, GatewayStatus>>;
 };
 
 export const checkoutFlowQuery = {

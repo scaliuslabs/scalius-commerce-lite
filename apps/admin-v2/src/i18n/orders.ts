@@ -1,4 +1,5 @@
 import { isOrderChannelSourcePreset, type OrderChannel } from "@scalius/shared/order-channel";
+import { appPaymentMethodName } from "~/lib/app-payment-method";
 import { defineMessages } from "./index";
 
 /**
@@ -118,8 +119,13 @@ export const paymentStatusLabel = (t: Translate, status: string) =>
   labelOrRaw(t, `payment.${status.toLowerCase()}`, status);
 export const fulfillmentStatusLabel = (t: Translate, status: string) =>
   labelOrRaw(t, `fulfillment.${status.toLowerCase()}`, status);
-export const paymentMethodLabel = (t: Translate, method: string) =>
-  labelOrRaw(t, `method.${method.toLowerCase()}`, method);
+/**
+ * An app's method (`<plugin id>:<provider id>`) reads as its provider's name
+ * from `appNames` (installed apps), else as the provider id in words; never
+ * as the stored id.
+ */
+export const paymentMethodLabel = (t: Translate, method: string, appNames?: ReadonlyMap<string, string>) =>
+  appPaymentMethodName(method, appNames) ?? labelOrRaw(t, `method.${method.toLowerCase()}`, method);
 /** "Delivery", "Pickup", or "No delivery" (nothing physical: a service). */
 export const deliveryMethodLabel = (t: Translate, method: "delivery" | "pickup" | "none") =>
   t(`delivery.${method}`);

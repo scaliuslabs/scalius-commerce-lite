@@ -1,17 +1,20 @@
 import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowDown, ArrowUp, Banknote } from "lucide-react";
+import { Link } from "@tanstack/react-router";
+import { ArrowDown, ArrowUp, Banknote, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import {
   deleteApiV1AdminSettingsSslcommerz,
   deleteApiV1AdminSettingsStripe,
   getApiV1AdminSettingsCheckoutFlow,
   postApiV1AdminSettingsPaymentMethods,
+  postApiV1AdminSettingsProvidersByIdTest,
   postApiV1AdminSettingsSslcommerz,
   postApiV1AdminSettingsStripe,
   putApiV1AdminSettingsCheckoutFlow,
 } from "@scalius/api-client/sdk";
 import { getStripeCredentialEnvironment } from "@scalius/shared/payment-gateway-environment";
+import { cn } from "@scalius/shared/utils";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
@@ -32,6 +35,7 @@ import {
   type GatewayValues,
   type PaymentMethods,
 } from "~/lib/api-query-options/settings-screens";
+import { appPaymentProvidersQuery } from "~/lib/api-query-options/payment-providers";
 import { queryKeys } from "~/lib/query-keys";
 import { formatNumber, getLocale, useMessages } from "~/i18n";
 import { settingsMessages } from "~/i18n/settings";
@@ -42,13 +46,15 @@ import {
   getCheckoutFlowPreviewIssues,
 } from "./checkout-flow-policy";
 import {
+  chargeCurrencyIssue,
   getEligibleDefaultPaymentMethods,
   getPaymentMethodFlowEligibility,
   getPaymentMethodFlowExclusionReason,
   getPaymentMethodOutcome,
   type MethodKey,
 } from "./payment-method-outcome";
-import { OfficialProviderMark } from "./provider-marks";
+import { COD_METHOD, paymentMethodRows, type PaymentMethodRow } from "./payment-method-rows";
+import { OfficialProviderMark, PROVIDER_MARKS, type ProviderMarkId } from "./provider-marks";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
 import { ConfirmDialog } from "../shared/ConfirmDialog";
 import { useWholeCashAmounts } from "../shared/MoneyInput";
@@ -56,7 +62,6 @@ import { SettingsCard, SettingsDialog, SettingsField, SettingsCardLoading, useCl
 
 /** Saved secrets come back masked; sending the mask back keeps them. */
 const MASKED = "••••••••••••";
-const METHODS: MethodKey[] = ["cod", "sslcommerz", "stripe"];
 
 type CheckoutFlow = Omit<ApiResult<typeof getApiV1AdminSettingsCheckoutFlow>, "revision">;
 type GatewayKey = "secretKey" | "publishableKey" | "webhookSecret" | "storeId" | "storePassword";
@@ -107,25 +112,33 @@ export function useCheckoutFlowForm(isValid: (draft: CheckoutFlow) => boolean, l
 function usableMethods(methods: PaymentMethods | undefined) {
   const usable = (method: MethodKey) => {
     const status = methods?.gatewayStatus[method];
-    return methods?.enabledMethods.includes(method) === true && (status?.usable ?? (status?.enabled === true && status?.configured === true));
+    return status?.usable ?? (status?.enabled === true && status?.configured === true);
   };
+  const enabled = methods?.enabledMethods.filter(usable) ?? [];
   return {
-    codEnabled: usable("cod"),
-    online: METHODS.filter((method) => method !== "cod" && usable(method)),
+    codEnabled: enabled.includes(COD_METHOD),
+    online: enabled.filter((method) => method !== COD_METHOD),
   };
 }
 
 // ── Payment methods ─────────────────────────────────────────────────────
 
-function MethodMark({ method }: { method: MethodKey }) {
-  if (method === "cod") {
-    return (
-      <span className="grid size-8 shrink-0 place-items-center rounded-md bg-muted text-muted-foreground" aria-hidden="true">
-        <Banknote className="size-5" />
-      </span>
-    );
+function MethodMark({ row }: { row: PaymentMethodRow }) {
+  if (row.kind === "built_in" && row.id in PROVIDER_MARKS) {
+    return <OfficialProviderMark provider={row.id as ProviderMarkId} />;
   }
-  return <OfficialProviderMark provider={method} />;
+  // Cash, or an app's provider: no official mark ships with the dashboard.
+  const Icon = row.kind === "cod" ? Banknote : Wallet;
+  return (
+    <span className="grid size-8 shrink-0 place-items-center rounded-md bg-muted text-muted-foreground" aria-hidden="true">
+      <Icon className="size-5" />
+    </span>
+  );
+}
+
+/** The two built-in gateways whose keys this page edits. */
+function hasKeyForm(id: string): id is keyof typeof GATEWAY_KEYS {
+  return Object.hasOwn(GATEWAY_KEYS, id);
 }
 
 /**
@@ -340,20 +353,42 @@ export function PaymentMethodsCard() {
   const [turningOn, setTurningOn] = useState<MethodKey | null>(null);
   const pendingTurnOn = useRef<MethodKey | null>(null);
   const setupButtons = useRef(new Map<MethodKey, HTMLButtonElement>());
+  const canViewApps = useHasPermission(ADMIN_PERMISSIONS.APPS_VIEW);
   const flow = useQuery(checkoutFlowQuery);
   const currency = useQuery(currencyQuery);
+  // Installed apps' providers, offered or not; without them the active ones still list.
+  const appProviders = useQuery(appPaymentProvidersQuery);
+  const [testResults, setTestResults] = useState<Record<string, { ok: boolean; message: string }>>({});
+  const connectionTest = useMutation({
+    mutationFn: (id: string) => apiData(postApiV1AdminSettingsProvidersByIdTest({ path: { id } })),
+    onSuccess: (result, id) => setTestResults((current) => ({ ...current, [id]: result })),
+    onError: (error, id) => setTestResults((current) => ({ ...current, [id]: { ok: false, message: getServerFnError(error) } })),
+  });
+  // The form validates its empty defaults before the first read too.
+  const rowsFor = (draft: PaymentMethods) =>
+    paymentMethodRows({
+      enabledMethods: draft.enabledMethods ?? [],
+      gateways: draft.gateways ?? [],
+      gatewayStatus: draft.gatewayStatus ?? {},
+      appProviders: appProviders.data ?? [],
+      appProvidersKnown: appProviders.isSuccess,
+    });
   const flowAllowed = (method: MethodKey) =>
     flow.data ? getPaymentMethodFlowEligibility(method, flow.data) : undefined;
-  const eligibilityIssue = (method: MethodKey) =>
-    method === "sslcommerz" && currency.data?.currencyCode !== "BDT" ? "sslNeedsBdt" : null;
+  // Fail closed: a gateway restricted to some currencies needs the store's to be one.
+  const currencyIssue = (draft: PaymentMethods, method: MethodKey) =>
+    chargeCurrencyIssue(draft.gateways?.find((gateway) => gateway.id === method)?.chargeCurrencies ?? "any", currency.data?.currencyCode);
   const defaults = (draft: PaymentMethods) =>
     getEligibleDefaultPaymentMethods({
-      methods: METHODS,
+      methods: rowsFor(draft).map((row) => row.id),
       statuses: draft.gatewayStatus,
       selectedMethods: new Set(draft.enabledMethods),
       flowAllowed,
-      eligibilityIssue,
+      eligibilityIssue: (method) => (currencyIssue(draft, method) ? "currency" : null),
     });
+  // A saved method whose app was removed can't be saved again: the server refuses it.
+  const keepsRemovedApp = (draft: PaymentMethods) =>
+    rowsFor(draft).some((row) => !row.installed && draft.enabledMethods.includes(row.id));
   const { values, setValues, isLoadError, refetch } = useSettingsForm<PaymentMethods>({
     label: t("methodsTitle"),
     queryKey: paymentMethodsQuery.queryKey,
@@ -367,7 +402,9 @@ export function PaymentMethodsCard() {
     errorMessage: common("saveFailed"),
     canEdit,
     // Fail closed: without the saved flow and currency, visibility is unknown.
-    isValid: (draft) => Boolean(flow.data && currency.data) && defaults(draft).includes(draft.defaultMethod),
+    isValid: (draft) => Boolean(flow.data && currency.data)
+      && defaults(draft).includes(draft.defaultMethod)
+      && !keepsRemovedApp(draft),
   });
   if (isLoadError || flow.isError || currency.isError) {
     return <SettingsLoadFailure title={t("loadMethods")} onRetry={() => Promise.all([refetch(), flow.refetch(), currency.refetch()])} />;
@@ -375,10 +412,15 @@ export function PaymentMethodsCard() {
   if (!values.enabledMethods) return <SettingsCardLoading />;
 
   const eligibleDefaults = defaults(values);
-  const ordered = [
-    ...values.enabledMethods,
-    ...METHODS.filter((method) => !values.enabledMethods.includes(method)),
-  ];
+  const methodRows = rowsFor(values);
+  // Built-in methods read in the dashboard language; an app's provider by its own name.
+  const nameOf = (row: PaymentMethodRow) =>
+    row.kind !== "app" && Object.hasOwn(paymentsMessages.en, row.id) ? t(row.id as keyof typeof paymentsMessages.en) : row.name;
+  const names = new Map(methodRows.map((row) => [row.id, nameOf(row)]));
+  const currencyText = (currencies: readonly string[]) =>
+    currencies.length === 1 && currencies[0] === "BDT"
+      ? t("needsTaka")
+      : t("needsCurrency", { currencies: new Intl.ListFormat(getLocale() === "bn" ? "bn" : "en", { type: "disjunction" }).format(currencies) });
   const toggle = (method: MethodKey, on: boolean) =>
     setValues((draft) => {
       const enabledMethods = on
@@ -398,54 +440,103 @@ export function PaymentMethodsCard() {
       return { ...draft, enabledMethods: order };
     });
 
-  const rows = ordered.map((method) => {
+  const rows = methodRows.map((row) => {
+    const method = row.id;
+    const name = nameOf(row);
+    const status = row.status;
     const selected = values.enabledMethods.includes(method);
+    const neededCurrencies = currencyIssue(values, method);
     const outcome = getPaymentMethodOutcome({
       method,
-      status: values.gatewayStatus[method],
+      status,
       checkoutSelected: selected,
       flowAllowed: flowAllowed(method),
-      eligibilityIssue: eligibilityIssue(method),
+      eligibilityIssue: neededCurrencies ? "currency" : null,
     });
-    const environment = values.gatewayStatus[method]?.environment;
+    const environment = status?.environment;
     const exclusion = flow.data && outcome.state === "hidden_by_flow" ? getPaymentMethodFlowExclusionReason(method, flow.data) : null;
-    const missingKeys = values.gatewayStatus[method]?.missingFields ?? [];
-    const needsKeys = outcome.state === "needs_setup" && missingKeys.length > 0;
-    const detail = eligibilityIssue(method)
-      ? t("sslNeedsBdt")
-      : exclusion
-        ? t(exclusion)
-        : [
-            needsKeys ? t("needsKeys", { fields: keyList(missingKeys) }) : t(outcome.state),
-            method !== "cod" && environment === "test" ? t("testMode") : null,
-            method !== "cod" && environment === "mixed" ? t("keyMismatch") : null,
-          ].filter(Boolean).join(" · ");
+    const missingKeys = status?.missingFields ?? [];
+    const keyForm = row.kind === "built_in" && hasKeyForm(method) ? method : null;
+    // Only the built-in key forms name missing keys; an app explains itself (blockedReason).
+    const needsKeys = keyForm !== null && outcome.state === "needs_setup" && missingKeys.length > 0;
+    const unusable = outcome.state === "needs_setup" || outcome.state === "provider_off" || outcome.state === "blocked";
+    const detail = row.kind === "app" && !row.installed
+      ? t("appRemoved")
+      : neededCurrencies
+        ? currencyText(neededCurrencies)
+        : exclusion
+          ? t(exclusion)
+          : row.kind === "app" && unusable && status?.blockedReason
+            ? status.blockedReason
+            : [
+                needsKeys ? t("needsKeys", { fields: keyList(missingKeys) }) : t(outcome.state),
+                method !== "cod" && environment === "test" ? t("testMode") : null,
+                method !== "cod" && environment === "mixed" ? t("keyMismatch") : null,
+              ].filter(Boolean).join(" · ");
     const position = values.enabledMethods.indexOf(method);
     const reorderable = selected && values.enabledMethods.length > 1;
+    // Flipping on a built-in gateway that still needs keys opens its setup.
+    const turnsOnThroughSetup = keyForm !== null && outcome.state === "needs_setup";
+    const testResult = testResults[method];
+    const testing = connectionTest.isPending && connectionTest.variables === method;
+    const appActions = row.kind === "app" ? (
+      <>
+        {row.canTestConnection && status?.usable ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={!canEdit || (connectionTest.isPending && !testing)}
+            loading={testing}
+            onClick={() => connectionTest.mutate(method)}
+          >
+            {t("testConnection")}
+          </Button>
+        ) : null}
+        {/* The app's own page holds its settings, keys and activation. */}
+        {canViewApps && row.installed && row.pluginId ? (
+          <Button asChild variant="outline" size="sm">
+            <Link to="/admin/apps/$pluginId" params={{ pluginId: row.pluginId }}>
+              {outcome.state === "needs_setup" ? t("set_up") : unusable ? t("openApp") : t("manage")}
+            </Link>
+          </Button>
+        ) : null}
+      </>
+    ) : null;
+    const hasActions = reorderable || keyForm !== null || (row.kind === "app" && ((row.canTestConnection && status?.usable) || (canViewApps && row.installed && row.pluginId)));
     return (
-      <li key={method} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
-        <MethodMark method={method} />
+      <li key={method} data-method={method} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
+        <MethodMark row={row} />
         <div className="min-w-0 flex-1">
-          <p className="text-body font-medium">{t(method)}</p>
+          <p className="text-body font-medium">{name}</p>
+          {row.kind === "app" && row.appName ? (
+            <p className="text-body text-muted-foreground">{t("fromApp", { app: row.appName })}</p>
+          ) : null}
           <p className="text-body text-muted-foreground">{detail}</p>
+          {testResult ? (
+            <p role="status" className={cn("text-body", testResult.ok ? "text-success" : "text-destructive")}>
+              {[t(testResult.ok ? "testWorked" : "testFailed"), testResult.message].filter(Boolean).join(" · ")}
+            </p>
+          ) : null}
         </div>
-        {method !== "cod" || reorderable ? (
+        {hasActions ? (
           // Secondary actions wrap under the name on phones.
-          <div className="order-last flex w-full items-center gap-1 sm:order-none sm:w-auto">
+          <div className="order-last flex w-full flex-wrap items-center gap-1 sm:order-none sm:w-auto">
             {reorderable ? (
               <>
-                <Button type="button" variant="ghost" size="icon" disabled={!canEdit || position === 0} aria-label={t("moveUp", { method: t(method) })} onClick={() => move(method, -1)}>
+                <Button type="button" variant="ghost" size="icon" disabled={!canEdit || position === 0} aria-label={t("moveUp", { method: name })} onClick={() => move(method, -1)}>
                   <ArrowUp aria-hidden="true" />
                 </Button>
-                <Button type="button" variant="ghost" size="icon" disabled={!canEdit || position === values.enabledMethods.length - 1} aria-label={t("moveDown", { method: t(method) })} onClick={() => move(method, 1)}>
+                <Button type="button" variant="ghost" size="icon" disabled={!canEdit || position === values.enabledMethods.length - 1} aria-label={t("moveDown", { method: name })} onClick={() => move(method, 1)}>
                   <ArrowDown aria-hidden="true" />
                 </Button>
               </>
             ) : null}
-            {method !== "cod" ? (
+            {appActions}
+            {keyForm !== null ? (
               <SettingsDialog
-                title={t("credentialsTitle", { method: t(method) })}
-                description={turningOn === method && needsKeys ? t("turnOnNeeds", { fields: keyList(missingKeys), method: t(method) }) : undefined}
+                title={t("credentialsTitle", { method: name })}
+                description={turningOn === method && needsKeys ? t("turnOnNeeds", { fields: keyList(missingKeys), method: name }) : undefined}
                 trigger={
                   <Button
                     ref={(button) => {
@@ -466,7 +557,7 @@ export function PaymentMethodsCard() {
                 }
               >
                 <GatewayFields
-                  gateway={method}
+                  gateway={keyForm}
                   turnOn={turningOn === method}
                   // Keys complete: show it at checkout, saved with the page like any switch.
                   onTurnedOn={() => toggle(method, true)}
@@ -479,10 +570,11 @@ export function PaymentMethodsCard() {
         <label className="-mx-1 -my-3 flex size-11 items-center justify-center">
           <Switch
             checked={selected}
-            disabled={!canEdit || (!selected && !outcome.canSelect && outcome.state !== "needs_setup")}
-            aria-label={t("showAtCheckout", { method: t(method) })}
+            // Fail closed: a method that can't be used can only be turned off.
+            disabled={!canEdit || (!selected && !outcome.canSelect && !turnsOnThroughSetup)}
+            aria-label={t("showAtCheckout", { method: name })}
             onCheckedChange={(on) => {
-              if (on && outcome.state === "needs_setup") {
+              if (on && turnsOnThroughSetup) {
                 pendingTurnOn.current = method;
                 setupButtons.current.get(method)?.click();
                 return;
@@ -511,12 +603,15 @@ export function PaymentMethodsCard() {
                   value={values.defaultMethod}
                   disabled={!canEdit}
                   onValueChange={(value) => setValues((draft) => ({ ...draft, defaultMethod: value as MethodKey }))}
-                  options={eligibleDefaults.map((method) => ({ value: method, label: t(method) }))}
+                  options={eligibleDefaults.map((method) => ({ value: method, label: names.get(method) ?? method }))}
                 />
               </SettingsField>
             ) : (
               <p role="alert" className="text-body text-destructive">{t("needOneMethod")}</p>
             )}
+            {appProviders.isError ? (
+              <p className="mt-2 text-body text-muted-foreground">{t("appsLoadFailed")}</p>
+            ) : null}
           </div>
         </>
       }

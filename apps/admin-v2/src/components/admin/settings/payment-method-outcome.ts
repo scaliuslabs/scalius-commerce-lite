@@ -1,4 +1,8 @@
-export type MethodKey = "stripe" | "sslcommerz" | "cod";
+/**
+ * A payment method id: `cod`, a built-in gateway (`stripe`, `sslcommerz`) or
+ * an app provider's `<plugin id>:<provider id>`. The API lists which exist.
+ */
+export type MethodKey = string;
 
 export interface GatewayStatus {
   configured: boolean;
@@ -6,9 +10,24 @@ export interface GatewayStatus {
   usable?: boolean;
   /** Keys still to add before the gateway can be turned on. */
   missingFields?: string[];
+  credentialErrors?: string[];
+  /** Why it can't be used, in the server's words (setup, activation, currency). */
   blockedReason?: string;
   providerEnabled?: boolean;
   environment?: "test" | "live" | "mixed" | "unknown" | "not_applicable";
+}
+
+/** The currencies a gateway charges: any, or only these ISO codes. */
+export type ChargeCurrencies = "any" | readonly string[];
+
+/**
+ * The currencies a gateway needs when the store's is not one of them, or
+ * null when it can charge the store currency. Fails closed: while the store
+ * currency is unknown, only a gateway that charges any currency passes.
+ */
+export function chargeCurrencyIssue(chargeCurrencies: ChargeCurrencies, currencyCode: string | undefined): readonly string[] | null {
+  if (chargeCurrencies === "any") return null;
+  return currencyCode && chargeCurrencies.includes(currencyCode.toUpperCase()) ? null : chargeCurrencies;
 }
 
 export type PaymentMethodOutcomeState =
@@ -67,7 +86,7 @@ export function getPaymentMethodOutcome(options: {
 
 export function getEligibleDefaultPaymentMethods(options: {
   methods: readonly MethodKey[];
-  statuses: Partial<Record<MethodKey, GatewayStatus>>;
+  statuses: Partial<Record<string, GatewayStatus>>;
   selectedMethods: ReadonlySet<MethodKey>;
   flowAllowed: (method: MethodKey) => boolean | undefined;
   eligibilityIssue?: (method: MethodKey) => string | null;

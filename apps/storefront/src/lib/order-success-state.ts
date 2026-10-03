@@ -56,11 +56,13 @@ export function formatOrderSuccessPaymentMethod(
   value: string | null | undefined,
   copy: CheckoutLanguageData,
   order: OrderGiftCardFacts & { shippingMethodKind?: string | null; requiresShipping?: boolean | null } = {},
+  /** The store's checkout gateways: an app wallet reads by their checkout name. */
+  gateways?: readonly { id: string; name?: unknown }[] | null,
 ): string {
   const giftCard = giftCardCheckoutCopy(copy).giftCardTitleText;
   if (normalize(value) === GIFT_CARD_PAYMENT_METHOD) return giftCard;
   // Cash reads "Pay at pickup" / "Pay on service" from the order's delivery facts.
-  const method = formatGatewayPaymentMethod(value, copy, order);
+  const method = formatGatewayPaymentMethod(value, copy, order, gateways);
   return readReceiptGiftCardTenders(order).length > 0 ? `${giftCard} + ${method}` : method;
 }
 
