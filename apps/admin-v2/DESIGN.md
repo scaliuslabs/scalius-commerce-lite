@@ -1,13 +1,6 @@
 # Dashboard design system
 
-Binding rules for every contributor to `apps/admin-v2`. The look follows Shopify admin (Polaris). The discipline follows Cloudflare Kumo's design rules (a reference, not a dependency). The primitives are shadcn/ui on Radix. `pnpm --filter ./apps/admin-v2 lint` enforces part of this document as errors (see [Lint](#lint)). Rules without a "(lint)" mark are review rules: follow them anyway.
-
-| What | Where |
-| --- | --- |
-| Token values, type scale, motion | `src/styles/global.css` |
-| Primitives | `src/components/ui/` |
-| Lint rules and exceptions | `eslint.config.js` |
-| Copy, English and Bangla | `src/i18n/` |
+Binding rules for every contributor to `apps/admin-v2`. The look follows Shopify admin (Polaris). The discipline follows Cloudflare Kumo's design rules (a reference, not a dependency). The primitives are shadcn/ui on Radix (`src/components/ui/`). Token values, the type scale and motion are in `src/styles/global.css`, and copy is in `src/i18n/`. `pnpm --filter ./apps/admin-v2 lint` enforces part of this document as errors (see [Lint](#lint)). Rules without a "(lint)" mark are review rules: follow them anyway.
 
 Dark mode is only the token file. Never write `dark:` (lint). Never use palette colours such as `bg-red-500` (lint, `no-raw-colors`).
 
@@ -22,7 +15,7 @@ Use the Tailwind names. Values for both themes are in `global.css`.
 | Lines, focus | `border-border` (the default `border`) · `border-input` field edge · `ring-ring` focus ring (2px, 1px offset) · `bg-overlay` backdrop |
 | Actions | `bg-primary` / `hover:bg-primary-hover` · `bg-destructive` / `hover:bg-destructive-hover` (the button fill) |
 | Tones: `success` `warning` `caution` `critical` `info` | `bg-{tone}` fill with `text-{tone}-foreground` · `bg-{tone}-surface` tint with `text-{tone}` · `border-{tone}`. Every pair passes WCAG AA in both themes. |
-| Shell | `bg-sidebar` (the near-black frame, both themes), `text-sidebar-foreground`, `text-sidebar-muted-foreground`, `hover:bg-sidebar-hover`, `bg-sidebar-accent` (current-page pill) · `bg-topbar`, `text-topbar-foreground` · `bg-topbar-subdued` with `border-topbar-border` (search pill, save bar), `bg-topbar-hover` (caps, Discard), `bg-topbar-primary` with `text-topbar-primary-foreground` (Save), `bg-topbar-progress` (loading bar) · `bg-store-badge` with `text-store-badge-foreground` (store avatar) |
+| Shell | `bg-sidebar` (the near-black frame, both themes) with `text-sidebar-foreground`, `text-sidebar-muted-foreground`, `hover:bg-sidebar-hover` and `bg-sidebar-accent` (current-page pill) · `bg-topbar` with `text-topbar-foreground` and the `-subdued` (search pill, save bar), `-hover`, `-primary` (Save) and `-progress` (loading bar) variants · `bg-store-badge` (store avatar) |
 | Charts | `bg-chart-1` to `bg-chart-5` |
 | Elevation | `shadow-card` · `shadow-button` (outline buttons) · `shadow-button-primary` · `shadow-button-critical` · `shadow-popover` · `shadow-modal` · pressed: `shadow-pressed`, `shadow-pressed-strong`. The card, button, popover and modal shadows draw their own 1px ring edge. |
 | Radius | `rounded-md` 6px (menu items) · `rounded-lg` 8px (controls, badges, navigation rows) · `rounded-xl` 12px (cards, popovers, menus, alerts) · `rounded-2xl` 16px (dialogs) |
@@ -44,9 +37,9 @@ Font: Inter at weights 450 (normal), 550 (`font-medium`) and 650 (`font-semibold
 | `text-heading-xl` | 24/32 | 24/36 | Metric values only |
 
 - All headings are semibold. Inline emphasis is `font-medium`.
-- Wrap SKUs, order IDs, phone numbers and tracking codes in `<code>` inside a sentence. `code`, `kbd` and `samp` render at 0.9em. A standalone mono value, such as a SKU column, uses `font-mono` at body size.
+- Wrap SKUs, order IDs, phone numbers and tracking codes in `<code>` inside a sentence (`code`, `kbd` and `samp` render at 0.9em). A standalone mono value, such as a SKU column, uses `font-mono` at body size.
 - Format money with `useCurrency().fmt()`: store currency symbol first, digits grouped in lakhs. Use `tabular-nums` outside tables.
-- Bangla (`<html lang="bn">`, set before paint) switches the same classes to the Bangla sizes and loads Noto Sans Bengali. Controls size to their line, so vowel signs never clip. Buttons grow instead of truncating. Truncate only with CSS (`truncate`, `line-clamp-*`), never by slicing strings. Keep Latin digits in inputs, SKUs, phones and IDs.
+- Bangla (`<html lang="bn">`, set before paint) switches the same classes to the Bangla sizes and loads Noto Sans Bengali. Controls size to their line, so vowel signs never clip, and buttons grow instead of truncating. Truncate only with CSS (`truncate`, `line-clamp-*`), never by slicing strings. Keep Latin digits in inputs, SKUs, phones and IDs.
 
 ## Rules
 
@@ -58,19 +51,14 @@ Font: Inter at weights 450 (normal), 550 (`font-medium`) and 650 (`font-semibold
 6. Make vertical padding around text smaller than horizontal: `px-3 py-2`, `px-2 py-0.5`.
 7. Make hover colour changes instant. Never `transition`, `transition-colors` or `transition-all`. Animate only transform, opacity or a size: `transition-transform`, `transition-opacity`, `transition-[width]`. (lint)
 8. Never put a border and a drop shadow together. Use a shadow token, which carries its own ring. (lint)
-9. Use concentric radii when two edges are 8px apart or less: outer radius = inner radius + padding. Example: a menu is `rounded-xl` with `p-1.5`, so its items are `rounded-md`.
+9. Use concentric radii when two edges are 8px apart or less: outer radius = inner radius + padding. A menu is `rounded-xl` with `p-1.5`, so its items are `rounded-md`.
 10. Align icons with the first text line. In multi-line rows, wrap the icon or checkbox in `flex h-lh items-center`. `Alert` does this for you.
-11. Keep inline mono at 0.9em (global style).
-12. Give sticky bars a `border-b` or `border-t`. (lint)
-13. Keep collapsing content at its size: `Accordion` animates the container height and keeps padding inside.
-14. Never put a Card inside a Card. Use sections (`border-t`), a Table or a list inside one card. (lint)
-15. Keep dialogs, sheets, alert dialogs, popovers and menus mounted. Drive them with `open` and `onOpenChange`. Never write `{open && <Dialog />}`. (lint for Dialog, AlertDialog and Sheet)
-
-Where the dashboard differs from its references: 14px body (Polaris uses 13px), no heading letter-spacing, Polaris' bevel shadows, a blue focus ring, 12px cards, a dark toast, and instant navigation hover.
+11. Give sticky bars a `border-b` or `border-t`. (lint)
+12. Keep collapsing content at its size: `Accordion` animates the container height and keeps padding inside.
+13. Never put a Card inside a Card. Use sections (`border-t`), a Table or a list inside one card. (lint)
+14. Keep dialogs, sheets, alert dialogs, popovers and menus mounted. Drive them with `open` and `onOpenChange`. Never write `{open && <Dialog />}`. (lint for Dialog, AlertDialog and Sheet)
 
 ## States
-
-Every primitive follows this table.
 
 | State | Rule |
 | --- | --- |
@@ -88,8 +76,8 @@ Every primitive follows this table.
 | --- | --- |
 | Action | `Button`. Variants: `default` primary, `outline` secondary, `secondary` neutral, `ghost` tertiary and icon, `link` plain, `destructive` critical. Sizes (phone/`sm` up): `default` 44/36px, `sm` 36/32, `lg` 44, `icon` 44/36, `icon-sm` 44/28. |
 | Section | `Card` with `CardHeader`, `CardTitle`, `CardDescription`, `CardContent`, `CardFooter`. |
-| Status | `Badge`. Variants: `default` (strong, only for counts), `secondary` (neutral), `outline`, `success`, `warning`, `attention`, `destructive`, `info`. |
-| Page message | `Alert`. Variants: `default`, `info`, `success`, `warning`, `destructive`. |
+| Status | `Badge`. Use `default` (strong) only for counts, and the tone variants per the status table below. |
+| Page message | `Alert`, with a tone variant. |
 | List | `Table` inside a `Card`, with `Tabs` above. Right-align numeric columns (`data-numeric`). |
 | Fields | `Input`, `Textarea`, `SearchableSelect`, `Checkbox`, `RadioGroup`, `Switch`, with `Label` and `Form*`. |
 | Small edit or confirmation | `Dialog`: a bottom sheet on phones, centred from `sm`. |
@@ -101,49 +89,42 @@ Every primitive follows this table.
 
 ### Tables
 
-- The header row is sticky by itself. While the table fits its card, it sticks just under the top bar. When the columns are wider than the card, the table scrolls both ways inside a viewport-high box and the header sticks there.
+- The header row is sticky by itself, under the top bar. When the columns are wider than the card, the table scrolls both ways inside a viewport-high box and the header sticks there.
 - Any wrapper between a table and the page uses `overflow-clip`, never `overflow-hidden` or `overflow-auto`. Otherwise sticky stops working.
 - Density follows Polaris IndexTable: 12px side padding, 6px row padding, a subdued header.
 
 ### Overlays
 
-- Overlays never cover the top bar and never run off screen. Popovers, menus and tooltips default to `OVERLAY_COLLISION_PADDING` (`components/ui/overlay.ts`: 64px top, 12px elsewhere). Radix flips them to the other side and caps their height.
-- A popover with actions uses `flex max-h-(--radix-popover-content-available-height) flex-col overflow-hidden p-0`. Its body scrolls (`min-h-0 flex-1 overflow-y-auto`). Its actions sit in a bordered footer that does not scroll.
-- `DialogFooter` and `AlertDialogFooter` (`data-slot="dialog-footer"`) are pinned bars. `SheetFooter` (`data-slot="sheet-footer"`) sits under a scrolling sheet body. Keep at most two buttons in a footer.
-- When a popover cannot fit beside its trigger (phones, short windows), open a Dialog instead. See `DateRangePickerWithPresets`.
+- Overlays never cover the top bar and never run off screen. Popovers, menus and tooltips default to `OVERLAY_COLLISION_PADDING` (`components/ui/overlay.ts`: 64px top, 12px elsewhere).
+- A popover with actions uses `flex max-h-(--radix-popover-content-available-height) flex-col overflow-hidden p-0`. Its body scrolls (`min-h-0 flex-1 overflow-y-auto`) and its actions sit in a bordered footer that does not scroll.
+- Keep at most two buttons in a `DialogFooter`, `AlertDialogFooter` or `SheetFooter`.
+- When a popover cannot fit beside its trigger (phones, short windows), open a Dialog instead (`DateRangePickerWithPresets`).
 
 ### Choosing one option
 
-- Use `SearchableSelect` for fixed lists and data-backed lists. For a loaded list, pass `options`. For a large list, pass `load` and `queryKey`: it searches on the server, debounced, and pages. The search never goes in the page URL. Optional props: `description` (secondary text), `group` headings, `clearable`.
+- Use `SearchableSelect` for fixed and data-backed lists. Pass `options` for a loaded list, or `load` and `queryKey` for a large list (it searches on the server, debounced, and pages). The search never goes in the page URL.
 - Use `LocationPicker` (`components/admin/location/`) wherever the dashboard picks a delivery address: City, then Thana, then Area, each filtered by the level above.
-- Never use `NativeSelect`, Radix Select or a raw `<select>`. Lint rejects them.
+- Never use `NativeSelect`, Radix Select or a raw `<select>` (lint).
 
 ### Page patterns
 
-- Page header (`PageHeader`): optional back link, a `text-heading-lg` title that wraps and never truncates, badges, then secondary actions and one primary action on the right.
-- Empty state: one card with a short title ("No orders match these filters"), one sentence and one primary action. Filtered empties offer "Clear filters".
+- `PageHeader` holds an optional back link, a `text-heading-lg` title that wraps and never truncates, badges, then secondary actions and one primary action on the right.
+- An empty state is one card with a short title ("No orders match these filters"), one sentence and one primary action. Filtered empties offer "Clear filters".
 - Help text is `text-body text-muted-foreground`. Error text is `text-body text-destructive`.
 
 ### Navigation shell
 
 Code: `components/admin/layout/`.
 
-- A near-black frame (`bg-sidebar`) holds the navigation and a 56px top bar. From `md`, the page sits on a rounded canvas inset 8px below and beside the frame.
-- From `md`, the navigation is a 240px panel. `Cmd+B` or `Ctrl+B` collapses it to a 56px icon rail with dark tooltips. The choice is saved per browser and read before the first render. Settings replaces the panel with the settings list beside the rail. Phones get a drawer behind a Menu button.
-- The top bar holds one search pill (36px tall, 44px on phones, 12px corners, `Cmd+K` cap), help, notifications and the store menu.
-- Navigation rows use `NAV_ROW` (`nav-button.ts`): 28px tall (44px on phones), `text-nav`, 16px icons, 8px radius, instant hover. The current page (`aria-current=page`) sits on the `bg-sidebar-accent` pill in semibold. Sub-pages indent to the label (32px) in muted text. `[data-nav-sub]` in `global.css` draws the tree line to the current child.
+- A near-black frame (`bg-sidebar`) holds the navigation and a 56px top bar. From `md`, the page sits on a rounded canvas inset 8px from the frame, and the navigation is a 240px panel that `Cmd+B` or `Ctrl+B` collapses to a 56px icon rail (saved per browser, read before the first render). Phones get a drawer behind a Menu button.
+- The top bar holds one search pill (`Cmd+K` cap), help, notifications and the store menu. While a form is dirty, the contextual save bar replaces the pill (`SaveBar` portals into `#admin-top-bar-pill`) and shakes when leaving is blocked.
+- Navigation rows use `NAV_ROW` (`nav-button.ts`). The current page (`aria-current=page`) sits on the `bg-sidebar-accent` pill in semibold.
 - Declare every keyboard shortcut once in `shortcuts.ts` (`SHORTCUTS`, `matchesShortcut`). The `?` dialog lists that table.
-- While a form is dirty, the contextual save bar replaces the search pill (`SaveBar` portals into `#admin-top-bar-pill`). It shakes when leaving is blocked.
-- The panel slides in (180ms) and its width eases (200ms) only after a change, never on load. The page-loading bar (`AdminNavigationProgress`) appears after 180ms.
+- The panel animates (180ms slide, 200ms width) only after a change, never on load. The page-loading bar (`AdminNavigationProgress`) appears after 180ms.
 
 ### Theme document fields
 
-Online store, Theme stores images as media ids and links in canonical form.
-
-- Use `MediaField` (preview, Select or Change from Files, Remove) and `LinkField` (typed or browsed, made canonical when the field is left, marked when unusable). Both are in `components/admin/online-store/schema-form/resource-fields.tsx`.
-- Never hand-write a section or block settings form. `SchemaSettingsForm` draws it from the registry's zod schemas. Labels come from `i18n/theme-settings.ts` (`labels.ts` resolves the keys). `labels.test.ts` fails on a setting without an English and a Bangla label.
-- Ordered picks inside a section (slides, categories, collections, list items) move with up and down buttons.
-- The theme editor (`/admin/online-store/theme/editor`) is a full window: page picker, the page's tree on the left, the preview, the selected part's settings on the right. Sections and product page modules reorder by drag handle or by keyboard (Space, arrows, Space).
+Use `MediaField` (Files picker) and `LinkField` (made canonical when the field is left) from `components/admin/online-store/schema-form/resource-fields.tsx`. Never hand-write a section or block settings form: `SchemaSettingsForm` draws it from the registry's zod schemas, and `labels.test.ts` fails on a setting without an English and a Bangla label in `i18n/theme-settings.ts`. Ordered picks inside a section move with up and down buttons. Sections and product page modules also reorder by drag handle or by keyboard (Space, arrows, Space).
 
 ## Status to badge variant
 
@@ -178,45 +159,20 @@ Record states `archived`, `hidden` and `inactive` are `secondary`. A cancelled, 
 | `no-restyle` | Pass layout classes (margin, size, position, z-index, grid templates, icon alignment) to primitives. Titles (`CardTitle`, `DialogTitle`, `SheetTitle`, `AlertDialogTitle`) also take a type-scale class. `Card`, `CardContent`, `CardHeader`, `CardFooter`, `DialogContent`, `SheetContent`, `PopoverContent`, `TableCell`, `TableHead` and `TabsContent` also take spacing. |
 | `no-raw-colors` | None. |
 | `no-arbitrary-values` | Layout values and `transition-[property]`. |
-| `no-inline-styles` | Runtime values only as custom properties: `style={{ "--swatch": merchantColour }}` with `bg-(--swatch)` (theme swatches, image widths, progress). |
+| `no-inline-styles` | Runtime values only as custom properties: `style={{ "--swatch": merchantColour }}` with `bg-(--swatch)`. |
 | `no-unknown-classes` | `rich-content` and `ProseMirror` (stylesheet classes). |
 | `require-static-classes` | None. |
 
-`no-restricted-syntax` checks class strings in `className`, `cn`, `cva`, `clsx`, `cx` and `...ClassName` constants. It enforces every rule marked (lint) above and these:
-
-- `dark:` variants.
-- `NativeSelect` identifiers and the raw `<select>` element.
-
-`no-restricted-imports` (all of `src/**/*.{ts,tsx}`): `@radix-ui/react-select`, `components/ui/select` and `native-select` are errors. Import `toast` from `~/lib/toast`, never from `sonner` (`src/lib/toast.ts` is the one exception).
+`no-restricted-syntax` checks class strings in `className`, `cn`, `cva`, `clsx`, `cx` and `...ClassName` constants. It enforces every rule marked (lint) above, `dark:` variants, `NativeSelect` and the raw `<select>`. `no-restricted-imports` (all of `src/**/*.{ts,tsx}`) rejects `@radix-ui/react-select`, `components/ui/select` and `native-select`, and `toast` from `sonner` (import it from `~/lib/toast`; `src/lib/toast.ts` is the one exception).
 
 For any other exception, write `// eslint-disable-next-line <rule> -- reason`.
 
 ## Raw color to token
 
-Use this table when you convert pasted code. Delete every `dark:` class, `tracking-*`, `uppercase`, `transition-colors` and `transition-all`.
+Use this map when you convert pasted code. Delete every `dark:` class, `tracking-*`, `uppercase`, `transition-colors` and `transition-all`.
 
-| Raw | Token |
-| --- | --- |
-| emerald, green | `success` |
-| amber, orange | `warning` |
-| yellow | `caution` |
-| red, rose | `critical` (`destructive` on buttons) |
-| sky, blue, indigo, cyan, teal, violet, purple | `info` |
-| Tone `-50`/`-100` background | `bg-{tone}-surface` |
-| Tone `-200`/`-300` border | `border-{tone}` |
-| Tone `-500`/`-600` background | `bg-{tone}` with `text-{tone}-foreground` |
-| Tone `-600` to `-800` text | `text-{tone}` |
-| Grey (gray, zinc, slate, neutral) `-50`/`-100` background | `bg-muted` |
-| Grey `-200` | `bg-secondary` or `border-border` |
-| Grey `-400` to `-600` text | `text-muted-foreground` |
-| Grey `-700` to `-900` text | `text-foreground` |
-| Grey `-800` to `-950` background | `bg-topbar` or `bg-card` |
-| `bg-white` | `bg-card` |
-| `bg-black/50` to `bg-black/80` | `bg-overlay` |
-| `text-white` on a fill | `text-{tone}-foreground` |
-| `text-xs` | `text-caption` (badges, column headings, shortcuts only), else `text-body` |
-| `text-sm`, `text-[8px]` to `text-[13px]` | `text-body` |
-| `text-base` | `text-body-lg` or `text-heading-md` |
-| `text-lg`, `text-xl` | `text-heading-lg` |
-| `text-2xl` and larger | `text-heading-xl` |
-| `font-bold` | `font-semibold` |
+- Hue: emerald and green are `success`. Amber and orange are `warning`. Yellow is `caution`. Red and rose are `critical` (`destructive` on buttons). Sky, blue, indigo, cyan, teal, violet and purple are `info`.
+- Shade: a `-50`/`-100` background is `bg-{tone}-surface`, a `-200`/`-300` border is `border-{tone}`, a `-500`/`-600` background is `bg-{tone}` with `text-{tone}-foreground`, and `-600` to `-800` text is `text-{tone}`.
+- Grey (gray, zinc, slate, neutral): a `-50`/`-100` background is `bg-muted`, `-200` is `bg-secondary` or `border-border`, `-400` to `-600` text is `text-muted-foreground`, `-700` to `-900` text is `text-foreground` and a `-800` to `-950` background is `bg-topbar` or `bg-card`.
+- `bg-white` is `bg-card`. `bg-black/50` to `bg-black/80` is `bg-overlay`. `text-white` on a fill is `text-{tone}-foreground`.
+- Size and weight: `text-xs` is `text-caption` (badges, column headings, shortcuts only), else `text-body`. `text-sm` and `text-[8px]` to `text-[13px]` are `text-body`. `text-base` is `text-body-lg` or `text-heading-md`. `text-lg` and `text-xl` are `text-heading-lg`. `text-2xl` and larger are `text-heading-xl`. `font-bold` is `font-semibold`.
