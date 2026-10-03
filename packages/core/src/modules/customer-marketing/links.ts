@@ -14,6 +14,7 @@
 import { deriveRuntimeSecret, readMasterSecret } from "@scalius/shared/runtime-secrets";
 import { isMarketingChannel, type MarketingChannel } from "@scalius/shared/customer-marketing";
 import { ServiceUnavailableError } from "@scalius/core/errors";
+import { bytesToHex, sha256Hex } from "@scalius/shared/hash";
 
 export const MARKETING_OPT_IN_LINK_PURPOSE = "marketing-opt-in-link";
 export const MARKETING_UNSUBSCRIBE_LINK_PURPOSE = "marketing-unsubscribe-link";
@@ -42,10 +43,6 @@ function fromBase64Url(value: string): string | null {
     }
 }
 
-function hex(bytes: ArrayBuffer): string {
-    return [...new Uint8Array(bytes)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
-}
-
 async function hmacKey(env: MarketingLinkEnv, purpose: string): Promise<CryptoKey> {
     const master = readMasterSecret(env as { SCALIUS_SECRET?: string });
     if (!master) throw new ServiceUnavailableError("Marketing links are unavailable right now.");
@@ -67,7 +64,7 @@ function constantTimeEqual(left: string, right: string): boolean {
 
 /** A fresh opt-in request nonce (32 hex): stored in the outbox row, useless without the key. */
 export function newOptInNonce(): string {
-    return hex(crypto.getRandomValues(new Uint8Array(16)).buffer as ArrayBuffer);
+    return bytesToHex(crypto.getRandomValues(new Uint8Array(16)));
 }
 
 export const OPT_IN_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/;
@@ -79,7 +76,7 @@ export async function deriveOptInToken(env: MarketingLinkEnv, input: { customerI
 
 /** What the consent row stores for a token (and how a presented token is looked up). */
 export async function hashOptInToken(token: string): Promise<string> {
-    return hex(await crypto.subtle.digest("SHA-256", encoder.encode(token)));
+    return sha256Hex(token);
 }
 
 export async function signUnsubscribeToken(

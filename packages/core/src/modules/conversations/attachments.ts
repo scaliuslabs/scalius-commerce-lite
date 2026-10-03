@@ -15,6 +15,7 @@ import { and, asc, eq, isNull, lt } from "drizzle-orm";
 import { NotFoundError, RateLimitError, ValidationError } from "../../errors";
 import { newConversationAttachmentId } from "./threads";
 import type { ConversationActor } from "./types";
+import { sha256Hex } from "@scalius/shared/hash";
 
 /** Staged but unattached uploads one uploader may hold per thread at once. */
 const MAX_STAGED_PER_UPLOADER = 6;
@@ -24,11 +25,6 @@ function uploaderFor(actor: ConversationActor): { type: "customer" | "guest_rece
   if (actor.kind === "customer") return { type: "customer", ref: actor.customerId };
   if (actor.kind === "guest_receipt") return { type: "guest_receipt", ref: actor.orderId };
   return { type: "staff", ref: actor.userId };
-}
-
-async function sha256Hex(bytes: ArrayBuffer): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
-  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 export interface StagedAttachment {

@@ -6,6 +6,7 @@ import {
   type NotificationSubjectType,
   type OutboxNotificationType,
 } from "./notification-types";
+import { sha256Hex } from "@scalius/shared/hash";
 
 export type OrderNotificationDeliveryChannel = "email" | "sms" | "whatsapp" | "push";
 
@@ -307,13 +308,9 @@ async function selectDeliveryReceiptByKey(
 
 async function hashNotificationRecipient(recipient: string): Promise<string> {
   const normalized = recipient.trim().toLowerCase();
-  const encoder = new TextEncoder();
 
   if (typeof crypto !== "undefined" && crypto.subtle) {
-    const digest = await crypto.subtle.digest("SHA-256", encoder.encode(normalized));
-    return Array.from(new Uint8Array(digest))
-      .map((byte) => byte.toString(16).padStart(2, "0"))
-      .join("");
+    return sha256Hex(normalized);
   }
 
   return fallbackHash(normalized);

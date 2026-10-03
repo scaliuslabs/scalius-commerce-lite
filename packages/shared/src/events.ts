@@ -10,6 +10,7 @@
 // webhook body carries the resource's current admin representation in `data`.
 
 import { z } from "zod";
+import { hmacSha256Hex } from "./hash";
 
 /** The payload version every delivery and plugin event declares. */
 export const EVENTS_API_VERSION = "2026-10" as const;
@@ -288,23 +289,6 @@ export const WEBHOOK_SIGNATURE_HEADER = "Scalius-Signature";
 /** Receivers should reject signatures older than this (replay window). */
 export const WEBHOOK_SIGNATURE_TOLERANCE_SECONDS = 5 * 60;
 export const WEBHOOK_SECRET_PREFIX = "whsec_";
-
-const encoder = new TextEncoder();
-
-function toHex(bytes: ArrayBuffer): string {
-  return [...new Uint8Array(bytes)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
-}
-
-async function hmacSha256Hex(secret: string, payload: string): Promise<string> {
-  const key = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
-  return toHex(await crypto.subtle.sign("HMAC", key, encoder.encode(payload)));
-}
 
 /**
  * `Scalius-Signature` value for a body: `t=<unix seconds>,v1=<hex>` where

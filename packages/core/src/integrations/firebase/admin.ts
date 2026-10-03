@@ -8,6 +8,7 @@ import {
   decryptCredentialsGraceful,
   encryptCredentials,
 } from "../../utils/credential-encryption";
+import { sha256Hex } from "@scalius/shared/hash";
 
 export interface ServiceAccount {
   client_email: string;
@@ -32,15 +33,12 @@ function getCredentialEncryptionKey(
 async function serviceAccountCacheFingerprint(
   serviceAccount: ServiceAccount,
 ): Promise<string> {
-  const material = new TextEncoder().encode(JSON.stringify([
+  const material = JSON.stringify([
     serviceAccount.project_id,
     serviceAccount.client_email,
     serviceAccount.private_key,
-  ]));
-  const digest = await crypto.subtle.digest("SHA-256", material);
-  return Array.from(new Uint8Array(digest).slice(0, 12), (byte) =>
-    byte.toString(16).padStart(2, "0"),
-  ).join("");
+  ]);
+  return (await sha256Hex(material)).slice(0, 24);
 }
 
 export async function getFirebaseAccessTokenCacheKey(

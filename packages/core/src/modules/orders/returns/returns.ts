@@ -33,6 +33,7 @@ import type {
   ReceiveOrderReturnInput,
 } from "./validation";
 import { receiveOrderReturnSchema } from "./validation";
+import { sha256Hex } from "@scalius/shared/hash";
 
 export const ORDER_RETURN_STATUSES = [
   "requested",
@@ -150,16 +151,6 @@ function stableStringify(value: unknown): string {
     .sort()
     .map((key) => `${JSON.stringify(key)}:${stableStringify(object[key])}`)
     .join(",")}}`;
-}
-
-async function sha256Hex(value: string): Promise<string> {
-  const digest = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(value),
-  );
-  return Array.from(new Uint8Array(digest), (byte) =>
-    byte.toString(16).padStart(2, "0"),
-  ).join("");
 }
 
 async function buildCommandIdentity(

@@ -8,6 +8,7 @@
 // phone and may add an e-mail; there is no separate subscriber identity.
 
 import { z } from "zod";
+import { sha256Hex } from "./hash";
 
 // ── Consent ────────────────────────────────────────────────────────────────
 
@@ -86,9 +87,7 @@ export function maskMarketingContact(channel: MarketingChannel, contact: string)
  * Stored with every subscription so the exact wording shown can be proven.
  */
 export async function marketingConsentTextVersion(surface: string, text: string): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text.normalize("NFC")));
-  const hex = [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
-  return `${surface}:${hex.slice(0, 12)}`;
+  return `${surface}:${(await sha256Hex(text.normalize("NFC"))).slice(0, 12)}`;
 }
 
 // ── Consent settings (settings document `marketing_consent`) ───────────────

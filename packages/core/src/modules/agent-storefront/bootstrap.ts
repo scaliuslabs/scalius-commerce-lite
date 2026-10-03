@@ -1,12 +1,6 @@
+import { sha256Hex } from "@scalius/shared/hash";
 const CONTINUATION_ID_PATTERN = /^acn_[A-Za-z0-9_-]{20}$/;
 const BOOTSTRAP_CODE_PATTERN = /^acb_([A-Za-z0-9_-]{20})_([A-Za-z0-9_-]{43})$/;
-
-async function sha256Hex(value: string): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
-  return [...new Uint8Array(digest)]
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
-}
 
 export async function createAgentStorefrontBootstrap(
   continuationId: string,

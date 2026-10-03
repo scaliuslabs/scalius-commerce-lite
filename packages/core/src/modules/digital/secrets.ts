@@ -15,6 +15,7 @@ import {
 } from "@scalius/shared/digital";
 import { deriveRuntimeSecret, readMasterSecret } from "@scalius/shared/runtime-secrets";
 import { ServiceUnavailableError } from "@scalius/core/errors";
+import { bytesToHex, sha256Hex } from "@scalius/shared/hash";
 
 const encoder = new TextEncoder();
 const HKDF_SALT = "scalius-commerce/digital-goods/v1";
@@ -34,10 +35,6 @@ function base64FromBytes(bytes: Uint8Array): string {
 
 function base64Url(bytes: Uint8Array): string {
     return base64FromBytes(bytes).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
-}
-
-function hex(bytes: Uint8Array): string {
-    return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 /** The installed CREDENTIAL_ENCRYPTION_KEY as bytes, or a 503 (strict: no fallback). */
@@ -85,7 +82,7 @@ export async function licenceKeyCrypto(credentialKey: string | undefined): Promi
     return {
         async hash(key) {
             const mac = await crypto.subtle.sign("HMAC", hmacKey, encoder.encode(key.normalize("NFC").trim()));
-            return hex(new Uint8Array(mac));
+            return bytesToHex(mac);
         },
         async encrypt(key, assetId) {
             const iv = crypto.getRandomValues(new Uint8Array(12));
@@ -117,10 +114,6 @@ export async function licenceKeyCrypto(credentialKey: string | undefined): Promi
 
 // ---------------------------------------------------------------------------
 // Download tickets
-
-async function sha256Hex(value: string): Promise<string> {
-    return hex(new Uint8Array(await crypto.subtle.digest("SHA-256", encoder.encode(value))));
-}
 
 async function ticketHmacKey(env: { SCALIUS_SECRET?: unknown }): Promise<CryptoKey> {
     const master = readMasterSecret(env);

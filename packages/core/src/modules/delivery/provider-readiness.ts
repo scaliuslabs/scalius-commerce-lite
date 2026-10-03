@@ -4,6 +4,7 @@ import {
   type ReadinessStatus,
 } from "@scalius/shared/readiness";
 import { ValidationError } from "../../errors";
+import { bytesToHex } from "@scalius/shared/hash";
 
 export type DeliveryProviderActivationRequirement = {
   source: "credentials" | "config";
@@ -192,10 +193,6 @@ function stableJson(value: unknown): unknown {
       acc[key] = stableJson((value as Record<string, unknown>)[key]);
       return acc;
     }, {});
-}
-
-function bytesToHex(bytes: ArrayBuffer): string {
-  return [...new Uint8Array(bytes)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 function keyBytes(fingerprintKey: string): ArrayBuffer {

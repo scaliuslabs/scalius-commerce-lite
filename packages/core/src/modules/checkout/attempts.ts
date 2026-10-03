@@ -14,6 +14,7 @@ import {
   hashOrderReceiptToken,
   ORDER_RECEIPT_TOKEN_TTL_SECONDS,
 } from "../orders/receipts";
+import { sha256Hex } from "@scalius/shared/hash";
 
 export interface CheckoutAttemptIdentity {
   requestKey: string;
@@ -378,14 +379,6 @@ function normalizeCheckoutRequest(input: CreateStorefrontOrderInput): Record<str
 
 function normalizeAmount(amount: number): number {
   return Math.round(amount * 1_000_000) / 1_000_000;
-}
-
-async function sha256Hex(value: string): Promise<string> {
-  const bytes = new TextEncoder().encode(value);
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
-  return [...new Uint8Array(digest)]
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
 }
 
 function stableStringify(value: unknown): string {

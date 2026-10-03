@@ -2,6 +2,7 @@ import { safeBatch, type Database } from "@scalius/database/client";
 import { adminSetupClaims, adminSetupRateLimits, user } from "@scalius/database/schema";
 import { and, eq, gt, isNull, lt, lte, or, sql } from "drizzle-orm";
 import { ConflictError, ForbiddenError, RateLimitError } from "../errors";
+import { sha256Hex } from "@scalius/shared/hash";
 
 export type AdminPrincipalExistsDb = Pick<Database, "get">;
 
@@ -382,15 +383,7 @@ async function selectAdminSetupClaim(db: Database) {
 
 async function buildAdminSetupRateLimitKey(identifier: string): Promise<string> {
   const normalized = identifier.trim().toLowerCase() || "unknown";
-  const data = new TextEncoder().encode(normalized);
-  const digest = await crypto.subtle.digest("SHA-256", data);
-  return `setup_rate:v1:${arrayBufferToHex(digest)}`;
-}
-
-function arrayBufferToHex(buffer: ArrayBuffer): string {
-  return [...new Uint8Array(buffer)]
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
+  return `setup_rate:v1:${await sha256Hex(normalized)}`;
 }
 
 function createAdminSetupClaimId(): string {

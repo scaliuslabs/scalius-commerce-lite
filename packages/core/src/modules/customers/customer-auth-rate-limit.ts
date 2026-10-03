@@ -2,6 +2,7 @@ import { customerAuthOtpRateLimits } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import { and, eq, gt, inArray, lt, lte, sql } from "drizzle-orm";
 import { RateLimitError } from "@scalius/core/errors";
+import { hmacSha256Hex, sha256Hex } from "@scalius/shared/hash";
 
 /**
  * Rate limits that can't be turned against a buyer.
@@ -209,25 +210,3 @@ function currentUnixSeconds(): number {
     return Math.floor(Date.now() / 1000);
 }
 
-async function hmacSha256Hex(secret: string, value: string): Promise<string> {
-    const key = await crypto.subtle.importKey(
-        "raw",
-        new TextEncoder().encode(secret),
-        { name: "HMAC", hash: "SHA-256" },
-        false,
-        ["sign"],
-    );
-    const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(value));
-    return bytesToHex(signature);
-}
-
-async function sha256Hex(value: string): Promise<string> {
-    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
-    return bytesToHex(digest);
-}
-
-function bytesToHex(value: ArrayBuffer): string {
-    return Array.from(new Uint8Array(value))
-        .map((byte) => byte.toString(16).padStart(2, "0"))
-        .join("");
-}

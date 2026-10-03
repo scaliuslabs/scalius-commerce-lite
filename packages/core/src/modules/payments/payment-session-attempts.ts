@@ -5,6 +5,7 @@ import { ConflictError, ServiceUnavailableError } from "@scalius/core/errors";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { fromMinor } from "@scalius/shared/money";
 import type { PaymentType } from "./types";
+import { sha256Hex } from "@scalius/shared/hash";
 
 export interface PaymentSessionAttemptIdentity {
   attemptKey: string;
@@ -588,14 +589,6 @@ function createPaymentSessionClaimId(): string {
 function serializeAttemptError(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
   return message.slice(0, MAX_ERROR_LENGTH);
-}
-
-async function sha256Hex(value: string): Promise<string> {
-  const bytes = new TextEncoder().encode(value);
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
-  return [...new Uint8Array(digest)]
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
 }
 
 function stableStringify(value: unknown): string {

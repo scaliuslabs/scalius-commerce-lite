@@ -19,6 +19,7 @@ import {
     encodeEncryptedCredential,
     encryptCredentials,
 } from "../../utils/credential-encryption";
+import { hmacSha256Hex } from "@scalius/shared/hash";
 
 const ORDER_PAYMENT_RECOVERY_PURPOSE = "order_payment_recovery";
 const OTP_TTL_SECONDS = 5 * 60;
@@ -506,20 +507,6 @@ export async function hashRecoveryOtpCode(
         requireOtpHashKey(encryptionKey),
         `order-payment-recovery-code:${challengeKey}:${code.trim()}`,
     );
-}
-
-export async function hmacSha256Hex(secret: string, value: string): Promise<string> {
-    const key = await crypto.subtle.importKey(
-        "raw",
-        new TextEncoder().encode(secret),
-        { name: "HMAC", hash: "SHA-256" },
-        false,
-        ["sign"],
-    );
-    const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(value));
-    return Array.from(new Uint8Array(signature))
-        .map((byte) => byte.toString(16).padStart(2, "0"))
-        .join("");
 }
 
 export function requireOtpHashKey(encryptionKey: string | undefined): string {

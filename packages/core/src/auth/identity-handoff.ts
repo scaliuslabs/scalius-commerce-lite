@@ -53,6 +53,7 @@ import {
 } from "@scalius/shared/platform-config";
 
 import { clearPermissionCache } from "./rbac/helpers";
+import { sha256Hex } from "@scalius/shared/hash";
 
 export const IDENTITY_HANDOFF_PLUGIN_ID = "identity-handoff";
 export const IDENTITY_HANDOFF_PATH = "/handoff";
@@ -117,11 +118,6 @@ const encoder = new TextEncoder();
 
 function unauthorized(code: string, message: string): IdentityHandoffError {
   return new IdentityHandoffError("UNAUTHORIZED", code, message);
-}
-
-async function sha256Hex(value: string): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", encoder.encode(value));
-  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 function readString(value: unknown, max = 512): string | null {

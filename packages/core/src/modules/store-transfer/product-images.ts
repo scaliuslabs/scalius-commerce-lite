@@ -21,6 +21,7 @@ import { AppError } from "@scalius/core/errors";
 import { executeProductAggregateMutationBatch, ProductRevisionConflictError } from "../product-admin/aggregate-revision";
 import { MAX_PRODUCT_MEDIA_ASSOCIATIONS } from "../products/media";
 import { ImportBudget, isWorkerLimitError } from "./budget";
+import { sha256Hex } from "@scalius/shared/hash";
 
 export type ImageImportStatus = "attached" | "already_attached" | "failed" | "pending";
 
@@ -49,11 +50,6 @@ export interface ProductImageImportResponse {
 export type RemoteMediaImporter = (input: { sourceUrl: string; mediaId: string; filename?: string }) => Promise<{ id: string; kind: "image" | "video" }>;
 
 const PRODUCT_MEDIA_INSERT_CHUNK = 12;
-
-async function sha256Hex(text: string): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
-  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
-}
 
 /** The id prefix every media downloaded from `url` carries. */
 export async function importedMediaIdPrefix(url: string): Promise<string> {

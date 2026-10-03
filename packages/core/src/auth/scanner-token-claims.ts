@@ -3,8 +3,8 @@ import { scannerTokenClaims } from "@scalius/database/schema";
 import {
   SCANNER_SESSION_TTL_SECONDS,
   SCANNER_TOKEN_TTL_SECONDS,
-  sha256Hex,
 } from "@scalius/shared/scanner-auth";
+import { sha256Hex } from "@scalius/shared/hash";
 import { and, eq, gt, inArray, isNotNull, isNull, lte, or } from "drizzle-orm";
 import { ConflictError, UnauthorizedError } from "../errors";
 

@@ -24,15 +24,11 @@ import { and, asc, eq, gt, inArray, or, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { executeInventoryOperation } from "../inventory/inventory-operations";
 import { licenceKeyCrypto } from "./secrets";
+import { sha256Hex } from "@scalius/shared/hash";
 
 const ID_CHUNK = 90;
 /** id, asset_id, key_ciphertext, key_hash, key_last4, status, import_id, created_at (+ spare). */
 const KEY_INSERT_PARAMS = 10;
-
-async function sha256Hex(value: string): Promise<string> {
-    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
-    return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
-}
 
 function chunks<T>(values: readonly T[], size = ID_CHUNK): T[][] {
     const result: T[][] = [];

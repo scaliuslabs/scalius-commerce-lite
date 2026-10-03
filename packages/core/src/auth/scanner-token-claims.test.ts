@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Database } from "@scalius/database/client";
 import { scannerTokenClaims } from "@scalius/database/schema";
-import { sha256Hex } from "@scalius/shared/scanner-auth";
+import { sha256Hex } from "@scalius/shared/hash";
 import { UnauthorizedError } from "../errors";
 import {
   cleanupExpiredScannerTokenClaims,

@@ -1,3 +1,4 @@
+import { sha256Hex } from "./hash";
 /**
  * Line-item properties: the buyer inputs a product asks for (engraving text,
  * gift wrap, a fit choice) and what they add to the line price (Wave A §3).
@@ -494,10 +495,6 @@ export function resolveLineProperties(
   return { ok: true, canonical, properties, propertiesPriceMinor };
 }
 
-function hex(bytes: ArrayBuffer): string {
-  return Array.from(new Uint8Array(bytes), (byte) => byte.toString(16).padStart(2, "0")).join("");
-}
-
 /**
  * `sha256(canonical JSON)`, first 16 hex characters, or "none" without
  * properties. Identical canonical properties always hash the same.
@@ -505,8 +502,7 @@ function hex(bytes: ArrayBuffer): string {
 export async function linePropertiesHash(canonical: readonly CanonicalLineProperty[]): Promise<string> {
   if (canonical.length === 0) return NO_PROPERTIES_HASH;
   const payload = JSON.stringify(canonical.map((property) => [property.key, property.value]));
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(payload));
-  return hex(digest).slice(0, 16);
+  return (await sha256Hex(payload)).slice(0, 16);
 }
 
 /** `line:v3:<product>:variant:<variant>:p:<propertiesHash>` — same SKU + same properties = one line. */

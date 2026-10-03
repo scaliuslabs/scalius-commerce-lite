@@ -59,6 +59,7 @@ import {
     normalizeGiftCardRecipient,
 } from "../gift-cards";
 import { buildBatchGuard, isBatchGuardError } from "@scalius/database/client";
+import { sha256Hex } from "@scalius/shared/hash";
 
 export interface RefundRequest {
     orderId: string;
@@ -547,14 +548,6 @@ function stableStringify(value: unknown): string {
         .sort()
         .map((key) => `${JSON.stringify(key)}:${stableStringify(record[key])}`);
     return `{${entries.join(",")}}`;
-}
-
-async function sha256Hex(value: string): Promise<string> {
-    const bytes = new TextEncoder().encode(value);
-    const digest = await crypto.subtle.digest("SHA-256", bytes);
-    return [...new Uint8Array(digest)]
-        .map((byte) => byte.toString(16).padStart(2, "0"))
-        .join("");
 }
 
 /** A partial refund is a payment fact only; the order keeps its lifecycle status. */

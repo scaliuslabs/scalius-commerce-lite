@@ -3,7 +3,7 @@ import { nanoid } from "nanoid";
 import type { Database } from "@scalius/database/client";
 import { adminOrderCreateAttempts, orderEvents, orders, user } from "@scalius/database/schema";
 import { ForbiddenError, NotFoundError, ValidationError } from "@scalius/core/errors";
-import { sha256Hex } from "./admin/create-attempts";
+import { sha256Hex } from "@scalius/shared/hash";
 import { ORDER_APP_FACT_KINDS } from "./app-facts";
 
 /** What happened to an order. The dashboard words each kind; `data` carries the facts. */

@@ -1,6 +1,7 @@
 import type { Database } from "@scalius/database/client";
 import { authOtpDeliveryReceipts } from "@scalius/database/schema";
 import { and, eq, inArray, lte, or, sql } from "drizzle-orm";
+import { sha256Hex } from "@scalius/shared/hash";
 
 export type AuthOtpDeliveryChannel = "email" | "sms" | "whatsapp";
 
@@ -337,10 +338,7 @@ async function selectAuthOtpDeliveryReceiptByKey(
 export async function hashOtpIdentifier(identifier: string): Promise<string> {
     const normalized = identifier.trim().toLowerCase();
     if (typeof crypto !== "undefined" && crypto.subtle) {
-        const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(normalized));
-        return Array.from(new Uint8Array(digest))
-            .map((byte) => byte.toString(16).padStart(2, "0"))
-            .join("");
+        return sha256Hex(normalized);
     }
     return fallbackHash(normalized).padEnd(64, "0").slice(0, 64);
 }

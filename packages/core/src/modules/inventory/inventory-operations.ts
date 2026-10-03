@@ -33,6 +33,7 @@ import {
   validateAbsoluteStockCount,
   validateSignedStockAdjustment,
 } from "./validation";
+import { sha256Hex } from "@scalius/shared/hash";
 
 const MAX_CAS_RETRIES = 3;
 const BASE_BACKOFF_MS = 50;
@@ -615,14 +616,4 @@ function hashNormalizedRequest(
 ): Promise<string> {
   const { operationKey: _operationKey, ...canonicalRequest } = input;
   return sha256Hex(JSON.stringify(canonicalRequest));
-}
-
-async function sha256Hex(value: string): Promise<string> {
-  const digest = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(value),
-  );
-  return Array.from(new Uint8Array(digest), (byte) =>
-    byte.toString(16).padStart(2, "0")
-  ).join("");
 }

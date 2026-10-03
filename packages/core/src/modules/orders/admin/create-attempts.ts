@@ -6,6 +6,7 @@ import { AppError, ServiceUnavailableError } from "@scalius/core/errors";
 import { generateOrderId } from "@scalius/shared/order-utils";
 import { normalizeOrderChannelSource } from "@scalius/shared/order-channel-source";
 import type { CreateOrderInput } from "../validation";
+import { sha256Hex } from "@scalius/shared/hash";
 
 export interface AdminOrderCreateAttemptIdentity {
   actorId: string | null;
@@ -404,14 +405,6 @@ function normalizeAmount(amount: number): number {
 function serializeAttemptError(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
   return message.slice(0, MAX_ATTEMPT_ERROR_LENGTH);
-}
-
-export async function sha256Hex(value: string): Promise<string> {
-  const bytes = new TextEncoder().encode(value);
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
-  return [...new Uint8Array(digest)]
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
 }
 
 export function stableStringify(value: unknown): string {

@@ -1,6 +1,7 @@
 // src/lib/meta/conversions-api.ts
 
-import { sha256, hashEmail, hashPhone } from "./crypto-utils";
+import { hashEmail, hashPhone } from "./crypto-utils";
+import { sha256Hex } from "@scalius/shared/hash";
 import { getCapiSettings, logCapiEvent } from "../../modules/analytics/meta.service";
 import { type Database } from "@scalius/database/client";
 
@@ -147,7 +148,7 @@ async function prepareUserData(
     prepared.external_id = await Promise.all(
       externalIds
         .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
-        .map((value) => sha256(value.trim().toLowerCase())),
+        .map((value) => sha256Hex(value.trim().toLowerCase())),
     );
     if (prepared.external_id.length === 0) {
       delete prepared.external_id;
@@ -159,31 +160,31 @@ async function prepareUserData(
   if (userData.ph) prepared.ph = [await hashPhone(userData.ph as string)];
 
   // Name fields
-  if (userData.fn) prepared.fn = await sha256((userData.fn as string).trim().toLowerCase());
-  if (userData.ln) prepared.ln = await sha256((userData.ln as string).trim().toLowerCase());
+  if (userData.fn) prepared.fn = await sha256Hex((userData.fn as string).trim().toLowerCase());
+  if (userData.ln) prepared.ln = await sha256Hex((userData.ln as string).trim().toLowerCase());
 
   // Gender
   if (userData.ge && ["f", "m"].includes((userData.ge as string).toLowerCase()))
-    prepared.ge = await sha256((userData.ge as string).toLowerCase());
+    prepared.ge = await sha256Hex((userData.ge as string).toLowerCase());
 
   // Date of Birth - normalize to YYYYMMDD
-  if (userData.db) prepared.db = await sha256((userData.db as string).replace(/\D/g, ""));
+  if (userData.db) prepared.db = await sha256Hex((userData.db as string).replace(/\D/g, ""));
 
   // Location data
   if (userData.ct)
-    prepared.ct = await sha256(
+    prepared.ct = await sha256Hex(
       (userData.ct as string).toLowerCase().replace(/[^a-z]/g, ""),
     );
   if (userData.st)
-    prepared.st = await sha256(
+    prepared.st = await sha256Hex(
       (userData.st as string).toLowerCase().replace(/[^a-z]/g, ""),
     );
   if (userData.zp)
-    prepared.zp = await sha256(
+    prepared.zp = await sha256Hex(
       (userData.zp as string).toLowerCase().replace(/[^a-z0-9]/g, ""),
     );
   if (userData.country)
-    prepared.country = await sha256((userData.country as string).trim().toLowerCase());
+    prepared.country = await sha256Hex((userData.country as string).trim().toLowerCase());
 
   return prepared;
 }

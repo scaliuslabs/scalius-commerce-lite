@@ -2,6 +2,7 @@ import type { Database } from "@scalius/database/client";
 import { checkoutAttempts, orderReceipts } from "@scalius/database/schema";
 import { and, eq, or, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
+import { sha256Hex } from "@scalius/shared/hash";
 
 export const ORDER_RECEIPT_TOKEN_PREFIX = "order_receipt:";
 export const ORDER_RECEIPT_TOKEN_TTL_SECONDS = 60 * 60 * 24 * 7;
@@ -22,11 +23,7 @@ export function createOrderReceiptToken(): string {
 }
 
 export async function hashOrderReceiptToken(token: string): Promise<string> {
-  const bytes = new TextEncoder().encode(token);
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
-  return [...new Uint8Array(digest)]
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
+  return sha256Hex(token);
 }
 
 export async function recordOrderReceipt(

@@ -24,6 +24,7 @@ import {
 } from "../products/digital-stock-rules";
 import { readLocationOnHand } from "../inventory/locations";
 import { ImportBudget, isWorkerLimitError } from "./budget";
+import { sha256Hex } from "@scalius/shared/hash";
 
 export type InventoryImportStatus = "updated" | "unchanged" | "failed" | "would_update" | "would_skip";
 
@@ -52,11 +53,6 @@ function issueCodeOf(error: unknown): string {
   if (!(error instanceof AppError)) return "write_failed";
   const reason = (error.details as { reason?: unknown } | undefined)?.reason;
   return typeof reason === "string" && reason ? reason : error.code.toLowerCase();
-}
-
-async function sha256Hex(text: string): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
-  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 /** Applies (or dry-runs) one batch of on-hand counts. */

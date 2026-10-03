@@ -8,7 +8,7 @@
 import { and, asc, eq, inArray, isNull, sql, type SQL } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import { orderHolds, orders } from "@scalius/database/schema";
-import { sha256Hex } from "./admin/create-attempts";
+import { sha256Hex } from "@scalius/shared/hash";
 import { NotFoundError, ValidationError } from "../../errors";
 
 export interface OrderHoldView {

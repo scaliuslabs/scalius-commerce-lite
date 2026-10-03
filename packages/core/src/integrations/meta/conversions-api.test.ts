@@ -11,7 +11,7 @@ vi.mock("../../modules/analytics/meta.service", () => ({
 }));
 
 import { redactCapiPayloadForLog, sendCapiEvent } from "./conversions-api";
-import { sha256 } from "./crypto-utils";
+import { sha256Hex as sha256 } from "@scalius/shared/hash";
 
 describe("Meta Conversions API log redaction", () => {
   beforeEach(() => {

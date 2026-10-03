@@ -20,12 +20,12 @@ import { deriveCustomerAuthOtpDeliveryCode } from "../customers/customer-auth.se
 import { chooseOrderCodeChannel } from "../customers/customer-code-channels";
 import {
     consumeLatestOrderOtpChallenge,
-    hmacSha256Hex,
     persistOrderOtpChallenge,
     requireOtpHashKey,
     requireRecoveryDeliveryEncryptionKey,
 } from "./payment-recovery";
 import { createOrderReceiptToken, recordOrderReceipt } from "./receipts";
+import { hmacSha256Hex } from "@scalius/shared/hash";
 
 const ORDER_LOOKUP_PURPOSE = "order_lookup";
 const ORDER_LOOKUP_KEY_PREFIX = "order_lookup:";

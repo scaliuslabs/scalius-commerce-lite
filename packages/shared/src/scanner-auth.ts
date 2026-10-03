@@ -1,3 +1,4 @@
+import { sha256Hex } from "./hash";
 export const SCANNER_COOKIE_NAME = "scanner_sid";
 export const SCANNER_TOKEN_TTL_SECONDS = 15 * 60;
 export const SCANNER_SESSION_TTL_SECONDS = 6 * 60 * 60;
@@ -31,16 +32,6 @@ const SCANNER_API_PATTERNS: ReadonlyArray<readonly [method: string, path: RegExp
   ["GET", new RegExp(`^/api/v1/admin/inventory/transfers/${DOCUMENT_ID}$`)],
   ["POST", new RegExp(`^/api/v1/admin/inventory/transfers/${DOCUMENT_ID}/receive$`)],
 ];
-
-export async function sha256Hex(value: string): Promise<string> {
-  const digest = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(value),
-  );
-  return Array.from(new Uint8Array(digest))
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
-}
 
 export async function getScannerSessionKey(sessionId: string): Promise<string> {
   return `scanner:session:${await sha256Hex(sessionId)}`;
