@@ -27,6 +27,7 @@ import { queryKeys } from "@/lib/query-keys";
 import { usePermissions } from "@/contexts/PermissionContext";
 import { useMessages } from "~/i18n";
 import { customersMessages } from "~/i18n/customers";
+import { customerAddressesMessages } from "~/i18n/customer-addresses";
 import { customerTitle, type CustomerTitleInput } from "~/lib/customer-title";
 import { readCustomerPhoneConflict, type CustomerPhoneConflict } from "~/lib/admin-api-error";
 import { CustomerTrashNotice, type TrashedCustomer } from "./CustomerTrashNotice";
@@ -91,6 +92,7 @@ function toNewCustomerInput(values: CustomerFormValues): ApiBody<typeof postApiV
  */
 export function CustomerForm({ defaultValues, isEdit = false, record }: CustomerFormProps) {
   const t = useMessages(customersMessages);
+  const ta = useMessages(customerAddressesMessages);
   const navigate = useNavigate();
   const { hasPermission } = usePermissions();
   const canCreate = hasPermission(PERMISSIONS.CUSTOMERS_CREATE);
@@ -132,7 +134,7 @@ export function CustomerForm({ defaultValues, isEdit = false, record }: Customer
       const refused = readAddressProblems(error);
       if (refused) {
         setAddressProblems(refused);
-        return t("addressInvalid");
+        return ta("addressInvalid");
       }
       const conflict = readCustomerPhoneConflict(error);
       if (!conflict) return undefined;
@@ -210,10 +212,10 @@ export function CustomerForm({ defaultValues, isEdit = false, record }: Customer
       ) : address ? (
         <Card>
           <CardHeader>
-            <CardTitle>{t("firstAddress")}</CardTitle>
+            <CardTitle>{ta("firstAddress")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <p className="text-body text-muted-foreground">{t("firstAddressHelp")}</p>
+            <p className="text-body text-muted-foreground">{ta("firstAddressHelp")}</p>
             <AddressFields
               idPrefix="new-customer-address"
               value={address}

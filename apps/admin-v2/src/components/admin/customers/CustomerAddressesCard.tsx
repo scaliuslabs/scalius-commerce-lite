@@ -39,7 +39,7 @@ import {
 } from "~/components/admin/address/address-draft";
 import { useMessages } from "~/i18n";
 import { addressMessages } from "~/i18n/address";
-import { customersMessages } from "~/i18n/customers";
+import { customerAddressesMessages } from "~/i18n/customer-addresses";
 import { resourceMessages } from "~/i18n/resource";
 import {
   createCustomerAddress,
@@ -73,7 +73,7 @@ export function CustomerAddressesCard({ customerId, addresses, canEdit }: {
   addresses: readonly CustomerAddress[];
   canEdit: boolean;
 }) {
-  const t = useMessages(customersMessages);
+  const t = useMessages(customerAddressesMessages);
   const a = useMessages(addressMessages);
   const r = useMessages(resourceMessages);
   const queryClient = useQueryClient();
@@ -191,7 +191,7 @@ function AddressDialog({ customerId, editing, isOnlyAddress, onOpenChange, onSav
   onOpenChange: (open: boolean) => void;
   onSaved: (message: string) => Promise<void>;
 }) {
-  const t = useMessages(customersMessages);
+  const t = useMessages(customerAddressesMessages);
   const r = useMessages(resourceMessages);
   const open = editing !== null;
   const current = editing?.kind === "edit" ? editing.address : null;

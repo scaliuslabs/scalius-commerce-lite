@@ -10,7 +10,6 @@ import { useMessages } from "~/i18n";
 import { orderDetailMessages } from "~/i18n/order-detail";
 import { formatShippingAddress } from "~/lib/location-presentation";
 import { countryName } from "~/lib/country-name";
-import { addressMessages } from "~/i18n/address";
 import { formatPhoneForDisplay } from "@scalius/shared/phone-input";
 import { customerContactLinks } from "./contact-links";
 import { formatOrderTimestamp, orderTimestampIso } from "./formatters";
@@ -106,7 +105,6 @@ export function OrderCustomerCard({ order }: { order: Order }) {
   const contact = customerContactLinks(order.customerPhone);
   // WhatsApp goes to the separate number the buyer gave, when there is one.
   const whatsappLink = order.customerWhatsapp ? customerContactLinks(order.customerWhatsapp).whatsapp : contact.whatsapp;
-  const a = useMessages(addressMessages);
   const address = formatShippingAddress(order, countryName);
   // The recipient when the order ships to someone other than its contact.
   const recipient = [order.shippingName, order.shippingCompany].filter(Boolean).join(", ");
@@ -167,7 +165,7 @@ export function OrderCustomerCard({ order }: { order: Order }) {
         <section className="space-y-1 px-6 py-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="font-semibold">{t("address.title")}</h2>
-            {order.shippingValidationSkipped ? <Badge variant="warning" title={a("notCheckedHelp")}>{a("notChecked")}</Badge> : null}
+            {order.shippingValidationSkipped ? <Badge variant="warning" title={t("address.notCheckedHelp")}>{t("address.notChecked")}</Badge> : null}
           </div>
           {recipient ? <p>{recipient}</p> : null}
           <p className="text-muted-foreground">{address || t("address.none")}</p>
