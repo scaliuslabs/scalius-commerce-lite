@@ -1,7 +1,16 @@
-import { deliveryProviders, deliveryShipments, orders, orderItems, products, ShipmentStatus } from "@scalius/database/schema";
+// Delivery providers and shipments. Every courier, built in or an app's, is
+// reached through the one courier port (./couriers/port.ts): a provider row's
+// `type` names the courier, the request's couriers resolve it, and nothing
+// here branches on which courier it is.
+import { deliveryProviders, deliveryShipments, orders, orderItems, products, ShipmentStatus, type Order } from "@scalius/database/schema";
 import { fromMinor } from "@scalius/shared/money";
-import { createProvider } from "./factory";
-import { encryptCredentials, readStoredCredentialStrict } from "@scalius/core/utils/credential-encryption";
+import {
+  providerErrorOf,
+  type CourierFind,
+  type CourierShipment,
+  type CourierShipmentInput,
+} from "@scalius/shared/plugins/providers";
+import { encryptCredentials } from "@scalius/core/utils/credential-encryption";
 
 import type { Database } from "@scalius/database/client";
 import {
@@ -18,23 +27,28 @@ import { assertNoActiveRefundAttempt } from "../payments/refund-attempt-guard";
 import { assertNoActivePaymentSessionAttempt } from "../payments/payment-session-attempts";
 import { assertOrderStockCoverable } from "../inventory/inventory-transitions";
 import { InventoryLocationShortfallError } from "../inventory/locations";
-import { getExternalLocationIds, isPositiveIntegerExternalLocationId } from "./locations";
 import {
-  assertDeliveryProviderReadyForActivation,
   getDeliveryProviderReadinessSummary,
   getDeliveryProviderSetupFingerprint,
 } from "./provider-readiness";
 import type { DeliveryProviderReadinessSummary } from "./provider-readiness";
+import type { Courier, CourierCall, CourierRow, CourierSetup } from "./couriers/port";
+import { courierFor, type CourierProvidersSource } from "./couriers/registry";
 import { readinessMessages } from "@scalius/shared/readiness";
 
 type ShipmentInternalOptions = {
   shipmentId?: string;
+  /** The request's couriers (app couriers join here); absent: the built-in couriers. */
+  couriers?: CourierProvidersSource;
 };
 
 type DeliveryProviderActionReadiness =
   | {
     ready: true;
     provider: NonNullable<Awaited<ReturnType<typeof getDeliveryProvider>>>;
+    courier: Courier;
+    /** The courier's settings for this row, read once for the action. */
+    settings: unknown;
     summary: DeliveryProviderReadinessSummary;
   }
   | {
@@ -56,21 +70,6 @@ const DELETABLE_SHIPMENT_STATUSES = new Set<string>([
 
 export const ORDER_SHIPMENT_LIST_LIMIT = 100;
 
-async function readDeliveryProviderCredentials(
-  storedCredentials: string,
-  encryptionKey?: string,
-): Promise<string> {
-  const read = await readStoredCredentialStrict(
-    storedCredentials,
-    encryptionKey,
-    "Delivery provider credentials",
-  );
-  if (read.error) {
-    throw new ServiceUnavailableError(read.error);
-  }
-  return read.value;
-}
-
 function mergeShipmentMetadata(
   existing: string | null | undefined,
   next: Record<string, unknown>,
@@ -90,40 +89,105 @@ function mergeShipmentMetadata(
   return JSON.stringify({ ...parsed, ...next });
 }
 
-async function preflightProviderShipmentSetup(
-  db: Database,
-  providerType: string,
-  order: { city?: string | null; zone?: string | null; area?: string | null },
-): Promise<ShipmentResult | null> {
-  if (providerType !== "pathao") return null;
-
-  if (!order.city || !order.zone) {
-    return {
-      success: false,
-      message: `Missing required location information: ${[!order.city && "city", !order.zone && "zone"].filter(Boolean).join(", ")}`,
-    };
-  }
-
-  const externalLocationIds = await getExternalLocationIds(
-    db,
-    {
-      city: order.city,
-      zone: order.zone,
-      area: order.area,
-    },
-    "pathao",
-  );
-  const missingMappings = [
-    !isPositiveIntegerExternalLocationId(externalLocationIds.city) && "city",
-    !isPositiveIntegerExternalLocationId(externalLocationIds.zone) && "zone",
-  ].filter(Boolean);
-
-  if (missingMappings.length === 0) return null;
-
+/** Where the parcel goes, from the saved order: the store's location ids and names. */
+function shipmentRecipient(order: Order): CourierShipmentInput["recipient"] {
   return {
-    success: false,
-    message: `Pathao requires mapped numeric location IDs before shipment creation. Missing mapping for: ${missingMappings.join(", ")}. Configure Pathao IDs in Delivery Locations settings.`,
+    name: order.customerName,
+    phone: order.customerPhone,
+    address: order.shippingAddress ?? "",
+    cityId: order.city ?? null,
+    zoneId: order.zone ?? null,
+    areaId: order.area ?? null,
+    cityName: order.cityName ?? null,
+    zoneName: order.zoneName ?? null,
+    areaName: order.areaName ?? null,
+    postalCode: null,
+    country: null,
   };
+}
+
+/**
+ * A row's courier and its setup. A courier this request cannot use (an app
+ * that is no longer active, or an unknown type) is a blocked setup, never a
+ * call.
+ */
+async function readCourierSetup(
+  provider: CourierRow,
+  encryptionKey: string | undefined,
+  couriers: CourierProvidersSource | undefined,
+): Promise<{ courier: Courier | null; setup: CourierSetup }> {
+  const courier = await courierFor(couriers, provider.type);
+  if (courier) return { courier, setup: await courier.setup(provider, encryptionKey) };
+  return {
+    courier: null,
+    setup: {
+      settings: null,
+      error: `Unsupported provider type: ${provider.type}`,
+      fingerprint: null,
+      readiness: getDeliveryProviderReadinessSummary({
+        type: provider.type,
+        credentials: null,
+        config: null,
+        isActive: provider.isActive,
+        lastTestAttemptAt: provider.lastTestAttemptAt,
+        lastTestSuccessAt: provider.lastTestSuccessAt,
+        lastTestFailureAt: provider.lastTestFailureAt,
+      }),
+    },
+  };
+}
+
+/** Why a row's courier cannot be called: fixed text, never a value. */
+function setupFailureMessage(setup: CourierSetup): string {
+  const reason = setup.error ?? "Delivery provider setup is incomplete or unreadable.";
+  return `Failed to create provider: ${setup.unreadable ? `Invalid credentials format: ${reason}` : reason}`;
+}
+
+/** The courier and settings of a row whose setup can be read, else a 503. */
+async function requireCourierSettings(
+  provider: CourierRow,
+  encryptionKey: string | undefined,
+  couriers: CourierProvidersSource | undefined,
+): Promise<{ courier: Courier; settings: unknown }> {
+  const { courier, setup } = await readCourierSetup(provider, encryptionKey, couriers);
+  if (!courier || setup.settings === null) {
+    console.error("[delivery] could not read provider setup", { providerType: provider.type, providerId: provider.id });
+    throw new ServiceUnavailableError(setupFailureMessage(setup));
+  }
+  return { courier, settings: setup.settings };
+}
+
+function courierCall(settings: unknown, db: Database): CourierCall {
+  return { settings, signal: new AbortController().signal, db };
+}
+
+/** Whether a setup may be switched on: the courier's own blockers, thrown as one validation error. */
+export async function assertDeliveryProviderActivatable(
+  provider: Pick<CourierRow, "type" | "credentials" | "config">,
+  encryptionKey: string | undefined,
+  couriers?: CourierProvidersSource,
+): Promise<void> {
+  const { setup } = await readCourierSetup({
+    id: "",
+    isActive: true,
+    lastTestAttemptAt: null,
+    lastTestSuccessAt: null,
+    lastTestFailureAt: null,
+    lastTestSuccessFingerprint: null,
+    ...provider,
+  }, encryptionKey, couriers);
+  const blockers = setup.readiness.activationBlockers;
+  if (blockers.length === 0) return;
+  throw new ValidationError("Delivery provider cannot be activated until required setup is complete.", { blockers });
+}
+
+/** A delivery provider row's readiness, as settings and shipment actions judge it. */
+export async function getDeliveryProviderReadiness(
+  provider: CourierRow,
+  encryptionKey: string | undefined,
+  couriers?: CourierProvidersSource,
+): Promise<DeliveryProviderReadinessSummary> {
+  return (await readCourierSetup(provider, encryptionKey, couriers)).setup.readiness;
 }
 
 function providerActionFailureMessage(
@@ -138,6 +202,7 @@ export async function getDeliveryProviderActionReadiness(
   db: Database,
   providerId: string,
   encryptionKey?: string,
+  couriers?: CourierProvidersSource,
 ): Promise<DeliveryProviderActionReadiness> {
   const provider = await getDeliveryProvider(db, providerId);
   if (!provider) {
@@ -148,38 +213,16 @@ export async function getDeliveryProviderActionReadiness(
     };
   }
 
-  let credentials: string;
-  try {
-    credentials = await readDeliveryProviderCredentials(provider.credentials, encryptionKey);
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : String(error);
+  const { courier, setup } = await readCourierSetup(provider, encryptionKey, couriers);
+  if (setup.unreadable) {
     return {
       ready: false,
       provider,
-      message: `Delivery provider ${providerId} is not ready for shipment creation: ${message}`,
+      message: `Delivery provider ${providerId} is not ready for shipment creation: ${setup.error}`,
     };
   }
-  const currentFingerprint = encryptionKey
-    ? await getDeliveryProviderSetupFingerprint({
-      type: provider.type,
-      credentials,
-      config: provider.config,
-    }, encryptionKey).catch(() => null)
-    : null;
-
-  const summary = getDeliveryProviderReadinessSummary({
-    type: provider.type,
-    credentials,
-    config: provider.config,
-    isActive: provider.isActive,
-    currentFingerprint,
-    lastTestAttemptAt: provider.lastTestAttemptAt,
-    lastTestSuccessAt: provider.lastTestSuccessAt,
-    lastTestFailureAt: provider.lastTestFailureAt,
-    lastTestSuccessFingerprint: provider.lastTestSuccessFingerprint,
-  });
-
-  if (!summary.active) {
+  const summary = setup.readiness;
+  if (!courier || !summary.active || setup.settings === null) {
     return {
       ready: false,
       provider,
@@ -188,7 +231,7 @@ export async function getDeliveryProviderActionReadiness(
     };
   }
 
-  return { ready: true, provider, summary };
+  return { ready: true, provider, courier, settings: setup.settings, summary };
 }
 
 export async function markShipmentReconciliationRequired(
@@ -270,6 +313,7 @@ export async function saveDeliveryProvider(
     config: Record<string, unknown> | string;
   },
   encryptionKey: string,
+  couriers?: CourierProvidersSource,
 ) {
   if (!encryptionKey) {
     throw new ServiceUnavailableError("CREDENTIAL_ENCRYPTION_KEY is required to store provider credentials.");
@@ -288,11 +332,7 @@ export async function saveDeliveryProvider(
       ? provider.config
       : JSON.stringify(provider.config);
   if (provider.isActive) {
-    assertDeliveryProviderReadyForActivation({
-      type: provider.type,
-      credentials,
-      config,
-    });
+    await assertDeliveryProviderActivatable({ type: provider.type, credentials, config }, encryptionKey, couriers);
   }
   const currentFingerprint = await getDeliveryProviderSetupFingerprint({
     type: provider.type,
@@ -354,10 +394,42 @@ export async function deleteDeliveryProvider(db: Database, id: string) {
   return true;
 }
 
+/** Runs a courier's connection test with a row's settings. */
+async function testCourierConnection(
+  courier: Courier,
+  settings: unknown,
+  db: Database,
+): Promise<{ success: boolean; message: string }> {
+  if (!courier.testConnection) {
+    return { success: false, message: `${courier.label} does not offer a connection test.` };
+  }
+  const result = await courier.testConnection({}, courierCall(settings, db));
+  return { success: result.ok, message: result.message };
+}
+
+/**
+ * Test a setup that is not saved yet (the settings form's typed keys): no
+ * test proof is recorded. Throws when the setup cannot be read.
+ */
+export async function testDeliveryProviderSetup(
+  db: Database,
+  provider: CourierRow,
+  encryptionKey: string | undefined,
+  couriers?: CourierProvidersSource,
+): Promise<{ success: boolean; message: string }> {
+  const { courier, settings } = await requireCourierSettings(provider, encryptionKey, couriers);
+  return testCourierConnection(courier, settings, db);
+}
+
 /**
  * Test provider connection
  */
-export async function testDeliveryProvider(db: Database, id: string, encryptionKey?: string) {
+export async function testDeliveryProvider(
+  db: Database,
+  id: string,
+  encryptionKey?: string,
+  couriers?: CourierProvidersSource,
+) {
   const provider = await getDeliveryProvider(db, id);
   if (!provider) {
     throw new NotFoundError(`Provider with ID ${id} not found`);
@@ -376,19 +448,17 @@ export async function testDeliveryProvider(db: Database, id: string, encryptionK
     if (!encryptionKey) {
       throw new ServiceUnavailableError("CREDENTIAL_ENCRYPTION_KEY is required to test provider readiness.");
     }
-    const credentials = await readDeliveryProviderCredentials(provider.credentials, encryptionKey);
-    assertDeliveryProviderReadyForActivation({
-      type: provider.type,
-      credentials,
-      config: provider.config,
-    });
-    const fingerprint = await getDeliveryProviderSetupFingerprint({
-      type: provider.type,
-      credentials,
-      config: provider.config,
-    }, encryptionKey);
-    const providerInstance = await createProvider(provider, encryptionKey, db);
-    const result = await providerInstance.testConnection();
+    const { courier, setup } = await readCourierSetup(provider, encryptionKey, couriers);
+    if (setup.unreadable) throw new ServiceUnavailableError(setup.error ?? "Delivery provider credentials cannot be read.");
+    if (setup.readiness.activationBlockers.length > 0) {
+      throw new ValidationError("Delivery provider cannot be activated until required setup is complete.", {
+        blockers: setup.readiness.activationBlockers,
+      });
+    }
+    if (!courier || setup.settings === null) throw new ServiceUnavailableError(setupFailureMessage(setup));
+    // The proof names the setup that passed; a courier without one (an app's) keeps none.
+    const fingerprint = setup.fingerprint;
+    const result = await testCourierConnection(courier, setup.settings, db);
     if (result.success) {
       await db
         .update(deliveryProviders)
@@ -424,22 +494,44 @@ export async function testDeliveryProvider(db: Database, id: string, encryptionK
   }
 }
 
+/**
+ * Asks the courier whether it booked this order (its `findShipment`):
+ * positive-only, so anything but a confirmation keeps the recovery lock.
+ * Couriers without a lookup answer so without reading their setup.
+ */
 export async function lookupShipmentByMerchantOrderId(
   db: Database,
   providerId: string,
   merchantOrderId: string,
   encryptionKey?: string,
+  couriers?: CourierProvidersSource,
 ): Promise<MerchantOrderShipmentLookup> {
   const provider = await getDeliveryProvider(db, providerId);
   if (!provider) throw new NotFoundError("Delivery provider not found");
-  const providerInstance = await createProvider(provider, encryptionKey, db);
-  if (!providerInstance.lookupShipmentByMerchantOrderId) {
+  const courier = await courierFor(couriers, provider.type);
+  if (!courier?.findShipment) {
     return {
       confirmed: false,
       message: `${provider.type} does not support lookup by the original order number. Confirm the outcome in the courier portal or with courier support.`,
     };
   }
-  return providerInstance.lookupShipmentByMerchantOrderId(merchantOrderId);
+  const { settings } = await requireCourierSettings(provider, encryptionKey, couriers);
+  let found: CourierFind;
+  try {
+    found = await courier.findShipment({ orderId: merchantOrderId }, courierCall(settings, db));
+  } catch (error) {
+    const failure = providerErrorOf(error);
+    if (!failure) throw error;
+    return { confirmed: false, message: `${failure.message} The recovery lock remains active.` };
+  }
+  if (!found.found) return { confirmed: false, message: found.message };
+  return {
+    confirmed: true,
+    courier: courier.label,
+    externalId: found.externalId,
+    status: found.tracking.status,
+    rawStatus: found.tracking.rawStatus,
+  };
 }
 
 /**
@@ -471,17 +563,18 @@ export async function createShipment(
     };
   }
 
-  const providerReadiness = await getDeliveryProviderActionReadiness(db, providerId, encryptionKey);
+  const providerReadiness = await getDeliveryProviderActionReadiness(db, providerId, encryptionKey, internalOptions?.couriers);
   if (!providerReadiness.ready) {
     return {
       success: false,
       message: providerReadiness.message,
     };
   }
-  const provider = providerReadiness.provider;
+  const { provider, courier, settings } = providerReadiness;
 
-  const preflightFailure = await preflightProviderShipmentSetup(db, provider.type, order);
-  if (preflightFailure) return preflightFailure;
+  const recipient = shipmentRecipient(order);
+  const preflightFailure = await courier.preflight?.(recipient, db);
+  if (preflightFailure) return { success: false, message: preflightFailure };
 
   // Booking ships the order, which deducts its stock at its fulfilment
   // location: never book a courier for units that location doesn't hold.
@@ -507,23 +600,31 @@ export async function createShipment(
     .map((i) => `${i.productName || "Product"} x${i.quantity}`)
     .join(", ");
 
+  // The local shipment id is the booking's idempotency key: a retry after a
+  // lost answer names the same booking.
+  const shipmentId = internalOptions?.shipmentId ?? nanoid();
+
   // Provider money and contents are order authority, never browser/provider-
   // form authority. Keep only genuine merchant choices from the caller and
   // overwrite every commerce fact with the fresh saved order projection.
-  const amountToCollect = fromMinor(Math.max(0, order.balanceDueMinor), order.currencyDecimalPlaces);
-  const enrichedOptions: ShipmentOptions = {
-    deliveryType: options?.deliveryType,
-    itemType: options?.itemType,
-    itemWeight: options?.itemWeight,
-    note: options?.note,
-    codAmount: amountToCollect,
-    itemCount: totalItemCount,
-    itemDescription,
+  const input: CourierShipmentInput = {
+    idempotencyKey: shipmentId,
+    orderId: order.id,
+    recipient,
+    codAmountMinor: Math.max(0, order.balanceDueMinor),
+    currency: order.currencyCode,
+    decimalPlaces: order.currencyDecimalPlaces,
+    note: options?.note || order.notes || null,
+    itemCount: totalItemCount > 0 ? totalItemCount : null,
+    itemDescription: itemDescription || null,
+    options: {
+      deliveryType: options?.deliveryType ?? null,
+      itemType: options?.itemType ?? null,
+      itemWeightKg: options?.itemWeight ?? null,
+    },
   };
 
   // 1. Insert a "creating" placeholder shipment FIRST
-  const shipmentId = internalOptions?.shipmentId ?? nanoid();
-
   await db.insert(deliveryShipments).values({
     id: shipmentId,
     orderId,
@@ -537,19 +638,32 @@ export async function createShipment(
   });
 
   let shipmentResult: ShipmentResult;
-  let providerCallStarted = false;
+  let booked: CourierShipment | null = null;
   try {
-    const providerInstance = await createProvider(provider, encryptionKey, db);
-    providerCallStarted = true;
-    shipmentResult = await providerInstance.createShipment(order, enrichedOptions);
-  } catch {
+    booked = await courier.createShipment(input, courierCall(settings, db));
     shipmentResult = {
-      success: false,
-      reconciliationRequired: providerCallStarted,
-      message: providerCallStarted
-        ? "Shipment outcome is unknown. Check the courier account for confirmation before another shipment is created."
-        : "Shipment could not be prepared. Check the delivery provider settings before retrying.",
+      success: true,
+      message: `${courier.label} shipment created.`,
+      data: {
+        externalId: booked.externalId,
+        // A booking without its own tracking id is tracked by its booking id.
+        trackingId: booked.trackingId ?? booked.externalId,
+        status: booked.status,
+        metadata: booked.details ?? {},
+      },
     };
+  } catch (error) {
+    // Only a certain refusal proves nothing was booked; anything else may
+    // have reached the courier and is kept for reconciliation.
+    const failure = providerErrorOf(error);
+    shipmentResult = failure && !failure.uncertain
+      ? { success: false, message: failure.message }
+      : {
+        success: false,
+        reconciliationRequired: true,
+        message: failure?.message
+          ?? "Shipment outcome is unknown. Check the courier account for confirmation before another shipment is created.",
+      };
   }
 
   if (shipmentResult.reconciliationRequired) {
@@ -561,19 +675,19 @@ export async function createShipment(
     return { ...shipmentResult, shipmentId };
   }
 
-  if (shipmentResult.success && shipmentResult.data) {
+  if (booked && shipmentResult.data) {
     try {
+      const trackingId = shipmentResult.data.trackingId;
+      const trackingUrl = trackingId && courier.trackingUrl ? courier.trackingUrl(trackingId) : null;
       await db
         .update(deliveryShipments)
         .set({
-          externalId: shipmentResult.data.externalId,
-          trackingId: shipmentResult.data.trackingId,
-          status: shipmentResult.data.status || "pending",
-          rawStatus:
-            (shipmentResult.data.metadata?.order_status as string) ||
-            (shipmentResult.data.metadata?.status as string) ||
-            "pending",
-          metadata: JSON.stringify(shipmentResult.data.metadata || {}),
+          externalId: booked.externalId,
+          trackingId,
+          ...(trackingUrl ? { trackingUrl } : {}),
+          status: booked.status || "pending",
+          rawStatus: booked.rawStatus || "pending",
+          metadata: JSON.stringify(booked.details ?? {}),
           updatedAt: sql`unixepoch()`,
         })
         .where(eq(deliveryShipments.id, shipmentId));
@@ -694,7 +808,12 @@ export async function getShipments(db: Database, orderId: string) {
 /**
  * Check and update shipment status
  */
-export async function checkShipmentStatus(db: Database, shipmentId: string, encryptionKey?: string) {
+export async function checkShipmentStatus(
+  db: Database,
+  shipmentId: string,
+  encryptionKey?: string,
+  couriers?: CourierProvidersSource,
+) {
   // Get shipment
   const [shipment] = await db
     .select()
@@ -734,13 +853,18 @@ export async function checkShipmentStatus(db: Database, shipmentId: string, encr
   }
 
   try {
-    // Create provider instance
-    const providerInstance = await createProvider(provider, encryptionKey, db);
+    const { courier, settings } = await requireCourierSettings(provider, encryptionKey, couriers);
 
-    // Check status
-    const statusResult = await providerInstance.checkShipmentStatus(
-      shipment.externalId,
-    );
+    let statusResult: { status: string; rawStatus: string; metadata: Record<string, unknown> };
+    try {
+      const tracking = await courier.trackShipment({ externalId: shipment.externalId }, courierCall(settings, db));
+      statusResult = { status: tracking.status, rawStatus: tracking.rawStatus, metadata: tracking.details ?? {} };
+    } catch (error: unknown) {
+      const failure = providerErrorOf(error);
+      if (!failure) throw error;
+      // The courier could not answer: the shipment says so until the next check.
+      statusResult = { status: ShipmentStatus.UNKNOWN, rawStatus: "error", metadata: { error: failure.message } };
+    }
 
     // Update shipment in database
     await db

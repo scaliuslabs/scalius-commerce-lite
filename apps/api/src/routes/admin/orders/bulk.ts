@@ -11,6 +11,7 @@ import { bulkFulfillOrders, bulkShipOrders } from "@scalius/core/modules/fulfilm
 import { ok, noContent } from "../../../utils/api-response";
 import { successEnvelope, noContentResponse, conflictResponse } from "../../../schemas/responses";
 import { getCredentialEncryptionKey } from "../../../utils/encryption-key";
+import { requestCourierProviders } from "../../../plugins/providers/courier";
 
 import {
     enqueueOrderNotificationMessage,
@@ -111,7 +112,7 @@ app.openapi(bulkShipRoute, (async (c: AdminRouteContext<typeof bulkShipRoute>) =
     const db = c.get("db");
     const data = c.req.valid("json");
     const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
-    const results = await bulkShipOrders(db, data.orderIds, data.providerId, data.options, encryptionKey);
+    const results = await bulkShipOrders(db, data.orderIds, data.providerId, data.options, encryptionKey, requestCourierProviders(c));
     const successCount = results.filter((r) => r.success).length;
     const newlyShippedResults = results.filter(isNewShipmentResult);
     const responseResults = results.map((result) => {

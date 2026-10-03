@@ -20,6 +20,7 @@ import {
   getApiV1AdminSettingsNotificationChannels,
   getApiV1AdminSettingsPaymentMethods,
   getApiV1AdminSettingsPlatform,
+  getApiV1AdminSettingsProviders,
   getApiV1AdminSettingsSecurity,
   getApiV1AdminSettingsSecurityRuntimeSources,
   getApiV1AdminSettingsSms,
@@ -142,6 +143,14 @@ export const areaCountsQuery = {
   },
 };
 export const couriersQuery = deliveryProvidersQueryOptions();
+
+export type AppProvider = ApiResult<typeof getApiV1AdminSettingsProviders>["providers"][number];
+/** Installed courier apps with their readiness: offered beside Pathao and Steadfast. */
+export const appCouriersQuery = {
+  queryKey: queryKeys.settings.appProviders("courier"),
+  queryFn: async (): Promise<AppProvider[]> =>
+    (await apiData(getApiV1AdminSettingsProviders({ query: { kind: "courier" } }))).providers,
+};
 
 // TODO(sdk): the generated SDK predates delivery zones; switch these raw calls
 // to it after `pnpm generate:sdk`.

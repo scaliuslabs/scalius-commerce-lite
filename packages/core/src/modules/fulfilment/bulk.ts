@@ -13,6 +13,7 @@ import {
     markShipmentReconciliationRequired,
 } from "../delivery/delivery.service";
 import { PROVIDER_OUTCOME_UNKNOWN } from "../delivery/types";
+import type { CourierProvidersSource } from "../delivery/couriers/registry";
 import {
     assertNoActiveRefundAttempt,
     noActiveRefundAttemptForOrderIdCondition,
@@ -111,6 +112,8 @@ export async function bulkShipOrders(
     providerId: string,
     options: ShipmentCreationOptionsInput | undefined,
     encryptionKey?: string,
+    /** The request's couriers (app couriers join here); absent: the built-in couriers. */
+    couriers?: CourierProvidersSource,
 ) {
     const parsedInput = bulkShipOrderSchema.safeParse({
         orderIds,
@@ -130,6 +133,7 @@ export async function bulkShipOrders(
         db,
         validatedProviderId,
         encryptionKey,
+        couriers,
     );
     if (!providerReadiness.ready) {
         return validatedOrderIds.map((orderId) => ({
@@ -211,7 +215,7 @@ export async function bulkShipOrders(
                 validatedProviderId,
                 validatedOptions,
                 encryptionKey,
-                { shipmentId: claimId },
+                { shipmentId: claimId, couriers },
             );
             if (shipment.reconciliationRequired) {
                 await holdShipmentClaimForReconciliation(db, orderId, claimId);

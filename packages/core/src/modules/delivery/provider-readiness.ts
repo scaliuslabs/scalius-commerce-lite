@@ -49,6 +49,13 @@ type DeliveryProviderReadinessInput = {
 
 type DeliveryProviderSummaryInput = DeliveryProviderReadinessInput & {
   credentialsReadable?: boolean;
+  /**
+   * The setup's blockers when they are not the row's own credentials and
+   * config: an app courier's setup lives in the app's settings.
+   */
+  activationBlockers?: DeliveryProviderActivationBlocker[];
+  /** False when the setup keeps no live-test proof on the row (an app courier is tested through its app). */
+  requiresTestProof?: boolean;
   isActive?: boolean | null;
   currentFingerprint?: string | null;
   lastTestAttemptAt?: Date | number | string | null;
@@ -330,7 +337,7 @@ export function getDeliveryProviderReadinessSummary(
         label: "Credentials",
         message: "Stored credentials cannot be decrypted with the configured credential key.",
       }]
-    : getDeliveryProviderActivationBlockers(input);
+    : input.activationBlockers ?? getDeliveryProviderActivationBlockers(input);
   const configured = activationBlockers.length === 0;
   const successAt = timestampMs(input.lastTestSuccessAt);
   const failureAt = timestampMs(input.lastTestFailureAt);
@@ -340,7 +347,7 @@ export function getDeliveryProviderReadinessSummary(
       && input.currentFingerprint === input.lastTestSuccessFingerprint,
   );
   const failedAfterSuccess = Boolean(failureAt && (!successAt || failureAt > successAt));
-  const tested = configured && successFingerprintMatches && !failedAfterSuccess;
+  const tested = configured && (input.requiresTestProof === false || (successFingerprintMatches && !failedAfterSuccess));
   const active = Boolean(input.isActive) && tested;
 
   const blockers: DeliveryProviderReadinessBlocker[] = [];

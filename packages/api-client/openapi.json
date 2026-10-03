@@ -188189,7 +188189,7 @@
                               },
                               "type": {
                                 "type": "string",
-                                "maxLength": 50
+                                "maxLength": 160
                               },
                               "credentials": {
                                 "type": "string",
@@ -188670,7 +188670,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "oneOf": [
+                "anyOf": [
                   {
                     "type": "object",
                     "properties": {
@@ -188883,6 +188883,30 @@
                       "credentials",
                       "config"
                     ]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 100
+                      },
+                      "type": {
+                        "type": "string",
+                        "maxLength": 160,
+                        "description": "An installed app courier, <plugin id>:<provider id> (GET /admin/settings/providers?kind=courier lists them). Set it up in the app's settings."
+                      },
+                      "isActive": {
+                        "type": "boolean",
+                        "default": false
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "type"
+                    ],
+                    "additionalProperties": false
                   }
                 ]
               }
@@ -188917,7 +188941,7 @@
                         },
                         "type": {
                           "type": "string",
-                          "maxLength": 50
+                          "maxLength": 160
                         },
                         "credentials": {
                           "type": "string",
@@ -189403,7 +189427,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "oneOf": [
+                "anyOf": [
                   {
                     "type": "object",
                     "properties": {
@@ -189622,6 +189646,35 @@
                       "name",
                       "type"
                     ]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 100
+                      },
+                      "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 100
+                      },
+                      "type": {
+                        "type": "string",
+                        "maxLength": 160,
+                        "description": "An installed app courier, <plugin id>:<provider id> (GET /admin/settings/providers?kind=courier lists them). Set it up in the app's settings."
+                      },
+                      "isActive": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "name",
+                      "type"
+                    ],
+                    "additionalProperties": false
                   }
                 ]
               }
@@ -189656,7 +189709,7 @@
                         },
                         "type": {
                           "type": "string",
-                          "maxLength": 50
+                          "maxLength": 160
                         },
                         "credentials": {
                           "type": "string",
@@ -189861,7 +189914,7 @@
                         },
                         "type": {
                           "type": "string",
-                          "maxLength": 50
+                          "maxLength": 160
                         },
                         "credentials": {
                           "type": "string",
@@ -190901,7 +190954,7 @@
                         },
                         "type": {
                           "type": "string",
-                          "maxLength": 50
+                          "maxLength": 160
                         },
                         "credentials": {
                           "type": "string",

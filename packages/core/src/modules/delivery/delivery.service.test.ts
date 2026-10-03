@@ -8,14 +8,6 @@ import {
   ShipmentStatus,
 } from "@scalius/database/schema";
 
-const mocks = vi.hoisted(() => ({
-  createProvider: vi.fn(),
-}));
-
-vi.mock("./factory", () => ({
-  createProvider: mocks.createProvider,
-}));
-
 // The fake database serves only the shipment reads; the location stock
 // pre-check is covered by the fulfilment ledger D1 tests.
 vi.mock("../inventory/inventory-transitions", () => ({
@@ -30,7 +22,9 @@ import {
   saveDeliveryProvider,
   testDeliveryProvider,
 } from "./delivery.service";
+import type { ShipmentOptions } from "./types";
 import { getDeliveryProviderSetupFingerprint } from "./provider-readiness";
+import { pathaoCourier } from "./couriers/pathao";
 import { encryptCredentials } from "@scalius/core/utils/credential-encryption";
 
 function createDeleteShipmentDb({
@@ -187,6 +181,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 async function readyPathaoProvider(overrides: Record<string, unknown> = {}) {
@@ -512,8 +507,6 @@ describe("testDeliveryProvider durable proof", () => {
       return storesResponse(url);
     });
     vi.stubGlobal("fetch", fetchMock);
-    const actualFactory = await vi.importActual<typeof import("./factory")>("./factory");
-    mocks.createProvider.mockImplementationOnce(actualFactory.createProvider);
     const { db: testDb, updates } = createSequentialSelectDb([[storedProvider]]);
     const result = await testDeliveryProvider(
       testDb as never,
@@ -698,9 +691,7 @@ describe("testDeliveryProvider durable proof", () => {
       lastTestSuccessFingerprint: null,
     });
     const { db, updates } = createSequentialSelectDb([[provider]]);
-    mocks.createProvider.mockResolvedValueOnce({
-      testConnection: vi.fn(async () => ({ success: true, message: "ok" })),
-    });
+    vi.spyOn(pathaoCourier, "testConnection").mockResolvedValueOnce({ ok: true, message: "ok" });
 
     await expect(testDeliveryProvider(db as never, "provider_pathao", TEST_FINGERPRINT_KEY))
       .resolves.toMatchObject({ success: true });
@@ -715,9 +706,7 @@ describe("testDeliveryProvider durable proof", () => {
   it("records failure without replacing the successful fingerprint when a live test fails", async () => {
     const provider = await readyPathaoProvider();
     const { db, updates } = createSequentialSelectDb([[provider]]);
-    mocks.createProvider.mockResolvedValueOnce({
-      testConnection: vi.fn(async () => ({ success: false, message: "rejected" })),
-    });
+    vi.spyOn(pathaoCourier, "testConnection").mockResolvedValueOnce({ ok: false, message: "rejected" });
 
     await expect(testDeliveryProvider(db as never, "provider_pathao", TEST_FINGERPRINT_KEY))
       .resolves.toMatchObject({ success: false, message: "rejected" });
@@ -735,6 +724,7 @@ describe("testDeliveryProvider durable proof", () => {
       ),
     });
     const { db, updates } = createSequentialSelectDb([[provider]]);
+    const testConnection = vi.spyOn(pathaoCourier, "testConnection");
 
     await expect(testDeliveryProvider(db as never, "provider_pathao"))
       .resolves.toMatchObject({
@@ -742,7 +732,7 @@ describe("testDeliveryProvider durable proof", () => {
         message: expect.stringContaining("CREDENTIAL_ENCRYPTION_KEY"),
       });
 
-    expect(mocks.createProvider).not.toHaveBeenCalled();
+    expect(testConnection).not.toHaveBeenCalled();
     expect(updates[0]).toHaveProperty("lastTestAttemptAt");
     expect(updates[1]).toHaveProperty("lastTestFailureAt");
   });
@@ -755,6 +745,7 @@ describe("testDeliveryProvider durable proof", () => {
       }),
     });
     const { db, updates } = createSequentialSelectDb([[provider]]);
+    const testConnection = vi.spyOn(pathaoCourier, "testConnection");
 
     await expect(testDeliveryProvider(db as never, "provider_pathao", TEST_FINGERPRINT_KEY))
       .resolves.toMatchObject({
@@ -762,7 +753,7 @@ describe("testDeliveryProvider durable proof", () => {
         message: expect.stringContaining("cannot be activated"),
       });
 
-    expect(mocks.createProvider).not.toHaveBeenCalled();
+    expect(testConnection).not.toHaveBeenCalled();
     expect(updates[0]).toHaveProperty("lastTestAttemptAt");
     expect(updates[1]).toHaveProperty("lastTestFailureAt");
   });
@@ -802,8 +793,6 @@ describe("testDeliveryProvider durable proof", () => {
       return responseFactory();
     });
     vi.stubGlobal("fetch", fetchMock);
-    const actualFactory = await vi.importActual<typeof import("./factory")>("./factory");
-    mocks.createProvider.mockImplementationOnce(actualFactory.createProvider);
     const { db: testDb, updates } = createSequentialSelectDb([[storedProvider]]);
     const result = await testDeliveryProvider(
       testDb as never,
@@ -890,16 +879,13 @@ describe("testDeliveryProvider durable proof", () => {
 describe("delivery provider active-state authority", () => {
   it("derives COD money and item facts instead of accepting caller overrides", async () => {
     const provider = await readyPathaoProvider();
-    const providerCreateShipment = vi.fn(async () => ({
-      success: true,
-      data: {
-        externalId: "external_1",
-        trackingId: "tracking_1",
-        status: "pending",
-      },
-    }));
-    mocks.createProvider.mockResolvedValueOnce({
-      createShipment: providerCreateShipment,
+    const providerCreateShipment = vi.spyOn(pathaoCourier, "createShipment").mockResolvedValueOnce({
+      externalId: "external_1",
+      trackingId: "tracking_1",
+      status: "pending",
+      rawStatus: "Pending",
+      chargeMinor: null,
+      label: null,
     });
     const { db } = createSequentialSelectDb([
       [{
@@ -927,18 +913,20 @@ describe("delivery provider active-state authority", () => {
         codAmount: 1,
         itemCount: 999,
         itemDescription: "Browser-authored contents",
-      },
+      } as ShipmentOptions,
       TEST_FINGERPRINT_KEY,
     )).resolves.toMatchObject({ success: true });
 
     expect(providerCreateShipment).toHaveBeenCalledWith(
-      expect.objectContaining({ id: "order_1" }),
       expect.objectContaining({
-        deliveryType: 48,
-        codAmount: 150,
+        orderId: "order_1",
+        codAmountMinor: 15_000,
+        decimalPlaces: 2,
         itemCount: 2,
         itemDescription: "Aster Clogs x2",
+        options: expect.objectContaining({ deliveryType: 48 }),
       }),
+      expect.objectContaining({ settings: expect.anything() }),
     );
   });
 
@@ -974,6 +962,7 @@ describe("delivery provider active-state authority", () => {
       [{ id: "order_1", currencyDecimalPlaces: 2, totalAmountMinor: 10_000, paidAmountMinor: 0, balanceDueMinor: 10_000 }],
       [provider],
     ]);
+    const providerCreateShipment = vi.spyOn(pathaoCourier, "createShipment");
 
     await expect(createShipment(
       db as never,
@@ -984,7 +973,7 @@ describe("delivery provider active-state authority", () => {
       message: expect.stringContaining("CREDENTIAL_ENCRYPTION_KEY"),
     });
 
-    expect(mocks.createProvider).not.toHaveBeenCalled();
+    expect(providerCreateShipment).not.toHaveBeenCalled();
     expect(inserts).toHaveLength(0);
   });
 
