@@ -26,6 +26,7 @@ import { Textarea } from "~/components/ui/textarea";
 import { useHasPermission } from "~/contexts/PermissionContext";
 import { useSettingsForm } from "~/hooks/use-settings-form";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
+import { useProviderPortAccess } from "~/lib/provider-port-access";
 import { apiData, type ApiBody, type ApiResult } from "~/lib/api";
 import {
   appProvidersQuery,
@@ -102,13 +103,16 @@ function RulesTable({
 }) {
   const events = useMessages(notificationEventMessages);
   const t = useMessages(notificationsMessages);
+  // Column headings (caption size): each channel column is as wide as its
+  // name on one line with room on both sides, so long Bangla names
+  // ("হোয়াটসঅ্যাপ") never run into the next one; the event names wrap instead.
   return (
     <table className="w-full text-body">
       <thead>
-        <tr className="border-b border-border text-muted-foreground">
-          <th className="py-2 text-left font-medium">{t("event")}</th>
+        <tr className="border-b border-border align-bottom text-muted-foreground">
+          <th className="py-2 pr-2 text-left text-caption font-medium">{t("event")}</th>
           {columns.map((column) => (
-            <th key={column.key} className="w-16 py-2 text-center font-medium sm:w-24">{column.label}</th>
+            <th key={column.key} className="whitespace-nowrap px-1.5 py-2 text-center text-caption font-medium sm:w-24">{column.label}</th>
           ))}
         </tr>
       </thead>
@@ -345,7 +349,7 @@ function EmailFields() {
     canEdit: useHasPermission(ADMIN_PERMISSIONS.SETTINGS_GENERAL_EDIT),
   });
   // Installed apps' email providers sit beside the built-in senders.
-  const apps = useQuery(appProvidersQuery("email")).data ?? [];
+  const apps = useQuery({ ...appProvidersQuery("email"), enabled: useProviderPortAccess("email").canView }).data ?? [];
   const appT = useMessages(appProvidersMessages);
   if (!values.provider) return null;
   const app = apps.find((candidate) => candidate.id === values.provider);
@@ -471,7 +475,7 @@ function SmsFields() {
     isValid: smsComplete,
   });
   // Installed apps' SMS providers sit beside the built-in gateways.
-  const apps = useQuery(appProvidersQuery("sms")).data ?? [];
+  const apps = useQuery({ ...appProvidersQuery("sms"), enabled: useProviderPortAccess("sms").canView }).data ?? [];
   const appT = useMessages(appProvidersMessages);
   const provider = values.activeProvider;
   const gateway = builtInSms(provider);
@@ -761,8 +765,10 @@ export function SendingCard() {
   const email = useQuery(emailQuery);
   const sms = useQuery(smsQuery);
   // An app's name is read only when the saved choice is an app.
-  const smsApps = useQuery({ ...appProvidersQuery("sms"), enabled: isQualifiedProviderId(sms.data?.activeProvider) });
-  const emailApps = useQuery({ ...appProvidersQuery("email"), enabled: isQualifiedProviderId(email.data?.provider) });
+  const smsAccess = useProviderPortAccess("sms");
+  const emailAccess = useProviderPortAccess("email");
+  const smsApps = useQuery({ ...appProvidersQuery("sms"), enabled: smsAccess.canView && isQualifiedProviderId(sms.data?.activeProvider) });
+  const emailApps = useQuery({ ...appProvidersQuery("email"), enabled: emailAccess.canView && isQualifiedProviderId(email.data?.provider) });
   if (!rules.data) return null;
   const smsName = sms.data?.activeProvider
     ? providerName(sms.data.activeProvider, smsApps.data, (id) => builtInSms(id)?.label ?? null)

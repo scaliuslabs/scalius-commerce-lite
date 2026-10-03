@@ -1287,7 +1287,8 @@ describe("order notification dispatch", () => {
         expect(mocks.sendEachForMulticast).toHaveBeenCalledWith(expect.objectContaining({
             notification: {
                 title: "Order Delivered",
-                body: "Order Delivered: Order order_1 from Push Customer. Click to view.",
+                // Never the order's internal id.
+                body: "Order Delivered from Push Customer. Click to view.",
             },
             data: expect.objectContaining({
                 orderId: "order_1",

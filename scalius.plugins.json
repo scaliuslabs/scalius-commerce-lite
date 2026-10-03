@@ -5,45 +5,45 @@
   "plugins": [
     {
       "id": "scalius.bkash",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "source": "plugins/bkash",
-      "sha256": "4342a575b112db72fa16b951efc51707c1cb6dfb00b04645578403f0e5250ebe"
+      "sha256": "aa2fb378b16f559c57c015553c25a01f2cb2224831de5816a233fccba38e20f4"
     },
     {
       "id": "scalius.bulk-discount",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "source": "plugins/bulk-discount",
-      "sha256": "ae607e7d776ea05e2572845136dbb93900bfcd50d4b0654f242d720a218d8ca0"
+      "sha256": "17e4bc680643b1d649cf252ea7b6d56fdf724e3c620b63da93666af7d0d7afd2"
     },
     {
       "id": "scalius.hello",
-      "version": "0.3.0",
+      "version": "0.3.1",
       "source": "plugins/hello",
-      "sha256": "c54c837ff5a576b5cd99b25709d63a1d012f59834851fd5ecf14e4d71f4a485c"
+      "sha256": "e6b07fc8a14735a67d679ec60cf47a60b8b1305242341f82b4666fc6f391b80b"
     },
     {
       "id": "scalius.loyalty",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "source": "plugins/loyalty",
-      "sha256": "0003d53f89325ff0c2e7f99fdf846e8440545c3aa4c5ff906958e21e85448542"
+      "sha256": "6610a06873ed6f4ddd20b2590c74f21c52fd0c98abc410d60fff78f647007953"
     },
     {
       "id": "scalius.nagad",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "source": "plugins/nagad",
-      "sha256": "fe58d80cdd691548fd7eb2aae7d6b68d228ff182b6db9f7cbd2664072dbad42e"
+      "sha256": "7f7cb0934620c15a561e17c48e14a07bca1d4d461c03971e82ee305bf30d82f6"
     },
     {
       "id": "scalius.order-tagger",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "source": "plugins/order-tagger",
-      "sha256": "09490a1adc6bdc77d8110293dfd7828a3ff8255e070ef645195ae0fc6eb1ef6f"
+      "sha256": "ff1704a0929a77a444283df3824cb3f69ac7b2a7ad259f11bcafcd393bef6eea"
     },
     {
       "id": "scalius.wishlist",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "source": "plugins/wishlist",
-      "sha256": "5b394f4bcf48ccd60e41e26ba872a68e3be5ffb3524da52877b203d6dd4e0989"
+      "sha256": "21d4227b0842638d2910edc05a5542cf8cfbab705a750b72e2447989b927e645"
     }
   ]
 }

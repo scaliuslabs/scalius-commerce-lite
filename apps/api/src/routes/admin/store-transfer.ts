@@ -150,6 +150,10 @@ importApp.openapi(productsRoute, async (c) => {
   assertBodySize(c);
   const batch = c.req.valid("json");
   requireImportPermissions(c, PRODUCT_MODE_PERMISSIONS[batch.mode]);
+  // A file's costs per item are written only by staff who can see costs.
+  if (batch.items.some((item) => item.variants.some((variant) => variant.cost != null))) {
+    requireImportPermissions(c, [PERMISSIONS.PRODUCTS_VIEW_COSTS]);
+  }
   const granted = permissionsOf(c);
   return ok(c, await importProducts(c.get("db"), batch, {
     actorId: staffId(c),
@@ -270,7 +274,12 @@ const exportProductsRoute = createRoute({
 
 exportApp.openapi(exportProductsRoute, async (c) => {
   const query = c.req.valid("query");
-  const page = await buildProductCsvPage(c.get("db"), { after: query.after ?? null, limit: query.limit, includeHeader: query.header !== "false" });
+  const page = await buildProductCsvPage(c.get("db"), {
+    after: query.after ?? null,
+    limit: query.limit,
+    includeHeader: query.header !== "false",
+    includeCosts: permissionsOf(c).has(PERMISSIONS.PRODUCTS_VIEW_COSTS),
+  });
   const day = new Date().toISOString().slice(0, 10);
   return new Response(page.body, { status: 200, headers: csvHeaders(`products-${day}.csv`, page) }) as never;
 });

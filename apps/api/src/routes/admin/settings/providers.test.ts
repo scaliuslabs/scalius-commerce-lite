@@ -12,6 +12,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import type { Database } from "@scalius/database/client";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { activatePlugin, installPlugin, writePluginSettings } from "@scalius/core/modules/plugins";
+import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { errorResponseFromError } from "../../../utils/api-response";
 import { PLUGIN_TEST_CREDENTIAL_KEY, pluginTestCtx, pluginTestEnv } from "../../../plugins/testing/fixtures";
 import { WALLET_FIXTURE_CODE, WALLET_FIXTURE_ID, WALLET_FIXTURE_MANIFEST, WALLET_FIXTURE_SECRET } from "../../../plugins/testing/provider-fixture";
@@ -60,7 +61,7 @@ describe("app provider settings", () => {
   let db: Database;
   let env: Env;
 
-  function createApp() {
+  function createApp(permissions: readonly string[] = Object.values(PERMISSIONS)) {
     const app = new OpenAPIHono<{ Bindings: Env }>();
     app.onError((error, c) => {
       const { body, status } = errorResponseFromError(error);
@@ -68,6 +69,7 @@ describe("app provider settings", () => {
     });
     app.use("*", async (c, next) => {
       c.set("db", db);
+      c.set("adminPermissions", new Set(permissions));
       await next();
     });
     app.route("/", appProviderSettingsRoutes);
@@ -114,6 +116,19 @@ describe("app provider settings", () => {
     expect((await list("payment"))[0]).toMatchObject({ readiness: { configured: true, enabled: true, usable: true } });
     expect(await test()).toEqual({ ok: true, message: "Secret saved." });
     expect(await list("courier")).toEqual([]);
+  });
+
+  it("answers to the port's built-in permissions, not to any settings permission", async () => {
+    const path = `/providers/${encodeURIComponent(`${WALLET_FIXTURE_ID}:wallet`)}/test`;
+    // Payment providers: read with View store settings, tested with Edit store settings (Settings → Payments).
+    expect((await createApp([PERMISSIONS.SETTINGS_FRAUD_CHECKER_VIEW]).request("/providers?kind=payment", {}, env)).status).toBe(403);
+    expect((await createApp([PERMISSIONS.SETTINGS_FRAUD_CHECKER_VIEW]).request("/providers?kind=fraud", {}, env)).status).toBe(200);
+    expect((await createApp([PERMISSIONS.SETTINGS_GENERAL_VIEW]).request("/providers?kind=payment", {}, env)).status).toBe(200);
+    expect((await createApp([PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT]).request(path, { method: "POST" }, env)).status).toBe(403);
+    expect((await createApp([PERMISSIONS.SETTINGS_GENERAL_VIEW, PERMISSIONS.SETTINGS_GENERAL_EDIT]).request(path, { method: "POST" }, env)).status).toBe(200);
+    // Couriers: Settings → Shipping's own permissions.
+    expect((await createApp([PERMISSIONS.SETTINGS_GENERAL_VIEW]).request("/providers?kind=courier", {}, env)).status).toBe(403);
+    expect((await createApp([PERMISSIONS.SETTINGS_DELIVERY_PROVIDERS_VIEW]).request("/providers?kind=courier", {}, env)).status).toBe(200);
   });
 
   it("refuses ids that are not an installed app provider", async () => {

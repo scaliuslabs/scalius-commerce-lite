@@ -8148,6 +8148,9 @@
           "description": {
             "type": "string"
           },
+          "translations": {
+            "$ref": "#/components/schemas/AppTranslations"
+          },
           "author": {
             "type": "object",
             "properties": {
@@ -8266,6 +8269,48 @@
           "updatedAt",
           "functions"
         ]
+      },
+      "AppTranslations": {
+        "type": "object",
+        "nullable": true,
+        "properties": {
+          "bn": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "pages": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              },
+              "cards": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              },
+              "actions": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              },
+              "widgets": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "description": "Name, description and surface titles in other dashboard languages (null: English only)."
       },
       "AppAdminSurfaces": {
         "type": "object",
@@ -8443,6 +8488,9 @@
                 "methods"
               ]
             }
+          },
+          "translations": {
+            "$ref": "#/components/schemas/AppTranslations"
           }
         },
         "required": [
@@ -131105,7 +131153,7 @@
         },
         "x-scalius-rbac": {
           "type": "permission",
-          "permission": "products.view"
+          "permission": "inventory.view"
         }
       },
       "post": {
@@ -131328,7 +131376,7 @@
         },
         "x-scalius-rbac": {
           "type": "permission",
-          "permission": "products.edit"
+          "permission": "inventory.manage"
         }
       }
     },
@@ -131514,7 +131562,7 @@
         },
         "x-scalius-rbac": {
           "type": "permission",
-          "permission": "products.view"
+          "permission": "inventory.view"
         }
       },
       "patch": {
@@ -131831,7 +131879,7 @@
         },
         "x-scalius-rbac": {
           "type": "permission",
-          "permission": "products.edit"
+          "permission": "inventory.manage"
         }
       }
     },
@@ -132056,7 +132104,7 @@
         },
         "x-scalius-rbac": {
           "type": "permission",
-          "permission": "products.edit"
+          "permission": "inventory.manage"
         }
       }
     },
@@ -132242,7 +132290,7 @@
         },
         "x-scalius-rbac": {
           "type": "permission",
-          "permission": "products.edit"
+          "permission": "inventory.manage"
         }
       }
     },
@@ -132421,11 +132469,11 @@
                               },
                               "subtotal": {
                                 "type": "number",
-                                "description": "Σ quantity × unit cost, major units"
+                                "description": "Σ quantity × unit cost, major units. Left out without the View product costs permission."
                               },
                               "total": {
                                 "type": "number",
-                                "description": "Subtotal + shipping + other costs + tax"
+                                "description": "Subtotal + shipping + other costs + tax. Left out without the View product costs permission."
                               },
                               "revision": {
                                 "type": "integer"
@@ -132473,8 +132521,6 @@
                               "lineCount",
                               "quantity",
                               "receivedQuantity",
-                              "subtotal",
-                              "total",
                               "revision",
                               "orderedAt",
                               "receivedAt",
@@ -132550,7 +132596,7 @@
         },
         "x-scalius-rbac": {
           "type": "permission",
-          "permission": "products.view"
+          "permission": "inventory.view"
         }
       },
       "post": {
@@ -132760,11 +132806,11 @@
                         },
                         "subtotal": {
                           "type": "number",
-                          "description": "Σ quantity × unit cost, major units"
+                          "description": "Σ quantity × unit cost, major units. Left out without the View product costs permission."
                         },
                         "total": {
                           "type": "number",
-                          "description": "Subtotal + shipping + other costs + tax"
+                          "description": "Subtotal + shipping + other costs + tax. Left out without the View product costs permission."
                         },
                         "revision": {
                           "type": "integer"
@@ -132803,13 +132849,16 @@
                           "nullable": true
                         },
                         "shipping": {
-                          "type": "number"
+                          "type": "number",
+                          "description": "Shipping charged by the supplier. Left out without the View product costs permission."
                         },
                         "otherCosts": {
-                          "type": "number"
+                          "type": "number",
+                          "description": "Other charges. Left out without the View product costs permission."
                         },
                         "tax": {
-                          "type": "number"
+                          "type": "number",
+                          "description": "Tax charged by the supplier. Left out without the View product costs permission."
                         },
                         "createdBy": {
                           "type": "string",
@@ -132861,15 +132910,17 @@
                                 "type": "integer"
                               },
                               "unitCost": {
-                                "type": "number"
+                                "type": "number",
+                                "description": "Unit cost on this purchase order. Left out without the View product costs permission."
                               },
                               "lineTotal": {
-                                "type": "number"
+                                "type": "number",
+                                "description": "Quantity × unit cost. Left out without the View product costs permission."
                               },
                               "currentCost": {
                                 "type": "number",
                                 "nullable": true,
-                                "description": "The SKU's unit cost now"
+                                "description": "The SKU's unit cost now. Left out without the View product costs permission."
                               }
                             },
                             "required": [
@@ -132884,10 +132935,7 @@
                               "position",
                               "quantity",
                               "receivedQuantity",
-                              "openQuantity",
-                              "unitCost",
-                              "lineTotal",
-                              "currentCost"
+                              "openQuantity"
                             ]
                           }
                         },
@@ -132930,15 +132978,18 @@
                                       "type": "integer"
                                     },
                                     "unitCost": {
-                                      "type": "number"
+                                      "type": "number",
+                                      "description": "Unit cost received. Left out without the View product costs permission."
                                     },
                                     "costBefore": {
                                       "type": "number",
-                                      "nullable": true
+                                      "nullable": true,
+                                      "description": "The SKU's unit cost before the receipt. Left out without the View product costs permission."
                                     },
                                     "costAfter": {
                                       "type": "number",
-                                      "nullable": true
+                                      "nullable": true,
+                                      "description": "The SKU's unit cost after the receipt. Left out without the View product costs permission."
                                     },
                                     "costUpdated": {
                                       "type": "boolean"
@@ -132949,9 +133000,6 @@
                                     "variantId",
                                     "sku",
                                     "quantity",
-                                    "unitCost",
-                                    "costBefore",
-                                    "costAfter",
                                     "costUpdated"
                                   ]
                                 }
@@ -132979,8 +133027,6 @@
                         "lineCount",
                         "quantity",
                         "receivedQuantity",
-                        "subtotal",
-                        "total",
                         "revision",
                         "orderedAt",
                         "receivedAt",
@@ -132988,9 +133034,6 @@
                         "createdAt",
                         "updatedAt",
                         "notes",
-                        "shipping",
-                        "otherCosts",
-                        "tax",
                         "createdBy",
                         "lines",
                         "receipts"
@@ -133108,8 +133151,11 @@
           "oneTimeSecretOutput": false
         },
         "x-scalius-rbac": {
-          "type": "permission",
-          "permission": "products.edit"
+          "type": "allOf",
+          "permissions": [
+            "inventory.manage",
+            "products.view_costs"
+          ]
         }
       }
     },
@@ -133250,11 +133296,11 @@
                         },
                         "subtotal": {
                           "type": "number",
-                          "description": "Σ quantity × unit cost, major units"
+                          "description": "Σ quantity × unit cost, major units. Left out without the View product costs permission."
                         },
                         "total": {
                           "type": "number",
-                          "description": "Subtotal + shipping + other costs + tax"
+                          "description": "Subtotal + shipping + other costs + tax. Left out without the View product costs permission."
                         },
                         "revision": {
                           "type": "integer"
@@ -133293,13 +133339,16 @@
                           "nullable": true
                         },
                         "shipping": {
-                          "type": "number"
+                          "type": "number",
+                          "description": "Shipping charged by the supplier. Left out without the View product costs permission."
                         },
                         "otherCosts": {
-                          "type": "number"
+                          "type": "number",
+                          "description": "Other charges. Left out without the View product costs permission."
                         },
                         "tax": {
-                          "type": "number"
+                          "type": "number",
+                          "description": "Tax charged by the supplier. Left out without the View product costs permission."
                         },
                         "createdBy": {
                           "type": "string",
@@ -133351,15 +133400,17 @@
                                 "type": "integer"
                               },
                               "unitCost": {
-                                "type": "number"
+                                "type": "number",
+                                "description": "Unit cost on this purchase order. Left out without the View product costs permission."
                               },
                               "lineTotal": {
-                                "type": "number"
+                                "type": "number",
+                                "description": "Quantity × unit cost. Left out without the View product costs permission."
                               },
                               "currentCost": {
                                 "type": "number",
                                 "nullable": true,
-                                "description": "The SKU's unit cost now"
+                                "description": "The SKU's unit cost now. Left out without the View product costs permission."
                               }
                             },
                             "required": [
@@ -133374,10 +133425,7 @@
                               "position",
                               "quantity",
                               "receivedQuantity",
-                              "openQuantity",
-                              "unitCost",
-                              "lineTotal",
-                              "currentCost"
+                              "openQuantity"
                             ]
                           }
                         },
@@ -133420,15 +133468,18 @@
                                       "type": "integer"
                                     },
                                     "unitCost": {
-                                      "type": "number"
+                                      "type": "number",
+                                      "description": "Unit cost received. Left out without the View product costs permission."
                                     },
                                     "costBefore": {
                                       "type": "number",
-                                      "nullable": true
+                                      "nullable": true,
+                                      "description": "The SKU's unit cost before the receipt. Left out without the View product costs permission."
                                     },
                                     "costAfter": {
                                       "type": "number",
-                                      "nullable": true
+                                      "nullable": true,
+                                      "description": "The SKU's unit cost after the receipt. Left out without the View product costs permission."
                                     },
                                     "costUpdated": {
                                       "type": "boolean"
@@ -133439,9 +133490,6 @@
                                     "variantId",
                                     "sku",
                                     "quantity",
-                                    "unitCost",
-                                    "costBefore",
-                                    "costAfter",
                                     "costUpdated"
                                   ]
                                 }
@@ -133469,8 +133517,6 @@
                         "lineCount",
                         "quantity",
                         "receivedQuantity",
-                        "subtotal",
-                        "total",
                         "revision",
                         "orderedAt",
                         "receivedAt",
@@ -133478,9 +133524,6 @@
                         "createdAt",
                         "updatedAt",
                         "notes",
-                        "shipping",
-                        "otherCosts",
-                        "tax",
                         "createdBy",
                         "lines",
                         "receipts"
@@ -133561,7 +133604,7 @@
         },
         "x-scalius-rbac": {
           "type": "permission",
-          "permission": "products.view"
+          "permission": "inventory.view"
         }
       },
       "put": {
@@ -133790,11 +133833,11 @@
                         },
                         "subtotal": {
                           "type": "number",
-                          "description": "Σ quantity × unit cost, major units"
+                          "description": "Σ quantity × unit cost, major units. Left out without the View product costs permission."
                         },
                         "total": {
                           "type": "number",
-                          "description": "Subtotal + shipping + other costs + tax"
+                          "description": "Subtotal + shipping + other costs + tax. Left out without the View product costs permission."
                         },
                         "revision": {
                           "type": "integer"
@@ -133833,13 +133876,16 @@
                           "nullable": true
                         },
                         "shipping": {
-                          "type": "number"
+                          "type": "number",
+                          "description": "Shipping charged by the supplier. Left out without the View product costs permission."
                         },
                         "otherCosts": {
-                          "type": "number"
+                          "type": "number",
+                          "description": "Other charges. Left out without the View product costs permission."
                         },
                         "tax": {
-                          "type": "number"
+                          "type": "number",
+                          "description": "Tax charged by the supplier. Left out without the View product costs permission."
                         },
                         "createdBy": {
                           "type": "string",
@@ -133891,15 +133937,17 @@
                                 "type": "integer"
                               },
                               "unitCost": {
-                                "type": "number"
+                                "type": "number",
+                                "description": "Unit cost on this purchase order. Left out without the View product costs permission."
                               },
                               "lineTotal": {
-                                "type": "number"
+                                "type": "number",
+                                "description": "Quantity × unit cost. Left out without the View product costs permission."
                               },
                               "currentCost": {
                                 "type": "number",
                                 "nullable": true,
-                                "description": "The SKU's unit cost now"
+                                "description": "The SKU's unit cost now. Left out without the View product costs permission."
                               }
                             },
                             "required": [
@@ -133914,10 +133962,7 @@
                               "position",
                               "quantity",
                               "receivedQuantity",
-                              "openQuantity",
-                              "unitCost",
-                              "lineTotal",
-                              "currentCost"
+                              "openQuantity"
                             ]
                           }
                         },
@@ -133960,15 +134005,18 @@
                                       "type": "integer"
                                     },
                                     "unitCost": {
-                                      "type": "number"
+                                      "type": "number",
+                                      "description": "Unit cost received. Left out without the View product costs permission."
                                     },
                                     "costBefore": {
                                       "type": "number",
-                                      "nullable": true
+                                      "nullable": true,
+                                      "description": "The SKU's unit cost before the receipt. Left out without the View product costs permission."
                                     },
                                     "costAfter": {
                                       "type": "number",
-                                      "nullable": true
+                                      "nullable": true,
+                                      "description": "The SKU's unit cost after the receipt. Left out without the View product costs permission."
                                     },
                                     "costUpdated": {
                                       "type": "boolean"
@@ -133979,9 +134027,6 @@
                                     "variantId",
                                     "sku",
                                     "quantity",
-                                    "unitCost",
-                                    "costBefore",
-                                    "costAfter",
                                     "costUpdated"
                                   ]
                                 }
@@ -134009,8 +134054,6 @@
                         "lineCount",
                         "quantity",
                         "receivedQuantity",
-                        "subtotal",
-                        "total",
                         "revision",
                         "orderedAt",
                         "receivedAt",
@@ -134018,9 +134061,6 @@
                         "createdAt",
                         "updatedAt",
                         "notes",
-                        "shipping",
-                        "otherCosts",
-                        "tax",
                         "createdBy",
                         "lines",
                         "receipts"
@@ -134176,8 +134216,11 @@
           "oneTimeSecretOutput": false
         },
         "x-scalius-rbac": {
-          "type": "permission",
-          "permission": "products.edit"
+          "type": "allOf",
+          "permissions": [
+            "inventory.manage",
+            "products.view_costs"
+          ]
         }
       },
       "delete": {
@@ -134353,7 +134396,7 @@
         },
         "x-scalius-rbac": {
           "type": "permission",
-          "permission": "products.edit"
+          "permission": "inventory.manage"
         }
       }
     },
@@ -134515,11 +134558,11 @@
                         },
                         "subtotal": {
                           "type": "number",
-                          "description": "Σ quantity × unit cost, major units"
+                          "description": "Σ quantity × unit cost, major units. Left out without the View product costs permission."
                         },
                         "total": {
                           "type": "number",
-                          "description": "Subtotal + shipping + other costs + tax"
+                          "description": "Subtotal + shipping + other costs + tax. Left out without the View product costs permission."
                         },
                         "revision": {
                           "type": "integer"
@@ -134558,13 +134601,16 @@
                           "nullable": true
                         },
                         "shipping": {
-                          "type": "number"
+                          "type": "number",
+                          "description": "Shipping charged by the supplier. Left out without the View product costs permission."
                         },
                         "otherCosts": {
-                          "type": "number"
+                          "type": "number",
+                          "description": "Other charges. Left out without the View product costs permission."
                         },
                         "tax": {
-                          "type": "number"
+                          "type": "number",
+                          "description": "Tax charged by the supplier. Left out without the View product costs permission."
                         },
                         "createdBy": {
                           "type": "string",
@@ -134616,15 +134662,17 @@
                                 "type": "integer"
                               },
                               "unitCost": {
-                                "type": "number"
+                                "type": "number",
+                                "description": "Unit cost on this purchase order. Left out without the View product costs permission."
                               },
                               "lineTotal": {
-                                "type": "number"
+                                "type": "number",
+                                "description": "Quantity × unit cost. Left out without the View product costs permission."
                               },
                               "currentCost": {
                                 "type": "number",
                                 "nullable": true,
-                                "description": "The SKU's unit cost now"
+                                "description": "The SKU's unit cost now. Left out without the View product costs permission."
                               }
                             },
                             "required": [
@@ -134639,10 +134687,7 @@
                               "position",
                               "quantity",
                               "receivedQuantity",
-                              "openQuantity",
-                              "unitCost",
-                              "lineTotal",
-                              "currentCost"
+                              "openQuantity"
                             ]
                           }
                         },
@@ -134685,15 +134730,18 @@
                                       "type": "integer"
                                     },
                                     "unitCost": {
-                                      "type": "number"
+                                      "type": "number",
+                                      "description": "Unit cost received. Left out without the View product costs permission."
                                     },
                                     "costBefore": {
                                       "type": "number",
-                                      "nullable": true
+                                      "nullable": true,
+                                      "description": "The SKU's unit cost before the receipt. Left out without the View product costs permission."
                                     },
                                     "costAfter": {
                                       "type": "number",
-                                      "nullable": true
+                                      "nullable": true,
+                                      "description": "The SKU's unit cost after the receipt. Left out without the View product costs permission."
                                     },
                                     "costUpdated": {
                                       "type": "boolean"
@@ -134704,9 +134752,6 @@
                                     "variantId",
                                     "sku",
                                     "quantity",
-                                    "unitCost",
-                                    "costBefore",
-                                    "costAfter",
                                     "costUpdated"
                                   ]
                                 }
@@ -134734,8 +134779,6 @@
                         "lineCount",
                         "quantity",
                         "receivedQuantity",
-                        "subtotal",
-                        "total",
                         "revision",
                         "orderedAt",
                         "receivedAt",
@@ -134743,9 +134786,6 @@
                         "createdAt",
                         "updatedAt",
                         "notes",
-                        "shipping",
-                        "otherCosts",
-                        "tax",
                         "createdBy",
                         "lines",
                         "receipts"
@@ -134902,7 +134942,7 @@
         },
         "x-scalius-rbac": {
           "type": "permission",
-          "permission": "products.edit"
+          "permission": "inventory.manage"
         }
       }
     },
@@ -135051,15 +135091,18 @@
                                 "type": "string"
                               },
                               "unitCost": {
-                                "type": "number"
+                                "type": "number",
+                                "description": "Unit cost received. Left out without the View product costs permission."
                               },
                               "costBefore": {
                                 "type": "number",
-                                "nullable": true
+                                "nullable": true,
+                                "description": "The SKU's unit cost before the receipt. Left out without the View product costs permission."
                               },
                               "costAfter": {
                                 "type": "number",
-                                "nullable": true
+                                "nullable": true,
+                                "description": "The SKU's unit cost after the receipt. Left out without the View product costs permission."
                               },
                               "stockAfter": {
                                 "type": "integer",
@@ -135072,9 +135115,6 @@
                               "sku",
                               "quantity",
                               "movementId",
-                              "unitCost",
-                              "costBefore",
-                              "costAfter",
                               "stockAfter"
                             ]
                           }
@@ -135241,7 +135281,7 @@
         },
         "x-scalius-rbac": {
           "type": "permission",
-          "permission": "products.edit"
+          "permission": "inventory.manage"
         }
       }
     },
@@ -135403,11 +135443,11 @@
                         },
                         "subtotal": {
                           "type": "number",
-                          "description": "Σ quantity × unit cost, major units"
+                          "description": "Σ quantity × unit cost, major units. Left out without the View product costs permission."
                         },
                         "total": {
                           "type": "number",
-                          "description": "Subtotal + shipping + other costs + tax"
+                          "description": "Subtotal + shipping + other costs + tax. Left out without the View product costs permission."
                         },
                         "revision": {
                           "type": "integer"
@@ -135446,13 +135486,16 @@
                           "nullable": true
                         },
                         "shipping": {
-                          "type": "number"
+                          "type": "number",
+                          "description": "Shipping charged by the supplier. Left out without the View product costs permission."
                         },
                         "otherCosts": {
-                          "type": "number"
+                          "type": "number",
+                          "description": "Other charges. Left out without the View product costs permission."
                         },
                         "tax": {
-                          "type": "number"
+                          "type": "number",
+                          "description": "Tax charged by the supplier. Left out without the View product costs permission."
                         },
                         "createdBy": {
                           "type": "string",
@@ -135504,15 +135547,17 @@
                                 "type": "integer"
                               },
                               "unitCost": {
-                                "type": "number"
+                                "type": "number",
+                                "description": "Unit cost on this purchase order. Left out without the View product costs permission."
                               },
                               "lineTotal": {
-                                "type": "number"
+                                "type": "number",
+                                "description": "Quantity × unit cost. Left out without the View product costs permission."
                               },
                               "currentCost": {
                                 "type": "number",
                                 "nullable": true,
-                                "description": "The SKU's unit cost now"
+                                "description": "The SKU's unit cost now. Left out without the View product costs permission."
                               }
                             },
                             "required": [
@@ -135527,10 +135572,7 @@
                               "position",
                               "quantity",
                               "receivedQuantity",
-                              "openQuantity",
-                              "unitCost",
-                              "lineTotal",
-                              "currentCost"
+                              "openQuantity"
                             ]
                           }
                         },
@@ -135573,15 +135615,18 @@
                                       "type": "integer"
                                     },
                                     "unitCost": {
-                                      "type": "number"
+                                      "type": "number",
+                                      "description": "Unit cost received. Left out without the View product costs permission."
                                     },
                                     "costBefore": {
                                       "type": "number",
-                                      "nullable": true
+                                      "nullable": true,
+                                      "description": "The SKU's unit cost before the receipt. Left out without the View product costs permission."
                                     },
                                     "costAfter": {
                                       "type": "number",
-                                      "nullable": true
+                                      "nullable": true,
+                                      "description": "The SKU's unit cost after the receipt. Left out without the View product costs permission."
                                     },
                                     "costUpdated": {
                                       "type": "boolean"
@@ -135592,9 +135637,6 @@
                                     "variantId",
                                     "sku",
                                     "quantity",
-                                    "unitCost",
-                                    "costBefore",
-                                    "costAfter",
                                     "costUpdated"
                                   ]
                                 }
@@ -135622,8 +135664,6 @@
                         "lineCount",
                         "quantity",
                         "receivedQuantity",
-                        "subtotal",
-                        "total",
                         "revision",
                         "orderedAt",
                         "receivedAt",
@@ -135631,9 +135671,6 @@
                         "createdAt",
                         "updatedAt",
                         "notes",
-                        "shipping",
-                        "otherCosts",
-                        "tax",
                         "createdBy",
                         "lines",
                         "receipts"
@@ -135752,7 +135789,7 @@
         },
         "x-scalius-rbac": {
           "type": "permission",
-          "permission": "products.edit"
+          "permission": "inventory.manage"
         }
       }
     },
@@ -135860,8 +135897,11 @@
           }
         },
         "x-scalius-rbac": {
-          "type": "permission",
-          "permission": "products.view"
+          "type": "allOf",
+          "permissions": [
+            "inventory.view",
+            "products.view_costs"
+          ]
         }
       }
     },
@@ -136152,7 +136192,7 @@
         },
         "x-scalius-rbac": {
           "type": "permission",
-          "permission": "products.view"
+          "permission": "inventory.view"
         }
       },
       "post": {
@@ -136651,7 +136691,7 @@
         },
         "x-scalius-rbac": {
           "type": "permission",
-          "permission": "products.edit"
+          "permission": "inventory.manage"
         }
       }
     },
@@ -137061,7 +137101,7 @@
         },
         "x-scalius-rbac": {
           "type": "permission",
-          "permission": "products.view"
+          "permission": "inventory.view"
         }
       },
       "put": {
@@ -137613,7 +137653,7 @@
         },
         "x-scalius-rbac": {
           "type": "permission",
-          "permission": "products.edit"
+          "permission": "inventory.manage"
         }
       },
       "delete": {
@@ -137788,7 +137828,7 @@
         },
         "x-scalius-rbac": {
           "type": "permission",
-          "permission": "products.edit"
+          "permission": "inventory.manage"
         }
       }
     },
@@ -138095,7 +138135,7 @@
         },
         "x-scalius-rbac": {
           "type": "permission",
-          "permission": "products.edit"
+          "permission": "inventory.manage"
         }
       }
     },
@@ -138421,7 +138461,7 @@
         },
         "x-scalius-rbac": {
           "type": "permission",
-          "permission": "products.edit"
+          "permission": "inventory.manage"
         }
       }
     },
@@ -138728,7 +138768,7 @@
         },
         "x-scalius-rbac": {
           "type": "permission",
-          "permission": "products.edit"
+          "permission": "inventory.manage"
         }
       }
     },
@@ -139041,7 +139081,7 @@
                               "cost": {
                                 "type": "number",
                                 "nullable": true,
-                                "description": "Unit cost (cost per item) in major units; null when not set. Staff-only."
+                                "description": "Unit cost (cost per item) in major units; null when not set. Left out without the View product costs permission."
                               },
                               "incoming": {
                                 "type": "integer",
@@ -139063,7 +139103,6 @@
                               "lowStockThreshold",
                               "version",
                               "locationOnHand",
-                              "cost",
                               "incoming"
                             ],
                             "additionalProperties": {}
@@ -139096,10 +139135,22 @@
                                 "type": "number"
                               },
                               "previousStock": {
-                                "type": "number"
+                                "type": "number",
+                                "description": "The SKU's on-hand across every location before the movement"
                               },
                               "newStock": {
-                                "type": "number"
+                                "type": "number",
+                                "description": "The SKU's on-hand across every location after the movement"
+                              },
+                              "locationPreviousStock": {
+                                "type": "integer",
+                                "nullable": true,
+                                "description": "On-hand at `locationId` before, when the operation recorded it (adjustments, counts, scans, licence keys); null otherwise"
+                              },
+                              "locationNewStock": {
+                                "type": "integer",
+                                "nullable": true,
+                                "description": "On-hand at `locationId` after, when recorded; null otherwise"
                               },
                               "notes": {
                                 "type": "string",
@@ -139208,6 +139259,8 @@
                               "quantity",
                               "previousStock",
                               "newStock",
+                              "locationPreviousStock",
+                              "locationNewStock",
                               "notes",
                               "createdBy",
                               "ledgerVersion",
@@ -142192,7 +142245,7 @@
         },
         "x-scalius-rbac": {
           "type": "permission",
-          "permission": "products.view"
+          "permission": "products.view_costs"
         }
       }
     },
@@ -142441,8 +142494,11 @@
           "oneTimeSecretOutput": false
         },
         "x-scalius-rbac": {
-          "type": "permission",
-          "permission": "products.edit"
+          "type": "allOf",
+          "permissions": [
+            "products.edit",
+            "products.view_costs"
+          ]
         }
       }
     },
@@ -142894,12 +142950,7 @@
                               "name",
                               "code",
                               "kind",
-                              "addressLine1",
-                              "addressLine2",
-                              "city",
-                              "postalCode",
                               "countryCode",
-                              "phone",
                               "isDefault",
                               "status",
                               "position",
@@ -142952,8 +143003,12 @@
           "oneTimeSecretOutput": false
         },
         "x-scalius-rbac": {
-          "type": "permission",
-          "permission": "products.view"
+          "type": "anyOf",
+          "permissions": [
+            "inventory.view",
+            "products.view",
+            "settings.general.view"
+          ]
         }
       },
       "post": {
@@ -143134,12 +143189,7 @@
                         "name",
                         "code",
                         "kind",
-                        "addressLine1",
-                        "addressLine2",
-                        "city",
-                        "postalCode",
                         "countryCode",
-                        "phone",
                         "isDefault",
                         "status",
                         "position",
@@ -143262,8 +143312,11 @@
           "oneTimeSecretOutput": false
         },
         "x-scalius-rbac": {
-          "type": "permission",
-          "permission": "products.edit"
+          "type": "anyOf",
+          "permissions": [
+            "inventory.manage",
+            "settings.general.edit"
+          ]
         }
       }
     },
@@ -143464,12 +143517,7 @@
                         "name",
                         "code",
                         "kind",
-                        "addressLine1",
-                        "addressLine2",
-                        "city",
-                        "postalCode",
                         "countryCode",
-                        "phone",
                         "isDefault",
                         "status",
                         "position",
@@ -143630,8 +143678,11 @@
           "oneTimeSecretOutput": false
         },
         "x-scalius-rbac": {
-          "type": "permission",
-          "permission": "products.edit"
+          "type": "anyOf",
+          "permissions": [
+            "inventory.manage",
+            "settings.general.edit"
+          ]
         }
       }
     },
@@ -143763,12 +143814,7 @@
                         "name",
                         "code",
                         "kind",
-                        "addressLine1",
-                        "addressLine2",
-                        "city",
-                        "postalCode",
                         "countryCode",
-                        "phone",
                         "isDefault",
                         "status",
                         "position",
@@ -143891,8 +143937,11 @@
           "oneTimeSecretOutput": false
         },
         "x-scalius-rbac": {
-          "type": "permission",
-          "permission": "products.edit"
+          "type": "anyOf",
+          "permissions": [
+            "inventory.manage",
+            "settings.general.edit"
+          ]
         }
       }
     },
@@ -144023,12 +144072,7 @@
                         "name",
                         "code",
                         "kind",
-                        "addressLine1",
-                        "addressLine2",
-                        "city",
-                        "postalCode",
                         "countryCode",
-                        "phone",
                         "isDefault",
                         "status",
                         "position",
@@ -144113,8 +144157,11 @@
           "oneTimeSecretOutput": false
         },
         "x-scalius-rbac": {
-          "type": "permission",
-          "permission": "products.edit"
+          "type": "anyOf",
+          "permissions": [
+            "inventory.manage",
+            "settings.general.edit"
+          ]
         }
       }
     },
@@ -144246,12 +144293,7 @@
                         "name",
                         "code",
                         "kind",
-                        "addressLine1",
-                        "addressLine2",
-                        "city",
-                        "postalCode",
                         "countryCode",
-                        "phone",
                         "isDefault",
                         "status",
                         "position",
@@ -144374,8 +144416,11 @@
           "oneTimeSecretOutput": false
         },
         "x-scalius-rbac": {
-          "type": "permission",
-          "permission": "products.edit"
+          "type": "anyOf",
+          "permissions": [
+            "inventory.manage",
+            "settings.general.edit"
+          ]
         }
       }
     },
@@ -160029,7 +160074,7 @@
           "Admin - Analytics"
         ],
         "summary": "List analytics reports",
-        "description": "Every report with its columns, default sort and whether this caller can run it now (customer reports need the View customers permission; profit reports need unit costs recorded on order lines).",
+        "description": "Every report with its columns, default sort and whether this caller can run it now (customer reports need the View customers permission; profit reports need the View product costs permission and unit costs recorded on order lines).",
         "responses": {
           "200": {
             "description": "Report catalog",
@@ -160164,6 +160209,9 @@
                               "requiresCustomerAccess": {
                                 "type": "boolean"
                               },
+                              "requiresCostAccess": {
+                                "type": "boolean"
+                              },
                               "rowLink": {
                                 "type": "string",
                                 "enum": [
@@ -160179,6 +160227,7 @@
                                 "nullable": true,
                                 "enum": [
                                   "customer_access",
+                                  "cost_access",
                                   null
                                 ]
                               }
@@ -160729,6 +160778,9 @@
                               ]
                             },
                             "requiresCustomerAccess": {
+                              "type": "boolean"
+                            },
+                            "requiresCostAccess": {
                               "type": "boolean"
                             },
                             "rowLink": {
@@ -168507,6 +168559,8 @@
             "discounts.view",
             "gift_cards.manage",
             "gift_cards.view",
+            "inventory.manage",
+            "inventory.view",
             "media.delete",
             "media.manage_folders",
             "media.upload",
@@ -168532,6 +168586,7 @@
             "products.permanent_delete",
             "products.restore",
             "products.view",
+            "products.view_costs",
             "reviews.moderate",
             "reviews.view",
             "settings.cache.manage",
@@ -172492,6 +172547,8 @@
             "discounts.view",
             "gift_cards.manage",
             "gift_cards.view",
+            "inventory.manage",
+            "inventory.view",
             "media.delete",
             "media.manage_folders",
             "media.upload",
@@ -172517,6 +172574,7 @@
             "products.permanent_delete",
             "products.restore",
             "products.view",
+            "products.view_costs",
             "reviews.moderate",
             "reviews.view",
             "settings.cache.manage",
@@ -174262,6 +174320,8 @@
             "discounts.view",
             "gift_cards.manage",
             "gift_cards.view",
+            "inventory.manage",
+            "inventory.view",
             "media.delete",
             "media.manage_folders",
             "media.upload",
@@ -174287,6 +174347,7 @@
             "products.permanent_delete",
             "products.restore",
             "products.view",
+            "products.view_costs",
             "reviews.moderate",
             "reviews.view",
             "settings.cache.manage",
@@ -203198,8 +203259,10 @@
         "x-scalius-rbac": {
           "type": "anyOf",
           "permissions": [
+            "settings.delivery_providers.view",
             "settings.fraud_checker.view",
-            "settings.general.view"
+            "settings.general.view",
+            "taxes.view"
           ]
         }
       }
@@ -203517,9 +203580,11 @@
         "x-scalius-rbac": {
           "type": "anyOf",
           "permissions": [
-            "settings.fraud_checker.edit",
+            "settings.delivery_providers.edit",
+            "settings.fraud_checker.view",
             "settings.general.edit",
-            "settings.notifications.edit"
+            "settings.notifications.edit",
+            "taxes.manage"
           ]
         }
       }

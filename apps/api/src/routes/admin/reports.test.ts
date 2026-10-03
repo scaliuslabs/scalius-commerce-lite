@@ -10,6 +10,7 @@ import { errorResponseFromError } from "../../utils/api-response";
 
 const ANALYTICS = [PERMISSIONS.DASHBOARD_VIEW, PERMISSIONS.DASHBOARD_ANALYTICS];
 const ANALYTICS_AND_CUSTOMERS = [...ANALYTICS, PERMISSIONS.CUSTOMERS_VIEW];
+const ANALYTICS_AND_COSTS = [...ANALYTICS, PERMISSIONS.PRODUCTS_VIEW, PERMISSIONS.PRODUCTS_VIEW_COSTS];
 
 let database: SqliteTestDatabase;
 
@@ -104,10 +105,13 @@ describe("analytics routes", () => {
     const result = await get(ANALYTICS, "");
     const reports = result.body.data.reports as Array<{ id: string; available: boolean; unavailableReason: string | null }>;
     expect(reports.find((report) => report.id === "customers_top")).toMatchObject({ available: false, unavailableReason: "customer_access" });
-    expect(reports.find((report) => report.id === "profit_by_product")).toMatchObject({ available: true, unavailableReason: null });
+    expect(reports.find((report) => report.id === "profit_by_product")).toMatchObject({ available: false, unavailableReason: "cost_access" });
     expect(reports.find((report) => report.id === "sales_by_product")).toMatchObject({ available: true });
     const withCustomers = await get(ANALYTICS_AND_CUSTOMERS, "");
     expect(withCustomers.body.data.reports.find((report: { id: string }) => report.id === "customers_top").available).toBe(true);
+    const withCosts = await get(ANALYTICS_AND_COSTS, "");
+    expect(withCosts.body.data.reports.find((report: { id: string }) => report.id === "profit_by_product"))
+      .toMatchObject({ available: true, unavailableReason: null, requiresCostAccess: true });
   });
 
   it("returns a sorted report page with totals and product links", async () => {
@@ -134,8 +138,11 @@ describe("analytics routes", () => {
     expect(allowed.body.data.rows[0].values).toMatchObject({ customer: "Rahim", phone: "+8801711111111", total_sales: 1_500 });
   });
 
-  it("runs the profit report from sale-time unit costs", async () => {
-    const result = await get(ANALYTICS, "/profit_by_product?from=2026-08-01&to=2026-08-31");
+  it("runs the profit report from sale-time unit costs only with View product costs", async () => {
+    const denied = await get(ANALYTICS, "/profit_by_product?from=2026-08-01&to=2026-08-31");
+    expect(denied.status).toBe(403);
+    expect((await get(ANALYTICS, "/profit_by_product/export?from=2026-08-01&to=2026-08-31")).status).toBe(403);
+    const result = await get(ANALYTICS_AND_COSTS, "/profit_by_product?from=2026-08-01&to=2026-08-31");
     expect(result.status).toBe(200);
   });
 

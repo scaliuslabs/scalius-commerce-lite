@@ -285,7 +285,7 @@ function OrderRowActions({ order, handlers }: { order: OrderListItem; handlers: 
  * an empty cell reads "—". Narrow screens drop the lowest priority first.
  */
 export function getOrderColumns(handlers: OrderRowHandlers): ColumnDef<OrderListItem, unknown>[] {
-  const meta = (key: OrderListMessageKey, layout: { priority?: number; minWidth: number; numeric?: boolean; primary?: boolean }) => ({
+  const meta = (key: OrderListMessageKey, layout: { priority?: number; minWidth: number; maxWidth?: number; numeric?: boolean; primary?: boolean }) => ({
     label: handlers.label?.(key),
     ...layout,
   });
@@ -310,7 +310,9 @@ export function getOrderColumns(handlers: OrderRowHandlers): ColumnDef<OrderList
     },
     {
       id: "customer",
-      meta: meta("customer", { priority: 96, minWidth: 180 }),
+      // A long name truncates (the whole name on hover) instead of pushing Total,
+      // Payment and Fulfillment out of the table.
+      meta: meta("customer", { priority: 96, minWidth: 180, maxWidth: 240 }),
       header: () => <Title k="customer" />,
       cell: ({ row }) => <CustomerCell order={row.original} />,
     },

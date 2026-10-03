@@ -28,7 +28,7 @@ function OrderLink({ id, number }: { id: string; number: string | null }) {
   const t = useMessages(giftCardsMessages);
   return (
     <Link to="/admin/orders/$orderId" params={{ orderId: id }} className="text-link hover:underline">
-      {t("orderNumber", { number: number ?? `#${id}` })}
+      {number ? t("orderNumber", { number }) : t("orderLink")}
     </Link>
   );
 }

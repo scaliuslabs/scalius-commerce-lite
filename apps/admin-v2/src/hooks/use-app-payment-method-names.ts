@@ -1,7 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { isQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
-import { useHasPermission } from "~/contexts/PermissionContext";
-import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
+import { useProviderPortAccess } from "~/lib/provider-port-access";
 import { appPaymentMethodNames, appPaymentProvidersQuery } from "~/lib/api-query-options/payment-providers";
 
 /** Installed apps change rarely; an order page needn't re-read them on every visit. */
@@ -19,7 +18,7 @@ export function hasAppPaymentMethod(methods: readonly (string | null | undefined
  * settings; otherwise app methods read as their provider id in words.
  */
 export function useAppPaymentMethodNames(needed: boolean): ReadonlyMap<string, string> | undefined {
-  const canRead = useHasPermission(ADMIN_PERMISSIONS.SETTINGS_GENERAL_VIEW);
+  const canRead = useProviderPortAccess("payment").canView;
   return useQuery({
     ...appPaymentProvidersQuery,
     enabled: needed && canRead,

@@ -19,7 +19,7 @@ export const Route = createFileRoute("/admin/inventory/transfers/$transferId/")(
 function TransferPage() {
   const { transferId } = Route.useParams();
   const query = useSuspenseQuery(transferQueryOptions(transferId));
-  const { inventory: { canAdjustStock: canEdit } } = useCatalogActionPermissions();
+  const { inventory: { canManageOperations: canEdit } } = useCatalogActionPermissions();
   // A reload after a conflict starts the page again from the latest copy.
   const [session, setSession] = useState(0);
   const reload = async () => {

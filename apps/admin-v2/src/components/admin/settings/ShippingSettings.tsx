@@ -16,6 +16,7 @@ import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Switch } from "~/components/ui/switch";
 import { useHasPermission } from "~/contexts/PermissionContext";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
+import { useProviderPortAccess } from "~/lib/provider-port-access";
 import { apiData, type ApiBody } from "~/lib/api";
 import type { DeliveryProviderRecord } from "~/lib/api-query-options/delivery";
 import {
@@ -170,8 +171,8 @@ function CourierForm({ courier }: { courier: DeliveryProviderRecord | null }) {
   const common = useMessages(settingsMessages);
   const queryClient = useQueryClient();
   const apiUrl = useQuery(platformQuery).data?.apiUrl ?? "";
-  const canReadApps = useHasPermission(ADMIN_PERMISSIONS.SETTINGS_GENERAL_VIEW);
-  const canTestApps = useHasPermission(ADMIN_PERMISSIONS.SETTINGS_GENERAL_EDIT);
+  // Courier apps answer to the built-in couriers' permissions.
+  const { canView: canReadApps, canManage: canTestApps } = useProviderPortAccess("courier");
   const appCouriers = useQuery({ ...appProvidersQuery("courier"), enabled: canReadApps }).data ?? [];
   const [saved] = useState<CourierDraft & { id: string; name: string; type: string; isActive: boolean }>(() => {
     const type = courier?.type ?? "pathao";

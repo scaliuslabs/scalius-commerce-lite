@@ -73,11 +73,16 @@ async function categoryPaths(db: Database): Promise<Map<string, string[]>> {
   return paths;
 }
 
-/** One page of the Shopify-compatible product CSV (live products, trash excluded). */
+/**
+ * One page of the Shopify-compatible product CSV (live products, trash
+ * excluded). `includeCosts: false` (no "View product costs") leaves "Cost per
+ * item" blank, which an import reads as "keep the SKU's cost".
+ */
 export async function buildProductCsvPage(
   db: Database,
-  input: { after?: string | null; limit?: number; includeHeader?: boolean } = {},
+  input: { after?: string | null; limit?: number; includeHeader?: boolean; includeCosts?: boolean } = {},
 ): Promise<CsvPage> {
+  const includeCosts = input.includeCosts ?? true;
   const limit = Math.min(Math.max(input.limit ?? PRODUCT_EXPORT_PAGE_DEFAULT, 1), PRODUCT_EXPORT_PAGE_MAX);
   const page = await db.select({
     id: products.id,
@@ -241,7 +246,7 @@ export async function buildProductCsvPage(
         "Variant Barcode": variant.barcode ?? "",
         "Variant Image": variant.imageId ? imageUrl.get(variant.imageId) ?? "" : "",
         "Variant Weight Unit": "g",
-        "Cost per item": unitCostFromMinor(variant.costMinor, decimals) ?? "",
+        "Cost per item": includeCosts ? unitCostFromMinor(variant.costMinor, decimals) ?? "" : "",
       };
     });
     if (output.length === 0) {

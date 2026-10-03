@@ -22,7 +22,7 @@ import { definePlugin, PLUGIN_API_VERSION, type PluginContext, type PluginManife
 export const manifest = {
   id: "scalius.loyalty",
   name: "Loyalty points",
-  version: "0.1.0",
+  version: "0.1.1",
   apiVersion: PLUGIN_API_VERSION,
   description: "Signed-in buyers earn points on paid orders and spend them at checkout with a code. Points are taken with the order itself, so they can never be spent twice.",
   author: { name: "Scalius" },
@@ -42,6 +42,12 @@ export const manifest = {
     { key: "point_value", label: "Value of one point", type: "number", min: 0.01, max: 1000, default: 1, help: "In your store currency." },
     { key: "min_redeem", label: "Fewest points to redeem", type: "number", integer: true, min: 1, max: 1_000_000, default: 50 },
   ],
+  translations: {
+    bn: {
+      name: "লয়্যালটি পয়েন্ট",
+      description: "সাইন-ইন করা ক্রেতারা পেমেন্ট হওয়া অর্ডারে পয়েন্ট পান আর চেকআউটে কোড দিয়ে খরচ করেন। পয়েন্ট অর্ডারের সঙ্গেই কাটা হয়, তাই কখনও দুবার খরচ করা যায় না।",
+    },
+  },
 } satisfies PluginManifestInput;
 
 export interface Balance extends Record<string, unknown> {

@@ -74,3 +74,4 @@ export * from "./purchase-orders";
 export * from "./transfers";
 export * from "./inventory-insights";
 export * from "./locations";
+export * from "./cost-visibility";

@@ -9,6 +9,7 @@ import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
+import { useProviderPortAccess } from "~/lib/provider-port-access";
 import { apiData } from "~/lib/api";
 import type { AppProvider } from "~/lib/api-query-options/settings-screens";
 import { useMessages } from "~/i18n";
@@ -24,6 +25,8 @@ export function appProviderOption(provider: AppProvider, t: (key: AppProvidersMe
 export function AppProviderStatus({ provider }: { provider: AppProvider }) {
   const t = useMessages(appProvidersMessages);
   const canSeeApps = usePermissions().hasPermission(ADMIN_PERMISSIONS.APPS_VIEW);
+  // Tested with whatever tests the port's built-in providers.
+  const { canManage } = useProviderPortAccess(provider.kind);
   const test = useMutation({
     mutationFn: () => apiData(postApiV1AdminSettingsProvidersByIdTest({ path: { id: provider.id } })),
   });
@@ -37,7 +40,7 @@ export function AppProviderStatus({ provider }: { provider: AppProvider }) {
       <p className="text-body text-muted-foreground">{t("keysInApp", { name: provider.name, app: provider.appName })}</p>
       {!usable && provider.readiness.blockedReason ? <Alert variant="warning">{provider.readiness.blockedReason}</Alert> : null}
       <div className="flex flex-wrap items-center gap-2">
-        {provider.canTestConnection ? (
+        {provider.canTestConnection && canManage ? (
           <Button type="button" variant="outline" loading={test.isPending} disabled={!usable} onClick={() => test.mutate()}>
             {t("testConnection")}
           </Button>

@@ -34,8 +34,8 @@ const SETTINGS_PAGE_PERMISSIONS = [
   PERMISSIONS.WEBHOOKS_VIEW,
   PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT,
   PERMISSIONS.TAXES_VIEW,
-  // Locations are inventory records: whoever can see stock can see where it is.
-  PERMISSIONS.PRODUCTS_VIEW,
+  // Locations (their addresses): inventory operations or store settings.
+  PERMISSIONS.INVENTORY_VIEW,
   ...TEAM_PAGE_PERMISSIONS,
   ...SHIPPING_PAGE_PERMISSIONS,
   ...INTEGRATIONS_PAGE_PERMISSIONS,
@@ -60,13 +60,16 @@ const PAGE_PERMISSION_MAP: Record<string, PagePermissionConfig> = {
   // Inventory
   "/admin/inventory": { permission: PERMISSIONS.PRODUCTS_VIEW },
   "/admin/inventory/labels": { permission: PERMISSIONS.PRODUCTS_VIEW },
-  // Purchasing: viewing needs products.view; creating, receiving and every
-  // other write products.edit (the API route map; actions are gated inside).
-  "/admin/inventory/purchase-orders": { permission: PERMISSIONS.PRODUCTS_VIEW },
-  "/admin/inventory/purchase-orders/new": { permission: PERMISSIONS.PRODUCTS_EDIT },
-  "/admin/inventory/transfers": { permission: PERMISSIONS.PRODUCTS_VIEW },
-  "/admin/inventory/transfers/new": { permission: PERMISSIONS.PRODUCTS_EDIT },
-  "/admin/inventory/suppliers": { permission: PERMISSIONS.PRODUCTS_VIEW },
+  // Purchasing: viewing needs inventory.view; receiving and every other write
+  // inventory.manage, and drafting a purchase order (its unit costs) also
+  // products.view_costs (the API route map; actions are gated inside).
+  "/admin/inventory/purchase-orders": { permission: PERMISSIONS.INVENTORY_VIEW },
+  "/admin/inventory/purchase-orders/new": {
+    allOf: [PERMISSIONS.INVENTORY_MANAGE, PERMISSIONS.PRODUCTS_VIEW_COSTS],
+  },
+  "/admin/inventory/transfers": { permission: PERMISSIONS.INVENTORY_VIEW },
+  "/admin/inventory/transfers/new": { permission: PERMISSIONS.INVENTORY_MANAGE },
+  "/admin/inventory/suppliers": { permission: PERMISSIONS.INVENTORY_VIEW },
 
   // Products
   "/admin/products": { permission: PERMISSIONS.PRODUCTS_VIEW },
@@ -149,7 +152,9 @@ const PAGE_PERMISSION_MAP: Record<string, PagePermissionConfig> = {
     permission: PERMISSIONS.SETTINGS_DELIVERY_LOCATIONS_VIEW,
   },
   "/admin/settings/taxes": { permission: PERMISSIONS.TAXES_VIEW },
-  "/admin/settings/locations": { permission: PERMISSIONS.PRODUCTS_VIEW },
+  "/admin/settings/locations": {
+    anyOf: [PERMISSIONS.INVENTORY_VIEW, PERMISSIONS.SETTINGS_GENERAL_VIEW],
+  },
   "/admin/settings/notifications": {
     anyOf: [
       PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT,
@@ -198,11 +203,11 @@ const DYNAMIC_PAGE_PERMISSIONS: Array<{
   // Purchase orders and transfers: one page each (actions gated inside); receiving writes stock.
   {
     pattern: /^\/admin\/inventory\/(?:purchase-orders|transfers)\/[^/]+\/receive$/,
-    config: { permission: PERMISSIONS.PRODUCTS_EDIT },
+    config: { permission: PERMISSIONS.INVENTORY_MANAGE },
   },
   {
     pattern: /^\/admin\/inventory\/(?:purchase-orders|transfers)\/[^/]+$/,
-    config: { permission: PERMISSIONS.PRODUCTS_VIEW },
+    config: { permission: PERMISSIONS.INVENTORY_VIEW },
   },
 
   // Products: one detail page; saving still requires products.edit.

@@ -14,7 +14,7 @@ import { adminContext, definePlugin, PLUGIN_API_VERSION, ui, type PluginContext,
 export const manifest = {
   id: "scalius.order-tagger",
   name: "Order tagger",
-  version: "0.1.1",
+  version: "0.1.2",
   apiVersion: PLUGIN_API_VERSION,
   description: "Tags new paid orders and notes them on the order timeline, so your team sees at a glance what to pack.",
   author: { name: "Scalius" },
@@ -39,14 +39,53 @@ export const manifest = {
   admin: {
     pages: [{ id: "overview", title: "Order tagger", route: "summary" }],
   },
+  translations: {
+    bn: {
+      name: "অর্ডার ট্যাগার",
+      description: "পেমেন্ট হওয়া নতুন অর্ডারে ট্যাগ দেয় আর অর্ডারের টাইমলাইনে নোট রাখে, যাতে আপনার টিম এক নজরে বোঝে কী প্যাক করতে হবে।",
+      pages: { overview: "অর্ডার ট্যাগার" },
+    },
+  },
 } satisfies PluginManifestInput;
 
 interface TaggedRecord extends Record<string, unknown> {
   orderId: string;
+  /** The order's number staff know it by (#1073); missing on records kept before 0.1.2. */
+  orderNumber?: number | null;
   /** Null when the order was below the minimum and left alone. */
   tag: string | null;
   taggedAt: number;
 }
+
+/** The dashboard page's words, in the staff member's dashboard language (`adminContext().locale`). */
+const ADMIN_TEXT = {
+  en: {
+    title: "Order tagger",
+    description: "Paid orders this app tagged and noted on their timeline.",
+    handled: "Orders handled",
+    recent: "Recent orders",
+    order: "Order",
+    tag: "Tag",
+    paid: "Paid",
+    openOrder: "Open order",
+    belowMinimum: "Below the minimum",
+    emptyTitle: "No paid orders yet",
+    emptyText: "Orders show here once they are paid.",
+  },
+  bn: {
+    title: "অর্ডার ট্যাগার",
+    description: "পেমেন্ট হওয়া যে অর্ডারে এই অ্যাপ ট্যাগ দিয়েছে আর টাইমলাইনে নোট রেখেছে।",
+    handled: "যত অর্ডার দেখা হয়েছে",
+    recent: "সাম্প্রতিক অর্ডার",
+    order: "অর্ডার",
+    tag: "ট্যাগ",
+    paid: "পেমেন্ট",
+    openOrder: "অর্ডার খুলুন",
+    belowMinimum: "সর্বনিম্ন অঙ্কের কম",
+    emptyTitle: "এখনও পেমেন্ট হওয়া কোনো অর্ডার নেই",
+    emptyText: "পেমেন্ট হলে অর্ডারগুলো এখানে দেখা যাবে।",
+  },
+} as const;
 
 function tagged(ctx: PluginContext) {
   const collection = ctx.storage.tagged;
@@ -62,12 +101,13 @@ export default definePlugin({
       const orderId = event.resource.id;
       if (await tagged(ctx).get(orderId)) return;
 
-      const order = await ctx.api.call<{ totalAmount?: number }>("dashboard.orders.get", { path: { id: orderId } });
+      const order = await ctx.api.call<{ totalAmount?: number; orderNumber?: number | null }>("dashboard.orders.get", { path: { id: orderId } });
       if (!order.ok) throw new Error(`The order could not be read (${order.error?.code ?? order.status}).`);
       const taggedAt = Date.parse(event.occurredAt) || 0;
+      const orderNumber = typeof order.data?.orderNumber === "number" ? order.data.orderNumber : null;
       const minimum = Number(ctx.settings.min_total ?? 0);
       if (Number(order.data?.totalAmount ?? 0) < minimum) {
-        await tagged(ctx).put(orderId, { orderId, tag: null, taggedAt } satisfies TaggedRecord);
+        await tagged(ctx).put(orderId, { orderId, orderNumber, tag: null, taggedAt } satisfies TaggedRecord);
         ctx.log.info("Left an order below the minimum untagged", { orderId });
         return;
       }
@@ -80,7 +120,7 @@ export default definePlugin({
       });
       if (!comment.ok) throw new Error(`The timeline note could not be added (${comment.error?.code ?? comment.status}).`);
       await ctx.customFields.set("order", orderId, { tag });
-      await tagged(ctx).put(orderId, { orderId, tag, taggedAt } satisfies TaggedRecord);
+      await tagged(ctx).put(orderId, { orderId, orderNumber, tag, taggedAt } satisfies TaggedRecord);
       ctx.log.info("Tagged a paid order", { orderId, tag });
     },
   },
@@ -89,35 +129,39 @@ export default definePlugin({
     admin: {
       // A UI document (`ui.page`), which the dashboard checks and draws with its own components.
       summary: async (request, ctx) => {
+        const { cursor, locale } = adminContext(request);
+        const t = ADMIN_TEXT[locale];
         const [count, recent] = await Promise.all([
           tagged(ctx).count(),
-          tagged(ctx).query({ orderBy: { field: "taggedAt", direction: "desc" }, limit: 10, cursor: adminContext(request).cursor }),
+          tagged(ctx).query({ orderBy: { field: "taggedAt", direction: "desc" }, limit: 10, cursor }),
         ]);
         return {
           body: ui.page([
-            ui.stat("Orders handled", count),
-            ui.card("Recent orders", [
+            ui.stat(t.handled, count),
+            ui.card(t.recent, [
               ui.table({
-                columns: [{ key: "order", label: "Order" }, { key: "tag", label: "Tag" }, { key: "at", label: "Paid" }],
+                columns: [{ key: "order", label: t.order }, { key: "tag", label: t.tag }, { key: "at", label: t.paid }],
                 rows: recent.records.map((record) => {
                   const orderId = String(record.data.orderId);
+                  const orderNumber = Number(record.data.orderNumber);
                   return {
                     id: record.id,
                     to: ui.to.resource("order", orderId),
                     cells: {
-                      order: { text: orderId, to: ui.to.resource("order", orderId) },
+                      // Staff know an order by its number, never its internal id.
+                      order: { text: orderNumber > 0 ? `#${orderNumber}` : t.openOrder, to: ui.to.resource("order", orderId) },
                       tag: record.data.tag === null
-                        ? { badge: "Below the minimum", tone: "neutral" as const }
+                        ? { badge: t.belowMinimum, tone: "neutral" as const }
                         : { badge: `#${String(record.data.tag)}`, tone: "success" as const },
                       at: { date: new Date(Number(record.data.taggedAt) || 0).toISOString() },
                     },
                   };
                 }),
                 pagination: { next: recent.nextCursor },
-                empty: { title: "No paid orders yet", text: "Orders show here once they are paid." },
+                empty: { title: t.emptyTitle, text: t.emptyText },
               }),
             ]),
-          ], { title: "Order tagger", description: "Paid orders this app tagged and noted on their timeline." }),
+          ], { title: t.title, description: t.description }),
         };
       },
     },

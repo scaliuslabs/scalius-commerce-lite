@@ -24,6 +24,7 @@ import { useHasPermission } from "~/contexts/PermissionContext";
 import { useSettingsForm } from "~/hooks/use-settings-form";
 import { AdminApiResponseError, readSettingsRevisionConflict } from "~/lib/admin-api-error";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
+import { useProviderPortAccess } from "~/lib/provider-port-access";
 import { apiData, type ApiResult } from "~/lib/api";
 import { getServerFnError } from "~/lib/api-helpers";
 import {
@@ -357,7 +358,7 @@ export function PaymentMethodsCard() {
   const flow = useQuery(checkoutFlowQuery);
   const currency = useQuery(currencyQuery);
   // Installed apps' providers, offered or not; without them the active ones still list.
-  const appProviders = useQuery(appPaymentProvidersQuery);
+  const appProviders = useQuery({ ...appPaymentProvidersQuery, enabled: useProviderPortAccess("payment").canView });
   const [testResults, setTestResults] = useState<Record<string, { ok: boolean; message: string }>>({});
   const connectionTest = useMutation({
     mutationFn: (id: string) => apiData(postApiV1AdminSettingsProvidersByIdTest({ path: { id } })),

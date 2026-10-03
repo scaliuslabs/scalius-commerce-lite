@@ -1,4 +1,4 @@
-import { productVariants, products, inventoryLocations, inventoryMovements, orders, productLowStockAlerts, user as adminUsers } from "@scalius/database/schema";
+import { productVariants, products, inventoryLocations, inventoryMovements, inventoryOperations, orders, productLowStockAlerts, user as adminUsers } from "@scalius/database/schema";
 import { eq, sql, and, isNull, desc, asc, or, like } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import type { SQL } from "drizzle-orm";
@@ -110,6 +110,29 @@ function movementTimestampSeconds(value: Date | number | string): number {
     return Math.floor(parsed / 1000);
 }
 
+/**
+ * The location's on-hand before and after a movement, when the operation that
+ * wrote it recorded them (`previousStock`/`newStock` are the SKU's total across
+ * every location). Null for movements without one (orders, purchase orders,
+ * transfers): History then names the location and labels the total.
+ */
+export function movementLocationCounts(
+    operationPayload: string | null,
+    locationId: string | null,
+): { locationPreviousStock: number | null; locationNewStock: number | null } {
+    const none = { locationPreviousStock: null, locationNewStock: null };
+    if (!operationPayload || !locationId) return none;
+    try {
+        const result = JSON.parse(operationPayload) as Record<string, unknown>;
+        const previous = result.locationPreviousStock;
+        const next = result.locationNewStock;
+        if (result.locationId !== locationId || !Number.isSafeInteger(previous) || !Number.isSafeInteger(next)) return none;
+        return { locationPreviousStock: previous as number, locationNewStock: next as number };
+    } catch {
+        return none;
+    }
+}
+
 export async function listInventoryMovements(db: Database, params: {
     search?: string;
     movementType?: string;
@@ -205,8 +228,12 @@ export async function listInventoryMovements(db: Database, params: {
             variantSku: productVariants.sku,
             optionLabel: variantOptionLabelSql(productVariants.id),
             productName: products.name,
+            // A merchant operation (adjustment, count, scan, licence keys) keeps
+            // the location's own count before and after; read it from there.
+            operationPayload: inventoryOperations.resultPayload,
         })
         .from(inventoryMovements)
+        .leftJoin(inventoryOperations, eq(inventoryOperations.movementId, inventoryMovements.id))
         .leftJoin(inventoryLocations, eq(inventoryLocations.id, inventoryMovements.locationId))
         .leftJoin(productVariants, eq(productVariants.id, inventoryMovements.variantId))
         .leftJoin(products, eq(products.id, productVariants.productId))
@@ -219,8 +246,9 @@ export async function listInventoryMovements(db: Database, params: {
 
     const hasMore = rows.length > params.limit;
     const pageRows = rows.slice(0, params.limit);
-    const movements = pageRows.map(({ actorDisplayName, ...row }) => ({
+    const movements = pageRows.map(({ actorDisplayName, operationPayload, ...row }) => ({
         ...row,
+        ...movementLocationCounts(operationPayload, row.locationId),
         actorName: row.createdBy ? actorDisplayName ?? "Former admin" : "System",
         actorType: row.createdBy
             ? actorDisplayName

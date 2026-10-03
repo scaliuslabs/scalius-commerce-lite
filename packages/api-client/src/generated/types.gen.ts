@@ -1600,6 +1600,7 @@ export type AppSummary = {
     name: string;
     version: string;
     description: string;
+    translations?: AppTranslations;
     author: {
         name: string;
         url: string | null;
@@ -1636,6 +1637,28 @@ export type AppSummary = {
     }>;
 };
 
+/**
+ * Name, description and surface titles in other dashboard languages (null: English only).
+ */
+export type AppTranslations = {
+    bn?: {
+        name?: string;
+        description?: string;
+        pages?: {
+            [key: string]: string;
+        };
+        cards?: {
+            [key: string]: string;
+        };
+        actions?: {
+            [key: string]: string;
+        };
+        widgets?: {
+            [key: string]: string;
+        };
+    };
+} | null;
+
 export type AppAdminSurfaces = {
     id: string;
     name: string;
@@ -1668,6 +1691,7 @@ export type AppAdminSurfaces = {
         name: string;
         methods: Array<'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'>;
     }>;
+    translations?: AppTranslations;
 };
 
 export type AppDetail = AppSummary & {
@@ -36021,13 +36045,13 @@ export type GetApiV1AdminInventoryPurchaseOrdersResponses = {
                 quantity: number;
                 receivedQuantity: number;
                 /**
-                 * Σ quantity × unit cost, major units
+                 * Σ quantity × unit cost, major units. Left out without the View product costs permission.
                  */
-                subtotal: number;
+                subtotal?: number;
                 /**
-                 * Subtotal + shipping + other costs + tax
+                 * Subtotal + shipping + other costs + tax. Left out without the View product costs permission.
                  */
-                total: number;
+                total?: number;
                 revision: number;
                 orderedAt: NullableTimestamp;
                 receivedAt: NullableTimestamp;
@@ -36133,13 +36157,13 @@ export type PostApiV1AdminInventoryPurchaseOrdersResponses = {
             quantity: number;
             receivedQuantity: number;
             /**
-             * Σ quantity × unit cost, major units
+             * Σ quantity × unit cost, major units. Left out without the View product costs permission.
              */
-            subtotal: number;
+            subtotal?: number;
             /**
-             * Subtotal + shipping + other costs + tax
+             * Subtotal + shipping + other costs + tax. Left out without the View product costs permission.
              */
-            total: number;
+            total?: number;
             revision: number;
             orderedAt: NullableTimestamp;
             receivedAt: NullableTimestamp;
@@ -36147,9 +36171,18 @@ export type PostApiV1AdminInventoryPurchaseOrdersResponses = {
             createdAt: string | number;
             updatedAt: string | number;
             notes: string | null;
-            shipping: number;
-            otherCosts: number;
-            tax: number;
+            /**
+             * Shipping charged by the supplier. Left out without the View product costs permission.
+             */
+            shipping?: number;
+            /**
+             * Other charges. Left out without the View product costs permission.
+             */
+            otherCosts?: number;
+            /**
+             * Tax charged by the supplier. Left out without the View product costs permission.
+             */
+            tax?: number;
             createdBy: string | null;
             lines: Array<{
                 id: string;
@@ -36167,12 +36200,18 @@ export type PostApiV1AdminInventoryPurchaseOrdersResponses = {
                 quantity: number;
                 receivedQuantity: number;
                 openQuantity: number;
-                unitCost: number;
-                lineTotal: number;
                 /**
-                 * The SKU's unit cost now
+                 * Unit cost on this purchase order. Left out without the View product costs permission.
                  */
-                currentCost: number | null;
+                unitCost?: number;
+                /**
+                 * Quantity × unit cost. Left out without the View product costs permission.
+                 */
+                lineTotal?: number;
+                /**
+                 * The SKU's unit cost now. Left out without the View product costs permission.
+                 */
+                currentCost?: number | null;
             }>;
             receipts: Array<{
                 operationKey: string;
@@ -36183,9 +36222,18 @@ export type PostApiV1AdminInventoryPurchaseOrdersResponses = {
                     variantId: string;
                     sku: string;
                     quantity: number;
-                    unitCost: number;
-                    costBefore: number | null;
-                    costAfter: number | null;
+                    /**
+                     * Unit cost received. Left out without the View product costs permission.
+                     */
+                    unitCost?: number;
+                    /**
+                     * The SKU's unit cost before the receipt. Left out without the View product costs permission.
+                     */
+                    costBefore?: number | null;
+                    /**
+                     * The SKU's unit cost after the receipt. Left out without the View product costs permission.
+                     */
+                    costAfter?: number | null;
                     costUpdated: boolean;
                 }>;
             }>;
@@ -36311,13 +36359,13 @@ export type GetApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdResponses = {
             quantity: number;
             receivedQuantity: number;
             /**
-             * Σ quantity × unit cost, major units
+             * Σ quantity × unit cost, major units. Left out without the View product costs permission.
              */
-            subtotal: number;
+            subtotal?: number;
             /**
-             * Subtotal + shipping + other costs + tax
+             * Subtotal + shipping + other costs + tax. Left out without the View product costs permission.
              */
-            total: number;
+            total?: number;
             revision: number;
             orderedAt: NullableTimestamp;
             receivedAt: NullableTimestamp;
@@ -36325,9 +36373,18 @@ export type GetApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdResponses = {
             createdAt: string | number;
             updatedAt: string | number;
             notes: string | null;
-            shipping: number;
-            otherCosts: number;
-            tax: number;
+            /**
+             * Shipping charged by the supplier. Left out without the View product costs permission.
+             */
+            shipping?: number;
+            /**
+             * Other charges. Left out without the View product costs permission.
+             */
+            otherCosts?: number;
+            /**
+             * Tax charged by the supplier. Left out without the View product costs permission.
+             */
+            tax?: number;
             createdBy: string | null;
             lines: Array<{
                 id: string;
@@ -36345,12 +36402,18 @@ export type GetApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdResponses = {
                 quantity: number;
                 receivedQuantity: number;
                 openQuantity: number;
-                unitCost: number;
-                lineTotal: number;
                 /**
-                 * The SKU's unit cost now
+                 * Unit cost on this purchase order. Left out without the View product costs permission.
                  */
-                currentCost: number | null;
+                unitCost?: number;
+                /**
+                 * Quantity × unit cost. Left out without the View product costs permission.
+                 */
+                lineTotal?: number;
+                /**
+                 * The SKU's unit cost now. Left out without the View product costs permission.
+                 */
+                currentCost?: number | null;
             }>;
             receipts: Array<{
                 operationKey: string;
@@ -36361,9 +36424,18 @@ export type GetApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdResponses = {
                     variantId: string;
                     sku: string;
                     quantity: number;
-                    unitCost: number;
-                    costBefore: number | null;
-                    costAfter: number | null;
+                    /**
+                     * Unit cost received. Left out without the View product costs permission.
+                     */
+                    unitCost?: number;
+                    /**
+                     * The SKU's unit cost before the receipt. Left out without the View product costs permission.
+                     */
+                    costBefore?: number | null;
+                    /**
+                     * The SKU's unit cost after the receipt. Left out without the View product costs permission.
+                     */
+                    costAfter?: number | null;
                     costUpdated: boolean;
                 }>;
             }>;
@@ -36473,13 +36545,13 @@ export type PutApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdResponses = {
             quantity: number;
             receivedQuantity: number;
             /**
-             * Σ quantity × unit cost, major units
+             * Σ quantity × unit cost, major units. Left out without the View product costs permission.
              */
-            subtotal: number;
+            subtotal?: number;
             /**
-             * Subtotal + shipping + other costs + tax
+             * Subtotal + shipping + other costs + tax. Left out without the View product costs permission.
              */
-            total: number;
+            total?: number;
             revision: number;
             orderedAt: NullableTimestamp;
             receivedAt: NullableTimestamp;
@@ -36487,9 +36559,18 @@ export type PutApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdResponses = {
             createdAt: string | number;
             updatedAt: string | number;
             notes: string | null;
-            shipping: number;
-            otherCosts: number;
-            tax: number;
+            /**
+             * Shipping charged by the supplier. Left out without the View product costs permission.
+             */
+            shipping?: number;
+            /**
+             * Other charges. Left out without the View product costs permission.
+             */
+            otherCosts?: number;
+            /**
+             * Tax charged by the supplier. Left out without the View product costs permission.
+             */
+            tax?: number;
             createdBy: string | null;
             lines: Array<{
                 id: string;
@@ -36507,12 +36588,18 @@ export type PutApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdResponses = {
                 quantity: number;
                 receivedQuantity: number;
                 openQuantity: number;
-                unitCost: number;
-                lineTotal: number;
                 /**
-                 * The SKU's unit cost now
+                 * Unit cost on this purchase order. Left out without the View product costs permission.
                  */
-                currentCost: number | null;
+                unitCost?: number;
+                /**
+                 * Quantity × unit cost. Left out without the View product costs permission.
+                 */
+                lineTotal?: number;
+                /**
+                 * The SKU's unit cost now. Left out without the View product costs permission.
+                 */
+                currentCost?: number | null;
             }>;
             receipts: Array<{
                 operationKey: string;
@@ -36523,9 +36610,18 @@ export type PutApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdResponses = {
                     variantId: string;
                     sku: string;
                     quantity: number;
-                    unitCost: number;
-                    costBefore: number | null;
-                    costAfter: number | null;
+                    /**
+                     * Unit cost received. Left out without the View product costs permission.
+                     */
+                    unitCost?: number;
+                    /**
+                     * The SKU's unit cost before the receipt. Left out without the View product costs permission.
+                     */
+                    costBefore?: number | null;
+                    /**
+                     * The SKU's unit cost after the receipt. Left out without the View product costs permission.
+                     */
+                    costAfter?: number | null;
                     costUpdated: boolean;
                 }>;
             }>;
@@ -36625,13 +36721,13 @@ export type PostApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdOrderResponses
             quantity: number;
             receivedQuantity: number;
             /**
-             * Σ quantity × unit cost, major units
+             * Σ quantity × unit cost, major units. Left out without the View product costs permission.
              */
-            subtotal: number;
+            subtotal?: number;
             /**
-             * Subtotal + shipping + other costs + tax
+             * Subtotal + shipping + other costs + tax. Left out without the View product costs permission.
              */
-            total: number;
+            total?: number;
             revision: number;
             orderedAt: NullableTimestamp;
             receivedAt: NullableTimestamp;
@@ -36639,9 +36735,18 @@ export type PostApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdOrderResponses
             createdAt: string | number;
             updatedAt: string | number;
             notes: string | null;
-            shipping: number;
-            otherCosts: number;
-            tax: number;
+            /**
+             * Shipping charged by the supplier. Left out without the View product costs permission.
+             */
+            shipping?: number;
+            /**
+             * Other charges. Left out without the View product costs permission.
+             */
+            otherCosts?: number;
+            /**
+             * Tax charged by the supplier. Left out without the View product costs permission.
+             */
+            tax?: number;
             createdBy: string | null;
             lines: Array<{
                 id: string;
@@ -36659,12 +36764,18 @@ export type PostApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdOrderResponses
                 quantity: number;
                 receivedQuantity: number;
                 openQuantity: number;
-                unitCost: number;
-                lineTotal: number;
                 /**
-                 * The SKU's unit cost now
+                 * Unit cost on this purchase order. Left out without the View product costs permission.
                  */
-                currentCost: number | null;
+                unitCost?: number;
+                /**
+                 * Quantity × unit cost. Left out without the View product costs permission.
+                 */
+                lineTotal?: number;
+                /**
+                 * The SKU's unit cost now. Left out without the View product costs permission.
+                 */
+                currentCost?: number | null;
             }>;
             receipts: Array<{
                 operationKey: string;
@@ -36675,9 +36786,18 @@ export type PostApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdOrderResponses
                     variantId: string;
                     sku: string;
                     quantity: number;
-                    unitCost: number;
-                    costBefore: number | null;
-                    costAfter: number | null;
+                    /**
+                     * Unit cost received. Left out without the View product costs permission.
+                     */
+                    unitCost?: number;
+                    /**
+                     * The SKU's unit cost before the receipt. Left out without the View product costs permission.
+                     */
+                    costBefore?: number | null;
+                    /**
+                     * The SKU's unit cost after the receipt. Left out without the View product costs permission.
+                     */
+                    costAfter?: number | null;
                     costUpdated: boolean;
                 }>;
             }>;
@@ -36766,9 +36886,18 @@ export type PostApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdReceiveRespons
                 sku: string;
                 quantity: number;
                 movementId: string;
-                unitCost: number;
-                costBefore: number | null;
-                costAfter: number | null;
+                /**
+                 * Unit cost received. Left out without the View product costs permission.
+                 */
+                unitCost?: number;
+                /**
+                 * The SKU's unit cost before the receipt. Left out without the View product costs permission.
+                 */
+                costBefore?: number | null;
+                /**
+                 * The SKU's unit cost after the receipt. Left out without the View product costs permission.
+                 */
+                costAfter?: number | null;
                 /**
                  * The SKU's on-hand across every location after the receipt
                  */
@@ -36859,13 +36988,13 @@ export type PostApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdCancelResponse
             quantity: number;
             receivedQuantity: number;
             /**
-             * Σ quantity × unit cost, major units
+             * Σ quantity × unit cost, major units. Left out without the View product costs permission.
              */
-            subtotal: number;
+            subtotal?: number;
             /**
-             * Subtotal + shipping + other costs + tax
+             * Subtotal + shipping + other costs + tax. Left out without the View product costs permission.
              */
-            total: number;
+            total?: number;
             revision: number;
             orderedAt: NullableTimestamp;
             receivedAt: NullableTimestamp;
@@ -36873,9 +37002,18 @@ export type PostApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdCancelResponse
             createdAt: string | number;
             updatedAt: string | number;
             notes: string | null;
-            shipping: number;
-            otherCosts: number;
-            tax: number;
+            /**
+             * Shipping charged by the supplier. Left out without the View product costs permission.
+             */
+            shipping?: number;
+            /**
+             * Other charges. Left out without the View product costs permission.
+             */
+            otherCosts?: number;
+            /**
+             * Tax charged by the supplier. Left out without the View product costs permission.
+             */
+            tax?: number;
             createdBy: string | null;
             lines: Array<{
                 id: string;
@@ -36893,12 +37031,18 @@ export type PostApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdCancelResponse
                 quantity: number;
                 receivedQuantity: number;
                 openQuantity: number;
-                unitCost: number;
-                lineTotal: number;
                 /**
-                 * The SKU's unit cost now
+                 * Unit cost on this purchase order. Left out without the View product costs permission.
                  */
-                currentCost: number | null;
+                unitCost?: number;
+                /**
+                 * Quantity × unit cost. Left out without the View product costs permission.
+                 */
+                lineTotal?: number;
+                /**
+                 * The SKU's unit cost now. Left out without the View product costs permission.
+                 */
+                currentCost?: number | null;
             }>;
             receipts: Array<{
                 operationKey: string;
@@ -36909,9 +37053,18 @@ export type PostApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdCancelResponse
                     variantId: string;
                     sku: string;
                     quantity: number;
-                    unitCost: number;
-                    costBefore: number | null;
-                    costAfter: number | null;
+                    /**
+                     * Unit cost received. Left out without the View product costs permission.
+                     */
+                    unitCost?: number;
+                    /**
+                     * The SKU's unit cost before the receipt. Left out without the View product costs permission.
+                     */
+                    costBefore?: number | null;
+                    /**
+                     * The SKU's unit cost after the receipt. Left out without the View product costs permission.
+                     */
+                    costAfter?: number | null;
                     costUpdated: boolean;
                 }>;
             }>;
@@ -37794,9 +37947,9 @@ export type GetApiV1AdminInventoryResponses = {
                  */
                 locationOnHand: number | null;
                 /**
-                 * Unit cost (cost per item) in major units; null when not set. Staff-only.
+                 * Unit cost (cost per item) in major units; null when not set. Left out without the View product costs permission.
                  */
-                cost: number | null;
+                cost?: number | null;
                 /**
                  * Open purchase order units plus transfers in transit (to the `locationId` filter, if any); not on hand
                  */
@@ -37813,8 +37966,22 @@ export type GetApiV1AdminInventoryResponses = {
                 orderNumber: number | null;
                 type: string;
                 quantity: number;
+                /**
+                 * The SKU's on-hand across every location before the movement
+                 */
                 previousStock: number;
+                /**
+                 * The SKU's on-hand across every location after the movement
+                 */
                 newStock: number;
+                /**
+                 * On-hand at `locationId` before, when the operation recorded it (adjustments, counts, scans, licence keys); null otherwise
+                 */
+                locationPreviousStock: number | null;
+                /**
+                 * On-hand at `locationId` after, when recorded; null otherwise
+                 */
+                locationNewStock: number | null;
                 notes: string | null;
                 createdBy: string | null;
                 ledgerVersion: number;
@@ -38883,12 +39050,12 @@ export type GetApiV1AdminInventoryLocationsResponses = {
                 name: string;
                 code: string;
                 kind: 'warehouse' | 'store' | 'other';
-                addressLine1: string | null;
-                addressLine2: string | null;
-                city: string | null;
-                postalCode: string | null;
+                addressLine1?: string | null;
+                addressLine2?: string | null;
+                city?: string | null;
+                postalCode?: string | null;
                 countryCode: string;
-                phone: string | null;
+                phone?: string | null;
                 isDefault: boolean;
                 status: 'active' | 'archived';
                 position: number;
@@ -38965,12 +39132,12 @@ export type PostApiV1AdminInventoryLocationsResponses = {
             name: string;
             code: string;
             kind: 'warehouse' | 'store' | 'other';
-            addressLine1: string | null;
-            addressLine2: string | null;
-            city: string | null;
-            postalCode: string | null;
+            addressLine1?: string | null;
+            addressLine2?: string | null;
+            city?: string | null;
+            postalCode?: string | null;
             countryCode: string;
-            phone: string | null;
+            phone?: string | null;
             isDefault: boolean;
             status: 'active' | 'archived';
             position: number;
@@ -39060,12 +39227,12 @@ export type PatchApiV1AdminInventoryLocationsByLocationIdResponses = {
             name: string;
             code: string;
             kind: 'warehouse' | 'store' | 'other';
-            addressLine1: string | null;
-            addressLine2: string | null;
-            city: string | null;
-            postalCode: string | null;
+            addressLine1?: string | null;
+            addressLine2?: string | null;
+            city?: string | null;
+            postalCode?: string | null;
             countryCode: string;
-            phone: string | null;
+            phone?: string | null;
             isDefault: boolean;
             status: 'active' | 'archived';
             position: number;
@@ -39133,12 +39300,12 @@ export type PostApiV1AdminInventoryLocationsByLocationIdArchiveResponses = {
             name: string;
             code: string;
             kind: 'warehouse' | 'store' | 'other';
-            addressLine1: string | null;
-            addressLine2: string | null;
-            city: string | null;
-            postalCode: string | null;
+            addressLine1?: string | null;
+            addressLine2?: string | null;
+            city?: string | null;
+            postalCode?: string | null;
             countryCode: string;
-            phone: string | null;
+            phone?: string | null;
             isDefault: boolean;
             status: 'active' | 'archived';
             position: number;
@@ -39195,12 +39362,12 @@ export type PostApiV1AdminInventoryLocationsByLocationIdUnarchiveResponses = {
             name: string;
             code: string;
             kind: 'warehouse' | 'store' | 'other';
-            addressLine1: string | null;
-            addressLine2: string | null;
-            city: string | null;
-            postalCode: string | null;
+            addressLine1?: string | null;
+            addressLine2?: string | null;
+            city?: string | null;
+            postalCode?: string | null;
             countryCode: string;
-            phone: string | null;
+            phone?: string | null;
             isDefault: boolean;
             status: 'active' | 'archived';
             position: number;
@@ -39268,12 +39435,12 @@ export type PostApiV1AdminInventoryLocationsByLocationIdDefaultResponses = {
             name: string;
             code: string;
             kind: 'warehouse' | 'store' | 'other';
-            addressLine1: string | null;
-            addressLine2: string | null;
-            city: string | null;
-            postalCode: string | null;
+            addressLine1?: string | null;
+            addressLine2?: string | null;
+            city?: string | null;
+            postalCode?: string | null;
             countryCode: string;
-            phone: string | null;
+            phone?: string | null;
             isDefault: boolean;
             status: 'active' | 'archived';
             position: number;
@@ -43727,9 +43894,10 @@ export type GetApiV1AdminReportsResponses = {
                     direction: 'asc' | 'desc';
                 };
                 requiresCustomerAccess?: boolean;
+                requiresCostAccess?: boolean;
                 rowLink?: 'product' | 'variant';
                 available: boolean;
-                unavailableReason: 'customer_access' | null;
+                unavailableReason: 'customer_access' | 'cost_access' | null;
             }>;
         };
     };
@@ -43863,6 +44031,7 @@ export type GetApiV1AdminReportsByReportIdResponses = {
                     direction: 'asc' | 'desc';
                 };
                 requiresCustomerAccess?: boolean;
+                requiresCostAccess?: boolean;
                 rowLink?: 'product' | 'variant';
             };
             currency: {

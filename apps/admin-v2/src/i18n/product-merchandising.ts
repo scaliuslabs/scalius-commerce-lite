@@ -138,7 +138,7 @@ export const productMerchandisingMessages = defineMessages({
     bundlePrice: "সেটের দাম ({symbol})",
     bundleLabel: "লেবেল",
     bundleLabelPlaceholder: "যেমন: ফ্যামিলি প্যাক",
-    bundleActive: "চালু",
+    bundleActive: "সক্রিয়",
     removeBundle: "বান্ডেল {row} সরান",
     bundlePercentSummary: "{quantity}টি বা বেশি কিনলে প্রতিটিতে {percent}% ছাড়",
     bundlePriceSummary: "প্রতি {quantity}টি {price}",

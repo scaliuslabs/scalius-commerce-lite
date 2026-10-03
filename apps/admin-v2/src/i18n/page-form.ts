@@ -72,7 +72,7 @@ export const pageFormMessages = defineMessages({
     changeImage: "ছবি বদলান",
     noImage: "কোনো ছবি নেই",
     visibility: "দৃশ্যমানতা",
-    draft: "ড্রাফট",
+    draft: "খসড়া",
     visible: "দৃশ্যমান",
     scheduled: "নির্ধারিত",
     publishAt: "প্রকাশের সময়",

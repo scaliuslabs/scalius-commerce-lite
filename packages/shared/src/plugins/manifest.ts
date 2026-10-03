@@ -185,6 +185,28 @@ const storefrontSchema = z.object({
   proxy: z.boolean().default(false),
 }).strict();
 
+// ── Translations ──────────────────────────────────────────────────────────
+
+/** Dashboard languages besides English, the manifest's own language. */
+export const PLUGIN_TRANSLATION_LOCALES = ["bn"] as const;
+export type PluginTranslationLocale = (typeof PLUGIN_TRANSLATION_LOCALES)[number];
+
+/**
+ * The manifest's merchant-facing text in another dashboard language: the
+ * app's name and description, and its pages', cards', actions' and widgets'
+ * titles by id. Anything left out shows in English. An app's own screens
+ * pick their language from `adminContext(request).locale`.
+ */
+const pluginTranslationSchema = z.object({
+  name: title.optional(),
+  description: description.optional(),
+  pages: z.record(name, title).optional(),
+  cards: z.record(name, title).optional(),
+  actions: z.record(name, title).optional(),
+  widgets: z.record(name, title).optional(),
+}).strict();
+export type PluginTranslation = z.infer<typeof pluginTranslationSchema>;
+
 // ── Manifest ──────────────────────────────────────────────────────────────
 
 export const pluginManifestSchema = z.object({
@@ -247,6 +269,8 @@ export const pluginManifestSchema = z.object({
 
   admin: adminSchema.default({ pages: [], cards: [], actions: [], widgets: [] }),
   storefront: storefrontSchema.default({ sections: [], productBlocks: [], head: false, scripts: [], proxy: false }),
+  /** The dashboard text in other languages (additive; English is the manifest itself). */
+  translations: z.object({ bn: pluginTranslationSchema.optional() }).strict().optional(),
 
   /** Per-invocation limits, within the platform's ceilings. */
   limits: z.object({
@@ -267,6 +291,18 @@ export const pluginManifestSchema = z.object({
   manifest.admin.cards.forEach((card, index) => needAdminRoute(["admin", "cards", index, "route"], card.route));
   manifest.admin.actions.forEach((action, index) => needAdminRoute(["admin", "actions", index, "route"], action.route));
   manifest.admin.widgets.forEach((widget, index) => needAdminRoute(["admin", "widgets", index, "route"], widget.route));
+  for (const locale of PLUGIN_TRANSLATION_LOCALES) {
+    const translation = manifest.translations?.[locale];
+    if (!translation) continue;
+    for (const surface of ["pages", "cards", "actions", "widgets"] as const) {
+      const declared = new Set(manifest.admin[surface].map((entry) => entry.id));
+      for (const id of Object.keys(translation[surface] ?? {})) {
+        if (!declared.has(id)) {
+          context.addIssue({ code: "custom", path: ["translations", locale, surface, id], message: `No admin ${surface.slice(0, -1)} ${id} to translate.` });
+        }
+      }
+    }
+  }
   const needPublicRoute = (path: (string | number)[], route: string) => {
     if (!publicRoutes.has(route)) context.addIssue({ code: "custom", path, message: `Public route ${route} is not declared.` });
   };

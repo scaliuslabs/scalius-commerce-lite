@@ -18,7 +18,8 @@ import {
 } from "@scalius/shared/plugins/providers/kinds";
 import { declaredProviderOperations } from "@scalius/shared/plugins/providers";
 import { getCredentialEncryptionKey } from "../../../utils/encryption-key";
-import { NotFoundError, ValidationError } from "../../../utils/api-error";
+import { canUseProviderPort } from "@scalius/core/auth/rbac/provider-permissions";
+import { ForbiddenError, NotFoundError, ValidationError } from "../../../utils/api-error";
 import { ok } from "../../../utils/api-response";
 import { errorResponses, successEnvelope } from "../../../schemas/responses";
 import { readAppProviderSettings, requestProviderRuntime } from "../../../plugins/providers/runtime";
@@ -72,6 +73,10 @@ const listRoute = createRoute({
 
 app.openapi(listRoute, async (c) => {
   const { kind } = c.req.valid("query");
+  // The same permission that reads this port's built-in providers.
+  if (!canUseProviderPort(c.get("adminPermissions"), kind, "view")) {
+    throw new ForbiddenError("You do not have permission to view these providers.");
+  }
   const runtime = requestProviderRuntime(c);
   const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
   const providers = await Promise.all(appProvidersOf(await listPluginInstallations(c.get("db")), kind)
@@ -125,6 +130,10 @@ app.openapi(testRoute, async (c) => {
   const installation = installations.find((candidate) => candidate.pluginId === parsed.pluginId);
   const declaration = installation?.manifest.providers.find((candidate) => candidate.id === parsed.providerId);
   if (!installation || !declaration) throw new NotFoundError("This app provider is not installed.");
+  // The same permission that tests or saves this port's built-in providers.
+  if (!canUseProviderPort(c.get("adminPermissions"), declaration.kind, "manage")) {
+    throw new ForbiddenError("You do not have permission to test this provider.");
+  }
   if (!declaredProviderOperations(declaration).includes("testConnection")) {
     throw new ValidationError(`${declaration.name} does not offer a connection test.`);
   }

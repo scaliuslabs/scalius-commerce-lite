@@ -21,6 +21,33 @@ describe("permission prerequisites", () => {
     // No view permission exists for the storefront header, so nothing is required.
     expect(permissionPrerequisites(PERMISSIONS.SETTINGS_HEADER_EDIT)).toEqual([]);
     expect(permissionPrerequisites(PERMISSIONS.PRODUCTS_VIEW)).toEqual([]);
+    // Costs are a product view; inventory operations list products.
+    expect(permissionPrerequisites(PERMISSIONS.PRODUCTS_VIEW_COSTS)).toEqual([PERMISSIONS.PRODUCTS_VIEW]);
+    expect(permissionPrerequisites(PERMISSIONS.INVENTORY_VIEW)).toEqual([PERMISSIONS.PRODUCTS_VIEW]);
+    expect(permissionPrerequisites(PERMISSIONS.INVENTORY_MANAGE)).toEqual([PERMISSIONS.INVENTORY_VIEW]);
+    expect(withPrerequisites([PERMISSIONS.INVENTORY_MANAGE])).toEqual(new Set([
+      PERMISSIONS.INVENTORY_MANAGE,
+      PERMISSIONS.INVENTORY_VIEW,
+      PERMISSIONS.PRODUCTS_VIEW,
+    ]));
+    expect(withoutUnmetPrerequisites([PERMISSIONS.INVENTORY_MANAGE, PERMISSIONS.INVENTORY_VIEW])).toEqual(new Set());
+  });
+
+  it("adds code-owned permissions without a migration and keeps them out of view-only roles", async () => {
+    const { sqlite, db } = createSqliteD1Database();
+    await autoSeedRbacIfNeeded(db);
+    const names = new Set((sqlite.prepare("SELECT name FROM permissions").all() as Array<{ name: string }>).map((row) => row.name));
+    for (const permission of [PERMISSIONS.PRODUCTS_VIEW_COSTS, PERMISSIONS.INVENTORY_VIEW, PERMISSIONS.INVENTORY_MANAGE]) {
+      expect(names.has(permission), permission).toBe(true);
+    }
+    const salesRep = new Set((sqlite.prepare(`
+      SELECT p.name FROM role_permissions rp JOIN roles r ON r.id = rp.role_id JOIN permissions p ON p.id = rp.permission_id
+      WHERE r.name = 'sales_rep'
+    `).all() as Array<{ name: string }>).map((row) => row.name));
+    expect(salesRep.has(PERMISSIONS.PRODUCTS_VIEW)).toBe(true);
+    expect(salesRep.has(PERMISSIONS.PRODUCTS_VIEW_COSTS)).toBe(false);
+    expect(salesRep.has(PERMISSIONS.INVENTORY_VIEW)).toBe(false);
+    sqlite.close();
   });
 
   it("ticks what a permission needs and unticks what depends on a removed one", () => {

@@ -3,15 +3,27 @@
 // All available permissions in the system
 export const PERMISSIONS = {
   // =============================================
-  // Products (7 permissions)
+  // Products (8 permissions)
   // =============================================
   PRODUCTS_VIEW: "products.view",
+  // Shopify's "View product costs": unit costs (cost per item), margins,
+  // inventory value, purchase-order money and profit reports. Responses
+  // leave those fields out for everyone without it.
+  PRODUCTS_VIEW_COSTS: "products.view_costs",
   PRODUCTS_CREATE: "products.create",
   PRODUCTS_EDIT: "products.edit",
   PRODUCTS_DELETE: "products.delete",
   PRODUCTS_RESTORE: "products.restore",
   PRODUCTS_PERMANENT_DELETE: "products.permanent_delete",
   PRODUCTS_BULK_OPERATIONS: "products.bulk_operations",
+
+  // =============================================
+  // Inventory operations (2 permissions): locations and their addresses,
+  // suppliers, purchase orders and transfers. Stock levels themselves are
+  // product data (products.view reads them, products.edit adjusts them).
+  // =============================================
+  INVENTORY_VIEW: "inventory.view",
+  INVENTORY_MANAGE: "inventory.manage",
 
   // =============================================
   // Reviews (2 permissions): buyer reviews of delivered order lines
@@ -217,16 +229,27 @@ export function getAllPermissionNames(): string[] {
 
 const PERMISSION_NAMES = new Set<string>(Object.values(PERMISSIONS));
 
+/** Prerequisites outside a permission's own area. */
+const CROSS_AREA_PREREQUISITES: Readonly<Record<string, readonly string[]>> = {
+  // Purchase orders, transfers and locations list products and their SKUs.
+  [PERMISSIONS.INVENTORY_VIEW]: [PERMISSIONS.PRODUCTS_VIEW],
+};
+
 /**
  * What a permission needs to be useful: its area's view permission ("Edit
  * products" needs "View products"; "View analytics" needs the home page),
- * and delete before delete-forever. Roles are saved closed under this, and a
- * person's effective access drops anything whose prerequisite is missing.
+ * delete before delete-forever, and the few needs that cross areas ("View
+ * inventory operations" needs "View products"). Roles are saved closed under
+ * this, and a person's effective access drops anything whose prerequisite is
+ * missing.
  */
 export function permissionPrerequisites(permission: string): string[] {
   const scope = permission.slice(0, permission.lastIndexOf("."));
-  return [`${scope}.view`, ...(permission.endsWith(".permanent_delete") ? [`${scope}.delete`] : [])]
-    .filter((required) => required !== permission && PERMISSION_NAMES.has(required));
+  return [
+    `${scope}.view`,
+    ...(permission.endsWith(".permanent_delete") ? [`${scope}.delete`] : []),
+    ...(CROSS_AREA_PREREQUISITES[permission] ?? []),
+  ].filter((required) => required !== permission && PERMISSION_NAMES.has(required));
 }
 
 /** Ticking a permission ticks what it needs. */

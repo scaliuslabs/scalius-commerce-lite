@@ -18,8 +18,9 @@ import {
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
 import { usePermissions } from "~/contexts/PermissionContext";
-import { useMessages } from "~/i18n";
+import { useLocale, useMessages } from "~/i18n";
 import { installedAppsMessages } from "~/i18n/apps";
+import { localizedAppDetail } from "./app-text";
 import { resourceMessages } from "~/i18n/resource";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import type { AppDetail, AppFunction } from "~/lib/api-query-options/apps";
@@ -246,9 +247,11 @@ function AppPage({ app }: { app: AppDetail }) {
 /** The app page with its own save bar (the settings card registers with it). */
 export function AppDetailPage({ app }: { app: AppDetail }) {
   const t = useMessages(installedAppsMessages);
+  // The app's name, description and page titles in the dashboard's language.
+  const locale = useLocale();
   return (
     <SaveBarProvider savedMessage={t("settingsSaved")}>
-      <AppPage app={app} />
+      <AppPage app={localizedAppDetail(app, locale)} />
     </SaveBarProvider>
   );
 }

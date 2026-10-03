@@ -30,7 +30,7 @@ import { refund, refundStatus } from "./refunds";
 export const manifest = {
   id: "scalius.bkash",
   name: "bKash",
-  version: "0.1.0",
+  version: "0.1.1",
   apiVersion: PLUGIN_API_VERSION,
   description: "Take bKash payments at checkout. Buyers pay on bKash's own page; an order is marked paid only after bKash confirms the payment to Scalius directly. Refund bKash payments from the order page.",
   author: { name: "Scalius" },
@@ -72,6 +72,12 @@ export const manifest = {
   },
   // A return may grant a token, Execute and Query in turn, and bKash can be slow: allow the platform's full 30 s.
   limits: { wallMs: 30_000 },
+  translations: {
+    bn: {
+      name: "বিকাশ",
+      description: "চেকআউটে বিকাশে পেমেন্ট নিন। ক্রেতা বিকাশের নিজের পেজে পেমেন্ট করেন; বিকাশ সরাসরি Scalius-কে পেমেন্ট নিশ্চিত করার পরই অর্ডার পেইড হয়। অর্ডার পেজ থেকে বিকাশ পেমেন্ট রিফান্ড করুন।",
+    },
+  },
 } satisfies PluginManifestInput;
 
 /** testConnection makes one token grant. */

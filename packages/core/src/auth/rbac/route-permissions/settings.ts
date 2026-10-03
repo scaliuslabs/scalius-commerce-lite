@@ -1,5 +1,6 @@
 // Route permissions for the settings, tax, fraud-checker and cache API.
 import { PERMISSIONS } from "../permissions";
+import { providerPortRouteUnion } from "../provider-permissions";
 import { ANY_STAFF, type RoutePermissionMap } from "./shared";
 
 export const SETTINGS_ROUTE_PERMISSIONS: RoutePermissionMap = {
@@ -132,19 +133,14 @@ export const SETTINGS_ROUTE_PERMISSIONS: RoutePermissionMap = {
     GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
     POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
   },
-  // App providers are offered on the settings pages of their port: general
-  // (email, payments), notifications (SMS) and the courier fraud check.
+  // App providers are offered on the settings pages of their port and answer
+  // to that port's built-in permissions (provider-permissions.ts): the route
+  // admits any of them, the handler checks the port asked for.
   "/api/v1/admin/settings/providers": {
-    GET: { anyOf: [PERMISSIONS.SETTINGS_GENERAL_VIEW, PERMISSIONS.SETTINGS_FRAUD_CHECKER_VIEW] },
+    GET: { anyOf: providerPortRouteUnion("view") },
   },
   "/api/v1/admin/settings/providers/*/test": {
-    POST: {
-      anyOf: [
-        PERMISSIONS.SETTINGS_GENERAL_EDIT,
-        PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT,
-        PERMISSIONS.SETTINGS_FRAUD_CHECKER_EDIT,
-      ],
-    },
+    POST: { anyOf: providerPortRouteUnion("manage") },
   },
   "/api/v1/admin/settings/sms": {
     GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },

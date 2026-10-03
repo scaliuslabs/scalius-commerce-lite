@@ -8,6 +8,7 @@ import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Label } from "~/components/ui/label";
+import { useCatalogActionPermissions } from "~/hooks/use-catalog-action-permissions";
 import { useMessages } from "~/i18n";
 import { purchasingMessages } from "~/i18n/purchasing";
 import { useReceivePurchaseOrder, type PurchaseOrder } from "~/lib/api-query-options/purchasing";
@@ -42,8 +43,11 @@ export function PurchaseOrderReceive({ order, onReload }: { order: PurchaseOrder
   const navigate = useNavigate();
   const receive = useReceivePurchaseOrder();
   const keys = useOperationKeys();
+  // Moving costs to the average writes them: only for staff who can see costs.
+  const { inventory: { canViewCosts } } = useCatalogActionPermissions();
   const [quantities, setQuantities] = useState<ReceiveQuantities>({});
-  const [updateCost, setUpdateCost] = useState(false);
+  const [costChoice, setUpdateCost] = useState(false);
+  const updateCost = canViewCosts && costChoice;
   const [problem, setProblem] = useState<PurchasingProblem | null>(null);
   const [touched, setTouched] = useState(false);
   const [reloading, setReloading] = useState(false);
@@ -120,7 +124,7 @@ export function PurchaseOrderReceive({ order, onReload }: { order: PurchaseOrder
               notOnDocument={(code) => t("notOnPurchaseOrder", { code })}
               disabled={receive.isPending}
             />
-            <Card>
+            {canViewCosts ? <Card>
               <CardContent className="pt-4">
                 <div className="flex items-start gap-3">
                   <span className="flex h-lh items-center">
@@ -138,7 +142,7 @@ export function PurchaseOrderReceive({ order, onReload }: { order: PurchaseOrder
                   </div>
                 </div>
               </CardContent>
-            </Card>
+            </Card> : null}
           </>
         ) : (
           <Card>

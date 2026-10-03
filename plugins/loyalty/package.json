@@ -1,6 +1,6 @@
 {
   "name": "@scalius/plugin-loyalty",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Scalius Loyalty: earn points on paid orders and redeem them at checkout, debited atomically with the order",
   "private": true,
   "type": "module",

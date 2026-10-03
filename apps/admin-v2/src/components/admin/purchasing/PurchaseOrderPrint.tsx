@@ -95,18 +95,19 @@ export function PurchaseOrderSheet({ order, storeName, t, fmt }: {
               <td>{lineName(line, t("unknownProduct"))}</td>
               <td className="po-mono">{line.sku}</td>
               <td className="po-num">{formatNumber(line.quantity)}</td>
-              <td className="po-num">{fmt(line.unitCost)}</td>
-              <td className="po-num">{fmt(line.lineTotal)}</td>
+              {/* The supplier's copy is printed only by staff who see costs. */}
+              <td className="po-num">{fmt(line.unitCost ?? 0)}</td>
+              <td className="po-num">{fmt(line.lineTotal ?? 0)}</td>
             </tr>
           ))}
         </tbody>
       </table>
       <div className="po-totals">
-        <div><span>{t("subtotal")}</span><span className="po-num">{fmt(order.subtotal)}</span></div>
-        {order.shipping > 0 ? <div><span>{t("shipping")}</span><span className="po-num">{fmt(order.shipping)}</span></div> : null}
-        {order.otherCosts > 0 ? <div><span>{t("otherCosts")}</span><span className="po-num">{fmt(order.otherCosts)}</span></div> : null}
-        {order.tax > 0 ? <div><span>{t("tax")}</span><span className="po-num">{fmt(order.tax)}</span></div> : null}
-        <div className="po-total"><span>{t("total")}</span><span className="po-num">{fmt(order.total)}</span></div>
+        <div><span>{t("subtotal")}</span><span className="po-num">{fmt(order.subtotal ?? 0)}</span></div>
+        {order.shipping ? <div><span>{t("shipping")}</span><span className="po-num">{fmt(order.shipping)}</span></div> : null}
+        {order.otherCosts ? <div><span>{t("otherCosts")}</span><span className="po-num">{fmt(order.otherCosts)}</span></div> : null}
+        {order.tax ? <div><span>{t("tax")}</span><span className="po-num">{fmt(order.tax)}</span></div> : null}
+        <div className="po-total"><span>{t("total")}</span><span className="po-num">{fmt(order.total ?? 0)}</span></div>
       </div>
       {order.notes ? (
         <div className="po-notes">

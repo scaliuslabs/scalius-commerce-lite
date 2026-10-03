@@ -21,7 +21,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 export const manifest = {
   id: "scalius.hello",
   name: "Hello",
-  version: "0.3.0",
+  version: "0.3.1",
   apiVersion: PLUGIN_API_VERSION,
   description: "Greets paid orders, offers a welcome discount and shows what it did.",
   author: { name: "Scalius" },
@@ -60,6 +60,16 @@ export const manifest = {
     cards: [{ id: "greeting", target: "order", title: "Hello", route: "order-card" }],
     actions: [{ id: "wave", target: "product", label: "Wave hello", route: "wave", bulk: true }],
     widgets: [{ id: "summary", title: "Hello", route: "widget" }],
+  },
+  translations: {
+    bn: {
+      name: "হ্যালো",
+      description: "পেমেন্ট হওয়া অর্ডারকে শুভেচ্ছা জানায়, স্বাগত ডিসকাউন্ট দেয় আর কী করেছে তা দেখায়।",
+      pages: { overview: "হ্যালো" },
+      cards: { greeting: "হ্যালো" },
+      actions: { wave: "হ্যালো জানান" },
+      widgets: { summary: "হ্যালো" },
+    },
   },
   storefront: {
     proxy: true,

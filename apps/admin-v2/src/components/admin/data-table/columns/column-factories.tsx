@@ -1,5 +1,7 @@
 import type { ColumnDef, TableRowData } from "../table-config";
 import { Checkbox } from "~/components/ui/checkbox";
+import { translate } from "~/i18n";
+import { resourceMessages } from "~/i18n/resource";
 import { formatDateShort as formatDate } from "@scalius/shared/timestamps";
 import { DataTableColumnHeader } from "../DataTableColumnHeader";
 import { DataTableRowActions, type ExtraAction } from "../DataTableRowActions";
@@ -16,7 +18,7 @@ import { DataTableRowActions, type ExtraAction } from "../DataTableRowActions";
 // ── Select (checkbox) column ─────────────────────────────────────────
 
 interface SelectColumnOptions {
-  /** Function to derive an aria-label from the row. Defaults to "row". */
+  /** Names the row in its checkbox's label ("Select PANJABI-L"); without it, "Select row". */
   getLabel?: (row: unknown) => string;
 }
 
@@ -26,7 +28,7 @@ const selectionAnchor = new WeakMap<object, number>();
 export function createSelectColumn<T extends TableRowData>(
   opts?: SelectColumnOptions,
 ): ColumnDef<T, unknown> {
-  const getLabel = opts?.getLabel ?? (() => "row");
+  const getLabel = opts?.getLabel;
   return {
     id: "select",
     header: ({ table }) => {
@@ -40,7 +42,7 @@ export function createSelectColumn<T extends TableRowData>(
             (table.getIsSomePageRowsSelected() && "indeterminate")
           }
           onCheckedChange={(v) => table.toggleAllPageRowsSelected(!!v)}
-          aria-label="Select all"
+          aria-label={translate(resourceMessages, "selectAll")}
           disabled={!hasSelectableRows}
         />
       );
@@ -61,7 +63,9 @@ export function createSelectColumn<T extends TableRowData>(
           }
         }}
         onCheckedChange={(v) => row.toggleSelected(!!v)}
-        aria-label={`Select ${getLabel(row.original)}`}
+        aria-label={getLabel
+          ? translate(resourceMessages, "select", { name: getLabel(row.original) })
+          : translate(resourceMessages, "selectRow")}
         disabled={!row.getCanSelect()}
       />
     ),

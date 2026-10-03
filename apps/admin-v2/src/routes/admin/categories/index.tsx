@@ -30,7 +30,7 @@ import { useCatalogActionPermissions } from "~/hooks/use-catalog-action-permissi
 import { Button } from "~/components/ui/button";
 import type { ColumnDef } from "~/components/admin/data-table/table-config";
 import { ResourceListPage, ResourceRowLink } from "~/components/admin/resource/ResourceListPage";
-import { Badge } from "~/components/ui/badge";
+import { StatusBadge } from "~/components/admin/resource/StatusBadge";
 import { DateText, Thumb, sortHeader } from "~/components/admin/resource/columns";
 import { useMessages } from "~/i18n";
 import { catalogMessages } from "~/i18n/catalog";
@@ -107,9 +107,9 @@ function CategoriesPage() {
       cell: ({ row }) => {
         const status = row.original.status;
         return (
-          <Badge variant={status === "published" ? "success" : status === "draft" ? "attention" : "secondary"}>
+          <StatusBadge status={status === "published" ? "active" : status === "internal" ? "hidden" : "draft"}>
             {t(status === "published" ? "active" : status === "internal" ? "hidden" : "draft")}
-          </Badge>
+          </StatusBadge>
         );
       },
     },

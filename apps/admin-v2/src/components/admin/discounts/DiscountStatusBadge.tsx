@@ -1,16 +1,9 @@
-import { discountStatus, limitReached, type DiscountStatus } from "./discount-form";
-import { Badge, type BadgeVariant } from "~/components/ui/badge";
+import { discountStatus, limitReached } from "./discount-form";
+import { StatusBadge } from "~/components/admin/resource/StatusBadge";
+import { Badge } from "~/components/ui/badge";
 import { useMessages } from "~/i18n";
 import { discountsMessages } from "~/i18n/discounts";
 import type { DiscountRecord } from "~/lib/api-query-options/discounts";
-
-const VARIANT: Record<DiscountStatus, BadgeVariant> = {
-  active: "success",
-  scheduled: "info",
-  expired: "destructive",
-  draft: "attention",
-  inactive: "secondary",
-};
 
 export const STATUS_LABEL = {
   active: "statusActive",
@@ -30,7 +23,7 @@ export function DiscountStatusBadge({
   const status = discountStatus(discount);
   return (
     <span className="inline-flex flex-wrap gap-1">
-      <Badge variant={VARIANT[status]}>{t(STATUS_LABEL[status])}</Badge>
+      <StatusBadge status={status}>{t(STATUS_LABEL[status])}</StatusBadge>
       {limitReached(discount) && status !== "expired" ? <Badge variant="warning">{t("limitReached")}</Badge> : null}
     </span>
   );

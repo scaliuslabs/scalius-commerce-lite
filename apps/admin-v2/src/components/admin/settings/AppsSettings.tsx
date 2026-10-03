@@ -42,6 +42,7 @@ import { Textarea } from "~/components/ui/textarea";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { useSettingsForm } from "~/hooks/use-settings-form";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
+import { useProviderPortAccess } from "~/lib/provider-port-access";
 import { analyticsScriptTypes, type AnalyticsScriptType } from "~/lib/analytics-script-types";
 import { apiData, type ApiResult } from "~/lib/api";
 import {
@@ -928,7 +929,7 @@ function FraudCardBody() {
   const appT = useMessages(appProvidersMessages);
   const { data, isError, refetch } = useQuery(fraudCheckerProvidersQueryOptions());
   // Installed apps' fraud providers sit beside the built-in checkers.
-  const apps = useQuery(appProvidersQuery("fraud")).data ?? [];
+  const apps = useQuery({ ...appProvidersQuery("fraud"), enabled: useProviderPortAccess("fraud").canView }).data ?? [];
   if (isError) return <SettingsLoadFailure title={t("fraudTitle")} onRetry={refetch} />;
   if (!data) return <SettingsCardLoading />;
   const builtInSaved = data.filter((provider) => !isAppChecker(provider));

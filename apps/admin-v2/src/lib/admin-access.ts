@@ -62,6 +62,14 @@ export function hasRbacAdminAccess({
   return isSuperAdmin || permissionCount > 0;
 }
 
+/** One permission, for a route loader deciding what to prefetch (super admins hold all). */
+export function hasAdminPermission(
+  context: Pick<AdminAccessContext, "isSuperAdmin" | "permissions">,
+  permission: string,
+): boolean {
+  return context.isSuperAdmin || toPermissionSet(context.permissions).has(permission);
+}
+
 export function canAccessAdminPath(
   pathname: string,
   context: AdminAccessContext,

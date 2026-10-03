@@ -33,13 +33,23 @@ import {
 
 
 type CounterChange = {
-  label: "counterStock" | "onHand" | "committed" | "counterPreorder";
-  previous: number;
-  next: number;
-  delta: number;
+  label: "counterStock" | "onHand" | "committed" | "counterPreorder" | "onHandAtLocation" | "onHandAllLocations" | "committedAllLocations";
+  location?: string;
+  /** Before and after; unknown for a location the movement didn't record. */
+  previous: number | null;
+  next: number | null;
+  /** Null on the store-wide line beside a location's change (the change is said once). */
+  delta: number | null;
 };
 
-function counterChanges(movement: InventoryMovement): CounterChange[] {
+/**
+ * The counts a movement changed, each naming its scope. With several
+ * locations, on-hand moves at a location: that location's change (with its
+ * before and after when the operation recorded them) comes first, then the
+ * store total across all locations, labelled so. Committed stock is always
+ * store-wide.
+ */
+export function counterChanges(movement: InventoryMovement, severalLocations = false): CounterChange[] {
   if (movement.ledgerVersion !== 2) {
     return [{
       label: "counterStock",
@@ -50,11 +60,22 @@ function counterChanges(movement: InventoryMovement): CounterChange[] {
   }
   const changes: CounterChange[] = [];
   if (movement.stockDelta) {
-    changes.push({ label: "onHand", previous: movement.previousStock, next: movement.newStock, delta: movement.stockDelta });
+    if (severalLocations && movement.locationName) {
+      changes.push({
+        label: "onHandAtLocation",
+        location: movement.locationName,
+        previous: movement.locationPreviousStock ?? null,
+        next: movement.locationNewStock ?? null,
+        delta: movement.stockDelta,
+      });
+      changes.push({ label: "onHandAllLocations", previous: movement.previousStock, next: movement.newStock, delta: null });
+    } else {
+      changes.push({ label: "onHand", previous: movement.previousStock, next: movement.newStock, delta: movement.stockDelta });
+    }
   }
   if (movement.reservedStockDelta && movement.previousReservedStock != null && movement.newReservedStock != null) {
     changes.push({
-      label: "committed",
+      label: severalLocations ? "committedAllLocations" : "committed",
       previous: movement.previousReservedStock,
       next: movement.newReservedStock,
       delta: movement.reservedStockDelta,
@@ -73,15 +94,15 @@ function counterChanges(movement: InventoryMovement): CounterChange[] {
     : [{ label: "counterStock", previous: movement.previousStock, next: movement.newStock, delta: 0 }];
 }
 
-/** `showLocation`: the store has several locations, so where stock moved is part of the line. */
-function MovementDetails({ movement, showLocation }: { movement: InventoryMovement; showLocation: boolean }) {
+/** Who did it, why, and on which document; where stock moved is on the change line. */
+function MovementDetails({ movement }: { movement: InventoryMovement }) {
   const t = useMessages(inventoryMessages);
-  const { labels, note, document } = describeMovementNote(movement);
+  const { labels, note, document, keys } = describeMovementNote(movement);
   const parts = [
     movement.actorType === "system" ? t("automatic") : t("byName", { name: movement.actorName }),
     ...labels.map((label) => t(label)),
     ...(document ? [t(document.label, { number: document.number })] : []),
-    ...(showLocation && movement.locationName ? [t("movedAt", { location: movement.locationName })] : []),
+    ...(keys ? [t(keys.label, { count: keys.count })] : []),
   ];
   return (
     <p className="truncate text-body text-muted-foreground">
@@ -278,7 +299,7 @@ export function HistoryTab({ filters, onFiltersChange }: HistoryTabProps) {
                     <Badge variant="outline" className="shrink-0">
                       {MOVEMENT_TYPES.includes(movement.type as MovementType)
                         ? t(`type_${movement.type as MovementType}`)
-                        : movement.type}
+                        : t("typeOther")}
                     </Badge>
                     <span className="line-clamp-2 min-w-0 break-words text-body font-medium">
                       {movement.productName ?? t("unknownProduct")}
@@ -286,18 +307,25 @@ export function HistoryTab({ filters, onFiltersChange }: HistoryTabProps) {
                         <span className="font-normal text-muted-foreground"> · {movement.optionLabel}</span>
                       ) : null}
                     </span>
-                    <IdText value={movement.variantSku ?? movement.variantId.slice(0, 8)} copy className="text-muted-foreground" />
+                    {/* A SKU without a code (removed long ago) shows no code, never part of its internal id. */}
+                    {movement.variantSku ? <IdText value={movement.variantSku} copy className="text-muted-foreground" /> : null}
                   </div>
-                  <MovementDetails movement={movement} showLocation={severalLocations} />
+                  <MovementDetails movement={movement} />
                 </div>
                 <div className="shrink-0 space-y-1 sm:text-right">
-                  {counterChanges(movement).map((change) => (
+                  {counterChanges(movement, severalLocations).map((change) => (
                     <p key={change.label} className="text-body tabular-nums">
-                      <span className="text-muted-foreground">{t(change.label)} </span>
-                      <span className={cn("font-medium", change.delta < 0 && "text-destructive")}>
-                        {change.delta > 0 ? "+" : ""}{formatNumber(change.delta)}
-                      </span>
-                      <span className="text-muted-foreground"> ({formatNumber(change.previous)} → {formatNumber(change.next)})</span>
+                      <span className="text-muted-foreground">{t(change.label, { location: change.location ?? "" })} </span>
+                      {change.delta !== null ? (
+                        <span className={cn("font-medium", change.delta < 0 && "text-destructive")}>
+                          {change.delta > 0 ? "+" : ""}{formatNumber(change.delta)}
+                        </span>
+                      ) : null}
+                      {change.previous !== null && change.next !== null ? (
+                        <span className="text-muted-foreground">
+                          {change.delta !== null ? " (" : ""}{formatNumber(change.previous)} → {formatNumber(change.next)}{change.delta !== null ? ")" : ""}
+                        </span>
+                      ) : null}
                     </p>
                   ))}
                   <p className="text-body text-muted-foreground">

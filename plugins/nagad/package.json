@@ -1,6 +1,6 @@
 {
   "name": "@scalius/plugin-nagad",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Scalius Nagad (unverified): Nagad online checkout as a payment provider, built from Nagad's documentation without sandbox access",
   "private": true,
   "type": "module",

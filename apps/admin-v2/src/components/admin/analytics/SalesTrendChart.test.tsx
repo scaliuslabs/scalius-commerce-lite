@@ -3,6 +3,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { getLocale, setLocale } from "~/i18n";
 import { MetricTile } from "./MetricTile";
 import { niceMaximum, SalesTrendChart, type TrendPoint } from "./SalesTrendChart";
 
@@ -82,22 +83,35 @@ describe("metric tile", () => {
   });
 
   it("says the direction in words, not colour alone", () => {
-    act(() => root.render(<MetricTile label="Total sales" value="৳1,500" current={1500} previous={1000} comparedTo="previous period" />));
+    act(() => root.render(<MetricTile label="Total sales" value="৳1,500" current={1500} previous={1000} comparedTo="previous_period" />));
     expect(container.textContent).toContain("Up 50%");
     expect(container.textContent).toContain("vs previous period");
     expect(container.querySelector(".text-success")).not.toBeNull();
   });
 
+  it("names the comparison with one whole phrase in Bangla", () => {
+    const previous = getLocale();
+    setLocale("bn");
+    try {
+      act(() => root.render(<MetricTile label="মোট বিক্রি" value="৳১,৫০০" current={1500} previous={1000} comparedTo="previous_period" />));
+      expect(container.textContent).toContain("আগের সময়ের তুলনায়");
+      expect(container.textContent).not.toContain("-এর তুলনায়");
+      expect(container.textContent).not.toContain("সঙ্গে");
+    } finally {
+      setLocale(previous);
+    }
+  });
+
   it("treats a rising return-to-sender rate as bad news, in percentage points", () => {
     act(() => root.render(
-      <MetricTile label="Returned to sender" value="30%" current={30} previous={20} comparedTo="previous period" change="points" upIsGood={false} />,
+      <MetricTile label="Returned to sender" value="30%" current={30} previous={20} comparedTo="previous_period" change="points" upIsGood={false} />,
     ));
     expect(container.textContent).toContain("Up 10 pts");
     expect(container.querySelector(".text-critical")).not.toBeNull();
   });
 
   it("shows no change without an earlier baseline", () => {
-    act(() => root.render(<MetricTile label="Orders" value="4" current={4} previous={0} comparedTo="previous period" />));
+    act(() => root.render(<MetricTile label="Orders" value="4" current={4} previous={0} comparedTo="previous_period" />));
     expect(container.textContent).toContain("No earlier sales to compare");
   });
 });

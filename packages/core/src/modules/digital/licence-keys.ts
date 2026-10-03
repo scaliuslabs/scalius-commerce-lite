@@ -158,8 +158,9 @@ export async function importLicenceKeys(
             pool: "stock",
             mode: "relative",
             delta: rows.length,
+            // The movement's SKU and quantity say which keys and how many; the
+            // note never carries an internal id (History shows it to merchants).
             reason: "Imported",
-            notes: `${rows.length} key${rows.length === 1 ? "" : "s"} into ${input.assetId}`,
         }, input.adminUserId, { companionStatements: companions });
         return {
             importId,
@@ -215,7 +216,6 @@ export async function revokeLicenceKeys(
         mode: "relative",
         delta: -targets.length,
         reason: "Revoked",
-        notes: `${targets.length} unused key${targets.length === 1 ? "" : "s"} from ${input.assetId}`,
     }, input.adminUserId, {
         companionStatements: [
             db.update(digitalLicenceKeys).set({ status: "revoked", revokedAt: sql`unixepoch()` })

@@ -13,7 +13,7 @@ import {
   putApiV1AdminTaxesRatesById,
   putApiV1AdminTaxesSettings,
 } from "@scalius/api-client/sdk";
-import { Badge } from "~/components/ui/badge";
+import { StatusBadge } from "~/components/admin/resource/StatusBadge";
 import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
@@ -724,7 +724,7 @@ export function TaxRatesCard() {
                     label={
                       <span className="flex items-center gap-2">
                         {rate.name}
-                        {rate.isActive ? null : <Badge variant="secondary">{t("inactive")}</Badge>}
+                        {rate.isActive ? null : <StatusBadge status="inactive">{t("inactive")}</StatusBadge>}
                       </span>
                     }
                     value={t("rateSummary", {

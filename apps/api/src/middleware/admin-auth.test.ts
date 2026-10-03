@@ -393,6 +393,44 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
     expect(next).toHaveBeenCalledTimes(1);
   });
 
+  it("gives an agent connection the same purchasing and cost RBAC as staff", async () => {
+    const agentToken = `sc_pat_agc_0123456789abcdefghij_${"a".repeat(43)}`;
+    const principal = (permissions: string[]) => ({
+      kind: "agent",
+      grantId: "agr_0123456789abcdefghij",
+      credentialId: "agc_0123456789abcdefghij",
+      ownerUserId: "admin_1",
+      isSuperAdmin: false,
+      resource: "dashboard",
+      grantKind: "pat",
+      preset: "custom",
+      permissions: new Set(permissions),
+      riskCeiling: "security",
+      authorityRevision: 1,
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+    const run = async (permissions: string[], path: string) => {
+      mocks.resolveAgentPrincipalFromBearer.mockResolvedValue(principal(permissions));
+      const next = vi.fn().mockResolvedValue(undefined);
+      const context = createContext(path, "GET", {
+        headers: { Authorization: `Bearer ${agentToken}` },
+        env: { RL_STANDARD: { limit: vi.fn().mockResolvedValue({ success: true }) } },
+      });
+      const outcome = await adminAuthMiddleware(context as never, next).then(() => "allowed", (error: Error) => error.message);
+      return { outcome, next };
+    };
+
+    // View products alone: stock yes; purchase orders, transfers and inventory value no.
+    expect((await run([PERMISSIONS.PRODUCTS_VIEW], "/api/v1/admin/inventory")).outcome).toBe("allowed");
+    for (const path of ["/api/v1/admin/inventory/purchase-orders", "/api/v1/admin/inventory/transfers", "/api/v1/admin/inventory/valuation"]) {
+      const denied = await run([PERMISSIONS.PRODUCTS_VIEW], path);
+      expect(denied.outcome, path).toBe("You do not have permission to perform this action");
+      expect(denied.next).not.toHaveBeenCalled();
+    }
+    expect((await run([PERMISSIONS.PRODUCTS_VIEW, PERMISSIONS.INVENTORY_VIEW], "/api/v1/admin/inventory/purchase-orders")).outcome).toBe("allowed");
+    expect((await run([PERMISSIONS.PRODUCTS_VIEW, PERMISSIONS.PRODUCTS_VIEW_COSTS], "/api/v1/admin/inventory/valuation")).outcome).toBe("allowed");
+  });
+
   it("authorizes the bounded raw upload part for live PAT and OAuth media authority only", async () => {
     const agentToken = `sc_pat_agc_0123456789abcdefghij_${"a".repeat(43)}`;
     const path = "/api/v1/admin/media/uploads/upload_session_1/parts/1";

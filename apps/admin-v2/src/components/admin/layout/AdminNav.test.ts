@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { canAccessAdminPath } from "~/lib/admin-access";
-import { activeNavChild, isSectionActive, visibleNav } from "./AdminNav";
+import { SETTINGS_ITEM, activeNavChild, isSectionActive, visibleNav } from "./AdminNav";
 
 const viewer = (...permissions: string[]) => (to: string) =>
   canAccessAdminPath(to, { isSuperAdmin: false, hasAdminAccess: true, permissions: new Set(permissions) });
@@ -47,8 +47,21 @@ describe("admin sidebar", () => {
     expect(isSectionActive("/admin/customers", products!)).toBe(false);
   });
 
+  it("shows a View products role neither purchasing, transfers nor Settings", () => {
+    const canOpen = viewer(PERMISSIONS.PRODUCTS_VIEW);
+    const [products] = visibleNav(canOpen);
+    const keys = products!.children.map((child) => child.key);
+
+    expect(keys).toContain("inventory");
+    expect(keys).not.toContain("purchaseOrders");
+    expect(keys).not.toContain("transfers");
+    // The settings entry is shown exactly when /admin/settings opens.
+    expect(canOpen(SETTINGS_ITEM.to)).toBe(false);
+    expect(canOpen("/admin/settings/locations")).toBe(false);
+  });
+
   it("lists Purchase orders and Transfers after Inventory, and marks the most specific page current", () => {
-    const [products] = visibleNav(viewer(PERMISSIONS.PRODUCTS_VIEW));
+    const [products] = visibleNav(viewer(PERMISSIONS.PRODUCTS_VIEW, PERMISSIONS.INVENTORY_VIEW));
     const keys = products!.children.map((child) => child.key);
 
     expect(keys.slice(keys.indexOf("inventory"), keys.indexOf("inventory") + 3)).toEqual(["inventory", "purchaseOrders", "transfers"]);
@@ -58,17 +71,19 @@ describe("admin sidebar", () => {
     expect(activeNavChild("/admin/inventory/labels", products!.children)?.key).toBe("inventory");
   });
 
-  it("opens purchasing to viewers and its writes to editors", () => {
-    const view = viewer(PERMISSIONS.PRODUCTS_VIEW);
-    const edit = viewer(PERMISSIONS.PRODUCTS_VIEW, PERMISSIONS.PRODUCTS_EDIT);
+  it("opens purchasing to inventory viewers and its writes to inventory managers", () => {
+    const view = viewer(PERMISSIONS.PRODUCTS_VIEW, PERMISSIONS.INVENTORY_VIEW);
+    const manage = viewer(PERMISSIONS.PRODUCTS_VIEW, PERMISSIONS.INVENTORY_VIEW, PERMISSIONS.INVENTORY_MANAGE, PERMISSIONS.PRODUCTS_VIEW_COSTS);
 
     for (const path of ["/admin/inventory/purchase-orders", "/admin/inventory/purchase-orders/po_1", "/admin/inventory/transfers", "/admin/inventory/transfers/tr_1", "/admin/inventory/suppliers"]) {
       expect(view(path)).toBe(true);
     }
     for (const path of ["/admin/inventory/purchase-orders/new", "/admin/inventory/purchase-orders/po_1/receive", "/admin/inventory/transfers/new", "/admin/inventory/transfers/tr_1/receive"]) {
       expect(view(path)).toBe(false);
-      expect(edit(path)).toBe(true);
+      expect(manage(path)).toBe(true);
     }
+    // Editing products is not running purchasing.
+    expect(viewer(PERMISSIONS.PRODUCTS_VIEW, PERMISSIONS.PRODUCTS_EDIT)("/admin/inventory/purchase-orders/new")).toBe(false);
     expect(viewer(PERMISSIONS.ORDERS_VIEW)("/admin/inventory/purchase-orders")).toBe(false);
   });
 

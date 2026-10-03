@@ -18,7 +18,7 @@ import { SupplierDialog } from "./SupplierDialog";
 /** Who the store buys from: add, edit, archive (never delete: past purchase orders keep them). */
 export function SupplierList({ tab, onTabChange }: { tab: SupplierTab; onTabChange: (tab: SupplierTab) => void }) {
   const t = useMessages(purchasingMessages);
-  const { inventory: { canAdjustStock: canEdit } } = useCatalogActionPermissions();
+  const { inventory: { canManageOperations: canEdit } } = useCatalogActionPermissions();
   const action = useSupplierAction();
   // The last supplier opened stays set while its dialog closes, so the dialog never jumps.
   const [editing, setEditing] = useState<Supplier | null>(null);

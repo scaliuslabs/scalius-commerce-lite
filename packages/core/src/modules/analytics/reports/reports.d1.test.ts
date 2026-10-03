@@ -14,7 +14,7 @@ import {
 } from "./service";
 
 const NOW = new Date("2026-09-01T06:00:00+06:00");
-const FULL_ACCESS: AnalyticsAccess = { customers: true };
+const FULL_ACCESS: AnalyticsAccess = { customers: true, costs: true };
 let f: AnalyticsFixture;
 
 beforeEach(() => {
@@ -153,9 +153,9 @@ describe("customer reports", () => {
   });
 
   it("refuses to name customers without the View customers permission", async () => {
-    await expect(report("customers_top", {}, { customers: false })).rejects.toMatchObject({ status: 403 });
+    await expect(report("customers_top", {}, { customers: false, costs: true })).rejects.toMatchObject({ status: 403 });
     // Counts of new and returning customers name no one.
-    await expect(report("customers_over_time", {}, { customers: false })).resolves.toBeDefined();
+    await expect(report("customers_over_time", {}, { customers: false, costs: true })).resolves.toBeDefined();
   });
 
   it("counts new and returning customers per bucket", async () => {
@@ -261,6 +261,17 @@ describe("profit (unit costs recorded at the time of sale)", () => {
     expect(byId(page.rows).prod_c?.values).toMatchObject({ costed_items: 0, cost_of_goods: 0, gross_profit: 0, gross_margin: null, cost_coverage: 0 });
     expect(page.totals).toMatchObject({ costed_items: 4, net_items_sold: 8, cost_coverage: 50 });
   });
+
+  it("needs the View product costs permission", async () => {
+    const ctx = await createAnalyticsContext(f.db, NOW);
+    const noCosts: AnalyticsAccess = { customers: true, costs: false };
+    expect((await listAnalyticsReports(ctx, noCosts)).find((entry) => entry.id === "profit_by_product"))
+      .toMatchObject({ available: false, unavailableReason: "cost_access" });
+    await expect(report("profit_by_product", {}, noCosts)).rejects.toMatchObject({ status: 403 });
+    await expect(exportAnalyticsReportCsv(ctx, "profit_by_product", { ...AUGUST }, noCosts)).rejects.toMatchObject({ status: 403 });
+    // Sales reports carry no costs.
+    await expect(report("sales_by_product", {}, noCosts)).resolves.toBeDefined();
+  });
 });
 
 describe("CSV export", () => {
@@ -285,7 +296,7 @@ describe("CSV export", () => {
 
   it("refuses customer exports without the permission", async () => {
     const ctx = await createAnalyticsContext(f.db, NOW);
-    await expect(exportAnalyticsReportCsv(ctx, "customers_top", { ...AUGUST }, { customers: false })).rejects.toMatchObject({ status: 403 });
+    await expect(exportAnalyticsReportCsv(ctx, "customers_top", { ...AUGUST }, { customers: false, costs: true })).rejects.toMatchObject({ status: 403 });
   });
 });
 

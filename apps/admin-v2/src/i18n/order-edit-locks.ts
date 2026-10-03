@@ -35,3 +35,21 @@ export const orderEditLockMessages = defineMessages({
 });
 
 export type OrderEditLockMessageKey = keyof typeof orderEditLockMessages.en;
+
+const LOCK_MESSAGE: Record<string, OrderEditLockMessageKey> = {
+  shipped: "lockShipped",
+  closed: "lockClosed",
+  paid: "lockPaid",
+  online_payment: "lockOnlinePayment",
+  discount: "lockDiscount",
+  history: "lockHistory",
+  inventory: "lockInventory",
+  archived: "lockArchived",
+  busy: "lockBusy",
+  unavailable: "lockUnavailable",
+};
+
+/** The plain sentence for a server edit-lock reason code. */
+export function editLockMessageKey(reason: string | null): OrderEditLockMessageKey {
+  return (reason && LOCK_MESSAGE[reason]) || "lockUnknown";
+}

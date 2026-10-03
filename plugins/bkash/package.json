@@ -1,6 +1,6 @@
 {
   "name": "@scalius/plugin-bkash",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Scalius bKash: bKash Tokenized Checkout as a payment provider (hosted wallet payments, execute on return, status queries, refunds)",
   "private": true,
   "type": "module",

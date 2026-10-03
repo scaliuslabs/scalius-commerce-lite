@@ -3329,7 +3329,7 @@ export const getApiV1AdminReportsOverview = <ThrowOnError extends boolean = fals
 /**
  * List analytics reports
  *
- * Every report with its columns, default sort and whether this caller can run it now (customer reports need the View customers permission; profit reports need unit costs recorded on order lines).
+ * Every report with its columns, default sort and whether this caller can run it now (customer reports need the View customers permission; profit reports need the View product costs permission and unit costs recorded on order lines).
  */
 export const getApiV1AdminReports = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AdminReportsData, ThrowOnError>): RequestResult<GetApiV1AdminReportsResponses, GetApiV1AdminReportsErrors, ThrowOnError> => (options?.client ?? client).get<GetApiV1AdminReportsResponses, GetApiV1AdminReportsErrors, ThrowOnError>({ url: '/api/v1/admin/reports', ...options });
 

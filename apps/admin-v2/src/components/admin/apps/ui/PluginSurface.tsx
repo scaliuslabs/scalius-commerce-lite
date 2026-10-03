@@ -8,6 +8,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { parsePluginUiDocument, type PluginUiDocument } from "@scalius/shared/plugins/ui";
 import { PageHeader } from "~/components/admin/resource/PageHeader";
+import { useLocale } from "~/i18n";
 import { fetchAppDocument } from "~/lib/app-route";
 import { queryKeys } from "~/lib/query-keys";
 import { PluginUiRenderer, type PluginUiHost } from "./PluginUiRenderer";
@@ -47,8 +48,10 @@ export function PluginSurface({ app, route, query, resource = null, variant, tit
   const cursor = cursors.at(-1);
   const request = useMemo(() => (cursor ? { ...query, cursor } : { ...query }), [cursor, query]);
   const declared = isAppRouteDeclared(app, route, "GET");
+  // The app writes in the dashboard's language: switching it asks again.
+  const locale = useLocale();
   const document = useQuery({
-    queryKey: queryKeys.apps.document(app.id, route, request),
+    queryKey: [...queryKeys.apps.document(app.id, route, request), locale],
     queryFn: ({ signal }) => fetchAppDocument(app.id, route, { query: request, signal }),
     enabled: declared,
     staleTime: APP_DOCUMENT_STALE_TIME_MS,

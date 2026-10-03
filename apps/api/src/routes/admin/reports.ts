@@ -44,7 +44,10 @@ const TEXT_MAX = 300;
 
 function access(c: Context): AnalyticsAccess {
   const permissions: ReadonlySet<string> = c.get("adminPermissions") ?? new Set();
-  return { customers: permissions.has(PERMISSIONS.CUSTOMERS_VIEW) };
+  return {
+    customers: permissions.has(PERMISSIONS.CUSTOMERS_VIEW),
+    costs: permissions.has(PERMISSIONS.PRODUCTS_VIEW_COSTS),
+  };
 }
 
 // ─── Schemas ────────────────────────────────────────────────────────────────
@@ -156,13 +159,14 @@ const reportDefinitionSchema = z.object({
   columns: z.array(columnSchema).max(20),
   defaultSort: z.object({ key: z.string().max(64), direction: z.enum(["asc", "desc"]) }),
   requiresCustomerAccess: z.boolean().optional(),
+  requiresCostAccess: z.boolean().optional(),
   rowLink: z.enum(["product", "variant"]).optional(),
 });
 
 const catalogSchema = z.object({
   reports: z.array(reportDefinitionSchema.extend({
     available: z.boolean(),
-    unavailableReason: z.enum(["customer_access"]).nullable(),
+    unavailableReason: z.enum(["customer_access", "cost_access"]).nullable(),
   })).max(64),
 });
 
@@ -286,6 +290,7 @@ function definitionView(report: AnalyticsReportDefinition) {
     })),
     defaultSort: report.defaultSort,
     ...(report.requiresCustomerAccess ? { requiresCustomerAccess: true } : {}),
+    ...(report.requiresCostAccess ? { requiresCostAccess: true } : {}),
     ...(report.rowLink ? { rowLink: report.rowLink } : {}),
   };
 }
@@ -342,7 +347,7 @@ const catalogRoute = createRoute({
   path: "/",
   tags: ["Admin - Analytics"],
   summary: "List analytics reports",
-  description: "Every report with its columns, default sort and whether this caller can run it now (customer reports need the View customers permission; profit reports need unit costs recorded on order lines).",
+  description: "Every report with its columns, default sort and whether this caller can run it now (customer reports need the View customers permission; profit reports need the View product costs permission and unit costs recorded on order lines).",
   responses: {
     200: { description: "Report catalog", content: { "application/json": { schema: successEnvelope(catalogSchema) } } },
     ...errorResponses,

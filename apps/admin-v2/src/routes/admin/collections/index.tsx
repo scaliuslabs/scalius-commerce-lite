@@ -20,7 +20,7 @@ import { useCatalogActionPermissions } from "~/hooks/use-catalog-action-permissi
 import { Button } from "~/components/ui/button";
 import type { ColumnDef } from "~/components/admin/data-table/table-config";
 import { ResourceListPage, ResourceRowLink, inChunks, useResourceMutation } from "~/components/admin/resource/ResourceListPage";
-import { Badge } from "~/components/ui/badge";
+import { StatusBadge } from "~/components/admin/resource/StatusBadge";
 import { DateText, sortHeader } from "~/components/admin/resource/columns";
 import { useMessages } from "~/i18n";
 import { catalogMessages } from "~/i18n/catalog";
@@ -101,7 +101,7 @@ function CollectionsPage() {
       header: sortHeader(t("status")),
       meta: { mobile: "status", priority: 90, minWidth: 100 },
       cell: ({ row }) => (
-        <Badge variant={row.original.isActive ? "success" : "attention"}>{t(row.original.isActive ? "active" : "draft")}</Badge>
+        <StatusBadge status={row.original.isActive ? "active" : "draft"}>{t(row.original.isActive ? "active" : "draft")}</StatusBadge>
       ),
     },
     {

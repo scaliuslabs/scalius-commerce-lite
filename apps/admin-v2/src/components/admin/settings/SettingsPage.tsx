@@ -2,7 +2,7 @@ import { cloneElement, createContext, isValidElement, useContext, useState, type
 import { Link, useLocation } from "@tanstack/react-router";
 import { ArrowLeft, ChevronRight, Loader2 } from "lucide-react";
 import { Button } from "~/components/ui/button";
-import { Card } from "~/components/ui/card";
+import { Card, CardHeading } from "~/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -102,15 +102,15 @@ export function SettingsCard({
   return (
     <div id={id} className={cn("scroll-mt-4 rounded-xl", targeted && "outline-2 outline-offset-2 outline-ring")}>
       <Card className="overflow-hidden">
-        <div className="flex flex-wrap items-start justify-between gap-3 p-4">
-          {header ?? (
-            <div className="min-w-0 flex-1 space-y-1">
+        <CardHeading
+          action={action}
+          heading={header ?? (
+            <div className="space-y-1">
               <h2 className="text-heading-sm">{title}</h2>
               {description ? <p className="text-body text-muted-foreground">{description}</p> : null}
             </div>
           )}
-          {action}
-        </div>
+        />
         {children ? <div className="space-y-4 px-4 pb-4">{children}</div> : null}
         {rows ? <div className="border-t border-border">{rows}</div> : null}
       </Card>

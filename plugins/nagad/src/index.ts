@@ -47,7 +47,7 @@ import { bytesToHex } from "./rsa";
 export const manifest = {
   id: "scalius.nagad",
   name: "Nagad (unverified)",
-  version: "0.1.0",
+  version: "0.1.1",
   apiVersion: PLUGIN_API_VERSION,
   description: "Unverified: Nagad online checkout, built from Nagad's published Online Payment API without sandbox access. Confirm it with a live Nagad merchant account before taking real payments.",
   author: { name: "Scalius" },
@@ -114,6 +114,12 @@ export const manifest = {
   },
   // A session makes two sequential Nagad calls within the platform's request budget.
   limits: { wallMs: 15_000 },
+  translations: {
+    bn: {
+      name: "নগদ (যাচাই করা হয়নি)",
+      description: "যাচাই করা হয়নি: স্যান্ডবক্স ছাড়া নগদের প্রকাশিত অনলাইন পেমেন্ট API দেখে তৈরি নগদ অনলাইন চেকআউট। আসল পেমেন্ট নেওয়ার আগে একটি লাইভ নগদ মার্চেন্ট অ্যাকাউন্টে এটি যাচাই করে নিন।",
+    },
+  },
 } satisfies PluginManifestInput;
 
 /** Nagad's merchant order id: alphanumeric, at most 20 characters. */
