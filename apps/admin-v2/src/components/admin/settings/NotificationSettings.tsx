@@ -97,13 +97,16 @@ function RulesTable({
 }) {
   const events = useMessages(notificationEventMessages);
   const t = useMessages(notificationsMessages);
+  // Column headings (caption size): each channel column is as wide as its
+  // name on one line with room on both sides, so long Bangla names
+  // ("হোয়াটসঅ্যাপ") never run into the next one; the event names wrap instead.
   return (
     <table className="w-full text-body">
       <thead>
-        <tr className="border-b border-border text-muted-foreground">
-          <th className="py-2 text-left font-medium">{t("event")}</th>
+        <tr className="border-b border-border align-bottom text-muted-foreground">
+          <th className="py-2 pr-2 text-left text-caption font-medium">{t("event")}</th>
           {columns.map((column) => (
-            <th key={column.key} className="w-16 py-2 text-center font-medium sm:w-24">{column.label}</th>
+            <th key={column.key} className="whitespace-nowrap px-1.5 py-2 text-center text-caption font-medium sm:w-24">{column.label}</th>
           ))}
         </tr>
       </thead>
