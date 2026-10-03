@@ -2,7 +2,7 @@
 // Public endpoint for storefront checkout configuration.
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { getCheckoutConfig } from "@scalius/core/modules/settings";
+import { getCheckoutConfig } from "@scalius/core/modules/checkout";
 import { requestPaymentProviders } from "../plugins/providers/payment";
 import { requestAppProviders } from "../plugins/providers/app-providers";
 import { successEnvelope, errorResponses, errorResponseSchema } from "../schemas/responses";

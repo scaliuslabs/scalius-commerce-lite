@@ -1,4 +1,6 @@
 export * from "./browser";
+export * from "./documents";
+export * from "./channel-settings";
 export { sendOrderNotification, sendOrderNotificationEmail } from "./notifications.service";
 export {
   buildNotificationOutboxInsert,

@@ -39,7 +39,7 @@ import {
   securityDocument,
   seoDocument,
 } from "../settings/documents";
-import { planPublicStorePolicies } from "../settings/store-policies.service";
+import { planPublicStorePolicies } from "../pages/store-policies";
 import {
   selectSettingsDocuments,
   type SettingsDocumentRow,

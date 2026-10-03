@@ -3,11 +3,11 @@ import { describe, expect, it } from "vitest";
 
 import { ValidationError } from "@scalius/core/errors";
 
-import { SettingsRevisionConflictError } from "./settings-store";
+import { SettingsRevisionConflictError } from "../settings/settings-store";
 import {
     getCheckoutFlowSettingsDocument,
     saveCheckoutFlowSettingsDocument,
-} from "./checkout-flow-admin.service";
+} from "./flow-settings";
 
 function setup() {
     return createSqliteD1Database();

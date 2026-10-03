@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { withPublicMediaUrl } from "../../integrations/storage";
-import { presentMediaProjection } from "./media.presentation";
+import { presentMediaProjection } from "./presentation";
 
 function row(overrides: Partial<Parameters<typeof presentMediaProjection>[0]> = {}) {
     return {

@@ -41,7 +41,8 @@ import {
     type OrderNotificationType,
 } from "./notification-types";
 import { composeOrderEmail, composeOrderSms, composeStaffOrderEmail, readOrderMessageContext } from "./order-email";
-import { notificationsDocument } from "../settings/documents";
+import { notificationsDocument } from "./documents";
+import { getNotificationChannels, getOrderWhatsAppTemplateSettings } from "./channel-settings";
 import { getNotificationTemplates } from "./notification-templates.service";
 
 /** An order notification passes `orderId`; other subjects pass their type and id. */
@@ -609,7 +610,6 @@ export async function sendOrderNotificationEmail(
     // defaults to email; the merchant's saved channels override it.
     let enabledChannels = ["email"];
     try {
-        const { getNotificationChannels } = await import("../settings/settings.service");
         enabledChannels = (await getNotificationChannels(db))[type] ?? enabledChannels;
     } catch (channelError: unknown) {
         console.warn("[Notifications] Failed to check channel preferences, defaulting to email:", channelError);
@@ -1125,7 +1125,6 @@ async function resolveOrderWhatsAppSendConfig(
         return null;
     }
 
-    const { getOrderWhatsAppTemplateSettings } = await import("../settings/settings.service");
     const template = await getOrderWhatsAppTemplateSettings(db);
     return {
         accessToken: whatsapp.accessToken,

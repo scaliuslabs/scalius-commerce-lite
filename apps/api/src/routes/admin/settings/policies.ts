@@ -1,5 +1,6 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { STORE_POLICY_KINDS, getStorePolicies, saveStorePolicies } from "@scalius/core/modules/settings";
+import { STORE_POLICY_KINDS } from "@scalius/core/modules/settings";
+import { getStorePolicies, saveStorePolicies } from "@scalius/core/modules/pages";
 
 import { ok } from "../../../utils/api-response";
 

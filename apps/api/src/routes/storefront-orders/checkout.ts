@@ -11,7 +11,7 @@ import { recordCheckoutMarketingConsent } from "@scalius/core/modules/customer-m
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { getCustomerBySession } from "@scalius/core/modules/customers";
 import { fromMinor } from "@scalius/shared/money";
-import type { CheckoutPaymentMethodId } from "@scalius/core/modules/settings";
+import type { CheckoutPaymentMethodId } from "@scalius/core/modules/checkout";
 import {
     assertStorefrontCheckoutQuoteFingerprint,
     buildStorefrontCheckoutQuoteFingerprint,

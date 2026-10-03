@@ -12,8 +12,8 @@ vi.mock("@scalius/core/modules/payments", async (importOriginal) => ({
 
 }));
 
-vi.mock("@scalius/core/modules/settings", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@scalius/core/modules/settings")>()),
+vi.mock("@scalius/core/modules/checkout", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/checkout")>()),
   getCheckoutConfig: mocks.getCheckoutConfig,
 }));
 

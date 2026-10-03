@@ -1,4 +1,4 @@
-// src/modules/settings/store-policies.service.ts
+// src/modules/pages/store-policies.ts
 // Settings -> Policies: which of the store's own pages is its refund, privacy,
 // terms, shipping and contact policy. Buyers see only published pages.
 
@@ -6,15 +6,13 @@ import { and, eq, inArray, isNull } from "drizzle-orm";
 import { safeBatch, type Database } from "@scalius/database/client";
 import { pages } from "@scalius/database/schema";
 import { ValidationError } from "../../errors";
-import { planPublicPagesByIdDeclaration, publicPageVisibilityCondition } from "../pages/pages.service";
+import { planPublicPagesByIdDeclaration, publicPageVisibilityCondition } from "./pages.service";
 import {
   policiesDocument,
   STORE_POLICY_KINDS,
   type StorePolicies,
   type StorePolicyKind,
-} from "./documents";
-
-export { STORE_POLICY_KINDS, type StorePolicies, type StorePolicyKind } from "./documents";
+} from "../settings/documents";
 
 /** A policy a buyer can open: its page title and same-store path. */
 export interface PublicStorePolicy {

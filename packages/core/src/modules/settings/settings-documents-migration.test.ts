@@ -26,7 +26,7 @@ import {
   getStripeSettings,
 } from "../payments/gateway-settings";
 import { getBusinessSettings } from "./business-settings.service";
-import { getCheckoutFlowSettingsDocument } from "./checkout-flow-admin.service";
+import { getCheckoutFlowSettingsDocument } from "../checkout/flow-settings";
 import { getCustomerRequestPolicy } from "./customer-request-policy";
 import { customerAuthDocument, securityDocument } from "./documents";
 import { getPlatformSettings } from "../platform/platform-settings.service";
@@ -34,7 +34,7 @@ import {
   getAdminNotificationChannels,
   getNotificationChannels,
   getOrderWhatsAppTemplateSettings,
-} from "./settings.service";
+} from "../notifications/channel-settings";
 import {
   getAllowedCountries,
   getCurrencySettings,

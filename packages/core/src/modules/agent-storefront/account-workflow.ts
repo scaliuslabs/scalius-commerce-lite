@@ -12,7 +12,7 @@ import {
   PaymentStatus,
 } from "@scalius/database/schema";
 import { getCurrentPublicMediaUrl } from "@scalius/core/integrations/storage";
-import { publishedMediaObjectKey } from "../media/media.presentation";
+import { publishedMediaObjectKey } from "../media-references/presentation";
 import {
   updateCustomerProfile,
   type CustomerSession,

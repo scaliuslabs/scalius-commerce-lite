@@ -12,7 +12,7 @@ import {
     updateAdminNotificationChannels,
     isWhatsAppCloudApiConfigured,
     STAFF_EMAIL_RECIPIENTS_MAX,
-} from "@scalius/core/modules/settings";
+} from "@scalius/core/modules/notifications";
 import { getSmsProviderReadiness } from "@scalius/core/integrations/sms";
 import { getEmailProviderReadiness } from "@scalius/core/integrations/email";
 import type { AppProviders } from "@scalius/core/integrations/provider-port";

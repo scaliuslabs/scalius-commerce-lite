@@ -1,4 +1,4 @@
-// src/modules/settings/checkout-config.service.ts
+// src/modules/checkout/config.ts
 // Assembles the public checkout configuration from DB + gateway registry.
 
 import type { Database } from "@scalius/database/client";
@@ -19,21 +19,21 @@ import {
 } from "../payments/gateways/registry";
 import type { GatewaySettings } from "../payments/gateways/port";
 import { getPaymentGatewaySettingsSnapshot } from "../payments/gateway-settings";
-import { isCheckoutGatewayUsableForFlow } from "./checkout-flow";
+import { isCheckoutGatewayUsableForFlow } from "./flow";
 import {
     CHECKOUT_READINESS_PUBLIC_UNAVAILABLE_MESSAGE,
     getCheckoutReadiness,
     getOfferedCustomerIdentity,
     type CheckoutReadiness,
-} from "./checkout-readiness";
+} from "../settings/checkout-readiness";
 import {
     checkoutDocument,
     currencyDocument,
     customerAuthDocument,
     customerCountriesDocument,
     marketingConsentDocument,
-} from "./documents";
-import { selectSettingsDocuments } from "./settings-store";
+} from "../settings/documents";
+import { selectSettingsDocuments } from "../settings/settings-store";
 
 export interface CheckoutConfig {
     gateways: Array<Record<string, unknown>>;

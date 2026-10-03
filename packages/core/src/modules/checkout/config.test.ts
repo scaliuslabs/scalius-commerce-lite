@@ -10,8 +10,8 @@ vi.mock("../payments/gateway-settings", async (importOriginal) => ({
 }));
 
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
-import { getCheckoutConfig } from "./checkout-config.service";
-import { checkoutDocument, currencyDocument } from "./documents";
+import { getCheckoutConfig } from "./config";
+import { checkoutDocument, currencyDocument } from "../settings/documents";
 
 async function createDb(
     siteOverrides: Record<string, unknown> = {},

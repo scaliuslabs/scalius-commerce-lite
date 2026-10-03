@@ -48,6 +48,7 @@ On the storefront, `[slug].astro` is the catch-all dynamic route. It performs ea
 - `index.ts` -- barrel exports
 - `pages.service.ts` -- all DB queries and mutations
 - `pages.validation.ts` -- Zod schemas (`createPageSchema`, `updatePageSchema`)
+- `store-policies.ts` -- Settings -> Policies: which published page is the store's refund, privacy, terms, shipping and contact policy (the `policies` settings document; buyers see only published pages)
 
 ### Service Functions
 

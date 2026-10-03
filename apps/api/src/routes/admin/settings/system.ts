@@ -26,8 +26,6 @@ import {
     type CustomerIdentitySettings,
 } from "@scalius/shared/customer-auth-policy";
 import {
-    getCheckoutFlowSettingsDocument,
-    saveCheckoutFlowSettingsDocument,
     SettingsRevisionConflictError,
     selectSettingsDocuments,
     writeSettingsDocuments,
@@ -46,6 +44,7 @@ import {
     getCustomerSignInReadiness,
     isCustomerAuthChannelReady,
 } from "@scalius/core/modules/settings";
+import { getCheckoutFlowSettingsDocument, saveCheckoutFlowSettingsDocument } from "@scalius/core/modules/checkout";
 
 import { buildClearNotificationProviderBlocksStatement } from "@scalius/core/modules/notifications";
 import {

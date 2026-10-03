@@ -4,6 +4,14 @@ The Media domain owns image/video catalog metadata in D1 and immutable blobs in
 R2. D1 stores `objectKey`; public URLs are derived from the current R2 base and
 are never durable authority.
 
+How other records point at a file lives in `modules/media-references`
+(`presentation.ts`: the published object key and URL projection;
+`reference-guard.ts`: the batch guard that refuses saving a reference to a file
+being deleted). It depends on no domain, so settings, categories, pages and
+staff writes use it without loading this library. This module is the Files
+library itself; its usage index reads every referrer, settings documents
+included, so it sits above settings.
+
 ## Authority
 
 - `media`: ready/trash/deleting/deleted lifecycle, verified kind/MIME, object

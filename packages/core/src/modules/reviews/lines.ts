@@ -13,7 +13,7 @@ import {
 } from "@scalius/database/schema";
 import { LIVE_REVIEW_STATUSES } from "@scalius/shared/reviews";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
-import { publishedMediaObjectKey } from "../media/media.presentation";
+import { publishedMediaObjectKey } from "../media-references/presentation";
 import type { LineExtrasInput } from "../../utils/line-extras";
 import type { LineReviewExtra, ReviewStatus } from "./browser";
 import {

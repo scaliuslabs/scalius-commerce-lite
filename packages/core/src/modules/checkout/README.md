@@ -12,6 +12,9 @@ Public entries: `index.ts` (the server API) and `browser.ts` (the quote fingerpr
 | `prepare.ts` | `createStorefrontOrder()`, `validateStorefrontDeliveryPreflight()`, `presentStorefrontDeliveryPreflight()` | Server-priced order payload, delivery preflight, checkout-policy snapshots |
 | `authority.ts` | `loadStorefrontCheckoutAuthority()` | One read of everything a checkout is priced and validated against, with its revision |
 | `policy.ts` | `assertStorefrontCheckoutPolicy()`, `assertGuestStorefrontCheckoutPolicy()` | Merchant checkout policy (guests, countries, methods) |
+| `flow.ts` | `isCheckoutGatewayUsableForFlow()`, `getCheckoutFlowValidationIssues()` | Which payment methods a checkout mode and advance payment allow |
+| `flow-settings.ts` | `getCheckoutFlowSettingsDocument()`, `saveCheckoutFlowSettingsDocument()` | The `checkout` settings document's revision-guarded admin read and save |
+| `config.ts` | `getCheckoutConfig()` | The public checkout configuration: readiness, currency, countries and the usable gateways in the merchant's order |
 | `attempts.ts` | `buildCheckoutAttemptIdentity()`, `resolveExistingCheckoutAttempt()`, `createAtomicCheckoutAttempt()`, ... | Database-backed submit replay and the atomic idempotency commit |
 | `reads.ts` | `loadStorefrontCheckoutReads()` | The attempt, authority and commit reads in one batch |
 | `commit.ts` | `commitStorefrontOrderPayload()` | The single guarded write batch: attempt, order, lines, stock (ledger v2), discounts, receipt, outboxes |

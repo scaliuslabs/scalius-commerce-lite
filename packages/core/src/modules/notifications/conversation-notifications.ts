@@ -25,7 +25,8 @@ import { normalizeStorefrontOrigin } from "@scalius/shared/storefront-url";
 import { and, eq, gt } from "drizzle-orm";
 import { sendEmail, type EmailRuntimeContext } from "../../integrations/email";
 import type { AppProviders } from "../../integrations/provider-port";
-import { notificationsDocument } from "../settings/documents";
+import { notificationsDocument } from "./documents";
+import { getAdminNotificationChannels, getNotificationChannels } from "./channel-settings";
 import { MESSAGE_COPY, type MessageLanguage } from "./message-copy";
 import { storeHeaderHtml, type EmailStore } from "./notification-templates";
 import {
@@ -265,7 +266,6 @@ async function sendReplyToBuyer(
 
   let channels = ["email"];
   try {
-    const { getNotificationChannels } = await import("../settings/settings.service");
     channels = (await getNotificationChannels(db)).conversation_reply ?? channels;
   } catch (error: unknown) {
     console.warn("[Notifications] Failed to read reply channels, defaulting to email:", compactProviderLogDetail(error));
@@ -429,7 +429,6 @@ async function sendMessageToStaff(
 
   let channels = ["push"];
   try {
-    const { getAdminNotificationChannels } = await import("../settings/settings.service");
     channels = (await getAdminNotificationChannels(db)).conversation_message ?? channels;
   } catch (error: unknown) {
     console.warn("[Notifications] Failed to read staff message channels, defaulting to push:", compactProviderLogDetail(error));

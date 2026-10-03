@@ -56,7 +56,7 @@ import {
 import type { Database } from "@scalius/database/client";
 import { NotFoundError, ValidationError } from "@scalius/core/errors";
 import { getCurrentPublicMediaUrl } from "../../integrations/storage";
-import { publishedMediaObjectKey } from "../media/media.presentation";
+import { publishedMediaObjectKey } from "../media-references/presentation";
 import {
     listOrderRefundAttempts,
     summarizeActiveRefundOperation,

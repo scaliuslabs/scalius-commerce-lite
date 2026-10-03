@@ -25,7 +25,7 @@ import {
 } from "@scalius/shared/reviews";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { AppError, ConflictError, NotFoundError, ValidationError } from "../../errors";
-import { publishedMediaObjectKey } from "../media/media.presentation";
+import { publishedMediaObjectKey } from "../media-references/presentation";
 import {
   reviewsDocument,
   type ReviewSettings,

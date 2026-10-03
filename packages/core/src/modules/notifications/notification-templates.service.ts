@@ -3,7 +3,7 @@
 
 import type { Database } from "@scalius/database/client";
 import { ValidationError } from "@scalius/core/errors";
-import { notificationTemplatesDocument } from "../settings/documents";
+import { notificationTemplatesDocument } from "./documents";
 import type { MessageLanguage } from "./message-copy";
 import type { TemplatedNotificationType } from "./notification-types";
 import {

@@ -27,7 +27,7 @@ import {
 import {
     adminPrincipalExists,
 } from "@scalius/core/auth/admin-setup";
-import { noDeletingMediaReferences } from "@scalius/core/modules/media";
+import { noDeletingMediaReferences } from "@scalius/core/modules/media-references";
 import {
     deleteStaffShortcutsStatement,
     readStaffShortcuts,

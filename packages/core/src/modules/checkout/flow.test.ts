@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   getCheckoutFlowValidationIssues,
   isCheckoutGatewayUsableForFlow,
-} from "./checkout-flow";
+} from "./flow";
 
 describe("checkout flow validation", () => {
   it("rejects Fast COD Only when COD is not enabled", () => {

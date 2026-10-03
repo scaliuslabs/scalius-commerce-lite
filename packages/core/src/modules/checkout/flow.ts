@@ -6,12 +6,10 @@ import {
     isOnlinePaymentMethod,
     type PaymentProviders,
 } from "../payments/gateways/registry";
-import type { CheckoutMode } from "./documents";
+import type { CheckoutMode } from "../settings/documents";
 
 /** `cod`, a built-in gateway id or an app provider id (`<plugin id>:<provider id>`). */
 export type CheckoutPaymentMethodId = string;
-
-export { isOnlinePaymentMethod };
 
 export function isPositiveDepositAmount(value: unknown): boolean {
     const amount = Number(value);

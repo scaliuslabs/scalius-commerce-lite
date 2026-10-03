@@ -8,15 +8,17 @@ import { ValidationError } from "@scalius/core/errors";
 
 import {
   checkoutDocument,
-  DEFAULT_ADMIN_NOTIFICATION_CHANNELS,
-  DEFAULT_CUSTOMER_NOTIFICATION_CHANNELS,
   giftCardsDocument,
-  notificationsDocument,
-  notificationTemplatesDocument,
   readGiftCardSettings,
   readReviewSettings,
   reviewsDocument,
 } from "./documents";
+import {
+  DEFAULT_ADMIN_NOTIFICATION_CHANNELS,
+  DEFAULT_CUSTOMER_NOTIFICATION_CHANNELS,
+  notificationsDocument,
+  notificationTemplatesDocument,
+} from "../notifications/documents";
 
 describe("Wave B settings documents", () => {
   let sqlite: DatabaseSync;

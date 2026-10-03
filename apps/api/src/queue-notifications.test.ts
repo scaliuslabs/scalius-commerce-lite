@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@scalius/core/modules/notifications", async (importOriginal) => ({
   ...await importOriginal<typeof import("@scalius/core/modules/notifications")>(),
+  getAdminNotificationChannels: mocks.getAdminNotificationChannels,
   sendOrderNotificationEmail: mocks.sendOrderNotificationEmail,
   sendOrderNotification: mocks.sendOrderNotification,
   sendStaffOrderEmails: mocks.sendStaffOrderEmails,
@@ -27,11 +28,6 @@ vi.mock("@scalius/core/modules/notifications", async (importOriginal) => ({
 vi.mock("./notification-content/digital", () => ({ resolveDigitalDeliveryContent: mocks.resolveDigitalDeliveryContent }));
 vi.mock("./notification-content/review-request", () => ({ resolveReviewRequestContent: mocks.resolveReviewRequestContent }));
 vi.mock("./notification-content/gift-card", () => ({ resolveGiftCardIssuedContent: mocks.resolveGiftCardIssuedContent }));
-
-vi.mock("@scalius/core/modules/settings", async (importOriginal) => ({
-  ...await importOriginal<typeof import("@scalius/core/modules/settings")>(),
-  getAdminNotificationChannels: mocks.getAdminNotificationChannels,
-}));
 
 import {
   recordAndEnqueueNotification,

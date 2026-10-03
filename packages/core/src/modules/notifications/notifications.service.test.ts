@@ -36,7 +36,7 @@ vi.mock("./store-messages", () => ({
     })),
 }));
 
-vi.mock("../settings/settings.service", () => ({
+vi.mock("./channel-settings", () => ({
     getNotificationChannels: mocks.getNotificationChannels,
     getOrderWhatsAppTemplateSettings: mocks.getOrderWhatsAppTemplateSettings,
 }));

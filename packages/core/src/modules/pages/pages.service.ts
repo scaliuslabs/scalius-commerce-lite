@@ -57,7 +57,7 @@ import {
   isMediaReferenceDeletingGuardError,
   MEDIA_REFERENCE_DELETING_MESSAGE,
   noDeletingMediaReferences,
-} from "../media/media-reference-guard";
+} from "../media-references/reference-guard";
 import { deps } from "../../cache-deps";
 import { truthfulUpdatedAt } from "../../utils/truthful-updated-at";
 

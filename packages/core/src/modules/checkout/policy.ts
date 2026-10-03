@@ -2,7 +2,7 @@ import { assertPhoneCountryAllowed } from "@scalius/shared/customer-utils";
 import {
   isCheckoutGatewayUsableForFlow,
   type CheckoutPaymentMethodId,
-} from "../settings/checkout-flow";
+} from "./flow";
 import {
   ServiceUnavailableError,
   UnauthorizedError,

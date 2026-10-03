@@ -14,7 +14,6 @@ import {
     customerAuthDocument,
     customerCountriesDocument,
     metaConversionsDocument,
-    notificationsDocument,
     paymentMethodsDocument,
     sslcommerzDocument,
     stripeDocument,
@@ -23,6 +22,7 @@ import {
 } from "../settings/documents";
 import type { CheckoutContactFieldSettings } from "./contact-fields";
 import { selectSettingsDocuments } from "../settings/settings-store";
+import { notificationsDocument } from "../notifications/documents";
 import {
     resolveProductMediaProjectionRows,
     selectCheckoutProductMediaProjectionRows,

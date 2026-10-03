@@ -91,7 +91,7 @@ async function dispatchOrderNotification(
 
   // Admin push notification — check admin channel settings before sending
   try {
-    const { getAdminNotificationChannels } = await import("@scalius/core/modules/settings");
+    const { getAdminNotificationChannels } = await import("@scalius/core/modules/notifications");
     const adminChannels = await getAdminNotificationChannels(db);
     const enabledAdminChannels = adminChannels[input.notificationType] || [];
 

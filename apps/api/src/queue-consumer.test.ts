@@ -67,6 +67,7 @@ vi.mock("@scalius/core/integrations/meta/purchase-outbox", () => ({
 
 vi.mock("@scalius/core/modules/notifications", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@scalius/core/modules/notifications")>()),
+  getAdminNotificationChannels: mocks.getAdminNotificationChannels,
   sendOrderNotificationEmail: mocks.sendOrderNotificationEmail,
   sendOrderNotification: mocks.sendOrderNotification,
   sendStaffOrderEmails: mocks.sendStaffOrderEmails,
@@ -121,11 +122,6 @@ vi.mock("./utils/order-notification-queue", () => ({
   enqueueOrderBalancePaidNotificationForOrder: mocks.enqueueOrderBalancePaidNotificationForOrder,
   enqueueOrderCreatedNotificationForOrder: mocks.enqueueOrderCreatedNotificationForOrder,
   enqueueOrderRefundNotificationForOrder: mocks.enqueueOrderRefundNotificationForOrder,
-}));
-
-vi.mock("@scalius/core/modules/settings", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@scalius/core/modules/settings")>()),
-  getAdminNotificationChannels: mocks.getAdminNotificationChannels,
 }));
 
 vi.mock("./utils/webhook-idempotency", () => ({

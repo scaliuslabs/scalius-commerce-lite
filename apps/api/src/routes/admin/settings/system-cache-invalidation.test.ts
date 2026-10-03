@@ -33,6 +33,10 @@ vi.mock("@scalius/core/modules/settings", async (importOriginal) => ({
     message:
       "Configure a usable customer sign-in verification channel before requiring customer accounts at checkout.",
   },
+}));
+
+vi.mock("@scalius/core/modules/checkout", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/checkout")>()),
   getCheckoutFlowSettingsDocument: mocks.getCheckoutFlowSettingsDocument,
   saveCheckoutFlowSettingsDocument: mocks.saveCheckoutFlowSettingsDocument,
 }));

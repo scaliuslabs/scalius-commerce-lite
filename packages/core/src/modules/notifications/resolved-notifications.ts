@@ -25,7 +25,8 @@ import {
   DEFAULT_ADMIN_NOTIFICATION_CHANNELS,
   DEFAULT_CUSTOMER_NOTIFICATION_CHANNELS,
   notificationsDocument,
-} from "../settings/documents";
+} from "./documents";
+import { getAdminNotificationChannels, getNotificationChannels } from "./channel-settings";
 import { MESSAGE_COPY } from "./message-copy";
 import {
   renderEmailTemplate,
@@ -142,7 +143,6 @@ export async function sendResolvedNotification(
 
   let channels = DEFAULT_CUSTOMER_NOTIFICATION_CHANNELS[type] ?? ["email"];
   try {
-    const { getNotificationChannels } = await import("../settings/settings.service");
     channels = (await getNotificationChannels(db))[type] ?? channels;
   } catch (error: unknown) {
     console.warn(`[Notifications] Failed to read ${type} channels, using the defaults:`, compactProviderLogDetail(error));
@@ -311,7 +311,6 @@ export async function sendStaffAlertNotification(
 
   let channels = DEFAULT_ADMIN_NOTIFICATION_CHANNELS[type] ?? ["push"];
   try {
-    const { getAdminNotificationChannels } = await import("../settings/settings.service");
     channels = (await getAdminNotificationChannels(db))[type] ?? channels;
   } catch (error: unknown) {
     console.warn(`[Notifications] Failed to read ${type} staff channels, using the defaults:`, compactProviderLogDetail(error));

@@ -29,11 +29,10 @@ import {
     stripeDocument,
     type SSLCommerzSettingsDocument,
     type StripeSettingsDocument,
-    getCheckoutFlowValidationIssues,
-    isCheckoutGatewayUsableForFlow,
     getCurrencySettings,
     writeSettingsDocuments,
 } from "@scalius/core/modules/settings";
+import { getCheckoutFlowValidationIssues, isCheckoutGatewayUsableForFlow } from "@scalius/core/modules/checkout";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const MASKED = "••••••••••••";

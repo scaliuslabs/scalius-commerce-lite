@@ -7,10 +7,10 @@ import {
 } from "./checkout-flow-policy";
 
 // The preview must agree with the server rule. The dashboard compiles only
-// against browser entries, so the server settings entry (which carries Worker
+// against browser entries, so the server checkout entry (which carries Worker
 // ambient types) is loaded at test time, not imported for the compiler.
-const SERVER_SETTINGS_ENTRY = "@scalius/core/modules/settings";
-const { getCheckoutFlowValidationIssues } = (await import(/* @vite-ignore */ SERVER_SETTINGS_ENTRY)) as {
+const SERVER_CHECKOUT_ENTRY = "@scalius/core/modules/checkout";
+const { getCheckoutFlowValidationIssues } = (await import(/* @vite-ignore */ SERVER_CHECKOUT_ENTRY)) as {
     getCheckoutFlowValidationIssues: (options: {
         checkoutMode: string | null | undefined;
         partialPaymentEnabled: boolean;

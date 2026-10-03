@@ -1,5 +1,6 @@
 import type { Database } from "@scalius/database/client";
-import { checkoutDocument, isCheckoutGatewayUsableForFlow } from "@scalius/core/modules/settings";
+import { checkoutDocument } from "@scalius/core/modules/settings";
+import { isCheckoutGatewayUsableForFlow } from "@scalius/core/modules/checkout";
 import {
   BUILT_IN_PAYMENT_PROVIDERS,
   getPaymentMethodPreferences,

@@ -130,6 +130,8 @@ Delivery notification enqueue is intentionally API-local because it depends on t
 - `message-copy.ts` -- the English and Bangla words around messages (email frame, request names, codes, staff email)
 - `notification-templates.ts` -- default templates (en/bn), variables, and the one email renderer used by sends and the dashboard preview
 - `notification-templates.service.ts` -- reads and saves the merchant's templates
+- `documents.ts` -- the `notifications` (customer/staff channel rules with their defaults and allowances, staff email recipients, order WhatsApp template) and `notification_templates` settings documents
+- `channel-settings.ts` -- reads and saves the channel rules; a channel is newly enabled only while its provider is ready and not paused
 - `notification-provider-health.ts` -- D1-backed provider pause markers and receipt-derived recovery for merchant-actionable setup failures
 - `order-notification-outbox.ts` -- parent queue handoff/replay state
 - `order-notification-delivery-receipts.ts` -- per-channel receipt claims and accepted/failed/skipped marks
@@ -142,5 +144,5 @@ Delivery notification enqueue is intentionally API-local because it depends on t
 - `@scalius/core/integrations/email` -- `sendEmail()` for transactional emails
 - `@scalius/core/integrations/sms` -- `getActiveSmsProvider()` for SMS channel dispatch (4 providers: smsnetbd, bdbulksms, mimsms, gennet)
 - `@scalius/core/integrations/whatsapp` -- encrypted Meta Cloud API credential resolver and template sender for order/customer WhatsApp notifications
-- `../settings/settings.service` -- `getNotificationChannels()`, `getOrderWhatsAppTemplateSettings()`, and `isWhatsAppCloudApiConfigured()`
+- `../settings` -- the settings store (`defineSettingsDocument`) and the business, platform and provider-credential documents
 - `@scalius/shared/html-escape` -- `escapeHtml()` for XSS prevention in notification content

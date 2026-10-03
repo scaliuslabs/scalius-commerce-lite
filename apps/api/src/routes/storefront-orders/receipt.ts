@@ -37,7 +37,7 @@ import {
 } from "../../schemas/order-lines";
 import { fromMinor } from "@scalius/shared/money";
 import { getCurrentPublicMediaUrl } from "@scalius/core/integrations/storage";
-import { publishedMediaObjectKey } from "@scalius/core/modules/media";
+import { publishedMediaObjectKey } from "@scalius/core/modules/media-references";
 import { CUSTOMER_AUTH_OTP_CHANNELS } from "@scalius/shared/customer-auth-policy";
 import { NotFoundError, RateLimitError, UnauthorizedError, ServiceUnavailableError } from "../../utils/api-error";
 import { isWithinRateLimit } from "../../utils/rate-limit";

@@ -41,7 +41,7 @@ import {
     isMediaReferenceDeletingGuardError,
     MEDIA_REFERENCE_DELETING_MESSAGE,
     noDeletingMediaReferences,
-} from "../media/media-reference-guard";
+} from "../media-references/reference-guard";
 import {
     assertCategoryPlacement,
     categoriesHaveNoChildrenOutsideCondition,

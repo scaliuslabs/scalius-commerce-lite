@@ -26,7 +26,7 @@ import {
 import { listOrderPaymentSessionAttempts } from "../../payments/payment-session-attempts";
 import { listOrderSupportRequests } from "../order-support-requests";
 import { getCurrentPublicMediaUrl } from "../../../integrations/storage";
-import { publishedMediaObjectKey } from "../../media/media.presentation";
+import { publishedMediaObjectKey } from "../../media-references/presentation";
 import { retryTransientD1 } from "../../../utils/transient-d1";
 import {
     paymentRecoveryLifecycleCondition,

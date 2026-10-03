@@ -53,7 +53,7 @@ import {
     serviceUnavailableResponse,
 } from "../../../schemas/responses";
 import { getCurrentPublicMediaUrl } from "@scalius/core/integrations/storage";
-import { publishedMediaObjectKey } from "@scalius/core/modules/media";
+import { publishedMediaObjectKey } from "@scalius/core/modules/media-references";
 import {
     activeRefundOperationSchema,
     orderDetailSchema,

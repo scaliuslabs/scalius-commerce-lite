@@ -8,13 +8,13 @@ wrappers over the documents.
 ## Files
 
 - `settings-store.ts` -- `defineSettingsDocument()` and `selectSettingsDocuments()`: the only code that reads or writes document rows
-- `documents.ts` -- every document definition (key, zod schema, defaults, secret fields, optional KV mirror)
+- `documents.ts` -- the shared document definitions (key, zod schema, defaults, secret fields, optional KV mirror); a domain that owns a document declares it itself (`notifications/documents.ts`, `delivery/zones.ts`, `inventory/low-stock-policy.ts`)
 - `staff-shortcuts.ts` -- one per-staff-member document (`staff-shortcuts:<userId>`, no KV, no secrets) for dashboard keyboard shortcuts; saves replace the whole map; the row is deleted with staff removal and invitation revocation
 - `../platform/platform-settings.service.ts` (the platform domain) -- deployment public origins (storefront/API/dashboard/media URLs, customer cookie domain, extra CORS origins) and their KV-first Worker-entry resolution
 - `site-settings.service.ts` -- currency, header/footer/homepage presentation (CAS), published theme/draft workflow, media delivery, SEO, storefront URL, allowed countries
-- `settings.service.ts` -- `getCurrencyConfig()` and notification channel preferences
-- `business-settings.service.ts`, `customer-request-policy.ts`, `checkout-flow-admin.service.ts` -- one document each
-- `checkout-config.service.ts` / `checkout-readiness.ts` -- public checkout configuration and readiness (one batched document read)
+- `settings.service.ts` -- `getCurrencyConfig()`
+- `business-settings.service.ts`, `customer-request-policy.ts` -- one document each
+- `checkout-readiness.ts` -- checkout and customer sign-in readiness (the checkout domain's `config.ts` assembles the public checkout configuration from it)
 
 ## Settings documents
 
@@ -84,8 +84,11 @@ shipping method or order exists the code is locked (`isCurrencyCodeLocked`).
 
 ## Notification channels
 
-`getNotificationChannels` / `updateNotificationChannels` and the admin
-equivalents read and write the `notifications` document. Customer channels are
+The notifications domain owns the `notifications` and `notification_templates`
+documents (`notifications/documents.ts`) and their rules
+(`notifications/channel-settings.ts`): `getNotificationChannels` /
+`updateNotificationChannels` and the admin equivalents read and write the
+`notifications` document. Customer channels are
 limited to implemented delivery paths (`email`, `sms`, `whatsapp`); SMS and
 WhatsApp saves require a ready provider that is not paused by
 `notification_provider_health`. Every order event defaults to `["email"]`.
@@ -100,7 +103,9 @@ WhatsApp saves require a ready provider that is not paused by
 
 ## Checkout configuration
 
-`getCheckoutConfig()` reads the `checkout`, `currency`, `customer_auth`, and
+The checkout domain owns the checkout-flow policy and its document service
+(`checkout/flow.ts`, `checkout/flow-settings.ts`) and the public configuration
+(`checkout/config.ts`): settings never imports payments. `getCheckoutConfig()` reads the `checkout`, `currency`, `customer_auth`, and
 `customer_countries` documents in one batch, evaluates delivery and required
 sign-in readiness, then intersects the merchant payment allowlist with provider
 readiness and checkout-flow policy (`guest_cod_only` hides online gateways,

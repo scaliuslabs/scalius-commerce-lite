@@ -8,7 +8,7 @@ import {
     isMediaReferenceDeletingGuardError,
     MEDIA_REFERENCE_DELETING_MESSAGE,
     noDeletingMediaReferences,
-} from "../media/media-reference-guard";
+} from "../media-references/reference-guard";
 import { normalizeBdLandline, validateAndFormatPhone } from "@scalius/shared/customer-utils";
 import { normalizeBdMobile } from "@scalius/shared/phone-input";
 import { normalizePublicMediaUrl } from "@scalius/shared/media-url";

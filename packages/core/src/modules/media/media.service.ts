@@ -42,7 +42,7 @@ import {
     ValidationError,
 } from "@scalius/core/errors";
 import type { InitiateMediaUploadInput, UpdateMediaInput } from "./media.validation";
-import { presentMediaProjection } from "./media.presentation";
+import { presentMediaProjection } from "../media-references/presentation";
 import { countMediaUsage, loadMediaUsage, noMediaUsage, type MediaUsage } from "./media.usage";
 
 const MAX_COMMAND_IDS = 90;
