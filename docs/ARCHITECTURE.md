@@ -1,201 +1,139 @@
-# Scalius Commerce — Architecture & Module Communication Guide
+# Architecture
 
-> How everything works, how domains talk to each other, and where the boundaries are.
+How Scalius Commerce is built: the two Workers, the core domain graph with its import rules, and the order lifecycle. It is for contributors and coding agents. Code and the checks named below are the authority. This page does not certify a clean tree.
 
-The measured stable-release performance baseline, retained optimizations, and
-rewrite thresholds are recorded in [PERFORMANCE-RELEASE.md](./PERFORMANCE-RELEASE.md).
-How a storefront page renders from one API batch, the per-page API and D1
-budgets, API placement, and `pnpm perf:storefront` are in
-[STOREFRONT-PERFORMANCE.md](./STOREFRONT-PERFORMANCE.md).
-Public cache validity, dependency triggers, and the one-second edge freshness
-contract are in [CACHE-FRESHNESS.md](./platform/CACHE-FRESHNESS.md).
+Related docs:
 
-Storefront template defaults live in `packages/shared/src/storefront-theme/templates.ts`;
-the dashboard's Online store theme page edits those blocks and tokens. Category
-and search starting views are separate, and a buyer's grid/list choice is saved
-separately for browsing and searching. `CatalogListing.astro` applies those
-choices and keeps desktop sidebar filters sticky. Product cards render only
-facts present on each product; variant-specific minimum heights keep sparse
-cards aligned without inventing missing facts. Check rendered geometry with
-`pnpm fidelity:check` and the catalog/theme render tests.
-The listing theme places short category, collection, and brand descriptions
-above or below products; buying guides remain below. Showcase listings surface
-published child categories in a segmented strip when the catalog has a
-category tree, and can show one compact row of real option or attribute values
-from listing facets. Merchants can hide either Showcase row in Theme settings.
-The Daily Essentials product buy box keeps quantity beside Add to cart and
-places Buy now below; its actions still follow the resolved product template.
-Marketplace option tiles show a price when the other selected axes identify
-one available SKU. Fashion and
-Heritage buy boxes start with one purchase button; merchants can add Buy now
-in Theme settings.
-Theme edits save to a private draft; merchants can preview real storefront
-routes through a one-time continuation before explicitly publishing. Logo,
-announcement bar, and footer settings on that page still save live.
-The homepage section editor can fill Showcase story, highlights, quotes, and
-FAQ blocks; empty blocks stay hidden until the merchant adds content. Showcase
-cards can opt into guarded Add to cart; optioned products open their detail page. The
-Daily Essentials card sketch follows its saved full or compact cart action.
+- Storefront themes, templates and listings: [storefront-theme.md](../packages/shared/src/storefront-theme.md).
+- Render budgets and `pnpm perf:storefront`: [STOREFRONT-PERFORMANCE.md](./STOREFRONT-PERFORMANCE.md).
+- Performance baseline: [PERFORMANCE-RELEASE.md](./PERFORMANCE-RELEASE.md).
+- Public cache validity (DVC): [cache-deps README](../packages/core/src/cache-deps/README.md).
+- Plan profile: [FREE-PLAN.md](./FREE-PLAN.md). Provider cutover: [DATABASE-PORTABILITY.md](./DATABASE-PORTABILITY.md).
 
+## System overview
 
-## System Overview
-
-```
-Browser (Admin)                  Browser (Customer)
-    │ dashboard host                   ↓
-    │                 ┌────────────────────────────────┐
-    │                 │  Storefront Worker (SSR) :4322 │
-    │                 └───────────────┬────────────────┘
-    │                                 │ Service Binding
-    ↓                                 ↓
-┌─────────────────────────────────────────────────────┐
-│  API Worker (Hono) :8787                             │
-│  ├─ Dashboard SPA (ASSETS) + Better Auth /api/auth   │
-│  ├─ Routes (thin HTTP layer, lazy route families)    │
-│  ├─ Middleware (auth, RBAC, cache, CSP)              │
-│  ├─ Queue Consumer (payment, notification, OTP+DLQs) │
-│  └─ Cron every 15 min (scheduled maintenance)        │
-└──────────────────────┬──────────────────────────────┘
-                       │
-┌──────────────────────┴──────────────────────────────┐
-│  @scalius/core (domain services)                     │
-│  39 domains under src/modules (an acyclic graph),    │
-│  plus settings-store, auth, integrations, search,    │
-│  cache-deps, errors, utils                           │
-└──────────────────────┬──────────────────────────────┘
-                       │
-┌──────────────────────┴──────────────────────────────┐
-│  @scalius/database (Drizzle + relational providers)   │
-│  Canonical schema, migrations, and atomic invariants  │
-└─────────────────────────────────────────────────────┘
+```text
+ Browser (dashboard)               Browser (buyer)
+        │                                 │
+        │                    ┌────────────▼────────────┐
+        │                    │ Storefront Worker       │
+        │                    │ (Astro SSR)             │
+        │                    └────────────┬────────────┘
+        │                                 │ service binding BACKEND_API
+┌───────▼─────────────────────────────────▼─────────────┐
+│ API Worker (Hono)                                      │
+│  - dashboard SPA (ASSETS) and Better Auth              │
+│  - HTTP routes, loaded lazily per route family         │
+│  - queue consumer: JOBS_QUEUE and jobs-dlq             │
+│  - cron every 15 minutes: maintenance sweeps           │
+└────────────────────────────┬───────────────────────────┘
+                             │
+┌────────────────────────────▼───────────────────────────┐
+│ @scalius/core: 39 domains (acyclic graph)              │
+│ plus settings-store, cache-deps, errors, auth,         │
+│ integrations, search, utils                            │
+└────────────────────────────┬───────────────────────────┘
+                             │
+┌────────────────────────────▼───────────────────────────┐
+│ @scalius/database: Drizzle schema, D1 / TursoDB / PG   │
+└────────────────────────────────────────────────────────┘
 ```
 
-The API Worker loads route graphs lazily per family
-(`apps/api/src/runtime/fetch-runtime-app.ts`: probe, public, admin, system,
-docs; `runtime/admin-app.ts` and `runtime/public-app.ts` split those further).
-The Worker entry's static graph stays small: it reads platform origins through
-the `platform` domain only.
+- The API Worker also serves the dashboard SPA (`apps/admin-v2/dist`) through its `ASSETS` binding. `apps/admin-v2` has no Wrangler config. On the dashboard host the API Worker serves the SPA shell, Better Auth (`<base>/api/auth/*`) and the API (`<base>/api/v1/*`): `apps/api/src/dashboard/surface.ts`.
+- The storefront Worker reads everything through `BACKEND_API` and has no KV binding.
+- Local ports: API 8787, storefront 4322, dashboard dev server 4323 (`scripts/dev-ports.mjs`).
+- `apps/api/src/runtime/fetch-runtime-app.ts` sorts a request path into one family (`probe`, `public`, `admin`, `system`, `docs`, `plugins`) and loads only that family's app. `runtime/admin-app.ts` and `runtime/public-app.ts` split `admin` and `public` into further lazy groups.
+- `apps/api/src/app.ts` is the full contract app that produces the OpenAPI contract. `runtime/route-family-parity.test.ts` checks that each of its routes belongs to exactly one runtime app.
+- `JOBS_QUEUE` message types: `payment.event`, `auth.send_otp`, `notification`, `order.notification` (legacy), `order.auto_fulfil`, `media.render_variants`, `catalog.recommendations.refresh`, `catalog.projections.rebuild`, `events.dispatch`, `webhooks.deliver`, `plugins.deliver`. `jobs-dlq` archives exhausted messages.
+- The cron runs `runScheduledMaintenance` (`apps/api/src/scheduled-maintenance.ts`). On Workers Free the sweeps rotate through four slices, so each runs hourly. On Paid every sweep runs on every tick. Sweeps marked `every` (notification outbox flush, event outbox maintenance, plugin maintenance) run on every tick on both plans.
 
-## Layer Rules
+## Layer rules
 
-Dependencies flow **downward only**. The checks named below are the authority;
-this document does not certify a clean tree by itself.
+Dependencies flow downward only.
 
 | Layer | May import | Never imports |
 |-------|-----------|---------------|
-| Dashboard browser code (`apps/admin-v2/src`) | `@scalius/shared`, `@scalius/api-client`, `@scalius/core/modules/<domain>/browser` | A domain `index`, any deeper core path, relational provider clients |
-| API routes (`apps/api/src/routes/`) | `@scalius/core/modules/<domain>` and `/browser`, `@scalius/database`, `@scalius/shared` | Deeper core paths; nothing imports routes |
-| Core domains (`packages/core/src/modules/<domain>/`) | Their own files, lower domains' `index.ts`/`browser.ts` entries, core's shared areas, `@scalius/database`, `@scalius/shared` | Routes, apps, any file inside another domain, a domain that imports them back |
-| Schema (`@scalius/database/schema/`) | `drizzle-orm` only | Services or routes |
-| Shared (`@scalius/shared/`) | Nothing | Pure utilities |
+| Dashboard (`apps/admin-v2/src`) | `@scalius/shared`, `@scalius/api-client`, `@scalius/core/modules/<domain>/browser`, `@scalius/core/auth/rbac/*` | A domain `index`, any other core path, database provider clients |
+| API routes (`apps/api/src/routes/`) | `@scalius/core` through its exports map, `@scalius/database`, `@scalius/shared` | A path outside the exports map. Nothing imports routes. |
+| Core domains (`packages/core/src/modules/<domain>/`) | Own files, other domains' entries, core's shared areas, `@scalius/database`, `@scalius/shared` | Routes, apps, a file inside another domain, a domain that imports them back |
+| Schema (`@scalius/database/schema`) | `drizzle-orm` | Services or routes |
+| Shared (`@scalius/shared`) | No workspace package | |
 | Storefront (`apps/storefront`) | `@scalius/shared`, `@scalius/api-client` | `@scalius/core`, `@scalius/database` |
 
-The admin production build also scans every emitted browser asset for
-relational provider markers, so server code that reaches the dashboard
-indirectly still fails the build.
+The admin build (`scripts/check-admin-client-boundaries.mjs`) scans every emitted JavaScript file for database-provider markers and circular static chunk imports.
 
-Worker bindings, database/auth/provider clients, credentials, in-flight I/O,
-and tenant data are request-scoped. The API Worker creates them from the
-current request context and never retains them in module variables. Deep media
-projection is the sole implicit request context: the API wraps each request in
-Cloudflare's `AsyncLocalStorage` with only the normalized public media base
-URL. `scripts/check-source-policies.mjs` (run by the API build and by the test
-suite) rejects mutable server module variables, the known historical
-client/cache globals, and the structural import/sink policies listed there.
+Worker bindings, database clients, credentials, in-flight I/O and tenant data are request-scoped. The API Worker creates them per request and never keeps them in module variables. Implicit request context uses `AsyncLocalStorage` only: the public media base URL (`withPublicMediaUrl`), the public render context, the dependency scope and the read observer.
 
----
+## Core domains
 
-## Core Domains
+Each directory under `packages/core/src/modules/` is one domain with at most two public entries:
 
-Each directory under `packages/core/src/modules/` is one domain with at most
-two public entries:
+- `index.ts` is the server API. It holds everything other code may call.
+- `browser.ts` exists only when the domain has pure types and policies that other code needs without its server graph. It is closed: every file it reaches is exported by a browser entry, and it imports only `zod`, `@scalius/shared/*` and other browser files.
 
-- `index.ts` — the domain's server API (everything other code may call);
-- `browser.ts` — only when the domain has pure types and policies other code
-  needs without its server graph. It is closed: every file it reaches, types
-  included, is itself exported by a browser entry, and it imports nothing but
-  `zod`, `@scalius/shared/*` and other browser files.
+Other code reaches a domain only through these entries: `../<domain>` or `../<domain>/browser` inside core, `@scalius/core/modules/<domain>` (and `/browser`) outside it. `packages/core/package.json` lists each domain's entries. 23 of the 39 domains have a `browser.ts`. Core also has shared areas that are not domains: `settings-store`, `cache-deps`, `errors`, `auth`, `integrations`, `search`, `utils` and `testing` (test-only fixtures).
 
-Other code reaches a domain only through those entries: `../<domain>` or
-`../<domain>/browser` inside core, `@scalius/core/modules/<domain>` (and
-`/browser`) outside it. Next to the domains, core has shared areas that are not
-domains: `settings-store` (the settings document store), `cache-deps`,
-`errors`, `auth`, `integrations`, `search` and `utils`.
-
-| Domain | Owns | Entries |
-|--------|------|---------|
-| `orders` | The order record: dashboard list/detail, manual orders and COD amendments, detail edits, archive, the status lifecycle (`status/`), returns, invoices, receipts, lookup, payment recovery, the buyer's account orders and order claims | index, browser |
-| `order-kernel` | What every order writer shares: the order/payment/fulfilment state machine, the shipment claim lease, the payment-session and refund-attempt locks, app facts on an order. Imports no domain | index, browser |
-| `checkout` | Storefront cart validation, the checkout authority and policy, checkout flow settings, public checkout configuration and readiness, delivery preflight and pricing, idempotent attempts, the single commit and post-commit side effects, quote fingerprint, abandoned checkouts | index, browser |
-| `fulfilment` | The actions that hand units over, all written to the fulfilment ledger (`ledger.ts`, the only writer of `order_fulfillments`; `fulfilled_quantity` is its trigger projection): own-rider parcels, courier bookings and their reconciliation, pickup (ready / picked up with cash at the counter), service done, void, delivery outcomes (delivered, COD collected/failed/returned), and the fulfiller registry plus the automatic-fulfilment seam (Wave B fulfillers) | index |
-| `products` | The product model and the rules others read through: public eligibility, buyer pricing and projections, option model, money, low-stock policy, catalog projections | index |
-| `product-admin` | The dashboard's product editor: create/update/duplicate, SKUs and the option matrix, trash/restore/delete, admin reads, tax classification, all under one aggregate revision with stock written to the inventory ledger in the same batch | index |
-| `catalog` | Buyer-facing catalogue reads: listings, facets, product page, collection reads, site search, feeds, sitemaps, recommendations, storefront sections, feed diagnostics | index |
-| `categories`, `collections`, `attributes`, `custom-fields` | Their records, publication rules and admin writes; `categories` also owns the tree (placement pre-check, moves, trash rules and tree reads over the trigger-maintained closure) | index, browser |
-| `brands` | Brand records, their revision-guarded writes and buyer reads (brand page, list, sitemap); `catalog` joins a product's published brand through it | index, browser |
-| `inventory` | Reservations, deductions, releases, restores, ledger v2, low-stock alerts, stock adjustment, purchase orders and transfers | index |
-| `payments` | Gateway port and adapters, gateway settings, sessions, payment application, refunds and reconciliation, COD records | index, browser |
-| `delivery` | Courier providers, shipments, tracking, delivery zones and locations | index, browser |
-| `promotions` | The discount engine, checkout snapshots, redemptions | index, browser |
-| `tax` | Tax classes, rates, the quote calculator | index, browser |
-| `customers` | Customer records, account auth and OTP, identity, sign-in readiness, tags and segments | index, browser |
-| `customer-marketing` | Marketing consent per customer and channel, double opt-in, unsubscribe links | index |
-| `notifications` | Its settings documents and channel preferences, order notification outbox, delivery receipts, templates, provider health | index, browser |
-| `conversations` | Buyer↔store threads | index, browser |
-| `reviews` | Verified-purchase reviews of delivered lines, moderation, replies, the rating projection, review requests | index, browser |
-| `digital` | Private-R2 files, licence-key pools that are the variant's stock, entitlements, cookie-bound download tickets | index, browser |
-| `gift-cards` | Codes, the append-only balance ledger, issue, redemption as a tender, release and refund credit. Imports no domain | index, browser |
-| `warranty` | Revisioned warranty policies, per-fulfilment-line warranty records, claims backed by threads | index, browser |
-| `settings` | The shared settings documents and the settings services (currency, presentation, SEO, business, EMI, staff shortcuts). A domain that owns a document declares it itself | index, browser |
-| `platform` | The `platform` document: public origins, CORS and identity handoff for the Worker entry | index |
-| `media` | The Files library: uploads, the usage index, permanent delete | index |
-| `media-references` | How records point at a stored file: the published-object key and URL projection, the deleting-reference batch guard. Imports no domain | index |
-| `events`, `plugins` | The domain event catalogue and outbox fan-out; installed apps' state and lifecycle (`plugins` imports only `events`) | index |
-| `pages`, `navigation`, `storefront`, `analytics`, `fraud-checker`, `store-transfer` | Their records and reads; `pages` also owns the store policy pages, `analytics` the analytics scripts | index (browser where listed in `package.json`) |
-| `agent-access`, `agent-storefront` | Agent connections and the agent storefront workflows | index |
+| Domain | Owns |
+|--------|------|
+| `agent-access` | Agent connections: grants, credentials, authorization |
+| `agent-storefront` | Buyer-agent storefront workflows |
+| `analytics` | Analytics scripts, provider health, dashboard reports |
+| `attributes` | Attribute definitions, groups, values, category attribute sets |
+| `brands` | Brand records and buyer reads (page, list, sitemap) |
+| `catalog` | Buyer reads: listings, facets, product page, collections, site search, feeds, sitemaps, recommendations |
+| `categories` | Category records, tree and publication rules |
+| `checkout` | Cart validation, checkout authority and policy, pricing, delivery preflight, public configuration, idempotent attempts, the single commit and its post-commit side effects, abandoned checkouts |
+| `collections` | Collection records and publication rules |
+| `conversations` | Buyer-store threads and attachments |
+| `custom-fields` | Custom field definitions and values |
+| `customer-marketing` | Marketing consent per customer and channel, double opt-in, unsubscribe links |
+| `customers` | Customer records, account auth and OTP, identity, sign-in readiness, tags, segments |
+| `delivery` | Couriers, shipments, tracking, delivery zones and locations |
+| `digital` | Private-R2 files, licence-key pools (the SKU's stock), entitlements, download tickets |
+| `events` | Event outbox dispatch, webhook subscriptions and deliveries (the catalog is `@scalius/shared/events`) |
+| `fraud-checker` | The manual courier-history lookup by phone on the order page. It advises and never blocks. |
+| `fulfilment` | Actions that hand units over, written to the fulfilment ledger: own-rider parcels, courier bookings, pickup, service, void, delivery outcomes. Also automatic fulfilment |
+| `gift-cards` | Codes, the append-only balance ledger, issue, redemption, refund credit |
+| `inventory` | Reservations, deductions, releases, restores, ledger v2, locations, low-stock alerts, suppliers, purchase orders, transfers |
+| `media` | The Files library: uploads, usage index, permanent delete |
+| `media-references` | How records point at a stored file: key and URL projection, deleting-reference guard |
+| `navigation` | Menus, publications, placements |
+| `notifications` | Channel rules and templates, order notification outbox, delivery receipts, provider health |
+| `order-kernel` | What every order writer shares: state machine, shipment claim lease, payment-session and refund-attempt locks, app facts |
+| `orders` | The order record: list and detail, manual orders, edits, archive, status lifecycle, app holds, returns, invoices, receipts, lookup, payment recovery, account orders and claims |
+| `pages` | CMS pages, articles, store policy pages |
+| `payments` | Gateway port and adapters, sessions, payment application, refunds and reconciliation, COD records |
+| `platform` | The `platform` settings document: public origins, CORS, identity handoff |
+| `plugins` | Installed apps' state and lifecycle: installations, grants, registrations, storage, logs, deliveries, cron runs |
+| `product-admin` | The dashboard product editor: create, update, duplicate, SKUs, option matrix, trash and delete, under one aggregate revision |
+| `products` | The product model and the rules others read: public eligibility, buyer pricing, option model, low-stock policy, catalog projections |
+| `promotions` | The discount engine, checkout snapshots, redemptions |
+| `reviews` | Verified-purchase reviews, moderation, replies, rating projection, review requests |
+| `settings` | Shared settings documents and services (currency, business, SEO, EMI, buyer requests, phone countries, staff shortcuts) |
+| `store-transfer` | Product, customer and inventory import and export |
+| `storefront` | Homepage and layout reads shaped for the storefront |
+| `tax` | Tax classes, rates, the quote calculator |
+| `warranty` | Revisioned warranty policies, per-line warranties, claims backed by threads |
 
 ### How the boundaries are enforced
 
-1. **Exports map.** `packages/core/package.json` exports exactly
-   `./modules/<domain>` and, where it exists, `./modules/<domain>/browser`.
-   `apps/api` and `apps/admin-v2` resolve `@scalius/core` through that map (no
-   `tsconfig` path alias), so `@scalius/core/modules/<domain>/<file>` fails to
-   compile and to resolve in tests. `@scalius/core/testing` carries test-only
-   fixtures (the fake payment gateway) for other packages' tests.
-2. **Source policies** (`scripts/check-source-policies.mjs`, samples in its
-   test): no deep `@scalius/core/modules` path anywhere; dashboard code imports
-   only browser entries. `scripts/core-boundaries.mjs` checks, inside core:
+1. **Exports map.** `packages/core/package.json` exports `./modules/<domain>` and, where it exists, `./modules/<domain>/browser`. It also exports the shared areas (`./cache-deps`, `./errors`, `./settings-store`, `./auth*`, `./integrations/*`, `./search`, `./testing`, `./utils/*`). `apps/api` and `apps/admin-v2` resolve `@scalius/core` through this map and have no `tsconfig` alias for it, so `@scalius/core/modules/<domain>/<file>` fails to compile and to resolve in tests.
+2. **Source policies** (`scripts/check-source-policies.mjs`). The API build and the test suite run them. They forbid deep `@scalius/core/modules` paths, dashboard imports of non-browser entries, mutable module variables, and `drizzle-orm/d1` or `D1Database` in core.
+3. **Core boundaries** (`scripts/core-boundaries.mjs`, run by the source policies):
    - the exports map matches the domain directories;
-   - **entry-only imports**: every import of a domain from another domain or
-     from a shared area resolves to that domain's `index.ts` or `browser.ts`,
-     never to a file inside it, even one the entry re-exports;
-   - **no import cycle leaves a unit**: in the file import graph, no cycle
-     spans two units (a unit is a domain, or a shared-area directory or file
-     such as `auth/rbac` or `integrations/meta`);
+   - every import of a domain from another domain or a shared area resolves to that domain's `index.ts` or `browser.ts`;
+   - no import cycle spans two units (a domain, or a shared-area file or directory such as `auth/rbac`);
    - browser entries are closed.
-3. **Graph ratchet** (`scripts/core-domain-graph.test.mjs`): the directed
-   domain edges (type imports included) must equal
-   `scripts/core-domain-graph.allow.json`, and its `cycles` list is empty: the
-   domain graph is acyclic. A new edge needs a reviewed allowlist diff and may
-   not close a cycle; a removed edge must be deleted from the allowlist, so the
-   graph only shrinks. `node scripts/core-boundaries.mjs --write-allowlist`
-   regenerates it.
-4. **Dashboard boundary test**
-   (`apps/admin-v2/src/lib/browser-core-boundaries.test.ts`) and the admin
-   build's bundle scan.
+4. **Graph ratchet** (`scripts/core-domain-graph.test.mjs`): the directed domain edges (type imports included) must equal `scripts/core-domain-graph.allow.json`, and its `cycles` list is empty. A new edge needs a reviewed allowlist diff and must not close a cycle. A removed edge must leave the allowlist. `node scripts/core-boundaries.mjs --write-allowlist` regenerates it.
+5. **Dashboard boundary test** (`apps/admin-v2/src/lib/browser-core-boundaries.test.ts`) and the admin build scan.
 
-Because the domain graph has no cycle and no file cycle crosses a unit,
-importing a domain through its `index.ts` is safe: an entry never re-enters a
-module that is still loading, so zod schemas, document definitions and
-registries are always defined when another domain reads them.
+The graph has no cycle, and no file cycle crosses a unit. So an entry never re-enters a module that is still loading. Importing a domain through its `index.ts` is safe: zod schemas, document definitions and registries exist when another domain reads them.
 
 ### The dependency graph
 
-129 directed edges, no cycle. Each layer imports only layers below it
-(computed from the allowlist; a domain sits one layer above the highest domain
-it imports):
+The allowlist holds 129 directed edges and no cycle. A domain sits one layer above the highest domain it imports. There are 11 layers:
 
-```
+```text
 L10  agent-storefront
 L9   checkout · storefront · warranty
 L8   analytics · conversations · fulfilment
@@ -205,492 +143,331 @@ L5   navigation · notifications
 L4   catalog · delivery · digital · product-admin
 L3   brands · categories · inventory · pages · promotions
 L2   custom-fields · customers · media · platform · products · tax
-L1   settings · plugins
-L0   order-kernel · media-references · collections · gift-cards · attributes
-     events · agent-access · fraud-checker
+L1   plugins · settings
+L0   agent-access · attributes · collections · events · fraud-checker
+     gift-cards · media-references · order-kernel
 ```
 
-The rules that keep it this way:
+Rules that keep it acyclic:
 
-- **Leaf modules import no domain**: `order-kernel`, `media-references`,
-  `collections`, `gift-cards`, `attributes`, `events`. Put a fact here when
-  several domains act on it and none of them should own the others.
-- **`settings` imports only `media-references`.** The document store is
-  infrastructure (`@scalius/core/settings-store`), so a domain owns its own
-  document (`platform/document.ts`, `notifications/documents.ts`,
-  `delivery/zones.ts`, `products/low-stock-policy.ts`) and settings never
-  reaches up into the domain that reads it.
-- **`plugins` imports only `events`** (plus `@scalius/shared` and the database).
-- **Orchestrators sit on top**: `checkout`, `fulfilment`, `storefront`,
-  `agent-storefront` and `store-transfer` compose lower domains, and nothing
-  below them imports them. Work that needs two peers goes up into the
-  orchestrator (or the API route) that calls both, not into either peer.
-- **The model sits below its editor**: `products` (rules) is below
-  `inventory`; `product-admin` (the editor) is above `inventory` and `tax`. `orders`
-  (workflows) is above `payments`, `delivery` and `notifications`, which share
-  `order-kernel` instead of importing `orders`.
-
-How the old 17-domain cycle group was taken apart: the state machine, the
-shipment claim, the payment-session and refund-attempt locks and app facts
-moved from `orders`/`payments` into `order-kernel`; the product editor moved
-from `products` into `product-admin`; media presentation and the reference
-guard moved from `media` into `media-references`; the settings store became
-infrastructure and the checkout flow, configuration and readiness, the
-notification documents, the store policy pages and the platform document moved
-into the domains that own them; the buyer's account orders and order claims
-moved from `customers` into `orders`; collection reads and site search moved
-into `catalog`.
-
-#### The intentional triangle
-
-```
-       ORDERS
-      /       \
-     /    DB    \
-    /   batch()  \
-PAYMENTS ──── INVENTORY
-```
-
-Payment confirmation must atomically update inventory and order status. The
-provider-backed `safeBatch()` boundary keeps all three consistent or none;
-`payments` writes the order row through `order-kernel`'s state machine and
-locks, so the batch needs no import of `orders`.
+- **Leaf domains import no domain:** `agent-access`, `attributes`, `collections`, `events`, `fraud-checker`, `gift-cards`, `media-references`, `order-kernel`. Put a fact in a leaf when several domains act on it and none should own the others.
+- **`settings` imports only `media-references`.** The document store is infrastructure (`@scalius/core/settings-store`). A domain declares the documents it owns.
+- **`plugins` imports only `events`.**
+- **Orchestrators sit on top.** `checkout`, `fulfilment`, `storefront`, `agent-storefront` and `store-transfer` compose lower domains, and nothing below them imports them. Work that needs two peers goes into the orchestrator or the API route that calls both.
+- **The model sits below its editor.** `products` is below `inventory`. `product-admin` is above `inventory` and `tax`.
+- **`orders` sits above `payments`, `delivery` and `notifications`.** These share `order-kernel` instead of importing `orders`.
 
 ### Per-domain registries and seams
 
-Shared composition files are split so features in different domains never
-edit the same file:
+Shared composition files are split so that features in different domains never edit the same file.
 
-- Route permissions: `packages/core/src/auth/rbac/route-permissions/<domain>.ts`,
-  merged by `index.ts`. A path pattern belongs to exactly one file, and no two
-  files can match the same path at the same specificity (tested), so the merge
-  order never decides a lookup.
-- Agent operation registry: `apps/api/src/openapi/operation-registry/<surface>-<domain>.ts`,
-  merged by `index.ts` (row shape in `entry.ts`). An operation id belongs to
-  exactly one file (tested).
-- Order routes: `apps/api/src/routes/storefront-orders/`,
-  `routes/customer-auth/` and `routes/admin/orders/`, one router per flow. Each
-  `index.ts` mounts them in registration order, which is also the published
-  OpenAPI path order.
-- Conversation seams: the `conversations` domain entries, and empty routers
-  mounted once (`routes/customer-auth/conversations.ts`,
-  `routes/storefront-orders/conversation.ts`, `routes/admin/conversations.ts`).
-- Order-line extras: `apps/api/src/routes/shared/order-line-extras.ts` composes
-  each item's review, downloads, licence keys, gift cards and warranty from the
-  four Wave B domains at the API layer (never inside `orders`, which would make
-  cycles) for the receipt, the account order and the admin order.
-- Automatic fulfilment: `apps/api/src/utils/auto-fulfil-queue.ts` sends
-  `order.auto_fulfil` after every commit that settles payment; it never throws,
-  and the 15-minute sweep is the backstop.
+- Route permissions: `packages/core/src/auth/rbac/route-permissions/<area>.ts`, merged by `index.ts`. A path pattern belongs to exactly one file, and `route-permissions.test.ts` checks that no two files tie on a path.
+- Agent operation registry: `apps/api/src/openapi/operation-registry/<surface>-<area>.ts`, merged by `index.ts` (row shape in `entry.ts`). An operation id belongs to exactly one file (`agent-operation-contract.test.ts`).
+- Order routes: `routes/storefront-orders/`, `routes/customer-auth/` and `routes/admin/orders/` under `apps/api/src`, one router per flow. Each `index.ts` mounts them in registration order, which is also the published OpenAPI path order. Append new routers; do not reorder.
+- Order-line extras: `apps/api/src/routes/shared/order-line-extras.ts` composes each item's review, download, licence-key, gift-card and warranty facts at the API layer. `warranty` sits above `orders`, so `orders` cannot import it.
+- Automatic fulfilment: `apps/api/src/utils/auto-fulfil-queue.ts` sends `order.auto_fulfil` after a write that settles payment (checkout commit, payment confirmation, cash collection). It never throws. The scheduled `auto_fulfil_sweep` is the backstop.
 
-## Runtime Configuration Boundary
+## Provider ports
 
-Wrangler configs declare resource bindings only; they carry no `vars`. Each
-Worker installs exactly one master secret, `SCALIUS_SECRET` (plus
-`CREDENTIAL_ENCRYPTION_KEY` on the API). Every per-purpose secret is
-HKDF-derived from the master at Worker entry in
-`packages/shared/src/runtime-secrets.ts`.
+`@scalius/shared/plugins/providers` defines one port per provider kind: `payment`, `courier`, `sms`, `email`, `fraud` and `tax`. Built-in adapters (Stripe, SSLCommerz, Pathao, Steadfast, the SMS and email senders, the fraud checkers) and app providers implement the same port. Core code resolves a provider by id and never asks which kind it got. A built-in id never contains a colon. An app provider id is `<plugin id>:<provider id>`.
 
-The Workers plan is the one other deploy-time input: `--plan paid` (default
-Free) generates a Wrangler config that adds the Paid profile's CPU limit, queue
-batch sizes and the build constant `__SCALIUS_PLAN__`; every plan-sized value
-(password hash cost, queue chunk sizes, KV hints, cron slices, list caps) lives in
-`packages/shared/src/plan-limits.ts` and is read through `planLimits()`. See
-[FREE-PLAN.md](./FREE-PLAN.md).
+- The API builds the app providers of each request from `plugin_registrations` rows of kind `provider` (`apps/api/src/plugins/providers/`). Payment and courier providers join their registries (`payments/gateways/registry.ts`, `delivery/couriers/registry.ts`). SMS, email and fraud providers reach core through the `AppProviders` lookup (`packages/core/src/integrations/provider-port.ts`).
+- Core asks for an app provider only when the saved choice names one, so a store on built-in providers reads no plugin table. Without a lookup an app choice fails closed.
+- Ports change only additively within a plugin API version.
 
-Public origins are merchant settings, not deployment configuration. The API
-resolves them per invocation in `apps/api/src/runtime/runtime-env.ts` through
-the `platform` domain, which returns a request-scoped env carrying the derived
-secrets and the resolved `PLATFORM_CONFIG`; consumers keep reading fields such
-as `env.STOREFRONT_URL` without knowing where the value came from. The
-storefront Worker holds no origins of its own: it reads them from
-`GET /api/v1/storefront/layout` through its service binding and falls back to
-its own request origin for its own URL. The dashboard SPA needs no origins: it
-calls the same-origin API Worker that serves it. Local development substitutes
-fixed localhost ports in code.
+## Runtime configuration boundary
 
-Automated and managed deployments extend this boundary without widening it.
-Seven opt-in contracts — a gated first-admin setup token, external identity
-handoff, `GET /api/v1/meta`, a runtime dashboard path prefix, signed front-proxy
-headers, a Wrangler-free migration plan, and a headless demo-store export — are
-all off by default, add no `vars` and no installed secret, derive their keys
-from the same master secret, and store their flags in the same Platform settings
-document. See [AUTOMATED-DEPLOYMENTS.md](AUTOMATED-DEPLOYMENTS.md).
+Wrangler configs declare resource bindings only and carry no `vars`, except `LOCAL_MAILPIT_URL` in `apps/api/wrangler.local.jsonc`. `pnpm check:env` enforces this. It limits bindings to KV `CACHE`, R2 `BUCKET`, rate limiters `RL_STRICT` and `RL_STANDARD` and queue producer `JOBS_QUEUE`. It requires `CF_VERSION_METADATA`, keeps the entrypoints uncached and checks each Worker's `Env` declaration.
+
+- Installed secrets: `SCALIUS_SECRET` on both Workers and `CREDENTIAL_ENCRYPTION_KEY` on the API Worker. Every per-purpose secret is HKDF-derived from `SCALIUS_SECRET` at Worker entry (`packages/shared/src/runtime-secrets.ts`).
+- Public origins are the `platform` settings document, not deployment configuration. Merchants edit the origins under Settings > Store details > Web addresses. They edit the customer cookie domain, extra CORS origins and single sign-on under Settings > Advanced > Sign-in and access. `GET /api/v1/platform` serves the four origins and the setup-token and identity-handoff flags with `Cache-Control: no-store`.
+- The API Worker resolves the document once per invocation in `runtime/runtime-env.ts`, through the `platform` domain only, so the entry's static graph stays small. It returns a request-scoped env with the derived secrets and `PLATFORM_CONFIG`. Consumers read fields such as `env.STOREFRONT_URL`.
+- The storefront Worker reads the origins from the platform fields of the layout payload that every page already fetches (`applyPlatformOrigins`, `apps/storefront/src/lib/api/runtime.ts`). Its own URL falls back to the request origin. The dashboard SPA calls the same-origin API Worker and needs no origins.
+- `--plan paid` (default Free) generates a Wrangler config with the Paid CPU limit, queue batch sizes and the build constant `__SCALIUS_PLAN__`. Plan-sized values live in `packages/shared/src/plan-limits.ts` and are read through `planLimits()`. Code never branches on the plan name. See [FREE-PLAN.md](./FREE-PLAN.md).
+- Seven opt-in contracts support automated deployments. All are off by default and add no `vars` and no installed secret. See [AUTOMATED-DEPLOYMENTS.md](./AUTOMATED-DEPLOYMENTS.md).
 
 ### Build outputs and secrets
 
-No build inlines a local value. Secrets reach a Worker only through its `env`
-at request time; `.dev.vars` and `.env*` exist for `wrangler dev`/`astro dev`
-bindings and never for a bundle.
+No build inlines a local value. Secrets reach a Worker only through its `env` at request time. `.dev.vars` and `.env*` serve `wrangler dev` and `astro dev`, never a bundle.
 
-- Storefront: Astro inlines every non-`PUBLIC_` variable it can see (Vite env
-  files plus all of `process.env`) as string literals wherever server code
-  reads `import.meta.env.NAME`, and wherever a module mentions a bare
-  `import.meta.env` (even in a comment) it inlines every variable the module's
-  text names. `@astrojs/cloudflare` copies `.dev.vars` into `process.env`
-  before the build, and the Cloudflare Vite plugin writes `.dev.vars` into
-  `dist/server/`. `apps/storefront/integrations/build-env-isolation.mjs`
-  rewrites every module so only the built-in keys (`DEV`, `SSR`, `PROD`,
-  `MODE`, `BASE_URL`, `SITE`, `ASSETS_PREFIX`) survive, turns off Vite env
-  files, and drops env files from the bundle.
-- Dashboard: `envDir: false`; it reads no env.
-- API: `wrangler deploy` bundles with esbuild and inlines no env.
-- Source policy (`scripts/check-source-policies.mjs`): storefront and dashboard
-  code use only the built-in `import.meta.env` keys and never `process.env`.
-- `pnpm check:dist-secrets` (`scripts/check-dist-secrets.mjs`) scans every
-  `dist/` file for env files, `import.meta.env` objects with extra keys, and
-  known secret names or names from the app's local env files bound to string
-  literals, reporting names only. `pnpm check:build-canaries`
-  (`scripts/check-build-canaries.mjs`) builds a throwaway copy of each app with
-  canary `.dev.vars`/`.env*` files, canary shell secrets and, for the
-  storefront, a probe route that reads them, and fails if any canary reaches
-  `dist/`. `pnpm run deploy*` runs both after the build, before any upload.
+- Storefront: Astro inlines every non-`PUBLIC_` variable it can see wherever server code reads `import.meta.env.NAME`. A bare `import.meta.env`, even in a comment, inlines every variable the module's text names. `@astrojs/cloudflare` copies `.dev.vars` into `process.env`, and the Cloudflare Vite plugin writes it into `dist/server/`. `apps/storefront/integrations/build-env-isolation.mjs` keeps only the built-in keys (`DEV`, `SSR`, `PROD`, `MODE`, `BASE_URL`, `SITE`, `ASSETS_PREFIX`), turns off Vite env files and drops env files from the bundle.
+- Dashboard: `envDir: false`. API: `wrangler deploy` inlines no env. Source policy: storefront and dashboard code never read `process.env`.
+- `pnpm check:dist-secrets` scans every `dist/` file for env files, extra `import.meta.env` keys and secret names bound to string literals. It reports names only. `pnpm check:build-canaries` builds a copy of each app with canary secrets and fails if one reaches `dist/`. `pnpm run deploy*` runs both after the build and before any upload.
 
-## Database Provider Boundary
+## Database provider boundary
 
-D1 remains the zero-configuration starter database. TursoDB is the portable
-external SQLite option whose hosted concurrency must be qualified against the
-exact service generation, and PostgreSQL/Neon is the proven high-throughput
-tier; selecting any provider is not by itself an orders-per-second guarantee.
-Routes and domain services receive the same `@scalius/database` surface;
-provider selection, transport adaptation, capability fallbacks, atomic writes,
-and conflict retry stay inside the database/core boundaries. Do not add
-provider branches throughout domain code.
+D1 is the zero-configuration default. TursoDB and PostgreSQL (Neon, or generic through `pg` or Hyperdrive) are the external options. Routes and domain services see one `@scalius/database` surface. Provider selection, transport, capability fallbacks, atomic writes and conflict retry stay inside the database and core boundaries. Do not add provider branches in domain code. Reference: [`packages/database/README.md`](../packages/database/README.md).
 
-This repository is the per-merchant commerce runtime. Provisioning, desired
-state, deployments, domains, migration orchestration, monitoring, rollback
-retention, and resource retirement belong to deployment operations, not Worker
-request paths. A provider switch is valid only after a write freeze, a
-revision-fenced canonical source snapshot, canonical normalization, verified
-target import, and exact logical schema/data fingerprints. See
-[Database portability and cutover](DATABASE-PORTABILITY.md).
+This repository is the per-merchant commerce runtime. Provisioning, deployments, migration orchestration and rollback retention belong to deployment operations, not to Worker request paths. A provider switch needs a write freeze, a revision-fenced source snapshot, a verified target import and matching logical fingerprints: [DATABASE-PORTABILITY.md](./DATABASE-PORTABILITY.md).
 
-The current root deploy command is a single-merchant operational deployment: it
-deploys the API Worker (which also serves the dashboard SPA) and the storefront
-Worker from fixed Wrangler configuration.
+`pnpm run deploy` deploys the API Worker (with the dashboard SPA) and the storefront Worker from fixed Wrangler configs.
 
----
+## Public caching
 
-## The Order Lifecycle
+Public API and storefront caches use dependency validation (DVC). SQL triggers advance dependency keys in the same transaction as each write. The registry is `packages/shared/src/cache-deps.ts`. Public readers declare what they read with `deps.*` (`@scalius/core/cache-deps`).
 
-### Entry Points
+- A cached entry carries a proof of its dependencies. A read serves it only while the proof holds.
+- Every cache key carries the Worker version (`CF_VERSION_METADATA`). Without a version nothing is cached.
+- The API Worker reads through its own cache reader (`createPublicPartReader`), not a Workers Cache entrypoint, so every hit is validated.
+- There are no route generation bumps, KV coherence mirror, purges or warm lists.
 
-```
-STOREFRONT CHECKOUT (checkout)       ADMIN DASHBOARD (orders)
-├─ POST /orders                      ├─ POST /admin/orders
-│  └─ Synchronous atomic commit      │  └─ Synchronous manual-order workflow
-│     1. One read batch: idempotency │     with its own idempotency authority
-│        row + checkout authority +  │     (orders/admin/create-attempts.ts)
-│        customer and SKU rows       │
-│     2. Price, quote fingerprint,   │
-│        policy (memory only)        │
-│     3. One guarded write batch:    │
-│        order, items, SKU hold      │
-│        (ledger v2 + stockVersion), │
-│        attempt, receipt, outboxes  │
-│     4. Post-commit side effects    │
+## Order lifecycle
+
+### Entry points
+
+```text
+STOREFRONT CHECKOUT (checkout)       DASHBOARD (orders)
+POST /orders                         POST /admin/orders
+ 1. One read batch: idempotency      One manual-order workflow with its
+    row, checkout authority,         own idempotency authority
+    customer and SKU rows            (orders/admin/create-attempts.ts)
+ 2. Price, quote fingerprint,
+    policy (in memory)
+ 3. One guarded write batch:
+    authority guard, attempt, SKU
+    holds (ledger v2 + stockVersion),
+    order, items, receipt, outboxes
+ 4. Post-commit side effects
 ```
 
-Every storefront and agent checkout, for every payment method and inventory
-pool, commits through `commitStorefrontOrderPayload` (`checkout/commit.ts`): a
-D1 `batch()` (a real transaction on TursoDB/PostgreSQL) of guarded statements.
-Order items exist when the response is sent; there is no Durable Object,
-deferred projection, or reservation lane. Stock holds live only on
-`product_variants` (`reserved_stock`, `stock_version`) with one ledger-v2
-movement per change.
+Every storefront and agent checkout commits through `commitStorefrontOrderPayload` (`checkout/commit.ts`) as one `safeBatch()` of guarded statements. Order items exist when the response is sent. The commit asserts the `checkoutAuthorityRevision` it priced against. If catalog, delivery, tax or checkout policy changed, the commit rolls back and the buyer reviews again. A committed order still replays from its idempotency row.
+
+Stock holds live only on `product_variants` (`reserved_stock`, `stock_version`), with one ledger-v2 movement per change. A new order starts with `inventory_action = reserved` when any line is tracked.
+
+Post-commit work runs through `waitUntil()` and never fails a committed checkout. It relays outbox rows to the queue, dispatches Meta events, enqueues automatic fulfilment for a paid order, runs app risk checks and records marketing consent.
 
 ### Statuses and where they come from
 
-```
-INCOMPLETE ──→ PENDING ──→ (PROCESSING) ──→ CONFIRMED ──→ SHIPPED ──→ DELIVERED ──→ COMPLETED
-     │            │              │              │            │            │
-     │            │              │              │            │            └──→ RETURNED ──→ REFUNDED
-     │            │              │              │            └──→ RETURNED
-     └────────────┴──────────────┴──────────────┴──→ CANCELLED (terminal)
-```
+The state machine is `packages/shared/src/order-state.ts`, wrapped by `validateTransition()` in `order-kernel/state-machine.ts`. An order has three dimensions: order status, payment status and fulfilment status.
 
-The state machine (`packages/shared/src/order-state.ts`, checked by
-`validateTransition()` in `order-kernel/state-machine.ts`) lists every legal
-move. Who may make it is narrower:
+| From | Next order status |
+|------|-------------------|
+| `incomplete` | `pending`, `cancelled` |
+| `pending` | `processing`, `confirmed`, `cancelled` |
+| `processing` | `confirmed`, `cancelled` |
+| `confirmed` | `shipped`, `delivered`, `cancelled` |
+| `shipped` | `confirmed`, `delivered`, `returned`, `cancelled` |
+| `delivered` | `completed`, `returned`, `refunded` |
+| `completed` | `returned`, `refunded` |
+| `returned` | `refunded` |
+| `cancelled`, `refunded` | none |
 
-- **The generic status editor** (`updateOrderStatus`, dashboard and agents
-  alike; `orders/status/policy.ts`) makes only side-effect-free moves:
-  incomplete → pending, pending/processing → confirmed, → cancelled, and
-  delivered → completed.
-- **Shipped, delivered and returned are fulfilment facts.** They come only
-  from real actions in `fulfilment`: Mark as sent / Book courier (shipped),
-  cash collected or Mark delivered once everything is sent (delivered), Mark
-  returned or a return (returned). Each records what moved and moves the stock
-  with it through the lifecycle kernel `applyOrderStatusChange`
-  (`orders/status/lifecycle.ts`).
-- **Refunded** comes from the refund workflow (`payments`).
-- **Delivered needs settled money**: a COD order must already have its cash
-  recorded.
-- **Cancel** is refused while any unit is with the courier, and generic
-  cancellation is limited to unpaid orders with no payment in flight; paid
-  orders are cancelled by the refund workflow.
+`shipped` to `confirmed` rebuilds a courier handoff. `confirmed` to `delivered` serves an order with nothing to ship.
 
-Wave A adds per-line fulfilment types (ship, pickup, digital, gift card,
-service) and a fulfilment ledger in the `fulfilment` domain without new order
-statuses (`audit/rewrite-2026-09-23/WAVE-A-DESIGN.md` §2).
+The machine lists every legal move. Who may make a move is narrower:
 
-| Move | Inventory (`inventory/inventory-transitions.ts`) | Notification |
-|------|-----------|-------------|
-| → pending | Stock reserved | `order_created` |
-| → processing / confirmed | Stays reserved | `order_processing` / `order_confirmed` |
-| → shipped | Reserved → deducted | `order_shipped` |
-| → delivered | Deducts reserved stock if not yet deducted | `order_delivered` |
-| → completed | No change | `order_completed` |
-| → cancelled | Reserved stock released; deducted stock restored | `order_cancelled` |
-| → returned | Deducted stock restored, unless an open return owns it (its receipt restocks good units and writes off damaged ones) | `order_returned` |
-| → refunded | Reserved stock released; deducted stock restored | `order_refunded` |
+- **The generic status editor** (`updateOrderStatus`; dashboard and agents; `orders/status/policy.ts`) makes only moves without side effects: `incomplete` to `pending`, `pending` or `processing` to `confirmed`, `delivered` to `completed`, and cancellation.
+- **Shipped, delivered and returned are fulfilment facts.** They come only from `fulfilment` actions (Mark as sent, Book courier, cash collected, Mark delivered, Mark returned) or a return. Each records what moved and moves the stock through `applyOrderStatusChange` (`orders/status/lifecycle.ts`).
+- **Refunded** comes from the refund workflow in `payments`.
+- **Delivered and completed need settled money.** A COD order needs its cash collection recorded.
+- **Cancel** is refused while any unit is handed over. The generic cancel works only for an order with no payment taken or in flight, or one paid only by gift cards (cancelling returns the balance). A paid order must be refunded first.
+- **An open app hold** (`order_holds`) limits the generic editor to cancel.
+- **Order locks** block every status change while a shipment claim, a refund attempt or a hosted-payment session setup is active (`order-kernel`).
+
+Order lines have a fulfilment type (`ship`, `pickup`, `digital`, `gift_card`, `service`). The fulfilment ledger (`order_fulfillments`, `order_fulfillment_lines`) adds no order status. `order_items.fulfilled_quantity` is a trigger projection of the ledger: never write it.
+
+| Move to | Inventory (`inventory/inventory-transitions.ts`) | Notification type |
+|---------|-----------|-------------|
+| `pending` | None. The checkout commit reserved the stock. | `order_created` |
+| `processing`, `confirmed` | None. Stock stays reserved. | `order_processing`, `order_confirmed` |
+| `shipped` | Reserved stock is deducted. | `order_shipped` |
+| `delivered` | Reserved stock is deducted if not yet deducted. | `order_delivered` |
+| `completed` | None. | `order_completed` |
+| `cancelled`, `refunded` | Reserved stock is released. Deducted stock is restored. | `order_cancelled`, `order_refunded` |
+| `returned` | Deducted stock is restored, unless an open return owns it. The return receipt restocks good units and writes off damaged ones. | `order_returned` |
+
+`orders.inventory_action` records the result: `none`, `reserved`, `deducted` or `restored`. A move to `incomplete`, `pending`, `processing` or `confirmed` re-reserves an order whose action is `restored`. This repairs data only.
 
 ### The cascade
 
-```
-Fulfilment action / webhook / generic editor
+```text
+Fulfilment action / generic editor / delivery webhook
     ↓
-1. validateTransition() — state machine
+1. validateTransition() (canTransitionTo() for a webhook)
     ↓
-2. CAS update — orders.version (admin changes and webhooks cannot both win)
+2. CAS update of orders.version and status
+   (an admin change, a webhook and a payment cannot all win)
     ↓
-3. applyInventoryForStatusChange() — reserve / deduct / release / restore
-   with deterministic movement claims and stockVersion CAS
+3. applyInventoryForStatusChangeWithImpact(): reserve, deduct, release
+   or restore, with deterministic movement claims and a stockVersion CAS
+   in one safeBatch()
     ↓
-4. Notification recorded in notification_outbox, relayed to JOBS_QUEUE
+4. The API route records a notification_outbox row and sends it to JOBS_QUEUE
     ↓
-5. Queue consumer dispatches each enabled channel independently
-   (email, SMS, WhatsApp, admin push)
-```
-
-`ORDER_NOTIFICATION_TYPES` (`notifications/notification-types.ts`) is the
-source of truth for order notifications: order created/confirmed/processing/
-shipped/delivered/completed/cancelled/returned, refund processing/failed/
-refunded/partially refunded, balance paid, and support request
-submitted/updated.
-
----
-
-## Inventory State Machine
-
-```
-                   ┌──────────┐
-                   │   NONE   │
-                   └────┬─────┘
-                        │ (order created)
-                        ↓
-                   ┌──────────┐
-            ┌──────│ RESERVED │──────┐
-            │      └────┬─────┘      │
-            │           │            │
-    (cancelled)    (shipped/    (projection
-     pre-ship)      delivered)    repair)
-            │           │            │
-            ↓           ↓            ↑
-    ┌──────────┐  ┌──────────┐       │
-    │ RESTORED │  │ DEDUCTED │       │
-    └──────────┘  └────┬─────┘       │
-            ↑          │             │
-            │    (cancelled/         │
-            │     returned           │
-            │     post-ship)         │
-            └──────────┘─────────────┘
+5. The queue consumer dispatches each enabled channel
 ```
 
-**Transition protection:** order status inventory transitions write a
-deterministic, movement-generation-based `inventory_movements.id` claim and the
-variant counter CAS update in one provider-backed `safeBatch()`. Exact
-duplicate `transition:*` claims are idempotent retries, mismatched duplicate
-claims fail closed for manual reconciliation, and the final
-`orders.inventoryAction` update is CAS-guarded against the action observed
-before the stock transition. Every stock mutation uses `stockVersion` with
-bounded conflict retry.
+If step 3 fails, the lifecycle kernel rolls the status back. The delivery webhook marks the shipment for reconciliation instead.
 
----
+`ORDER_NOTIFICATION_TYPES` (`notifications/notification-types.ts`) lists the order notifications: created, confirmed, processing, shipped, ready for pickup, delivered, completed, cancelled, returned, refund processing, refund failed, refunded, partially refunded, balance paid, and support request submitted or updated.
+
+### Inventory protection
+
+A status transition writes a deterministic `inventory_movements.id` claim and the SKU counter CAS update in one `safeBatch()`. A repeated `transition:*` claim is an idempotent retry. A conflicting claim fails closed and needs manual reconciliation. The `orders.inventory_action` update is CAS-guarded against the value read before the stock transition. Every stock mutation uses `stockVersion` with bounded conflict retry.
 
 ## Money
 
-Money is stored and computed as integer minor units of the order or store
-currency (`*_minor` columns, `packages/shared/src/money.ts`). Gateways receive
-integer minor units plus an ISO 4217 code across the payment port; the HTTP
-contract carries decimal major units, converted once at the edge.
+Money is stored and computed as integer minor units of the order or store currency (`*_minor` columns, `packages/shared/src/money.ts`). Gateways receive integer minor units plus an ISO 4217 code across the payment port. The HTTP contract carries decimal major units, converted once at the edge.
 
-## Payment Processing Pipeline
+## Payment pipeline
 
-```
-Browser → Storefront Proxy → API Worker → Gateway
-                                              │
-                                         (async webhook)
-                                              │
-                                              ↓
-                                    Webhook Handler (API)
-                                    ├─ Verify with the gateway adapter
-                                    ├─ Claim durable webhook_events row
-                                    └─ Enqueue JOBS_QUEUE (payment.event)
-                                              │
-                                              ↓
-                                    Queue Consumer
-                                    └─ processPaymentConfirmed()
-                                       ├─ Dedup on (payment_method, provider_ref)
-                                       ├─ Validate state machine
-                                       └─ Atomic batch: payment row, order,
-                                          inventory statements, payment plan
+```text
+provider webhook / hosted return / buyer reconcile
+        ↓
+claimAndEnqueuePaymentEvent (apps/api/src/routes/payment/payment-events.ts)
+ 1. The gateway adapter verifies the callback (or queries the provider
+    on a buyer reconcile).
+ 2. One webhook_events row is claimed before any side effect.
+ 3. One payment.event message goes to JOBS_QUEUE.
+        ↓
+Queue consumer (apps/api/src/queue-consumer.ts)
+ processPaymentConfirmed() / processPaymentFailed()
+  - refuses a deleted, fully paid, refunded, cancelled or returned order
+  - validates the order and payment transitions
+  - one safeBatch(): order CAS (status, paid amounts, payment status,
+    version), order_payments row, payment plan, Meta purchase outbox claim
 ```
 
-| Layer | Where | Mechanism |
+Stock was reserved at checkout, so payment confirmation writes no inventory statements.
+
+| Guard | Where | Mechanism |
 |-------|-------|-----------|
-| 1. Webhook claim | `webhook_events` | Claim-before-side-effect with retryable failed claims and lease-reclaimable stale processing claims |
-| 2. Queue dedup | Cloudflare native | Per-message id tracking |
-| 3. DB dedup | Unique index | `UNIQUE(payment_method, provider_ref)` on `order_payments` |
-| 4. Status guard | `processPaymentConfirmed()` | Skip when the order is already paid |
+| Webhook claim | `webhook_events` | Claim before side effect. Failed claims retry. Stale `processing` claims are reclaimed after a 5-minute lease. |
+| Payment record | `order_payments` | Unique index on `(payment_method, provider_ref)` where `provider_ref` is not null |
+| Status guard | `getUnpayableOrderReason()` | Refuses an order that cannot take a payment |
+| Version CAS | `orders.version` | The batch fails if the order changed |
 
-See `packages/core/src/modules/payments/README.md` for the gateway port rules.
+Gateway port rules: [payments README](../packages/core/src/modules/payments/README.md).
 
----
+## Notifications
 
-## Notification System
-
-```
-JOBS_QUEUE message arrives
+```text
+JOBS_QUEUE { type: "notification", outboxId }
     ↓
-Claim notification_outbox by outboxId
+Claim the notification_outbox row (no contact or body travels in the queue)
     ↓
-sendOrderNotificationEmail(..., { outboxId })
+Read the channel rules (notifications settings document)
     ↓
-Read channel preferences (notifications settings document)
+Buyer channels (sendOrderNotificationEmail): each target is fenced by a
+notification_delivery_receipts row
+    ├─ email: Cloudflare Email Service, Resend, or an app provider
+    ├─ sms: the active SMS provider (built in or an app)
+    └─ whatsapp: Meta Cloud API template
     ↓
-For each enabled customer target:
-    ├─ Claim notification_delivery_receipts row
-    ├─ EMAIL: Cloudflare Email Service by default, Resend fallback
-    ├─ SMS: active SMS provider
-    └─ WHATSAPP: Meta Cloud API template
+Staff: admin push (Firebase FCM) and staff order emails
     ↓
-sendOrderNotification(..., { outboxId }) for admin FCM push when enabled
-    ↓
-Mark parent outbox sent only when enabled receipts are accepted/skipped
+Mark the outbox row sent, or failed with backoff
 ```
 
-| Gap | Current | Should be |
-|-----|---------|-----------|
-| Shipment-only statuses (`out_for_delivery`, `on_hold`, `delivery_failed`) | Internal status only | Explicit templates/settings before customer-facing shipment-progress notifications |
-| Admin push provider | Firebase FCM only | A first-party Web Push or Cloudflare-native alternative |
-| WhatsApp provider idempotency | Local D1 receipt fence only | Upstream provider idempotency if Meta exposes a key |
+- Buyer channels are `email`, `sms` and `whatsapp`. Staff channels are `push` and `email`. Rules per notification type live in the `notifications` document (`notifications/documents.ts`).
+- Some messages resolve their content at send time through `apps/api/src/notification-content/*`, so `notifications` never imports `digital`, `gift-cards` or `reviews`.
+- A delivery failure marks the row failed with backoff and acknowledges the message. The scheduled `notification_outbox_flush` is the durable retry authority.
 
----
+## Delivery webhook flow
 
-## Delivery Webhook → Order Status → Inventory
-
-```
-Pathao/Steadfast Webhook
+```text
+Pathao / Steadfast webhook (POST /api/v1/webhooks/pathao | steadfast)
     ↓
-Verify signature + KV idempotency
+Verify the signature or token (middleware/webhook-auth.ts)
     ↓
-Update deliveryShipments
+Find the shipment, then claim a webhook_events row
     ↓
-If status changed:
-    ├─ mapProviderStatus() → normalized status
-    ├─ updateOrderStatusFromShipment()   (delivery/tracking.ts)
-    │   ├─ Validate transition (state machine)
-    │   ├─ CAS update on orders.version (admin changes take priority)
-    │   └─ applyInventoryForStatusChange()
-    └─ enqueueOrderStatusChangeNotification()
+mapProviderStatus() -> shipment status, saved on delivery_shipments
+    ↓
+syncCourierFulfilmentFromShipment()    (fulfilment ledger)
+updateOrderStatusFromShipment()        (delivery/tracking.ts)
+    ├─ canTransitionTo(): skip a move the state machine refuses
+    ├─ CAS update of orders.version (an admin change wins a race)
+    └─ inventory reconciliation
+    ↓
+enqueueOrderStatusChangeNotification()
 ```
 
-| Provider event | Normalized | Order status |
-|---------------|------------|-------------|
-| order.picked / in-transit | shipped | SHIPPED |
-| order.delivered | delivered | DELIVERED |
-| order.returned | returned | RETURNED |
-| order.delivery-failed | failed | → CONFIRMED (revert) |
-| order.cancelled | cancelled | CANCELLED |
+App couriers (`<plugin id>:<provider id>`) use `POST /api/v1/webhooks/couriers/{provider}` and the same flow.
 
----
+| Shipment status | Order status |
+|-----------------|--------------|
+| `pickup_assigned`, `picked_up`, `in_transit`, `out_for_delivery` | `shipped`, unless the order is delivered, returned or cancelled |
+| `delivered`, `partial_delivered` | `delivered` |
+| `returned` | `returned` |
+| `pickup_failed`, `delivery_failed`, `failed` | `confirmed`, only from `shipped` or `processing` |
+| `cancelled` | `confirmed` from `shipped`, `cancelled` from `pending` or `processing`, else unchanged |
+| `pending`, `on_hold`, `unknown` | unchanged |
 
-## Settings Architecture
+## Settings documents
 
-Settings are typed documents: one `settings` row per document (`category` =
-document key, `key = 'document'`, JSON `value`, CAS `revision`), defined in
-`packages/core/src/modules/settings/documents.ts` and read/written only through
-`defineSettingsDocument()` (`settings-store.ts`). Secret fields are `enc:`
-ciphertext under `CREDENTIAL_ENCRYPTION_KEY`, decrypted strictly.
+A settings document is one `settings` row: `category` is the document key, `key` is `'document'`, `value` is JSON and `revision` is the CAS counter. A domain declares each document with `defineSettingsDocument()` (`packages/core/src/settings-store/index.ts`), the only code that reads or writes document rows. Secret fields hold `enc:` ciphertext under `CREDENTIAL_ENCRYPTION_KEY` and are decrypted strictly. The `platform` and `security` documents also have a KV mirror. "Declared in" paths are under `packages/core/src/modules/`.
 
-| Document | Purpose | Secret fields |
-|----------|---------|---------------|
-| `platform` | Public storefront/API/dashboard/media origins, customer cookie domain, extra CORS origins (service in the `platform` domain) | -- |
-| `checkout`, `customer_auth`, `customer_countries`, `customer_requests`, `currency` | Checkout flow, sign-in policy, phone countries, buyer requests, currency | -- |
-| `header`, `footer`, `homepage`, `seo`, `media`, `security`, `business` | Storefront presentation, discovery, media delivery, CSP, business identity | -- |
-| `notifications` | Per-event channel preferences and order WhatsApp template | -- |
-| `email`, `whatsapp`, `sms`, `firebase` | Notification/OTP providers | Resend key, WhatsApp token, SMS credentials, service account |
-| `stripe`, `sslcommerz`, `payment_methods` | Payment gateways and checkout method allowlist | Gateway secrets |
-| `meta_conversions` | Meta CAPI | Access token |
+| Document key | Declared in | Holds | Secret fields |
+|--------------|-------------|-------|---------------|
+| `platform` | `platform/document.ts` | Public origins, cookie domain, CORS origins, identity handoff | -- |
+| `notifications`, `notification_templates` | `notifications/documents.ts` | Channel rules, staff email recipients, WhatsApp order template, message copy | -- |
+| `delivery_everywhere_else` | `delivery/zones.ts` | Revision counter for the zoneless delivery rates | -- |
+| `inventory` | `products/low-stock-policy.ts` | Default low-stock threshold | -- |
+| `staff-shortcuts:<userId>` | `settings/staff-shortcuts.ts` | One staff member's keyboard shortcuts | -- |
+| `checkout`, `customer_auth`, `customer_countries`, `customer_requests`, `marketing_consent` | `settings/documents.ts` | Checkout flow, sign-in policy, phone countries, buyer requests, marketing consent | -- |
+| `currency`, `business`, `seo`, `media`, `security`, `policies`, `emi`, `reviews`, `gift_cards` | `settings/documents.ts` | Currency, business identity, discovery policy, media hosts, CSP sources, policy pages, EMI plans, review and gift-card defaults | -- |
+| `email`, `whatsapp`, `sms`, `firebase` | `settings/documents.ts` | Messaging providers | Resend key, WhatsApp token, SMS keys, service account |
+| `stripe`, `sslcommerz`, `payment_methods` | `settings/documents.ts` | Payment gateways and the checkout method allowlist | Stripe secret and webhook secret, SSLCommerz store password |
+| `meta_conversions` | `settings/documents.ts` | Meta Conversions API | Access token |
 
-Fraud-checker provider rows and `notification_provider_health` pause markers
-share the table but are not documents.
+Fraud-checker provider rows (`category = 'fraud-checker'`) and `notification_provider_health` markers share the table but are not documents. The storefront theme is not a settings document: it lives in `theme_settings` and `theme_settings_drafts`.
 
----
+## List pagination
 
-## Release posture
+Lists that can grow large use keyset (cursor) paging: the admin orders, products and customers lists and the public product listing. A cursor names the last row shown. Totals are exact up to a plan cap and read "N+" above it. Numbered `page` requests work only for shallow offsets (`planLimits().lists`). Code: `packages/shared/src/pagination.ts` (cursors) and `packages/core/src/utils/keyset.ts` (SQL). `apps/api/src/routes/admin/list-cursor-contract.test.ts` pins the contract.
 
-Numeric architecture scores and blanket "production-ready" claims are not used.
-Release confidence comes from invariant tests, sequential package gates,
-deployed Cloudflare smokes, and current operational evidence. The
-orders/payments/inventory triangle stays intentionally coupled at its atomic
-commit boundary; every other dependency is recorded in the graph allowlist and
-should shrink.
-
----
-
-## How to Extend
+## How to extend
 
 ### Add a feature to an existing domain
-1. Put the code in the owning domain; export what other code may call from its
-   `index.ts` (and pure types or policies from `browser.ts`, keeping it
-   closed).
-2. Add its routes in the owning route file or folder, its permissions in
-   `route-permissions/<domain>.ts`, and its agent operations in
-   `operation-registry/<surface>-<domain>.ts`.
-3. If it makes one domain import another for the first time, run
-   `node scripts/core-boundaries.mjs --write-allowlist` and justify the new
-   edge in review. Prefer moving the code instead.
 
-### Add a new domain
-1. Create `packages/core/src/modules/<domain>/index.ts` (and `browser.ts` if
-   it has pure types or policies others need).
-2. Add `./modules/<domain>` (and `./modules/<domain>/browser`) to
-   `packages/core/package.json` exports; `check-source-policies` fails until
-   the map and the directories agree.
-3. Add its route permission file and registry file(s), and mount its routers
-   once in `apps/api/src/app.ts` and the matching runtime family app.
-4. Record its domain edges in the allowlist.
+1. Put the code in the owning domain. Export what other code may call from `index.ts`. Export pure types and policies from `browser.ts` and keep it closed.
+2. Add routes in the owning route file, permissions in `route-permissions/<area>.ts` and agent operations in `operation-registry/<surface>-<area>.ts`.
+3. If one domain imports another for the first time, run `node scripts/core-boundaries.mjs --write-allowlist` and justify the edge in review. Prefer moving the code.
 
-### Add a payment gateway
-1. Write `payments/gateways/<id>.ts` implementing `PaymentGateway` from
-   `gateways/port.ts`.
-2. Add one line to `PAYMENT_GATEWAYS` in `gateways/registry.ts`.
-3. Define its credential document in `settings/documents.ts` and its reader in
-   `payments/gateway-settings.ts`.
+### Add a domain
 
-### Add a delivery provider
-1. `packages/core/src/modules/delivery/providers/{provider}.ts` — implement the
-   provider interface.
-2. `packages/core/src/modules/delivery/factory.ts` — register it.
-3. `apps/api/src/routes/webhooks/{provider}.ts` — webhook handler.
+1. Create `packages/core/src/modules/<domain>/index.ts`, and `browser.ts` if other code needs pure types or policies.
+2. Add `./modules/<domain>` (and `/browser`) to the `packages/core/package.json` exports. `scripts/core-boundaries.mjs` fails until the map and the directories agree.
+3. Add its route permission file and registry files.
+4. Mount its routers in `apps/api/src/app.ts` and in the matching `apps/api/src/runtime/<family>-app.ts`.
+5. Record its domain edges in the allowlist.
 
-### Add a notification channel
-1. Add channel dispatch in `notifications/notifications.service.ts`.
-2. Add the channel key to the dashboard channel builder.
-3. The queue consumer already handles channels generically.
+### Add a built-in payment gateway
 
----
+Paths are under `packages/core/src/modules/payments/` unless stated.
 
-## Key Invariants (Never Break These)
+1. Write `gateways/<id>.ts` implementing `PaymentGateway` (`gateways/port.ts`).
+2. Add the adapter to `BUILT_IN_GATEWAYS` in `gateways/registry.ts` and its id to `BUILT_IN_PAYMENT_GATEWAY_IDS` in `gateways/identity.ts`. `gateways/gateway-kernel.test.ts` keeps both lists equal.
+3. Declare its credential document in `packages/core/src/modules/settings/documents.ts` and its reader in `gateway-settings.ts`.
 
-1. **Inventory deduction happens on shipment, not on payment** — stock stays reserved until physically sent.
-2. **All status transitions go through `validateTransition()`**, and fulfilment statuses only through real actions.
-3. **All stock mutations use `stockVersion` CAS** with ledger-v2 edges in the same batch.
-4. **All payment processing uses `safeBatch()`** — atomic across order + payment + inventory on the selected provider.
-5. **Webhook handlers claim before side effects** — duplicates return success; queue-send failures mark the event failed and return retryable errors.
-6. **Response envelope is always `{ success: true, data: T }`** — storefront proxies unwrap before returning to the browser.
-7. **Secrets come from `env.*` (runtime), never `import.meta.env` (build time).**
-8. **Storefront imports `@scalius/shared` and `@scalius/api-client` only** — never `@scalius/core` or `@scalius/database`.
-9. **Core domains are reached only through their entries**, and the domain graph only shrinks.
+A third party builds a payment provider as an app: [plugin-sdk README](../packages/plugin-sdk/README.md), "Build a payment provider".
+
+### Add a built-in courier
+
+Paths are under `packages/core/src/modules/delivery/` unless stated.
+
+1. Write `couriers/<id>.ts` implementing `Courier` (`couriers/port.ts`).
+2. Add it to `BUILT_IN_COURIERS` in `couriers/registry.ts` and its status table to `status-mapper.ts`. Add its id to `DeliveryProvider` in `packages/database/src/schema/enums.ts`.
+3. Add `apps/api/src/routes/webhooks/<id>.ts` and a verification case in `apps/api/src/middleware/webhook-auth.ts`. Mount the route in `apps/api/src/app.ts` and `apps/api/src/runtime/register-system-routes.ts`, before the generic `/webhooks` payment route.
+
+A third party builds a courier as an app: [plugin-sdk README](../packages/plugin-sdk/README.md), "Build a courier".
+
+### Add a built-in SMS provider
+
+1. Write `packages/core/src/integrations/sms/providers/<id>.ts`.
+2. Add its id to `BUILT_IN_SMS_PROVIDER_IDS` (`integrations/sms/port.ts`) and its adapter to `BUILT_IN_SMS_ADAPTERS` (`integrations/sms/sms-settings.ts`).
+3. Add its credential fields to `smsDocument` in `packages/core/src/modules/settings/documents.ts`, with secret fields.
+
+The notification channels (`email`, `sms`, `whatsapp`, `push`) are fixed in the `notifications` domain.
+
+## Key invariants
+
+1. Stock is deducted on shipment, not on payment. It stays reserved until sent.
+2. Every status transition passes the state machine. Shipped, delivered and returned come only from fulfilment actions.
+3. Every stock mutation uses a `stockVersion` CAS and writes its ledger-v2 edge in the same batch.
+4. Payment confirmation is one `safeBatch()` across the order, the payment record and the payment plan.
+5. Webhook handlers claim before side effects. A duplicate returns success. A failed queue send marks the event failed and returns a retryable error.
+6. API responses use the envelope `{ success: true, data: T }`. Consumers read `data` (the storefront uses `apps/storefront/src/lib/api/unwrap.ts`).
+7. Secrets come from `env.*` at request time, never from `import.meta.env` at build time.
+8. Core domains are reached only through their entries. The domain graph is acyclic and only shrinks.
