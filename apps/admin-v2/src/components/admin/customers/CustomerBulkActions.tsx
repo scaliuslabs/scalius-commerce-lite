@@ -69,7 +69,7 @@ export function CustomerBulkActions({
     const chosen = input.current?.flush() ?? tags;
     if (!mode || chosen.length === 0) return;
     change.mutate(
-      { variables: { mode, tags: chosen }, success: t(mode === "add" ? "tagsAdded" : "tagsRemoved") },
+      { variables: { mode, tags: chosen }, success: b(mode === "add" ? "tagsAdded" : "tagsRemoved") },
       {
         onSuccess: () => {
           setMode(null);
