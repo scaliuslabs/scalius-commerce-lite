@@ -57,13 +57,16 @@ use the compact commands and cannot consume the full-document artifact.
 
 ## Verification, 2026-10-03
 
-Lead source changes through `ce1b0613f8e2742f4d3a66473565fa7c9553dda0`
+Lead source changes through `46060229651b85b14869ededc37eed06854c9bd6`
 were integrated before the final verification, including the Free-plan and
 cursor hardening. Generated contracts were rebuilt: 612 runtime routes and
 1,406 agent records. Dashboard route generation produced no further changes.
 The sandbox denied Git's shared worktree merge metadata writes. The merge-tree
 content was therefore applied and committed linearly in `61a0623c3`,
-`b7ba27430` and `e2c0c8557`; these commits do not record merge ancestry.
+`b7ba27430`, `e2c0c8557` and `dac64c025`; these commits do not record merge
+ancestry. The last integration uses `ce1b0613f` as the explicit merge base,
+since its source content was already integrated. Its only conflicts were
+generated contracts, which are regenerated rather than hand-edited.
 
 Recorded phase-2 sweeps passed 181 editor checks, 765 storefront checks,
 259 shared/core/API domain checks, 412 operation/route/budget checks, 29 DVC
@@ -74,7 +77,9 @@ group, 76-check generated-contract/CLI group, eight template render checks,
 three route-family parity checks, and all 26 storefront budget checks. The
 last editor component run passed 36 checks, including historical CMS and
 missing-page preview paths. Performance boundary checks passed 47 checks;
-navigation/settings checks passed 173 checks. The domain graph passed.
+navigation/settings checks passed 173 checks. The latest lead integration's
+frontier/preview/budget group passed 86 checks, and its domain/product/editor
+group passed 173 checks. The domain graph passed.
 
 The required five-seed DVC property/race gate passed all 29 checks with zero
 findings. Typechecks passed for shared, core, API, API client, admin, storefront
@@ -134,6 +139,8 @@ performance gap, not a passing gate:
    an older version, restore it and confirm only the draft changes. Preview a
    version predating the landing page and confirm it shows that version's home.
    Edit again and confirm the preview returns to the draft. Confirm discard.
+   Open a private preview in its own tab: the localized preview bar should show
+   and Exit preview should return to live. The editor frame must not show the bar.
 4. Save from two staff tabs using the same revision. The second must show the
    conflict banner; exercise reload and explicit overwrite.
 5. Enter a real product URL and blur it to preview. Reorder/hide its fixed
