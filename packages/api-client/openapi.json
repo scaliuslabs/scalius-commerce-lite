@@ -8224,11 +8224,26 @@
                 "priority": {
                   "type": "integer",
                   "description": "Lower runs first among apps at the same point."
+                },
+                "onError": {
+                  "type": "string",
+                  "enum": [
+                    "skip",
+                    "block"
+                  ],
+                  "description": "block: the app pauses checkout when it cannot answer (needs approval)."
+                },
+                "snapshotCollection": {
+                  "type": "string",
+                  "nullable": true,
+                  "description": "checkout.discounts: the app reads and updates the signed-in buyer's record in this collection with each order."
                 }
               },
               "required": [
                 "point",
-                "priority"
+                "priority",
+                "onError",
+                "snapshotCollection"
               ]
             },
             "description": "The checkout function points the app implements (cart rules, discounts, delivery options, payment methods, order risk)."
@@ -8885,6 +8900,13 @@
               "type": "string"
             }
           },
+          "blockingFunctions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Function points where the app may pause checkout when it cannot answer."
+          },
           "providers": {
             "type": "array",
             "items": {
@@ -8915,6 +8937,7 @@
           "allowedHosts",
           "events",
           "functions",
+          "blockingFunctions",
           "providers",
           "publicRoutes",
           "storefrontScripts",

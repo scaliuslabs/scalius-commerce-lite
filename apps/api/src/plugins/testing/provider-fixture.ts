@@ -55,8 +55,11 @@ export default {
           providerRef: "W-" + input.correlationId,
           redirectUrl: "https://wallet.acme.test/pay?amount=" + input.wireAmount.decimal + "&currency=" + input.currency,
         };
-        await ctx.storage.sessions.put(input.attemptKey, { session, orderId: input.orderId });
-        ctx.log.info("Session created", { orderId: input.orderId });
+        // Written once per attempt (a racing retry finds it): the atomic batch path in either loader.
+        const [revision] = (await ctx.storage.batch([
+          { op: "put", collection: "sessions", id: input.attemptKey, record: { session, orderId: input.orderId }, expectedRevision: null },
+        ])).revisions;
+        ctx.log.info("Session created", { orderId: input.orderId, revision });
         return session;
       },
       async verifyWebhook(request, ctx) {

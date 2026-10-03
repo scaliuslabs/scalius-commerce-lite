@@ -1625,6 +1625,14 @@ export type AppSummary = {
          * Lower runs first among apps at the same point.
          */
         priority: number;
+        /**
+         * block: the app pauses checkout when it cannot answer (needs approval).
+         */
+        onError: 'skip' | 'block';
+        /**
+         * checkout.discounts: the app reads and updates the signed-in buyer's record in this collection with each order.
+         */
+        snapshotCollection: string | null;
     }>;
 };
 
@@ -1762,6 +1770,10 @@ export type AppGrant = {
     allowedHosts: Array<string>;
     events: Array<string>;
     functions: Array<string>;
+    /**
+     * Function points where the app may pause checkout when it cannot answer.
+     */
+    blockingFunctions: Array<string>;
     providers: Array<string>;
     publicRoutes: boolean;
     storefrontScripts: Array<string>;

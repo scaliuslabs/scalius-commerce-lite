@@ -344,6 +344,8 @@ export interface PluginGrantRequest {
   allowedHosts: string[];
   events: EventTopicFilter[];
   functions: PluginFunctionPoint[];
+  /** Function points where the app may pause checkout when it cannot answer (`onError: "block"`). */
+  blockingFunctions: PluginFunctionPoint[];
   providers: PluginProviderKind[];
   publicRoutes: boolean;
   storefrontScripts: string[];
@@ -358,6 +360,7 @@ export function pluginGrantRequest(manifest: PluginManifest): PluginGrantRequest
     allowedHosts: sorted(manifest.allowedHosts),
     events: sorted(manifest.events),
     functions: sorted(manifest.functions.map((fn) => fn.point)),
+    blockingFunctions: sorted(manifest.functions.filter((fn) => fn.onError === "block").map((fn) => fn.point)),
     providers: sorted(manifest.providers.map((provider) => provider.kind)),
     publicRoutes: manifest.routes.public.length > 0 || manifest.routes.webhooks.length > 0 || manifest.storefront.proxy,
     storefrontScripts: sorted(manifest.storefront.scripts.map((script) => new URL(script.src).host)),
@@ -378,6 +381,7 @@ export function pluginGrantExpands(granted: PluginGrantRequest, next: PluginGran
     || grows(granted.allowedHosts, next.allowedHosts)
     || next.events.some((filter) => !eventFilterCovered(filter, granted.events))
     || grows(granted.functions, next.functions)
+    || grows(granted.blockingFunctions, next.blockingFunctions)
     || grows(granted.providers, next.providers)
     || (!granted.publicRoutes && next.publicRoutes)
     || grows(granted.storefrontScripts, next.storefrontScripts)
@@ -398,6 +402,7 @@ export function pluginGrantAdditions(granted: PluginGrantRequest | null, next: P
     allowedHosts: added(granted.allowedHosts, next.allowedHosts),
     events: next.events.filter((filter) => !eventFilterCovered(filter, granted.events)),
     functions: added(granted.functions, next.functions),
+    blockingFunctions: added(granted.blockingFunctions, next.blockingFunctions),
     providers: added(granted.providers, next.providers),
     publicRoutes: next.publicRoutes && !granted.publicRoutes,
     storefrontScripts: added(granted.storefrontScripts, next.storefrontScripts),

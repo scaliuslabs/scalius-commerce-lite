@@ -102,7 +102,8 @@ export async function runPluginFunctions<P extends PluginFunctionPoint>(
       const snapshot = point === "checkout.discounts" ? await readSnapshot(db, installation, declaration?.snapshot, checked.data) : undefined;
       const outcome = await host.invokeFunction(installation, point, snapshot ? { ...checked.data, snapshot: snapshot.value } : checked.data);
       if (!outcome.ok || !outcome.value) {
-        if (declaration?.onError === "block") blocked.push(installation.pluginId);
+        // Only an approved grant lets an app pause checkout.
+        if (declaration?.onError === "block" && installation.grant?.blockingFunctions.includes(point)) blocked.push(installation.pluginId);
         continue;
       }
       const result: PluginFunctionResult<P> = { pluginId: installation.pluginId, priority, output: outcome.value };

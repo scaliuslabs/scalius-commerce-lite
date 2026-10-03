@@ -88,7 +88,7 @@ function stringList(value: unknown): string[] | null {
 export function parseStoredPluginGrant(value: string | null): PluginGrantRequest | null {
   const raw = parseJsonObject(value);
   if (!raw) return null;
-  const lists = ["permissions", "allowedHosts", "events", "functions", "providers", "storefrontScripts", "customFieldOwners"] as const;
+  const lists = ["permissions", "allowedHosts", "events", "functions", "blockingFunctions", "providers", "storefrontScripts", "customFieldOwners"] as const;
   const parsed: Partial<Record<(typeof lists)[number], string[]>> = {};
   for (const key of lists) {
     const list = stringList(raw[key]);

@@ -105,6 +105,12 @@ describe("plugin manifest", () => {
     expect(pluginGrantExpands(granted, parse({ ...FULL, events: ["order.*", "product.created"] }))).toBe(true);
     expect(pluginGrantExpands(granted, parse({ ...FULL, events: ["*"] }))).toBe(true);
     expect(pluginGrantExpands(granted, parse({ ...FULL, events: ["order.*"], allowedHosts: ["api.other.example"] }))).toBe(true);
+    // Pausing checkout on failure is a new power: the same point with onError "block" needs approval.
+    const validating = parse({ ...FULL, events: ["order.*"], functions: [{ point: "cart.validate" }] });
+    const blocking = parse({ ...FULL, events: ["order.*"], functions: [{ point: "cart.validate", onError: "block" }] });
+    expect(blocking.blockingFunctions).toEqual(["cart.validate"]);
+    expect(pluginGrantExpands(validating, blocking)).toBe(true);
+    expect(pluginGrantExpands(blocking, validating)).toBe(false);
     // The key is order-independent.
     expect(pluginGrantKey(parse({ ...FULL, permissions: ["customers.view", "orders.view"] })))
       .toBe(pluginGrantKey(parse({ ...FULL, permissions: ["orders.view", "customers.view"] })));
