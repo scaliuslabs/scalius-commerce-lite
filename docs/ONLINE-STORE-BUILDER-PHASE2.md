@@ -8,6 +8,12 @@ buy box, the ordered `below` modules, app blocks, sticky bars) and every
 collection, category, brand and search page renders `blocks.listing`. CMS pages
 keep their own content; the theme frames them.
 
+A landing page has a title, a description and, like CMS pages, `noIndex`
+(public with `noindex,follow`, out of the sitemap) and `excludeFromSitemap`.
+The pages sitemap lists the live theme's landing pages (read from the layout,
+which already depends on the theme) at their absolute `/pages/<slug>` address,
+without a lastmod. Their canonical is always that address.
+
 ## Drafts, publishing and versions
 
 - One shared draft per store, guarded by its revision. Save, page edits,
@@ -22,6 +28,11 @@ keep their own content; the theme frames them.
 - Preview sessions store only a SHA-256 of the token. Draft tokens are `D` +
   random; version tokens are `V` + base-36 revision + random. Pruned versions
   lose preview.
+- A version naming images deleted from Files since is refused with
+  `THEME_VERSION_IMAGES_MISSING` (`details.missingImages`); restoring it with
+  `withoutMissingImages` leaves out the slides, cards and tiles that showed one
+  and empties single images (`storefrontThemeWithoutMedia`).
+- Staff with `settings.general.view` but not edit browse the editor read-only.
 
 ## Upgrades
 
@@ -68,6 +79,12 @@ document, delivered to agents as an authenticated JSON artifact),
 answer revision receipts only. The curated `theme.draft-landing-page.v1`
 workflow drafts a landing page and verifies it through `workspace_get`; it never
 publishes.
+
+The contract states shared shapes once as named components (the error
+envelope, the theme document, its section list and landing page, the homepage
+section data and others), so full operation descriptions stay within one agent
+result. A nullable use of a named schema is `z.union([Named, z.null()])`:
+`.nullable()` would make the component itself nullable (a test checks).
 
 ## Storefront budgets
 
