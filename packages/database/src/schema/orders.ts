@@ -79,6 +79,27 @@ export const orders = sqliteTable("orders", {
     discountAmountMinor: integer("discount_amount_minor").notNull().default(0),
     taxAmountMinor: integer("tax_amount_minor").notNull().default(0),
     totalAmountMinor: integer("total_amount_minor").notNull().default(0),
+    /**
+     * The order money chain (MARKETS-DESIGN D3, migration 0111): `currencyCode`
+     * is the presentment currency (what the buyer sees and pays); the shop
+     * currency is the store's reporting currency when the order was placed,
+     * and `fxRate` (a decimal string: shop units per presentment unit) is the
+     * rate locked when checkout priced the cart. A same-currency order has
+     * rate "1", source `same_currency`, no quote times, and shop amounts equal
+     * to its presentment amounts. Every writer of the presentment totals
+     * writes these in the same statement (`orderMoneyChainColumns`);
+     * analytics sum the shop amounts, never mixed currencies.
+     */
+    shopCurrency: text("shop_currency").notNull().default("BDT"),
+    fxRate: text("fx_rate").notNull().default("1"),
+    fxSource: text("fx_source").notNull().default("same_currency"),
+    fxAsOf: integer("fx_as_of", { mode: "timestamp" }),
+    fxLockedUntil: integer("fx_locked_until", { mode: "timestamp" }),
+    subtotalShopMinor: integer("subtotal_shop_minor").notNull().default(0),
+    shippingShopMinor: integer("shipping_shop_minor").notNull().default(0),
+    discountShopMinor: integer("discount_shop_minor").notNull().default(0),
+    taxShopMinor: integer("tax_shop_minor").notNull().default(0),
+    totalShopMinor: integer("total_shop_minor").notNull().default(0),
     taxLabel: text("tax_label"),
     pricesIncludeTax: integer("prices_include_tax", { mode: "boolean" }).notNull().default(false),
     /** Valid: pending | processing | confirmed | shipped | delivered | completed | cancelled | refunded | returned | incomplete (see OrderStatus enum) */
@@ -674,7 +695,21 @@ export const orderPayments = sqliteTable("order_payments", {
         .notNull()
         .references(() => orders.id, { onDelete: "cascade" }),
     amountMinor: integer("amount_minor").notNull().default(0),
+    /** The presentment currency: the order's, the one refunds are made in. */
     currency: text("currency").notNull().default("BDT"),
+    /**
+     * Settlement (MARKETS-DESIGN D2, migration 0111): what reaches the
+     * merchant, in which currency, at which presentment → settlement rate (a
+     * decimal string). A provider that reports settlement fills them;
+     * every other movement records settlement = presentment at rate "1".
+     * `exchangeAdjustmentMinor` (settlement currency minor units) is the gain
+     * or loss against the order's locked rate when the payment settled in the
+     * shop currency through a conversion, else 0.
+     */
+    settlementCurrency: text("settlement_currency").notNull().default("BDT"),
+    settlementAmountMinor: integer("settlement_amount_minor").notNull().default(0),
+    settlementRate: text("settlement_rate").notNull().default("1"),
+    exchangeAdjustmentMinor: integer("exchange_adjustment_minor").notNull().default(0),
     paymentMethod: text("payment_method").notNull(),
     paymentType: text("payment_type").notNull().default("full"),
     /** Valid: pending | confirmed | failed | refunded | cancelled (see PaymentRecordStatus enum) */

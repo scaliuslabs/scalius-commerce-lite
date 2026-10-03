@@ -471,6 +471,13 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 22,
         postgresStatements: 18,
       },
+      {
+        version: 111,
+        name: "0111_order_money_chain",
+        // Fourteen ADD COLUMNs and two same-currency backfills, the same on both providers.
+        sqliteStatements: 17,
+        postgresStatements: 17,
+      },
     ]);
   });
 
@@ -630,6 +637,7 @@ describe("provider-neutral schema upgrades", () => {
           { version: 108, name: "0108_customer_marketing" },
           { version: 109, name: "0109_inventory_purchasing" },
           { version: 110, name: "0110_plugin_providers" },
+          { version: 111, name: "0111_order_money_chain" },
         ],
       });
     } finally {
