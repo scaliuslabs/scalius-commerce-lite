@@ -5,6 +5,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { OrderPaymentsPayload } from "~/lib/api-query-options/orders";
+import { PermissionProvider } from "~/contexts/PermissionContext";
 import { setLocale } from "~/i18n";
 import { orderDetailMessages } from "~/i18n/order-detail";
 import type { Order } from "./types";
@@ -161,6 +162,34 @@ describe("PaymentCard", () => {
       mocks.permissions.canEditOrders = false;
       await renderSession({}, { paymentRecovery: { ...recovery, canIssueRecoveryLink: true } });
       expect(button(en["recovery.copy"])).toBeUndefined();
+    });
+
+    it("words an app's hosted payment by its provider, never the stored id, and offers its payment link", async () => {
+      const app = "scalius.bkash:bkash";
+      await renderSession({ gateway: app }, {
+        paymentMethod: app,
+        paymentRecovery: { ...recovery, gateway: app, canIssueRecoveryLink: true },
+      });
+      expect(host.textContent).not.toContain(app);
+      expect(host.textContent).toContain("Bkash");
+      expect(sessionRow().textContent).toContain("Bkash");
+      expect(button(en["recovery.copy"])).toBeDefined();
+    });
+
+    it("names an app's method from the installed apps when the merchant can read them", async () => {
+      const app = "scalius.bkash:bkash";
+      client.setQueryData(["settings", "app-providers", "payment"], [{ id: app, name: "bKash" }]);
+      client.setQueryData(["payments", order.id], { ...emptyPayments, paymentSessionAttempts: [{ ...attempt, gateway: app }] });
+      await act(async () => root.render(
+        <QueryClientProvider client={client}>
+          <PermissionProvider isSuperAdmin>
+            <PaymentCard order={{ ...order, paymentMethod: app }} />
+          </PermissionProvider>
+        </QueryClientProvider>,
+      ));
+      await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+      expect(sessionRow().textContent).toContain("bKash");
+      expect(host.textContent).not.toContain("Bkash");
     });
   });
 

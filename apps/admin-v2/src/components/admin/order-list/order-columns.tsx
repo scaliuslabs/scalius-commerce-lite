@@ -9,6 +9,7 @@ import { createSelectColumn } from "~/components/admin/data-table/columns/column
 import { DataTableRowActions } from "~/components/admin/data-table/DataTableRowActions";
 import { orderBadgeVisibility, statusBadgeVariant } from "~/components/admin/orderview/status-badges";
 import ShipmentStatusIndicator from "~/components/admin/ShipmentStatusIndicator";
+import { hasAppPaymentMethod, useAppPaymentMethodNames } from "~/hooks/use-app-payment-method-names";
 import { useCurrency } from "~/hooks/use-currency";
 import { useMessages } from "~/i18n";
 import {
@@ -122,11 +123,12 @@ export function OrderAttentionBadges({ order }: { order: Pick<OrderListItem, "op
 function TotalCell({ order }: { order: OrderListItem }) {
   const { fmt } = useCurrency();
   const t = useMessages(orderMessages);
+  const appNames = useAppPaymentMethodNames(hasAppPaymentMethod([order.paymentMethod]));
   return (
     <div className="space-y-1 text-right">
       <p className="font-medium tabular-nums">{fmt(order.totalAmount)}</p>
       {orderBadgeVisibility(order).payment ? (
-        <span title={paymentMethodLabel(t, order.paymentMethod)} className="inline-flex">
+        <span title={paymentMethodLabel(t, order.paymentMethod, appNames)} className="inline-flex">
           <PaymentBadge order={order} />
         </span>
       ) : null}

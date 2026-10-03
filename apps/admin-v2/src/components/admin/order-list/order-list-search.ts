@@ -1,5 +1,6 @@
 import { PAYMENT_STATUSES as ORDER_PAYMENT_STATUSES } from "@scalius/shared/order-state";
 import { ORDER_CHANNELS, type OrderChannel } from "@scalius/shared/order-channel";
+import { isQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
 import {
   createListSearchValidator,
   normalizeBooleanSearchParam,
@@ -18,6 +19,7 @@ export const ORDER_SORTS = ["createdAt", "relevance", "updatedAt", "totalAmount"
 /** Server-side tabs, in tab order after "All". */
 export const ORDER_VIEWS = ["unfulfilled", "ready_for_pickup", "unpaid", "cod_to_collect", "delivery_failed", "returned"] as const;
 export const PAYMENT_STATUSES = ORDER_PAYMENT_STATUSES;
+/** Cash and the built-in gateways; apps' methods are listed from the installed apps. */
 export const PAYMENT_METHODS = ["cod", "stripe", "sslcommerz"] as const;
 export const FULFILLMENT_STATUSES = ["pending", "partial", "complete"] as const;
 /** How the order reaches the buyer: shipped to an address, picked up, or nothing physical (a service). */
@@ -40,7 +42,8 @@ export type OrderListSearch = Omit<ListSearchParams<OrderSort>, "trashed"> & {
   openRequest: boolean;
   status?: string;
   paymentStatus?: (typeof PAYMENT_STATUSES)[number];
-  paymentMethod?: (typeof PAYMENT_METHODS)[number];
+  /** Cash, a built-in gateway, or an app's `<plugin id>:<provider id>`. */
+  paymentMethod?: string;
   fulfillmentStatus?: (typeof FULFILLMENT_STATUSES)[number];
   deliveryMethod?: (typeof DELIVERY_METHODS)[number];
   channel?: OrderChannel;
@@ -70,7 +73,8 @@ export function validateOrderSearch(search: SearchValidatorInput<OrderListSearch
     openRequest: normalizeBooleanSearchParam(search.openRequest),
     status: normalizeOptionalSearchString(search.status),
     paymentStatus: normalizeOptionalEnumSearchParam(search.paymentStatus, PAYMENT_STATUSES),
-    paymentMethod: normalizeOptionalEnumSearchParam(search.paymentMethod, PAYMENT_METHODS),
+    paymentMethod: normalizeOptionalEnumSearchParam(search.paymentMethod, PAYMENT_METHODS)
+      ?? (isQualifiedProviderId(search.paymentMethod) ? search.paymentMethod : undefined),
     fulfillmentStatus: normalizeOptionalEnumSearchParam(search.fulfillmentStatus, FULFILLMENT_STATUSES),
     deliveryMethod: normalizeOptionalEnumSearchParam(search.deliveryMethod, DELIVERY_METHODS),
     channel: normalizeOptionalEnumSearchParam(search.channel, SALES_CHANNELS),
