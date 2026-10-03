@@ -7,7 +7,6 @@ import {
     getCollectionById,
     getCollectionSection,
     getCollectionCategoryOptions,
-    listCollectionProductOptions,
     getCollectionsByIds,
     createCollection,
     updateCollection,
@@ -22,6 +21,7 @@ import {
     createCollectionSchema,
     updateCollectionSchema
 } from "@scalius/core/modules/collections";
+import { listCollectionProductOptions } from "@scalius/core/modules/catalog";
 import { categories, products } from "@scalius/database/schema";
 import { isNull } from "drizzle-orm";
 import { getCurrencyConfig } from "@scalius/core/modules/settings";

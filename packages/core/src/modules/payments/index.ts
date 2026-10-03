@@ -83,21 +83,6 @@ export type {
   RefundReconciliationResult,
 } from "./refund-reconciliation";
 export {
-  ACTIVE_REFUND_ATTEMPT_STATUSES,
-  ORDER_REFUND_MUTATION_BLOCKED_MESSAGE,
-  REFUND_IN_PROGRESS_MESSAGE,
-  assertNoActiveRefundAttempt,
-  assertNoActiveRefundAttemptsForOrders,
-  findActiveRefundAttempt,
-  findActiveRefundAttemptsForOrders,
-  noActiveRefundAttemptForOrderColumnCondition,
-  noActiveRefundAttemptForOrderIdCondition,
-} from "./refund-attempt-guard";
-export type {
-  ActiveRefundAttemptSnapshot,
-  ActiveRefundAttemptStatus,
-} from "./refund-attempt-guard";
-export {
   formatRefundAttemptForVisibility,
   listOrderRefundAttempts,
   summarizeActiveRefundOperation,
@@ -106,17 +91,11 @@ export type { RefundAttemptVisibilityRow } from "./refund-attempt-visibility";
 
 // --- Public payment session attempts ---
 export {
-  ACTIVE_PAYMENT_SESSION_SETUP_MESSAGE,
-  activePaymentSessionAttemptExistsCondition,
-  assertNoActivePaymentSessionAttempt,
-  assertNoActivePaymentSessionAttemptsForOrders,
   buildPaymentSessionAttemptIdentity,
   claimPaymentSessionAttempt,
   listOrderPaymentSessionAttempts,
   markPaymentSessionAttemptCreated,
   markPaymentSessionAttemptFailed,
-  noActivePaymentSessionAttemptForOrderIdCondition,
-  noActivePaymentSessionAttemptForOrderSqlCondition,
 } from "./payment-session-attempts";
 export type {
   AdminPaymentSessionAttemptView,

@@ -24,11 +24,8 @@ import { applyInventoryForStatusChangeWithImpact } from "../../inventory/invento
 import {
     assertNoActiveRefundAttempt,
     noActiveRefundAttemptForOrderIdCondition,
-} from "../../payments/refund-attempt-guard";
-import {
-    assertNoActivePaymentSessionAttempt,
-    noActivePaymentSessionAttemptForOrderIdCondition,
-} from "../../payments/payment-session-attempts";
+} from "../../order-kernel/refund-attempt-guard";
+import { assertNoActivePaymentSessionAttempt, noActivePaymentSessionAttemptForOrderIdCondition } from "../../order-kernel/payment-session-guard";
 import { sql, eq, and, inArray, type SQL } from "drizzle-orm";
 import { NotFoundError, ValidationError, ConflictError } from "@scalius/core/errors";
 import {
@@ -41,11 +38,11 @@ import {
     resolveOrderCurrencySnapshot,
     type OrderCurrencySnapshot,
 } from "../../payments/order-currency";
-import { validateTransition } from "./state-machine";
+import { validateTransition } from "../../order-kernel/state-machine";
 import type { StatusUpdateResult } from "../types";
 import type { OrderNotificationType } from "../../notifications/notification-types";
 import { buildOrderStatusNotificationDedupeKey } from "../../notifications/order-notification-outbox";
-import { assertNoActiveShipmentClaim } from "../shipment-claim";
+import { assertNoActiveShipmentClaim } from "../../order-kernel/shipment-claim";
 import { rollbackOrderStatusIfInventoryUnchanged } from "./claim";
 import { assertGenericAdminOrderStatusTransition } from "./policy";
 import { assertOrderNotOnHold } from "../holds";

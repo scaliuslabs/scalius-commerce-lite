@@ -23,7 +23,7 @@ import { createMigratedSqlite, createSqliteD1Database } from "@scalius/database/
 import { CACHE_DEP_ENTRY_KEY_BUDGET } from "@scalius/shared/cache-deps";
 import { withDependencyScope, type CacheDependencies } from "../../cache-deps";
 import { rebuildCatalogProjections } from "../products";
-import { getPublicCollectionCatalog, planCollectionProducts } from "../collections";
+import { getPublicCollectionCatalog, planCollectionProducts } from ".";
 import {
     getPublicCategoryFacets,
     getStorefrontBrandProducts,

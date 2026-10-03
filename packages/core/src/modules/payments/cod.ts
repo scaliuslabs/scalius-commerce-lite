@@ -28,7 +28,6 @@ import type {
 } from "./types";
 import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
 import { fromMinor } from "@scalius/shared/money";
-import { formatOrderMoney } from "../orders/money";
 import { computePaymentStateAfterPayment } from "./payment-state";
 import { assertOrderPaymentCurrency, resolveOrderCurrencySnapshot } from "./order-currency";
 
@@ -58,6 +57,14 @@ function assertPositiveMinor(amountMinor: number): void {
   if (!Number.isSafeInteger(amountMinor) || amountMinor <= 0) {
     throw new ValidationError("COD collected amount must be a positive finite number.");
   }
+}
+
+/** Money for a merchant-facing sentence: "৳2,480" / "৳1,234.50" (lakh grouping). */
+function formatOrderMoney(amountMinor: number, currency: { code: string; decimalPlaces: number }): string {
+  const amount = fromMinor(amountMinor, currency.decimalPlaces);
+  const digits = Number.isInteger(amount) ? 0 : currency.decimalPlaces;
+  const number = amount.toLocaleString("en-IN", { minimumFractionDigits: digits, maximumFractionDigits: digits });
+  return currency.code === "BDT" ? `৳${number}` : `${currency.code} ${number}`;
 }
 
 export function validateCODCollectionDetails(

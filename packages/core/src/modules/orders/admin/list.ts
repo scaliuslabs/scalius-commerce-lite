@@ -38,7 +38,7 @@ import {
     selectActiveRefundAttemptRowsForOrders,
     type RefundAttemptVisibilityRow,
 } from "../../payments/refund-attempt-visibility";
-import { activePaymentSessionAttemptExistsCondition } from "../../payments/payment-session-attempts";
+import { activePaymentSessionAttemptExistsCondition } from "../../order-kernel/payment-session-guard";
 import {
     onlinePaymentMethod,
     paymentRecoveryLifecycleCondition,

@@ -1,11 +1,7 @@
 // One signed-in customer order: claim a receipt, detail, support requests and payment sessions.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import {
-    getCustomerOrderDetailForOrder,
-    getCustomerOwnedOrderForDetail,
-    getCustomerPaymentSessionOrderForDetail,
-    claimGuestOrderToAccount,
-} from "@scalius/core/modules/customers";
+import { claimGuestOrderToAccount } from "@scalius/core/modules/orders";
+import { getCustomerOrderDetailForOrder, getCustomerOwnedOrderForDetail, getCustomerPaymentSessionOrderForDetail } from "@scalius/core/modules/orders";
 import { listOrderDiscountLines } from "@scalius/core/modules/promotions";
 import { orderDiscountLineSchema, presentOrderDiscountLines } from "../../schemas/storefront-discounts";
 import { buyerOrderProgressSchema, buyerOrderTimelineSchema } from "../../schemas/order-tracking";

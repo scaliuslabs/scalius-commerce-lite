@@ -6,12 +6,11 @@ import { orderDiscountLineSchema, presentOrderDiscountLines } from "../../schema
 import { and, eq, isNull, sql } from "drizzle-orm";
 import {
   getCustomerBySession,
-  getBuyerOrderTracking,
-  getCustomerVisibleBalanceDueMinor,
-  issueAccountOwnerReceipt,
   listOrderCodeOptions,
   readCustomerIdentity,
 } from "@scalius/core/modules/customers";
+import { issueAccountOwnerReceipt } from "@scalius/core/modules/orders";
+import { getBuyerOrderTracking, getCustomerVisibleBalanceDueMinor } from "@scalius/core/modules/orders";
 import { buyerOrderTrackingSchema } from "../../schemas/order-tracking";
 import {
   findOrderByReference,

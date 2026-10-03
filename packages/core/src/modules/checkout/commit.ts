@@ -58,7 +58,7 @@ import {
     type AtomicCheckoutAttempt,
 } from "./attempts";
 import { MAX_ORDER_LINE_ITEMS } from "../orders/validation";
-import { buildAppDiscountFactInserts } from "../orders/app-facts";
+import { buildAppDiscountFactInserts } from "../order-kernel/app-facts";
 import { appStorageCommitStatements, isAppStorageCommitConflict } from "../plugins/storage";
 import { readCheckoutCopy } from "./store-copy";
 import type { StorefrontOrderCommitReads, SQLiteBatchItem } from "./reads";

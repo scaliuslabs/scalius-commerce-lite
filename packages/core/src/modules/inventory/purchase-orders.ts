@@ -41,6 +41,7 @@ import { resolveActiveInventoryLocation } from "./locations";
 import { assertActiveSupplier } from "./suppliers";
 import { addedQuantitySql, commandActorUserIdSql, executeStockCommand, idsFromJsonSql, readStockCommandSkus, type StockCommandEdge } from "./stock-commands";
 import { unitCostAmountSchema, unitCostToMinor } from "./unit-costs";
+import { spreadsheetSafeCsvCell } from "@scalius/shared/spreadsheet-csv";
 
 export const PURCHASE_ORDER_MAX_LINES = 100;
 export const PURCHASE_ORDER_OPEN_STATUSES = ["ordered", "partially_received"] as const satisfies readonly PurchaseOrderStatus[];
@@ -924,17 +925,6 @@ export async function receivePurchaseOrder(
 // ─────────────────────────────────────────
 // Export
 // ─────────────────────────────────────────
-
-/**
- * A quoted CSV cell a spreadsheet will not run as a formula (the same rule as
- * the order and movement exports; kept here so inventory does not depend on
- * the orders domain).
- */
-function spreadsheetSafeCsvCell(value: unknown): string {
-  const text = value == null ? "" : value instanceof Date ? value.toISOString() : String(value);
-  const safe = /^[\t\r\n ]*[=+\-@]/.test(text) && !/^\+\d{6,15}$/.test(text) ? `'${text}` : text;
-  return `"${safe.replaceAll('"', '""')}"`;
-}
 
 /** One purchase order as CSV: a header block, then one row per line (formula-safe). */
 export async function buildPurchaseOrderCsv(db: Database, id: string) {

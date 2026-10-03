@@ -8,7 +8,7 @@ import {
   type ShipmentView,
   updateOrderStatusFromShipment,
 } from "@scalius/core/modules/delivery";
-import { assertNoActiveRefundAttempt, assertNoActivePaymentSessionAttempt } from "@scalius/core/modules/payments";
+import { assertNoActiveRefundAttempt, assertNoActivePaymentSessionAttempt } from "@scalius/core/modules/order-kernel";
 import { eq } from "drizzle-orm";
 import { syncCourierFulfilmentFromShipment } from "@scalius/core/modules/fulfilment";
 import { NotFoundError } from "../../utils/api-error";

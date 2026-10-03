@@ -16,7 +16,7 @@ import {
     buildOrderReadyForPickupNotificationDedupeKey,
     createOrderNotificationOutboxInsertValues,
 } from "../notifications/order-notification-outbox";
-import { assertNoActiveShipmentClaim, noActiveShipmentClaimCondition } from "../orders/shipment-claim";
+import { assertNoActiveShipmentClaim, noActiveShipmentClaimCondition } from "../order-kernel/shipment-claim";
 
 const PICKUP_READY_GUARD = "ORDER_PICKUP_READY_CONFLICT";
 const OPEN_PICKUP_STATUSES = [OrderStatus.PENDING, OrderStatus.PROCESSING, OrderStatus.CONFIRMED] as const;

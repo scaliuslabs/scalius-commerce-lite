@@ -19,17 +19,16 @@ import {
   getGatewayAmountIssue,
   isOnlinePaymentMethod,
   buildPaymentSessionAttemptIdentity,
-  assertNoActivePaymentSessionAttempt,
   claimPaymentSessionAttempt,
   markPaymentSessionAttemptCreated,
   markPaymentSessionAttemptFailed,
-  noActivePaymentSessionAttemptForOrderSqlCondition,
   type PaymentSessionAttemptProcessingResult,
   buildPaymentCorrelationId,
   PaymentProviderError,
   type PaymentGateway,
   type PaymentProviders,
 } from "@scalius/core/modules/payments";
+import { assertNoActivePaymentSessionAttempt, noActivePaymentSessionAttemptForOrderSqlCondition } from "@scalius/core/modules/order-kernel";
 import { encodeProviderAmount } from "@scalius/shared/plugins/providers/amount";
 import { minorToMajorString } from "@scalius/core/modules/payments";
 import { getDecimalPlaces } from "@scalius/shared/currency";
@@ -39,7 +38,7 @@ import {
   resolveOrderCurrencySnapshot,
   type OrderCurrencySnapshot,
 } from "@scalius/core/modules/payments/browser";
-import { assertNoActiveShipmentClaim } from "@scalius/core/modules/orders";
+import { assertNoActiveShipmentClaim } from "@scalius/core/modules/order-kernel";
 import { normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
 import {
   assertPaymentSessionOrderPayable,

@@ -13,14 +13,11 @@ import { PROVIDER_OUTCOME_UNKNOWN } from "../delivery/types";
 import {
     assertNoActiveRefundAttempt,
     noActiveRefundAttemptForOrderIdCondition,
-} from "../payments/refund-attempt-guard";
-import {
-    assertNoActivePaymentSessionAttempt,
-    noActivePaymentSessionAttemptForOrderIdCondition,
-} from "../payments/payment-session-attempts";
+} from "../order-kernel/refund-attempt-guard";
+import { assertNoActivePaymentSessionAttempt, noActivePaymentSessionAttemptForOrderIdCondition } from "../order-kernel/payment-session-guard";
 import { sql, eq, and } from "drizzle-orm";
 import { NotFoundError, ValidationError, ConflictError } from "@scalius/core/errors";
-import { validateTransition } from "../orders/status/state-machine";
+import { validateTransition } from "../order-kernel/state-machine";
 import type {
     OrderShipmentReconciliationResult,
     UnknownShipmentResolutionResult,

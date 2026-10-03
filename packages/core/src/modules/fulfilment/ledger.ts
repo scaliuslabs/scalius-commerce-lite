@@ -28,13 +28,10 @@ import { recordCODCollection, validateCODCollectionDetails } from "../payments/c
 import {
     assertNoActiveRefundAttempt,
     noActiveRefundAttemptForOrderIdCondition,
-} from "../payments/refund-attempt-guard";
-import {
-    assertNoActivePaymentSessionAttempt,
-    noActivePaymentSessionAttemptForOrderIdCondition,
-} from "../payments/payment-session-attempts";
-import { validateTransition } from "../orders/status/state-machine";
-import { assertNoActiveShipmentClaim, noActiveShipmentClaimCondition } from "../orders/shipment-claim";
+} from "../order-kernel/refund-attempt-guard";
+import { assertNoActivePaymentSessionAttempt, noActivePaymentSessionAttemptForOrderIdCondition } from "../order-kernel/payment-session-guard";
+import { validateTransition } from "../order-kernel/state-machine";
+import { assertNoActiveShipmentClaim, noActiveShipmentClaimCondition } from "../order-kernel/shipment-claim";
 import { assertOrderNotOnHold } from "../orders/holds";
 import { applyOrderStatusChange, reconcileInventoryForStatus } from "../orders/status/lifecycle";
 import type { StatusUpdateResult } from "../orders/types";

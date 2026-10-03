@@ -1,6 +1,6 @@
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { describe, expect, it } from "vitest";
-import { listCollectionProductOptions } from "./collections.service";
+import { listCollectionProductOptions } from "./collections";
 import { rebuildCatalogProjections } from "../products/catalog-projections";
 
 function setup() {
@@ -65,7 +65,7 @@ describe("collection product picker on D1", () => {
     expect(both.visibleOnline).toBeGreaterThanOrEqual(1);
     expect(both.visibleOnline).toBeLessThan(both.pagination.total);
 
-    const { getStorefrontCollectionProducts } = await import("../catalog/listing");
+    const { getStorefrontCollectionProducts } = await import("./listing");
     const storefront = await getStorefrontCollectionProducts(db, { categoryIds: ["cat_a", "cat_b"] }, {});
     expect(storefront.products.map((product) => product.id)).toContain("prod_cap");
     expect(storefront.products.map((product) => product.id)).not.toContain("prod_skuless");

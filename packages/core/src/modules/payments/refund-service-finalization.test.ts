@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => ({
   applyInventoryForStatusChange: vi.fn(),
 }));
 
-vi.mock("../orders/status/state-machine", () => ({
+vi.mock("../order-kernel/state-machine", () => ({
   canTransitionTo: mocks.canTransitionTo,
 }));
 

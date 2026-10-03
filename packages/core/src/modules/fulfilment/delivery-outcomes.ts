@@ -18,18 +18,15 @@ import {
 import {
     assertNoActiveRefundAttempt,
     noActiveRefundAttemptForOrderIdCondition,
-} from "../payments/refund-attempt-guard";
-import {
-    assertNoActivePaymentSessionAttempt,
-    noActivePaymentSessionAttemptForOrderIdCondition,
-} from "../payments/payment-session-attempts";
+} from "../order-kernel/refund-attempt-guard";
+import { assertNoActivePaymentSessionAttempt, noActivePaymentSessionAttemptForOrderIdCondition } from "../order-kernel/payment-session-guard";
 import { sql, eq, and, inArray, notInArray } from "drizzle-orm";
 import { NotFoundError, ValidationError, ConflictError } from "@scalius/core/errors";
 import { resolveOrderCurrencySnapshot } from "../payments/order-currency";
 import { fromMinor } from "@scalius/shared/money";
-import { validateTransition } from "../orders/status/state-machine";
+import { validateTransition } from "../order-kernel/state-machine";
 import type { StatusUpdateResult } from "../orders/types";
-import { assertNoActiveShipmentClaim } from "../orders/shipment-claim";
+import { assertNoActiveShipmentClaim } from "../order-kernel/shipment-claim";
 import { rollbackOrderStatusIfInventoryUnchanged } from "../orders/status/claim";
 import {
     approveOrderReturn,

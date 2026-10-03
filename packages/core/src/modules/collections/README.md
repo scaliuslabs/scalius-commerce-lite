@@ -9,7 +9,9 @@ Curated product groups with independent public-page and homepage placement, manu
 | `index.ts` | Barrel exports (re-exports service + validation) |
 | `collection-config.ts` | Pure canonical parser/stringifier for the JSON `config` column |
 | `collections.validation.ts` | Zod schemas: `createCollectionSchema`, `updateCollectionSchema`, `collectionConfigSchema` |
-| `collections.service.ts` | All DB queries, mutations, lookup helpers, and product resolution |
+| `collections.service.ts` | Collection records: admin list and sections, revision-guarded writes, bulk actions, reference checks |
+
+Buyer-facing collection reads (the collection page catalog, the batched product resolvers storefront sections use, the public directory and sitemap entries) and the dashboard's product picker live in `../catalog/collections.ts`: they read catalogue cards, so they sit with the catalogue, which depends on this module and never the reverse.
 
 ## Collection Types
 

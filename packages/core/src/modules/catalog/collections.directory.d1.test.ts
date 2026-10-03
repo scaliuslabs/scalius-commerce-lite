@@ -6,7 +6,7 @@ import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { afterAll, describe, expect, it } from "vitest";
 
 import { rebuildCatalogProjections } from "../products/catalog-projections";
-import { listPublicCollectionDirectory } from "./collections.service";
+import { listPublicCollectionDirectory } from "./collections";
 
 let sqlite: DatabaseSync | null = null;
 afterAll(() => {

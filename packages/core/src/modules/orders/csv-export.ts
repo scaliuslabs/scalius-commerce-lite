@@ -8,6 +8,7 @@ import {
   type OrderChannel,
   type OrderChannelSourcePreset,
 } from "@scalius/shared/order-channel";
+import { spreadsheetSafeCsvCell } from "@scalius/shared/spreadsheet-csv";
 import { formatOrderLinePropertiesText, parseOrderLineProperties } from "./line-presentation";
 
 export const ORDER_CSV_ARTIFACT_MAX_BYTES = 16 * 1024 * 1024;
@@ -59,19 +60,6 @@ export interface OrderCsvArtifactBuilder<T = OrderCsvSummary> {
   /** Adds one order (one or more CSV rows); false once the byte limit is reached. */
   append(order: T): boolean;
   finish(): OrderCsvArtifact;
-}
-
-export function spreadsheetSafeCsvCell(value: unknown): string {
-  const normalized = value == null
-    ? ""
-    : value instanceof Date
-      ? value.toISOString()
-      : String(value);
-  // An international phone ("+8801712345678") is data, not a formula.
-  const safe = /^[\t\r\n ]*[=+\-@]/.test(normalized) && !/^\+\d{6,15}$/.test(normalized)
-    ? `'${normalized}`
-    : normalized;
-  return `"${safe.replaceAll('"', '""')}"`;
 }
 
 function row(values: unknown[]): string {

@@ -8,19 +8,21 @@ import { SQLiteSyncDialect } from "drizzle-orm/sqlite-core";
 import {
   bulkDeleteCustomers,
   buildCustomerOrderMetricsProjection,
+  deleteCustomer,
+  listCustomers,
+  permanentlyDeleteCustomer,
+} from "./customers.service";
+import {
   buildCustomerOrderItemDetailProjection,
   customerAccountOrderVisibilityCondition,
   buildCustomerOrderTracking,
   customerOrderStatusLabel,
   decodeCustomerOrdersCursor,
-  deleteCustomer,
   encodeCustomerOrdersCursor,
   getCustomerOrderDetail,
   getCustomerOrders,
   getCustomerVisibleBalanceDueMinor,
-  listCustomers,
-  permanentlyDeleteCustomer,
-} from "./customers.service";
+} from "../orders/account-orders";
 
 interface CapturedListQuery {
   fields: Record<string, unknown>;

@@ -4,7 +4,7 @@ import type { Database } from "@scalius/database/client";
 import { adminOrderCreateAttempts, orderEvents, orders, user } from "@scalius/database/schema";
 import { ForbiddenError, NotFoundError, ValidationError } from "@scalius/core/errors";
 import { sha256Hex } from "@scalius/shared/hash";
-import { ORDER_APP_FACT_KINDS } from "./app-facts";
+import { ORDER_APP_FACT_KINDS } from "../order-kernel/app-facts";
 
 /** What happened to an order. The dashboard words each kind; `data` carries the facts. */
 export const ORDER_EVENT_KINDS = [

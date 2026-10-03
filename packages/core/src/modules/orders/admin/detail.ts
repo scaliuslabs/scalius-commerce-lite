@@ -11,7 +11,7 @@ import {
     inventoryLocations,
 } from "@scalius/database/schema";
 import { listOrderDiscountLines } from "../../promotions/order-discount-lines";
-import { resolveOrderAppFacts, selectOrderAppFactRows, type OrderAppFactRow } from "../app-facts";
+import { resolveOrderAppFacts, selectOrderAppFactRows, type OrderAppFactRow } from "../../order-kernel/app-facts";
 import { listOrderHolds } from "../holds";
 import { sql, desc, eq } from "drizzle-orm";
 import { customerKind } from "../../customers/customer-identity";

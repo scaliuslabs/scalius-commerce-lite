@@ -38,7 +38,7 @@ import { prepareManualOrderQuote } from "./quote";
 import type { SQLiteBatchItem } from "./shared";
 import type { FunctionCart } from "@scalius/shared/plugins";
 import type { AppliedAppDiscount, ManualOrderAppFunctions } from "@scalius/shared/checkout-app-facts";
-import { buildAppDiscountFactInserts } from "../app-facts";
+import { buildAppDiscountFactInserts } from "../../order-kernel/app-facts";
 import { manualOrderAppLines } from "./app-lines";
 
 /**

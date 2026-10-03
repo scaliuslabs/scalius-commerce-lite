@@ -7,8 +7,8 @@ import { customers, orders } from "@scalius/database/schema";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 
 import { withPublicMediaUrl } from "../../integrations/storage";
-import { getCustomerOrderDetail } from "./customers.service";
-import { claimGuestOrderToAccount } from "./order-account-claim";
+import { getCustomerOrderDetail } from "./account-orders";
+import { claimGuestOrderToAccount } from "./account-claims";
 
 describe("guest order account claim", () => {
   let sqlite: DatabaseSync;

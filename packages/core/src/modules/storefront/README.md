@@ -28,7 +28,7 @@ in `@scalius/shared/storefront-theme`); a theme preview passes `requests`
 for its draft instead.
 
 **Batch 2** (one `db.batch`, skipped when nothing needs it):
-- `planCollectionProducts()` (collections service): products of the
+- `planCollectionProducts()` (`catalog/collections.ts`): products of the
   collections sections' collections and of collection-sourced section lists;
 - `planHomeProductLists()` (`catalog/home-lists.ts`): newest, on sale,
   popular (distinct buyers in real orders of 30 days) and category lists;
@@ -135,7 +135,7 @@ The look (logo, announcement, footer words) is the theme document and
 
 - `@scalius/database` -- `categories`, `collections`, `media`, `theme_settings`, `analytics`, `pages`, `settings`
 - `@scalius/core/integrations/analytics` -- `processAnalyticsScript()`, `shouldUsePartytown()`
-- `../collections/collections.service` -- `resolveCollectionProductsBatch()`
+- `../catalog` -- `resolveCollectionProductsBatch()`
 
 ## Known Gaps
 

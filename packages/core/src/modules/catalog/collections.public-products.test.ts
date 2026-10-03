@@ -1,6 +1,6 @@
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { describe, expect, it } from "vitest";
-import { resolveCollectionProductsBatch } from "./collections.service";
+import { resolveCollectionProductsBatch } from "./collections";
 
 describe("public collection product resolution", () => {
     it("resolves manual, dynamic, and featured products only when a buyer can resolve a SKU", async () => {

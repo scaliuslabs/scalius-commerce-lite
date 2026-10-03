@@ -2,9 +2,9 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import {
   getAccountPhoneVerificationPrompt,
-  getCustomerOrders,
   linkVerifiedContactOrders,
 } from "@scalius/core/modules/customers";
+import { getCustomerOrders } from "@scalius/core/modules/orders";
 import { errorResponses, successEnvelope } from "../../schemas/responses";
 import { deliveryMethodKindSchema } from "../../schemas/order-lines";
 import { nullableTimestampSchema } from "../../schemas/timestamps";

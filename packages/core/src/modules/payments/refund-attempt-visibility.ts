@@ -1,7 +1,7 @@
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import { refundAttempts } from "@scalius/database/schema";
-import { ACTIVE_REFUND_ATTEMPT_STATUSES } from "./refund-attempt-guard";
+import { ACTIVE_REFUND_ATTEMPT_STATUSES } from "../order-kernel/refund-attempt-guard";
 import { paymentMethodLabel } from "./gateways/registry";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { fromMinor, toMinor } from "@scalius/shared/money";

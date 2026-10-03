@@ -25,7 +25,7 @@ import {
   shouldUsePartytown,
 } from "../../integrations/analytics";
 import { normalizeCloudflareWebAnalyticsConfig } from "../analytics/analytics.validation";
-import { planCollectionProducts } from "../collections/collections.service";
+import { planCollectionProducts } from "../catalog/collections";
 import { planHomeProductLists, type HomeProductList } from "../catalog/home-lists";
 import { planHomeBrands } from "../catalog/home-brands";
 import { planHomeMedia, planHomePromotions, planPublishedThemeBrandMedia } from "./homepage-sections";

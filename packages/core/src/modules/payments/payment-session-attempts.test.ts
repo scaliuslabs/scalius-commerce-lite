@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { Database } from "@scalius/database/client";
 import {
-  assertNoActivePaymentSessionAttempt,
   buildPaymentSessionAttemptIdentity,
   claimPaymentSessionAttempt,
   listOrderPaymentSessionAttempts,
   markPaymentSessionAttemptCreated,
   markPaymentSessionAttemptFailed,
 } from "./payment-session-attempts";
+import { assertNoActivePaymentSessionAttempt } from "../order-kernel/payment-session-guard";
 
 type AttemptRow = {
   id: string;

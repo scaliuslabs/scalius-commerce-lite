@@ -6,10 +6,9 @@ import {
     createCollection,
     bulkActivateCollections,
     listCollections,
-    listCollectionProductOptions,
-    resolveCollectionProductsBatch,
     updateCollection,
 } from "./collections.service";
+import { listCollectionProductOptions, resolveCollectionProductsBatch } from "../catalog/collections";
 
 vi.mock("../products/media", () => ({
     loadProductMediaProjections: vi.fn(async () => new Map()),

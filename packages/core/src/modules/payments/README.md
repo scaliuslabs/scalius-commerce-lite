@@ -5,6 +5,12 @@ orchestration, webhook claim-once, payment application, refunds,
 reconciliation) is written once and never branches on a gateway id, or on
 whether a gateway is built in or an app's.
 
+Payments act on orders through [`../order-kernel`](../order-kernel/README.md):
+the state machine, the shipment claim, and the two locks this module's own
+work takes on an order (the hosted-payment setup and refund-in-flight guards
+live there because every order writer checks them). The order views that show
+payment and refund facts are `../orders`'.
+
 ## Gateways
 
 Every gateway implements the shared payment port

@@ -1,6 +1,6 @@
 import type { Database } from "@scalius/database/client";
 import { deliveryShipments, orderDiscountAllocations, orders, orderItems } from "@scalius/database/schema";
-import { resolveOrderAppFacts, selectOrderAppFactRows, type OrderAppFactRow } from "../orders/app-facts";
+import { resolveOrderAppFacts, selectOrderAppFactRows, type OrderAppFactRow } from "../order-kernel/app-facts";
 import { formatMoney, normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
 import { fromMinor } from "@scalius/shared/money";
 import { formatOrderNumber } from "@scalius/shared/order-utils";

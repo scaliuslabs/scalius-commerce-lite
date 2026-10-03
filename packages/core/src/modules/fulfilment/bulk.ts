@@ -17,20 +17,17 @@ import type { CourierProvidersSource } from "../delivery/couriers/registry";
 import {
     assertNoActiveRefundAttempt,
     noActiveRefundAttemptForOrderIdCondition,
-} from "../payments/refund-attempt-guard";
-import {
-    assertNoActivePaymentSessionAttempt,
-    noActivePaymentSessionAttemptForOrderIdCondition,
-} from "../payments/payment-session-attempts";
+} from "../order-kernel/refund-attempt-guard";
+import { assertNoActivePaymentSessionAttempt, noActivePaymentSessionAttemptForOrderIdCondition } from "../order-kernel/payment-session-guard";
 import { sql, eq, and } from "drizzle-orm";
 import { NotFoundError, ValidationError } from "@scalius/core/errors";
-import { validateTransition } from "../orders/status/state-machine";
+import { validateTransition } from "../order-kernel/state-machine";
 import {
     hasActiveShipmentClaim,
     noActiveShipmentClaimCondition,
     SHIPMENT_CLAIM_CONFLICT_MESSAGE,
     SHIPMENT_CLAIM_LEASE_SECONDS,
-} from "../orders/shipment-claim";
+} from "../order-kernel/shipment-claim";
 import { bulkShipOrderSchema, type ShipmentCreationOptionsInput } from "../orders/validation";
 import { assertOrderNotOnHold, noOpenOrderHoldCondition } from "../orders/holds";
 import {

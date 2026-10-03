@@ -15,7 +15,7 @@ import { eq } from "drizzle-orm";
 import { fromMinor } from "@scalius/shared/money";
 import { NotFoundError, ValidationError, ConflictError } from "@scalius/core/errors";
 import type { OrderPaymentRecoverySummary } from "../types";
-import { hasActiveShipmentClaim } from "../shipment-claim";
+import { hasActiveShipmentClaim } from "../../order-kernel/shipment-claim";
 import { createOrderReceiptToken, recordOrderReceipt } from "../receipts";
 import {
     findLatestAttempt,

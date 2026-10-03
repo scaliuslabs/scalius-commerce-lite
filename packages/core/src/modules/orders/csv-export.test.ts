@@ -4,10 +4,10 @@ import {
   createPaymentRecoveryCsvArtifactBuilder,
   formatOrderCsvLineProperties,
   ORDER_CSV_ARTIFACT_MAX_BYTES,
-  spreadsheetSafeCsvCell,
   type OrderCsvRow,
   type OrderCsvSummary,
 } from "./csv-export";
+import { spreadsheetSafeCsvCell } from "@scalius/shared/spreadsheet-csv";
 
 const recoveryRow: OrderCsvSummary = {
   id: "ord_1", customerName: "Buyer", customerPhone: "01700", customerEmail: null,

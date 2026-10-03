@@ -43,13 +43,17 @@ vi.mock("@scalius/core/modules/customers", async (importOriginal) => ({
   getAccountPhoneVerificationPrompt: vi.fn(async () => null),
   COOKIE_NAME: "cs_tok",
   SESSION_TTL_SECONDS: 2_592_000,
+  linkVerifiedContactOrders: mocks.linkVerifiedContactOrders,
+}));
+
+vi.mock("@scalius/core/modules/orders", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/orders")>()),
   getCustomerOrders: mocks.getCustomerOrders,
   getCustomerOrderDetail: mocks.getCustomerOrderDetail,
   getCustomerOwnedOrderForDetail: mocks.getCustomerOwnedOrderForDetail,
   getCustomerOrderDetailForOrder: mocks.getCustomerOrderDetailForOrder,
   getCustomerPaymentSessionOrderForDetail: mocks.getCustomerPaymentSessionOrderForDetail,
   claimGuestOrderToAccount: mocks.claimGuestOrderToAccount,
-  linkVerifiedContactOrders: mocks.linkVerifiedContactOrders,
 }));
 
 // Gift-card tenders and issued cards are covered on the real schema by

@@ -17,11 +17,7 @@ import {
   updateCustomerProfile,
   type CustomerSession,
 } from "../customers/customer-auth.service";
-import {
-  getCustomerOrderDetailForOrder,
-  getCustomerOrders,
-  getCustomerOwnedOrderForDetail,
-} from "../customers/customers.service";
+import { getCustomerOrderDetailForOrder, getCustomerOrders, getCustomerOwnedOrderForDetail } from "../orders/account-orders";
 import { getReceiptOrderSupportRequestStateForOrder } from "../orders/order-support-requests";
 import { createCustomerOrderSupportRequest, createReceiptOrderSupportRequest } from "../conversations";
 import { and, desc, eq, gt, isNull, sql } from "drizzle-orm";

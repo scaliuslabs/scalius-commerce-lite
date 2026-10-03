@@ -4,11 +4,7 @@ import { eq, isNull, and } from "drizzle-orm";
 import { NotFoundError } from "../utils/api-error";
 import { successEnvelope, errorResponses, listingPaginationSchema, listingPageInfoSchema, listingCursorQuerySchema } from "../schemas/responses";
 import { ok } from "../utils/api-response";
-import {
-  getPublicCollectionCatalog,
-  getPublicCollectionSitemapEntries,
-  listPublicCollectionDirectory,
-} from "@scalius/core/modules/collections";
+import { getPublicCollectionCatalog, getPublicCollectionSitemapEntries, listPublicCollectionDirectory } from "@scalius/core/modules/catalog";
 import { deps } from "@scalius/core/cache-deps";
 import { resolvePublicAttributeFilters } from "@scalius/core/modules/catalog";
 import { productFacetSchema } from "../schemas/catalog-facets";

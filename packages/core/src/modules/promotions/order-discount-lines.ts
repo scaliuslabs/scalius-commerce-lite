@@ -1,7 +1,7 @@
 import type { Database } from "@scalius/database/client";
 import { orderDiscountAllocations, promotionEffects } from "@scalius/database/schema";
 import { asc, eq, sql } from "drizzle-orm";
-import { resolveOrderAppFacts, selectOrderAppFactRows, type OrderAppFactRow } from "../orders/app-facts";
+import { resolveOrderAppFacts, selectOrderAppFactRows, type OrderAppFactRow } from "../order-kernel/app-facts";
 
 /** What an applied discount did, for how an order summary shows it. */
 export type OrderDiscountKind = "buy_x_get_y" | "product" | "order" | "shipping";

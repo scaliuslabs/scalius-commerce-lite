@@ -89,7 +89,7 @@ language with the merchant's edits).
   price without a signed-in buyer, so no commit can arise there.
 - **Persistence**: no schema change. Line `discount_amount_minor` is the
   platform part plus the app part; each app discount is an immutable
-  `app_discount` row in `order_events` (`orders/app-facts.ts`: app id and
+  `app_discount` row in `order_events` (`order-kernel/app-facts.ts`: app id and
   name, title, code, target, amounts, per-order-item parts), inserted in the
   commit batch. The commit check, refund reconciliation
   (`readPromotionRefundSnapshot`), the order discount lines (receipts,

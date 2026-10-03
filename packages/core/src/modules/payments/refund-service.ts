@@ -26,8 +26,8 @@ import { providerErrorOf } from "@scalius/shared/plugins/providers/kinds";
 import { applyInventoryForStatusChangeWithImpact } from "../inventory/inventory-transitions";
 import type { Database } from "@scalius/database/client";
 import { NotFoundError, ValidationError, ConflictError, ServiceUnavailableError } from "@scalius/core/errors";
-import { canTransitionTo } from "../orders/status/state-machine";
-import { assertNoActiveShipmentClaim } from "../orders/shipment-claim";
+import { canTransitionTo } from "../order-kernel/state-machine";
+import { assertNoActiveShipmentClaim } from "../order-kernel/shipment-claim";
 import { fromMinor, toMinor } from "@scalius/shared/money";
 import { computeOrderPaymentState } from "./payment-state";
 import {
@@ -40,11 +40,8 @@ import {
     REFUND_IN_PROGRESS_MESSAGE,
     assertNoActiveRefundAttempt,
     noActiveRefundAttemptForOrderIdCondition,
-} from "./refund-attempt-guard";
-import {
-    assertNoActivePaymentSessionAttempt,
-    noActivePaymentSessionAttemptForOrderIdCondition,
-} from "./payment-session-attempts";
+} from "../order-kernel/refund-attempt-guard";
+import { assertNoActivePaymentSessionAttempt, noActivePaymentSessionAttemptForOrderIdCondition } from "../order-kernel/payment-session-guard";
 import type { OrderNotificationType } from "../notifications/notification-types";
 import { buildNotificationOutboxInsert } from "../notifications/notification-outbox";
 import { readPromotionRefundSnapshot } from "../promotions/promotions.refunds";

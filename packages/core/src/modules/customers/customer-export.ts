@@ -8,7 +8,7 @@ import { customerMarketingConsents, customerOrderStats, customers, orders } from
 import { MARKETING_CHANNELS, type MarketingChannel } from "@scalius/shared/customer-marketing";
 import { fromMinor } from "@scalius/shared/money";
 import { and, asc, eq, inArray, isNull, sql, type SQL } from "drizzle-orm";
-import { spreadsheetSafeCsvCell } from "../orders/csv-export";
+import { spreadsheetSafeCsvCell } from "@scalius/shared/spreadsheet-csv";
 import { customerKind } from "./customer-identity";
 import { currentMarketingContactSql } from "./customer-segments";
 import { listTagsForCustomers } from "./customer-tags";

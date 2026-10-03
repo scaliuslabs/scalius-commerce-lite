@@ -38,9 +38,9 @@ import type {
     OrderShipmentRecoverySummary,
     OrderShipmentSummary,
 } from "../types";
-import { hasActiveShipmentClaim } from "../shipment-claim";
+import { hasActiveShipmentClaim } from "../../order-kernel/shipment-claim";
 import { PROVIDER_OUTCOME_UNKNOWN } from "../../delivery/types";
-import { noActiveRefundAttemptForOrderColumnCondition } from "../../payments/refund-attempt-guard";
+import { noActiveRefundAttemptForOrderColumnCondition } from "../../order-kernel/refund-attempt-guard";
 import { PAYMENT_BLOCKED_ORDER_STATUSES } from "../../payments/payable-order";
 
 // ─────────────────────────────────────────

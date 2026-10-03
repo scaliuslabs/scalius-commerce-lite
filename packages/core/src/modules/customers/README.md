@@ -6,8 +6,8 @@ Customer management (admin CRUD) and OTP-based storefront authentication with pl
 
 | File | Purpose |
 |------|---------|
-| `index.ts` | Barrel export -- re-exports `customers.service` only (not customer-auth) |
-| `customers.service.ts` | Admin CRUD: `listCustomers`, `createCustomer`, `updateCustomer`, `deleteCustomer`, `permanentlyDeleteCustomer`, `restoreCustomer`, `bulkDeleteCustomers`, `getCustomerById`; storefront account order history/detail via `getCustomerOrders()` and `getCustomerOrderDetail()` with customer-scoped order facts. Re-exports schemas from `customers.validation.ts`. |
+| `index.ts` | The server API: records, auth and OTP, identity, tags, segments, export |
+| `customers.service.ts` | Admin CRUD: `listCustomers`, `createCustomer`, `updateCustomer`, `deleteCustomer`, `permanentlyDeleteCustomer`, `restoreCustomer`, `bulkDeleteCustomers`, `getCustomerById`, and the paid-spend projections the order views share. The buyer's account order history and detail (`getCustomerOrders()`, `getCustomerOrderDetail()`) and guest-order claims are order views and live in `../orders` (`account-orders.ts`, `account-claims.ts`). Re-exports schemas from `customers.validation.ts`. |
 | `customers.validation.ts` | Canonical Zod schemas: `createCustomerSchema` (uses `phoneNumberSchema` from `@scalius/shared/customer-utils`), `updateCustomerSchema` (partial). Imported by both service and API routes. |
 | `customer-auth.service.ts` | Storefront auth: `sendOtp()`, `verifyOtp()`, `getCustomerBySession()`, `deleteCustomerSession()`, `updateCustomerProfile()`. Cookie/session helpers. Imported directly by path (not through `index.ts`) |
 | `customer-auth-rate-limit.ts` | D1-authoritative OTP send throttling for client IP buckets, plus bounded cleanup of expired windows |

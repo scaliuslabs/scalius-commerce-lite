@@ -15,10 +15,9 @@ import type { FunctionCart } from "@scalius/shared/plugins";
 import { buildAppCartFromOrderPayload, type CheckoutAppFunctions } from "@scalius/core/modules/checkout";
 import {
   placeAppOrderHolds,
-  readOrderRiskHistory,
-  recordAppRiskChecks,
   type CreateStorefrontOrderResult,
 } from "@scalius/core/modules/orders";
+import { readOrderRiskHistory, recordAppRiskChecks } from "@scalius/core/modules/order-kernel";
 
 export interface OrderRiskInput {
   db: Database;

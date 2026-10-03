@@ -17,11 +17,11 @@ import {
   createCustomer,
   deleteCustomer,
   getCustomerDetail,
-  getCustomerOrders,
   listCustomers,
   restoreCustomer,
   updateCustomer,
 } from "./customers.service";
+import { getCustomerOrders } from "../orders/account-orders";
 import { linkVerifiedContactOrders } from "./customer-identity";
 import {
   buildCustomerAuthOtpStorageKey,

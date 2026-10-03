@@ -1,8 +1,9 @@
 // Catalog domain: buyer-facing catalogue reads. Listings, facets, the product
-// page, search, feeds, sitemaps, recommendations and storefront sections all
-// read through the product rules owned by modules/products (public
-// eligibility, buyer pricing, media). Category, collection, attribute and
-// brand records keep their own domains beside this one.
+// page, search, feeds, sitemaps, recommendations, collection pages and
+// storefront sections all read through the product rules owned by
+// modules/products (public eligibility, buyer pricing, media). Category,
+// collection, attribute and brand records keep their own domains below this
+// one.
 export * from "./listing";
 export {
   BRAND_FACET_KEY,
@@ -43,6 +44,4 @@ export * from "./card-facts";
 export * from "./home-lists";
 export { planHomeBrands, type HomeBrand } from "./home-brands";
 export * from "./recommendation-refresh";
-// Cache dependency declarations of catalogue cards and requested products,
-// for the domains that show catalogue cards (collections).
-export { declareProductCards, declareRequestedProducts } from "./declare-deps";
+export * from "./collections";

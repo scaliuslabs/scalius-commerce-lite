@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { planLimits } from "@scalius/shared/plan-limits";
 
 import { resolvePublicAttributeFilters } from "./facets";
-import { resolveCollectionProductsBatch } from "../collections/collections.service";
+import { resolveCollectionProductsBatch } from "./collections";
 import { search } from "../../search";
 import { getHomepageData } from "../storefront/storefront.service";
 import { getProductsByIds, listProducts } from "../product-admin/read";

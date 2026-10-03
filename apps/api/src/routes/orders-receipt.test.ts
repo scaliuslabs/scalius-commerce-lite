@@ -23,6 +23,8 @@ vi.mock("@scalius/core/modules/orders", async (importOriginal) => {
     // The ledger and thread reads are covered on the real schema by orders-owner-receipt.d1.test.ts.
     listBuyerOrderFulfilments: vi.fn(async () => []),
     findOrderConversationId: vi.fn(async () => null),
+    // The tracked-order view is covered on the real schema by orders-owner-receipt.d1.test.ts.
+    getBuyerOrderTracking: vi.fn(async () => ({ progress: { steps: [], outcome: null }, timeline: [], shipments: [] })),
   };
 });
 
@@ -65,12 +67,6 @@ vi.mock("@scalius/core/modules/gift-cards", async (importOriginal) => ({
 vi.mock("@scalius/core/modules/promotions", async (importOriginal) => ({
   ...await importOriginal<typeof import("@scalius/core/modules/promotions")>(),
   listOrderDiscountLines: vi.fn(async () => []),
-}));
-
-// The tracked-order view is covered on the real schema by orders-owner-receipt.d1.test.ts.
-vi.mock("@scalius/core/modules/customers", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@scalius/core/modules/customers")>()),
-  getBuyerOrderTracking: vi.fn(async () => ({ progress: { steps: [], outcome: null }, timeline: [], shipments: [] })),
 }));
 
 const orderRow = {

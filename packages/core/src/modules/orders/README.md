@@ -1,8 +1,8 @@
 # Orders Module
 
-The order record and everything staff do to it: the dashboard list and detail, manual orders and COD amendments, detail edits, archive, the status lifecycle kernel, returns, invoices, buyer receipts, order lookup and payment recovery. Storefront checkout lives in [`../checkout`](../checkout/README.md); the actions that hand units over (parcels, courier bookings, delivery outcomes) live in [`../fulfilment`](../fulfilment/README.md).
+The order record and everything staff and buyers do with it: the dashboard list and detail, manual orders and COD amendments, detail edits, archive, the status lifecycle, returns, invoices, buyer receipts, the account order views and guest-order claims, order lookup and payment recovery. It sits on top of payments, delivery, inventory, customers, promotions and notifications; the primitives those domains need (the state machine, the shipment/payment-session/refund locks and app facts) live below them in [`../order-kernel`](../order-kernel/README.md). Storefront checkout lives in [`../checkout`](../checkout/README.md); the actions that hand units over (parcels, courier bookings, delivery outcomes) live in [`../fulfilment`](../fulfilment/README.md).
 
-Public entries: `index.ts` (the server API) and `browser.ts` (types, the state machine, the archive policy, money helpers, search parsing and CSV export; safe for the dashboard).
+Public entries: `index.ts` (the server API) and `browser.ts` (types, the archive policy, money helpers, search parsing and CSV export; safe for the dashboard; the state machine is `order-kernel/browser`).
 
 ## Files
 
@@ -23,15 +23,15 @@ Public entries: `index.ts` (the server API) and `browser.ts` (types, the state m
 | `admin/recovery-link.ts` | `previewOrderPaymentRecoveryLink()`, `createOrderPaymentRecoveryLink()` | Merchant-sendable hosted-payment recovery links |
 | `admin/shared.ts` | -- | Helpers shared by the admin files (not exported) |
 | `status/lifecycle.ts` | `updateOrderStatus()`, `applyOrderStatusChange()`, `bulkConfirmOrders()`, `reconcileInventoryForStatus()`, ... | The status kernel: validated transitions, inventory reconciliation, COD gates, cancel guards, status notifications. Fulfilment actions call it. |
-| `status/state-machine.ts` | `canTransitionTo()`, `validateTransition()` | Order/payment/fulfilment transition maps |
 | `status/policy.ts` | `assertGenericAdminOrderStatusTransition()` | What the generic status editor may do (R3-ORD-01) |
 | `status/claim.ts` | `rollbackOrderStatusIfInventoryUnchanged()` | Status-claim rollback when inventory did not move |
-| `shipment-claim.ts` | `assertNoActiveShipmentClaim()`, `hasActiveShipmentClaim()` | The order-level lease a courier booking holds |
 | `holds.ts` | `placeAppOrderHolds()`, `assertOrderNotOnHold()`, `noOpenOrderHoldCondition()`, `releaseOrderHold()` | App holds for staff review (`order.risk` with `hold: true`): one per order and app; while one is open the order is not shipped, handed over, auto-fulfilled or moved on by status edits (cancel stays possible); staff release it |
 | `returns/returns.ts`, `returns/validation.ts` | `createOrderReturn()`, `approveOrderReturn()`, `receiveOrderReturn()`, ... | Item-level returns and receipts |
 | `invoices/{service,snapshot,order-reader,printable-artifact}.ts` | `issueInvoice()`, `getInvoiceDocument()`, `renderPrintableInvoice()`, ... | Immutable invoice snapshots and printable artifacts |
 | `order-support-requests.ts` | `createCustomerOrderSupportRequest()`, `createReceiptOrderSupportRequest()`, `updateOrderSupportRequestStatus()` | Buyer cancel/return/refund requests (moves to `conversations` in Wave A) |
 | `receipts.ts`, `lookup.ts`, `payment-recovery.ts` | receipt proof, order lookup OTP, buyer-verified payment recovery | Guest access to an order |
+| `account-orders.ts` | `getCustomerOrders()`, `getCustomerOrderDetail()`, `getBuyerOrderTracking()`, `customerAccountOrderVisibilityCondition()`, ... | A signed-in buyer's own orders: cursor pages with totals, detail with payments, refunds, shipments, support requests and the tracking timeline |
+| `account-claims.ts` | `issueAccountOwnerReceipt()`, `claimGuestOrderToAccount()` | An account owner's receipt proof, and adding a guest order whose contact matches to the account |
 | `timeline.ts`, `number.ts`, `money.ts`, `search.ts`, `csv-export.ts`, `archive-policy.ts`, `stale-incomplete.ts` | -- | Timeline, `#1001` numbers, money projections, search parsing, CSV, archive eligibility, stale hosted-payment cleanup |
 
 ## Order Channel
