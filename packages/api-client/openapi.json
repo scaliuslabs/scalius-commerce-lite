@@ -1126,6 +1126,84 @@
           "head"
         ]
       },
+      "MarketMatrix": {
+        "type": "object",
+        "properties": {
+          "markets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicMarket"
+            },
+            "maxItems": 50
+          }
+        },
+        "required": [
+          "markets"
+        ],
+        "description": "Every active market with its countries and subfolder presences, backup first. Draft markets are left out."
+      },
+      "PublicMarket": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "handle": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "isBackup": {
+            "type": "boolean",
+            "description": "The backup market catches every buyer no other market matches and is sold at the root URL."
+          },
+          "countries": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 2
+            },
+            "maxItems": 250
+          },
+          "presences": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MarketPresence"
+            },
+            "maxItems": 50
+          }
+        },
+        "required": [
+          "id",
+          "handle",
+          "name",
+          "isBackup",
+          "countries",
+          "presences"
+        ]
+      },
+      "MarketPresence": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "type": "string",
+            "maxLength": 5,
+            "description": "The subfolder (`en-in`: the language and the country), or `''` for the root URL, which only the backup market holds."
+          },
+          "locale": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 2,
+            "description": "The language of the presence's pages (ISO 639-1)."
+          }
+        },
+        "required": [
+          "value",
+          "locale"
+        ]
+      },
       "StorefrontThemeDocument": {
         "type": "object",
         "properties": {
@@ -10274,6 +10352,97 @@
           "changes",
           "moreChanges",
           "note"
+        ]
+      },
+      "Market": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "handle": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "active"
+            ],
+            "description": "Only active markets resolve for buyers."
+          },
+          "isBackup": {
+            "type": "boolean"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true
+          },
+          "countries": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 2
+            },
+            "maxItems": 250
+          },
+          "presence": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MarketPresence"
+              },
+              {
+                "nullable": true,
+                "description": "The root presence of the backup market, or the market's subfolder; null when it has none."
+              }
+            ]
+          },
+          "currencyCode": {
+            "type": "string",
+            "description": "Every market sells in the shop currency until markets get their own currency."
+          },
+          "priceIncrementMinor": {
+            "type": "integer",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "description": "The price increment its prices use, in minor units: the backup market's own, inherited by every other market."
+          },
+          "priceIncrementInherited": {
+            "type": "boolean"
+          },
+          "hasOrders": {
+            "type": "boolean",
+            "description": "A market that took orders cannot be deleted; set it to draft instead."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "handle",
+          "name",
+          "status",
+          "isBackup",
+          "revision",
+          "countries",
+          "presence",
+          "currencyCode",
+          "priceIncrementMinor",
+          "priceIncrementInherited",
+          "hasOrders",
+          "createdAt",
+          "updatedAt"
         ]
       },
       "WarrantyClaim": {
@@ -21061,6 +21230,9 @@
                             "priceIncrementMinor"
                           ]
                         },
+                        "markets": {
+                          "$ref": "#/components/schemas/MarketMatrix"
+                        },
                         "theme": {
                           "$ref": "#/components/schemas/StorefrontThemeDocument"
                         },
@@ -21612,6 +21784,7 @@
                         "categoryTree",
                         "footerMenus",
                         "currency",
+                        "markets",
                         "theme",
                         "brand",
                         "storeShape",
@@ -21625,6 +21798,75 @@
                         "storefrontCopy",
                         "appScripts"
                       ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "x-scalius-agent": {
+          "surface": "storefront",
+          "exposure": "execute",
+          "principals": [
+            "visitor",
+            "customer"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 16384,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "public"
+        },
+        "security": []
+      }
+    },
+    "/api/v1/storefront/markets": {
+      "get": {
+        "operationId": "storefront.markets.get",
+        "tags": [
+          "Storefront"
+        ],
+        "summary": "Get the active markets with their countries and URL presences",
+        "description": "Every active market, backup first: the countries it sells to and its subfolder presences (`/en-in`). The root URL is the backup market's. Draft markets are left out.",
+        "responses": {
+          "200": {
+            "description": "The active presence matrix",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/MarketMatrix"
                     }
                   },
                   "required": [
@@ -29295,6 +29537,20 @@
           "Checkout"
         ],
         "summary": "Get checkout configuration (payment gateways, auth settings)",
+        "description": "The checkout settings of the page's market: `presence` names a subfolder presence (`en-in`); without it the root presence, the backup market. An inactive or unknown presence answers 404.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 5,
+              "description": "A subfolder presence such as `en-in`; omit for the root."
+            },
+            "required": false,
+            "description": "A subfolder presence such as `en-in`; omit for the root.",
+            "name": "presence",
+            "in": "query"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Checkout configuration",
@@ -29531,6 +29787,29 @@
                         "unavailableMessage": {
                           "type": "string"
                         },
+                        "market": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "handle": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "locale": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "handle",
+                            "name",
+                            "locale"
+                          ]
+                        },
                         "marketingConsent": {
                           "type": "object",
                           "properties": {
@@ -29586,6 +29865,7 @@
                         "currency",
                         "checkoutReadiness",
                         "unavailable",
+                        "market",
                         "marketingConsent"
                       ]
                     }
@@ -29594,6 +29874,16 @@
                     "success",
                     "data"
                   ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -104274,7 +104564,7 @@
                           "minimum": 0,
                           "exclusiveMinimum": true,
                           "maximum": 1000,
-                          "description": "The store's price increment in minor units of the currency: every price is a multiple of it and derived amounts round to it. 1 is the minor unit (paisa, cents); 10^decimals is whole units (a BDT store's default: 100, whole taka)."
+                          "description": "The backup market's price increment in minor units of the currency (read-only here; Settings → Markets edits it): every price is a multiple of it and derived amounts round to it. 1 is the minor unit (paisa, cents); 10^decimals is whole units (a BDT store's default: 100, whole taka)."
                         },
                         "currencyCodeLocked": {
                           "type": "boolean"
@@ -104669,13 +104959,6 @@
                   "currencySymbol": {
                     "type": "string",
                     "maxLength": 16
-                  },
-                  "priceIncrementMinor": {
-                    "type": "integer",
-                    "minimum": 0,
-                    "exclusiveMinimum": true,
-                    "maximum": 1000,
-                    "description": "The store's price increment in minor units of the currency: every price is a multiple of it and derived amounts round to it. 1 is the minor unit (paisa, cents); 10^decimals is whole units (a BDT store's default: 100, whole taka)."
                   }
                 },
                 "required": [
@@ -116357,6 +116640,889 @@
         "x-scalius-rbac": {
           "type": "permission",
           "permission": "settings.shipping_methods.edit"
+        }
+      }
+    },
+    "/api/v1/admin/settings/markets": {
+      "get": {
+        "operationId": "dashboard.markets.list",
+        "tags": [
+          "Admin - Markets"
+        ],
+        "summary": "Markets: the backup market first, then by name",
+        "description": "Each market with its status, countries, currency and web presence. Every market sells in the shop currency until markets get their own currency.",
+        "responses": {
+          "200": {
+            "description": "Markets",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/Market"
+                          }
+                        }
+                      },
+                      "required": [
+                        "items"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "settings.general.view"
+        }
+      },
+      "post": {
+        "operationId": "dashboard.markets.create",
+        "tags": [
+          "Admin - Markets"
+        ],
+        "summary": "Create a market",
+        "description": "A market sells to its countries (each country belongs to one market) and can have a subfolder presence such as /en-in. Only active markets resolve for buyers.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 60
+                  },
+                  "handle": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 60,
+                    "description": "Derived from the name when omitted."
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "draft",
+                      "active"
+                    ],
+                    "default": "draft"
+                  },
+                  "countries": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 2,
+                      "maxLength": 2
+                    },
+                    "minItems": 1,
+                    "maxItems": 250
+                  },
+                  "presence": {
+                    "type": "object",
+                    "nullable": true,
+                    "properties": {
+                      "value": {
+                        "type": "string",
+                        "maxLength": 5
+                      },
+                      "locale": {
+                        "type": "string",
+                        "minLength": 2,
+                        "maxLength": 2
+                      }
+                    },
+                    "default": null,
+                    "required": [
+                      "value",
+                      "locale"
+                    ],
+                    "description": "A subfolder presence such as `{ value: \"en-in\", locale: \"en\" }`."
+                  }
+                },
+                "required": [
+                  "name",
+                  "countries"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The new market",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "market": {
+                          "$ref": "#/components/schemas/Market"
+                        }
+                      },
+                      "required": [
+                        "market"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "sequential",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "settings.general.edit"
+        }
+      }
+    },
+    "/api/v1/admin/settings/markets/{id}": {
+      "get": {
+        "operationId": "dashboard.markets.get",
+        "tags": [
+          "Admin - Markets"
+        ],
+        "summary": "One market",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The market",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "market": {
+                          "$ref": "#/components/schemas/Market"
+                        }
+                      },
+                      "required": [
+                        "market"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "settings.general.view"
+        }
+      },
+      "patch": {
+        "operationId": "dashboard.markets.update",
+        "tags": [
+          "Admin - Markets"
+        ],
+        "summary": "Edit a market under the revision the editor loaded",
+        "description": "Fields left out keep their value. The backup market stays active at the root URL and alone has a price increment; every other market uses it.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "exclusiveMinimum": true
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 60
+                  },
+                  "handle": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 60
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "draft",
+                      "active"
+                    ]
+                  },
+                  "countries": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 2,
+                      "maxLength": 2
+                    },
+                    "maxItems": 250
+                  },
+                  "presence": {
+                    "type": "object",
+                    "nullable": true,
+                    "properties": {
+                      "value": {
+                        "type": "string",
+                        "maxLength": 5
+                      },
+                      "locale": {
+                        "type": "string",
+                        "minLength": 2,
+                        "maxLength": 2
+                      }
+                    },
+                    "required": [
+                      "value",
+                      "locale"
+                    ],
+                    "description": "Backup market: only the root's language. Other markets: the subfolder, or null to remove it."
+                  },
+                  "priceIncrementMinor": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "exclusiveMinimum": true,
+                    "maximum": 1000,
+                    "description": "Backup market only: 1 (minor units) or the currency's whole unit (100 for BDT)."
+                  }
+                },
+                "required": [
+                  "expectedRevision"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The saved market",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "market": {
+                          "$ref": "#/components/schemas/Market"
+                        }
+                      },
+                      "required": [
+                        "market"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "required",
+          "batch": "sequential",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "settings.general.edit"
+        }
+      },
+      "delete": {
+        "operationId": "dashboard.markets.delete",
+        "tags": [
+          "Admin - Markets"
+        ],
+        "summary": "Delete a market that took no orders",
+        "description": "Its countries fall back to the backup market and its subfolder stops resolving. The backup market and markets with orders cannot be deleted.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "exclusiveMinimum": true
+            },
+            "required": true,
+            "name": "expectedRevision",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "destructive",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "required",
+          "batch": "sequential",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "settings.general.edit"
         }
       }
     },
@@ -202085,6 +203251,46 @@
           ]
         },
         {
+          "operationId": "dashboard.markets.create",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.markets.create"
+          ]
+        },
+        {
+          "operationId": "dashboard.markets.delete",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.markets.delete"
+          ]
+        },
+        {
+          "operationId": "dashboard.markets.get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.markets.get"
+          ]
+        },
+        {
+          "operationId": "dashboard.markets.list",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.markets.list"
+          ]
+        },
+        {
+          "operationId": "dashboard.markets.update",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.markets.update"
+          ]
+        },
+        {
           "operationId": "dashboard.media_folders.create",
           "surface": "dashboard",
           "mode": "operation-fallback",
@@ -204448,6 +205654,14 @@
           "mode": "curated",
           "workflowIds": [
             "storefront.delivery-search"
+          ]
+        },
+        {
+          "operationId": "storefront.markets.get",
+          "surface": "storefront",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.storefront.markets.get"
           ]
         },
         {

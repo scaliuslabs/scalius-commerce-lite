@@ -10,6 +10,8 @@ import { readinessSchema } from "../schemas/readiness";
 
 import { ok } from "../utils/api-response";
 import { getCredentialEncryptionKey } from "../utils/encryption-key";
+import { readPublicMarket } from "../utils/public-market";
+import { NotFoundError } from "../utils/api-error";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 /** One buyer-selectable payment method: a registered gateway or cash on delivery. */
@@ -56,6 +58,17 @@ const checkoutConfigSchema = z.object({
   }),
   unavailable: z.boolean(),
   unavailableMessage: z.string().optional(),
+  /**
+   * The market of the page's presence (`?presence=en-in`; none: the root,
+   * the backup market). Payment and delivery methods are store-wide until
+   * markets link them; the order's market is its shipping country's.
+   */
+  market: z.object({
+    id: z.string(),
+    handle: z.string(),
+    name: z.string(),
+    locale: z.string(),
+  }),
   /** The marketing consent checkbox: unchecked by default, never required. */
   marketingConsent: z.object({
     enabled: z.boolean(),
@@ -72,11 +85,18 @@ const getCheckoutConfigRoute = createRoute({
   operationId: "storefront.checkout.get_config",
   tags: ["Checkout"],
   summary: "Get checkout configuration (payment gateways, auth settings)",
+  description: "The checkout settings of the page's market: `presence` names a subfolder presence (`en-in`); without it the root presence, the backup market. An inactive or unknown presence answers 404.",
+  request: {
+    query: z.object({
+      presence: z.string().max(5).optional().openapi({ description: "A subfolder presence such as `en-in`; omit for the root." }),
+    }),
+  },
   responses: {
     200: {
       description: "Checkout configuration",
       content: { "application/json": { schema: successEnvelope(checkoutConfigSchema) } },
     },
+    404: errorResponses[404],
     503: {
       description: "Checkout configuration temporarily unavailable",
       content: { "application/json": { schema: errorResponseSchema } },
@@ -86,11 +106,13 @@ const getCheckoutConfigRoute = createRoute({
 });
 
 app.openapi(getCheckoutConfigRoute, async (c) => {
-  try {
-    const db = c.get("db");
-
-    const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
-    const config = await getCheckoutConfig(
+  const db = c.get("db");
+  const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
+  // The market and the settings are read together (one D1 wave); a missing
+  // market is a 404, never the unavailable-config answer below.
+  const [market, config] = await Promise.allSettled([
+    readPublicMarket(c),
+    getCheckoutConfig(
       db,
       encryptionKey,
       c.env as unknown as Record<string, unknown>,
@@ -99,9 +121,15 @@ app.openapi(getCheckoutConfigRoute, async (c) => {
       () => requestPaymentProviders(c),
       // Customer sign-in channels may send through an app the merchant chose.
       requestAppProviders(c),
-    );
-
-    return ok(c, checkoutConfigSchema.parse(config));
+    ),
+  ]);
+  // An unknown presence is a 404; a failed read of either fails closed below.
+  if (market.status === "rejected" && market.reason instanceof NotFoundError) throw market.reason;
+  try {
+    if (market.status === "rejected") throw market.reason;
+    if (config.status === "rejected") throw config.reason;
+    const { id, handle, name, presence } = market.value;
+    return ok(c, checkoutConfigSchema.parse({ ...config.value, market: { id, handle, name, locale: presence.locale } }));
   } catch (error: unknown) {
     console.error("[checkout] Error fetching checkout config:", error instanceof Error ? error.message : error);
     c.header("Cache-Control", "private, no-cache, no-store, must-revalidate");

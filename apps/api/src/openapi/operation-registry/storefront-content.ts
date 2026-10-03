@@ -23,6 +23,7 @@ export const STOREFRONT_CONTENT_OPERATIONS = {
     reason: "Rendering infrastructure: apps' sanitized HTML for one product page, not structured agent data.",
   },
   "storefront.layout.get": { limits: { request: 16_384 } },
+  "storefront.markets.get": { limits: { request: 16_384 } },
   "storefront.meta_events.events": {
     exposure: "excluded",
     openWorld: true,

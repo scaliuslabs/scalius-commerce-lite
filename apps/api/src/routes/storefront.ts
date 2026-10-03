@@ -58,6 +58,8 @@ import { ok } from "../utils/api-response";
 import { successEnvelope, errorResponses } from "../schemas/responses";
 import { storeShapeApiSchema, storefrontThemeDocumentApiSchema } from "../schemas/storefront-theme";
 import { optionalProductCardFacts } from "../schemas/product-card-facts";
+import { marketMatrixSchema } from "../schemas/markets";
+import { readMarketMatrix } from "@scalius/core/modules/markets";
 import { publicPageDetailSchema } from "../schemas/custom-fields";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -276,9 +278,11 @@ const layoutDataSchema = z.object({
     symbol: z.string(),
     /** ISO 4217 decimal places: prices on the wire are major units at this precision. */
     decimalPlaces: z.number().int().min(0).max(3),
-    /** The store's price increment in minor units: percentage prices round to it exactly as checkout charges. */
+    /** The backup market's price increment in minor units: percentage prices round to it exactly as checkout charges. */
     priceIncrementMinor: z.number().int().positive().max(1_000),
   }),
+  /** Every active market's countries and subfolder presences: hreflang, the market selector and the page's presence. */
+  markets: marketMatrixSchema,
   theme: storefrontThemeDocumentApiSchema,
   /** The published theme's brand images (logo, footer logo, tab icon). A preview carries its draft's own. */
   brand: brandAssetsSchema,
@@ -566,6 +570,26 @@ app.openapi(layoutRoute, async (c) => {
     },
   } as unknown as LayoutData);
 });
+
+// GET /storefront/markets — the active presence matrix (the storefront
+// gateway resolves a buyer's market choice with it; pages read it in the layout)
+const marketsRoute = createRoute({
+  method: "get",
+  path: "/markets",
+  operationId: "storefront.markets.get",
+  tags: ["Storefront"],
+  summary: "Get the active markets with their countries and URL presences",
+  description: "Every active market, backup first: the countries it sells to and its subfolder presences (`/en-in`). The root URL is the backup market's. Draft markets are left out.",
+  responses: {
+    200: {
+      description: "The active presence matrix",
+      content: { "application/json": { schema: successEnvelope(marketMatrixSchema) } },
+    },
+    500: errorResponses[500],
+  },
+});
+
+app.openapi(marketsRoute, async (c) => ok(c, await readMarketMatrix(c.get("db"))));
 
 // GET /storefront/batch — one storefront page render's public reads
 const batchPartSchema = z.object({

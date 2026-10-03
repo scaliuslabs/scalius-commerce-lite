@@ -304,6 +304,36 @@ export type StorefrontAppSurface = {
     };
 };
 
+/**
+ * Every active market with its countries and subfolder presences, backup first. Draft markets are left out.
+ */
+export type MarketMatrix = {
+    markets: Array<PublicMarket>;
+};
+
+export type PublicMarket = {
+    id: string;
+    handle: string;
+    name: string;
+    /**
+     * The backup market catches every buyer no other market matches and is sold at the root URL.
+     */
+    isBackup: boolean;
+    countries: Array<string>;
+    presences: Array<MarketPresence>;
+};
+
+export type MarketPresence = {
+    /**
+     * The subfolder (`en-in`: the language and the country), or `''` for the root URL, which only the backup market holds.
+     */
+    value: string;
+    /**
+     * The language of the presence's pages (ISO 639-1).
+     */
+    locale: string;
+};
+
 export type StorefrontThemeDocument = {
     version: 7;
     template: 'boutique' | 'heritage-editorial' | 'fashion-value' | 'spec-catalogue' | 'rounded-tech' | 'marketplace' | 'mass-retail' | 'department-mall' | 'daily-essentials' | 'showcase-landing';
@@ -2083,6 +2113,35 @@ export type ThemeVersionSummary = {
     }>;
     moreChanges: number;
     note: string | null;
+};
+
+export type Market = {
+    id: string;
+    handle: string;
+    name: string;
+    /**
+     * Only active markets resolve for buyers.
+     */
+    status: 'draft' | 'active';
+    isBackup: boolean;
+    revision: number;
+    countries: Array<string>;
+    presence: MarketPresence & unknown;
+    /**
+     * Every market sells in the shop currency until markets get their own currency.
+     */
+    currencyCode: string;
+    /**
+     * The price increment its prices use, in minor units: the backup market's own, inherited by every other market.
+     */
+    priceIncrementMinor: number;
+    priceIncrementInherited: boolean;
+    /**
+     * A market that took orders cannot be deleted; set it to draft instead.
+     */
+    hasOrders: boolean;
+    createdAt: string;
+    updatedAt: string;
 };
 
 export type WarrantyClaim = {
@@ -5242,6 +5301,7 @@ export type GetApiV1StorefrontLayoutResponses = {
                 decimalPlaces: number;
                 priceIncrementMinor: number;
             };
+            markets: MarketMatrix;
             theme: StorefrontThemeDocument;
             brand: {
                 logo: {
@@ -5370,6 +5430,34 @@ export type GetApiV1StorefrontLayoutResponses = {
 };
 
 export type GetApiV1StorefrontLayoutResponse = GetApiV1StorefrontLayoutResponses[keyof GetApiV1StorefrontLayoutResponses];
+
+export type GetApiV1StorefrontMarketsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/storefront/markets';
+};
+
+export type GetApiV1StorefrontMarketsErrors = {
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1StorefrontMarketsError = GetApiV1StorefrontMarketsErrors[keyof GetApiV1StorefrontMarketsErrors];
+
+export type GetApiV1StorefrontMarketsResponses = {
+    /**
+     * The active presence matrix
+     */
+    200: {
+        success: true;
+        data: MarketMatrix;
+    };
+};
+
+export type GetApiV1StorefrontMarketsResponse = GetApiV1StorefrontMarketsResponses[keyof GetApiV1StorefrontMarketsResponses];
 
 export type GetApiV1StorefrontBatchData = {
     body?: never;
@@ -7841,11 +7929,20 @@ export type PostApiV1StorefrontAgentContinuationsByContinuationIdRecoveryVerifyO
 export type GetApiV1CheckoutConfigData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * A subfolder presence such as `en-in`; omit for the root.
+         */
+        presence?: string;
+    };
     url: '/api/v1/checkout/config';
 };
 
 export type GetApiV1CheckoutConfigErrors = {
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
     /**
      * Server error
      */
@@ -7909,6 +8006,12 @@ export type GetApiV1CheckoutConfigResponses = {
             };
             unavailable: boolean;
             unavailableMessage?: string;
+            market: {
+                id: string;
+                handle: string;
+                name: string;
+                locale: string;
+            };
             marketingConsent: {
                 enabled: boolean;
                 channels: Array<'email' | 'sms' | 'whatsapp'>;
@@ -30282,7 +30385,7 @@ export type GetApiV1AdminSettingsCurrencyResponses = {
             currencyCode: 'USD' | 'EUR' | 'GBP' | 'JPY' | 'CHF' | 'CAD' | 'AUD' | 'NZD' | 'CNY' | 'HKD' | 'SGD' | 'SEK' | 'NOK' | 'DKK' | 'MXN' | 'BRL' | 'BDT' | 'INR' | 'PKR' | 'LKR' | 'NPR' | 'AFN' | 'BTN' | 'MVR' | 'MYR' | 'PHP' | 'THB' | 'IDR' | 'VND' | 'MMK' | 'KHR' | 'LAK' | 'BND' | 'KRW' | 'TWD' | 'MNT' | 'KPW' | 'MOP' | 'AED' | 'SAR' | 'QAR' | 'KWD' | 'BHD' | 'OMR' | 'JOD' | 'IQD' | 'IRR' | 'YER' | 'LBP' | 'SYP' | 'ILS' | 'KZT' | 'UZS' | 'KGS' | 'TJS' | 'TMT' | 'GEL' | 'AMD' | 'AZN' | 'TRY' | 'RUB' | 'UAH' | 'PLN' | 'CZK' | 'HUF' | 'RON' | 'BGN' | 'HRK' | 'RSD' | 'BAM' | 'MKD' | 'ALL' | 'MDL' | 'BYN' | 'ISK' | 'ARS' | 'CLP' | 'COP' | 'PEN' | 'UYU' | 'PYG' | 'BOB' | 'VES' | 'GYD' | 'SRD' | 'TTD' | 'JMD' | 'BBD' | 'BSD' | 'BZD' | 'CRC' | 'CUP' | 'DOP' | 'GTQ' | 'HNL' | 'HTG' | 'NIO' | 'PAB' | 'AWG' | 'ANG' | 'KYD' | 'BMD' | 'XCD' | 'FKP' | 'NGN' | 'GHS' | 'XOF' | 'GMD' | 'GNF' | 'SLL' | 'LRD' | 'CVE' | 'MRU' | 'KES' | 'TZS' | 'UGX' | 'RWF' | 'BIF' | 'ETB' | 'SOS' | 'ERN' | 'DJF' | 'SDG' | 'SSP' | 'SCR' | 'KMF' | 'MGA' | 'MUR' | 'XAF' | 'CDF' | 'ZAR' | 'BWP' | 'LSL' | 'SZL' | 'NAD' | 'MWK' | 'ZMW' | 'MZN' | 'AOA' | 'ZWL' | 'EGP' | 'DZD' | 'MAD' | 'TND' | 'LYD' | 'STN' | 'FJD' | 'PGK' | 'WST' | 'TOP' | 'VUV' | 'SBD' | 'XPF' | 'XDR' | 'XAG' | 'XAU';
             currencySymbol: string;
             /**
-             * The store's price increment in minor units of the currency: every price is a multiple of it and derived amounts round to it. 1 is the minor unit (paisa, cents); 10^decimals is whole units (a BDT store's default: 100, whole taka).
+             * The backup market's price increment in minor units of the currency (read-only here; Settings → Markets edits it): every price is a multiple of it and derived amounts round to it. 1 is the minor unit (paisa, cents); 10^decimals is whole units (a BDT store's default: 100, whole taka).
              */
             priceIncrementMinor: number;
             currencyCodeLocked: boolean;
@@ -30298,10 +30401,6 @@ export type PostApiV1AdminSettingsCurrencyData = {
         expectedRevision: number;
         currencyCode?: 'USD' | 'EUR' | 'GBP' | 'JPY' | 'CHF' | 'CAD' | 'AUD' | 'NZD' | 'CNY' | 'HKD' | 'SGD' | 'SEK' | 'NOK' | 'DKK' | 'MXN' | 'BRL' | 'BDT' | 'INR' | 'PKR' | 'LKR' | 'NPR' | 'AFN' | 'BTN' | 'MVR' | 'MYR' | 'PHP' | 'THB' | 'IDR' | 'VND' | 'MMK' | 'KHR' | 'LAK' | 'BND' | 'KRW' | 'TWD' | 'MNT' | 'KPW' | 'MOP' | 'AED' | 'SAR' | 'QAR' | 'KWD' | 'BHD' | 'OMR' | 'JOD' | 'IQD' | 'IRR' | 'YER' | 'LBP' | 'SYP' | 'ILS' | 'KZT' | 'UZS' | 'KGS' | 'TJS' | 'TMT' | 'GEL' | 'AMD' | 'AZN' | 'TRY' | 'RUB' | 'UAH' | 'PLN' | 'CZK' | 'HUF' | 'RON' | 'BGN' | 'HRK' | 'RSD' | 'BAM' | 'MKD' | 'ALL' | 'MDL' | 'BYN' | 'ISK' | 'ARS' | 'CLP' | 'COP' | 'PEN' | 'UYU' | 'PYG' | 'BOB' | 'VES' | 'GYD' | 'SRD' | 'TTD' | 'JMD' | 'BBD' | 'BSD' | 'BZD' | 'CRC' | 'CUP' | 'DOP' | 'GTQ' | 'HNL' | 'HTG' | 'NIO' | 'PAB' | 'AWG' | 'ANG' | 'KYD' | 'BMD' | 'XCD' | 'FKP' | 'NGN' | 'GHS' | 'XOF' | 'GMD' | 'GNF' | 'SLL' | 'LRD' | 'CVE' | 'MRU' | 'KES' | 'TZS' | 'UGX' | 'RWF' | 'BIF' | 'ETB' | 'SOS' | 'ERN' | 'DJF' | 'SDG' | 'SSP' | 'SCR' | 'KMF' | 'MGA' | 'MUR' | 'XAF' | 'CDF' | 'ZAR' | 'BWP' | 'LSL' | 'SZL' | 'NAD' | 'MWK' | 'ZMW' | 'MZN' | 'AOA' | 'ZWL' | 'EGP' | 'DZD' | 'MAD' | 'TND' | 'LYD' | 'STN' | 'FJD' | 'PGK' | 'WST' | 'TOP' | 'VUV' | 'SBD' | 'XPF' | 'XDR' | 'XAG' | 'XAU';
         currencySymbol?: string;
-        /**
-         * The store's price increment in minor units of the currency: every price is a multiple of it and derived amounts round to it. 1 is the minor unit (paisa, cents); 10^decimals is whole units (a BDT store's default: 100, whole taka).
-         */
-        priceIncrementMinor?: number;
     };
     path?: never;
     query?: never;
@@ -33856,6 +33955,308 @@ export type PutApiV1AdminSettingsShippingMethodsByIdResponses = {
 };
 
 export type PutApiV1AdminSettingsShippingMethodsByIdResponse = PutApiV1AdminSettingsShippingMethodsByIdResponses[keyof PutApiV1AdminSettingsShippingMethodsByIdResponses];
+
+export type GetApiV1AdminSettingsMarketsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/markets';
+};
+
+export type GetApiV1AdminSettingsMarketsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminSettingsMarketsError = GetApiV1AdminSettingsMarketsErrors[keyof GetApiV1AdminSettingsMarketsErrors];
+
+export type GetApiV1AdminSettingsMarketsResponses = {
+    /**
+     * Markets
+     */
+    200: {
+        success: true;
+        data: {
+            items: Array<Market>;
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsMarketsResponse = GetApiV1AdminSettingsMarketsResponses[keyof GetApiV1AdminSettingsMarketsResponses];
+
+export type PostApiV1AdminSettingsMarketsData = {
+    body: {
+        name: string;
+        /**
+         * Derived from the name when omitted.
+         */
+        handle?: string;
+        status?: 'draft' | 'active';
+        countries: Array<string>;
+        /**
+         * A subfolder presence such as `{ value: "en-in", locale: "en" }`.
+         */
+        presence?: {
+            value: string;
+            locale: string;
+        } | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/markets';
+};
+
+export type PostApiV1AdminSettingsMarketsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminSettingsMarketsError = PostApiV1AdminSettingsMarketsErrors[keyof PostApiV1AdminSettingsMarketsErrors];
+
+export type PostApiV1AdminSettingsMarketsResponses = {
+    /**
+     * The new market
+     */
+    201: {
+        success: true;
+        data: {
+            market: Market;
+        };
+    };
+};
+
+export type PostApiV1AdminSettingsMarketsResponse = PostApiV1AdminSettingsMarketsResponses[keyof PostApiV1AdminSettingsMarketsResponses];
+
+export type DeleteApiV1AdminSettingsMarketsByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query: {
+        expectedRevision: number;
+    };
+    url: '/api/v1/admin/settings/markets/{id}';
+};
+
+export type DeleteApiV1AdminSettingsMarketsByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type DeleteApiV1AdminSettingsMarketsByIdError = DeleteApiV1AdminSettingsMarketsByIdErrors[keyof DeleteApiV1AdminSettingsMarketsByIdErrors];
+
+export type DeleteApiV1AdminSettingsMarketsByIdResponses = {
+    /**
+     * Deleted
+     */
+    200: {
+        success: true;
+        data: {
+            id: string;
+        };
+    };
+};
+
+export type DeleteApiV1AdminSettingsMarketsByIdResponse = DeleteApiV1AdminSettingsMarketsByIdResponses[keyof DeleteApiV1AdminSettingsMarketsByIdResponses];
+
+export type GetApiV1AdminSettingsMarketsByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/settings/markets/{id}';
+};
+
+export type GetApiV1AdminSettingsMarketsByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminSettingsMarketsByIdError = GetApiV1AdminSettingsMarketsByIdErrors[keyof GetApiV1AdminSettingsMarketsByIdErrors];
+
+export type GetApiV1AdminSettingsMarketsByIdResponses = {
+    /**
+     * The market
+     */
+    200: {
+        success: true;
+        data: {
+            market: Market;
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsMarketsByIdResponse = GetApiV1AdminSettingsMarketsByIdResponses[keyof GetApiV1AdminSettingsMarketsByIdResponses];
+
+export type PatchApiV1AdminSettingsMarketsByIdData = {
+    body: {
+        expectedRevision: number;
+        name?: string;
+        handle?: string;
+        status?: 'draft' | 'active';
+        countries?: Array<string>;
+        /**
+         * Backup market: only the root's language. Other markets: the subfolder, or null to remove it.
+         */
+        presence?: {
+            value: string;
+            locale: string;
+        } | null;
+        /**
+         * Backup market only: 1 (minor units) or the currency's whole unit (100 for BDT).
+         */
+        priceIncrementMinor?: number;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/settings/markets/{id}';
+};
+
+export type PatchApiV1AdminSettingsMarketsByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PatchApiV1AdminSettingsMarketsByIdError = PatchApiV1AdminSettingsMarketsByIdErrors[keyof PatchApiV1AdminSettingsMarketsByIdErrors];
+
+export type PatchApiV1AdminSettingsMarketsByIdResponses = {
+    /**
+     * The saved market
+     */
+    200: {
+        success: true;
+        data: {
+            market: Market;
+        };
+    };
+};
+
+export type PatchApiV1AdminSettingsMarketsByIdResponse = PatchApiV1AdminSettingsMarketsByIdResponses[keyof PatchApiV1AdminSettingsMarketsByIdResponses];
 
 export type GetApiV1AdminSettingsDeliveryProvidersData = {
     body?: never;
