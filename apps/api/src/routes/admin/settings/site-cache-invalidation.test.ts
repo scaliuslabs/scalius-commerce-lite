@@ -995,7 +995,10 @@ describe("site settings write behavior", () => {
   it("restores versions and discards only through explicit draft CAS commands", async () => {
     const { app, env } = createTestApp();
     expect((await requestJson(app, env, "POST", "/theme/restore", { sourceRevision: 4, expectedDraftRevision: 8, basePublishedRevision: 6 })).status).toBe(200);
-    expect(mocks.restoreThemeVersion).toHaveBeenCalledWith({ id: "db" }, 4, 8, 6, null);
+    expect(mocks.restoreThemeVersion).toHaveBeenCalledWith({ id: "db" }, 4, 8, 6, null, { withoutMissingImages: false });
+    // Restoring without the images deleted from Files since is an explicit choice.
+    expect((await requestJson(app, env, "POST", "/theme/restore", { sourceRevision: 4, expectedDraftRevision: 8, basePublishedRevision: 6, withoutMissingImages: true })).status).toBe(200);
+    expect(mocks.restoreThemeVersion).toHaveBeenLastCalledWith({ id: "db" }, 4, 8, 6, null, { withoutMissingImages: true });
     expect((await requestJson(app, env, "POST", "/theme/discard", { expectedDraftRevision: 8, basePublishedRevision: 6 })).status).toBe(200);
     expect(mocks.discardThemeDraft).toHaveBeenCalledWith({ id: "db" }, 8, 6, null);
     expect(mocks.publishThemeDraft).not.toHaveBeenCalled();

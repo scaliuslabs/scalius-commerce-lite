@@ -5628,6 +5628,12 @@
           },
           "sections": {
             "$ref": "#/components/schemas/StorefrontSectionList"
+          },
+          "noIndex": {
+            "type": "boolean"
+          },
+          "excludeFromSitemap": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -106291,6 +106297,7 @@
           "Admin - Settings"
         ],
         "summary": "Put a published version in the draft (it goes live only when the draft is published)",
+        "description": "A version that names images deleted from Files since is refused with THEME_VERSION_IMAGES_MISSING (details.missingImages: how many); send withoutMissingImages to restore it without them (slides, cards and tiles showing one are left out, other images become empty).",
         "operationId": "dashboard.theme.version_restore",
         "requestBody": {
           "required": true,
@@ -106311,6 +106318,9 @@
                     "type": "integer",
                     "minimum": 0,
                     "exclusiveMinimum": true
+                  },
+                  "withoutMissingImages": {
+                    "type": "boolean"
                   }
                 },
                 "required": [

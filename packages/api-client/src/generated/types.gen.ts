@@ -1102,6 +1102,8 @@ export type StorefrontLandingPage = {
     title: string;
     description: string;
     sections: StorefrontSectionList;
+    noIndex?: boolean;
+    excludeFromSitemap?: boolean;
 };
 
 export type StorefrontStoreShape = {
@@ -30802,6 +30804,7 @@ export type PostApiV1AdminSettingsThemeRestoreData = {
         expectedDraftRevision: number;
         basePublishedRevision: number;
         sourceRevision: number;
+        withoutMissingImages?: boolean;
     };
     path?: never;
     query?: never;

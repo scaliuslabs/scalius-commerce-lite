@@ -3587,6 +3587,8 @@ export const postApiV1AdminSettingsThemePublish = <ThrowOnError extends boolean 
 
 /**
  * Put a published version in the draft (it goes live only when the draft is published)
+ *
+ * A version that names images deleted from Files since is refused with THEME_VERSION_IMAGES_MISSING (details.missingImages: how many); send withoutMissingImages to restore it without them (slides, cards and tiles showing one are left out, other images become empty).
  */
 export const postApiV1AdminSettingsThemeRestore = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminSettingsThemeRestoreData, ThrowOnError>): RequestResult<PostApiV1AdminSettingsThemeRestoreResponses, PostApiV1AdminSettingsThemeRestoreErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminSettingsThemeRestoreResponses, PostApiV1AdminSettingsThemeRestoreErrors, ThrowOnError>({
     url: '/api/v1/admin/settings/theme/restore',
