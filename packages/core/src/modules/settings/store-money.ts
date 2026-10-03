@@ -116,7 +116,11 @@ export function storePriceIncrementSql(): SQL<number> {
     deps.settings(currencyDocument.key, SETTINGS_DOCUMENT_ROW_KEY);
     const field = (path: string) => sql`CASE WHEN json_valid(${settings.value}) THEN json_extract(${settings.value}, ${sql.raw(`'${path}'`)}) END`;
     const code = sql`upper(trim(coalesce(${field("$.currencyCode")}, '')))`;
-    const saved = sql`CAST(${field("$.priceIncrementMinor")} AS TEXT)`;
+    // Only a JSON integer is an increment (a string "1" is not, as in TypeScript).
+    const saved = sql`CASE WHEN json_valid(${settings.value}) THEN CASE
+        WHEN json_type(${settings.value}, '$.priceIncrementMinor') = 'integer'
+            THEN CAST(json_extract(${settings.value}, '$.priceIncrementMinor') AS TEXT)
+    END END`;
     const wholeUnits = WHOLE_UNIT_INCREMENTS.map(({ increment, codes }) =>
         sql` WHEN ${saved} = ${sql.raw(`'${increment}'`)} AND ${code} IN (${sql.raw(codes)}) THEN ${sql.raw(String(increment))}`);
     const defaults = DEFAULT_INCREMENT_GROUPS.map(({ increment, codes }) =>

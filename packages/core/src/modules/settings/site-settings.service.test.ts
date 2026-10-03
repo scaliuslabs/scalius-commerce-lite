@@ -13,6 +13,8 @@ import {
   saveThemeDraft,
 } from "./site-settings.service";
 import { getBusinessSettings, saveBusinessSettings } from "./business-settings.service";
+import { getCurrencyConfig } from "./settings.service";
+import { readStoreCurrency, toStoreMinor } from "./store-money";
 
 function storeDocument(sqlite: ReturnType<typeof createSqliteD1Database>["sqlite"], category: string, value: string) {
   sqlite.prepare("INSERT INTO settings (id, key, value, type, category) VALUES (?, 'document', ?, 'json', ?)")
@@ -168,6 +170,33 @@ describe("site currency settings", () => {
       currencyCode: "BDT",
       currencySymbol: "Tk",
     });
+  });
+
+  it("saves the default market's price increment, keeps it on symbol edits and resets it with the currency", async () => {
+    const { db } = createSqliteD1Database();
+    // Nothing saved: a BDT store prices in whole taka.
+    await expect(getCurrencyConfig(db)).resolves.toMatchObject({ code: "BDT", priceIncrementMinor: 100 });
+
+    const paisa = await saveCurrencySettings(db, { priceIncrementMinor: 1 });
+    expect(paisa.priceIncrementChanged).toBe(true);
+    await expect(getCurrencyConfig(db)).resolves.toMatchObject({ code: "BDT", priceIncrementMinor: 1 });
+    await expect(readStoreCurrency(db)).resolves.toEqual({ code: "BDT", decimalPlaces: 2, priceIncrementMinor: 1 });
+    // Paisa prices are accepted now.
+    expect(toStoreMinor(150.5, await readStoreCurrency(db))).toBe(15_050);
+
+    const symbol = await saveCurrencySettings(db, { currencySymbol: "Tk" });
+    expect(symbol.priceIncrementChanged).toBe(false);
+    await expect(getCurrencySettings(db)).resolves.toEqual({ currencyCode: "BDT", currencySymbol: "Tk", priceIncrementMinor: 1 });
+
+    await expect(saveCurrencySettings(db, { priceIncrementMinor: 10 })).rejects.toBeInstanceOf(ValidationError);
+    // A new currency starts from its own default: whole dollars are not carried over from whole taka.
+    await saveCurrencySettings(db, { priceIncrementMinor: 100 });
+    await saveCurrencySettings(db, { currencyCode: "USD", currencySymbol: "$" });
+    await expect(getCurrencySettings(db)).resolves.toEqual({ currencyCode: "USD", currencySymbol: "$" });
+    await expect(getCurrencyConfig(db)).resolves.toMatchObject({ code: "USD", priceIncrementMinor: 1 });
+    await saveCurrencySettings(db, { priceIncrementMinor: 100 });
+    await expect(getCurrencyConfig(db)).resolves.toMatchObject({ code: "USD", priceIncrementMinor: 100 });
+    expect(() => toStoreMinor(12.5, { code: "USD", decimalPlaces: 2, priceIncrementMinor: 100 })).toThrow("USD amounts are whole numbers.");
   });
 });
 

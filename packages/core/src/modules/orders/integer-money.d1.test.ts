@@ -233,4 +233,38 @@ describe.each(["d1", "turso"] as const)("integer money (%s)", (provider) => {
     await expect(getStorefrontProducts(db, { minPrice: 0.87, maxPrice: 0.875 }))
       .resolves.toMatchObject({ products: [{ id: "tee", discountedPrice: 0.874 }] });
   });
+
+  it("prices in paisa once a taka store chooses to, everywhere a price is computed", async () => {
+    const db = open(provider);
+    sqlite!.exec(`
+      INSERT INTO media (id, filename, kind, object_key, size, mime_type, alt_text, status)
+      VALUES ('img', 'tee.jpg', 'image', 'products/tee.jpg', 1, 'image/jpeg', 'Tee', 'ready');
+      INSERT INTO products (id, name, slug, price_minor, discount_type, discount_bps, is_active)
+      VALUES ('tee', 'Tee', 'tee', 999, 'percentage', 1250, 1);
+      INSERT INTO product_media (id, product_id, media_id, alt_text, is_primary, sort_order)
+      VALUES ('pmed_tee_primary', 'tee', 'img', 'Tee', 1, 0);
+      INSERT INTO product_variants (id, product_id, sku, price_minor, stock, is_default, track_inventory)
+      VALUES ('tee_sku', 'tee', 'TEE-1', 999, 5, 1, 1);
+      INSERT INTO settings (id, key, value, type, category)
+      VALUES ('currency_doc', 'document', '{"currencyCode":"BDT","currencySymbol":"৳","priceIncrementMinor":1}', 'json', 'currency');
+    `);
+    await rebuildCatalogProjections(db);
+
+    // 999 × 0.875 = 874.125 paisa: half-up to the paisa, not to whole taka.
+    const feed = await getStorefrontFeedProducts(db, { limit: 10 });
+    expect(feed.products.map((product) => product.discountedPrice)).toEqual([8.74]);
+    await expect(getStorefrontProducts(db, { minPrice: 8.74, maxPrice: 8.74 }))
+      .resolves.toMatchObject({ products: [{ id: "tee", discountedPrice: 8.74 }] });
+    const cart = await validateStorefrontCartItems(db, [
+      { productId: "tee", variantId: "tee_sku", quantity: 1, price: 8.74, productName: "Tee", variantLabel: null },
+    ], { currencyCode: "BDT", priceIncrementMinor: 1 });
+    expect(cart.valid).toBe(true);
+    expect(cart.subtotalMinor).toBe(874);
+
+    // Back to whole taka: the rebuild (queued by the settings save) restores ৳9.
+    sqlite!.exec(`UPDATE settings SET value = '{"currencyCode":"BDT","currencySymbol":"৳","priceIncrementMinor":100}' WHERE id = 'currency_doc'`);
+    await rebuildCatalogProjections(db);
+    await expect(getStorefrontProducts(db, { minPrice: 9, maxPrice: 9 }))
+      .resolves.toMatchObject({ products: [{ id: "tee", discountedPrice: 9 }] });
+  });
 });
