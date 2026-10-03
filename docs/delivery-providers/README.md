@@ -1,20 +1,32 @@
-# Delivery provider knowledge base
+# Delivery providers
 
-Last verified: **2026-09-09**
+Courier reference for operators who connect a courier and contributors who change a courier adapter: credentials, calls, status maps, webhooks and test steps. Runtime behavior (readiness, booking, unknown outcomes, status sync) is owned by the [delivery domain README](../../packages/core/src/modules/delivery/README.md).
 
-This folder records courier contracts and dated live observations that are useful when operating or changing Scalius delivery integrations. The runtime authority remains [`packages/core/src/modules/delivery`](../../packages/core/src/modules/delivery/README.md).
+| Courier | `type` | Auth | Webhook callback | Lookup by order id | Reference |
+|---------|--------|------|------------------|--------------------|-----------|
+| Pathao | `pathao` | OAuth password grant | `/api/v1/webhooks/pathao` | none | [pathao.md](pathao.md) |
+| Steadfast | `steadfast` | `Api-Key` and `Secret-Key` headers | `/api/v1/webhooks/steadfast` | by invoice | [steadfast.md](steadfast.md) |
+| Courier app | `<plugin id>:<provider id>` | the app's own settings | `/api/v1/webhooks/couriers/{id}`, when the app implements `verifyWebhook` | when the app implements `findShipment` | the app; adapter in `apps/api/src/plugins/providers/courier.ts` |
 
-- [Pathao](pathao.md) — sandbox/production environments, OAuth, stores, locations, booking, status, and webhook behavior.
-- [Steadfast](steadfast.md) — production API, API-key auth, invoice lookup limits, and portal webhook contract.
-- Courier apps — an installed app that implements the courier port (`<plugin id>:<provider id>`). The merchant adds it under Settings → Shipping → Couriers; its keys live in the app's own settings, its readiness and connection test come from the app, and its tracking pushes arrive at `POST /api/v1/webhooks/couriers/{id}` when the app verifies them. Every rule below applies to it unchanged (owning code: [`apps/api/src/plugins/providers/courier.ts`](../../apps/api/src/plugins/providers/courier.ts)).
+The merchant adds a courier under Settings, Shipping, Couriers. A courier app keeps its keys in its own settings. Its readiness and connection test come from the app. Every rule below applies to it too.
 
-## Shared Scalius rules
+## Shared rules
 
-- A provider is usable only when its saved credentials/config match a successful live test and the row is active. A friendly name such as “Demo” does not change the endpoint or make a production API a sandbox.
-- API credentials and webhook authentication secrets are different authorities. Save and rotate each in its provider field; never substitute one for the other.
-- Provider credentials are merchant settings, never environment variables. They are stored encrypted with the installed `CREDENTIAL_ENCRYPTION_KEY`, so rotating that key makes every saved provider credential unreadable and each one must be re-entered in the dashboard.
-- Shipment creation is insert-first and order-claim guarded. Retry only after an explicit rejection. A timeout, malformed response, server error, or incomplete success identity is an unknown outcome and keeps the order locked until positive provider evidence or accountable merchant confirmation resolves it.
-- Never infer absence from a 404, failed lookup, unknown status, or arbitrary consignment ID. Never attach an ID unless evidence binds it to the original provider and order.
-- Provider failures must expose bounded status/field information only. Do not log credentials, raw provider responses, buyer contact data, addresses, or webhook bodies.
+- Courier credentials are dashboard data, never environment variables. They are encrypted with `CREDENTIAL_ENCRYPTION_KEY`. Rotating that key makes every saved credential unreadable, so re-enter each one.
+- A courier works only when its row is active and its saved setup passed a live test. Editing a credential or setting clears the proof. A sandbox pass proves the request path only, not production approval.
+- API credentials and the webhook secret are different. Save each in its own field.
+- Retry a booking only after an explicit rejection. An unknown outcome keeps the order locked until the courier confirms or the merchant attests (delivery README).
+- Never infer "not booked" from a 404, a failed lookup or an unknown status. Never attach an id without evidence that binds it to the original provider and order.
+- Never log credentials, courier responses, buyer contact data, addresses or webhook bodies.
 
-Owning code: [`delivery.service.ts`](../../packages/core/src/modules/delivery/delivery.service.ts), [`fulfilment/`](../../packages/core/src/modules/fulfilment/), [`provider-readiness.ts`](../../packages/core/src/modules/delivery/provider-readiness.ts), and [`delivery.create-outcome.d1.test.ts`](../../packages/core/src/modules/delivery/delivery.create-outcome.d1.test.ts).
+## Webhook verification
+
+The webhook routes accept no session. `verifyDeliveryWebhook()` (`apps/api/src/middleware/webhook-auth.ts`) is the only authentication:
+
+1. Exactly one active provider row of the courier type must exist. None, or more than one, fails closed with 401.
+2. The row's credentials must be readable with `CREDENTIAL_ENCRYPTION_KEY`.
+3. The secret is `credentials.webhookSecret`. When that key is absent (not empty), the API uses `credentials.secretKey` instead, so save a separate `webhookSecret`. Pathao sends it in the `X-PATHAO-Signature` header. Steadfast sends it as `Authorization: Bearer <secret>`. Both are compared in constant time.
+4. Without a secret, the request IP (`CF-Connecting-IP`) must be in `config.allowedWebhookIps`.
+5. Without a secret and without an allowlist, the request is rejected.
+
+Each route then scopes the shipment lookup to the verified provider id and type, deduplicates the event in `webhook_events`, and runs the pipeline described in the delivery README.

@@ -1,130 +1,61 @@
-# Firebase (FCM Push Notifications)
+# Firebase (FCM push)
 
-Firebase Cloud Messaging integration for sending push notifications to admin dashboard browsers. Replaces the `firebase-admin` Node.js SDK with direct REST API calls compatible with Cloudflare Workers.
+Firebase Cloud Messaging sends push notifications to admin dashboard browsers. The server calls the FCM HTTP v1 REST API directly with Web Crypto. It does not use the Node.js `firebase-admin` SDK. This document is for contributors and operators. Which events push, and how receipts and pauses work, is in the [notifications README](../../modules/notifications/README.md).
 
-## Connection Status
+## Flow
 
-| Component | Status |
-|-----------|--------|
-| `admin.ts` -- Server-side FCM REST API client | Fully implemented |
-| Browser SDK init + token registration (`apps/admin-v2/src/hooks/use-firebase-init.ts`) | Fully implemented |
-| Service worker for background notifications | Fully implemented |
-| FCM token registration API endpoint | Fully implemented |
-| FCM token storage in DB (`adminFcmTokens` table) | Fully implemented |
-| Admin settings UI for Firebase config | Fully implemented |
-| Calling `sendOrderNotification()` on new orders | Connected via queue consumer |
+1. The merchant opens Settings > Notifications (`/admin/settings/notifications`) > Sending > Push (`PushFields` in `apps/admin-v2/src/components/admin/settings/NotificationSettings.tsx`) and saves the service account JSON and the web app config.
+2. A staff member selects "Turn on" in the dashboard notification menu (`NotificationDropdown.tsx`). That calls `useFirebaseInit` (`apps/admin-v2/src/hooks/use-firebase-init.ts`).
+3. The hook reads the public config from `GET /api/v1/auth/firebase-config`. It needs `apiKey` and `vapidKey`. Without them the status is `unconfigured`.
+4. The hook asks for browser notification permission, loads `@firebase/app` and `@firebase/messaging` on demand and registers the service worker `apps/admin-v2/public/firebase-messaging-sw.js`. The public config travels in the script URL query (without `vapidKey`). The worker scope is the dashboard base path.
+5. It gets an FCM token and sends it to `POST /api/v1/admin/fcm-token`.
+6. For each notification the API Worker sends one FCM request per active token (`sendOrderNotification()` and the other senders in the notifications domain).
+7. In the foreground the dashboard shows a toast, plays `/alert.mp3` and dispatches an `admin-notification` event. In the background the service worker shows the notification.
 
-### What Works
+## Credentials
 
-If Firebase is configured (service account JSON + public config + VAPID key in settings DB), the admin dashboard will:
-1. Lazy-load Firebase client SDK via `requestIdleCallback` (3s timeout fallback)
-2. Request browser notification permission
-3. Obtain an FCM token and register it via `POST /api/v1/admin/fcm-token`
-4. Listen for foreground messages and show custom toast notifications with sound (`/alert.mp3`)
-5. Register a service worker (`firebase-messaging-sw.js`) for background notifications
+The `firebase` settings document (`firebaseDocument` in `packages/core/src/modules/settings/documents.ts`):
 
-The queue consumer calls `sendOrderNotification()` on new orders, which sends FCM push to all registered admin tokens.
+| Field | Meaning |
+|---|---|
+| `serviceAccount` | Service account JSON. A secret, encrypted at rest with `CREDENTIAL_ENCRYPTION_KEY`. |
+| `publicConfig` | Web app config (`apiKey`, `authDomain`, `projectId`, `storageBucket`, `messagingSenderId`, `appId`, `vapidKey`, optional `measurementId`). Not secret. |
 
-## Files
+- The dashboard is the only source of the service account. There is no environment variable.
+- A service account must have non-empty `client_email`, `private_key` and `project_id`. `normalizeFirebaseServiceAccountJson()` rejects anything else.
+- `readFirebaseServiceAccountJson()` returns `undefined` for a missing or unusable account. It never throws. Never call FCM with unreadable ciphertext, and never fall back to a JWT secret.
+- `getFirebaseServiceAccountReadiness()` returns `missing_firebase_service_account` or `unusable_firebase_service_account`. The notification settings use it before they allow push.
 
-### `admin.ts` -- Server-Side FCM REST API
+## Server client (`admin.ts`)
 
-A custom FCM implementation for Cloudflare Workers (no Node.js `firebase-admin` SDK). Handles:
+- `getFirebaseAdminMessaging(env, serviceAccountJson)` builds a new `FCMMessagingService` per call. It throws `ServiceUnavailableError` when the JSON is empty.
+- Auth: an RS256 JWT with scope `https://www.googleapis.com/auth/firebase.messaging`, exchanged at `https://oauth2.googleapis.com/token`.
+- Token cache: memory per instance, and KV `CACHE` only when `CREDENTIAL_ENCRYPTION_KEY` is present. The KV value is an `enc:` AES-GCM string with a 3300 s TTL. The key is `scalius:fcm_access_token:<project_id>:<24-hex fingerprint of the service account>`. A rotated private key changes the fingerprint.
+- Send: `sendEachForMulticast()` makes one request per token to `https://fcm.googleapis.com/v1/projects/<project_id>/messages:send`. `FCM_SEND_CONCURRENCY` is a fixed 8.
+- Retry: up to 3 attempts for HTTP 429 and 5xx. Backoff is `2^attempt` seconds plus up to 1 s of jitter. `Retry-After` overrides it.
+- `admin.ts` maps the FCM status to a `messaging/*` error code (for example `UNREGISTERED` -> `messaging/registration-token-not-registered`). Anything unknown becomes `messaging/unknown-error`.
 
-- **JWT creation**: Builds RS256 JWTs using Web Crypto API (`crypto.subtle`) for Google OAuth2 token exchange
-- **OAuth2 token management**: Exchanges JWT for Google access token via `https://oauth2.googleapis.com/token`. Uses per-instance memory for the current token and writes to `CACHE` only when `CREDENTIAL_ENCRYPTION_KEY` is present; persisted values are `enc:` AES-GCM strings with a 3300s TTL. Legacy plaintext KV reads remain tolerated when the dedicated key is available, but new writes never persist raw bearer tokens.
-- **FCM v1 API**: Sends messages via `https://fcm.googleapis.com/v1/projects/{projectId}/messages:send`
-- **Bounded fanout**: Sends one FCM v1 request per token with bounded concurrency. `FCM_SEND_CONCURRENCY` is a fixed constant (8) exported from `admin.ts` -- not a merchant setting or environment variable. Response order is preserved so invalid-token cleanup can safely map responses back to the original token list.
-- **Retry logic**: Up to 3 retries for 429/5xx errors with exponential backoff + Web Crypto jitter. Respects `Retry-After` header.
-- **PEM parsing**: Converts PEM private key to ArrayBuffer for Web Crypto, handles formatting issues from env vars (leading/trailing quotes, literal newlines)
+## Routes
 
-#### Interfaces
+| Method and path | Auth |
+|---|---|
+| `GET /api/v1/auth/firebase-config` (`publicConfig` only) | public |
+| `GET /api/v1/admin/settings/firebase` (masked service account, `publicConfig`, `revision`) | `settings.notifications.edit` |
+| `POST /api/v1/admin/settings/firebase` (saves both with `expectedRevision`) | `settings.notifications.edit` |
+| `POST /api/v1/admin/fcm-token` (registers a token) | any admin session |
+| `POST /api/v1/admin/fcm-token-cleanup` (deactivates tokens) | `settings.notifications.edit` |
 
-```typescript
-interface ServiceAccount {
-  client_email: string;
-  private_key: string;
-  project_id: string;
-}
-```
-
-```typescript
-interface FCMMessage {
-  notification?: { title?: string; body?: string; image?: string };
-  data?: { [key: string]: string };
-  webpush?: { fcmOptions?: { link?: string }; notification?: { badge?: string } };
-  token: string;
-}
-```
-
-Key exports:
-- `FCMMessagingService` -- Class with `sendEachForMulticast(payload)` method. Sends with bounded concurrency and maps error codes to `messaging/*` format (e.g., `UNREGISTERED` -> `messaging/registration-token-not-registered`). All catch blocks use typed `error: unknown`.
-- `getFirebaseAdminMessaging(env, serviceAccountJson?)` -- Factory function; always constructs a fresh `FCMMessagingService` for the call (cheap; the encrypted OAuth access token is shared safely through the request's KV binding instead). Throws `ServiceUnavailableError` if `serviceAccountJson` is missing or empty -- there is no other credential source.
-- `settings.ts` -- `readFirebaseServiceAccountJson(db, encryptionKey?)` reads the encrypted `firebase`/`service_account` row, decrypts `enc:` values, tolerates legacy plaintext rows on read, and returns `undefined` (never throws) when the row is missing or unusable so callers can report readiness instead of crashing. `getFirebaseServiceAccountReadiness(db, encryptionKey?)` is the merchant-facing check used before enabling admin push.
-
-The service account has exactly one source: the encrypted `firebase`/`service_account` row saved from the dashboard (Settings -> Notifications -> Push setup, `FirebaseSettingsForm.tsx`). There is no environment-variable fallback; `FIREBASE_SERVICE_ACCOUNT_CRED_JSON` does not exist in code.
-
-Required fields in service account JSON: `client_email`, `private_key`, `project_id`.
-
-The browser side (Firebase SDK init, token registration, foreground messages) lives in the admin app: `apps/admin-v2/src/hooks/use-firebase-init.ts`.
-
-## Admin Dashboard Integration
-
-### Public config (`apps/admin-v2/src/lib/api-query-options/firebase.ts`)
-
-A React Query option that reads `GET /api/v1/auth/firebase-config` and
-normalizes it to `Record<string, string>`. No env-var default or merge: an
-unset field is simply absent from the result.
-
-### `/firebase-messaging-sw.js` (`apps/admin-v2/public/firebase-messaging-sw.js`)
-
-A static service worker. The dashboard registers it with the public Firebase
-config (never a secret; `vapidKey` omitted) in the script URL's query string:
-1. Without an `apiKey` it initializes nothing.
-2. Otherwise it imports the Firebase compat SDK (v9.15.0) and initializes messaging.
-3. Handles `onBackgroundMessage`: Shows browser notification with order details and a link below the registration scope (so a dashboard base path is kept).
-4. Handles `notificationclick`: Focuses an existing admin tab or opens a new window to the order URL.
-
-## API Endpoints
-
-### `GET /api/v1/auth/firebase-config`
-Returns public Firebase config from DB settings table (category `firebase`, key `public_config`). Used by the dashboard's push-notification setup.
-
-### `POST /api/v1/admin/fcm-token`
-Registers an FCM token for push notifications. Validates user ownership. Upserts into `adminFcmTokens` table (conflict on unique `token` column).
-
-### `POST /api/v1/admin/fcm-token-cleanup`
-Deactivates invalid tokens and tokens unused for 30+ days.
-
-### `GET /api/v1/admin/settings/firebase`
-Returns Firebase config status: masked service account presence and public config object.
-
-### `POST /api/v1/admin/settings/firebase`
-Saves service account JSON and/or public config. Non-empty service-account saves require `CREDENTIAL_ENCRYPTION_KEY`, validate `client_email`, `private_key`, and `project_id`, then store an encrypted `enc:` value. Masked service-account values are skipped; empty values clear the stored credential. Invalidates `layoutCache` for `FIREBASE_CONFIG` key.
+- A stale `expectedRevision` returns 409.
+- A masked service account value is ignored. An empty value clears it. A new value needs `CREDENTIAL_ENCRYPTION_KEY` (503 without it).
+- A service account change clears the `push` provider pause markers in the same batch.
+- `fcm-token` needs `userId` equal to the session user (403 otherwise). It upserts on the unique `token` and sets `is_active` to true.
+- `fcm-token-cleanup` takes 1 to 10 `invalidTokens` and deactivates them. It also deactivates tokens whose `last_used` is empty or older than 30 days.
 
 ## Database
 
-`adminFcmTokens` table (`packages/database/src/schema/system.ts`):
-- `id` (text, PK)
-- `userId` (text, not null)
-- `token` (text, not null, unique)
-- `deviceInfo` (text, nullable) -- JSON string with browser, user agent, URL, timestamp
-- `isActive` (boolean, default true)
-- `lastUsed` (timestamp)
-- `createdAt` / `updatedAt` (timestamps)
+Table `admin_fcm_tokens` (`packages/database/src/schema/system.ts`): `user_id`, unique `token`, `device_info` (JSON text), `is_active`, `last_used`.
 
-Firebase settings in `settings` table:
-- `service_account` (category `firebase`) -- Encrypted `enc:` AES-GCM service account JSON for new writes; legacy plaintext rows remain read-compatible only
-- `public_config` (category `firebase`) -- JSON with apiKey, authDomain, projectId, etc.
+## Limits
 
-## Dependencies
-
-- `@firebase/app`, `@firebase/messaging` -- Client-side SDK, declared and dynamically imported by the admin app (`use-firebase-init.ts`)
-- Web Crypto API (`crypto.subtle`) -- JWT signing on server (available in Cloudflare Workers)
-- `CACHE` KV namespace -- Optional, for encrypted Google OAuth token caching when `CREDENTIAL_ENCRYPTION_KEY` is configured
-
-## Operations
-
-- `FCM_SEND_CONCURRENCY` (fanout of 8) is a fixed constant in `admin.ts`, not a merchant setting or environment variable. Changing it requires a code change and redeploy.
-- The FCM OAuth access-token KV cache key is prefixed with the fixed literal `scalius:` (`FCM_TOKEN_CACHE_PREFIX` in `admin.ts`) rather than a configurable/environment prefix -- this deployment owns exactly one KV namespace per environment, so there is nothing to disambiguate.
-- Current admin browser push is Firebase FCM only. A first-party Web Push provider remains the Cloudflare-native fallback target; do not describe admin push as Cloudflare-native until that exists.
+- The service worker loads the Firebase compat SDK 9.15.0 from `gstatic.com`.
+- Admin push is Firebase only. There is no first-party Web Push provider. Do not describe admin push as Cloudflare-native.

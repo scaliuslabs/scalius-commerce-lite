@@ -1,143 +1,52 @@
 # Storefront
 
-Batched D1 queries for the public storefront API. Shapes homepage and layout data for the storefront app in minimal round-trips.
+The orchestrator for the public storefront reads: the homepage, landing pages, the layout, CMS page render data, the product-page app blocks and the store shape that drives theme fit rules. It composes lower domains and adds no table. Read this before you change what a storefront page loads or how many D1 round trips it costs.
 
-## Files
+## Entries and layer
 
-- `index.ts` -- barrel exports (re-exports everything from `storefront.service.ts`)
-- `storefront.service.ts` -- `getHomepageData()`, `getLayoutData()`
-- `homepage-sections.ts` -- the homepage section images and deal countdowns, planned into the homepage's second batch (catalog lists and brands live in `catalog/home-lists.ts` and `catalog/home-brands.ts`)
+`index.ts` is the only entry. There is no `browser.ts`. It exports:
 
-## Local Helpers
+- `storefront.service.ts`: `getHomepageData`, `getLandingPageData`, `getPageRenderData`, `getLayoutData` and their result types.
+- `store-shape.ts`: `selectStoreShapeCounts`, `storeShapeFromCounts`, `readStoreShape`.
+- `product-apps.ts` and `app-render.ts`: `readProductAppContext`, `planPluginRenderStoreFacts`, `readPluginRenderContext`.
+- `homepage-sections.ts`: `readThemeBrandAssets`, `readThemeMedia`, `HomeMediaAsset`.
 
-- `safeJsonParse<T>(json, fallback)` -- JSON.parse with fallback on null/undefined/error
-- `unixToISO(timestamp)` -- converts Unix epoch seconds to ISO 8601 string; returns null for invalid values
+Layer L9. The domain imports `analytics`, `catalog`, `categories`, `collections`, `navigation`, `pages`, `platform`, `plugins` and `settings`. Nothing in core imports `storefront`; only API routes call it (`apps/api/src/routes/storefront.ts`, `routes/admin/settings/site.ts`, `plugins/storefront-render.ts`).
 
-## Service Functions
+## Owns
 
-### `getHomepageData(db, { requests? })`
+The domain owns no table and declares no settings document. It reads the published theme (`theme_settings`, row `default`), `analytics`, `checkout_languages`, `promotions`, `media`, `categories`, `collections` and `product_buyer_state`, and the settings documents `currency`, `media`, `metaConversions`, `seo`, `business`, `security`, `policies` and `platform`.
 
-Fetches and shapes all homepage data in **two batched D1 round trips**
-(`apps/api/src/storefront-render-budget.test.ts` measures it on a store
-whose theme uses every section type).
+DVC: readers declare their dependencies where they load data. The homepage declares `deps.theme()` and `deps.anyCollection()`, the layout `deps.analytics()`, `deps.theme()` and `deps.checkoutLanguages()`. The store shape declares the any-row keys of categories, brands, attributes and collections, shipping, the `emi` document and `t:product_content_blocks`. Catalogue and navigation reads add their own keys.
 
-**Batch 1**: the `seo` settings document, active collections (metadata) and
-the published theme row. The theme alone says what to read: its sections
-and home mode (`homeSectionRequests(theme.pages.home, theme.pages.homeMode)`
-in `@scalius/shared/storefront-theme`); a theme preview passes `requests`
-for its draft instead.
+## Routes
 
-**Batch 2** (one `db.batch`, skipped when nothing needs it):
-- `planCollectionProducts()` (`catalog/collections.ts`): products of the
-  collections sections' collections and of collection-sourced section lists;
-- `planHomeProductLists()` (`catalog/home-lists.ts`): newest, on sale,
-  popular (distinct buyers in real orders of 30 days) and category lists;
-- `planHomeBrands()` (`catalog/home-brands.ts`): public brands with public products;
-- `planHomePromotions()` (`homepage-sections.ts`): running promotions' end times;
-- `planHomeMedia()` (`homepage-sections.ts`): section images, hero slides and
-  their phone images included (ready or trashed images only, at their
-  published rendition);
-- the category tiles' published categories, in the sections' order;
-- a product homepage's product, while it is public.
+All routes are in `apps/api/src/routes/storefront.ts` under `/api/v1/storefront`.
 
-Every product statement is scoped to the products it returns (the buyer
-pricing projection never ranks the whole catalogue) and brings a media
-statement for exactly the same rows, so card images need no third round
-trip. `products.catalog-scale-plans.d1.test.ts` guards the query plans.
+| Method and path | Note |
+|-----------------|------|
+| `GET /homepage` | `getHomepageData`. Takes no query string |
+| `GET /landing/{slug}` | A theme landing page's sections |
+| `GET /product-apps/{slug}` | `readProductAppContext`, then the apps draw the blocks |
+| `GET /pages/slug/{slug}` | `getPageRenderData` |
+| `GET /layout` | `getLayoutData`, plus the public Platform origins |
+| `GET /batch?r=<path>&r=...` | At most 8 public reads of one page render. Each part is answered as its own GET would, from the dependency-validated cache. The batch itself is never cached |
+| `GET /frontier`, `POST /frontier/check` | Cache change frontier for the storefront page cache. Authenticated with the storefront's frontier key; not public contract |
+| `POST /theme-preview/resolve`, `/theme-preview/homepage`, `/theme-preview/product-apps/{slug}` | Theme preview reads |
 
-Returns: `{ seo, sections: { lists, media, brands, promotions, categories, collections, homeProduct } }`.
+How a page renders from one batch, the per-page API and D1 budgets and `pnpm perf:storefront` are in [`docs/STOREFRONT-PERFORMANCE.md`](../../../../../docs/STOREFRONT-PERFORMANCE.md).
 
-- **SEO**: unset copy stays null (the storefront titles the page with the store name).
-- **Collections**: the collections sections' collections that are active and have products, with `categories`, `products` and `featuredProduct`.
-- **Section lists**: one per source key, in request order, with the public category or active collection it reads (for titles and "View all"); a list with nothing to show is empty, and its sections render nothing.
-- **Home product**: `{ id, slug }` while a product homepage's product is public; the storefront answers `/` with a redirect to its page.
+## Rules
 
-### `getLayoutData(db)`
-
-Fetches and shapes all layout data in **two batched D1 round trips**:
-
-1. Analytics scripts, the settings documents it projects (currency, media
-   delivery, Meta CAPI readiness, SEO discovery, business identity,
-   security, policies), the published theme (parsed strictly; an unreadable
-   row renders the default theme whole), the active checkout language, the
-   store-shape counts, the reachable category tree, the published theme's
-   brand images (logo, footer logo, tab icon) through the stored theme row,
-   and the placed menus (`planPublishedNavigationPlacements`: the placement
-   manifest and the published items of every placed menu).
-2. The pages the linked store policies name (`planPublicStorePolicies`) and
-   every resource the menu items link to (`planNavigationResourceSnapshots`,
-   at most 90 IDs per statement). Skipped when there are none.
-
-Meta CAPI readiness decrypts the access token only when the stored document
-turns the pixel on. `storefront-render-budget.test.ts` holds a layout with
-header and footer menus and linked policies to these two waves.
-
-Returns: `{ analytics, navigation, footerMenus, categoryTree, currency, theme, brand, storeShape, media, metaCapi, business, seo, cspAllowedDomains, storefrontCopy, policies }`.
-The look (logo, announcement, footer words) is the theme document and
-`brand`; identity (name, phone, email, address, `socialLinks`) is `business`.
-
-**Analytics processing**: Each active analytics script is assigned an effective delivery policy by `shouldUsePartytown()`. GA4, GTM, Facebook Pixel, and TikTok are always worker-isolated even when a legacy stored flag is false; Cloudflare Web Analytics stays on the main thread; trusted custom code respects its saved choice. Worker-isolated snippets are normalized through `processAnalyticsScript()` and the response exposes the effective policy.
-
-**Currency**: Reads `currency_code`, `currency_symbol`, `usd_exchange_rate` from the settings table. Defaults to BDT.
-
-**Theme**: The published theme document (`theme_settings`), or the default theme when the row is unreadable; `brand` carries its resolved brand images.
-
-**SEO discovery**: Reads the default-on sitemap/feed/robots/JSON-LD policy from the `seo` settings document (`discovery`) plus its merchant return-policy schema settings (`returnPolicy`). Layout consumers use this to gate global OnlineStore, WebSite, and MerchantReturnPolicy JSON-LD without a second storefront API read. Product pages use the same policy plus active shipping methods to emit offer-level shipping schema when enabled. Return-policy JSON-LD is emitted only when the saved policy is enabled and has schema-safe country/category/window facts or a safe same-origin/absolute policy URL.
-
-## API Endpoints
-
-### Public Storefront (`/api/v1/storefront`)
-| Method | Path | Description | Cache |
-|--------|------|-------------|-------|
-| GET | `/homepage` | The published theme's homepage data (SEO and what its sections show) | `PublicApi` edge cache keyed by the store cache generation and the API Worker version |
-| GET | `/pages/slug/{slug}` | Consolidated CMS page render data | `PublicApi` edge cache keyed by the store cache generation and the API Worker version |
-| GET | `/layout` | Consolidated layout data (analytics, nav, footer menus, currency, theme and its brand images, media, Meta CAPI readiness, public business identity and social profiles, SEO discovery, public platform origins, merchant CSP sources) | `PublicApi` edge cache keyed by the store cache generation |
-
-### Public SEO (`/api/v1/seo`)
-| Method | Path | Description | Cache |
-|--------|------|-------------|-------|
-| GET | `/` | Get SEO settings (siteTitle, homepageTitle, homepageMetaDescription, robotsTxt, default-on discovery policy, and merchant return-policy schema settings) | `PublicApi` edge cache keyed by the store cache generation |
-
-### Public Checkout (`/api/v1/checkout`)
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/config` | Returns checkout config including `allowedCountries`, `allowedCountriesMode`, and `currency` with `decimalPlaces` |
-
-### Public Checkout Languages (`/api/v1/checkout-languages`)
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/active` | Get active checkout language. Falls back to default, then hardcoded English fallback with 30+ label strings. Includes `customerPhoneHelp` field |
-| GET | `/` | List all languages with pagination, search, sort, trashed filter |
-| POST | `/` | Create language. Auto-deactivates other active/default languages when setting isActive/isDefault |
-| GET | `/{id}` | Get language by ID |
-| PUT | `/{id}` | Update language. Enforces unique code constraint |
-| PATCH | `/{id}` | Soft-delete (sets deletedAt) |
-| DELETE | `/{id}` | Hard-delete (204 No Content) |
-| POST | `/{id}/restore` | Restore soft-deleted language |
-
-### Public Abandoned Checkouts (`/api/v1/abandoned-checkouts`)
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/` | Save/update abandoned checkout (upsert by checkoutId) |
-| POST | `/cleanup` | Delete checkout record after successful order (auth-protected) |
-
-### Cache Management (`/api/v1/cache`)
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/clear` | "Refresh store": starts a new public cache generation (`bumpCacheGeneration`). Saves already do this; there are no purges or groups |
-
-## Storefront Consumers
-
-- `apps/storefront/src/lib/api/storefront.ts` -- `getHomepageData()` and `getLayoutData()` wrappers with edge cache (BUILD_ID in cache key)
-- `apps/storefront/src/lib/api/settings.ts` -- `getSeoSettings()`, `getAnalyticsConfigurations()`, `getActiveCheckoutLanguage()` with edge cache
-
-## Dependencies
-
-- `@scalius/database` -- `categories`, `collections`, `media`, `theme_settings`, `analytics`, `pages`, `settings`
-- `../analytics` -- `processAnalyticsScript()`, `shouldUsePartytown()`
-- `../catalog` -- `resolveCollectionProductsBatch()`
-
-## Known Gaps
-
-- Public SEO route at `/api/v1/seo` still overlaps with the SEO payload inside the consolidated homepage endpoint.
-- Abandoned checkouts cleanup endpoint requires auth middleware, but the save endpoint does not.
+- **Two D1 round trips.** The homepage and the layout each read in two batches. `apps/api/src/storefront-render-budget.test.ts` holds both to that budget on a store whose theme uses every section type.
+- **The theme says what to read.** `homeSectionRequests(theme.pages.home, theme.pages.homeMode)` (`@scalius/shared/storefront-theme`) names the lists, images, categories, collections, brands, promotions and app sections. A theme preview passes its draft's `requests` instead.
+- **Homepage batch 1:** the `seo` document, the active collections and the published theme. **Batch 2:** `planCollectionProducts`, `planHomeProductLists` and `planHomeBrands` (all `catalog`), `planHomeMedia`, `planHomePromotions`, the category tiles' published categories and a product homepage's product. Every product statement is scoped to its own rows and carries a media statement for the same rows, so cards need no third round trip.
+- **Homepage result:** `{ seo, sections: { lists, media, brands, promotions, categories, collections, homeProduct, apps } }`. Unset SEO copy stays null. A list with nothing to show is empty, and its section renders nothing. `homeProduct` is `{ id, slug }` only while a product homepage's product is public; the storefront then redirects `/` to it.
+- **Layout batch 1:** analytics scripts, the settings documents it projects, the published theme, the active checkout language, the store shape counts, the reachable category tree, the theme's brand images, active app installations and the placed menus. **Batch 2:** the pages the linked store policies name and the resources the menu items link to (skipped when there are none).
+- **Layout result:** `analytics`, `navigation`, `footerMenus`, `categoryTree`, `currency`, `theme`, `brand`, `storeShape`, `media`, `metaCapi`, `business`, `seo` (`discovery`, `returnPolicy`, `socialImage`), `cspAllowedDomains`, `storefrontCopy`, `policies` and `appScripts`. The look (logo, announcement, footer words) is the theme document and `brand`. Identity (name, phone, email, address, social links) is `business`.
+- **Theme.** The storefront renders a stored theme whole or the default theme whole, never a mix. An unreadable stored theme logs a warning and renders the default.
+- **Navigation failure is local.** A corrupt placement or menu logs a warning and renders without that navigation. It does not fail the page.
+- **Analytics.** The layout drops scripts that are not publicly injectable and applies `shouldUsePartytown` and `processAnalyticsScript` from `analytics`.
+- **Meta CAPI.** `metaCapi.browserEventsEnabled` is true only for an enabled pixel with a readable access token. The token is decrypted (with `credentialEncryptionKey`) only when the stored document turns the pixel on.
+- **Apps.** App sections draw beside batch 2. A failed draw returns no section and sets `deps.validUntil` 60 seconds ahead, so the page retries.
+- **Store shape.** `selectStoreShapeCounts` is one statement that joins the layout batch. Counts read at most 1,000 rows and existence checks stop at the first match. Category facts count only what a buyer can reach: a published category with all ancestors published and a public product (`product_buyer_state.is_public`).

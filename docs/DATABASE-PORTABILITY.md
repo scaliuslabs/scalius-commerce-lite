@@ -1,522 +1,176 @@
-# Database Portability and Cutover
+# Database portability and cutover
 
-Scalius exposes one provider-neutral commerce model through three operational
-database tiers:
+This page covers the three database providers Scalius runs on (Cloudflare D1, TursoDB and PostgreSQL), how the API Worker selects one, and the runbook that moves a live store between them. It is for operators who run a cutover and contributors who touch provider code. [packages/database/README.md](../packages/database/README.md) owns the per-command reference, the migration files and the `migration-plan` contract.
 
-- Cloudflare D1 is the default starter. It has the lowest provisioning and
-  operational complexity and remains suitable for most merchants for a long
-  time.
-- TursoDB is the supported concurrent-writer SQLite tier. A `turso://` endpoint
-  selects concurrent atomic batches; legacy `libsql://`/HTTPS endpoints retain
-  conservative immediate transactions. It uses the same domain schema and
-  services, but provider selection alone is not a throughput guarantee.
-- PostgreSQL/Neon is the proven high-throughput tier. Its adapter translates the
-  canonical SQLite-shaped application surface, while its checkout commit uses
-  native PostgreSQL transactions and conflict handling. Neon `*.neon.tech`
-  endpoints use the managed HTTP transport; generic PostgreSQL and Cloudflare
-  Hyperdrive use `pg`. Dialect and transport differences do not leak into
-  routes or commerce services.
+The Workers never provision a database or move data. The operator runs the scripts in `packages/database/scripts` and owns provider accounts, secrets, deploys, health checks and rollback retention.
 
-The application does not provision databases or move data. The deployment
-operator owns provider accounts, database creation, migration state, Worker
-secrets, deployments, health checks, rollback retention, and eventual source
-retirement. Per-merchant Workers and resources remain isolated.
+## Provider tiers
+
+D1 is the default and needs no provisioning. Provider differences stay in shared helpers (see "Rules for provider code").
+
+| | D1 | TursoDB | PostgreSQL |
+|---|---|---|---|
+| Concurrent writes | no | yes | yes |
+| FTS5 | yes | no | no |
+| Write retries | none | busy and conflict failures only (8 attempts) | serialization and deadlock failures only |
+| Write isolation | D1 batch | `turso://`: concurrent batch. `libsql://` or `https://`: immediate transaction | every write `SERIALIZABLE` |
+
+`getDatabaseProviderCapabilities` in `packages/database/src/provider.ts` holds the full capability rows. Where a provider lacks FTS5, search takes a bounded `instr()` fallback (`packages/core/src/search/fts5.ts`). Each D1 request uses one `first-primary` session (`packages/database/src/client.ts`): the first operation reads the primary, and later reads may use a replica.
 
 ## Runtime contract
 
-`@scalius/database` is the only runtime provider boundary. D1 is selected when
-no external database credentials are present. A Turso deployment installs:
+`resolveDatabaseConfiguration` (`packages/database/src/provider.ts`) picks the provider once per request from the API Worker's environment.
 
-- `TURSO_DATABASE_URL`
-- `TURSO_AUTH_TOKEN`
-- optionally `DATABASE_PROVIDER=turso` as an explicit pin
+| Provider | Needs | Notes |
+|---|---|---|
+| D1 | the `DB` binding | Used when no external credential is set, or when `DATABASE_PROVIDER=d1`. |
+| TursoDB | `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN` | The URL is `turso://`, `libsql://` or `https://`, without credentials. |
+| PostgreSQL | `POSTGRES_DATABASE_URL` or a `HYPERDRIVE` binding | `HYPERDRIVE` wins over the URL. `postgres://` or `postgresql://` only, and it names a database. |
 
-A PostgreSQL deployment installs:
+- `DATABASE_PROVIDER` (`d1`, `turso` or `postgres`) pins the provider. Any other value is an error.
+- Without a pin, complete Turso credentials select Turso and complete PostgreSQL credentials select PostgreSQL. Both sets together are an error: set `DATABASE_PROVIDER`.
+- An incomplete configuration fails closed. A connection string never moves data and never starts a migration.
+- A `*.neon.tech` host without Hyperdrive uses the Neon HTTP transport. Any other PostgreSQL host, and Hyperdrive, uses `pg`. Use Hyperdrive for generic PostgreSQL on a production Worker.
+- These names are API Worker secrets or bindings, not Wrangler `vars`. The storefront Worker has no database.
 
-- either `POSTGRES_DATABASE_URL` or a `HYPERDRIVE` binding
-- optionally `DATABASE_PROVIDER=postgres` as an explicit pin
+## Release ledger and schema upgrades
 
-These are the only optional runtime secrets beyond the two every deployment
-installs (`SCALIUS_SECRET` on both Workers, `CREDENTIAL_ENCRYPTION_KEY` on the
-API). None of them appear in the checked-in Wrangler configs, which carry
-no `vars` at all; the deployment operator installs each one with
-`wrangler secret put` on the API.
+Migration `0050_schema_release_contract` starts one ordered ledger, `scalius_schema_migrations`, shared by all providers. Every later migration ends with its own ledger row: version, name and the sha256 of its source file.
 
-`POSTGRES_DATABASE_URL` alone is sufficient for Neon and generic PostgreSQL.
-For generic PostgreSQL on production Workers, the deployment operator should
-provision Hyperdrive and bind it as `HYPERDRIVE`; that binding takes precedence
-over the retained direct URL and supplies Cloudflare's regional connection
-pool. This is a transport choice, not a second application database adapter.
+- `GET /api/v1/readyz` compares the whole ledger with `CURRENT_DATABASE_SCHEMA_MIGRATIONS` (`packages/database/src/schema-contract.ts`). It answers 503 for a missing, extra, renamed, future or digest-mismatched row.
+- Never delete or squash a released migration. Every migration from 0050 onward has canonical SQLite SQL in `packages/database/migrations/` and a PostgreSQL sidecar with the same file name in `migrations/postgres/`. `pnpm --filter @scalius/database check:migrations` checks them.
 
-An incomplete configuration fails closed. When Turso and PostgreSQL credentials
-are both installed, `DATABASE_PROVIDER` is mandatory; `DATABASE_PROVIDER=d1` is
-an explicit source/rollback pin while target credentials are staged. A
-connection string does not move data and must never trigger an implicit
-request-path migration.
+| Provider | How the schema upgrades |
+|---|---|
+| D1 | `wrangler d1 migrations apply`. `pnpm run deploy` runs it. |
+| TursoDB | `upgrade:schema --provider turso`. One immediate transaction per migration. |
+| PostgreSQL | `upgrade:schema --provider postgres`. One serializable transaction per sidecar. A replay after a lost response is safe. |
 
-Database release compatibility is exact, not a connectivity probe. Migration
-`0050_schema_release_contract` starts one ordered ledger shared by D1, TursoDB,
-and PostgreSQL. Each release row includes the canonical source digest, and API
-`/readyz` rejects missing, extra, renamed, future, or digest-mismatched rows.
-`0055_cache_invalidation_postgres_bigint` is the current release. Historical
-migrations are an installed-system contract and must not be deleted or squashed
-after release.
+`upgrade:schema` reads the target from `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN`, or from `POSTGRES_DATABASE_URL`. It prints a JSON receipt.
 
-D1 continues to use Wrangler's normal migration application. Existing TursoDB
-and PostgreSQL databases use the explicit `upgrade:schema` runner. Every
-provider-neutral migration has canonical SQLite SQL plus a transaction-safe
-PostgreSQL sidecar with the same identity and source digest. TursoDB proves the
-semantic legacy baseline before its first ledger release and applies one
-migration per immediate transaction. PostgreSQL reuses the initial import's
-receipt and advisory-lock identity and applies one sidecar per serializable
-transaction. Replays after a committed-but-lost response are safe.
+```bash
+# Read-only check. Exits non-zero unless the schema is current.
+pnpm --filter @scalius/database upgrade:schema --provider postgres \
+  --acknowledge-target-host <host> --dry-run --require-current
 
-Each D1 request uses one `first-primary` session. Its first operation observes
-the primary and later reads may use a consistent replica; routes and services
-do not carry provider-specific consistency branches.
+# Mutation. Needs a 64-hex freeze proof, which the runner records in its receipt.
+pnpm --filter @scalius/database upgrade:schema --provider postgres \
+  --acknowledge-target-host <host> --freeze-proof-sha256 <digest>
+```
 
-Ordinary deploys never upgrade an external database. They run a read-only
-`--dry-run --require-current` preflight; an explicit migration operation
-must first activate `DATABASE_MIGRATION_FREEZE`, prove the freeze, run the
-explicit mutation with that proof digest, and only then deploy the release.
-This separation prevents an ordinary redeploy from racing checkout, queue, or
-scheduled writes.
+- `--acknowledge-target-host` must equal the host of the connection URL.
+- `--freeze-proof-sha256` is rejected with `--dry-run`. The runner checks the format only. The operator proves the freeze.
+- An ordinary deploy never upgrades an external database. `pnpm run deploy` reads the provider from `vars.DATABASE_PROVIDER` of the Wrangler config. A config with a D1 binding and no such var means D1: the script runs `wrangler d1 migrations apply` against that D1 database, whatever the Worker secrets select.
+- For Turso or PostgreSQL, deploy with `--only api --wrangler-config <path>` (that config sets `vars.DATABASE_PROVIDER`) and `--database-target-host <host>`. The script then runs the read-only check above before it deploys.
 
-Provider capability differences stay behind shared helpers. D1 keeps FTS5,
-recursive CTE, and `WITHOUT ROWID` support. TursoDB and PostgreSQL omit or
-translate unsupported physical artifacts, while bounded provider-aware
-search/navigation helpers preserve the public contract. Atomic domain writes
-use the shared commit/transport boundary: TursoDB retries only explicit MVCC
-conflicts, and PostgreSQL retries only serialization/deadlock conflicts.
-PostgreSQL fallback multi-statement writes use `SERIALIZABLE`, including
-projection and reservation-lane guard/update/postcondition batches; the
-collapsed checkout commit uses the same isolation level in one round trip.
+## Write freeze
 
-Portable SQLite fingerprinting processes schema tables sequentially and issues
-at most the three independent PRAGMA metadata reads for one table concurrently.
-Do not restore an all-table `Promise.all`: it can exceed D1's six simultaneous
-connection limit even though each individual table inspection looks bounded.
+`DATABASE_MIGRATION_FREEZE` on the API Worker (`1`, `true` or `on`) stops all writes while an operator copies the database. The API Worker is the only Worker that writes to the database.
 
-Guarded compare-and-swap batches expose one API: a boolean success predicate
-plus an uppercase semantic failure marker. The database package constructs the
-SQLite invalid-path sentinel and the PostgreSQL compiler rewrites it to the
-typed, volatile `scalius_compat.fail_bigint()` function. Feature code cannot
-mix dialect-specific `CASE` result types, and one error classifier preserves
-the same domain conflict across D1, TursoDB, and PostgreSQL transports. The
-full database/core/API suites and a disposable native Neon branch proved both
-the successful and rollback paths on 2026-08-03. Production API Worker version
-`5a1be633-eed5-48b9-a2a5-4b170ee3a0b1` then passed four PostgreSQL readiness
-samples and the complete read-only release check on the Neon-backed demo.
+- A request gets 503 `DATABASE_MIGRATION_IN_PROGRESS` with `Retry-After: 60`. Only `GET` and `HEAD` of `/api/v1/health`, `/api/v1/readyz` and `/api/v1/meta` pass.
+- Queue batches retry with a 60 second delay. The cron run does nothing.
 
-Administrative credential creation is also one provider-native commit. The
-application hashes passwords with Better Auth's implementation, then inserts
-the Better Auth user/account rows together with the setup claim or invitation
-and optional RBAC role. It deliberately does not call the public Better Auth
-sign-up route internally: that route creates an unused session and its
-transaction callback falls back to sequential writes on the one-shot proxy
-adapters. Local D1 proves end-to-end Better Auth sign-in; local D1 and stateful
-TursoDB prove compatible password hashes, duplicate rollback, and setup-claim
-rollback; equivalent credential and claim conformance passed on a disposable
-native Neon branch on 2026-08-03. D1 batches, Turso atomic batches, and Neon
-HTTP one-shot transactions remain the shared boundary.
+## Cutover: D1 to TursoDB
 
-## Deterministic D1 to Turso protocol
+Persist a record of each step. Do not skip a gate.
 
-The migration orchestrator must persist a resumable migration record and
-evidence for each transition:
+1. Pin the source: set `DATABASE_PROVIDER=d1` on the API Worker before you install any Turso credential. Without the pin, Turso credentials switch the provider at once.
+   Gate: `GET /api/v1/readyz` shows `checks.d1.status` as `ok`.
+2. Set `DATABASE_MIGRATION_FREEZE=1` on the API Worker. Wait for in-flight requests to finish.
+   Gate: an API write answers 503 `DATABASE_MIGRATION_IN_PROGRESS`, and `/api/v1/readyz` still answers.
+3. Read the D1 Time Travel bookmark and persist it.
+   ```bash
+   pnpm --dir apps/api exec wrangler d1 time-travel info <d1-database> --json
+   ```
+4. Export the D1 database, fenced by that bookmark. The `--out` directory must not exist.
+   ```bash
+   pnpm --filter @scalius/database export:d1-portable \
+     --database <d1-database> --out <export-dir> --expected-bookmark <bookmark>
+   ```
+   Gate: exit 0 (`source.sql` and `export-evidence.json` written). The command fails when the live bookmark differs before the export or changes during it.
+5. Normalize the export into a Turso upload bundle. It needs the `sqlite3` binary (`SQLITE3_BIN` or `--sqlite-binary`) and free disk of 3 times the export plus 2 GiB.
+   ```bash
+   pnpm --filter @scalius/database prepare:turso-upload \
+     --export-bundle <export-dir> --out <bundle-dir>
+   ```
+   Gate: the summary shows `integrity: "ok"`, `foreignKeyViolations: 0` and `journalMode: "mvcc"`.
+6. Provision a Turso database and upload the bundle from a secured host. Set `TURSO_PLATFORM_API_TOKEN` first.
+   ```bash
+   pnpm --filter @scalius/database provision-upload:turso \
+     --bundle <bundle-dir> --organization <org> --group <group> --database <name>
+   ```
+   Gate: the command checks the organization's storage quota first (it needs `--allow-storage-overage` for a billable upload), then verifies the remote journal mode, the schema and data fingerprint, the row counts, `foreign_key_check` and `integrity_check`. It rotates the temporary tokens and writes its receipts into the bundle directory. A repeat run resumes from the receipts.
+7. Check the target schema. Use the provision receipt's hostname.
+   ```bash
+   TURSO_DATABASE_URL=turso://<host> TURSO_AUTH_TOKEN=<token> \
+     pnpm --filter @scalius/database upgrade:schema --provider turso \
+     --acknowledge-target-host <host> --dry-run --require-current
+   ```
+   Gate: exit code 0.
+8. Install `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN` and `DATABASE_PROVIDER=turso` on the API Worker. Use a `turso://` URL for concurrent batches.
+9. Deploy the API Worker with the freeze still on (flags: "Release ledger and schema upgrades").
+   Gate: the deploy script's schema check passes and its `/readyz` samples are ready.
+10. Sample readiness again: `pnpm ops:check --api-base-url <api-origin>`.
+    Gate: every sample is ready, and `GET /api/v1/readyz` shows `checks.turso.status` as `ok`.
+11. Remove `DATABASE_MIGRATION_FREEZE`. Then smoke-test public reads, an authenticated admin read, one idempotent checkout, an order transition, an inventory release, queues, storefront rendering and browser hydration.
+    Gate: `pnpm ops:check --queues --api-base-url <api-origin>` passes.
+    Gate: `pnpm release:check --api-base-url <api-origin> --storefront-url <store-origin> --dashboard-url <dashboard-url>` passes. Both commands default to the Scalius demo hosts.
+12. Keep the frozen D1 database for the rollback window. Destroy it only under a separate, explicit retention decision.
 
-1. Enable `DATABASE_MIGRATION_FREEZE` on every Worker that can write. API health
-   and readiness remain available; ordinary API/admin traffic is rejected,
-   queues retry, and cron mutation is skipped.
-2. Wait for in-flight work to settle, persist the authoritative D1 Time Travel
-   bookmark, and run `export:d1-portable` with `--expected-bookmark`. It exports
-   only the canonical application tables and refuses the result unless the D1
-   bookmark is unchanged before and after export. One bookmark-bound export is
-   stronger and faster than two best-effort dumps with matching hashes.
-3. Run `prepare:turso-upload` to normalize the trusted export onto the current
-   canonical table/column set and create a native Turso MVCC upload artifact.
-   Reject missing current tables/columns, unhandled nullability drift, row-count
-   drift, foreign-key violations, or a failed integrity check. Record every
-   discarded retired column and ignored retired table with its row count. The
-   bundle and evidence are private, create-only files; the command refuses an
-   existing destination and fsyncs the completed artifact.
-4. Run `provision-upload:turso` from a secured operations host. It checks the
-   organization's current storage usage and plan quota before creating a
-   database, refuses an over-quota upload when overages are disabled, and
-   requires `--allow-storage-overage` before a billable upload. It then creates
-   a native `database_upload` target, mints a temporary database token, streams
-   the MVCC file, and verifies the remote journal mode, logical schema/data
-   fingerprint, table/row counts, `foreign_key_check`, and `integrity_check`.
-5. Rotate the temporary database tokens and persist provision, upload, and
-   final receipts containing hashes and safe target identity only. A completed
-   retry resolves locally from matching receipts; a partial retry resumes from
-   the last verified phase instead of silently recreating the target.
-6. Install provider secrets, deploy the API, and require repeated Turso
-   readiness success before removing the freeze.
-7. Exercise public reads, authenticated admin reads, one idempotent checkout,
-   order transition, inventory release, queues, storefront rendering, and
-   browser hydration. Re-run the production ops and release checks.
-8. Retain the frozen D1 source for the configured rollback window. Destroy it
-   only through a separate, explicit retention policy.
+Never use `turso db create --from-file ... --tursodb` for a cutover: a 2026-08-05 rehearsal reported success but created a target that held only Turso's internal MVCC table. Use `prepare:turso-upload` and `provision-upload:turso`, and require the exact remote fingerprints.
 
-The normalizer and bundle builder stream through SQLite/files instead of holding
-the SQL dump in JavaScript memory. The implemented disk preflight requires at
-least `2 × export bytes + 2 GiB` free in addition to the retained input; actual
-peak storage is approximately the input plus source and target copies. D1
-export time, provider transfer time, remote verification time, database quota,
-and the full freeze duration remain deployment-specific gates.
+## Cutover: D1 or TursoDB to PostgreSQL
 
-Adding the verified target URL/token and changing `DATABASE_PROVIDER` is only
-the final traffic switch. A connection string alone cannot safely perform the
-export, data movement, verification, token rotation, deployment, or rollback
-retention.
+Both sources feed `migrate:sqlite-to-postgres` with one standalone canonical SQLite file.
 
-Do not substitute `turso db create --from-file ... --tursodb` for the native
-upload flow. A live 2026-08-05 rehearsal reported a successful upload but
-created a target containing only Turso's internal MVCC table. The repo-owned
-flow refused to infer readiness from provisioning success and instead uploaded
-the prepared native MVCC artifact, then verified every table, row, fingerprint,
-journal mode, integrity result, and foreign-key result before issuing a final
-receipt.
+1. Pin the source provider (`DATABASE_PROVIDER=d1` or `turso`) before you install a PostgreSQL credential.
+   Gate: `GET /api/v1/readyz` shows the source provider's check (`checks.d1` or `checks.turso`) as `ok`.
+2. Freeze writes as in step 2 of the Turso cutover.
+3. Export the frozen source.
+   - D1: run steps 3 and 4 of the Turso cutover.
+   - TursoDB, current engine: run `turso db export <database> --output-file <snapshot>` under the freeze. Then run the command below with `TURSO_DATABASE_URL` set.
+   - TursoDB, legacy SQLite-backed: omit `--snapshot` and `--snapshot-revision`. The command then pulls through Turso Sync until two pulls match, and needs `TURSO_AUTH_TOKEN`.
+   ```bash
+   pnpm --filter @scalius/database export:turso-portable --out <export-dir> \
+     --ack-source-host <host> --snapshot <snapshot> --snapshot-revision <freeze-proof>
+   ```
+   Gate: for a Turso source, the command writes `source.sqlite3` (ordinary SQLite, normalized) and `export-evidence.json`.
+4. Get one standalone canonical SQLite file. For a Turso source, use `source.sqlite3` from step 3. For a D1 source, no package script writes this file (unverified: the migration orchestrator owns it). The function `normalizeD1ExportToTursoDatabase` in `packages/database/scripts/normalize-d1-export-core.ts` builds it.
+   Gate: the file has no `-wal`, `-shm` or `-journal` sidecar, passes `integrity_check` and `foreign_key_check`, and holds exactly the canonical application tables.
+5. Provision an empty PostgreSQL or Neon database. It must have no public tables or triggers.
+6. Run the migrator.
+   ```bash
+   POSTGRES_DATABASE_URL=<target-url> pnpm --filter @scalius/database \
+     migrate:sqlite-to-postgres --sqlite <canonical.sqlite> \
+     --checkpoint <checkpoint.json> --ack-target-host <host>
+   ```
+   Gate: the migrator copies each table with `COPY` under an advisory lock and records per-table receipts in the `_scalius_migration` schema. It completes only when the per-table and whole-database content fingerprints match and the schema objects and constraints are clean. After a crash, run the same command again: it resumes at the first missing table.
+7. Install `POSTGRES_DATABASE_URL`, or bind `HYPERDRIVE`, on the API Worker. Then set `DATABASE_PROVIDER=postgres`.
+8. Finish as in steps 9 to 12 of the Turso cutover: deploy with the freeze on, sample readiness (`GET /api/v1/readyz` shows `checks.postgres.status` as `ok`), remove the freeze, run the smoke tests (add an inventory-ledger check and an order cancellation) and keep the frozen source for the rollback window.
 
-## Deterministic D1 or TursoDB to PostgreSQL protocol
+## Rollback
 
-The migration orchestrator uses the same frozen canonical SQLite artifact for
-both sources and persists every phase as machine-readable evidence:
+Before the target accepts its first write, roll back by setting `DATABASE_PROVIDER` back to the source provider and redeploying. The frozen source is still current.
 
-1. Pin the current provider, activate `DATABASE_MIGRATION_FREEZE` on API and
-   admin, and prove ordinary writes are unavailable while health/readiness stay
-   observable.
-2. For D1, run `export:d1-portable` against the exact unchanged Time Travel
-   bookmark. For a current-engine TursoDB target, persist the write-freeze
-   proof, run the platform's `turso db export`, and pass its snapshot to
-   `export:turso-portable --snapshot ... --snapshot-revision ...`. The command
-   copies and checkpoints the snapshot/log, converts MVCC to ordinary SQLite,
-   and records platform-export evidence. Legacy SQLite-backed Turso targets may
-   use the command's revision-fenced Sync acquisition mode.
-3. Normalize the snapshot to the current canonical application-table and column
-   set. Reject schema/nullability drift, row-count drift, non-canonical source
-   state, foreign-key violations, or integrity failures before target work.
-4. Provision an empty PostgreSQL/Neon database and run
-   `migrate:sqlite-to-postgres` with its create-only local checkpoint. The
-   migrator takes a PostgreSQL advisory lock, installs the compatibility schema,
-   streams each table through `COPY`, and atomically records per-table row/hash
-   receipts in a locked control schema.
-5. Re-running after termination reconciles the local checkpoint from the target
-   receipts, verifies every completed table, and resumes at the first missing
-   table. Completion requires exact per-table and whole-database content
-   fingerprints, expected schema objects, clean constraints, and the completed
-   target receipt.
-6. Install `POSTGRES_DATABASE_URL`, keep `DATABASE_PROVIDER` explicit while old
-   credentials remain, deploy the immutable release, require repeated
-   `postgres` readiness, and run release, authenticated dashboard, storefront,
-   checkout/idempotency, inventory-ledger, and cancellation smokes before
-   unfreezing.
-7. Retain the frozen source for the configured rollback window. After the first
-   PostgreSQL write, switching credentials back is not rollback; it requires a
-   verified reverse migration/reconciliation or an explicit restore-to-snapshot
-   data-loss decision.
+After the target accepts a write, the retained source is stale. Switching credentials back loses orders, inventory movements, sessions and other merchant facts. Do one of these:
 
-## Rollback rule
+- Migrate the target's data back into a verified source database, with the same freeze and fingerprint gates.
+- Restore the cutover snapshot as a deliberate decision to lose the later data.
 
-Before the first target write, rollback is a provider pin and redeploy. After
-Turso accepts writes, the retained D1 snapshot is stale. Switching back without
-a reverse migration would lose orders, inventory movements, sessions, and other
-merchant facts. The migration operator must either migrate the Turso delta/full
-state back into a verified D1 target or present rollback as a deliberate restore
-to the cutover snapshot with an explicit data-loss decision.
+## Tools for rehearsal and load
 
-## Current release portability proof — 2026-08-08
+These scripts run through `pnpm --filter @scalius/database <name>` against disposable databases. The README documents their options: `rehearse:near-limit` (a synthetic D1-shaped export of a given size, prepared into a Turso bundle; local only), `verify:portability-export`, `prepare:checkout-load-target`, `seed:checkout-load-target`, `add:checkout-load-hot-fixture`, `load:checkout-live` (the full checkout route against a disposable API Worker) and `probe:turso-concurrency`.
 
-Fresh disposable targets first proved release
-`0053_checkout_language_authority` without using production merchant data:
+Rules for a capacity claim:
 
-- The D1-shaped SQLite source and the Turso native upload each contained 109
-  canonical tables and six synthetic rows. Turso matched source and target
-  fingerprint
-  `fe077796db9192b89251f7eb0029e7ef29909e33f08a1207c74ef037faa18b29`,
-  used the `mvcc` journal, passed integrity and foreign-key checks, and produced
-  provision, upload, and final receipts.
-- A disposable Turso schema-52 state advanced to schema 53 in one provider
-  transaction, restored both checkout-language authority indexes, and replayed
-  as an exact no-op.
-- Direct SQLite-to-Neon migration completed 109 tables and six rows with schema
-  digest `f491501d5cfb75d9df6d6f9d4301a4d76d4bca98870b834f9276345d94a4f89c`
-  and content digest
-  `573f0af41c90d4a41dbcfba7c7c3129c9acc3a22ec64a937d96b1a7a2fc5e82a`.
-  A disposable PostgreSQL schema-52 state advanced to schema 53 in one
-  serializable transaction, replayed as a no-op, restored both authority
-  indexes, and left zero unvalidated constraints.
-- A current Turso platform snapshot normalized back to 109 tables and six rows,
-  then migrated into a second empty Neon database with the same schema and
-  content digests as the direct SQLite-to-Neon path. This proves the current
-  D1-to-PostgreSQL and Turso-to-PostgreSQL paths converge on identical logical
-  data.
-- Both disposable Turso databases/groups and the disposable Neon project were
-  deleted after verification; provider inventories returned empty.
+- A conflict test proves adapter correctness. It is not a throughput figure.
+- A claim needs a disposable, fully migrated store, load through the Worker origin, realistic SKU contention, stubbed providers, queue drain times, latency percentiles, and explicit error, oversell and duplicate-order targets.
+- Do not publish "supports N orders per second" for a provider tier until `load:checkout-live` passes on that tier. In 2026-08 rehearsals (unverified here) only PostgreSQL passed a sustained full-route load.
+- Hosted Turso load spends organization-wide row quotas. Use a separate test organization.
 
-Release `0054_cache_invalidation_delivery` was then verified independently on
-fresh disposable targets:
+## Rules for provider code
 
-- A hosted `--tursodb` database at schema 53 advanced to schema 54 in one
-  provider transaction, created `cache_invalidation_state`, passed integrity
-  and foreign-key checks, and replayed through `--dry-run --require-current` as
-  an exact no-op.
-- A current D1-shaped SQLite artifact migrated into generic PostgreSQL across
-  110 tables and seven rows with schema digest
-  `f30d212d585d044cdb69af1278ef10a2d3838d794c751981daecf9ca5d302654`
-  and content digest
-  `a97d41cc76ab19b120258e7b28c3775bfd7e6861824f920d7ca7fa2d9ff10746`.
-  Re-running from the completed checkpoint reproduced the same receipts.
-- A current Turso platform export normalized to 110 tables and seven rows,
-  then migrated into a second generic PostgreSQL target with content digest
-  `43f55a4b0f55057e2d6115aac0c20fff1303b8ad6116d589c0caffafaf5ad560`.
-  Re-running was receipt-exact, schema 54 was current, and PostgreSQL reported
-  zero unvalidated constraints. The content digest intentionally differs from
-  the independently created D1-shaped fixture; each PostgreSQL target matched
-  its own immutable source exactly.
-
-Release `0055_cache_invalidation_postgres_bigint` is a forward-only convergence
-step discovered during the stable-release audit. The schema-54 PostgreSQL
-sidecar created the three cache-generation counters as 32-bit integers, while a
-fresh PostgreSQL import compiled the same SQLite integer-affinity columns to
-64-bit integers. The 0055 PostgreSQL sidecar widens existing targets to `bigint`;
-D1 and Turso record the identical release ledger row without changing their
-integer-affinity schema. Focused migration tests prove the release chain,
-idempotent Turso replay, transaction-safe PostgreSQL sidecar, and fresh-schema
-type agreement; a live external-provider rehearsal remains an operations gate.
-
-## Historical verified D1 to TursoDB cutover — 2026-08-01
-
-The production Scalius demo domains were migrated in place from D1 to TursoDB
-for merchant testing. That target later became the frozen source for the
-PostgreSQL cutover below; the original D1 database was not modified or destroyed.
-
-- Two settled 6,253,644-byte source snapshots matched at SHA-256
-  `ee63f0344521c43c960a2c18fa92254bdaa81ee3ca7646fcf8ba8c1cca61484e`.
-- Normalization projected 105 canonical tables and 15,189 rows, discarded eight
-  retired columns, deterministically repaired 80 legacy null update timestamps,
-  and passed integrity/foreign-key checks.
-- The normalized data fingerprint matched on source and target:
-  `0e1e8180c70787a5587a07995497abb3e6148856e6fac5a0fcc6c87e06f4552e`.
-- The streaming compiler suspended/restored 64 triggers, cleared 105 target
-  tables, and reproduced the proven import SHA-256
-  `b505eeed25484b44bcf5d098214c715106cf6fb1892c1f430b6d95c6622ea861`.
-- A real storefront COD checkout created order `XM7YH7W45WWN9C21`; the normal
-  admin workflow cancelled it. The ledger recorded exactly one reserve and one
-  release edge, every net stock/reserved/preorder delta was zero, the order
-  reached `inventory_action=restored`, and target integrity remained `ok`.
-- Production readiness, queue metadata, dashboard auth gates, storefront pages,
-  discovery feeds/XML, UCP catalog discovery, product rendering, browser
-  checkout/admin/search hydration, and browser console diagnostics passed.
-
-An isolated conflict test also committed 512 atomic two-statement transactions
-at concurrency 64 with exact event/counter totals. That proves adapter
-correctness under conflict; it is not an orders-per-second benchmark. A capacity
-claim requires a disposable fully migrated merchant, Worker-origin load,
-realistic SKU contention, stubbed providers, queue drain measurements, regional
-latency percentiles, and explicit error/oversell/duplicate-order SLOs.
-
-## Verified migration and Worker-origin load — 2026-08-02
-
-The current bookmark-bound/native-upload path was exercised separately from the
-production demo so failures could not mutate merchant data:
-
-- A real D1 export was pinned to bookmark
-  `00007859-00000000-000050ba-c50b946f72a89c233d44ae33711fc439`.
-  It contained 105 canonical tables and 15,189 rows. Two independent
-  preparations produced the same 8,089,600-byte MVCC artifact at SHA-256
-  `e068a90cebaacf116b6341483141f2d6af22a8828a34c2255003b972b8663cd1`.
-- The one-command migration flow created a disposable native-upload target,
-  uploaded and remotely verified all 105 tables/15,189 rows, matched logical
-  fingerprint
-  `4de71904216ca86e04e535ec57995b7bf7cedb30aea298827ac1398287a63c4b`,
-  rotated temporary tokens, and then completed a second invocation entirely
-  from local receipts. The disposable target was destroyed after verification.
-- A synthetic 8.25-GiB source-storage rehearsal generated an 8,435,940,916-byte
-  SQL export and an 8,858,222,592-byte MVCC artifact with 990,393 canonical
-  rows. Exact preparation took 303,261 ms (about 5 minutes 3 seconds), peak Node
-  RSS was 686,309,376 bytes, and integrity/foreign-key checks passed. This proves
-  bounded-memory local preparation, not D1 network export or remote upload
-  duration. The retained input plus working files occupied roughly 24 GB.
-- The authenticated Turso organization was on Starter with a hard
-  5,000,000,000-byte storage quota and overages disabled, so the real 8.86-GB
-  provider upload was correctly refused before target creation. An 8-GB
-  merchant therefore needs confirmed paid Turso headroom or a PostgreSQL/Neon
-  target; migration automation must never assume that a Turso account can fit
-  the database.
-
-A disposable API Worker backed by a migrated Turso database then exercised real
-cart validation, COD checkout, committed idempotency replay, receipt access,
-support request, authenticated order cancellation, inventory reserve/release,
-and ledger-v2 invariants. External payment/notification providers were disabled,
-and KV rate limiting was intentionally absent, so these measurements isolate the
-current Worker/database path rather than representing a complete production
-capacity test.
-
-- A 25-request simultaneous replay of one checkout ID produced exactly one
-  order, item, and checkout attempt (18 committed responses and seven in-flight
-  responses), with no duplicate order.
-- Independent untracked-SKU orders were clean at 2 arrivals/second (20/20). At
-  5 arrivals/second, one 20-order run passed, but a sustained 40-order run
-  committed only 30; ten requests exhausted all eight adapter retries with
-  `Write-write conflict`.
-- Against one tracked SKU, a controlled 2 arrivals/second run accepted exactly
-  the 16 remaining units and rejected nine out-of-stock attempts without
-  overselling. A 30 arrivals/second burst caused conflict/retry failures and
-  stale in-progress checkout leases; correctness held, but capacity did not.
-- A real admin cancellation advanced the order version once, released exactly
-  one reservation through the paired ledger edges, and left database integrity
-  and foreign keys clean.
-- Forced public product cache misses had roughly 13–15 second median/tail
-  service latency in this disposable no-KV configuration. Edge-cached shopper
-  traffic and database-bound misses must be capacity-tested and reported as
-  different paths.
-
-These results do not support a thousands-of-orders-per-second claim. Turso's
-concurrent-writer engine preserves the adapter's atomicity and can remove D1's
-single-writer ceiling, but the current checkout still performs enough
-synchronous reads/writes and touches enough shared SQLite pages that conflicts
-dominate far earlier. Raising retry counts would increase latency rather than
-solve that architecture.
-
-## Single checkout commit — 2026-09-24
-
-The checkout coordinator Durable Object, its reservation lanes, and the
-deferred checkout projection were retired. Every storefront and agent checkout
-now commits through one guarded database batch that writes the order, its
-items, the SKU hold (ledger v2 + `stockVersion`), the idempotency row, the
-receipt, and the outbox rows together. Load results below dated before this
-section measured the retired coordinator path and do not describe the current
-commit.
-
-A local workerd + D1 comparison (requests dispatched directly to the Worker;
-200 simultaneous checkouts per round) measured:
-
-- 200 orders across 20 SKUs: 80–95 committed orders/second on the single
-  commit versus 73–83 on the retired coordinator.
-- 150 buyers racing for 20 units of one SKU plus 50 buyers on ten other SKUs:
-  exactly 20 hot orders committed every round on both paths; the round took a
-  median of about 2.2 s on the single commit versus about 1.3 s on the
-  coordinator, whose 30-second authority cache also served stale settings.
-
-## Verified live TursoDB to PostgreSQL cutover — 2026-08-03
-
-The production demo was frozen, revision-exported from TursoDB, migrated into a
-permanent Neon/PostgreSQL database, redeployed, and left live on PostgreSQL with
-the existing merchant data, login, dashboard, storefront, and API domains.
-
-- The canonical snapshot contained 109 application tables and 20,258 rows.
-- The source artifact SHA-256 was
-  `19b4d1a92c7a9509cf2454832bbcc7e522783bc5dc7e46d8c619d7a183ff9e95`;
-  the provider-neutral content fingerprint was
-  `6f6c0040dd9c0246a1692eb60882ae099384bf89312847eaf7ee177197153b0a`.
-- Migration id
-  `a211eb3d0522b3bf5485f172dfece81c4cd1461a98efb9b9043ba2e597469835`
-  completed with exact table receipts and an exact second invocation resolved
-  from persisted target state.
-- PostgreSQL readiness, the retained authenticated dashboard session, the
-  storefront catalog, API release checks, and production checkout/inventory
-  invariants passed after cutover.
-- A disposable production-limit Worker committed 5,000 exact PostgreSQL
-  checkout transactions at 1,161–1,426 orders/second in the measured runs with
-  no duplicate order or oversell. This is backend-path evidence, not a promise
-  that gateways, notifications, arbitrary carts, or every merchant workload
-  sustain the same rate.
-
-## Verified full Worker-to-Neon checkout load — 2026-08-03
-
-Historical: measured on the retired coordinator v2 path. A sentinel-protected
-Worker and disposable database on the demo project's smallest fixed 0.25-CU
-Neon compute exercised the complete public checkout route, coordinator, native
-PostgreSQL commit, durable projection, and direct database oracle. External gateways and notification consumers remained outside
-the measured path.
-
-- Three independent migrations from the same immutable canonical SQLite source
-  into three fresh PostgreSQL databases produced identical schema, source, and
-  logical-content fingerprints across 110 application tables.
-- Idempotency, receipt, support, exact projection, constraint, and tracked-SKU
-  concurrency scenarios passed. A 60-request hot-SKU run accepted exactly the
-  50 available units, rejected ten as unavailable, and preserved exact lane
-  versions/quantities without oversell or legacy inventory movements.
-- An initial 2,000-order run exposed a real recovery flaw: every authoritative
-  order committed, but a failed oversized projection group could remain pending
-  until the scheduled sweep. The live coordinator now shares the scheduled
-  recovery policy, bounds groups to 500 orders, isolates failed groups by
-  durable outbox, and retries transient single-outbox failures. The pre-fix
-  backlog then recovered 35/35 outboxes with zero failed facts.
-- After the fix, one 2,000-order spread run at 1,000 scheduled arrivals/second
-  returned 2,000/2,000 HTTP 201 responses in 6.080 seconds: 328.95 accepted
-  orders/second, p95/p99 service latency 4.784/5.353 seconds, and automatic
-  projection catch-up in 5.601 seconds. The oracle found exactly 2,000 orders,
-  2,000 items, and 2,000 attempts, no legacy movements, clean PostgreSQL
-  constraints, and no violation.
-- The database and API suites passed 244 tests (one skipped) and 998 tests
-  respectively after the change. Commits `988f25044` and `6296b6843` contain
-  the recovery policy and provider-neutral load tooling.
-
-The native backend commit has crossed 1,000 orders/second, while the complete
-0.25-CU Worker path has currently proved 329 orders/second. Therefore Scalius
-must not publish “PostgreSQL supports 1,000+ complete orders/second” until the
-same full-route oracle passes on sized compute or a proven horizontally scaled
-merchant topology. Database-tier throughput is a tested deployment profile,
-not a universal product adjective such as “enterprise-grade.”
-
-## Current-engine migration rehearsal — 2026-08-04
-
-A fresh production D1 bookmark export exposed and fixed two portability gaps:
-Wrangler's table-filtered export omitted indexes/triggers, and a legitimate
-historical D1 physical schema did not byte-match a freshly replayed migration
-boundary even though its provider-neutral release ledger was exact. Portable
-export v3 now appends the selected remote schema objects inside the unchanged
-bookmark fence. Normalization validates the exact release ledger, rebuilds a
-clean canonical target, and still rejects ledger drift, data-shape drift,
-foreign-key violations, or failed integrity.
-
-- The D1 snapshot normalized to 109 canonical tables and 15,335 rows. Four
-  non-empty retired tables containing 15 rows were preserved in the separate
-  retired-schema archive. Integrity and foreign keys were clean.
-- D1 to the current Rust TursoDB engine completed through native MVCC upload.
-  Source and target matched portability fingerprint
-  `0a52076bfd4a5f9d23478c4e3803445a4622dab56b91534a1cac1f5c539a41cb`.
-- The same D1 artifact migrated into a fresh 0.25-CU Neon database with 109
-  exact table receipts and 15,335 rows. A current-engine `turso db export` was
-  then converted through portable-export v2 and migrated into a second fresh
-  Neon database. Both PostgreSQL targets completed with whole-database content
-  fingerprint
-  `98510f57a0a4b8ceef47b845c2705608a6e6c6f06c3eb3412f27f60a8e639a13`.
-- The current TursoDB engine reported `journal_mode=mvcc` and preserved every
-  direct concurrency-probe row, but its measured service rate was not viable:
-  200 concurrent two-statement transactions achieved 1.43 transactions/second;
-  32 concurrent transactions achieved 1.81/second; 32 autocommit batches
-  achieved 4.41/second. A second, fresh Developer-plan database created with
-  the CLI's explicit `--tursodb` flag reproduced the result: 32 independent
-  connections wrote two rows each to 32 non-overlapping tables using
-  `BEGIN CONCURRENT`; all 64 rows committed exactly, but the run completed at
-  only 1.30 transactions/second with 24.6-second p99 latency. The disposable
-  database and group were deleted after the run. These results disqualify the
-  current hosted deployment from a throughput claim despite functional
-  correctness, MVCC, independent client streams, remaining quota, and the
-  upgraded plan.
-
-A fresh 2026-08-05 Developer-plan target created after the new-engine toggle
-became visible reproduced the same result: the CLI reported `Type: Turso`, the
-endpoint used `turso://`, and `journal_mode` was `mvcc`, but 32 independent
-`BEGIN CONCURRENT` two-statement transactions across 32 non-overlapping tables
-still achieved only 1.30 transactions/second with 24.573-second p99. All 32
-transactions and 64 rows committed exactly. Correctness passed; hosted write
-capacity did not.
-
-The default remains D1. PostgreSQL remains the only qualified high-throughput
-tier. In addition to the 1,161–1,426/second native backend evidence and the
-329/second complete Worker path on undersized 0.25-CU Neon, a disposable local
-generic PostgreSQL 15 target exercised the full Worker route through the native
-transport: 5,000/5,000 orders returned HTTP 201 at 581.82 orders/second, all
-5,000 orders/items/attempts projected, projection caught up in 4.254 seconds,
-and constraints remained clean. That run exposed and fixed a limit mismatch:
-the commit kernel permitted 1,000-order durable outboxes while recovery accepted
-only 500; projection recovery now accepts the same hard ceiling and its release
-batching target remains independently bounded. These are tested deployment
-profiles, not a universal throughput promise. Turso stays a supported
-migration/runtime adapter, but it must pass the same sustained Worker-origin
-oracle before it is offered as a scale tier.
+- Keep provider differences in the shared helpers of `@scalius/database`. Do not add provider branches to routes or domains.
+- Write a guarded compare-and-swap batch with `buildBatchGuard` and `isBatchGuardError` (`packages/database/src/batch-helper.ts`): a boolean predicate and an uppercase failure marker. Never write a dialect-specific `CASE` result type.
+- The portable SQLite fingerprint (`packages/database/src/portability.ts`) reads tables one at a time and runs at most three metadata PRAGMAs for one table at once. Do not restore an all-table `Promise.all`: it can exceed D1's six simultaneous connections.
+- Create an administrator only through the guarded batch in `packages/core/src/auth/credential-account.ts`, never the Better Auth sign-up route (see [the auth README](../packages/core/src/auth/README.md)).

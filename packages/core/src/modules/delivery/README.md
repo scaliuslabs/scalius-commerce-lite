@@ -1,168 +1,123 @@
 # Delivery
 
-Multi-courier delivery management. Every courier, built in (Pathao, Steadfast) or an app's (`<plugin id>:<provider id>`), implements the one courier port (`@scalius/shared/plugins/providers/courier`) and is resolved from a delivery provider row's `type` through the request's couriers; delivery and fulfilment code never branch on which courier it is.
+The `delivery` domain owns the courier port and its adapters, saved courier accounts (delivery providers), shipments and their tracking, and the delivery places and rates a buyer chooses at checkout (locations, zones, shipping methods). It is for contributors who change booking, tracking or delivery pricing. Courier-specific facts (endpoints, headers, statuses, webhooks) are in [docs/delivery-providers](../../../../../docs/delivery-providers/README.md).
+
+## Entries and layer
+
+- `index.ts` exports the services, the courier port and registry (`couriers/port.ts`, `couriers/registry.ts`), `pathaoCourier` and `steadfastCourier`, and re-exports `browser.ts` (`types.ts`, `getTrackingUrl()`, `provider-readiness.ts`).
+- Layer L4. It imports `inventory`, `order-kernel` and `settings`. `checkout`, `fulfilment`, `notifications` and `orders` import it (`scripts/core-domain-graph.allow.json`).
+
+## Owns
+
+| Table | Purpose |
+|-------|---------|
+| `delivery_providers` | A saved courier account: `type`, `is_active` (default false), encrypted `credentials`, `config`, and the live-test proof (`last_test_*` columns). |
+| `delivery_shipments` | A parcel. `provider_type` is `manual` for an own rider. |
+| `delivery_locations` | The city, zone (thana) and area tree. `external_ids` is JSON, for example `{ "pathao": "123" }`. Soft delete. |
+| `delivery_zones`, `delivery_zone_locations` | A zone and its places. A place belongs to at most one zone. `delivery_zones.revision` guards edits. |
+| `shipping_methods` | A delivery rate: `zone_id` (null = "Everywhere else"), `kind` (`delivery` or `pickup`), `fee_minor`, `free_over_minor`, `pickup_address`. Soft delete. |
+
+- Settings document `delivery_everywhere_else` (`zones.ts`) is empty. Its revision guards edits of the "Everywhere else" rates.
+- DVC: `shipping_methods`, `delivery_zones` and `delivery_zone_locations` advance dependency `ship`. `delivery_locations` advances `loc`. Providers and shipments are private.
 
 ## Couriers
 
-- A merchant uses a courier through a `delivery_providers` row whose `type` is the courier id. Built-in couriers keep encrypted credentials on the row; an app courier's row carries none (its settings live in the app, read strictly through the plugin host).
-- `couriers/registry.ts`: `createCourierProviders(apps)` is one request's catalog (built-ins plus qualified app ids; an app can never shadow a built-in). Functions take an optional `CourierProvidersSource`: the catalog, or a loader the API passes that runs only when a row names an app courier, so built-in work reads no plugin table. Absent: built-ins alone.
-- `Courier.setup(row, key)` reads a row once: settings for calls (null when unreadable: never call the courier), the readiness summary and, for row-held setups, the keyed fingerprint a live test proves. App couriers keep no test proof; their readiness is the app's (active, approved, runnable, settings complete, secrets readable).
-- Port errors (`ProviderError`): a certain refusal (declined, misconfigured, or retryable without `uncertain`) marks the attempt failed; `uncertain` (or any other throw once the call started) keeps it `reconcile_required` with `provider_outcome_unknown`. Recovery asks the courier's `findShipment` when it has one (Steadfast's invoice lookup, an app's), else the merchant attests.
-- Tracking pushes: Pathao and Steadfast keep their own routes; app couriers that declare `verifyWebhook` use `POST /webhooks/couriers/{id}` (apps/api/src/routes/webhooks/couriers.ts).
+- Every courier implements the courier port (`@scalius/shared/plugins/providers/courier`). `couriers/port.ts` adds `setup()`, `preflight()` and `trackingUrl()`.
+- A delivery provider row names its courier in `type`: `pathao`, `steadfast`, or an installed app's `<plugin id>:<provider id>`. Delivery and fulfilment code never branch on the courier.
+- `createCourierProviders(apps)` builds one request's catalog: built-in couriers first, then app couriers. An app cannot shadow a built-in id. The API loads app couriers only when a row names one (`requestCourierProviders()` in `apps/api/src/plugins/providers/courier.ts`). Without that source, only built-ins exist.
+- `Courier.setup(row, key)` reads a row once. It returns the call settings (null when unreadable: never call the courier), the readiness summary and a setup fingerprint.
+- A built-in courier keeps encrypted credentials on the row. `readRowCourierSetup()` reads them strictly with `CREDENTIAL_ENCRYPTION_KEY`. An app courier's row has no credentials: its settings and readiness live in the app.
+- `ProviderError` decides the outcome of a booking. A certain refusal (`declined`, `misconfigured`, or `retryable` without `uncertain`) means nothing was booked. `uncertain`, or any other throw after the call started, keeps the booking for reconciliation.
 
-## Files
+## Provider readiness
 
-| File | Purpose |
-|------|---------|
-| `index.ts` | Barrel exports (delivery.service, tracking, locations, types, status-mapper, couriers port/registry and the built-in adapters). |
-| `couriers/port.ts` | `Courier` -- the courier port plus `setup`, optional `preflight` (store setup a booking needs before anything is written) and `trackingUrl`. |
-| `couriers/registry.ts` | `createCourierProviders`, `BUILT_IN_COURIER_PROVIDERS`, `CourierProvidersSource`, `courierFor`. |
-| `couriers/row-setup.ts` | `readRowCourierSetup()` -- strict-reads row credentials with `CREDENTIAL_ENCRYPTION_KEY`, parses credentials/config JSON (masked logging, never a quoted value), and computes readiness and the live-test fingerprint. Legacy plaintext rows remain readable for migration. |
-| `types.ts` | Shared types: `ShipmentResult`, `ShipmentOptions` (staff choices only), `MerchantOrderShipmentLookup`, plus provider-specific credential/config/response types (`PathaoCredentials`, `PathaoConfig`, `SteadfastCredentials`, `SteadfastConfig`, etc.) |
-| `delivery.service.ts` | Standalone functions for provider CRUD, shipment lifecycle (insert-first creation), status checking, shipment queries, connection tests and recovery lookups |
-| `provider-readiness.ts` | Activation/readiness rules for Pathao/Steadfast required fields plus keyed setup fingerprints for durable live-test proof; app couriers pass their own blockers and no test proof |
-| `tracking.ts` | Standalone functions: `updateOrderStatusFromShipment()` maps shipment status to order status (with inventory side-effects via `applyInventoryForStatusChange`) |
-| `tracking-url.ts` | `getTrackingUrl()`: the courier's public tracking page (used by buyer notifications) |
-| `status-mapper.ts` | `mapProviderStatus()` + `ShipmentStatusCode` enum -- normalizes provider-specific statuses to 14 canonical codes |
-| `locations.ts` | Location CRUD and external ID resolution functions |
-| `zones.ts` | Delivery zones and rates (`shipping_methods`). An address resolves to the zone of its most specific assigned place (area > zone > city), else the zoneless "Everywhere else" rates; local pickup rates are store-wide. `resolveDeliveryRate` is the one checkout decision (zone match, active, free-over on the items subtotal before discounts); zone edits CAS on `delivery_zones.revision`, Everywhere-else edits on a settings document revision. |
-| `pathao-location-import.ts` | Chunked bulk import of Pathao cities/zones/areas (excluded from barrel exports) |
-| `couriers/pathao.ts` | `pathaoCourier` -- OAuth2 password-grant token per call, location ID mapping (and its preflight), whole-taka COD |
-| `couriers/steadfast.ts` | `steadfastCourier` -- API key + secret key auth, full-text address construction, `findShipment` by invoice |
+`getDeliveryProviderReadinessSummary()` reports a lifecycle: `draft`, `configured`, `tested`, `active` or `blocked`. `active` means enabled and tested.
 
-## Delivery Service Functions (`delivery.service.ts`)
+- A placeholder-looking value (`test`, `demo`, `changeme`, `password`, repeated digits, and similar) blocks activation. The `baseUrl` must be an absolute public HTTPS URL without credentials, a custom port, a query or a fragment.
+- The test proof is an HMAC-SHA256 fingerprint of the type, credentials and config, keyed with `CREDENTIAL_ENCRYPTION_KEY`. `saveDeliveryProvider()` keeps the proof only while the fingerprint still matches. A failure after the last success blocks actions until a new test passes. App couriers keep no proof.
+- Shipment creation and status checks need an active provider.
 
-| Function | Signature | Notes |
-|----------|-----------|-------|
-| `getDeliveryProviders` | `(db)` | All providers, ordered by updatedAt desc |
-| `getDeliveryProvider` | `(db, id)` | Single provider by ID |
-| `saveDeliveryProvider` | `(db, provider, encryptionKey, couriers?)` | Create or update. Requires `CREDENTIAL_ENCRYPTION_KEY`; rejects before insert/update if no dedicated key is supplied. Activation checks the courier's own blockers (`assertDeliveryProviderActivatable`). Preserves live-test proof only when the current setup fingerprint still matches. |
-| `testDeliveryProvider` | `(db, id, encryptionKey?, couriers?)` | Records a test attempt, runs the courier's `testConnection`, and stores successful proof for the current setup fingerprint (none for app couriers) |
-| `testDeliveryProviderSetup` | `(db, row, encryptionKey, couriers?)` | Tests an unsaved setup (the settings form's typed keys); records nothing |
-| `getDeliveryProviderReadiness` | `(row, encryptionKey, couriers?)` | The row's readiness summary through its courier |
-| `createShipment` | `(db, orderId, providerId, options?, encryptionKey?, { shipmentId?, couriers? })` | Requires a provider whose readiness summary is `active`, runs the courier's preflight (Pathao city/zone mappings), then uses the insert-first pattern (see below). Money, item count and contents come from the saved order. |
-| `lookupShipmentByMerchantOrderId` | `(db, providerId, orderId, encryptionKey?, couriers?)` | Positive-only `findShipment`; couriers without one answer "not supported" without reading their setup |
-| `getShipment` | `(db, id)` | Single shipment by ID |
-| `getLatestShipment` | `(db, orderId)` | Most recent shipment for an order |
-| `getShipments` | `(db, orderId)` | All shipments for an order, ordered by createdAt desc |
-| `checkShipmentStatus` | `(db, shipmentId, encryptionKey?, couriers?)` | Requires the shipment provider to still be active, asks the courier's `trackShipment`, updates DB record (a courier error is recorded as `unknown`/`error`) |
-| `deleteShipmentRecord` | `(db, id)` | Hard delete only failed/cancelled shipment attempts after claim/reconciliation safety checks. Active and fulfilled shipment history is immutable; stale failed/cancelled claims are cleared before deletion. |
+## Shipment creation
 
-## Tracking Functions (`tracking.ts`)
+`createShipment(db, orderId, providerId, options, key, { shipmentId, couriers })` inserts first:
 
-| Function | Signature | Notes |
-|----------|-----------|-------|
-| `updateOrderStatusFromShipment` | `(db, shipmentId, newStatus)` | Maps shipment status to order status, CAS update on `orders.version` first when status changes, then applies inventory side-effects via `applyInventoryForStatusChange()`. Same-status retries still reconcile stale inventory. Inventory failures mark the shipment `reconcile_required` with sanitized repair metadata. Concurrent admin changes take priority (CAS conflict is logged and skipped). |
-| `getTrackingUrl` | `(providerType, trackingId)` | Returns tracking URL for Pathao or Steadfast, null for others |
+1. Check that the provider is `active`, run the courier `preflight()` (Pathao needs mapped city and zone ids) and run `assertOrderStockCoverable()`.
+2. Build the `CourierShipmentInput` from the saved order. The caller supplies only staff options (`deliveryType`, `itemType`, `itemWeight`, `note`). `codAmountMinor` is the balance due. `idempotencyKey` is the shipment id.
+3. Insert a `creating` shipment row, then call the courier.
+4. Success: save `external_id`, `tracking_id` (the booking id when the courier has none), `tracking_url`, `status`, `raw_status` and the courier's details in `metadata`.
+5. Certain refusal: `status = failed`, `raw_status = provider_rejected`.
+6. Uncertain outcome: `status = reconcile_required`, `raw_status = provider_outcome_unknown`. The caller (`fulfilment`) keeps the order's shipment claim without an expiry. If this write fails, the `creating` row still blocks a retry.
+7. If persisting a success fails: `reconcile_required` with reason `shipment_success_persist_failed`.
 
-## Location Functions (`locations.ts`)
+- `fulfilment` calls this function (`bulkShipOrders()`) under the order's shipment claim (`order-kernel`, 15-minute lease). `createShipment()` does not write the order.
+- An unknown outcome blocks another booking, deleting the shipment, a status check and local repair until someone resolves it. `lookupShipmentByMerchantOrderId()` asks the courier's `findShipment` (positive answers only). [fulfilment](../fulfilment/README.md) owns the resolution flow.
+- `deleteShipmentRecord()` deletes only `failed` or `cancelled` rows, and refuses while a claim, a `creating` row or a reconciliation is open. A parcel linked to a fulfilment cannot be deleted.
+- `checkShipmentStatus()` needs an active provider, an `external_id` and no open claim, refund or payment-session attempt. A courier error stores `unknown` with `raw_status = error`.
+- A booking failure message carries the HTTP status, never the response body.
 
-| Function | Signature | Notes |
-|----------|-----------|-------|
-| `getCities` | `(db)` | All active cities, ordered by sortOrder |
-| `getZones` | `(db, cityId)` | Active zones for a city |
-| `getAreas` | `(db, zoneId)` | Active areas for a zone |
-| `createLocation` | `(db, data: LocationData)` | Creates with cuid2 ID |
-| `updateLocation` | `(db, id, data)` | Partial update |
-| `getLocationById` | `(db, id)` | Single active location, parses JSON fields |
-| `countLocationDescendants` | `(db, ids)` | Live thanas (`zone` rows) and areas under each city/thana, for the delete confirmation |
-| `deleteLocations` | `(db, ids)` | One batch: soft-deletes the locations with their thanas and areas and removes all of them from delivery zones (never leaves orphans) |
-| `getExternalLocationId` | `(db, locationId, providerType)` | Resolves provider-specific numeric ID from `externalIds` JSON |
-| `getExternalLocationIds` | `(db, { city?, zone?, area? }, providerType)` | Batch-resolves external IDs for city/zone/area |
+## Status and order sync
 
-**Exported type:** `LocationData` -- `{ id?, name, type, parentId?, externalIds, metadata, isActive?, sortOrder? }`
+`mapProviderStatus(type, status)` maps a courier status to one of 14 shipment codes (`status-mapper.ts`). An unmapped status becomes `unknown`. The maps are in [Pathao](../../../../../docs/delivery-providers/pathao.md) and [Steadfast](../../../../../docs/delivery-providers/steadfast.md).
 
-## Shipment Creation (Insert-First Pattern)
+`updateOrderStatusFromShipment(db, shipmentId, status)` moves the order:
 
-`createShipment()` guarantees a DB record exists even if the provider API succeeds but the subsequent DB write fails:
+| Shipment status | Order status |
+|-----------------|--------------|
+| `pickup_assigned`, `picked_up`, `in_transit`, `out_for_delivery` | `shipped`, unless the order is `delivered`, `returned` or `cancelled` |
+| `delivered`, `partial_delivered` | `delivered` |
+| `returned` | `returned` |
+| `pickup_failed`, `delivery_failed`, `failed` | `confirmed`, only from `shipped` or `processing` |
+| `cancelled` | `confirmed` from `shipped`; `cancelled` from `pending` or `processing` |
+| `pending`, `on_hold`, `unknown` | no change |
 
-1. Load order + order items (with product names for item descriptions and count)
-2. Build the port's `CourierShipmentInput` from the saved order (recipient with the store's location ids and names, COD in minor units, item count and description); only the staff options come from the caller. Its `idempotencyKey` is the shipment id.
-3. INSERT a `"creating"` placeholder shipment record
-4. Call `courier.createShipment(input, { settings, signal, db })`
-5. On success: UPDATE with `externalId`, `trackingId` (the booking id when the courier has no separate one), normalized `status`, `rawStatus`, the courier's `details` as metadata, and the app's tracking page when it declares one
-6. On a certain refusal (explicit rejection, or preparation failure before the shipment POST): UPDATE to `status: "failed"`, `rawStatus: "provider_rejected"`
-7. On an uncertain outcome (transport/read failure, incomplete success identity, server error, unrecognized response, an app timeout after sending): UPDATE to `reconcile_required` with `rawStatus: "provider_outcome_unknown"`; retain the order claim without an expiry. A failed persistence attempt keeps the original `creating` placeholder and the claim rather than marking the shipment safely retryable.
+- The update runs only when the state machine allows the transition (`canTransitionTo`). It is a CAS on `orders.version`: a concurrent admin change wins and the update is skipped. It refuses while a shipment claim, refund or payment-session attempt is in flight.
+- After the CAS, and also when the status is unchanged, it reconciles stock (`applyInventoryForStatusChangeWithImpact`). If that fails, the shipment becomes `reconcile_required` with reason `order_status_inventory_reconcile_failed`, and a retry or `reconcileOrderShipment()` repairs it.
+- The caller sends a customer notification only for `shipped`, `delivered`, `cancelled` and `returned`, and only when the order status really changed.
+- `fulfilment` keeps the ledger in step through `syncCourierFulfilmentFromShipment()` ([fulfilment](../fulfilment/README.md)).
 
-Provider shipment creation is coordinated by order-level shipment claims in the orders module. Bulk shipment creation preflights provider readiness once before the per-order loop; missing, inactive, unconfigured, untested, stale-test, or unreadable providers return one clear failure per requested order without writing order claims or shipment placeholders. `deleteShipmentRecord()` is the deletion gate: do not bypass it when removing shipments, because it protects active claims, reconciliation evidence, and stale claimed rows that still need manual resolution. When provider creation succeeded but local order/inventory finalization failed, the orders module repairs from the persisted shipment evidence and only then clears the matching order claim; delivery providers must not be called a second time for that repair.
+## Webhooks
 
-Pathao and Steadfast creation accept only a complete success identity or an explicit rejection. Neither a failed HTTP exchange nor the merchant order ID proves that the courier did not create a consignment; remote deduplication is not assumed. Unknown outcomes block another create, deletion, refresh, and local repair until provider confirmation is available. The current repair operation only settles already-confirmed provider/local finalization; it does not discover or attach missing consignments. Expired creating placeholders become unknown, and existing reconciliation evidence survives claim expiry. Failure diagnostics never include upstream response bodies or exception text. `delivery.create-outcome.d1.test.ts` exercises both real adapters through the service and fulfillment claim flow against the full migrated SQLite schema with mocked courier requests.
+The API mounts `POST /api/v1/webhooks/pathao`, `POST /api/v1/webhooks/steadfast` and `POST /api/v1/webhooks/couriers/{id}` (app couriers whose port implements `verifyWebhook`) without session auth: verification is the auth (`apps/api/src/routes/webhooks/`, `apps/api/src/middleware/webhook-auth.ts`; rules in [docs/delivery-providers](../../../../../docs/delivery-providers/README.md)). After verification, each route:
 
-Unknown outcomes can be resolved from the courier's positive `findShipment` (Steadfast's invoice lookup, or an app courier's) or an explicit merchant confirmation from the courier portal/support. Lookup failures and missing results keep the lock; Pathao has no verified merchant-order lookup. A courier with a lookup also vetoes a merchant's "not created" when it confirms a booking. Merchant confirmation requires the current order version and shipment claim, a stable operation key, actor, source, bounded note, and an explicit exact-order attestation. Confirmed existing bookings finalize locally without another provider create; confirmed non-creation/cancellation records durable shipment metadata before releasing the claim. Steadfast `cancelled_approval_pending` remains `on_hold`, so it cannot reopen the order for another booking before final cancellation.
+1. Finds the shipment by external id, scoped to the verified provider id and type. An old or inactive row, or another provider's colliding id, cannot match.
+2. Claims the event once in `webhook_events`. A duplicate returns the earlier result.
+3. Stores the status and details on the shipment, then runs `syncCourierFulfilmentFromShipment()`, `updateOrderStatusFromShipment()` and `syncCourierFulfilmentFromShipment()` again.
+4. Enqueues the customer notification after a committed status change.
 
-For Pathao, positive-integer city and zone `externalIds.pathao` mappings are mandatory before the insert-first placeholder is written. Area mappings remain optional because Pathao accepts some shipments without area IDs, but when present the provider payload includes them.
+Admin status checks use the same sync through `checkAndSyncShipmentStatus()` (`apps/api/src/routes/admin/shipment-status-sync.ts`). Use that helper for every status-check endpoint.
 
-## Status Mapping
+## Locations and zones
 
-`ShipmentStatusCode` enum (14 canonical statuses):
-`pending`, `pickup_assigned`, `picked_up`, `pickup_failed`, `in_transit`, `out_for_delivery`, `delivered`, `partial_delivered`, `delivery_failed`, `on_hold`, `failed`, `cancelled`, `returned`, `unknown`
+- A location is a city, a zone (thana) or an area. A name is trimmed and whitespace-collapsed, at most 120 characters. Active names are unique per parent and type. `deleteLocations()` soft-deletes a place with its children and removes all of them from zones in one batch, because orders and bookings still read the names.
+- `resolveActiveDeliveryLocationNames()` checks a checkout address: the city is a root city, the zone belongs to it, the area belongs to the zone, and all are active. Otherwise it throws `delivery_location_unavailable` with the failing field.
+- Pathao needs positive-integer `external_ids` for city and zone. The area is optional.
+- A zone is a name plus a set of places. An address resolves to the zone of its most specific assigned place (area, then zone, then city). With no zone it gets the "Everywhere else" rates. A `pickup` rate is store-wide, needs a pickup address, and is offered for every address.
+- `resolveDeliveryRate()` is the one checkout decision: the rate is active and live, its zone matches the address (pickup always matches), and the rate is free when the items subtotal before discounts reaches `free_over_minor`.
+- Limits: a rate or threshold up to 100,000 major units (`MAX_DELIVERY_AMOUNT`), 20 rates per zone, 2,000 places per zone. In BDT a fee is a whole taka.
+- Zone edits need the current `delivery_zones.revision`. "Everywhere else" edits need the revision of the `delivery_everywhere_else` document. A write cannot remove the last active rate. `applyDeliveryZoneTemplate()` creates starter Dhaka zones only when no zone exists.
+- `processPathaoImportChunk()` imports cities, zones and areas in chunks through repeated dashboard calls until the status is `complete`. Progress is in KV under `location_import:pathao` (24-hour TTL).
 
-### Pathao Status Map
-Handles two formats:
-- Webhook events: `order.created`, `order.picked`, `order.delivered`, etc. (20 mappings)
-- API status strings: normalized to lowercase with spaces to underscores (19 mappings)
-- Unmapped statuses log a warning and default to `unknown`
+## Routes
 
-### Steadfast Status Map
-Single format: 11 mappings including `_approval_pending` suffixes. Normalized to lowercase.
+Permissions are in `packages/core/src/auth/rbac/route-permissions/settings.ts` and `orders.ts`.
 
-## Shipment-to-Order Status Sync
+| Path | Permission |
+|------|------------|
+| `/api/v1/admin/settings/delivery-providers`: `GET /` | `settings.delivery_providers.view` or `orders.manage_shipments` |
+| Same path: `GET /{id}` | `settings.delivery_providers.view` |
+| Same path: `POST /`, `PUT /`, `POST /create-test` (test an unsaved setup), `POST /{id}` (test a saved one), `DELETE /{id}` | `settings.delivery_providers.edit` |
+| `/api/v1/admin/settings/delivery-locations`: reads (`GET /`, `GET /{id}`) | `settings.delivery_locations.view` |
+| Same path: `POST /`, `PUT /{id}`, `DELETE /`, `DELETE /all`, `DELETE /{id}`, `POST`/`DELETE /import-pathao`, `GET /import-pathao/status` | `settings.delivery_locations.edit` |
+| `/api/v1/admin/settings/shipping-methods`: `GET /`, `POST /` (create zone), `PUT /{id}`, `DELETE /{id}`, `PUT /everywhere-else`, `PUT /template` | `settings.shipping_methods.view` (`GET`), `.edit` (writes) |
+| `GET /api/v1/locations/cities`, `/zones`, `/areas` (and `/summaries`), `GET /api/v1/shipping-methods` | public |
+| `GET`, `DELETE /api/v1/admin/shipments/{id}`; `POST /api/v1/admin/shipments/{id}/check-status` | `orders.view` / `orders.manage_shipments` |
+| `/api/v1/admin/orders/{id}/shipments`, `.../{shipmentId}`, `/status`, `/refresh`, `/reconcile`, `/resolve-unknown` | see [fulfilment](../fulfilment/README.md) |
 
-`updateOrderStatusFromShipment()` maps shipment status to order status:
+## Rules
 
-| Shipment Status | Order Status | Conditions |
-|----------------|-------------|------------|
-| `pickup_assigned` | `shipped` | Order not already delivered/returned/cancelled |
-| `picked_up` | `shipped` | Order not already delivered/returned/cancelled |
-| `in_transit` | `shipped` | Order not already delivered/returned/cancelled |
-| `out_for_delivery` | `shipped` | Order not already delivered/returned/cancelled |
-| `partial_delivered` | `delivered` | Same as delivered |
-| `delivered` | `delivered` | Allowed direct from confirmed; deducts reserved stock if the order skipped shipped locally |
-| `returned` | `returned` | Always |
-| `pickup_failed`, `delivery_failed`, `failed` | `confirmed` | Only if order is shipped or processing |
-| `cancelled` | `confirmed` or `cancelled` | If shipped -> confirmed; if pending/processing -> cancelled |
-| `pending`, `on_hold`, `unknown` | No order change | Shipment-only state |
-
-Before updating, performs CAS update on `orders.version` to prevent race conditions with concurrent admin status changes. If the CAS fails (admin made a change at the same time), the webhook update is skipped with a log message. On CAS success, calls `applyInventoryForStatusChange()` for inventory side-effects. If inventory reconciliation fails after the status CAS, the shipment is marked `reconcile_required` with the carrier status needed for local repair. If the mapped order status already equals the current order status, it still calls `applyInventoryForStatusChange()` so provider retries or the explicit admin repair can fix stale `inventoryAction` left by a prior failure; callers should only send customer notifications when a real order status change is returned.
-
-Delivery webhooks and admin shipment refresh/check paths enqueue customer notifications from the API layer through `JOBS_QUEUE` after a committed order status change. The API helper maps only order statuses with existing templates: `shipped`, `delivered`, `returned`, and `cancelled`. Shipment-only states such as `out_for_delivery`, `on_hold`, and `delivery_failed` remain internal unless new notification templates/settings are added. All admin status-check endpoints must use the shared API shipment-status sync helper so provider polling, `lastChecked`, order/inventory reconciliation, availability cache invalidation, and notification enqueue stay in one path.
-
-Delivery webhook verification is active-provider authoritative. `verifyDeliveryWebhook()` must find exactly one active provider for the courier type; zero or multiple active providers fail closed before signature/IP checks. The webhook routes then scope shipment lookup by the verified `providerId` and `providerType` as well as the external consignment/tracking identifier, so an old/inactive provider row or another provider's colliding external id cannot update a shipment. Admin-triggered shipment creation and status polling also reject inactive provider IDs before provider API calls or local placeholder writes. Pathao shipment creation preflights required city/zone mappings before provider token work or local placeholder writes; the Pathao provider keeps its own mapping check as defense-in-depth.
-
-## Provider Activation Readiness
-
-Delivery providers are inactive drafts by default on both create and update-as-create paths. Turning a provider active still requires complete local setup through `assertDeliveryProviderReadyForActivation()`, but shipment actions require more: the provider readiness summary must be `active`, meaning the row is enabled and has a successful live connection test for the current provider type, unmasked credentials, and config. The proof is stored as a keyed fingerprint, so editing credentials/config clears stale success evidence unless the fingerprint still matches. A failed test records failure time without replacing successful proof, and a later failure blocks action readiness until a new successful test passes. Pathao activation requires `baseUrl`, `clientId`, `clientSecret`, `username`, `password`, and `storeId`; Steadfast activation requires `baseUrl`, `apiKey`, and `secretKey`. Admin list/get responses include a readiness summary with statuses `draft`, `configured`, `tested`, `active`, or `blocked` while returning masked credentials.
-
-## Credential Storage
-
-Delivery provider credentials are encrypted before storage with the dedicated `CREDENTIAL_ENCRYPTION_KEY`. `saveDeliveryProvider()` is write-strict and must not be called with `getEncryptionKey()` fallback output; route-facing saves use `requireEncryptionKey()` and fail before DB writes or checkout-cache invalidation when the key is missing. Admin list/get/update paths strict-read existing rows before masking or merging masked fields, including `webhookSecret`, so encrypted rows are never returned as ciphertext and masked placeholders are never persisted as real credentials. Provider runtime reads, webhook verification, Pathao import, shipment creation, status polling, and live tests pass only `getCredentialEncryptionKey()` output; missing/wrong keys fail closed before courier calls while legacy plaintext rows remain readable for migration.
-
-Active provider saves also reject incomplete setup, obvious placeholder values, and base URLs that are not absolute credential-free HTTPS URLs. Provider failures retain only bounded status/field metadata; raw upstream HTML/JSON bodies that may echo buyer details are never logged or returned as shipment diagnostics.
-
-### Tracking URLs
-- Pathao: `https://merchant.pathao.com/tracking?consignment_id={trackingId}`
-- Steadfast: `https://steadfast.com.bd/t/{trackingId}`
-
-## Pathao Location Import (`pathao-location-import.ts`)
-
-Chunked import optimized for Cloudflare Workers limits:
-
-- **Phase 1 (cities)**: One API call, bulk upsert
-- **Phase 2 (zones)**: Parallel API calls (`MAX_CONCURRENT=8`), bulk upsert
-- **Phase 3 (areas)**: 30 zones per chunk (`ZONES_PER_CHUNK`), parallel area fetches, bulk upsert
-
-Upsert logic: match by Pathao external ID first, then by `name+parentId`. Progress stored in KV (`location_import:pathao`, 24h TTL). Token cached with 10-minute safety margin.
-
-**Exported functions:** `processPathaoImportChunk()`, `resetPathaoImportProgress()`, `getPathaoImportStatus()`
-
-**Exported type:** `ImportChunkResult`
-
-## Dependencies
-
-- `@scalius/database` -- `deliveryProviders`, `deliveryShipments`, `deliveryLocations`, `orders`, `orderItems`, `products`
-- `@scalius/core/errors` -- `NotFoundError`, `ValidationError`, `ServiceUnavailableError`
-- `@scalius/core/utils/credential-encryption` -- `encryptCredentials`, `readStoredCredentialStrict`
-- `../inventory/inventory-transitions` -- `applyInventoryForStatusChange`
-- `@scalius/shared/customer-utils` -- `formatPhoneForProvider` (used by fraud-checker provider, not delivery directly)
-- `@paralleldrive/cuid2` -- ID generation for locations
-- `nanoid` -- ID generation for shipments
+- Never call a courier with unreadable or placeholder credentials. Fail closed.
+- Never infer "not booked" from a 404, a failed lookup or an unknown status. Never attach an external id without evidence that binds it to the original provider and order.
+- Never save a masked placeholder (`••••••••••••`) as a credential. The admin routes mask `clientSecret`, `password`, `apiKey`, `secretKey` and `webhookSecret`.
+- Never log credentials, courier response bodies, buyer contact data or webhook bodies.
+- Always scope webhook shipment lookups to the verified provider id and type.
+- Never write the fulfilment ledger or order status from a courier adapter. Adapters speak one courier's protocol only.

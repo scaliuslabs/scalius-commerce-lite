@@ -1,82 +1,101 @@
-# Cache dependency recording
+# Public cache validity (DVC)
 
-Read side of the dependency-validated public cache (DVC), described in
-`audit/rewrite-2026-09-23/CACHE-DESIGN.md` §6.5. The keys and the table
-registry live in `@scalius/shared/cache-deps`. The database triggers advance
-those keys on every committed buyer-visible change.
+This document owns how public API reads and storefront pages are cached and proved fresh: the dependency registry, SQL triggers, `deps.*` declarations, frontier proofs and the one-second freshness bound. DVC means dependency validation cache. Read it before you add a buyer-visible table or column, a public reader or a cache key.
 
-## Public freshness contract
+## Contract
 
-The API validates all cached parts of one batch with one authoritative database
-statement, including the starting clock and current Platform settings. Storefront
-HTML/XML checks a per-colo change frontier no older than one second; merchant
-preview links carry `_sv` to require their acknowledged commit immediately.
-Worker deployment identities are part of the proof. External responses cannot
-bypass validation through another CDN cache.
+- The API Worker caches each public read, and the storefront Worker each public page, in the Cache API (`caches.default`). There is no purge, warm list or route generation.
+- An entry stores the dependency keys its render read and the change-clock value `s0` the render started at. It stays valid while no key it depends on has a clock value above `s0`.
+- The storefront validates a page against a change frontier of its data center that is at most 1 second old (`CACHE_FRONTIER_DELTA_MS`). A page served at time t shows every write acknowledged before t minus 1 second.
+- A scheduled change (a promotion start or end) sets `validUntil`: the entry is never served at or after it. Otherwise content has no expiry.
+- Objects carry a one-year storage hint (`DEPENDENCY_CACHE_RETENTION_SECONDS`). An eviction costs one render, never correctness. Without proof the Worker renders live and never serves stale content.
+- Public API responses carry `no-store` CDN headers. `pnpm check:env` fails when the API default or a named entrypoint enables the Workers Cache, or when `PublicApi` exists.
+- The Worker version (`CF_VERSION_METADATA`) is part of every cache key, and page proofs also carry the API Worker version. Without a version, nothing is cached.
 
-Content has no routine expiration. Scheduled fact changes keep their exact
-transition deadline. Internal Cache API objects use a one-year storage hint;
-Cloudflare may evict them sooner, requiring a correct refill. Normal hot hits
-do not rewrite unchanged bodies. Missing freshness proof fails closed or renders
-live; it never grants a stale-response window.
+```text
+write (any path) -> trigger -> cache_dep (key -> seq), cache_clock.seq
+render -> withDependencyScope -> keys + s0 -> Cache API entry
+hit    -> API: one validation statement | storefront: frontier <= 1 s old
+```
 
-For the generation-to-dependency rollout, deploy the storefront first: an older
-API supplies no compatible proof, so pages render without persistent storage.
-Apply migration 0101 before deploying the strict API. Once the API removes
-generation bumps, do not roll back only the storefront to generation mode.
+## Write side: registry and triggers
 
-Database restore or authority replacement must redeploy **both API and
-storefront Worker versions before serving traffic**. Commit clocks order one
-database history only; a rollback or replacement can reuse earlier sequence
-numbers, so existing proofs must not cross that boundary.
+`CACHE_DEP_TABLES` in `packages/shared/src/cache-deps.ts` is the one registry. A registered table has `kinds` (the key kinds that cover a read of it), `noise` (columns no public payload outputs; every other column is buyer-visible) and `rules`. A rule gives, per event (insert, update, delete), the row image, the changed columns, a guard and the keys to advance. `CACHE_DEP_EXEMPT_TABLES` lists tables a public read may touch without a key, each with a reason.
 
-## Pieces
+`packages/database/scripts/cache-dep-triggers.ts` generates one trigger per rule. The tables `cache_clock` (one row: `seq`, `floor`, `coarse`) and `cache_dep` (`dep`, `seq`) hold the result.
 
-- `@scalius/database/read-observer`: the transports call `observeStatement(sql)`
-  for every statement. That covers the D1 request client (`prepare`, batches
-  included), the Turso adapter and the PostgreSQL adapter.
-  - Outside a scope it costs one `AsyncLocalStorage.getStore()`.
-  - Inside a scope it reports the tables the statement touched, and for a
-    settings statement its SQL and bound parameters (D1 at `bind` time), so
-    coverage can tell which documents it read.
-- `withDependencyScope(render, options)`: runs one public render and returns
-  `{ value, dependencies }`. The scope is request-scoped through
-  AsyncLocalStorage, so concurrent requests and concurrent batch parts never
-  mix. A nested scope hands its keys to its parent.
-- `deps.*`: what readers call to declare precise keys. Every call is a no-op
-  outside a scope.
+- **SQLite (D1, Turso).** The guard is the trigger `WHEN` clause. The body is one `INSERT INTO cache_dep ... ON CONFLICT DO UPDATE` statement, because remote D1 rejects trigger bodies that embed `SELECT CASE WHEN`. Each key gets `cache_clock.seq + 1`. Two triggers on `cache_dep` raise the clock.
+- **PostgreSQL.** Each trigger is a deferred constraint trigger. At commit it calls `scalius_compat."cache_dep_bump"`, which locks the clock row, so transactions commit in clock order.
 
-`dependencies` (`CacheDependencies`) has these fields:
+The triggers keep these rules:
 
-| Field | Meaning |
-| --- | --- |
-| `keys` | Sorted keys, `store` always included. The entry is valid while no key has `seq > s0`. |
-| `tables` | Every table the render touched. |
-| `coarseTables` | Registered tables no declared key covered. Each one added its `t:<table>` key and logged `[CacheDeps] coarse <label> <tables>`. |
-| `collapsedKinds` | Kinds that the 256-key budget replaced by their `t:` keys. |
-| `softMaxAgeSeconds` | Compatibility field for an explicit caller bound; ordinary reads never set it. |
-| `validUntil` | The earliest scheduled transition declared. Never serve the entry at or after it. |
-| `uncacheable` | Reasons the entry must not be stored: an unregistered table was read, `deps.uncacheable()` was called, the entry is over budget, or a nested render failed. |
+- A buyer-visible change of a registered row advances every key its rule derives, from the old and the new row image. It does so in the same transaction, whatever code wrote the row. An update rule fires only when a visible column changed. A move out of a menu, category, brand, product or promotion advances the one it left. Every change also advances `t:<table>`.
+- A stock change inside the SKU availability band advances nothing. A band change advances the product keys.
+- `rebuildCatalogProjections` sets `cache_clock.coarse = 1` for its batches. Every trigger then advances only `store`.
+- `POST /api/v1/cache/clear` (Settings, Advanced, "Refresh store"; permission `settings.cache.manage`) advances `store`. Every entry depends on `store`.
+- An entry with `s0` below `cache_clock.floor` is invalid. No code prunes `cache_dep`, so the floor stays 0.
 
-## How to declare deps (S3a/S3b)
+### Key kinds
 
-Import from inside core with `import { deps } from "../../cache-deps";`.
+A key is `kind:id[:facet]` or a bare constant. Ids are database row ids. The key builders are `cacheDep` in `packages/shared/src/cache-deps.ts`.
 
-1. **Declare what the output shows, where the data is loaded.** Put the call
-   in the shared loader, not in each route:
+```text
+p:<productId>   rec:<productId>   sold:<productId>   popular   recommendation-signals
+lm:all  lm:cat:<id>  lm:brand:<id>  lm:seo  lm:shape
+lo:<facet>:<scope>   lf:<scope>   srch
+c|b|col|pg|attr|promo : <id> or *    (categories, brands, collections, CMS pages, attributes, promotions)
+m:<mediaId>   set:<category>:<key>   theme   nav:<menuId> or nav:*
+ship  loc  tax  lang  an   cf:<ownerType>   plg:<pluginId> or plg:*   plgs:<pluginId>:<collection>
+t:<table>   store
+```
+
+- `p` advances on any buyer-visible fact of the product (page, card, JSON-LD, feed row). `lm` covers membership and newest order of a public product set, sitemap and feed flags and lastmods, and the store-shape counts (`lm:shape`). `lo` facets are `price`, `band`, `disc`, `name`, `rating` and `sale` (scope `all` only).
+- `sold` advances only when the visible sold count changes (10 or more units in 30 days), `popular` only at 2 or more units. `recommendation-signals` advances on any order or order line change, and only the live ranking fallback reads it.
+- `t:<table>` is the coarse fallback for any buyer-visible change of the table. `store` is everything.
+
+### Migrations
+
+Migration 0100 holds the clock tables and the baseline triggers (deployed, immutable). Migration 0101 holds the triggers of the ordering projections (`product_recommendations`, `product_sales_stats`, `orders`, `order_items`). `pnpm --filter @scalius/database exec tsx scripts/cache-dep-triggers.ts --write` regenerates only 0101. A table registered after 0101 gets a hand-assembled migration that contains every generated statement verbatim, and `CACHE_DEP_LATER_TABLES` names that migration (0104 custom fields, 0108 promotion customer segments, 0110 the plugin tables).
+
+## Read side: recording
+
+`withDependencyScope(render, options)` runs one public render and returns `{ value, dependencies }`. The scope lives in `AsyncLocalStorage`, so concurrent requests and batch parts never mix. A nested scope hands its keys to its parent.
+
+- Every database transport (D1, Turso, PostgreSQL) calls `observeStatement` from `@scalius/database/read-observer`. Inside a scope it reports the tables a statement touched (syntactic extraction, biased toward more tables), and for a settings statement also the SQL and bound parameters.
+- Readers call `deps.*` to declare precise keys. Outside a scope every call is a no-op.
+
+The `dependencies` result (`CacheDependencies`) holds the sorted `keys` (`store` is always in them), the `tables` touched, `validUntil` (the earliest scheduled transition declared) and:
+
+- `coarseTables`: registered tables that no declared key covered. Each added its `t:<table>` key and logged `[CacheDeps] coarse <label> <tables>`.
+- `collapsedKinds`: kinds that the key budget replaced by `t:` keys.
+- `uncacheable`: reasons not to store the entry. An unregistered table was read, `deps.uncacheable()` was called, the entry is over budget, or a nested render failed.
+
+Coverage rules:
+
+- A registered table is covered when a declared key has a kind in `cacheDepKindsForTable(table)`, or when `t:<table>` is declared. Any `p:`, `lo:`, `lm:` or `srch` key covers `products`.
+- Settings are covered by row (`CACHE_DEP_ROW_KEYED_TABLES`). Every settings source of a statement must pin `category` and `key` (`=` or `IN` against literals or bound values), and every pinned document needs its own `set:<category>:<key>`. A statement that reads the whole table, or joins settings on a column, falls back to `t:settings`.
+- Every public render declares `set:platform:document`. The part reader reads that row in the same statement as the clock. A KV hint never enters an entry.
+- An uncovered registered table falls back to `t:<table>`, which costs hit rate and never correctness. A table that is neither registered nor exempt makes the entry uncacheable.
+- An entry with more than 256 keys (`CACHE_DEP_ENTRY_KEY_BUDGET`) collapses its most numerous kinds to `t:` keys. Still above 256: uncacheable (`over-budget`).
+
+## How to declare deps
+
+Inside core, import `deps` from the `cache-deps` folder (`../../cache-deps` in a domain). The API imports `@scalius/core/cache-deps`. The full method list is `deps.ts`.
+
+1. Declare what the output shows, where the data loads. Put the call in the shared loader, not in each route:
 
    ```ts
    const cards = await loadProductCards(db, ids);
    deps.products(cards.map((card) => card.id));     // p:<id> for every card shown
    ```
 
-2. **Pick the key by what would change the output:**
+2. Pick the key by what would change the output:
 
    | Output | Declare |
    | --- | --- |
    | A product page, card, JSON-LD block or feed row | `deps.product(id)` / `deps.products(ids)` |
    | Which products are in a listing (and newest order) | `deps.listMembership(scope)`; scope is `"all"`, `categoryScope(id)` or `brandScope(id)` |
-   | Sorting or filtering by price, band, discount or name | `deps.listOrder("price" \| "band" \| "disc" \| "name", scope)` |
+   | Sorting or filtering by price, band, discount, name or rating | `deps.listOrder("price" \| "band" \| "disc" \| "name" \| "rating", scope)` |
    | The on-sale home list's candidate window | `deps.listOrder("sale", "all")` plus `deps.products(candidateIds)` for every candidate, shown or not |
    | Facet values and counts | `deps.listFacets(scope)` |
    | Search results | `deps.search()` plus `deps.listMembership("all")` |
@@ -84,89 +103,84 @@ Import from inside core with `import { deps } from "../../cache-deps";`.
    | Any availability band | `deps.inventoryBands()` (`set:inventory:document`) as well as the product keys |
    | A manual collection | `deps.collection(id)` plus `deps.products(memberIds)` |
    | A dynamic collection | `deps.collection(id)` plus `deps.listMembership(categoryScope(...))`, plus `deps.listOrder(...)` when sorted |
-   | One settings document | `deps.settings(category, key)` |
-   | Category, brand, CMS page, media, attribute or promotion rows | `deps.category(id)`, `deps.brand(id)`, `deps.page(id)`, `deps.media(id)`, `deps.attribute(id)`, `deps.promotion(id)`, or `deps.anyX()` for a list of all of them |
-   | Theme, menus, hero, shipping, locations, tax, languages, analytics | `deps.theme()`, `deps.navigation(menuId)`, `deps.hero()`, `deps.shipping()`, `deps.locations()`, `deps.tax()`, `deps.checkoutLanguages()`, `deps.analytics()` |
-   | App output (sections, product blocks) and the active apps' scripts | `deps.plugin(id)` (one installation), `deps.anyPlugin()` (which apps are active), `deps.pluginCollections(id, reads)` (the storage collections a section declares). These keys have no triggers: `core/modules/plugins` (the only writer of the plugin tables) advances them in the batch of every write (`plugins/cache-deps.ts`), and `apps/api/src/plugins/storefront-render.ts` declares them. |
+   | Custom field values | `deps.customFieldDefinitions(ownerType)` plus the owner's own keys |
+   | The store-shape counts | `deps.key(cacheDep.storeShape())` (`lm:shape`) plus the "any row" keys the read uses |
+   | App output (sections, product blocks) and active apps' scripts | `deps.plugin(id)` (one installation), `deps.anyPlugin()` (which apps are active), `deps.pluginCollections(id, reads)` (storage collections a section declares) |
 
-   Id helpers skip `null` and `undefined`, so optional relations can be written
-   inline, for example `deps.brand(product.brandId)`.
+   One row, one settings document or a global fact has a same-named call: `deps.category(id)`, `deps.brand(id)`, `deps.settings(category, key)`, `deps.theme()`, `deps.navigation(menuId)`, `deps.shipping()` and so on. `deps.anyX()` covers a list of all rows. Id helpers skip `null` and `undefined`, so `deps.brand(product.brandId)` works inline. `plugin_kv` is exempt because app storefront output never reads it. App declarations live in `packages/core/src/modules/plugins/storefront.ts` and `apps/api/src/plugins/storefront-render.ts`.
 
-3. **Time.** When the output depends on a scheduled switch, such as a
-   promotion's `starts_at` or `ends_at`, call `deps.validUntil(nextTransition)`
-   with the next future instant among the facts read.
+3. For a scheduled switch such as a promotion `starts_at` or `ends_at`, call `deps.validUntil(nextTransition)` with the next future instant among the facts read.
+4. Facts no key can validate (a KV hint, a live provider call, a per-buyer value) make the output uncacheable. Call `deps.uncacheable("short-code")`. Never put a value in the reason.
+5. Ordering projections. Stored recommendation readers declare `deps.recommendations(sourceId)` even when rows are missing. Card fact readers declare `deps.sold(productId)`, and the popular home list also declares `deps.popular()`. An unchanged refresh only updates `computed_at`, which advances no key. Only the live ranking fallback declares `deps.recommendationSignals()`. It also declares `validUntil` at the earliest included order's 30-day popularity exit or 365-day co-purchase exit, plus one second.
+6. Run the reader under `withDependencyScope(render, { strict: true })`. Strict mode throws `CacheDepCoverageError` when a table has no covering key, a table is neither registered nor exempt, or a key is malformed. A nested scope inherits strict mode.
 
-4. **Facts no key can validate.** A KV hint, a live provider call or a
-   per-buyer value makes the output uncacheable. Call
-   `deps.uncacheable("short-code")`, and never put a value in the reason.
+## Validate and serve
 
-5. **Ordering projections.** Stored recommendation readers declare
-   `deps.recommendations(sourceId)` (`rec:<id>`) even when rows are missing.
-   Card fact readers declare `deps.sold(productId)` (`sold:<id>`); the popular
-   home list also declares `deps.popular()` (`popular`). Migration 0101 adds
-   triggers for those projections without modifying deployed 0100. Unchanged
-   refreshes only update `computed_at`, which advances no key. Sold counts
-   below the card threshold (10) do not invalidate cards; popular-list changes
-   start at its threshold (2). Counts leaving either threshold advance its key.
+### API part reader
 
-   Only the live ranking fallback declares `deps.recommendationSignals()`.
-   Relevant committed order/line changes advance this constant key, never a
-   private order/customer identifier. The reader declares `validUntil` at the
-   earliest included order's 30-day popularity or 365-day co-purchase exit
-   (one second after the inclusive SQL boundary). Empty/quiet order sets have
-   no deadline. Stored lists and ordinary cards never depend on live order
-   signals. There is no routine age-based ordering expiry.
+`createPublicPartReader` in `apps/api/src/public-read.ts` serves every public read inside the calling invocation: each part of `GET /api/v1/storefront/batch` (at most 8 parts) and each direct public GET (`PUBLIC_API_CACHE_ROUTES`).
 
-6. **Check coverage.** Run the reader under
-   `withDependencyScope(render, { strict: true })`. Strict mode throws
-   `CacheDepCoverageError` when:
-   - a table is not covered by a declared key;
-   - a table is neither registered nor exempt;
-   - a key is malformed.
+1. The reader keys each part by the canonical URL plus `__cv=<Worker version>` and matches it in the Cache API. One statement (`readValidationSnapshot`) then reads the clock, the floor, the Platform settings row and every key of the hit entries that changed after the smallest `s0`.
+2. An entry is valid when all of these hold: `s0` is not ahead of the clock, `validUntil` and the soft age have not passed, `s0` is not below the floor, and no key it depends on has a clock value above `s0`. A valid hit raises its `s0` to the clock without rewriting the body.
+3. A miss or rejected hit renders under `withDependencyScope` with `s0` set to the snapshot clock. The reader stores the entry only when the response is cacheable, `uncacheable` is empty, `validUntil` is still ahead and the key list fits a 16,384-character header.
+4. A failed validation fails the part (a direct read answers 503). The reader never serves an unvalidated body.
+5. After the response, the reader re-renders 1 in 1,000 validated hits (`DVC_AUDIT_RATE`). A different body with no moved key evicts the entry and logs one masked line `[CacheAudit] stale`.
 
-   Strict mode is inherited by nested scopes, so one strict outer scope checks
-   a whole request.
+The reader gives the storefront a proof per part: the API version, `status` (`hit`, `miss`, `refresh`), `s0`, the keys as 48-bit hashes (`hashCacheDep`), `validUntil` and `renderedAt`. Key names never leave the API.
 
-Coverage is decided by kind. A table is covered when a declared key's kind is
-one of `cacheDepKindsForTable(table)`, or when its own `t:<table>` is
-declared. For example, `products` is covered by any `p:`, `lo:`, `lm:` or
-`srch` key.
+### Storefront page reader
 
-Settings are the exception (`CACHE_DEP_ROW_KEYED_TABLES`): every render
-declares `set:platform:document`, so a kind rule would cover any settings
-read. Each settings source of each statement must pin `category` and `key`
-(`=` or `IN` against literals or bound values, `pinnedSourceValues`), and
-every document it pins needs its own `set:<category>:<key>` declared. A
-statement that reads the whole table, or joins settings on a column, falls
-back to `t:settings`. Declare the precise keys the output actually depends on. The
-kind rule is only the safety net, and the S6 differential property test
-checks that the declared keys are enough.
+`servePublicStorefrontRequest` in `apps/storefront/src/lib/public-worker-cache.ts` serves anonymous HTML and discovery files. The key is `<origin>/__cache/<BUILD_ID>/<storefront Worker version>/dvc<path><query>`.
 
-A missing declaration costs hit rate in production, never correctness: the
-fallback adds `t:<table>`, which every change of that table advances. Reading
-a table that is neither registered nor exempt makes the entry uncacheable.
+1. A miss renders inside a collector (`apps/storefront/src/lib/page-dependencies.ts`). The page entry joins its parts: `s0` is the minimum, the keys are the union, `validUntil` is the minimum.
+2. The page is stored only when every API read of the render came through a batch part with a proof. It also needs at most 1,024 keys and one API version across all parts.
+3. `decideCacheFrontierHit` serves a hit only when the API versions match, `validUntil` and the soft age have not passed, `s0` is not below the floor and no key hash changed after `s0`. The slow path of step 4 checks an `s0` below the frontier horizon.
+   - The frontier is one Cache API object per data center, build and Worker version. A hit needs a frontier at most 1 second old.
+   - A refresh starts in the background once the frontier is older than 0.5 second. A request blocks on a refresh when the frontier is older than 1 second or behind `_sv`.
+   - A frontier call longer than 1.5 seconds renders the page live.
+4. The slow path (`POST /api/v1/storefront/frontier/check`) sends the key hashes. The API scans at most 4,000 changes after `s0` and answers "changed" beyond that. One check runs per entry and isolate; concurrent requests join it.
+5. `GET /api/v1/storefront/frontier` and the check route answer 404 without the `X-Scalius-Frontier-Key` header. Both Workers derive the key as an HKDF of `SCALIUS_SECRET` (purpose `cache-frontier`). A frontier answer holds at most 4,000 changes.
+6. Private requests (checkout, account, a session cookie, variant selections) always render.
+
+### Read your writes
+
+A successful admin write answers with `X-Scalius-Commit-Seq`, the clock after the write (`apps/api/src/middleware/commit-seq.ts`). The dashboard keeps the newest value in memory (`apps/admin-v2/src/lib/store-commit-seq.ts`) and adds `_sv=<clock>` to "view on store" links. The storefront refreshes its frontier to at least that clock before it serves, so the merchant sees their own write at once. `_sv` never splits the cache key or reaches a render.
+
+### Modes
+
+Production runs the API reader in `strict` mode (`API_PART_CACHE_MODE`) and the storefront in `frontier` mode (`STOREFRONT_PAGE_CACHE_MODE`). The modes `generation` and `shadow` exist for differential tests and the load harness only.
+
+## Add or change a schema element
+
+New buyer-visible table:
+
+1. Add the table to `CACHE_DEP_TABLE_RULES` with `kinds`, `noise` and `rules`. If no public read touches it, add it to `CACHE_DEP_EXEMPT_TABLES` with a reason of more than 20 characters instead. `packages/database/__tests__/cache-dep-triggers.test.ts` fails for a table in neither list or in both, and when the registry, triggers and migrations disagree on a provider.
+2. Add a migration that installs every generated trigger verbatim, on every provider (SQLite and the PostgreSQL sidecar). Keep each trigger body to one statement and the guard in `WHEN`. List the table in `CACHE_DEP_LATER_TABLES`. Never edit 0100.
+3. Declare precise `deps.*` in every public reader of the table.
+4. Run the DVC gate (below).
+
+New column on a registered table: the column is buyer-visible unless you list it in `noise`. List it only when no public payload outputs it. `apps/api/src/cache-deps-noise-audit.test.ts` (opt-in with `CACHE_DEP_NOISE_AUDIT_DB`) checks this on a copy of a real store. A visible column changes the generated update triggers, so add a migration that recreates the trigger.
+
+New public reader: declare its keys where the data loads, run it under a strict scope, mark a date-dependent fact with `deps.validUntil`, and keep per-buyer values out (or call `deps.uncacheable`).
+
+## Deploy and restore
+
+- Deploy the API Worker and the storefront Worker together. Page proofs carry the API version, so an API-only deploy re-renders every cached page.
+- After a database restore or an authority replacement, deploy both Workers before you serve traffic. Commit clocks order one database history only, and a restore can reuse earlier clock values. New Worker versions start with empty caches.
+
+## Gate
+
+The release gate must report zero findings. The property test runs random writes against every cached read. The race test checks commit order.
+
+```bash
+DVC_COLLECT=1 DVC_SEEDS=5 pnpm exec vitest run apps/api/src/cache-dvc.property.test.ts apps/api/src/cache-dvc.race.test.ts
+```
+
+`DVC_COLLECT=1` lists every distinct finding instead of stopping at the first, and `DVC_SEEDS` sets the number of seeds. The header of the property test lists the other modes. `apps/api/src/cache-deps-coverage.test.ts` checks that every table a cached public read touches is registered or exempt.
 
 ## Not observed
 
-- Statements sent through a raw binding (`env.DB.prepare`) and not through
-  `getDb(...)`. None exist in `apps/api/src` or `packages/core/src` today.
-- KV, R2 and provider calls. Declare them with `deps.uncacheable(...)`, or with
-  the settings key whose row the KV value mirrors.
+- Statements sent through a raw binding (`env.DB.prepare`) instead of `getDb(...)`. None exist in `apps/api/src` or `packages/core/src`.
+- KV, R2 and provider calls. Declare them with `deps.uncacheable(...)`, or with the settings key whose row the KV value mirrors.
 
-## Cost
-
-Measured by `overhead.test.ts` on Node 24 (Apple silicon), for a
-376-character Drizzle join:
-
-| Case | Cost |
-| --- | --- |
-| No scope | about 21 ns per statement |
-| In a scope, memoised parse | about 140 ns per statement |
-| First parse of a new statement shape | about 2 µs |
-| `deps.product(id)` | about 125 ns |
-
-An end-to-end node:sqlite Drizzle query took 42.2 µs without a scope and
-43.9 µs with one, within run-to-run noise. A hosted D1 read costs 0.5-5 ms.
-
-The parse memo keeps only statements without string literals, so no literal
-value is retained across requests. It is bounded to 1,024 statement shapes.
+Page and render budgets: [docs/STOREFRONT-PERFORMANCE.md](../../../../docs/STOREFRONT-PERFORMANCE.md).

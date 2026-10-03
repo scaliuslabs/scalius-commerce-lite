@@ -1,134 +1,71 @@
 # Nagad (`scalius.nagad`)
 
 > [!WARNING]
-> **UNVERIFIED.** This app was built from Nagad's published Online Payment API
-> documentation **without access to a Nagad sandbox**. Its HTTP calls and its
-> cryptography are tested only against a mock Nagad server that follows the
-> documentation. Before you take real payments with it, verify it end to end
-> with a live Nagad merchant account: a small real payment, a cancelled
-> payment and a failed one (see [What to verify](#what-to-verify)).
+> **UNVERIFIED.** Built from Nagad's published Online Payment API documentation **without access to a Nagad sandbox**. The tests use only a mock Nagad server (`src/mock-nagad.ts`) that follows that documentation. Every statement about Nagad's side below is unverified. Before real payments, verify the app with a live merchant account: a small real payment, a cancelled one and a failed one (see [What to verify](#what-to-verify)).
 
-Nagad online checkout as a hosted payment provider: the buyer chooses Nagad
-at checkout, pays on Nagad's page and comes back to the store. Scalius never
-trusts what the return URL says; it asks Nagad's Verify Payment API.
+A first-party hosted payment provider (`scalius.nagad:nagad`) for Nagad online checkout, built on the public plugin contract (`packages/plugin-sdk/README.md`). It is for merchants and contributors. The buyer pays on Nagad's page and returns to the store. The app never trusts the return URL: it asks Nagad's Verify Payment API.
 
-## Merchant setup
+## Set it up
 
-1. **Get a Nagad merchant account** with online payment (e-commerce) enabled.
-   Nagad gives you a **merchant ID** and your **merchant wallet number**.
-2. **Create an RSA key pair** (2048 bits or more) and keep the private key
-   secret:
+1. Get a Nagad merchant account with online payment enabled and a merchant ID.
+2. Create an RSA key pair of 2048 bits or more. Register the public key with Nagad. Keep the public key that Nagad gives you.
 
    ```sh
    openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out merchant-private.pem
    openssl pkey -in merchant-private.pem -pubout -out merchant-public.pem
    ```
 
-   Register `merchant-public.pem` with Nagad. Nagad gives you **its public
-   key** in return.
-3. In the Scalius dashboard, open the settings of the **Nagad (unverified)**
-   app and fill in:
+3. Open **Apps**, then **Nagad (unverified)**. Fill in the settings and save.
 
    | Setting | What to enter |
    | --- | --- |
-   | Environment | `Sandbox (test)` or `Live` |
-   | Merchant ID | The merchant ID from Nagad |
-   | Merchant number | Optional: your merchant wallet number (`01XXXXXXXXX`), sent as `accountNumber` |
-   | Merchant private key | The contents of `merchant-private.pem` (PKCS#8, `-----BEGIN PRIVATE KEY-----`). Stored encrypted. |
-   | Nagad public key | The key Nagad gave you (`-----BEGIN PUBLIC KEY-----`, or the bare base64 text) |
-   | Server IP sent to Nagad | Sent as `X-KM-IP-V4`. Use the IP Nagad whitelisted for you, if it asked for one; default `127.0.0.1`. |
+   | Environment | `Sandbox (test)` (default) or `Live`. |
+   | Merchant ID | Required. Letters and digits, at most 40. |
+   | Merchant number | Optional wallet number (`01XXXXXXXXX`, with or without `+88`). Sent as `accountNumber`. |
+   | Merchant private key | Required, stored encrypted. The contents of `merchant-private.pem` (PKCS#8, `BEGIN PRIVATE KEY`). A PKCS#1 key is refused with the `openssl` command that converts it. |
+   | Nagad public key | Required. The key Nagad gave you (`BEGIN PUBLIC KEY` or bare base64). |
+   | Server IP sent to Nagad | IPv4, default `127.0.0.1`. Sent as `X-KM-IP-V4`. Use the IP Nagad whitelisted for you, if it asked for one. |
 
-   A key in PKCS#1 form (`BEGIN RSA PRIVATE KEY`) is refused with the
-   `openssl` command that converts it.
-4. **Test connection** checks the settings locally: the merchant ID, that both
-   keys parse as RSA keys of at least 2048 bits, and that the Nagad key is not
-   your own public key. Nagad has no test call, so it **cannot** prove that
-   Nagad accepts your keys: only a real payment does.
-5. Turn Nagad on in **Settings → Payments**.
+4. A Super Admin selects **Review and activate**. The app asks to take payments and to reach the Nagad hosts. It asks for no permission on your store data.
+5. Open **Settings → Payments**. Select **Test connection**, then turn Nagad on.
 
-You do not configure a callback URL at Nagad: Scalius sends one with every
-payment (`merchantCallbackURL`), pointing at the store's API.
+**Test connection** checks the settings locally: merchant ID, merchant number, server IP, that both keys parse as RSA keys of at least 2048 bits, and that the Nagad key is not your own public key. It makes no Nagad call, so only a real payment proves that Nagad accepts your keys.
 
-## Environments
-
-| Environment | Base URL |
-| --- | --- |
-| Live | `https://api.mynagad.com/api/dfs` |
-| Sandbox | `https://sandbox-ssl.mynagad.com:10061/remote-payment-gateway-1.0/api/dfs` |
-
-Nagad's older sandbox (`http://sandbox.mynagad.com:10080/...`) is plain HTTP,
-and apps may only call `https` hosts, so it cannot be used. The TLS sandbox
-listens on port 10061, so the manifest's `allowedHosts` names that exact
-`sandbox-ssl.mynagad.com:10061` entry; no other port on that host is reachable.
+You configure no callback URL at Nagad. Scalius sends one with every payment (`merchantCallbackURL`).
 
 ## How a payment works
 
-1. **Initialize** (`POST /check-out/initialize/{merchantId}/{orderId}`): Scalius
-   sends `{merchantId, datetime, orderId, challenge}` encrypted with Nagad's
-   public key (RSA PKCS#1 v1.5) and signed with your private key
-   (SHA256withRSA). Nagad answers with `{paymentReferenceId, challenge,
-   acceptDateTime}` encrypted to your key and signed with its own; Scalius
-   decrypts it, checks Nagad's signature and checks that the challenge is the
-   one it sent.
-2. **Complete** (`POST /check-out/complete/{paymentReferenceId}`): Scalius
-   sends the amount (BDT, currency code `050`) and the return URL, sealed the
-   same way. Nagad answers with the page the buyer pays on.
-3. **Return**: Nagad sends the buyer back with `payment_ref_id`, `status` and
-   other parameters. Scalius ignores everything but the reference and calls
-   **Verify Payment** (`GET /verify/payment/{paymentRefId}`). Only Nagad's own
-   answer, matched against the order id, merchant and amount Scalius created,
-   confirms, cancels or fails the payment.
-4. **Status checks**: when a buyer asks whether a payment went through, or
-   Scalius reconciles one, it calls Verify Payment the same way.
+Every call sends `X-KM-Api-Version: v-0.2.0` and `X-KM-Client-Type: PC_WEB`. The base URL is `https://api.mynagad.com/api/dfs` (Live) or `https://sandbox-ssl.mynagad.com:10061/remote-payment-gateway-1.0/api/dfs` (Sandbox). Apps may call only `https` hosts, so the manifest's `allowedHosts` names `api.mynagad.com` and the exact `sandbox-ssl.mynagad.com:10061`.
 
-Nagad's order id is derived from the checkout attempt (20 hex characters), so
-a retried checkout gets the same Nagad page instead of a second payment. When
-Nagad closes a payment (cancelled, aborted, failed, or refused), the buyer's
-next try starts a new Nagad order.
+1. **Initialize** (`POST /check-out/initialize/{merchantId}/{orderId}?locale=EN`). The app sends `{merchantId, datetime, orderId, challenge}` encrypted with Nagad's public key (RSA PKCS#1 v1.5) and signed with your private key (SHA256withRSA). Nagad answers `{paymentReferenceId, challenge, ...}` sealed the same way. The app decrypts it, checks Nagad's signature and checks that `challenge` is the one it sent.
+2. **Complete** (`POST /check-out/complete/{paymentReferenceId}`). The app sends the amount (BDT, currency code `050`) and the return URL, sealed the same way. Nagad answers with the page the buyer pays on. The page must be `https`.
+3. **Return.** Nagad sends the buyer back with `payment_ref_id`. The app looks up only references this store created, so a forged return costs no Nagad call. It then calls **Verify Payment** (`GET /verify/payment/{paymentRefId}`). The answer must match the stored reference, Nagad order id, merchant ID and (for a capture) amount.
+4. **Status checks.** When a buyer asks whether a payment went through, or the platform reconciles one, the app calls Verify Payment the same way.
 
-Nagad's `Success` is a capture. `Aborted` and `Cancelled` release the checkout
-attempt as cancelled; `Failed`, `Fraud`, `InvalidRequest`, `UnKnownFailed` and
-`Expired` release it as failed. Any other status (`Ready`, `OrderInitiated`,
-`InProgress`, …) is not final and changes nothing.
+Nagad's order id is the first 20 hex characters of a SHA-256 over the checkout attempt and a generation number. A retried checkout gets the same Nagad page, never a second payment. After Nagad closes a payment, or an initialize call gets no answer, the next try of the attempt starts a new Nagad order (generation + 1).
 
-## Refunds
+The app compares Nagad's `status` without case, spaces, `_` and `-`:
 
-Nagad's public documentation gives no reliable refund API for this flow, so
-the app does not refund. Refund the payment in the **Nagad merchant portal**
-(the event's secondary reference is Nagad's `issuerPaymentRefNo`, the
-transaction id the portal shows), then record the refund manually on the
-order in Scalius.
+- `Success` is a capture. The event id is `issuerPaymentRefNo` (else the reference).
+- `Aborted` and `Cancelled` release the checkout attempt as cancelled.
+- `Failed`, `Fraud`, `InvalidRequest`, `UnKnownFailed` and `Expired` release it as failed.
+- Any other status (`Ready`, `OrderInitiated`, `InProgress`, ...) is not final and changes nothing.
 
-## What is not done, and why
+## Refunds, webhooks and limits
 
-- **Webhooks**: Nagad's public flow has no merchant webhook. `verifyWebhook`
-  answers `ignored`; payments are verified when the buyer returns and when
-  Scalius asks Nagad.
-- **Refunds**: see above.
-- **Amount limits**: Nagad's per-transaction limits are not documented
-  reliably, so none are declared; Nagad refuses an amount it does not allow
-  (`declined`).
-- **Sandbox testing**: no sandbox access, hence "unverified".
+- **Refunds.** The app declares no refund operation. Refund in the Nagad merchant portal, then record the refund on the order in Scalius.
+- **Webhooks.** `verifyWebhook` answers `ignored`.
+- **Amounts.** BDT only. The app declares no amount limits. Nagad refuses an amount it does not allow, and checkout shows `declined`.
+- **Time.** `limits.wallMs` is 15,000 ms. A return verification waits at most 8 s.
 
 ## What to verify
 
 With a live merchant account, before production:
 
-- Initialize answers decrypt and verify, and **echo the challenge Scalius
-  sent**. Some integrations treat the answer's `challenge` as one Nagad
-  generates; if so, initialize fails with `nagad.challenge_mismatch` and the
-  echo check in `src/nagad.ts` (`initializePayment`) must be removed (complete
-  already signs the challenge from Nagad's answer).
-- The page Nagad returns is `https`, and the buyer comes back to the store with
-  `payment_ref_id` in the query string. Scalius's return URL already has query
-  parameters (`order_id`, `payment_type`); check that Nagad appends its own
-  with `&`, and note that Nagad also sends an `order_id` (its own order id).
-- Verify Payment's `status` values (`Success`, `Aborted`, `Cancelled`,
-  `Failed`, …), its `amount` format, and that `issuerPaymentRefNo` is present
-  on a capture.
-- How Nagad reports refusals (`reason`/`message` fields, HTTP status): the app
-  treats 401/403 and signature or merchant errors as misconfiguration and
-  everything else as a decline.
+- Initialize answers decrypt and verify, and **echo the challenge the app sent**. If Nagad generates its own challenge, initialize fails with `nagad.challenge_mismatch`. Then remove the echo check in `initializePayment` (`src/nagad.ts`). Complete already signs the challenge from Nagad's answer.
+- The buyer returns with `payment_ref_id` in the query string. Scalius's return URL already has `order_id` and `payment_type`. Check that Nagad appends its own parameters with `&`. Nagad also sends an `order_id` of its own.
+- Verify Payment's `status` values, its `amount` format, and `issuerPaymentRefNo` on a capture.
+- How Nagad reports refusals. The app treats HTTP 401 and 403, and messages about signature, decryption, `sensitiveData` or merchant state, as misconfiguration. It treats everything else as a decline.
 
 ## Development
 
@@ -136,7 +73,4 @@ With a live merchant account, before production:
 pnpm exec vitest run plugins/nagad      # from the repository root
 ```
 
-`src/rsa.ts` implements PKCS#1 v1.5 encryption with BigInt (Web Crypto has
-none, and the sandbox has no `node:crypto`); its tests decrypt a ciphertext
-produced by OpenSSL. `src/mock-nagad.ts` is a test-only Nagad server that
-decrypts and signature-checks every request and seals its answers.
+`src/nagad.ts` holds the settings checks, the three Nagad calls and the status mapping. `src/index.ts` holds the manifest and the payment records (`ctx.storage.payments`). `src/rsa.ts` implements PKCS#1 v1.5 encryption with BigInt, because Web Crypto has none and the sandbox has no `node:crypto`.

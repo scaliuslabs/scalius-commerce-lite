@@ -1,260 +1,204 @@
-# Auth & RBAC System
+# Auth and RBAC
 
-Complete authentication and role-based access control for the Scalius Commerce admin dashboard. Two independent auth systems: Better Auth for admin users, D1-backed OTP challenges plus D1 hashed-token sessions for storefront customers.
+How staff sign in to the dashboard and what they may do: Better Auth, sessions, two-step verification (2FA), roles and permissions, first-admin setup, staff invites, scanner pairing and the identity handoff. For contributors and coding agents.
 
-## Architecture Overview
+Buyer sign-in is separate. It lives in `packages/core/src/modules/customers/README.md` (one-time codes, `customer_sessions`). Buyers have no 2FA.
 
+## Overview
+
+The API Worker serves the dashboard SPA (`apps/admin-v2`) and the API. The dashboard host carries three surfaces.
+
+```text
+<dashboard>/api/auth/*  -> apps/api/src/dashboard/auth.ts      Better Auth, route-guard state
+<dashboard>/api/v1/*    -> apps/api/src/middleware/admin-auth.ts -> getRoutePermission()
+<dashboard>/api/scanner-token -> apps/api/src/dashboard/scanner-session.ts
 ```
-Admin Auth Flow:
-  Browser (static SPA) --> GET <dashboard>/api/auth/dashboard-session --> Direct D1 session-cookie lookup
-                                             |
-                                             v
-                                       RBAC Permission Load
-                                             |
-                                             v
-                                       Page/API Route Guard
 
-API Worker Auth Flow (dashboard, CLI/agents, scanner):
-  Request --> Hono admin-auth middleware --> Better Auth Cookie OR Scanner Cookie
-                                             |
-                                             v
-                                       2FA gate + RBAC Permission Check via rbac/route-permissions/
+The selected relational provider is the authority for staff sessions, setup, scanner tokens and permissions. KV holds only the permission snapshot (Paid), the RBAC seed marker and the scanner session payload. Tables: `packages/database/src/schema/auth.ts` and `rbac.ts`.
 
-Customer Auth Flow (storefront):
-  Browser --> storefront /api/customer-auth/* proxy --> API /customer-auth/send-otp --> D1 OTP challenge
-  Browser --> storefront /api/customer-auth/* proxy --> API /customer-auth/verify   --> D1 token-hash session (cs_tok cookie)
-```
+The admin API accepts four kinds of caller:
+
+| Caller | Credential | Limits |
+| --- | --- | --- |
+| Staff | Signed Better Auth cookie | Gates, then route permissions. |
+| Scanner device | `scanner_sid` cookie | Only the scanner allowlist. No RBAC. |
+| Agent connection (CLI, MCP) | Bearer credential from `apps/api/src/agent-access/` | Dashboard resource, exposed operations, route permissions of its grant. A cookie plus an agent credential returns 403. |
+| Installed plugin | In-process dispatch | `apps/api/src/plugins/admin-request.ts`. Plugins never hold `apps.*` permissions. |
 
 ## Files
 
-### Core Auth
+- `auth.ts` has `createAuth()` and `getAuth()`, the Better Auth factory. It is request-scoped: never cache it, because it closes over the request database and bindings.
+- `credential-account.ts` holds the guarded provider batches that create staff identities (see "Staff and roles API").
+- `rbac/` holds `permissions.ts` (`PERMISSIONS`, prerequisites), `permission-metadata.ts` (display names, categories and sensitivity, kept apart so the dashboard does not download it on every page), `auto-seed.ts`, `route-permissions/` and `page-permissions.ts`. Other files in this folder are named after what they do (`password-hash.ts`, `admin-setup.ts`, `identity-handoff.ts`, `scanner-token-claims.ts`).
 
-| File | Purpose |
-|------|---------|
-| `auth.ts` | `createAuth()` / `getAuth()` -- request-scoped Better Auth factory with Drizzle adapter, email/password, 2FA (TOTP + email OTP), and admin plugin. It must not be cached because the instance closes over the request database adapter and Worker bindings. |
-| `password-hash.ts` | Self-describing, versioned password hashes sized to the Workers plan (`$sc1$pbkdf2-sha256$...` on Free, `$sc1$scrypt$...` on Paid), keyed with a pepper derived from `CREDENTIAL_ENCRYPTION_KEY`; Better Auth's own scrypt hashes still verify. A hash the deployment would not write now is rewritten at the next successful verify (`upgradeStoredPasswordHash` in `credential-account.ts`). See `docs/FREE-PLAN.md`. |
-| `admin-setup.ts` | D1-backed first-admin setup coordination. Owns the singleton setup claim, setup attempt rate limit, and guarded admin promotion/claim completion helper used by `/api/v1/setup`. |
-| `scanner-token-claims.ts` | D1-backed scanner QR-token claim helpers. Minting stores only a token hash, exchange atomically consumes an unexpired/unconsumed claim before a scanner KV session is written, and scheduled maintenance prunes expired/old claims. |
-| `index.ts` | Barrel re-export of `createAuth`, `getAuth`, `Auth` type, and setup coordination helpers. |
+## Keys
 
-### RBAC
+`SCALIUS_SECRET` is installed on both Workers. Each purpose key below is derived from it with HKDF at Worker entry (`packages/shared/src/runtime-secrets.ts`). Nothing derived is stored. Changing `SCALIUS_SECRET` rotates all of them: staff and buyer sessions, service JWTs and agent credential hashes stop working.
 
-| File | Purpose |
-|------|---------|
-| `rbac/types.ts` | TypeScript types: `PermissionName`, `UserPermissionContext`, `PermissionCheckResult`, `PermissionGroup`, `PermissionCategory`, `PermissionMetadata` |
-| `rbac/permissions.ts` | `PERMISSIONS` constant (78 permissions across 13 categories), `getAllPermissionNames`, and the prerequisite rules (`permissionPrerequisites`, `withPrerequisites`, `withoutUnmetPrerequisites`) |
-| `rbac/permission-metadata.ts` | `PERMISSION_METADATA` record (display names, descriptions, categories) and its helpers (`getPermissionsByCategory`, `getAllPermissions`, `isSensitivePermission`), apart so the dashboard's every page doesn't download it |
-| `rbac/helpers.ts` | Core RBAC engine: `getUserPermissions()` (KV + authoritative database batch query), `hasPermission()`, `hasAnyPermission()`, `hasAllPermissions()`, `getUserPermissionContext()`, `isSuperAdmin()`, `hasAdminAccess()`, role/permission CRUD (`assignRoleToUser`, `removeRoleFromUser`, `setUserPermissionOverride`, `removeUserPermissionOverride`, `getAllRolesWithPermissions`, `getRolePermissions`), and `clearPermissionCache()` |
-| `rbac/page-permissions.ts` | Maps admin page routes to required permissions. Static map for exact routes, regex array for dynamic routes (e.g., `/admin/products/[id]/edit`). `getPagePermission()` and `hasPageAccess()` functions. |
-| `rbac/route-permissions/` | Maps API route patterns to required permissions per HTTP method, one file per domain (`orders.ts`, `products.ts`, `conversations.ts`, ...) merged by `index.ts`. Glob-style wildcard matching. `getRoutePermission()` function. `ROUTE_PERMISSIONS` record. A path pattern belongs to exactly one domain file. |
-| `rbac/auto-seed.ts` | `autoSeedRbacIfNeeded()` -- seeds permissions and five system roles during first-admin setup, and reconciles changed code-owned definitions in idempotent database batches. API middleware schedules reconciliation outside the request critical path and uses a versioned six-hour Cloudflare KV marker; it never shares database I/O across Worker requests. |
+| Derived name (purpose label) | Use here |
+| --- | --- |
+| `BETTER_AUTH_SECRET` (`better-auth-session`) | Signs the staff session cookie. Encrypts 2FA recovery codes. |
+| `CUSTOMER_SESSION_HASH_KEY` (`customer-session-hash`) | Hashes buyer session tokens. |
+| `ADMIN_SETUP_TOKEN` (`admin-setup`) | Optional first-admin setup token. |
+| `FRONT_PROXY_SECRET` (`front-proxy`), `IDENTITY_HANDOFF_SECRET` (`identity-handoff`) | Automation keys. |
+| `JWT_SECRET` (`jwt-signing`), `API_TOKEN` (`service-api-token`), `AGENT_TOKEN_PEPPER` (`agent-token-pepper`) | Service tokens and agent credential hashes. |
 
-### Database Schema
+`CREDENTIAL_ENCRYPTION_KEY` is installed on the API Worker only. It is not derived. It encrypts provider credentials and customer OTP material, and it feeds the password pepper.
 
-| File | Tables |
-|------|--------|
-| `packages/database/src/schema/auth.ts` | `user`, `session`, `account`, `verification`, `twoFactor` including Better Auth's `verified` column and invited-admin onboarding flags |
-| `packages/database/src/schema/rbac.ts` | `permissions`, `roles`, `rolePermissions`, `userRoles`, `userPermissions` |
+## Better Auth configuration
 
-## Better Auth Configuration
+| Setting | Value |
+| --- | --- |
+| Sign-in | E-mail and password only. No OAuth. Disabled when the identity handoff turns local login off (`localLoginDisabled`). |
+| Base URL | The Platform dashboard URL (`BETTER_AUTH_URL`; the request origin before it is set). Never the API origin. |
+| Base path | `<dashboard base path>/api/auth`. The session cookie `Path` is the dashboard base path. |
+| Trusted origins | Dashboard URL and storefront URL. |
+| Password | 12 to 128 characters. E-mail verification off. |
+| Session | 7 days, refreshed daily. Cookies `better-auth.session_token` and `__Secure-better-auth.session_token`. Extra column `session.two_factor_verified`. |
+| Reset and invite links | Reset: 1 hour. Staff invite: 7 days. A new link replaces older ones. Sessions end after a reset. A reset clears `mustChangePassword`. |
+| 2FA | TOTP (6 digits, 30 s) and e-mail code (valid 5 minutes). 10 single-use recovery codes like `k7qx4-mn2pa`, stored encrypted. |
+| Admin plugin | `defaultRole: user`, `adminRoles: [admin]`. A suspended person gets `BANNED_USER`. |
 
-- **Provider**: Email/password only (no OAuth)
-- **Secret**: `BETTER_AUTH_SECRET`, derived from the single installed `SCALIUS_SECRET` with HKDF at Worker entry (`@scalius/shared/runtime-secrets`). It is never installed or read from `process.env`; `createAuth()` throws if it is absent from the request `Env`.
-- **Base URL**: `BETTER_AUTH_URL`, resolved per request to the Platform dashboard URL (Settings -> System -> Platform, falling back to the request's own origin before that setting is filled in) -- never the API origin, since reset links open dashboard routes.
-- **Min password length**: 12 characters (enforced consistently: Better Auth config, API `changePasswordSchema`, admin frontend `ChangePasswordForm`, and `SetupForm`)
-- **Email verification**: Disabled (`requireEmailVerification: false`)
-- **Session TTL**: 7 days, updated daily, cookie cache 5 minutes
-- **Rate limiting**: 5 sign-in attempts/min, 3 password resets/5min, 5 2FA attempts/min, session checks unlimited
-- **IP detection**: `cf-connecting-ip` then `x-forwarded-for`, IPv6 /64 subnet grouping
-- **Trusted origins**: the resolved dashboard URL (`BETTER_AUTH_URL`) and storefront URL (`STOREFRONT_URL`), both from Platform settings
-- **Password resets**: Better Auth revokes existing sessions after password reset and clears `user.mustChangePassword` only after the reset token is consumed.
-- **Email callbacks**: `sendResetPassword` (staff invite: 7-day link; password reset: 1-hour link; a new link replaces older ones), 2FA `sendOTP` and the password-changed notice render the store-branded templates in `staff-emails.ts` and dynamically import `sendEmail` from `../integrations/email` to avoid circular dependencies.
+### Password hashes (`password-hash.ts`)
 
-### Plugins
+Format `$sc1$<algorithm>$<params>$<salt>$<hash>`. The plan profile (`planLimits().password`, see `docs/FREE-PLAN.md`) picks the algorithm: Free uses PBKDF2-SHA256 with 30,000 iterations, Paid uses scrypt N=16384, r=16, p=1.
 
-1. **twoFactor**: TOTP (6 digits, 30s period) + email OTP (5 min expiry) + 10 backup codes (`xxxxx-xxxxx`, lower case without i/l/o/0/1)
-2. **admin**: `defaultRole: "user"`, `adminRoles: ["admin"]`
+- The password is keyed first: HMAC-SHA256 of the NFKC-normalised password under a key that HKDF derives from `CREDENTIAL_ENCRYPTION_KEY`. A copy of the database alone cannot test a guess.
+- Better Auth's own scrypt hashes still verify.
+- When a verified hash differs from what this deployment writes (other plan, no pepper, Better Auth format), `upgradeStoredPasswordHash` rewrites it with a compare-and-set. A failed rewrite never fails the sign-in.
 
-### Auth Client (admin frontend)
+### Rate limits and client IP
 
-`apps/admin-v2/src/lib/auth-client.ts` -- `createAuthClient()` with `twoFactorClient` (redirects to `/auth/two-factor`) and `adminClient` plugins. Exports `signIn`, `signUp`, `signOut`, `useSession`, `getSession`, `twoFactor`, `admin`.
+| Limit | Value | Store |
+| --- | --- | --- |
+| Better Auth `/sign-in/email` | 5 per minute | D1 `rate_limit` |
+| `/request-password-reset` | 3 per 5 minutes | D1 `rate_limit` |
+| `/two-factor/*` | 5 per minute | D1 `rate_limit` |
+| Other Better Auth routes | 100 per minute (`/get-session`: none) | D1 `rate_limit` |
+| Wrong 2FA codes | Better Auth locks the 2FA row; the API answers 429 `TWO_FACTOR_LOCKED` ("try again in 15 minutes") | `two_factor.locked_until` |
+| Identity handoff routes | 10 per minute | plugin |
+| First-admin setup | 5 per hour per IP | D1 `admin_setup_rate_limits` |
 
-## RBAC System
+- Better Auth reads the client IP from `cf-connecting-ip`, then `x-forwarded-for`, and groups IPv6 by /64. API routes call `getTrustedClientIp` (`apps/api/src/utils/client-ip.ts`): it trusts `cf-connecting-ip` only, reads `x-forwarded-for` only when a platform origin is loopback, and otherwise returns `unknown`.
+- Native limiters `RL_STRICT` (5 per 60 s) and `RL_STANDARD` (60 per 60 s; it also limits agent calls) are in `apps/api/wrangler.jsonc`.
 
-### Permission Resolution Order
+## Dashboard sign-in (`apps/api/src/dashboard/auth.ts`)
 
-1. Super admin (`user.isSuperAdmin = true`) -- gets ALL permissions unconditionally
-2. User-level overrides (grant or deny from `user_permissions` table)
-3. Role-based permissions (union of all assigned roles via `user_roles` + `role_permissions`)
+- `GET <dashboard>/api/auth/dashboard-session` returns `{ adminExists, signIn, session }` from the same lookup as the admin middleware. `session.permissions` appears only after every gate passes (password set, 2FA enrolled when required, 2FA verified). `signedOut: "access_changed"` means someone else ended the session behind a valid cookie.
+- `POST reset-session` checks a reset or invite token sent in the body and sets the cookie `__Host-scalius-password-reset` (10 minutes, `HttpOnly`, `SameSite=Strict`). `POST reset-password-session` sets the password and signs the person in. Tokens never travel in URLs. Dead links answer `TOKEN_USED`, `TOKEN_CANCELLED` or `INVALID_TOKEN`.
+- These Better Auth routes return 403 `AUTH_ROUTE_NOT_AVAILABLE`: `/sign-up/email`, `/change-password`, `/reset-password`, `/two-factor/disable`, `/admin/*`. Account creation, password change and 2FA removal go through the admin API.
+- A 2FA verify with `trustDevice: true` returns 400 `TRUSTED_DEVICE_DISABLED`.
+- Sign-in retries transient D1 failures, then returns 503 `TEMPORARY_AUTH_BACKEND_UNAVAILABLE`.
+- After a verified second factor, the handler sets `session.two_factor_verified`. The admin API requires it.
+- A request with an `Origin` that is neither the request origin nor the dashboard URL returns 403.
 
-### 78 Permissions Across 13 Categories
+Route guards (`apps/admin-v2/src/lib/auth-guards.ts`) redirect from that one session read: no administrator to `/auth/setup`, signed out to `/auth/login`, `mustChangePassword` to `/auth/forgot-password`, `mustEnrollTwoFactor` to `/auth/setup-2fa`, an unverified 2FA session to `/auth/two-factor`, and no page permission to `/admin/access-denied`. `/auth/reset-password` completes a reset or an invite. `/admin/access-denied` and `/admin/account` open for any signed-in person.
 
-| Category | Count | Sensitive |
-|----------|-------|-----------|
-| Products | 7 | `permanent_delete` only |
-| Categories | 6 | `permanent_delete` only |
-| Collections | 6 | No |
-| Orders | 8 | No |
-| Customers | 6 | No |
-| Discounts | 5 | All 5 |
-| Pages | 5 | No |
-| Media | 4 | No |
-| Attributes | 4 | No |
-| Analytics | 4 | No |
-| Settings | 18 | `general.*`, `delivery_providers.*`, `fraud_checker.*`, `taxes.*` |
-| Team | 3 | `view`, `manage`, `manage_roles` |
-| Dashboard | 2 | No |
+## Admin API middleware (`apps/api/src/middleware/admin-auth.ts`)
 
-### 5 System Roles (auto-seeded)
+For a cookie session, in order:
 
-| Role | Permissions | Notes |
-|------|-------------|-------|
-| `super_admin` | All 78 | System role, cannot modify permissions |
-| `manager` | All except `permanent_delete`, `orders.refund`, `delivery_providers.edit`, `fraud_checker.edit`, `team.manage_roles` | System role |
-| `sales_rep` | Dashboard, products/categories/collections (view), orders (full CRUD + shipments), customers (view/create/edit/history), discounts (view) | System role |
-| `content_editor` | Dashboard, pages (full CRUD), media (full), collections (view/edit/toggle), settings (header/footer/seo) | System role |
-| `product_specialist` | Dashboard, products (full except permanent_delete), categories (full except permanent_delete), collections (full), attributes (full), media (view/upload) | System role |
+1. Verify the Better Auth cookie signature with `BETTER_AUTH_SECRET`. Only then read the session and user from D1 (unexpired, not banned). A tampered cookie never reaches D1.
+2. If there is no staff session, try the `scanner_sid` cookie (below).
+3. Apply the gates. Each blocks everything except the listed requests (all under `/api/v1/admin/auth`):
+   - `mustChangePassword`: only `POST /change-password`.
+   - `mustEnrollTwoFactor` without 2FA: only `GET /2fa/info`, `POST /2fa/method`.
+   - 2FA enabled, session not verified: only `GET /2fa/info`, `POST /2fa/verify`, `POST /2fa/method`.
+4. Load permissions with `getUserPermissions`. A person with none gets 403. The legacy `user.role` is never a fallback.
+5. Schedule RBAC seed reconciliation with `waitUntil`. It never delays the response.
+6. Look up `getRoutePermission(path, method)`. An unmapped route returns 403, also for super admins.
+7. Check the rule: `allowAnyAdmin`, `permission`, `anyOf` or `allOf`.
 
-### Permission Caching
+`middleware/auth.ts` is a JWT-only middleware for service-token routes. The admin API accepts no JWT bearer. `GET /api/v1/auth/token` (`routes/auth.ts`) exchanges `X-API-Token` for a `system` JWT with a constant-time compare.
 
-- **Shared cache**: Cloudflare KV (`rbac:perms:{userId}`), 5-minute TTL
-- **Read order**: `getUserPermissions(db, userId, kv)` reads KV first, then refreshes from the authoritative database on a miss. It intentionally has no isolate-local user cache, so binding changes and revocations cannot be hidden by stale process memory.
-- **D1 batch query**: All 3 queries (user lookup, role permissions, user overrides) run in a single `db.batch()` call
-- **Cache invalidation**: `clearPermissionCache(userId, kv)` deletes the affected shared KV entry.
-- **Mutation rule**: RBAC mutation routes enumerate affected users and delete their per-user KV entries. There is no isolate-local authority cache to clear.
+### CSRF and CORS
 
-## Dashboard Sign-in and Route Guards
+- CORS allows credentials. Allowed origins: `PUBLIC_API_BASE_URL`, `BETTER_AUTH_URL`, `STOREFRONT_URL` and the Platform `corsAllowedOrigins` list (exact origins only), plus loopback origins when a platform origin is loopback (`packages/shared/src/cors-helper.ts`).
+- `dashboardOriginGuardMiddleware` covers `/admin/*` and `/cache/*`. Any request with cookies and a foreign `Origin` returns 403, reads included. Requests without cookies (agents, CLI) skip it.
+- `cookieOriginGuardMiddleware` covers `/customer-auth/*` and `/orders/*`. An unsafe request with cookies and an `Origin` outside the allowed list returns 403.
 
-The dashboard is a static SPA served by the API Worker on the dashboard hostname (`apps/api/src/dashboard/`).
+## Permissions
 
-- `apps/api/src/dashboard/auth.ts` owns `<dashboard>/api/auth/*`: Better Auth (sign-in, 2FA, sessions, password reset, identity handoff) plus the dashboard wrappers (reset-session cookie, blocked sign-up/change-password/2FA-disable routes, trusted-device refusal, D1 retries, 2FA-verified session marking). Every request must come from the dashboard origin.
-- `GET <dashboard>/api/auth/dashboard-session` returns `{ adminExists, signIn, session }` from the same signed-cookie D1 lookup as the admin middleware. `session.permissions` is present only once every gate (password set, 2FA enrolled when required, 2FA verified) has passed. Without a session, `signedOut: "access_changed"` means the browser still holds a correctly signed cookie whose session someone else ended (suspension, removal, sign-out elsewhere); the sign-in page says so.
-- Reset and invite links: `POST reset-session` answers `TOKEN_USED` (a hashed `reset-password:used:*` verification row, cleared by a newer link or staff removal) and `TOKEN_CANCELLED` (a hashed `reset-password:cancelled:*` row written when the owner revokes the invite; `reset-token-markers.ts`) apart from `INVALID_TOKEN` (expired, replaced, unknown). `POST reset-password-session` sets the password, signs in, and, when two-step enrolment is required, starts the authenticator enrolment with that same password so the setup page only confirms the emailed code (`twoFactorSetup.backupCodes`).
-- `apps/admin-v2/src/lib/auth-guards.ts` turns that state into route redirects: `/auth/setup` when no admin exists, `/auth/login` when signed out, `/auth/forgot-password` when `mustChangePassword`, `/auth/setup-2fa` when invited-admin enrollment is pending, `/auth/two-factor` when the session is not verified.
-- Page-level protection: the `/admin` route guard checks `hasPageAccess()` and redirects to `/admin/access-denied` on failure. Exceptions: `/admin/access-denied` and `/admin/account` are always accessible.
+`PERMISSIONS` in `rbac/permissions.ts` is the one list: 95 permissions named `<area>.<action>`.
 
-## API Worker Auth (Hono)
+- `permission-metadata.ts` marks 25 permissions sensitive: both `permanent_delete`, `orders.refund`, `orders.issue_invoice`, `gift_cards.*`, `discounts.*`, `settings.general.*`, `settings.delivery_providers.*`, `settings.fraud_checker.*`, `taxes.manage`, `team.manage`, `team.manage_roles`, `agent_access.*`, `webhooks.*` and `apps.manage`.
+- The dashboard groups them in 13 display categories (`PermissionCategory`). Inventory, reviews and gift cards show under Products. Conversations show under Orders. Taxes, agent access, webhooks and apps show under Settings.
+- Prerequisites (`permissionPrerequisites`): a permission needs its area's `.view`; `permanent_delete` needs `delete`; `inventory.view` needs `products.view`. A role save is rejected when a permission lacks its prerequisite. Effective access drops a permission whose prerequisite is missing.
 
-### Admin Auth Middleware (`apps/api/src/middleware/admin-auth.ts`)
+### Resolution (`getUserPermissions`)
 
-Authentication strategy:
-1. **Better Auth session cookie** -- tries first (dashboard requests on the dashboard host). The same direct signed-cookie model backs the dashboard route-guard state: verify `token.signature` with the derived `BETTER_AUTH_SECRET`, then read the active session/user row from D1 with expiry and ban predicates. Raw or tampered token prefixes must never reach D1 or Better Auth's heavier request handler.
-2. **Scanner session cookie** -- created only after `<dashboard>/api/scanner-token` atomically consumes a D1 scanner QR-token claim; limited to exact scanner workflow endpoints
+1. `user.isSuperAdmin`: every permission.
+2. The union of the person's role permissions (`user_roles`, `role_permissions`).
+3. User overrides (`user_permissions`): a grant adds, a denial removes. A denial wins.
+4. Drop permissions with an unmet prerequisite.
 
-Then validates:
-- Invited admins with `user.mustChangePassword = true` are blocked before RBAC except the own-account password-change endpoint. Invite onboarding uses a Better Auth reset token (`/auth/reset-password#invite=…`); the dashboard checks the token when the page opens, sets the password, clears the flag and signs the person straight in.
-- Invited admins with `user.mustEnrollTwoFactor = true` and `twoFactorEnabled = false` are blocked before RBAC except exact 2FA setup endpoints (`GET /2fa/info`, `POST /2fa/method`).
-- 2FA-enabled admin sessions must have `session.twoFactorVerified = true`, except exact 2FA completion endpoints (`GET /2fa/info`, `POST /2fa/verify`, `POST /2fa/complete-verification`, `POST /2fa/method`).
-- User must have at least one RBAC permission. Super admins receive all permissions through `getUserPermissions()`; do not fall back to legacy `user.role`.
-- Code-owned permission/role reconciliation runs through `waitUntil()` after effective permissions resolve. Existing D1 grants remain fail-closed authority for ordinary admins; a missing or expired seed marker must never delay an authenticated response.
-- Fine-grained route permission check via `getRoutePermission()`. Unmapped admin routes fail closed, including for super admins.
-- Scanner sessions use only the scanner allowlist and never inherit the minting admin's role or permissions.
-- Scanner QR token single-use state lives in `scanner_token_claims`, not KV. KV stores only the post-claim `scanner:session:*` payload with `claimTokenHash`.
+### System roles (`rbac/auto-seed.ts`)
 
-### JWT Auth Middleware (`apps/api/src/middleware/auth.ts`)
+| Role | Permissions |
+| --- | --- |
+| `super_admin` | All. |
+| `manager` | All except `products.permanent_delete`, `categories.permanent_delete`, `orders.refund`, `gift_cards.manage`, `settings.delivery_providers.edit`, `settings.fraud_checker.edit`, `team.manage_roles`, `agent_access.*`, `webhooks.*`, `apps.manage`. |
+| `sales_rep` | Orders and shipments, conversations, customers (no delete), `discounts.view`, product, category and collection view. |
+| `content_editor` | Pages, media, collection view and edit, header, footer and SEO settings edit. |
+| `product_specialist` | Products (no `permanent_delete`), inventory, categories, collections, attributes, media view and upload. |
 
-Simpler JWT-only middleware for non-admin service-token routes (`/auth/token`, `/auth/me`, etc.). Admin APIs intentionally do not accept JWT Bearer fallback; they require live Better Auth session truth for revocation, ban/deleted status, and 2FA.
+Every role has `dashboard.view`. Exact grants: `getSystemRoleSeeds()`.
 
-### Service-to-Service Token (`apps/api/src/routes/auth.ts`)
+`autoSeedRbacIfNeeded` creates missing permissions and roles and corrects system role grants. A KV marker `rbac:seed-current:v5:<hash>` (6 hours) skips repeat checks. D1 stays the authority.
 
-`GET /api/v1/auth/token` -- exchanges `X-API-Token` header for a JWT with `role: "system"`. Uses constant-time comparison. The token grants system-level access. Other `/api/v1/auth/*` routes are service token helpers, Firebase config, token revocation, current-token info, and token stats; they are not Better Auth endpoints.
+### Permission snapshot cache
 
-## Auth Pages (Admin Frontend)
+- `rbac:perms:<userId>:<seed hash>` in KV, TTL 1 hour. Paid only (`planLimits().kv.permissionCache`). On Free every check reads D1.
+- Every role or override write deletes the affected entries (`clearPermissionCache`, `clearPermissionCacheForRole`).
+- Role changes do not end sessions. The next request reads the new permissions.
 
-| Page | Purpose |
-|------|---------|
-| `/auth/login` | Sign-in form. Redirects to setup if no admins exist, to admin if already logged in. |
-| `/auth/setup` | First admin user creation. Blocked if any admin already exists or setup has already completed. D1-backed rate limit and setup claim prevent concurrent bootstrap races. Seeds RBAC. |
-| `/auth/two-factor` | 2FA verification form. Shows if session exists but `twoFactorVerified` is false. |
-| `/auth/setup-2fa` | 2FA setup page. Optional for existing admins, required for invited admins until `mustEnrollTwoFactor` is cleared. Redirects if password setup is still required or 2FA is already enabled. |
-| `/auth/forgot-password` | Password reset request form. |
-| `/auth/reset-password` | Password reset confirmation with token. |
-| `/auth/index` | Redirects to `/auth/login`. |
-| `/admin/access-denied` | Shown when RBAC denies page access. Link back to dashboard. |
+### Routes and pages
 
-## Customer Auth (Storefront)
+- `rbac/route-permissions/<domain>.ts` files map patterns (`/api/v1/admin/...`) to rules. `index.ts` merges them in `ROUTE_PERMISSION_MAPS`. A pattern lives in exactly one file (`route-permissions.test.ts`). Append a new map; do not reorder.
+- Matching: exact first, then more segments and fewer wildcards first. `*` is one segment. `**` is one or more (plugin route families only).
+- `allowAnyAdmin` admits the signed-in person's own account routes. Agents reach it only as super admin.
+- Every new admin route needs a rule. Add its page to `page-permissions.ts` (`hasPageAccess`; a page with no entry denies).
 
-Completely separate from Better Auth. OTP verification uses short-lived D1 challenges; customer sessions remain JWT-free D1 rows keyed by an HMAC hash of the `cs_tok` cookie value.
+## Staff and roles API
 
-| Constant | Value |
-|----------|-------|
-| Cookie name | `cs_tok` |
-| Session TTL | 30 days |
-| OTP TTL | 5 minutes |
-| OTP resend cooldown | 2 minutes |
-| Max OTP attempts | 5 per code |
-| IP rate limit | 5 requests/10min |
+Under `/api/v1/admin`. Rules from `rbac/route-permissions/staff.ts`.
 
-### Flow
+| Method and path | Permission |
+| --- | --- |
+| `GET /auth/users` | `team.view`, `team.manage` or `team.manage_roles` |
+| `POST /auth/users` (invite), `POST /auth/users/{id}/resend-setup`, `DELETE /auth/users/{id}` (revoke invite), `POST /auth/users/{id}/suspension`, `POST /auth/users/{id}/remove` | `team.manage` |
+| `GET /rbac/roles`, `GET /rbac/roles/{id}`, `GET /rbac/permissions` | `team.view` or `team.manage_roles` |
+| `POST /rbac/roles`, `PUT` and `DELETE /rbac/roles/{id}`, `POST` and `DELETE /rbac/user-roles`, `POST` and `DELETE /rbac/user-permissions` | `team.manage_roles` |
+| `POST /auth/change-password`, `POST /auth/update-profile`, `GET` and `PUT /auth/shortcuts`, `/auth/2fa/*`, `GET /auth/account-security`, `GET /auth/sessions`, `DELETE /auth/sessions` and `/{commandId}`, `GET /rbac/my-permissions` | Any signed-in person |
+| `POST /auth/scanner-link` | `products.view` and `products.edit` |
 
-1. `sendOtp()` -- validates identifier, normalizes phone to E.164, checks site settings/customer-auth policy, validates delivery transport before mutating challenge state, rate limits by trusted client IP through D1 `customer_auth_otp_rate_limits`, generates a 6-digit OTP, stores only opaque HMAC lookup material, a code HMAC, masks, and encrypted pinned sign-up contacts in `customer_auth_otp_challenges`, and returns queue payload with `deliveryKey` and `otpExpiresAt` for async delivery
-2. `/send-otp` sends the payload to `JOBS_QUEUE`; if queue handoff fails, it deletes the exact D1 OTP challenge by `otpKey` + `deliveryKey` and returns retryable `503`
-3. Queue delivery claims `auth_otp_delivery_receipts`, skips terminal/expired attempts, and records provider refs/status for email, SMS, or WhatsApp delivery
-4. `verifyOtp()` -- normalizes identifier to E.164, atomically consumes correct D1 OTP challenges or increments wrong-code attempts, creates/finds customer in DB, creates a D1 session row with only the token HMAC, returns `CustomerSession` with the raw token for the `cs_tok` cookie plus the canonical customer profile projection
-5. `getCustomerBySession()` -- hashes the cookie token, reads `customer_sessions`, joins the live `customers` row, rejects expired/revoked/deleted-customer sessions, and returns address/location/profile-completion fields for storefront hydration
-6. `deleteCustomerSession()` -- revokes the D1 session row; scheduled maintenance deletes expired and old revoked rows
-7. `updateCustomerProfile()` -- validates active delivery-location hierarchy, updates the customer DB record, clears the durable profile-required state only when name/address/city/zone are complete, and returns a fresh customer/session projection from D1
+Rules that code enforces:
 
-Phone numbers normalized to E.164 format via `libphonenumber-js`. New customer records are created only by explicit sign-up OTP verification and remain marked as needing profile completion until the delivery profile is saved.
+- A person who is not the store owner cannot put a permission they lack into a role, an override or an assigned role (`assertPermissionSubset`). Only the store owner assigns `super_admin`.
+- Nobody edits their own roles or permissions, or those of a super admin. Removing a person's last role is refused.
+- System roles cannot change permissions or be deleted. A role assigned to staff cannot be deleted.
+- Invite: `POST /auth/users` creates a blocked user (`mustChangePassword`, `mustEnrollTwoFactor`), the invitation row and the role in one atomic batch. A random bootstrap password is never returned or e-mailed. The response says `emailFailed: true` when the setup link did not send.
+- Suspend: sets `banned` and deletes the person's sessions. Refused for yourself, the store owner and the last active administrator.
+- Remove (`removeStaffMember`): ends sessions, password, 2FA, roles, overrides, scanner claims and pending invites. The `user` row stays so history keeps the name. Refused for yourself and the store owner.
+- 2FA is optional for the first admin and manual admins, and required for invited admins. Change an established method with `POST /auth/2fa/method-challenge` (needs the password; the staged challenge lasts 10 minutes) then `POST /auth/2fa/method` with `challengeId` and a code.
 
-## API Endpoints
+Better Auth e-mail sign-up is not atomic on the one-shot proxy adapters. Create administrative identities only with the atomic provider batches in `credential-account.ts` (`createInvitedAdminCredentialAccount`, `completeAdminSetupClaimWithCredentialIdentity`). Never enable interactive Drizzle transactions on these adapters.
 
-### Auth Management (`/api/v1/admin/auth/`)
+## First-admin setup (`admin-setup.ts`)
 
-| Method | Path | Purpose |
-|--------|------|---------|
-| GET | `/users` | List all admin users with roles and overrides |
-| POST | `/users` | Create an invited admin user, assign the selected role, set `mustChangePassword` + `mustEnrollTwoFactor`, and send a one-use Better Auth password setup link. The generated bootstrap password is never returned or emailed. |
-| DELETE | `/users/{id}` | Delete admin user (prevents last admin deletion) |
-| POST | `/change-password` | Change current user password (12-char minimum) |
-| POST | `/update-profile` | Update name and avatar |
-| GET | `/shortcuts` | Your dashboard keyboard shortcuts (`staff-shortcuts:<userId>` settings document; revision 0 = none saved) |
-| PUT | `/shortcuts` | Replace your shortcuts (`expectedRevision` compare-and-swap; paths `/admin/...`, values `g <key>` or `""` to turn a default off, no duplicates, max 80) |
-| GET | `/2fa/info` | Get current user 2FA status |
-| POST | `/2fa/complete-verification` | Complete 2FA after Better Auth verification; requires the verification session token bound to the current session/user |
-| POST | `/2fa/method` | Switch between TOTP and email OTP after verifying a code for the target method or proving the same-origin Better Auth `sessionToken` matches the current session/user |
-| POST | `/2fa/verify` | Verify TOTP, email OTP, or backup code |
-| GET | `/account-security` | Get 2FA method and super admin status |
+- `GET /api/v1/setup` returns `{ adminExists, setupTokenRequired }`. `POST /api/v1/setup` creates the first super admin and seeds RBAC.
+- D1 decides concurrency: the singleton row `admin_setup_claims` (`first_admin`, 60-second lease) and 5 attempts per hour per IP in `admin_setup_rate_limits`. Do not move this lock to KV.
+- When the Platform setting `setupTokenRequired` is on, the request needs the header `X-Scalius-Setup-Token` with the derived `ADMIN_SETUP_TOKEN`. See `docs/AUTOMATED-DEPLOYMENTS.md`.
 
-### Setup (`/api/v1/setup`)
+## Scanner pairing
 
-| Method | Path | Purpose |
-|--------|------|---------|
-| GET | `/` | Check if any admin user exists |
-| POST | `/` | Create first admin (sets as super admin, seeds RBAC) |
+1. `POST /api/v1/admin/auth/scanner-link` stores the SHA-256 of a one-time token (`sct_...`) in `scanner_token_claims`. It lives 15 minutes.
+2. The scanner page (`/scanner`) reads the token from the URL fragment and posts it to `<dashboard>/api/scanner-token`. Tokens in URLs are refused.
+3. The exchange consumes the claim atomically, writes the session payload to KV (`scanner:session:<sha256>`, 6 hours) and sets `scanner_sid` (`HttpOnly`, `SameSite=Strict`).
+4. The middleware lets a scanner session call only the allowlist in `packages/shared/src/scanner-auth.ts` (inventory lookup, locations, stock adjust and set, purchase order and transfer reads and receiving). It never inherits the minting admin's permissions.
 
-`POST /api/v1/setup` uses `admin_setup_rate_limits` for the 5/hour/IP setup throttle and `admin_setup_claims` as the singleton D1 setup authority. Do not move first-admin locking back to Cloudflare KV; KV may cache RBAC seed status, but setup concurrency must be decided by D1 insert/update predicates.
+Scheduled maintenance deletes expired and old consumed claims.
 
-### RBAC (`/api/v1/admin/rbac/`)
+## Identity handoff
 
-| Method | Path | Purpose |
-|--------|------|---------|
-| GET | `/roles` | List all roles with permissions |
-| POST | `/roles` | Create custom role |
-| GET | `/roles/{id}` | Get single role |
-| PUT | `/roles/{id}` | Update role (system role permissions immutable) |
-| DELETE | `/roles/{id}` | Delete role (blocked if assigned to users, blocked for system roles) |
-| POST | `/user-roles` | Assign role to user |
-| DELETE | `/user-roles` | Remove role from user |
-| POST | `/user-permissions` | Set permission override (grant or deny) |
-| DELETE | `/user-permissions` | Remove permission override |
-| GET | `/permissions` | List all permissions grouped by category |
-| GET | `/my-permissions` | Get current user's effective permissions |
-
-## Known Gaps
-
-1. **2FA is optional for existing/manual admins, mandatory for invited admins**. Invited admins are blocked by `mustEnrollTwoFactor` until a verified 2FA method update clears the flag. When 2FA is enabled, the admin middleware redirects browser sessions to `/auth/two-factor`, and the API admin middleware rejects unverified sessions except exact 2FA info/verify/complete-verification/method endpoints.
-
-2. **Permission invalidation is per user**: Cross-isolate RBAC invalidation deletes affected `rbac:perms:{userId}` KV entries with `clearPermissionCache(userId, kv)`. Role/permission mutation routes enumerate affected users and clear those keys.
-
-3. **Route permission map has mixed path prefixes**: Some entries use `/api/products/*` (legacy prefix), others use `/api/v1/admin/categories/*` (current prefix). The API admin-auth middleware normalizes paths by prepending `/api/v1` if not present. Admin page access is handled separately through the dashboard route guard and `@scalius/core/auth/rbac/page-permissions`.
-
-4. **Fraud checker is NOT called during checkout or order processing**. It is a standalone admin-only tool for manual phone number lookups. No automated fraud screening exists in the order pipeline.
-
-5. **Customer auth has no 2FA**. Storefront customers authenticate solely via single-factor OTP (email or phone).
-
-6. **Admin user creation depends on password setup email delivery**. If setup email delivery fails, the API reports `emailFailed: true`; the account remains blocked by onboarding flags until the creating admin fixes email settings or the invitee uses the password reset flow.
-
-7. **No session revocation on role changes**. When a user's roles or permissions are modified, their existing sessions remain valid. Effective permission checks should refresh after affected KV permission-cache entries are deleted, but sessions themselves are not revoked.
-
-8. **Super admin is set by first-user heuristic**. `autoSeedRbacIfNeeded()` also checks on every isolate start whether the first `role=admin` user (by `createdAt`) is a super admin and sets them if not. This could promote an unintended user if the original super admin is deleted.
+Opt-in. An operator's identity provider mints a short-lived token, and the dashboard turns it into a normal session. `GET <dashboard>/api/auth/handoff?token=...` signs in. `POST <dashboard>/api/auth/handoff/revoke` ends a person's sessions. Both answer 404 while the handoff is off. Each attempt writes `admin_identity_handoff_events`. The token contract, settings and the `pnpm auth:handoff-token` tool are in `docs/AUTOMATED-DEPLOYMENTS.md`. Code: `identity-handoff.ts`.
