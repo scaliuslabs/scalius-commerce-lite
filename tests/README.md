@@ -1,88 +1,58 @@
-# Scalius Commerce -- Private Test Suite
+# Cross-package unit tests
 
-This directory is gitignored. Tests are maintained by the core team only.
+This directory holds shared test helpers and unit tests that import code from more than one workspace. It is for contributors who write or run tests.
 
-## Structure
+Most tests live beside the code they cover, as `*.test.ts` files in `apps/*`, `packages/*`, `plugins/*`, and `scripts/`. Vitest runs all of them, including this directory.
 
-```
-tests/
-  setup.ts              # Mock factories, seed data generators
-  vitest.config.ts      # Vitest configuration
-  unit/
-    core/
-      orders/
-        order-lifecycle.test.ts      # Order creation and update flows
-        order-state-machine.test.ts  # Status transition validation
-      inventory/
-        batch-reservation.test.ts    # Multi-item stock reservation
-        reserve-deduct-release.test.ts # Individual inventory operations
-      payments/
-        cod-idempotency.test.ts      # COD duplicate prevention
-        process-payment.test.ts      # Payment confirmation processing
-        refund-validation.test.ts    # Refund amount validation
-      discounts/
-        discount-validation.test.ts  # Discount rule validation
-    api/
-      response-envelope.test.ts      # API response envelope contract
-    shared/                          # (empty -- placeholder for utility tests)
-  integration/
-    api-routes/                      # (empty -- placeholder for API route tests)
-    checkout/                        # (empty -- placeholder for checkout flow tests)
-    inventory/                       # (empty -- placeholder for concurrent inventory tests)
-  fixtures/                          # (empty -- placeholder for shared test data)
-```
+`.gitignore` lists `tests/`. The files below are tracked anyway. Add a new file here with `git add -f`.
 
-## Running Tests
+## Run tests
+
+Run from the repository root:
 
 ```bash
-pnpm test           # Run all tests
-pnpm test:watch     # Watch mode
+pnpm test                                   # all tests in the repository
+pnpm test:watch                             # watch mode
+pnpm exec vitest run tests/unit/core/orders # one directory or file
+pnpm test:ci                                # what CI runs
 ```
 
-## Configuration
+`pnpm test:ci` runs the same tests, but runs the three database export and upload tests in `packages/database/__tests__/` one worker at a time.
 
-These tests run under the repository-root `vitest.config.ts`. Import helpers from
-`./setup.ts` directly where a test needs them.
+The root `vitest.config.ts` sets `globals: true` and ignores `.claude/**`. It resolves the `@/` alias to `apps/admin-v2/src` or `apps/storefront/src` by the importing file. It stubs the `cloudflare:workers` module.
 
-## Test Setup (`setup.ts`)
+## Test conventions
 
-### Mock DB Factory
+| Suffix | Runs against |
+|--------|--------------|
+| `*.test.ts` | Pure logic or mocks |
+| `*.d1.test.ts` | The real migrations on an in-memory SQLite database behind a D1-compatible binding (`createSqliteD1Database` in `packages/database/src/testing/sqlite-d1.ts`) |
+| `*.postgres-native.test.ts` | A real PostgreSQL server. The tests skip unless `SCALIUS_TEST_POSTGRES_URL` points at a disposable server |
 
-`createMockDb(overrides?)` creates a mock drizzle-style database for unit tests:
-- Tracks all calls for assertion (`db._calls`)
-- Returns configurable results for `select`, `insert`, `update`, `delete`
-- Supports `batch()` for atomic multi-statement operations
-- Chainable methods: `from`, `where`, `set`, `values`, `returning`, `orderBy`, `limit`, `offset`, `groupBy`, `leftJoin`, `innerJoin`
-- Terminal methods: `.get()` (single result), `.all()` (array), `.then()` (thenable for `await`)
-- Reset: `db._reset()` clears recorded calls
+## Layout
 
-### Mock Cloudflare Environment
+```text
+tests/
+  setup.ts   Mock factories and seed generators
+  unit/
+    api/         response-envelope, timestamps
+    core/
+      inventory/ batch-reservation, reserve-deduct-release
+      media/     media-settings, storage-url
+      orders/    order-lifecycle, order-state-machine, order-search, update-order-atomicity
+      pages/     page-content-sanitization
+      payments/  cod-idempotency, process-payment, refund-validation
+    shared/      html-sanitize
+    storefront/  checkout-discount-input, checkout-error-messages, price-filter-url,
+                 product-media, rich-content-media
+```
 
-`createMockEnv()` returns mocked Cloudflare bindings:
-- `DB` -- Mock D1 with `prepare`, `batch`, `exec`
-- `KV` -- Mock KV backed by `Map` with `get`, `put`, `delete`, `list`
-- `R2` -- Mock R2 with `get`, `put`, `delete`, `list`
-- `QUEUE` -- Mock Queue with `send`, `sendBatch` (tracks messages in `_messages`)
+Each file in `unit/` is named `<name>.test.ts`. Only `page-content-sanitization` and `reserve-deduct-release` import `setup.ts`. The other tests define their own fixtures.
 
-### Seed Data Generators
+## Helpers in `setup.ts`
 
-Factory functions with sensible defaults and override support:
-- `seedProduct(overrides?)` -- Products with `prod_` prefix IDs
-- `seedVariant(overrides?)` -- Variants with `var_` prefix IDs, stock/preorder/backorder fields
-- `seedOrder(overrides?)` -- Orders with 6-char alphanumeric IDs, all financial fields
-- `seedOrderItem(overrides?)` -- Order items with `item_` prefix IDs
-- `seedCustomer(overrides?)` -- Customers with `cust_` prefix IDs, E.164 phone
-
-## Test Coverage
-
-8 test files covering critical business logic:
-
-| Area | Tests | What's Covered |
-|------|-------|----------------|
-| Orders | 2 | Lifecycle (create/update), state machine (valid/invalid transitions) |
-| Inventory | 2 | Batch reservation (multi-item), reserve/deduct/release operations |
-| Payments | 3 | COD idempotency, payment confirmation processing, refund amount validation |
-| Discounts | 1 | Discount rule validation |
-| API | 1 | Response envelope `{ success: true, data: T }` contract |
-
-Unit tests mock the DB at the drizzle level. Integration tests (currently empty) are intended to use miniflare.
+| Helper | What it gives you |
+|--------|-------------------|
+| `createMockDb(overrides?)` | A drizzle-style database mock. It records calls in `db._calls` (clear with `db._reset()`), returns the configured results, and supports `batch()`. Chainable methods: `from`, `where`, `set`, `values`, `returning`, `orderBy`, `limit`, `offset`, `groupBy`, `leftJoin`, `innerJoin`. Terminal methods: `get()`, `all()`, and `await`. |
+| `createMockEnv()` | Mock bindings `DB` (D1 `prepare`, `batch`, `exec`), `KV` (backed by a `Map`), `R2`, and `QUEUE` (`send`, `sendBatch`, messages in `_messages`). These names are the mock's own, not the Worker's binding names. |
+| `seedProduct`, `seedVariant`, `seedOrder`, `seedOrderItem`, `seedCustomer` | Plain objects with defaults and per-field overrides. IDs use the prefixes `prod_`, `var_`, `ORD-`, `item_`, and `cust_`. Money fields are integer minor units (`*Minor`). |
