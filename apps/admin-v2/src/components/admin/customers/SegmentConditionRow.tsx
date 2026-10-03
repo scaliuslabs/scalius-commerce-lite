@@ -15,6 +15,7 @@ import { SearchableSelect } from "~/components/ui/searchable-select";
 import { MoneyInput } from "~/components/admin/shared/MoneyInput";
 import { useCurrency } from "~/hooks/use-currency";
 import { useMessages } from "~/i18n";
+import { customerMarketingMessages } from "~/i18n/customer-marketing";
 import { customersMessages } from "~/i18n/customers";
 import { customerSegmentMessages, type CustomerSegmentMessageKey } from "~/i18n/customer-segments";
 import type { CustomFieldDefinition } from "~/lib/api-query-options/custom-fields";
@@ -63,6 +64,7 @@ export function SegmentConditionRow({
 }) {
   const t = useMessages(customerSegmentMessages);
   const c = useMessages(customersMessages);
+  const m = useMessages(customerMarketingMessages);
   const { code, symbol } = useCurrency();
   const key = condition.key;
   const name = t(`field.${condition.field}` as CustomerSegmentMessageKey);
@@ -217,7 +219,7 @@ export function SegmentConditionRow({
                 value={condition.status}
                 disabled={disabled}
                 onValueChange={(status) => onChange({ ...condition, status: status as typeof condition.status })}
-                options={MARKETING_CONSENT_STATUSES.map((status) => ({ value: status, label: c(`status.${status}`) }))}
+                options={MARKETING_CONSENT_STATUSES.map((status) => ({ value: status, label: m(`status.${status}`) }))}
                 triggerClassName={FULL}
               />
             </Field>

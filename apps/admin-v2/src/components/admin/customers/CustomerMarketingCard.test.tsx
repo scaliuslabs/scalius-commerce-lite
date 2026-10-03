@@ -5,7 +5,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { notifyManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { translate } from "~/i18n";
-import { customersMessages } from "~/i18n/customers";
+import { customerMarketingMessages } from "~/i18n/customer-marketing";
 
 const sdk = vi.hoisted(() => ({
   getApiV1AdminCustomersByIdMarketing: vi.fn(),
@@ -18,7 +18,7 @@ import { CustomerMarketingCard } from "./CustomerMarketingCard";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const t = (key: keyof typeof customersMessages.en, vars?: Record<string, string | number>) => translate(customersMessages, key, vars);
+const t = (key: keyof typeof customerMarketingMessages.en, vars?: Record<string, string | number>) => translate(customerMarketingMessages, key, vars);
 const ok = <T,>(data: T) => Promise.resolve({ data: { success: true, data }, response: { status: 200 } });
 
 const consent = (channel: string, status: string, extra: Record<string, unknown> = {}) => ({

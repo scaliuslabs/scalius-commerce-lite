@@ -12,7 +12,7 @@ import { Button } from "~/components/ui/button";
 import { Label } from "~/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import { useMessages } from "~/i18n";
-import { customersMessages } from "~/i18n/customers";
+import { customerBulkMessages } from "~/i18n/customer-bulk";
 import { resourceMessages } from "~/i18n/resource";
 import {
   buildCustomerExportParams,
@@ -39,7 +39,7 @@ interface ExportCustomersDialogProps {
 
 /** Export customers as CSV: the selection (up to 100) or everyone matching the list's tab and filters. */
 export function ExportCustomersDialog({ open, onOpenChange, filters, selectedIds, total, searchActive }: ExportCustomersDialogProps) {
-  const t = useMessages(customersMessages);
+  const t = useMessages(customerBulkMessages);
   const r = useMessages(resourceMessages);
   const [chosen, setChosen] = useState<Scope | null>(null);
   const [busy, setBusy] = useState(false);
