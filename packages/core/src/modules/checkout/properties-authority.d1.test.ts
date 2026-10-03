@@ -164,8 +164,9 @@ describe("buyer-input schema changes fence in-flight checkouts", () => {
     sqlite.exec(`
       INSERT INTO product_variants (id, product_id, sku, price_minor, stock, is_default, track_inventory)
       VALUES ('variant_1', 'prod_1', 'PEN-1', 10000, 10, 1, 1);
-      INSERT INTO shipping_methods (id, name, fee_minor, is_active)
-      VALUES ('shipping_standard', 'Standard delivery', 6000, 1);
+      INSERT INTO delivery_zones (id, name) VALUES ('dz_bd', 'Bangladesh'); INSERT INTO delivery_zone_regions (country_code, zone_id) VALUES ('BD', 'dz_bd'); 
+      INSERT INTO shipping_methods (id, name, fee_minor, is_active, zone_id)
+      VALUES ('shipping_standard', 'Standard delivery', 6000, 1, 'dz_bd');
     `);
   });
 

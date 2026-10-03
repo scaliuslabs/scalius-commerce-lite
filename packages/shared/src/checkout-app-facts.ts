@@ -97,6 +97,9 @@ export interface ManualOrderAppInput {
   /** The shipping country (null when nothing ships); Bangladesh's City/Thana ids and names below. */
   shippingCountryCode?: string | null;
   address: { city: string; zone: string; area: string | null } | null;
+  /** Another country's admin area and postal code: shipping zones match on them. */
+  shippingAdminArea?: string | null;
+  shippingPostalCode?: string | null;
   locationNames: { cityName: string | null; zoneName: string | null };
 }
 

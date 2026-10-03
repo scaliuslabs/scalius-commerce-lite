@@ -457,6 +457,8 @@ export async function prepareManualOrderQuote(
         requiresShipping: plan.requiresShipping,
         shippingCountryCode,
         address,
+        shippingAdminArea: data.shippingAdminArea ?? null,
+        shippingPostalCode: data.shippingPostalCode ?? null,
         locationNames,
     };
     const appPricing = options.apps ? await options.apps.price(appInput) : withoutApps(appInput);

@@ -9,7 +9,12 @@ import {
   type AgentStorefrontCheckoutSubmitInput,
 } from "./buyer-workflow";
 import { AgentStorefrontCheckoutQuoteConflictError } from "./quote-fingerprint";
-import { getAgentStorefrontCart, mutateAgentStorefrontCart, quoteAgentStorefrontCheckout } from "./service";
+import {
+  getAgentStorefrontCart,
+  mutateAgentStorefrontCart,
+  quoteAgentStorefrontCheckout,
+  setAgentStorefrontDelivery,
+} from "./service";
 
 const GRANT = "agr_storefront0123456789";
 const CONTEXT = "asc_context0123456789abc";
@@ -32,7 +37,7 @@ describe("agent storefront checkout submission on D1 storage", () => {
       INSERT INTO delivery_locations (id, name, type, parent_id, external_ids, metadata, is_active)
       VALUES ('city_1', 'Dhaka', 'city', NULL, '{}', '{}', 1),
              ('zone_1', 'Dhanmondi', 'zone', 'city_1', '{}', '{}', 1);
-      INSERT INTO shipping_methods (id, name, fee_minor, is_active) VALUES ('ship_1', 'Standard', 6000, 1);
+      INSERT INTO delivery_zones (id, name) VALUES ('dz_bd', 'Bangladesh'); INSERT INTO delivery_zone_regions (country_code, zone_id) VALUES ('BD', 'dz_bd'); INSERT INTO shipping_methods (id, name, fee_minor, is_active, zone_id) VALUES ('ship_1', 'Standard', 6000, 1, 'dz_bd');
       INSERT INTO products (id, name, slug, price_minor, is_active) VALUES ('prod_1', 'Tea', 'tea', 10000, 1);
       INSERT INTO product_variants (id, product_id, sku, price_minor, stock, is_default, track_inventory)
       VALUES ('variant_1', 'prod_1', 'TEA-1', 10000, 10, 1, 1);
@@ -210,6 +215,44 @@ describe("agent storefront checkout submission on D1 storage", () => {
     await expect(refusal).rejects.toBeInstanceOf(ValidationError);
     await expect(refusal).rejects.toThrow("Enter the delivery address");
     expectNothingCommitted();
+  });
+
+  it("prices a foreign destination with its shipping zone and never offers cash on delivery there (MARKETS-DESIGN step 3b)", async () => {
+    sqlite.exec(`
+      UPDATE settings SET value = '{"allowedCountries":["BD","US"],"allowedCountriesMode":"include"}' WHERE id = 's_countries';
+      INSERT INTO markets (id, handle, name, status) VALUES ('mkt_us', 'united-states', 'United States', 'active');
+      INSERT INTO market_countries (country_code, market_id) VALUES ('US', 'mkt_us');
+      INSERT INTO delivery_zones (id, name) VALUES ('dz_us', 'United States'), ('dz_west', 'West coast');
+      INSERT INTO delivery_zone_regions (country_code, admin_area, zone_id) VALUES ('US', '', 'dz_us'), ('US', 'CA', 'dz_west');
+      INSERT INTO shipping_methods (id, name, fee_minor, is_active, zone_id) VALUES
+        ('ship_us', 'US standard', 250000, 1, 'dz_us'), ('ship_west', 'West coast', 150000, 1, 'dz_west');
+    `);
+    await expect(setAgentStorefrontDelivery(db, GRANT, CONTEXT, 2, {
+      countryCode: "US", cityId: null, zoneId: null, areaId: null, adminArea: "CA", postalCode: "94103", shippingMethodId: "ship_us",
+    })).rejects.toMatchObject({ details: { reason: "delivery_rate_unavailable" } });
+    const cart = await setAgentStorefrontDelivery(db, GRANT, CONTEXT, 2, {
+      countryCode: "US", cityId: null, zoneId: null, areaId: null, adminArea: "California", postalCode: "94103", shippingMethodId: "ship_west",
+    });
+    expect(cart.context.delivery).toEqual({
+      countryCode: "US", cityId: null, zoneId: null, areaId: null, adminArea: "California", postalCode: "94103", shippingMethodId: "ship_west",
+    });
+    expect(cart.delivery).toMatchObject({ kind: "delivery", shippingCharge: 1_500 });
+
+    const quote = await quoteAgentStorefrontCheckout(db, GRANT, CONTEXT, { credentialEncryptionKey: "k".repeat(64) });
+    expect(quote).toMatchObject({ shippingMinor: 150_000, paymentMethods: [] });
+    await expect(submitAgentStorefrontCheckout(db, GRANT, CONTEXT, {
+      expectedRevision: 3,
+      expectedQuoteFingerprint: quote.quoteFingerprint,
+      idempotencyKey: "agent-checkout-key-0002",
+      customerName: "Delivery Buyer",
+      customerPhone: "+14155550100",
+      customerEmail: null,
+      shippingAddress: "1 Market Street",
+      shippingLocality: "San Francisco",
+      notes: null,
+      paymentMethod: "cod",
+    }, { requestUrl: "https://shop.example.com/api/v1/agent" })).rejects.toThrow("Cash on delivery isn't available for this delivery country");
+    expect(sqlite.prepare("SELECT COUNT(*) AS count FROM orders").get()).toEqual({ count: 0 });
   });
 });
 

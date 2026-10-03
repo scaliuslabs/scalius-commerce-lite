@@ -19,7 +19,7 @@ function createTestApp() {
       ('mirpur2', 'Mirpur-2', 'area', 'para', '{}', '{}', 1),
       ('dhaka', 'Dhaka', 'city', NULL, '{}', '{}', 1),
       ('mirpur', 'Mirpur', 'zone', 'dhaka', '{}', '{}', 1);
-    INSERT INTO shipping_methods (id, name, fee_minor, is_active) VALUES ('sm_else', 'Standard', 6000, 1);
+    INSERT INTO delivery_zones (id, name) VALUES ('dz_bd', 'Bangladesh'); INSERT INTO delivery_zone_regions (country_code, zone_id) VALUES ('BD', 'dz_bd'); INSERT INTO shipping_methods (id, name, fee_minor, is_active, zone_id) VALUES ('sm_else', 'Standard', 6000, 1, 'dz_bd');
   `);
   const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
 

@@ -31,6 +31,7 @@ import { assertDiscountCodesApplied, quoteStorefrontDiscount } from "@scalius/co
 import { buildStorefrontTaxAllocationLineId } from "@scalius/core/modules/tax";
 import { BUILT_IN_PAYMENT_PROVIDERS, getActivePaymentMethods, type PaymentProviders } from "../payments";
 import { fromMinor } from "@scalius/shared/money";
+import { DELIVERY_HIERARCHY_COUNTRY } from "@scalius/shared/markets";
 import { and, eq, gt, isNull, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import {
@@ -138,7 +139,10 @@ export interface AgentStorefrontCheckoutQuote {
   }>;
   /** The delivery options when an app changed them (hid, renamed, priced, reordered); null when none did. */
   shippingRates: Array<{ id: string; name: string; kind: "delivery" | "pickup"; amount: number; amountMinor: number }> | null;
-  /** The payment methods submit accepts when an app changed them; null when none did. */
+  /**
+   * The payment methods submit accepts when an app or the delivery country
+   * changed them (cash on delivery serves Bangladesh); null when none did.
+   */
   paymentMethods: Array<{ id: string; name: string }> | null;
 }
 
@@ -203,9 +207,13 @@ function projectContext(
     cart: parseAgentStorefrontCartJson(row.cartJson),
     discountCode: row.discountCode,
     delivery: {
+      // Null in the row is Bangladesh, as before markets.
+      countryCode: row.countryCode ?? DELIVERY_HIERARCHY_COUNTRY,
       cityId: row.cityId,
       zoneId: row.zoneId,
       areaId: row.areaId,
+      adminArea: row.adminArea,
+      postalCode: row.postalCode,
       shippingMethodId: row.shippingMethodId,
     },
     customerAuthorized,
@@ -522,13 +530,17 @@ export async function setAgentStorefrontDelivery(
       itemIssues: presentAgentStorefrontCartIssues(cart.issues),
     });
   }
-  // A pickup rate is checked without an address; a delivery rate still needs
-  // its city and zone (the preflight refuses it otherwise).
+  // A pickup rate is checked without an address; a delivery rate must be a
+  // rate of the destination's shipping zone (in Bangladesh it still needs
+  // its city and thana; the preflight refuses it otherwise).
   if (normalized.shippingMethodId || (normalized.cityId && normalized.zoneId)) {
     await validateStorefrontDeliveryPreflight(db, {
+      shippingCountryCode: normalized.countryCode,
       city: normalized.cityId,
       zone: normalized.zoneId,
       area: normalized.areaId,
+      shippingAdminArea: normalized.adminArea,
+      shippingPostalCode: normalized.postalCode,
       shippingMethodId: normalized.shippingMethodId,
     }, cart);
   }
@@ -539,9 +551,12 @@ export async function setAgentStorefrontDelivery(
     now,
     current,
     buildUpdate: () => ({
+      countryCode: normalized.countryCode,
       cityId: normalized.cityId,
       zoneId: normalized.zoneId,
       areaId: normalized.areaId,
+      adminArea: normalized.adminArea,
+      postalCode: normalized.postalCode,
       shippingMethodId: normalized.shippingMethodId,
     }),
   });
@@ -592,9 +607,12 @@ async function loadAgentStorefrontCart(
   ) {
     try {
       delivery = await validateStorefrontDeliveryPreflight(db, {
+        shippingCountryCode: row.countryCode,
         city: row.cityId,
         zone: row.zoneId,
         area: row.areaId,
+        shippingAdminArea: row.adminArea,
+        shippingPostalCode: row.postalCode,
         shippingMethodId: row.shippingMethodId,
       }, validation);
     } catch (error) {
@@ -806,7 +824,9 @@ function assertAgentStorefrontCheckoutProjection(
   if (!projection.delivery) {
     // Only a cart with a physical line gets here: it needs one method.
     throw new ValidationError(projection.context.delivery.shippingMethodId
-      ? "Select a city and zone for this delivery method, or choose a pickup method."
+      ? projection.context.delivery.countryCode === DELIVERY_HIERARCHY_COUNTRY
+        ? "Select a city and zone for this delivery method, or choose a pickup method."
+        : "Set the delivery address for this delivery method, or choose a pickup method."
       : "Select a delivery or pickup method before checkout.");
   }
 }
@@ -820,7 +840,7 @@ export async function quoteAgentStorefrontCheckout(
     now?: Date;
     /** The apps' checkout functions, channel "agent" (none: platform pricing only). */
     apps?: CheckoutAppFunctions;
-    /** Reads the enabled payment methods, only when an app adjusts them. */
+    /** Reads the enabled payment methods, only when an app adjusts them or the delivery is abroad. */
     credentialEncryptionKey?: string;
     /** The request's gateways (built-in and active app providers); built-in ones alone by default. */
     paymentProviders?: PaymentProviders;
@@ -856,14 +876,20 @@ export async function quoteAgentStorefrontCheckout(
   assertNoCheckoutRuleErrors(pricing.ruleErrors);
   assertDiscountCodesApplied(pricing.typedCodes);
   const quote = pricing.taxQuote;
-  // Apps narrow and present the methods submit accepts (read only when an app adjusts them).
+  // Apps narrow and present the methods submit accepts (read only when an
+  // app adjusts them, or when a delivery abroad may rule a method out:
+  // cash on delivery serves Bangladesh).
   const paymentProviders = input.paymentProviders ?? BUILT_IN_PAYMENT_PROVIDERS;
-  const payment = apps.points.has("checkout.payment_methods")
-    ? await resolveAppPaymentMethods(apps, pricing.appCart, resolveCartPaymentMethods(
-      (await getActivePaymentMethods(db, input.credentialEncryptionKey, paymentProviders)).enabledMethods,
-      delivery.fulfilment,
-    ), paymentProviders)
-    : null;
+  const deliveryCountry = delivery.address?.countryCode ?? null;
+  const abroad = deliveryCountry !== null && deliveryCountry !== DELIVERY_HIERARCHY_COUNTRY;
+  let payment: { methods: Array<{ methodId: string; name: string }>; changed: boolean } | null = null;
+  if (apps.points.has("checkout.payment_methods") || abroad) {
+    const enabled = (await getActivePaymentMethods(db, input.credentialEncryptionKey, paymentProviders)).enabledMethods;
+    const allowed = resolveCartPaymentMethods(enabled, delivery.fulfilment, deliveryCountry, paymentProviders);
+    payment = await resolveAppPaymentMethods(apps, pricing.appCart, allowed, paymentProviders);
+    const withoutCountry = resolveCartPaymentMethods(enabled, delivery.fulfilment);
+    if (allowed.length !== withoutCountry.length) payment = { ...payment, changed: true };
+  }
   const toAmount = (minor: number) => fromMinor(minor, quote.decimalPlaces);
   const currentQuoteFingerprint = await buildAgentStorefrontCheckoutQuoteFingerprint({
     contextRevision: row.revision,

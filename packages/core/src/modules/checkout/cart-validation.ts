@@ -28,6 +28,7 @@ import {
   variantOptionLabelSql,
 } from "../products";
 import { hasFulfiller } from "../fulfilment";
+import { BUILT_IN_PAYMENT_PROVIDERS, type PaymentProviders } from "../payments";
 import { giftCardLineRecipientIssue } from "../gift-cards";
 import { digitalDeliverableSql } from "../digital";
 import { bundleGroupPricing } from "@scalius/shared/product-bundles";
@@ -887,11 +888,18 @@ function presentStorefrontCartFulfilmentSummary(summary: StorefrontCartFulfilmen
 
 /**
  * The payment methods a cart may use: the store's enabled methods, without
- * cash on delivery when nothing is shipped, collected or performed.
+ * cash on delivery when nothing is shipped, collected or performed, and
+ * without a method that doesn't serve the delivery country (cash on
+ * delivery serves Bangladesh; MARKETS-DESIGN step 3b). A pickup or an order
+ * that ships nothing has no delivery country.
  */
 export function resolveCartPaymentMethods(
     enabledMethods: readonly string[],
     summary: Pick<StorefrontCartFulfilmentSummary, "allowsCashOnDelivery">,
+    deliveryCountryCode: string | null = null,
+    providers: Pick<PaymentProviders, "countryIssue"> = BUILT_IN_PAYMENT_PROVIDERS,
 ): string[] {
-    return enabledMethods.filter((method) => method !== "cod" || summary.allowsCashOnDelivery);
+    return enabledMethods.filter((method) =>
+        (method !== "cod" || summary.allowsCashOnDelivery)
+        && providers.countryIssue(method, deliveryCountryCode) === null);
 }

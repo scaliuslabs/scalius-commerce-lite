@@ -149,6 +149,9 @@ export const quoteManualOrderSchema = sellableOrderContentSchema.pick({
     city: true,
     zone: true,
     area: true,
+    // Shipping zones outside Bangladesh match on them (apps' delivery options).
+    shippingAdminArea: true,
+    shippingPostalCode: true,
     items: true,
     discountAmount: true,
     shippingCharge: true,

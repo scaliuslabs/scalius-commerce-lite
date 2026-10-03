@@ -96,7 +96,7 @@ function authorityRows(): Record<string, unknown>[][] {
     ],
     [{
       id: "shipping_1",
-      zoneId: null,
+      zoneId: "dz_bd",
       name: "Standard delivery",
       description: "Delivered within 2–3 business days",
       feeMinor: 6_000,
@@ -104,6 +104,10 @@ function authorityRows(): Record<string, unknown>[][] {
       isActive: 1,
       deletedAt: null,
       kind: "delivery",
+      pickupAddress: null,
+      pickupHours: null,
+      // The Bangladesh destination's zone regions, read in the rate's own statement.
+      destinationRegions: JSON.stringify([{ zoneId: "dz_bd", countryCode: "BD", adminArea: "", postalPrefix: "" }]),
     }],
     // Active bundle tiers of the cart's products.
     [],

@@ -92,8 +92,9 @@ describe("checkout app functions on the agent and admin channels", () => {
         ('s_checkout', 'document', '{"guestCheckoutEnabled":true,"checkoutMode":"all","partialPaymentEnabled":false,"partialPaymentAmount":0}', 'json', 'checkout');
       INSERT INTO delivery_locations (id, name, type, parent_id, external_ids, metadata, is_active)
       VALUES ('city_1', 'Dhaka', 'city', NULL, '{}', '{}', 1), ('zone_1', 'Gulshan', 'zone', 'city_1', '{}', '{}', 1);
-      INSERT INTO shipping_methods (id, name, fee_minor, kind, sort_order) VALUES
-        ('m_std', 'Standard', 6000, 'delivery', 0), ('m_exp', 'Express', 12000, 'delivery', 1);
+      INSERT INTO delivery_zones (id, name) VALUES ('dz_bd', 'Bangladesh'); INSERT INTO delivery_zone_regions (country_code, zone_id) VALUES ('BD', 'dz_bd'); 
+      INSERT INTO shipping_methods (id, name, fee_minor, kind, sort_order, zone_id) VALUES
+        ('m_std', 'Standard', 6000, 'delivery', 0, 'dz_bd'), ('m_exp', 'Express', 12000, 'delivery', 1, 'dz_bd');
       INSERT INTO shipping_methods (id, name, fee_minor, kind, pickup_address, sort_order)
       VALUES ('m_pick', 'Store pickup', 0, 'pickup', 'Shop 4, Gulshan 1', 2);
       INSERT INTO products (id, name, slug, price_minor, is_active) VALUES

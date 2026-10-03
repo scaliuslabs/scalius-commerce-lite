@@ -30,7 +30,7 @@ async function createDb(
     }
     await currencyDocument.write(db, (readiness.currency ?? { currencyCode: "bdt", currencySymbol: "৳" }) as never);
     if ((readiness.activeShippingRows ?? [{ id: "sm_1" }]).length > 0) {
-        sqlite.exec("INSERT INTO shipping_methods (id, name, fee_minor, is_active) VALUES ('sm_1', 'Standard', 6000, 1)");
+        sqlite.exec("INSERT INTO delivery_zones (id, name) VALUES ('dz_bd', 'Bangladesh'); INSERT INTO delivery_zone_regions (country_code, zone_id) VALUES ('BD', 'dz_bd'); INSERT INTO shipping_methods (id, name, fee_minor, is_active, zone_id) VALUES ('sm_1', 'Standard', 6000, 1, 'dz_bd')");
     }
     if ((readiness.activeHierarchyRows ?? [{ id: "zone_1" }]).length > 0) {
         sqlite.exec(`INSERT INTO delivery_locations (id, name, type, parent_id, external_ids, metadata, is_active)
@@ -162,7 +162,8 @@ describe("getCheckoutConfig", () => {
                 publishableKey: "pk_test_realishValue",
                 testMode: true,
             },
-            { id: "cod", name: "Cash on Delivery", flow: "cod", currencies: ["BDT"] },
+            // Cash on delivery serves deliveries to Bangladesh (its country rule).
+            { id: "cod", name: "Cash on Delivery", flow: "cod", currencies: ["BDT"], countries: ["BD"] },
         ]);
         expect(config.activeDefaultMethod).toBe("stripe");
     });

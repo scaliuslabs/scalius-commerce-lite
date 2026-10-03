@@ -163,7 +163,7 @@ describe("site currency settings", () => {
 
     await expect(saveCurrencySettings(db, { currencyCode: "USD" })).rejects.toBeInstanceOf(ConflictError);
     await saveCurrencySettings(db, { currencyCode: "BDT", currencySymbol: "Tk" });
-    sqlite.exec("DELETE FROM product_variants; DELETE FROM products; INSERT INTO shipping_methods (id, name, fee_minor) VALUES ('ship', 'Standard', 6000)");
+    sqlite.exec("DELETE FROM product_variants; DELETE FROM products; INSERT INTO delivery_zones (id, name) VALUES ('dz_bd', 'Bangladesh'); INSERT INTO delivery_zone_regions (country_code, zone_id) VALUES ('BD', 'dz_bd'); INSERT INTO shipping_methods (id, name, fee_minor, zone_id) VALUES ('ship', 'Standard', 6000, 'dz_bd')");
     await expect(saveCurrencySettings(db, { currencyCode: "JPY" })).rejects.toBeInstanceOf(ConflictError);
     await expect(getCurrencySettings(db)).resolves.toEqual({
       currencyCode: "BDT",

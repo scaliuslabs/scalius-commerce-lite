@@ -46,6 +46,7 @@ import {
 import {
   type ActiveDeliveryLocationRow,
   type DeliveryRateRow,
+  normalizeDeliveryDestination,
   selectActiveDeliveryLocationRowsByIds,
   selectDeliveryRateRowsByIds,
 } from "../delivery";
@@ -67,12 +68,15 @@ const CHECKOUT_SETTINGS_DOCUMENTS = [
 export interface StorefrontCheckoutAuthorityInput {
     items: StorefrontCartValidationItem[];
     inventoryPool?: string | null;
-    /** The shipping country (absent: Bangladesh). A `delivery` rate needs one its rates serve. */
+    /** The shipping country (absent: Bangladesh). A `delivery` rate must be one of its zone's. */
     shippingCountryCode?: string | null;
-    /** Needed only for a `delivery` rate (Bangladesh's City/Thana/Area). */
+    /** Needed only for a `delivery` rate in Bangladesh (its City/Thana/Area). */
     city?: string | null;
     zone?: string | null;
     area?: string | null;
+    /** Another country's admin area and postal code: shipping zones match on them. */
+    shippingAdminArea?: string | null;
+    shippingPostalCode?: string | null;
     shippingMethodId?: string | null;
     customerEmail?: string | null;
     customerPhone?: string | null;
@@ -198,11 +202,19 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
     const allItems = inputs.flatMap((input) => input.items);
     const productIds = uniqueNonEmpty(allItems.map((item) => item.productId));
     const variantIds = uniqueNonEmpty(allItems.map((item) => item.variantId));
-    const locationIds = uniqueNonEmpty(inputs.flatMap((input) => [
-        input.city,
-        input.zone,
-        input.area,
+    const destinations = inputs.map((input) => normalizeDeliveryDestination({
+        countryCode: input.shippingCountryCode,
+        city: input.city,
+        zone: input.zone,
+        area: input.area,
+    }));
+    const locationIds = uniqueNonEmpty(destinations.flatMap((destination) => [
+        destination.city,
+        destination.zone,
+        destination.area,
     ]));
+    // The zone regions of every destination country ride on the rate rows.
+    const destinationCountries = [...new Set(destinations.map((destination) => destination.countryCode))];
     const shippingMethodIds = uniqueNonEmpty(
         inputs.map((input) => input.shippingMethodId),
     );
@@ -214,7 +226,7 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
         selectStorefrontCartVariantRows(db, productIds, variantIds),
         selectCheckoutProductMediaProjectionRows(db, productIds, variantIds),
         selectActiveDeliveryLocationRowsByIds(db, locationIds),
-        selectDeliveryRateRowsByIds(db, shippingMethodIds),
+        selectDeliveryRateRowsByIds(db, shippingMethodIds, destinationCountries),
         // Quantity bundle tiers price the cart; any change bumps the revision below.
         selectActiveProductBundleRows(db, productIds),
         db.select({
@@ -357,6 +369,8 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
                             city: input.city,
                             zone: input.zone,
                             area: input.area,
+                            shippingAdminArea: input.shippingAdminArea,
+                            shippingPostalCode: input.shippingPostalCode,
                             shippingMethodId: input.shippingMethodId,
                         },
                         cartValidation,

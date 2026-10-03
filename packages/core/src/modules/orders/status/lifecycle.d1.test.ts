@@ -404,7 +404,7 @@ describe("dashboard order lifecycle on D1 storage", () => {
     });
 
     it("keeps the delivery method's name on a manual order (R2-ORD-10)", async () => {
-        sqlite.exec(`INSERT INTO shipping_methods (id, name, fee_minor, description) VALUES ('method_1', 'OPS006 Standard Delivery', 8000, 'Inside Dhaka')`);
+        sqlite.exec(`INSERT INTO delivery_zones (id, name) VALUES ('dz_bd', 'Bangladesh'); INSERT INTO delivery_zone_regions (country_code, zone_id) VALUES ('BD', 'dz_bd'); INSERT INTO shipping_methods (id, name, fee_minor, description, zone_id) VALUES ('method_1', 'OPS006 Standard Delivery', 8000, 'Inside Dhaka', 'dz_bd')`);
         const { id } = await manualOrder({ shippingMethodId: "method_1", shippingCharge: 80 });
         expect(one("SELECT shipping_method_name, shipping_amount_minor FROM orders WHERE id = ?", id))
             .toEqual({ shipping_method_name: "OPS006 Standard Delivery", shipping_amount_minor: 8000 });

@@ -183,10 +183,22 @@ describe("provider declarations", () => {
     expect(parsed.ok).toBe(true);
     if (!parsed.ok) return;
     expect(parsed.manifest.providers).toEqual([
-      { kind: "payment", id: "wallet", name: "Wallet", flow: "hosted", chargeCurrencies: ["BDT"], operations: HOSTED_REFUNDS },
+      { kind: "payment", id: "wallet", name: "Wallet", flow: "hosted", chargeCurrencies: ["BDT"], countries: "any", operations: HOSTED_REFUNDS },
       { kind: "courier", id: "parcel", name: "Parcel", operations: [], trackingUrl: "https://parcel.test/t/{trackingId}", countries: "any" },
     ]);
     expect(pluginGrantRequest(parsed.manifest).providers).toEqual(["courier", "payment"]);
+  });
+
+  it("lets a payment provider declare the shipping countries it serves (MARKETS-DESIGN step 3b)", () => {
+    const parsed = parsePluginManifest({
+      ...manifest,
+      providers: { payment: [{ id: "wallet", name: "Wallet", chargeCurrencies: ["BDT"], countries: ["BD"], operations: HOSTED_REFUNDS }] },
+    });
+    expect(parsed.ok && parsed.manifest.providers[0]).toMatchObject({ kind: "payment", countries: ["BD"] });
+    expect(parsePluginManifest({
+      ...manifest,
+      providers: { payment: [{ id: "wallet", name: "Wallet", chargeCurrencies: ["BDT"], countries: ["bd"], operations: HOSTED_REFUNDS }] },
+    }).ok).toBe(false);
   });
 
   it("lets couriers and fraud checkers declare the countries they serve (MARKETS-DESIGN step 3a)", () => {

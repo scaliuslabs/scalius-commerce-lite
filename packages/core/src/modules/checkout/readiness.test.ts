@@ -46,7 +46,7 @@ describe("customer checkout sign-in readiness", () => {
 
     it("blocks checkout when accounts are required and no sign-in channel is usable", async () => {
         const { db, sqlite } = await createAuthDb({ guestCheckoutEnabled: false });
-        sqlite.exec(`INSERT INTO shipping_methods (id, name, fee_minor, is_active) VALUES ('sm_1', 'Standard', 6000, 1);
+        sqlite.exec(`INSERT INTO delivery_zones (id, name) VALUES ('dz_bd', 'Bangladesh'); INSERT INTO delivery_zone_regions (country_code, zone_id) VALUES ('BD', 'dz_bd'); INSERT INTO shipping_methods (id, name, fee_minor, is_active, zone_id) VALUES ('sm_1', 'Standard', 6000, 1, 'dz_bd');
             INSERT INTO delivery_locations (id, name, type, parent_id, external_ids, metadata, is_active)
             VALUES ('city_1', 'Dhaka', 'city', NULL, '{}', '{}', 1),
                    ('zone_1', 'Dhanmondi', 'zone', 'city_1', '{}', '{}', 1);`);

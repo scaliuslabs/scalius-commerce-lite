@@ -49,7 +49,7 @@ const SEED = `
   INSERT INTO delivery_locations (id, name, type, parent_id, external_ids, metadata, is_active)
     VALUES ('city_1', 'Dhaka', 'city', NULL, '{}', '{}', 1), ('zone_1', 'North', 'zone', 'city_1', '{}', '{}', 1),
            ('area_1', 'Banani', 'area', 'zone_1', '{}', '{}', 1);
-  INSERT INTO shipping_methods (id, name, fee_minor, kind) VALUES ('m_ship', 'Standard', 6000, 'delivery');
+  INSERT INTO delivery_zones (id, name) VALUES ('dz_bd', 'Bangladesh'); INSERT INTO delivery_zone_regions (country_code, zone_id) VALUES ('BD', 'dz_bd'); INSERT INTO shipping_methods (id, name, fee_minor, kind, zone_id) VALUES ('m_ship', 'Standard', 6000, 'delivery', 'dz_bd');
   INSERT INTO analytics (id, name, type, is_active, use_partytown, config, location)
     VALUES ('an_1', 'Tag', 'custom', 1, 0, '<script>window.x=1</script>', 'head');
   INSERT INTO checkout_languages (id, name, code, language_data, field_visibility, is_active, is_default)

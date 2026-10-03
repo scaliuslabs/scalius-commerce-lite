@@ -69,8 +69,9 @@ describe("checkout app functions (real schema, bundled and test apps)", () => {
       INSERT INTO user (id, name, email, email_verified, role, is_super_admin) VALUES ('owner', 'Owner', 'owner@shop.test', 1, 'admin', 1);
       INSERT INTO delivery_locations (id, name, type, parent_id, external_ids, metadata, is_active)
       VALUES ('city_1', 'Dhaka', 'city', NULL, '{}', '{}', 1), ('zone_1', 'Gulshan', 'zone', 'city_1', '{}', '{}', 1);
-      INSERT INTO shipping_methods (id, name, fee_minor, kind, sort_order) VALUES
-        ('m_std', 'Standard', 6000, 'delivery', 0), ('m_exp', 'Express', 12000, 'delivery', 1);
+      INSERT INTO delivery_zones (id, name) VALUES ('dz_bd', 'Bangladesh'); INSERT INTO delivery_zone_regions (country_code, zone_id) VALUES ('BD', 'dz_bd'); 
+      INSERT INTO shipping_methods (id, name, fee_minor, kind, sort_order, zone_id) VALUES
+        ('m_std', 'Standard', 6000, 'delivery', 0, 'dz_bd'), ('m_exp', 'Express', 12000, 'delivery', 1, 'dz_bd');
       INSERT INTO shipping_methods (id, name, fee_minor, kind, pickup_address, pickup_hours, sort_order)
       VALUES ('m_pick', 'Store pickup', 0, 'pickup', 'Shop 4, Gulshan 1', '10am-8pm', 2);
       INSERT INTO categories (id, name, slug, status) VALUES ('cat_tea', 'Tea', 'tea', 'published');

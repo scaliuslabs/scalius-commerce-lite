@@ -14,7 +14,7 @@ export function seedCatalog(sqlite: DatabaseSync): void {
     INSERT INTO categories (id, name, slug, status) VALUES ('cat_panjabi', 'Panjabi', 'panjabi', 'published');
     INSERT INTO delivery_locations (id, name, type, parent_id, external_ids, metadata, is_active)
       VALUES ('city_1', 'Dhaka', 'city', NULL, '{}', '{}', 1), ('zone_1', 'Gulshan', 'zone', 'city_1', '{}', '{}', 1);
-    INSERT INTO shipping_methods (id, name, fee_minor, kind) VALUES ('m_std', 'Standard', 6000, 'delivery');
+    INSERT INTO delivery_zones (id, name) VALUES ('dz_bd', 'Bangladesh'); INSERT INTO delivery_zone_regions (country_code, zone_id) VALUES ('BD', 'dz_bd'); INSERT INTO shipping_methods (id, name, fee_minor, kind, zone_id) VALUES ('m_std', 'Standard', 6000, 'delivery', 'dz_bd');
     INSERT INTO products (id, name, price_minor, slug, category_id, is_active) VALUES
       ('p_linen', 'Linen Panjabi', 250000, 'linen-panjabi', 'cat_panjabi', 1),
       ('p_cotton', 'Cotton Panjabi', 180000, 'cotton-panjabi', 'cat_panjabi', 1);

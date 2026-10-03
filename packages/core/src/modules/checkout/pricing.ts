@@ -18,7 +18,8 @@ import {
   type TaxDiscountAllocationInput,
   type TaxQuote,
 } from "../tax";
-import { DELIVERY_RATE_UNAVAILABLE_REASON, deliveryRatesServeCountry, listDeliveryRatesForAddress } from "../delivery";
+import { DELIVERY_HIERARCHY_COUNTRY } from "@scalius/shared/markets";
+import { DELIVERY_RATE_UNAVAILABLE_REASON, destinationCountry, listDeliveryRatesForDestination } from "../delivery";
 import { BUILT_IN_PAYMENT_PROVIDERS, COD_LABEL, type PaymentProviders } from "../payments";
 import { GIFT_CARD_PAYMENT_METHOD } from "../gift-cards";
 import type { StorefrontOrderCommitPayload, StorefrontOrderShippingMethodSnapshot } from "../orders";
@@ -52,8 +53,15 @@ export interface CheckoutPricingDelivery {
   cityName: string | null;
   zoneName: string | null;
   areaName: string | null;
-  /** A delivery rate's address (its country is one the rates serve); null for pickup or nothing physical. */
-  address: { countryCode?: string; city: string; zone: string; area: string | null } | null;
+  /** A delivery rate's destination (its zone holds the rate); null for pickup or nothing physical. */
+  address: {
+    countryCode?: string;
+    city: string | null;
+    zone: string | null;
+    area: string | null;
+    adminArea?: string | null;
+    postalCode?: string | null;
+  } | null;
   fulfilment: { requiresShipping: boolean };
 }
 
@@ -70,8 +78,15 @@ export interface StorefrontCheckoutPricingInput {
   taxAuthority?: StorefrontTaxAuthoritySnapshot;
   apps?: CheckoutAppFunctions;
   channel: FunctionCart["channel"];
-  /** The buyer's country and location ids, to list the options a shipping-rates app may adjust. */
-  location?: { countryCode?: string | null; city?: string | null; zone?: string | null; area?: string | null } | null;
+  /** The buyer's destination, to list the options a shipping-rates app may adjust. */
+  location?: {
+    countryCode?: string | null;
+    city?: string | null;
+    zone?: string | null;
+    area?: string | null;
+    adminArea?: string | null;
+    postalCode?: string | null;
+  } | null;
 }
 
 export interface StorefrontCheckoutPricing {
@@ -118,20 +133,24 @@ async function listRateOptions(
   db: Database,
   input: StorefrontCheckoutPricingInput,
 ): Promise<CheckoutRateOption[]> {
-  const delivery = input.delivery;
-  // A country no delivery rate serves gets pickup options only (MARKETS-DESIGN step 3a).
-  const served = deliveryRatesServeCountry(delivery.address?.countryCode ?? input.location?.countryCode);
-  const city = served ? delivery.address?.city ?? input.location?.city?.trim() ?? null : null;
-  const rows = await listDeliveryRatesForAddress(db, city
+  // The destination's zone decides the delivery options (MARKETS-DESIGN step 3b).
+  const source = input.delivery.address ?? input.location ?? null;
+  const country = destinationCountry(source);
+  // Bangladesh needs its city; another country is a destination by itself.
+  const hasDestination = country === DELIVERY_HIERARCHY_COUNTRY ? Boolean(source?.city?.trim()) : Boolean(source);
+  const rows = await listDeliveryRatesForDestination(db, hasDestination
     ? {
-      city,
-      zone: delivery.address?.zone ?? input.location?.zone?.trim() ?? null,
-      area: delivery.address?.area ?? input.location?.area?.trim() ?? null,
+      countryCode: country,
+      city: source?.city,
+      zone: source?.zone,
+      area: source?.area,
+      adminArea: source?.adminArea,
+      postalCode: source?.postalCode,
     }
     : null);
   return rows
-    // Without an address only pickup is offered; apps adjust what the buyer can choose.
-    .filter((row) => city || row.kind === "pickup")
+    // Without a destination only pickup is offered; apps adjust what the buyer can choose.
+    .filter((row) => hasDestination || row.kind === "pickup")
     .map((row) => {
       const freeOver = row.freeOverMinor ?? null;
       const waived = input.cartValidation.hasFreeDeliveryProduct

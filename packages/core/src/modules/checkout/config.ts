@@ -164,8 +164,12 @@ export async function getCheckoutConfig(
     for (const methodId of activePaymentMethods.enabledMethods) {
         if (providers.currencyIssue(methodId, localCurrencyCode) !== null) continue;
         if (!isCheckoutGatewayUsableForFlow({ gatewayId: methodId, checkoutMode, partialPaymentEnabled, partialPaymentAmount })) continue;
+        // A method that serves only some shipping countries says which:
+        // checkout hides it for a delivery elsewhere (cash on delivery: BD).
+        const countries = providers.countries(methodId);
+        const served = countries === "any" ? {} : { countries: [...countries] };
         if (methodId === COD_PAYMENT_METHOD) {
-            gateways.push({ id: methodId, name: COD_LABEL, flow: "cod", currencies: [localCurrencyCode] });
+            gateways.push({ id: methodId, name: COD_LABEL, flow: "cod", currencies: [localCurrencyCode], ...served });
             continue;
         }
         const gateway = providers.get(methodId);
@@ -180,6 +184,7 @@ export async function getCheckoutConfig(
             name: gateway.checkoutName,
             flow: gateway.flow,
             currencies: [localCurrencyCode],
+            ...served,
             ...(amountLimits ? { amountLimits } : {}),
             ...gateway.publicConfig?.(settings),
         });

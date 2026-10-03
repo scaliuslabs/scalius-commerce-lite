@@ -382,10 +382,15 @@ export async function seedLiveCheckoutTarget(
         args: [`${identity.targetId}_settings_${category}`, JSON.stringify(value), category],
       })),
       {
+        // A delivery rate belongs to a shipping zone (0114); this one holds the fixture city.
+        sql: `INSERT INTO delivery_zones (id, name) VALUES (?, 'Loadtest zone')`,
+        args: [`${fixture.shippingMethodId}_zone`],
+      },
+      {
         sql: `INSERT INTO shipping_methods
-                (id, name, fee_minor, description, is_active, sort_order)
-              VALUES (?, ?, 9900, 'Synthetic load-test delivery', 1, 0)`,
-        args: [fixture.shippingMethodId, `${identity.targetId} delivery`],
+                (id, name, fee_minor, description, is_active, sort_order, zone_id)
+              VALUES (?, ?, 9900, 'Synthetic load-test delivery', 1, 0, ?)`,
+        args: [fixture.shippingMethodId, `${identity.targetId} delivery`, `${fixture.shippingMethodId}_zone`],
       },
       {
         sql: `INSERT INTO delivery_locations
@@ -404,6 +409,10 @@ export async function seedLiveCheckoutTarget(
                 (id, name, type, parent_id, external_ids, metadata, is_active, sort_order)
               VALUES (?, 'Loadtest Area', 'area', ?, '{}', '{}', 1, 0)`,
         args: [fixture.areaId, fixture.zoneId],
+      },
+      {
+        sql: `INSERT INTO delivery_zone_locations (location_id, zone_id) VALUES (?, ?)`,
+        args: [fixture.cityId, `${fixture.shippingMethodId}_zone`],
       },
       {
         sql: `INSERT INTO products

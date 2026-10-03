@@ -69,8 +69,9 @@ const SEED = `
         ('v_black_xl', 'opt_colour', 'ov_black'), ('v_black_xl', 'opt_size', 'ov_xl'),
         ('v_gone_m', 'opt_colour', 'ov_gone'), ('v_gone_m', 'opt_size', 'ov_m');
     INSERT INTO product_sales_stats (product_id, sold_30d) VALUES ('p_laptop', 129), ('p_shirt', 9);
-    INSERT INTO shipping_methods (id, name, fee_minor, is_active) VALUES
-        ('sm_city', 'Inside Dhaka', 6000, 1), ('sm_far', 'Outside Dhaka', 12000, 1), ('sm_off', 'Old', 1000, 0);
+    INSERT INTO delivery_zones (id, name) VALUES ('dz_bd', 'Bangladesh'); INSERT INTO delivery_zone_regions (country_code, zone_id) VALUES ('BD', 'dz_bd'); 
+    INSERT INTO shipping_methods (id, name, fee_minor, is_active, zone_id) VALUES
+        ('sm_city', 'Inside Dhaka', 6000, 1, 'dz_bd'), ('sm_far', 'Outside Dhaka', 12000, 1, 'dz_bd'), ('sm_off', 'Old', 1000, 0, 'dz_bd');
 `;
 
 function setup() {

@@ -127,22 +127,27 @@ export function buildFixtureSql() {
     ...otpFixtureStatements(),
     patchSettingsDocument("currency", { currencyCode: "BDT", currencySymbol: "৳" }),
     patchSettingsDocument("payment_methods", { enabledMethods: ["cod"], defaultMethod: "cod" }),
+    upsertDeliveryLocation(fixture.cityId, "Dhaka", "city", null, 1),
+    upsertDeliveryLocation(fixture.zoneId, "Mirpur", "zone", fixture.cityId, 1),
+    upsertDeliveryLocation(fixture.areaId, "Section 10", "area", fixture.zoneId, 1),
+    // A delivery rate belongs to a shipping zone (0114): the fixture city's.
+    `INSERT INTO delivery_zones (id, name) VALUES ('dz_ops006', 'OPS006 smoke zone') ON CONFLICT(id) DO NOTHING`,
+    `INSERT INTO delivery_zone_locations (location_id, zone_id) VALUES (${sqlString(fixture.cityId)}, 'dz_ops006')
+    ON CONFLICT(location_id) DO UPDATE SET zone_id = excluded.zone_id`,
     `INSERT INTO shipping_methods (
-      id, name, fee_minor, description, is_active, sort_order, created_at, updated_at, deleted_at
+      id, name, fee_minor, description, is_active, sort_order, zone_id, created_at, updated_at, deleted_at
     ) VALUES (
       ${sqlString(fixture.shippingMethodId)}, 'OPS006 Standard Delivery', ${fixture.shippingCharge * 100},
-      'Disposable local smoke shipping method', 1, 1, unixepoch(), unixepoch(), NULL
+      'Disposable local smoke shipping method', 1, 1, 'dz_ops006', unixepoch(), unixepoch(), NULL
     )
     ON CONFLICT(id) DO UPDATE SET
       fee_minor = excluded.fee_minor,
       description = excluded.description,
       is_active = 1,
       sort_order = excluded.sort_order,
+      zone_id = excluded.zone_id,
       deleted_at = NULL,
       updated_at = unixepoch()`,
-    upsertDeliveryLocation(fixture.cityId, "Dhaka", "city", null, 1),
-    upsertDeliveryLocation(fixture.zoneId, "Mirpur", "zone", fixture.cityId, 1),
-    upsertDeliveryLocation(fixture.areaId, "Section 10", "area", fixture.zoneId, 1),
     `INSERT INTO categories (
       id, name, slug, description, created_at, updated_at, deleted_at
     ) VALUES (

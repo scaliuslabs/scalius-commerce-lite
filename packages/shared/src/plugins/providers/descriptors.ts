@@ -46,6 +46,12 @@ export const paymentProviderDescriptorSchema = z.object({
   flow: z.enum(["hosted"]).default("hosted"),
   /** The currencies the provider can charge; checkout offers it in no other. */
   chargeCurrencies: z.union([z.literal("any"), z.array(providerCurrencySchema).min(1).max(50)]),
+  /**
+   * The shipping countries it serves (default `any`): checkout never offers
+   * it for an order delivered elsewhere (pickup and orders that ship nothing
+   * have no shipping country).
+   */
+  countries: providerCountriesSchema.default("any"),
   amountLimits: paymentAmountLimitsSchema.optional(),
   /** Per-currency wire forms (amount.ts); currencies without one are sent as ISO minor units. */
   amountCodecs: providerAmountCodecsSchema.optional(),

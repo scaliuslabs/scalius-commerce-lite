@@ -78,7 +78,7 @@ describe("agent storefront checkout state", () => {
       zoneId: "zone",
       areaId: "area",
       shippingMethodId: "method",
-    })).toEqual({ cityId: "city", zoneId: "zone", areaId: "area", shippingMethodId: "method" });
+    })).toEqual({ countryCode: null, cityId: "city", zoneId: "zone", areaId: "area", adminArea: null, postalCode: null, shippingMethodId: "method" });
 
     expect(() => normalizeAgentStorefrontDeliverySelection({
       cityId: null,
@@ -100,6 +100,27 @@ describe("agent storefront checkout state", () => {
       zoneId: null,
       areaId: null,
       shippingMethodId: " pickup_counter ",
-    })).toEqual({ cityId: null, zoneId: null, areaId: null, shippingMethodId: "pickup_counter" });
+    })).toEqual({ countryCode: null, cityId: null, zoneId: null, areaId: null, adminArea: null, postalCode: null, shippingMethodId: "pickup_counter" });
+  });
+
+  it("takes another country's region and postal code, and keeps Bangladesh's places for Bangladesh (MARKETS-DESIGN step 3b)", () => {
+    expect(normalizeAgentStorefrontDeliverySelection({
+      countryCode: " us ",
+      cityId: null,
+      zoneId: null,
+      areaId: null,
+      adminArea: " CA ",
+      postalCode: "94103",
+      shippingMethodId: "sm_us",
+    })).toEqual({ countryCode: "US", cityId: null, zoneId: null, areaId: null, adminArea: "CA", postalCode: "94103", shippingMethodId: "sm_us" });
+    // Bangladesh is the default: stored as no country.
+    expect(normalizeAgentStorefrontDeliverySelection({ countryCode: "BD", cityId: "city", zoneId: "zone", areaId: null, shippingMethodId: null }))
+      .toMatchObject({ countryCode: null, cityId: "city" });
+    expect(() => normalizeAgentStorefrontDeliverySelection({ countryCode: "US", cityId: "city", zoneId: "zone", areaId: null, shippingMethodId: null }))
+      .toThrow(ValidationError);
+    expect(() => normalizeAgentStorefrontDeliverySelection({ cityId: "city", zoneId: "zone", areaId: null, postalCode: "1216", shippingMethodId: null }))
+      .toThrow(ValidationError);
+    expect(() => normalizeAgentStorefrontDeliverySelection({ countryCode: "USA", cityId: null, zoneId: null, areaId: null, shippingMethodId: null }))
+      .toThrow(ValidationError);
   });
 });

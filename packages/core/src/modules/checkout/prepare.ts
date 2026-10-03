@@ -21,7 +21,7 @@ import {
 import { isGiftCardTenderBlocked } from "@scalius/shared/gift-card-tender";
 import { BUILT_IN_PAYMENT_PROVIDERS, CASH_ON_DELIVERY_AMOUNT_REASON, type PaymentProviders } from "../payments";
 import { assertDiscountCodesApplied } from "../promotions";
-import type { CheckoutAppFunctions } from "./app-functions";
+import { PAYMENT_METHOD_UNAVAILABLE_REASON, type CheckoutAppFunctions } from "./app-functions";
 import { assertNoCheckoutRuleErrors, priceStorefrontCheckout } from "./pricing";
 import {
     PaymentMethod,
@@ -32,7 +32,7 @@ import {
 import { nanoid } from "nanoid";
 
 import { generateOrderId } from "@scalius/shared/order-utils";
-import { DELIVERY_HIERARCHY_COUNTRY, normalizeMarketCountry } from "@scalius/shared/markets";
+import { DELIVERY_HIERARCHY_COUNTRY } from "@scalius/shared/markets";
 import { resolveAddressWithLocation, type ResolvedAddress } from "../customers";
 import { checkoutDocument } from "../settings";
 import { ValidationError } from "@scalius/core/errors";
@@ -63,21 +63,27 @@ import {
   type ActiveDeliveryLocationRow,
   type DeliveryRateKind,
   type DeliveryRateRow,
-  assertDeliveryRatesServeCountry,
+  DELIVERY_RATE_UNAVAILABLE_REASON,
+  normalizeDeliveryDestination,
+  normalizePostalPrefix,
+  parseDeliveryRegionRows,
   resolveActiveDeliveryLocationNamesFromRows,
-  resolveAddressZoneId,
   resolveDeliveryRate,
+  resolveDestinationZoneId,
   selectActiveDeliveryLocationRowsByIds,
   selectDeliveryRateRowsByIds,
 } from "../delivery";
 
 export interface StorefrontDeliveryPreflightInput {
-    /** The address's country (absent: Bangladesh); a `delivery` rate needs one its rates serve. */
+    /** The address's country (absent: Bangladesh); a `delivery` rate must be one of its zone's. */
     shippingCountryCode?: string | null;
-    /** Needed only for a `delivery` rate; pickup and no-method carts omit it. */
+    /** Bangladesh's City/Thana/Area, needed only for a `delivery` rate there; pickup and no-method carts omit them. */
     city?: string | null;
     zone?: string | null;
     area?: string | null;
+    /** Another country's admin area and postal code: shipping zones match on them. */
+    shippingAdminArea?: string | null;
+    shippingPostalCode?: string | null;
     shippingMethodId?: string | null;
 }
 
@@ -95,12 +101,25 @@ export interface StorefrontDeliveryPreflightResult {
     cityName: string | null;
     zoneName: string | null;
     areaName: string | null;
-    /** The address the order ships to; set only for a `delivery` rate (Bangladesh's delivery hierarchy). */
-    address: { countryCode: string; city: string; zone: string; area: string | null } | null;
+    /**
+     * The destination the rate was priced for; set only for a `delivery`
+     * rate. Bangladesh has its City/Thana/Area ids; another country its
+     * admin area code and postal code (letters and digits) when given.
+     */
+    address: StorefrontDeliveryDestination | null;
     /** Where and when to collect; set only for a `pickup` rate. */
     pickup: { address: string | null; hours: string | null } | null;
     /** Every line's fulfilment type and the order-level consequences. */
     fulfilment: StorefrontCartFulfilmentSummary;
+}
+
+export interface StorefrontDeliveryDestination {
+    countryCode: string;
+    city: string | null;
+    zone: string | null;
+    area: string | null;
+    adminArea: string | null;
+    postalCode: string | null;
 }
 
 export interface StorefrontCheckoutPolicySnapshot {
@@ -212,22 +231,48 @@ export function resolveStorefrontDeliveryPreflightFromRows(
         });
     }
 
-    // Only an address in a country the delivery rates serve gets a rate (step 3b: zones by country).
-    const countryCode = normalizeMarketCountry(data.shippingCountryCode) ?? DELIVERY_HIERARCHY_COUNTRY;
-    assertDeliveryRatesServeCountry(countryCode);
-    const city = data.city?.trim();
-    const zone = data.zone?.trim();
-    if (!city || !zone) {
-        throw new ValidationError(
-            "Enter the delivery address, city and thana, or choose pickup.",
-            { reason: DELIVERY_ADDRESS_REQUIRED_REASON },
+    // A delivery rate must be a rate of the destination's zone: the most
+    // specific match of its Bangladesh location, postal code, admin area and
+    // country (MARKETS-DESIGN step 3b). No zone: no delivery rate.
+    const destination = normalizeDeliveryDestination({
+        countryCode: data.shippingCountryCode,
+        city: data.city,
+        zone: data.zone,
+        area: data.area,
+        adminArea: data.shippingAdminArea,
+        postalCode: data.shippingPostalCode,
+    });
+    let locationNames: { cityName: string | null; zoneName: string | null; areaName: string | null } = {
+        cityName: null,
+        zoneName: null,
+        areaName: null,
+    };
+    if (destination.countryCode === DELIVERY_HIERARCHY_COUNTRY) {
+        if (!destination.city || !destination.zone) {
+            throw new ValidationError(
+                "Enter the delivery address, city and thana, or choose pickup.",
+                { reason: DELIVERY_ADDRESS_REQUIRED_REASON },
+            );
+        }
+        locationNames = resolveActiveDeliveryLocationNamesFromRows(
+            { city: destination.city, zone: destination.zone, area: destination.area },
+            [...locationRows],
         );
     }
-    const address = { countryCode, city, zone, area: data.area?.trim() || null };
-    const locationNames = resolveActiveDeliveryLocationNamesFromRows(address, [...locationRows]);
+    const address: StorefrontDeliveryDestination = {
+        countryCode: destination.countryCode,
+        city: destination.city ?? null,
+        zone: destination.zone ?? null,
+        area: destination.area ?? null,
+        adminArea: destination.adminArea ?? null,
+        postalCode: destination.postalCode ?? null,
+    };
     const rate = resolveDeliveryRate({
         rate: rateRow,
-        addressZoneId: resolveAddressZoneId(address, locationRows),
+        addressZoneId: resolveDestinationZoneId(destination, {
+            locations: locationRows,
+            regions: parseDeliveryRegionRows(rateRow?.destinationRegions),
+        }),
         subtotalMinor: cartValidation.subtotalMinor,
     });
     const shippingFeeWaived = cartValidation.hasFreeDeliveryProduct || rate.freeOverApplied;
@@ -259,10 +304,21 @@ export async function validateStorefrontDeliveryPreflight(
     if (!summarizeStorefrontCartFulfilment(cartValidation, null).requiresDeliveryMethod) {
         return resolveStorefrontDeliveryPreflightFromRows(data, cartValidation, [], []);
     }
+    const destination = normalizeDeliveryDestination({
+        countryCode: data.shippingCountryCode,
+        city: data.city,
+        zone: data.zone,
+        area: data.area,
+    });
     const readBatch = [
-        selectActiveDeliveryLocationRowsByIds(storefrontDb, [data.city, data.zone, data.area]
+        selectActiveDeliveryLocationRowsByIds(storefrontDb, [destination.city, destination.zone, destination.area]
             .filter((id): id is string => typeof id === "string" && id.trim().length > 0)),
-        selectDeliveryRateRowsByIds(storefrontDb, data.shippingMethodId ? [data.shippingMethodId] : []),
+        // The rate row carries its destination country's zone regions (same statement).
+        selectDeliveryRateRowsByIds(
+            storefrontDb,
+            data.shippingMethodId ? [data.shippingMethodId] : [],
+            [destination.countryCode],
+        ),
     ];
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle D1 batch typing limitation
@@ -341,6 +397,15 @@ export function resolveStorefrontShippingAddress(
             countryCode: destination.countryCode,
         });
     }
+    // The admin area and postal code are the ones the rate was priced for.
+    if (
+        destination.countryCode !== DELIVERY_HIERARCHY_COUNTRY
+        && (normalizePostalPrefix(data.shippingPostalCode) || null) !== destination.postalCode
+    ) {
+        throw new ValidationError("The postal code changed since delivery was priced. Review the delivery options.", {
+            reason: DELIVERY_RATE_UNAVAILABLE_REASON,
+        });
+    }
     return resolveAddressWithLocation(
         {
             countryCode: destination.countryCode,
@@ -348,18 +413,20 @@ export function resolveStorefrontShippingAddress(
             line2: data.shippingAddressLine2,
             dependentLocality: data.shippingDependentLocality,
             locality: data.shippingLocality,
-            adminArea: data.shippingAdminArea,
+            adminArea: destination.countryCode === DELIVERY_HIERARCHY_COUNTRY ? data.shippingAdminArea : destination.adminArea,
             postalCode: data.shippingPostalCode,
         },
         {
-            location: {
-                city: destination.city,
-                zone: destination.zone,
-                area: destination.area,
-                cityName: delivery.cityName,
-                zoneName: delivery.zoneName,
-                areaName: delivery.areaName,
-            },
+            location: destination.city && destination.zone
+                ? {
+                    city: destination.city,
+                    zone: destination.zone,
+                    area: destination.area,
+                    cityName: delivery.cityName,
+                    zoneName: delivery.zoneName,
+                    areaName: delivery.areaName,
+                }
+                : null,
             problems: [],
         },
     );
@@ -571,6 +638,8 @@ export async function createStorefrontOrder(
             city: data.city,
             zone: data.zone,
             area: data.area,
+            shippingAdminArea: data.shippingAdminArea,
+            shippingPostalCode: data.shippingPostalCode,
             shippingMethodId: data.shippingMethodId,
         },
         cartValidation,
@@ -583,6 +652,10 @@ export async function createStorefrontOrder(
         if (paymentMethod === PaymentMethod.COD && !allowsCashOnDelivery) {
             throw new ValidationError("Cash on delivery isn't available for this order. Choose an online payment method.");
         }
+        // A method that doesn't serve the delivery country (cash on delivery: Bangladesh).
+        const countryIssue = (appOptions.paymentProviders ?? BUILT_IN_PAYMENT_PROVIDERS)
+            .countryIssue(paymentMethod, deliveryPreflight.address?.countryCode ?? null);
+        if (countryIssue) throw new ValidationError(countryIssue, { reason: PAYMENT_METHOD_UNAVAILABLE_REASON });
     };
     // With gift cards the method is settled once the amount due is known.
     if (giftCardHandles.length === 0) assertCashOnDeliveryFits(data.paymentMethod);
@@ -658,7 +731,14 @@ export async function createStorefrontOrder(
         taxAuthority: taxAuthoritySnapshot,
         apps: appOptions.apps,
         channel: appOptions.channel ?? "online_store",
-        location: { countryCode: deliveryPreflight.address?.countryCode ?? null, city: data.city, zone: data.zone, area: data.area },
+        location: {
+            countryCode: deliveryPreflight.address?.countryCode ?? data.shippingCountryCode ?? null,
+            city: data.city,
+            zone: data.zone,
+            area: data.area,
+            adminArea: data.shippingAdminArea,
+            postalCode: data.shippingPostalCode,
+        },
     });
     assertNoCheckoutRuleErrors(pricing.ruleErrors);
     assertDiscountCodesApplied(pricing.typedCodes);

@@ -115,7 +115,7 @@ export {
   resolveAppPaymentUsability,
 } from "./gateway-settings";
 export type { AppPaymentUsability, GatewaySettingsStoredRow } from "./gateway-settings";
-export { COD_LABEL, getGatewayAmountIssue, publicAmountLimits } from "./gateways/registry";
+export { COD_COUNTRIES, COD_LABEL, getGatewayAmountIssue, publicAmountLimits } from "./gateways/registry";
 export { REFUND_OBSERVED_EVENT_TYPE } from "./refund-reconciliation";
 export { reconcileHostedPaymentReturn } from "./hosted-payment-return";
 export type { HostedPaymentReturnResult } from "./hosted-payment-return";

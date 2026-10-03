@@ -20,6 +20,7 @@ import type {
   PaymentSessionInput,
   PaymentVerification,
   ProviderAmountCodecs,
+  ProviderCountries,
   ProviderHttpRequest,
   ProviderPort,
   ProviderRefunds,
@@ -89,6 +90,11 @@ export interface PaymentGateway<S extends GatewaySettings = GatewaySettings> ext
   readonly flow: GatewayCheckoutFlow;
   /** ISO 4217 codes the provider can charge, or "any" for every store currency. */
   readonly chargeCurrencies: readonly string[] | "any";
+  /**
+   * The shipping countries it serves (absent: any). Checkout never offers it
+   * for an order delivered elsewhere.
+   */
+  readonly countries?: ProviderCountries;
   readonly amountLimits?: GatewayAmountLimits;
   /** Per-currency wire forms (`encodeProviderAmount`); absent: ISO minor units as they are. */
   readonly amountCodecs?: ProviderAmountCodecs;

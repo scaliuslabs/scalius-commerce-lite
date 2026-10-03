@@ -63,7 +63,8 @@ import {
     type CheckoutRateOption,
 } from "./app-functions";
 import { checkoutPaymentMethodName, presentCheckoutRateOptions } from "./pricing";
-import { DELIVERY_RATE_UNAVAILABLE_REASON, listDeliveryRatesForAddress } from "../delivery";
+import { DELIVERY_HIERARCHY_COUNTRY } from "@scalius/shared/markets";
+import { DELIVERY_RATE_UNAVAILABLE_REASON, listDeliveryRatesForDestination } from "../delivery";
 import { buildStorefrontDiscountAllocation, type TaxDiscountAllocationInput } from "../tax";
 
 /** The one payment method a manual order takes. */
@@ -160,10 +161,18 @@ async function listRateOptions(
     input: ManualOrderAppInput,
     chosen: NonNullable<ManualOrderAppInput["deliveryMethod"]>,
 ): Promise<CheckoutRateOption[]> {
-    const rows = await listDeliveryRatesForAddress(db, input.address);
+    // The destination's zone decides the options, as at checkout: Bangladesh
+    // by its City/Thana/Area, another country by its regions.
+    const foreign = input.requiresShipping && input.shippingCountryCode && input.shippingCountryCode !== DELIVERY_HIERARCHY_COUNTRY;
+    const destination = input.address
+        ? { countryCode: DELIVERY_HIERARCHY_COUNTRY, ...input.address }
+        : foreign
+            ? { countryCode: input.shippingCountryCode, adminArea: input.shippingAdminArea, postalCode: input.shippingPostalCode }
+            : null;
+    const rows = await listDeliveryRatesForDestination(db, destination);
     const options: CheckoutRateOption[] = rows
-        // Without an address only pickup is offered (the storefront's rule).
-        .filter((row) => input.address || row.kind === "pickup")
+        // Without a destination only pickup is offered (the storefront's rule).
+        .filter((row) => destination || row.kind === "pickup")
         .map((row) => ({
             rateId: row.id,
             name: row.name.trim(),

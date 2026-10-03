@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { countLocationDescendants, deleteLocations } from "./locations";
-import { createDeliveryZone, listDeliveryRatesForAddress, listDeliveryZones } from "./zones";
+import { createDeliveryZone, listDeliveryRatesForDestination, listDeliveryZones } from "./zones";
 
 /** Nagar (Para → Pallabi, Kazipara; Savar → Hemayetpur) and Chattogram (Agrabad). */
 function seed() {
@@ -52,8 +52,8 @@ describe("deleting delivery locations", () => {
         ]);
         const memberships = harness.sqlite.prepare("SELECT location_id FROM delivery_zone_locations ORDER BY location_id").all();
         expect(memberships).toEqual([{ location_id: "agrabad" }]);
-        // Once a deleted place is out of its zone, a stale address falls back to everywhere else.
-        expect(await listDeliveryRatesForAddress(db, { city: "nagar", zone: "para" })).toEqual([]);
+        // Once a deleted place is out of its zone, a stale address gets no delivery rate.
+        expect(await listDeliveryRatesForDestination(db, { city: "nagar", zone: "para" })).toEqual([]);
     });
 
     it("deletes a thana with its areas and leaves the rest of the city", async () => {

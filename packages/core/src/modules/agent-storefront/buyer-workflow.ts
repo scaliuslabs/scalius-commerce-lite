@@ -1,4 +1,5 @@
 import type { Database } from "@scalius/database/client";
+import { DELIVERY_HIERARCHY_COUNTRY } from "@scalius/shared/markets";
 import {
   agentStorefrontContexts,
   agentStorefrontContinuations,
@@ -89,6 +90,14 @@ export interface AgentStorefrontCheckoutSubmitInput {
   customerEmail: string | null;
   /** Required only when a line ships (not for pickup or a cart with nothing physical). */
   shippingAddress?: string | null;
+  /**
+   * The rest of a delivery address outside Bangladesh, as its country's
+   * rules ask (GET /api/v1/address-rules/{countryCode}). The country, admin
+   * area and postal code are the context's delivery selection.
+   */
+  shippingAddressLine2?: string | null;
+  shippingLocality?: string | null;
+  shippingDependentLocality?: string | null;
   notes: string | null;
   paymentMethod: string;
 }
@@ -147,6 +156,11 @@ async function requestKeyForCheckout(requestId: string): Promise<string> {
   return `${CHECKOUT_ATTEMPT_REQUEST_KEY_PREFIX}${await sha256Hex(requestId)}`;
 }
 
+function optionalText(key: string, value: string | null | undefined): Record<string, string> {
+  const text = value?.trim();
+  return text ? { [key]: text } : {};
+}
+
 export async function buildAgentStorefrontCheckoutRequestHash(
   contextId: string,
   input: AgentStorefrontCheckoutSubmitInput,
@@ -159,6 +173,10 @@ export async function buildAgentStorefrontCheckoutRequestHash(
     customerPhone: input.customerPhone.trim(),
     customerEmail: input.customerEmail?.trim().toLowerCase() ?? null,
     shippingAddress: input.shippingAddress?.trim() || null,
+    // Only when sent, so a Bangladesh submit hashes as before.
+    ...optionalText("shippingAddressLine2", input.shippingAddressLine2),
+    ...optionalText("shippingLocality", input.shippingLocality),
+    ...optionalText("shippingDependentLocality", input.shippingDependentLocality),
     notes: input.notes?.trim() || null,
     paymentMethod: input.paymentMethod,
   });
@@ -350,9 +368,12 @@ export async function submitAgentStorefrontCheckout(
     loadStorefrontCheckoutAuthority(db, {
       items: cart,
       inventoryPool: InventoryPool.REGULAR,
+      shippingCountryCode: owned.countryCode,
       city: owned.cityId,
       zone: owned.zoneId,
       area: owned.areaId,
+      shippingAdminArea: owned.adminArea,
+      shippingPostalCode: owned.postalCode,
       shippingMethodId: owned.shippingMethodId,
       customerEmail: input.customerEmail,
       customerPhone: input.customerPhone,
@@ -394,10 +415,20 @@ export async function submitAgentStorefrontCheckout(
     customerPhone: input.customerPhone,
     customerEmail: input.customerEmail?.trim().toLowerCase() ?? null,
     // The address is stored only when a line ships. A context's destination
-    // is a delivery rate's (Bangladesh's City/Thana/Area until shipping zones
-    // by country, step 3b), so the order's country is the destination's.
+    // is its delivery rate's (MARKETS-DESIGN step 3b): the order's country,
+    // Bangladesh's City/Thana/Area or another country's admin area and
+    // postal code are the ones the rate was priced for.
     shippingCountryCode: delivery.address?.countryCode ?? null,
     shippingAddress: delivery.fulfilment.requiresShipping ? shippingAddress : null,
+    ...(delivery.fulfilment.requiresShipping && delivery.address?.countryCode !== DELIVERY_HIERARCHY_COUNTRY
+      ? {
+        shippingAddressLine2: input.shippingAddressLine2?.trim() || null,
+        shippingLocality: input.shippingLocality?.trim() || null,
+        shippingDependentLocality: input.shippingDependentLocality?.trim() || null,
+        shippingAdminArea: owned.adminArea,
+        shippingPostalCode: owned.postalCode,
+      }
+      : {}),
     city: delivery.address?.city ?? null,
     zone: delivery.address?.zone ?? null,
     area: delivery.address?.area ?? null,

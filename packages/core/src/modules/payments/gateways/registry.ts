@@ -13,7 +13,9 @@ import { toMinor } from "@scalius/shared/money";
 import type { ProviderAmountCodecs } from "@scalius/shared/plugins/providers";
 import { encodeProviderAmount, type EncodedProviderAmount } from "@scalius/shared/plugins/providers/amount";
 import { isQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
+import { providerServesCountry, type ProviderCountries } from "@scalius/shared/plugins/providers/common";
 import {
+  COD_COUNTRIES,
   COD_LABEL,
   COD_PAYMENT_METHOD,
   GIFT_CARD_TENDER_LABEL,
@@ -29,6 +31,7 @@ const BUILT_IN_GATEWAYS: readonly PaymentGateway[] = [stripeGateway, sslcommerzG
 
 export {
   BUILT_IN_PAYMENT_GATEWAY_IDS,
+  COD_COUNTRIES,
   COD_LABEL,
   COD_PAYMENT_METHOD,
   GIFT_CARD_TENDER_LABEL,
@@ -113,6 +116,13 @@ export interface PaymentProviders {
   label(id: string): string;
   /** Store-currency eligibility shared by every checkout surface; credential readiness is separate. */
   currencyIssue(id: string, currencyCode: unknown): string | null;
+  /** The shipping countries a method serves: COD's countries, a gateway's declared ones, else `any`. */
+  countries(id: string): ProviderCountries;
+  /**
+   * Why a method can't take an order delivered to this country, or null
+   * (null country: nothing is delivered, every method fits).
+   */
+  countryIssue(id: string, shippingCountryCode: string | null | undefined): string | null;
   filterForCurrency(ids: readonly string[], currencyCode: unknown): string[];
   /**
    * The one amount codec of every payment path (MARKETS-DESIGN D2): the
@@ -164,6 +174,16 @@ export function createPaymentProviders(apps: readonly PaymentGateway[] = []): Pa
     return null;
   };
 
+  const countries = (id: string): ProviderCountries =>
+    id === COD_PAYMENT_METHOD ? COD_COUNTRIES : get(id)?.countries ?? "any";
+
+  const countryIssue = (id: string, shippingCountryCode: string | null | undefined): string | null => {
+    if (!shippingCountryCode || providerServesCountry(countries(id), shippingCountryCode)) return null;
+    return id === COD_PAYMENT_METHOD
+      ? "Cash on delivery isn't available for this delivery country. Choose an online payment method."
+      : `${label(id)} isn't available for this delivery country. Choose another payment method.`;
+  };
+
   const encodeAmount = (methodId: string, amountMinor: number, currency: string): EncodedProviderAmount =>
     encodeProviderAmount(
       amountMinor,
@@ -185,6 +205,8 @@ export function createPaymentProviders(apps: readonly PaymentGateway[] = []): Pa
     methodIds: () => [...byId.keys(), COD_PAYMENT_METHOD],
     label,
     currencyIssue,
+    countries,
+    countryIssue,
     filterForCurrency: (ids, currencyCode) => ids.filter((id) => currencyIssue(id, currencyCode) === null),
     encodeAmount,
     amountIssue,

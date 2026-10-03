@@ -30,7 +30,7 @@ describe("quantity bundles at checkout", () => {
         sqlite.exec(`
             INSERT INTO delivery_locations (id, name, type, parent_id, external_ids, metadata, is_active)
             VALUES ('city_1', 'Dhaka', 'city', NULL, '{}', '{}', 1), ('zone_1', 'North', 'zone', 'city_1', '{}', '{}', 1);
-            INSERT INTO shipping_methods (id, name, fee_minor, kind) VALUES ('m_ship', 'Standard', 6000, 'delivery');
+            INSERT INTO delivery_zones (id, name) VALUES ('dz_bd', 'Bangladesh'); INSERT INTO delivery_zone_regions (country_code, zone_id) VALUES ('BD', 'dz_bd'); INSERT INTO shipping_methods (id, name, fee_minor, kind, zone_id) VALUES ('m_ship', 'Standard', 6000, 'delivery', 'dz_bd');
             INSERT INTO products (id, name, slug, price_minor, is_active) VALUES
               ('p_honey', 'Honey', 'honey', 90000, 1),
               ('p_ghee', 'Ghee', 'ghee', 120000, 1);

@@ -2,6 +2,7 @@
 // settings, checkout and order code classify ids without loading adapters.
 
 import { isQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
+import type { ProviderCountries } from "@scalius/shared/plugins/providers/common";
 import { sql, type AnyColumn, type SQL } from "drizzle-orm";
 
 /** The built-in gateways (registry.ts holds their adapters, in this order). */
@@ -9,6 +10,15 @@ export const BUILT_IN_PAYMENT_GATEWAY_IDS = ["stripe", "sslcommerz"] as const;
 
 export const COD_PAYMENT_METHOD = "cod";
 export const COD_LABEL = "Cash on Delivery";
+
+/**
+ * The shipping countries cash on delivery serves (MARKETS-DESIGN step 3b):
+ * riders collect it through Bangladesh's couriers, in BDT whole taka (its
+ * amount codec), so it is offered for deliveries to Bangladesh only. Pickup
+ * and orders that ship nothing have no shipping country: the counter or the
+ * service collects the cash.
+ */
+export const COD_COUNTRIES: ProviderCountries = ["BD"];
 
 /**
  * A gift-card tender (`orders.payment_method` of an order the buyer's gift

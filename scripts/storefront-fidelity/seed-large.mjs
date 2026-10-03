@@ -334,8 +334,11 @@ function shapeStore(stateDir, pool, ports, log, theme) {
       AND EXISTS (SELECT 1 FROM products p WHERE p.id = line.product_id)
     GROUP BY line.product_id;`);
   // Two delivery rates, as every Bangladeshi store has: cards read the cheapest.
-  db.exec(`INSERT OR REPLACE INTO shipping_methods (id, name, is_active, sort_order, fee_minor, kind) VALUES
-    ('ship_fid_dhaka', 'Inside Dhaka', 1, 0, 6000, 'delivery'), ('ship_fid_outside', 'Outside Dhaka', 1, 1, 12000, 'delivery');`);
+  // Both in the zone of the whole of Bangladesh (0114: a delivery rate belongs to a zone).
+  db.exec(`INSERT OR IGNORE INTO delivery_zones (id, name) VALUES ('dz_fid_bd', 'Bangladesh');
+    INSERT OR IGNORE INTO delivery_zone_regions (country_code, zone_id) VALUES ('BD', 'dz_fid_bd');
+    INSERT OR REPLACE INTO shipping_methods (id, name, is_active, sort_order, fee_minor, kind, zone_id) VALUES
+    ('ship_fid_dhaka', 'Inside Dhaka', 1, 0, 6000, 'delivery', 'dz_fid_bd'), ('ship_fid_outside', 'Outside Dhaka', 1, 1, 12000, 'delivery', 'dz_fid_bd');`);
   // The scale seed's 1,500 orders over two years give no product ten sales
   // in 30 days, so the "sold" fact would never render. One discounted public
   // product in seven with a colour axis gets a deterministic 30-day count

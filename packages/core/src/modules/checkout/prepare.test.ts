@@ -143,6 +143,8 @@ interface ShippingMethodRow {
   feeMinor: number;
   isActive: boolean;
   deletedAt: Date | null;
+  zoneId?: string | null;
+  destinationRegions?: string | null;
 }
 
 interface LocationRow {
@@ -193,6 +195,9 @@ function createVariant(overrides: Partial<VariantRow> = {}): VariantRow {
   };
 }
 
+/** The zone of the whole of Bangladesh (the regions its rate row carries for a Bangladesh destination). */
+const BANGLADESH_ZONE_REGIONS = JSON.stringify([{ zoneId: "dz_bd", countryCode: "BD", adminArea: "", postalPrefix: "" }]);
+
 function createShippingMethod(overrides: Partial<ShippingMethodRow> = {}): ShippingMethodRow {
   return {
     id: "ship_standard",
@@ -201,6 +206,8 @@ function createShippingMethod(overrides: Partial<ShippingMethodRow> = {}): Shipp
     feeMinor: 6_000,
     isActive: true,
     deletedAt: null,
+    zoneId: "dz_bd",
+    destinationRegions: BANGLADESH_ZONE_REGIONS,
     ...overrides,
   };
 }
@@ -1154,25 +1161,61 @@ describe("createStorefrontOrder shipping verification", () => {
   });
 });
 
-describe("createStorefrontOrder country-aware shipping (MARKETS-DESIGN step 3a)", () => {
-  it("gives a foreign address no delivery rate rather than a wrong fee", async () => {
+describe("createStorefrontOrder country-aware shipping (MARKETS-DESIGN steps 3a and 3b)", () => {
+  const india = {
+    shippingCountryCode: "IN",
+    shippingAddress: "12 MG Road",
+    shippingLocality: "Bengaluru",
+    shippingAdminArea: "Karnataka",
+    shippingPostalCode: "560001",
+    city: null,
+    zone: null,
+  };
+  const indiaZoneRate = createShippingMethod({
+    id: "ship_india",
+    zoneId: "dz_in",
+    destinationRegions: JSON.stringify([{ zoneId: "dz_in", countryCode: "IN", adminArea: "", postalPrefix: "" }]),
+  });
+
+  it("gives a foreign address no zone serves no delivery rate rather than a wrong fee (fail closed)", async () => {
     await expect(placeOrder({
-      inputOverrides: {
-        shippingCountryCode: "IN",
-        shippingAddress: "12 MG Road",
-        shippingLocality: "Bengaluru",
-        shippingAdminArea: "Karnataka",
-        shippingPostalCode: "560001",
-        city: null,
-        zone: null,
-      },
-    })).rejects.toMatchObject({ details: { reason: "delivery_country_unavailable", countryCode: "IN" } });
+      inputOverrides: india,
+      // The rate row carries the destination country's regions: none for India.
+      shippingMethods: [createShippingMethod({ destinationRegions: null })],
+    })).rejects.toMatchObject({
+      message: expect.stringContaining("We don't deliver to this address"),
+      details: { reason: "delivery_rate_unavailable" },
+    });
+  });
+
+  it("refuses cash on delivery for a delivery outside Bangladesh, its country rule", async () => {
+    await expect(placeOrder({
+      inputOverrides: { ...india, shippingMethodId: "ship_india" },
+      shippingMethods: [indiaZoneRate],
+    })).rejects.toMatchObject({
+      message: expect.stringContaining("Cash on delivery isn't available for this delivery country"),
+      details: { reason: "payment_method_unavailable" },
+    });
+  });
+
+  it("refuses an order whose postal code differs from the one delivery was priced for", async () => {
+    const { resolveStorefrontShippingAddress: resolve } = await import("./prepare");
+    const delivery = {
+      address: { countryCode: "GB", city: null, zone: null, area: null, adminArea: null, postalCode: "SW1A1AA" },
+      cityName: null,
+      zoneName: null,
+      areaName: null,
+    };
+    expect(resolve({ shippingAddress: "10 Downing Street", shippingLocality: "London", shippingPostalCode: "sw1a 1aa" }, delivery))
+      .toMatchObject({ countryCode: "GB", postalCode: "SW1A 1AA" });
+    expect(() => resolve({ shippingAddress: "10 Downing Street", shippingLocality: "London", shippingPostalCode: "EC1A 1BB" }, delivery))
+      .toThrow(expect.objectContaining({ details: { reason: "delivery_rate_unavailable" } }));
   });
 
   it("ships only to a country an active market sells to", async () => {
     // The delivery preflight's facts for a Bangladesh delivery rate.
     const delivery = {
-      address: { countryCode: "BD", city: "city_1", zone: "zone_1", area: null },
+      address: { countryCode: "BD", city: "city_1", zone: "zone_1", area: null, adminArea: null, postalCode: null },
       cityName: "Dhaka",
       zoneName: "Mirpur",
       areaName: null,
@@ -1386,7 +1429,7 @@ describe("createStorefrontOrder prevalidated input trust", () => {
         undefined,
         {
           kind: "delivery",
-          address: { countryCode: "BD", city: "city_1", zone: "zone_1", area: null },
+          address: { countryCode: "BD", city: "city_1", zone: "zone_1", area: null, adminArea: null, postalCode: null },
           pickup: null,
           fulfilment: {
             lineTypes: ["ship"],
