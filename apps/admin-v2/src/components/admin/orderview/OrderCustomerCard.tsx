@@ -12,7 +12,7 @@ import { formatLocationParts } from "~/lib/location-presentation";
 import { formatPhoneForDisplay } from "@scalius/shared/phone-input";
 import { customerContactLinks } from "./contact-links";
 import { formatOrderTimestamp, orderTimestampIso } from "./formatters";
-import type { Order, OrderAppRiskCheck } from "./types";
+import type { Order, OrderAppRiskCheck, OrderHold } from "./types";
 
 // The edit dialog checks phones with libphonenumber's metadata: it loads
 // just after the page, not as part of it.
@@ -26,13 +26,26 @@ const RISK_VARIANT: Record<OrderAppRiskCheck["level"], BadgeVariant> = {
   high: "destructive",
 };
 
+function HoldReleased({ hold }: { hold: OrderHold }) {
+  const t = useMessages(orderDetailMessages);
+  const when = formatOrderTimestamp(hold.releasedAt);
+  return when ? (
+    <p className="text-muted-foreground">
+      <time dateTime={orderTimestampIso(hold.releasedAt)}>{t("holds.releasedAt", { when })}</time>
+    </p>
+  ) : null;
+}
+
 /**
  * Apps' risk checks of the order (`order.risk`), as advice: the level is a
  * word on the badge, not only its colour, and nothing here acts on the order.
- * Part of the order read, so everyone who can open the order sees it.
+ * A hold an app placed and staff released shows under that app's check (an
+ * open one is the page's hold notice). Part of the order read, so everyone
+ * who can open the order sees it.
  */
-function AppRiskChecks({ checks }: { checks: OrderAppRiskCheck[] }) {
+function AppRiskChecks({ checks, released }: { checks: OrderAppRiskCheck[]; released: OrderHold[] }) {
   const t = useMessages(orderDetailMessages);
+  const unchecked = released.filter((hold) => !checks.some((check) => check.appId === hold.appId));
   return (
     <section className="space-y-3 px-6 py-4">
       <div className="space-y-1">
@@ -42,6 +55,7 @@ function AppRiskChecks({ checks }: { checks: OrderAppRiskCheck[] }) {
       <ul className="space-y-3">
         {checks.map((check, index) => {
           const when = formatOrderTimestamp(check.checkedAt);
+          const hold = released.find((candidate) => candidate.appId === check.appId);
           return (
             <li key={`${check.appId}:${index}`} className="space-y-1">
               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -60,9 +74,18 @@ function AppRiskChecks({ checks }: { checks: OrderAppRiskCheck[] }) {
                   <time dateTime={orderTimestampIso(check.checkedAt)}>{t("appRisk.checkedAt", { when })}</time>
                 </p>
               ) : null}
+              {hold ? <HoldReleased hold={hold} /> : null}
             </li>
           );
         })}
+        {unchecked.map((hold) => (
+          <li key={hold.id} className="space-y-1">
+            <Link to="/admin/apps/$pluginId" params={{ pluginId: hold.appId }} className="font-medium text-link hover:underline">
+              {hold.appName}
+            </Link>
+            <HoldReleased hold={hold} />
+          </li>
+        ))}
       </ul>
     </section>
   );
@@ -86,6 +109,7 @@ export function OrderCustomerCard({ order }: { order: Order }) {
   const record = order.customerRecord ?? null;
   // An account or merchant-added customer named differently from this order: say so, so the mismatch is seen.
   const orderedAs = record !== null && record.kind !== "guest" && !sameName(record.name, order.customerName);
+  const released = (order.holds ?? []).filter((hold) => hold.releasedAt !== null);
 
   return (
     <Card>
@@ -149,7 +173,7 @@ export function OrderCustomerCard({ order }: { order: Order }) {
             <LazyFraudCheckIndicator phone={order.customerPhone} customerName={order.customerName} />
           </section>
         ) : null}
-        {order.appRiskChecks.length > 0 ? <AppRiskChecks checks={order.appRiskChecks} /> : null}
+        {order.appRiskChecks.length > 0 || released.length > 0 ? <AppRiskChecks checks={order.appRiskChecks} released={released} /> : null}
       </div>
       <Suspense fallback={null}>
         <OrderDetailsDialog order={order} open={editing} onOpenChange={setEditing} />

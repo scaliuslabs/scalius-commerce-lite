@@ -32,6 +32,7 @@ import { editLockMessageKey } from "~/routes/admin/orders/-order-form-route-stat
 import { ErrorBoundary } from "./ErrorBoundary";
 import { OrderCustomerCard } from "./orderview/OrderCustomerCard";
 import { OrderFulfilmentCards, usePickupReadyAction } from "./orderview/OrderFulfilmentCards";
+import { OrderHoldNotice } from "./orderview/OrderHoldNotice";
 import { OrderSummaryCard } from "./orderview/OrderItemsCard";
 import { OrderNotesCard } from "./orderview/OrderNotesCard";
 import { OrderNotificationsCard } from "./orderview/OrderNotificationsCard";
@@ -244,6 +245,8 @@ export function OrderView({ order }: { order: Order }) {
               </>
             }
           />
+
+          <OrderHoldNotice order={order} />
 
           {notice ? (
             <Alert variant="warning">
