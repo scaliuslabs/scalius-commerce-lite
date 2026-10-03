@@ -172,19 +172,20 @@ describe.each(["d1", "turso"] as const)("storefront checkout commit (%s)", (prov
     }]);
   });
 
-  it("records the market the checkout authority resolved, and the backup market for a payload without one", async () => {
+  it("records the shipping country's active market in the order insert, else the backup market", async () => {
     const db = openStore(provider);
-    sqlite!.exec("INSERT INTO markets (id, handle, name, status) VALUES ('mkt_bd', 'dhaka', 'Dhaka', 'active')");
-    const resolved = prepare("m1");
-    resolved.payload.orderData.marketId = "mkt_bd";
-    await commitStorefrontOrderPayload(db, resolved.payload, resolved.commit);
-    const legacy = prepare("m2");
-    delete legacy.payload.orderData.marketId;
-    await commitStorefrontOrderPayload(db, legacy.payload, legacy.commit);
-    expect(sqlite!.prepare("SELECT id, market_id FROM orders ORDER BY market_id").all()).toEqual([
-      { id: legacy.payload.orderData.id, market_id: "mkt_backup" },
-      { id: resolved.payload.orderData.id, market_id: "mkt_bd" },
-    ]);
+    const commit = async (key: string) => {
+      const resolved = prepare(key);
+      await commitStorefrontOrderPayload(db, resolved.payload, resolved.commit);
+      return (sqlite!.prepare("SELECT market_id FROM orders WHERE id = ?").get(resolved.payload.orderData.id) as { market_id: string }).market_id;
+    };
+    expect(await commit("m1")).toBe("mkt_backup");
+    // BD moves to a draft market: still the backup market's until it is active.
+    sqlite!.exec("INSERT INTO markets (id, handle, name, status) VALUES ('mkt_bd', 'dhaka', 'Dhaka', 'draft')");
+    sqlite!.exec("UPDATE market_countries SET market_id = 'mkt_bd' WHERE country_code = 'BD'");
+    expect(await commit("m2")).toBe("mkt_backup");
+    sqlite!.exec("UPDATE markets SET status = 'active' WHERE id = 'mkt_bd'");
+    expect(await commit("m3")).toBe("mkt_bd");
   });
 
   it("records the SKU's unit cost on the committed line, frozen against later cost changes", async () => {

@@ -35,7 +35,7 @@ import {
     resolveAdminOrderCreateAttempt,
 } from "./create-attempts";
 import { prepareManualOrderQuote } from "./quote";
-import { orderMarketId, readMarketMatrix } from "../../markets";
+import { orderMarketIdSql } from "../../markets";
 import type { SQLiteBatchItem } from "./shared";
 import type { FunctionCart } from "@scalius/shared/plugins";
 import type { AppliedAppDiscount, ManualOrderAppFunctions } from "@scalius/shared/checkout-app-facts";
@@ -148,11 +148,11 @@ export async function createManualOrder(
             totalAmountMinor: taxQuote.totalMinor,
             paidAmountMinor: 0,
         });
-        // The order's market: the delivery address's country's, else the backup market.
-        const [existingCustomer, marketMatrix] = await Promise.all([
-            db.select().from(customers).where(guestRecordForPhone(data.customerPhone)).get(),
-            readMarketMatrix(db),
-        ]);
+        const existingCustomer = await db
+            .select()
+            .from(customers)
+            .where(guestRecordForPhone(data.customerPhone))
+            .get();
         const reservationEntries: ReservationEntry[] = trackedItems
             .filter((item) => item.inventoryTracked)
             .map((item) => ({
@@ -177,7 +177,6 @@ export async function createManualOrder(
         }
 
         return {
-            marketId: orderMarketId(marketMatrix),
             initialPaymentState,
             address,
             shippingAddress,
@@ -204,7 +203,6 @@ export async function createManualOrder(
         throw error;
     });
     const {
-        marketId,
         initialPaymentState,
         address,
         shippingAddress,
@@ -345,7 +343,8 @@ export async function createManualOrder(
             paymentMethod: PaymentMethod.COD,
             fulfillmentStatus: FulfillmentStatus.PENDING,
             status: OrderStatus.CONFIRMED,
-            marketId,
+            // The delivery address's country's market, else the backup market (MARKETS-DESIGN D4).
+            marketId: orderMarketIdSql(),
             customerId,
             inventoryAction: reservationEntries.length > 0 ? "reserved" : "none",
             // Staff-created; the source says where it came in (facebook, walk_in, …).

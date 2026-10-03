@@ -54,6 +54,8 @@ describe("admin product SKU invariant boundaries", () => {
                     from() {
                         const query = {
                             innerJoin: () => query,
+                            // The store currency read joins the currency document beside the backup market.
+                            leftJoin: () => query,
                             where() {
                                 return {
                                     get: async () => null,
@@ -408,6 +410,8 @@ describe("admin product SKU invariant boundaries", () => {
                         const query = {
                             // The SKU-ownership check joins products; no other product owns these SKUs.
                             innerJoin: () => query,
+                            // The store currency read joins the currency document beside the backup market.
+                            leftJoin: () => query,
                             where() {
                                 return { get: async () => null, limit: () => ({ get: async () => null }) };
                             },

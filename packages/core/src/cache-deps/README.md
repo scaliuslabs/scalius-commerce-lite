@@ -60,7 +60,7 @@ t:<table>   store
 `PUBLIC_API_CACHE_ROUTES` (`packages/shared/src/public-api-cache-routes.ts`) gives every public read a `market` field: `{ keyed: true }` or `{ invariant: <reason> }` (MARKETS-DESIGN D4). This is the one list of reads that are the same in every market.
 
 - A keyed read carries the page's presence (`?presence=en-in`), so the presence is part of its key. Only `/api/v1/checkout/config` is keyed. The storefront transport adds the presence to keyed reads only (`withMarketPresence()`), so root pages keep their keys.
-- A route reads its market only through `readPublicMarket()` (`apps/api/src/utils/public-market.ts`). It refuses an invariant route, so a read cannot vary by market while its key does not.
+- A route learns its presence only through `publicMarketPresence()` (`apps/api/src/utils/public-market.ts`) and reads that market joined with its settings documents (`readPresenceMarketWithDocuments()`), in the statement it already runs. The helper refuses an invariant route, so a read cannot vary by market while its key does not.
 - Before a read varies by market (price lists, FX, translations in step 4), mark it keyed. Its presence then enters its key.
 
 ### Migrations

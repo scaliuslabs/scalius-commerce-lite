@@ -1,86 +1,108 @@
 // The active presence matrix (MARKETS-DESIGN D4): every active market with
-// its countries and subfolder presences, backup first. The storefront layout
-// carries it (hreflang, the market selector), the gateway resolves a buyer's
-// choice with it, and checkout resolves the order's market with it. Three
-// small bounded statements that join any batch.
+// its countries and subfolder presences, backup first, and the backup
+// market's price increment. The storefront layout carries it (hreflang, the
+// market selector), the gateway resolves a buyer's choice with it, and every
+// price reader rounds to its increment. It is one scalar SQL expression, so a
+// read adds it to a statement it already runs: a store costs the same D1
+// calls and statements with markets as before.
 import type { Database } from "@scalius/database/client";
-import { marketCountries, marketPresences, markets } from "@scalius/database/schema";
+import { marketPresences, markets, settings } from "@scalius/database/schema";
 import type { MarketMatrix, PublicMarket } from "@scalius/shared/markets";
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, eq, sql, type SQL } from "drizzle-orm";
 import { deps } from "../../cache-deps";
+import { settingsDocumentsJoin, type SettingsDocumentRow } from "../../settings-store";
 
-export interface MarketMatrixRows {
-    markets: ReadonlyArray<{ id: string; handle: string; name: string; status: string; isBackup: boolean | number }>;
-    countries: ReadonlyArray<{ countryCode: string; marketId: string }>;
-    presences: ReadonlyArray<{ marketId: string; kind: string; value: string; locale: string }>;
+export interface MarketMatrixRead {
+    matrix: MarketMatrix;
+    /** The backup market's stored price increment (null without a backup row). */
+    backupPriceIncrementMinor: number | null;
 }
 
-/** The three statements of the matrix, for a caller's batch; `marketMatrixFromRows` reads their results. */
-export function planMarketMatrix(db: Database) {
+/**
+ * The matrix as one JSON text: an array with one object per active market
+ * (`countries` and `presences` are comma lists; a presence is
+ * `<value>:<locale>`, the root's value empty), or NULL without an active
+ * market. Country codes, subfolder values and locales are letters and dashes
+ * only (database checks), so the lists are unambiguous. Every value is cast
+ * to text: PostgreSQL's `json_object` takes text. Declares `mk:*`.
+ */
+export function marketMatrixSql(): SQL<string | null> {
     deps.anyMarket();
-    return {
-        statements: [
-            db.select({
-                id: markets.id,
-                handle: markets.handle,
-                name: markets.name,
-                status: markets.status,
-                isBackup: markets.isBackup,
-            }).from(markets).orderBy(desc(markets.isBackup), asc(markets.name), asc(markets.id)),
-            db.select({ countryCode: marketCountries.countryCode, marketId: marketCountries.marketId })
-                .from(marketCountries)
-                .orderBy(asc(marketCountries.countryCode)),
-            db.select({
-                marketId: marketPresences.marketId,
-                kind: marketPresences.kind,
-                value: marketPresences.value,
-                locale: marketPresences.locale,
-            }).from(marketPresences)
-                .where(eq(marketPresences.kind, "subfolder"))
-                .orderBy(asc(marketPresences.createdAt), asc(marketPresences.value)),
-        ] as const,
-        resolve(results: readonly unknown[], offset = 0): MarketMatrix {
-            return marketMatrixFromRows({
-                markets: results[offset] as MarketMatrixRows["markets"],
-                countries: results[offset + 1] as MarketMatrixRows["countries"],
-                presences: results[offset + 2] as MarketMatrixRows["presences"],
-            });
-        },
-    };
+    return sql<string | null>`(SELECT '[' || group_concat(matrix_market.entry, ',') || ']' FROM (
+        SELECT json_object(
+            'id', matrix_row.id,
+            'handle', matrix_row.handle,
+            'name', matrix_row.name,
+            'isBackup', CAST(matrix_row.is_backup AS TEXT),
+            'priceIncrementMinor', CAST(matrix_row.price_increment_minor AS TEXT),
+            'countries', (SELECT group_concat(matrix_country.country_code, ',') FROM market_countries AS matrix_country WHERE matrix_country.market_id = matrix_row.id),
+            'presences', (SELECT group_concat(matrix_presence.value || ':' || matrix_presence.locale, ',') FROM market_presences AS matrix_presence WHERE matrix_presence.market_id = matrix_row.id AND matrix_presence.kind = 'subfolder')
+        ) AS entry
+        FROM markets AS matrix_row
+        WHERE matrix_row.status = 'active'
+    ) AS matrix_market)`;
 }
 
-/** Active markets only; a draft market's countries and presences resolve to nothing. */
-export function marketMatrixFromRows(rows: MarketMatrixRows): MarketMatrix {
-    const active = rows.markets.filter((market) => market.status === "active");
-    const byId = new Map<string, PublicMarket>(active.map((market) => [market.id, {
-        id: market.id,
-        handle: market.handle,
-        name: market.name,
-        isBackup: Boolean(market.isBackup),
-        countries: [],
-        presences: [],
-    }]));
-    for (const country of rows.countries) byId.get(country.marketId)?.countries.push(country.countryCode);
-    for (const presence of rows.presences) {
-        const market = byId.get(presence.marketId);
-        if (!market || presence.kind !== "subfolder") continue;
-        // The root belongs to the backup market alone (the database enforces it too).
-        if (presence.value === "" && !market.isBackup) continue;
-        market.presences.push({ value: presence.value, locale: presence.locale });
-    }
-    for (const market of byId.values()) {
-        market.countries.sort();
-        // The root first: the backup market's own URL.
-        market.presences.sort((left, right) => (left.value === "" ? -1 : right.value === "" ? 1 : 0));
-    }
-    const ordered = [...byId.values()];
-    return { markets: [...ordered.filter((market) => market.isBackup), ...ordered.filter((market) => !market.isBackup)] };
+interface MatrixEntry {
+    id?: unknown;
+    handle?: unknown;
+    name?: unknown;
+    isBackup?: unknown;
+    priceIncrementMinor?: unknown;
+    countries?: unknown;
+    presences?: unknown;
 }
 
+function list(value: unknown): string[] {
+    return typeof value === "string" && value ? value.split(",").filter(Boolean) : [];
+}
+
+function truthy(value: unknown): boolean {
+    return value === true || value === 1 || value === "1" || value === "true";
+}
+
+function compare(left: string, right: string): number {
+    return left < right ? -1 : left > right ? 1 : 0;
+}
+
+/** The matrix of a `marketMatrixSql()` value: the backup market first, the root its first presence. */
+export function marketMatrixFromSql(value: unknown): MarketMatrixRead {
+    let entries: MatrixEntry[] = [];
+    if (typeof value === "string" && value) {
+        const parsed = JSON.parse(value) as unknown;
+        if (Array.isArray(parsed)) entries = parsed as MatrixEntry[];
+    }
+    let backupPriceIncrementMinor: number | null = null;
+    const all = entries.map((entry): PublicMarket => {
+        const isBackup = truthy(entry.isBackup);
+        if (isBackup && entry.priceIncrementMinor !== null && entry.priceIncrementMinor !== undefined) {
+            const increment = Number(entry.priceIncrementMinor);
+            backupPriceIncrementMinor = Number.isFinite(increment) ? increment : null;
+        }
+        const presences = list(entry.presences)
+            .map((item) => {
+                const separator = item.lastIndexOf(":");
+                return { value: item.slice(0, separator), locale: item.slice(separator + 1) };
+            })
+            // The root belongs to the backup market alone (the database enforces it too).
+            .filter((presence) => isBackup || presence.value !== "")
+            .sort((left, right) => (left.value === "" ? -1 : right.value === "" ? 1 : compare(left.value, right.value)));
+        return {
+            id: String(entry.id),
+            handle: String(entry.handle),
+            name: String(entry.name),
+            isBackup,
+            countries: list(entry.countries).sort(),
+            presences,
+        };
+    }).sort((left, right) => Number(right.isBackup) - Number(left.isBackup) || compare(left.name, right.name) || compare(left.id, right.id));
+    return { matrix: { markets: all }, backupPriceIncrementMinor };
+}
+
+/** The matrix alone, in its own one-row statement (the gateway's choice redirect, the dashboard). */
 export async function readMarketMatrix(db: Database): Promise<MarketMatrix> {
-    const plan = planMarketMatrix(db);
-    const results = await db.batch(plan.statements as never) as unknown[];
-    return plan.resolve(results);
+    const [row] = await db.select({ matrix: marketMatrixSql() }).from(sql`(SELECT 1 AS one) AS market_matrix_row`);
+    return marketMatrixFromSql(row?.matrix).matrix;
 }
 
 export interface PresenceMarket {
@@ -92,19 +114,27 @@ export interface PresenceMarket {
 }
 
 /**
- * The active market a market-keyed public read renders for: the one holding
- * the subfolder `value`, or the backup market for the root (`''`). Null
- * when no active market holds that subfolder. Declares only `mk:<id>`: a
- * change of that market (or of the presence it holds) invalidates the read.
+ * The active market a market-keyed public read renders for (the one holding
+ * the subfolder `value`, or the backup market for the root `''`) and the
+ * settings documents the read needs, in ONE statement: the market row joined
+ * with the documents. No row: no active market holds that subfolder (the
+ * documents are moot). Declares only `mk:<id>` for the market, so a change
+ * of that market (or of the presence it holds) invalidates the read.
  */
-export async function readPresenceMarket(db: Database, value: string): Promise<PresenceMarket | null> {
+export async function readPresenceMarketWithDocuments(
+    db: Database,
+    value: string,
+    documents: readonly { key: string }[],
+): Promise<{ market: PresenceMarket | null; documentRows: SettingsDocumentRow[] }> {
     const rows = await db.select({
         id: markets.id,
         handle: markets.handle,
         name: markets.name,
         isBackup: markets.isBackup,
-        value: marketPresences.value,
         locale: marketPresences.locale,
+        category: settings.category,
+        value: settings.value,
+        revision: settings.revision,
     })
         .from(markets)
         .leftJoin(marketPresences, and(
@@ -112,19 +142,24 @@ export async function readPresenceMarket(db: Database, value: string): Promise<P
             eq(marketPresences.kind, "subfolder"),
             eq(marketPresences.value, value),
         ))
+        .leftJoin(settings, settingsDocumentsJoin(documents))
         .where(and(
             eq(markets.status, "active"),
             value === "" ? eq(markets.isBackup, true) : sql`${marketPresences.value} IS NOT NULL`,
-        ))
-        .limit(1);
+        ));
     const row = rows[0];
-    if (!row) return null;
+    if (!row) return { market: null, documentRows: [] };
     deps.market(row.id);
     return {
-        id: row.id,
-        handle: row.handle,
-        name: row.name,
-        isBackup: Boolean(row.isBackup),
-        presence: { value, locale: row.locale ?? "en" },
+        market: {
+            id: row.id,
+            handle: row.handle,
+            name: row.name,
+            isBackup: Boolean(row.isBackup),
+            presence: { value, locale: row.locale ?? "en" },
+        },
+        documentRows: rows.flatMap((each) => each.category === null || each.value === null
+            ? []
+            : [{ category: each.category, value: each.value, revision: each.revision ?? 0 }]),
     };
 }

@@ -14,16 +14,16 @@ import { defaultPriceIncrementMinor, resolvePriceIncrementMinor } from "@scalius
 import { eq, sql, type SQL } from "drizzle-orm";
 import { deps } from "../../cache-deps";
 import { currencyDocument, storeCurrencyFromCode, type CurrencySettings, type StoreCurrency } from "../settings";
-import { SETTINGS_DOCUMENT_ROW_KEY } from "../../settings-store";
+import { SETTINGS_DOCUMENT_ROW_KEY, settingsDocumentsJoin } from "../../settings-store";
 
-/** The backup market's stored price increment, as a batchable statement. */
-export function selectBackupPriceIncrement(db: Database) {
+/**
+ * The backup market's stored price increment as a scalar, for a statement a
+ * read already runs (so pricing costs no extra statement). Declares
+ * `mk:backup`, which only a change of that increment advances.
+ */
+export function backupPriceIncrementSql(): SQL<number | null> {
     deps.backupMarketPricing();
-    return db
-        .select({ priceIncrementMinor: markets.priceIncrementMinor })
-        .from(markets)
-        .where(eq(markets.isBackup, true))
-        .limit(1);
+    return sql<number | null>`(SELECT backup_increment.price_increment_minor FROM markets AS backup_increment WHERE backup_increment.is_backup = 1)`;
 }
 
 /** The store currency from the currency document and the backup market's stored increment. */
@@ -38,15 +38,25 @@ export function storeCurrencyOf(
     };
 }
 
-/** The store currency: the currency document and the backup market's increment, read together. */
+/**
+ * The store currency in one statement, as before markets: the currency
+ * document joined beside the backup market's increment.
+ */
 export async function readStoreCurrency(db: Database): Promise<StoreCurrency & { symbol: string }> {
-    const [currency, backupRows] = await Promise.all([
-        currencyDocument.read(db),
-        selectBackupPriceIncrement(db),
-    ]);
-    // No backup row (a store before 0112, or a test double) reads as the currency's default increment.
-    const rows = Array.isArray(backupRows) ? backupRows : [];
-    return { ...storeCurrencyOf(currency, rows[0]?.priceIncrementMinor), symbol: currency.currencySymbol };
+    const rows = await db.select({
+        backupPriceIncrementMinor: backupPriceIncrementSql(),
+        category: settings.category,
+        value: settings.value,
+        revision: settings.revision,
+    })
+        .from(sql`(SELECT 1 AS one) AS store_currency_row`)
+        .leftJoin(settings, settingsDocumentsJoin([currencyDocument]));
+    const list = Array.isArray(rows) ? rows : [];
+    const currency = (await currencyDocument.fromRows(list.flatMap((row) => row.category === null || row.value === null
+        ? []
+        : [{ category: row.category, value: row.value, revision: row.revision ?? 0 }]))).value;
+    // No backup row (a store before 0112) reads as the currency's default increment.
+    return { ...storeCurrencyOf(currency, list[0]?.backupPriceIncrementMinor), symbol: currency.currencySymbol };
 }
 
 const quoted = (codes: readonly string[]) => codes.map((code) => `'${code}'`).join(", ");

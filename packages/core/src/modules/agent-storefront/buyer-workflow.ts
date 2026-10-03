@@ -460,7 +460,6 @@ export async function submitAgentStorefrontCheckout(
       orderCreatedNotificationEnabled: authority.sideEffects.orderCreatedNotification,
       metaPurchaseEnabled: authority.sideEffects.metaPurchase,
       contactFields: authority.contactFields,
-      marketId: authority.marketId,
     }),
     authority.taxAuthority,
     {},

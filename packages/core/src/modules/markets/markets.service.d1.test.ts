@@ -4,6 +4,7 @@
 // and the active presence matrix buyers and orders resolve against.
 import type { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { sql } from "drizzle-orm";
 
 import type { Database } from "@scalius/database/client";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
@@ -11,7 +12,7 @@ import { ConflictError, ValidationError } from "@scalius/core/errors";
 import { withDependencyScope } from "../../cache-deps";
 import { createMarket, deleteMarket, getMarket, listMarkets, resetBackupPriceIncrement, updateMarket } from "./markets.service";
 import { readMarketMatrix } from "./matrix";
-import { orderMarketId } from "./order-market";
+import { orderMarketId, orderMarketIdSql } from "./order-market";
 import { readStoreCurrency } from "./pricing";
 
 let sqlite: DatabaseSync;
@@ -153,15 +154,24 @@ describe("the presence matrix", () => {
         expect(read.dependencies.coarseTables).toEqual([]);
     });
 
-    it("places an order in the shipping country's active market, else the backup market", async () => {
-        expect(orderMarketId(await readMarketMatrix(db))).toBe("mkt_backup");
+    it("places an order in the shipping country's active market, else the backup market (the pure rule and its SQL twin agree)", async () => {
+        const both = async (country?: string) => {
+            const [row] = await db.select({ id: orderMarketIdSql(country) }).from(sql`(SELECT 1 AS one) AS probe`);
+            const pure = orderMarketId(await readMarketMatrix(db), country);
+            expect(row!.id, country ?? "BD").toBe(pure);
+            return pure;
+        };
+        expect(await both()).toBe("mkt_backup");
         const bangladesh = await createMarket(db, { name: "Dhaka", status: "draft", countries: ["LK"], presence: null });
         // Bangladesh moves out of the backup market into a draft market: still the backup's until it is active.
         await updateMarket(db, "mkt_backup", { expectedRevision: 1, countries: [] });
         await updateMarket(db, bangladesh.id, { expectedRevision: 1, countries: ["BD"] });
-        expect(orderMarketId(await readMarketMatrix(db))).toBe("mkt_backup");
+        expect(await both()).toBe("mkt_backup");
         await updateMarket(db, bangladesh.id, { expectedRevision: 2, status: "active" });
-        expect(orderMarketId(await readMarketMatrix(db))).toBe(bangladesh.id);
-        expect(orderMarketId(await readMarketMatrix(db), "US")).toBe("mkt_backup");
+        expect(await both()).toBe(bangladesh.id);
+        expect(await both("US")).toBe("mkt_backup");
+        expect(await both("LK")).toBe("mkt_backup");
+        // Not an ISO code: the backup market, and nothing reaches the SQL.
+        expect(await both("bd'--")).toBe("mkt_backup");
     });
 });

@@ -148,12 +148,14 @@ language with the merchant's edits).
   before.
 - **Commit budget.** A 99-line commit is one batch of 39 statements, each
   within D1's 100 bound values (`wave-a-checkout.d1.test.ts`).
-- **Market** (MARKETS-DESIGN step 2). The authority batch also reads the
-  backup market's price increment and the active market matrix. The order's
-  market is the market of its shipping country (`orderMarketId()`, BD until
-  addresses are country-aware), else the backup market, and the commit writes
-  `orders.market_id`. A change of a market's status, increment or countries
-  bumps `checkout_authority` (0112 triggers).
+- **Market** (MARKETS-DESIGN step 2). The `checkout_authority` row of the
+  authority batch also carries the backup market's price increment (no extra
+  statement). The order insert writes `orders.market_id` itself
+  (`orderMarketIdSql()`): the active market of the shipping country (BD until
+  addresses are country-aware), else the backup market. A change of a
+  market's status, increment or countries bumps `checkout_authority` (0112
+  triggers). The checkout config reads the presence's market joined with its
+  settings documents, in the statement it already ran.
 
 ## Quantity bundles (catalogue slice 1c)
 

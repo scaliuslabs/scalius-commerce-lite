@@ -475,12 +475,6 @@ export interface StorefrontOrderCommitPayload {
         fulfillmentStatus: string;
         inventoryPool: string;
         inventoryAction: string;
-        /**
-         * The market the order is placed in (checkout authority: the shipping
-         * country's, else the backup market). Absent on a payload prepared
-         * before markets: the commit records the backup market.
-         */
-        marketId?: string | null;
     };
     items: {
         id: string;

@@ -12,7 +12,7 @@ import { getDb } from "@scalius/database/client";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { rebuildCatalogProjections } from "@scalius/core/modules/products";
 import { createPublicPartReader, renderPublicRead } from "./public-read";
-import { MarketInvariantRouteError, readPublicMarket } from "./utils/public-market";
+import { MarketInvariantRouteError, publicMarketPresence } from "./utils/public-market";
 
 class MemoryCache {
   readonly entries = new Map<string, Response>();
@@ -120,7 +120,7 @@ describe("market-keyed public reads", () => {
     const app = new OpenAPIHono();
     app.get("/api/v1/products/:slug", async (c) => {
       try {
-        await readPublicMarket(c);
+        publicMarketPresence(c);
         return c.text("read");
       } catch (error) {
         return c.text(error instanceof MarketInvariantRouteError ? "refused" : "other");

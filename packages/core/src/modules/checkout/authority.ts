@@ -50,7 +50,7 @@ import {
   selectDeliveryRateRowsByIds,
 } from "../delivery";
 import { createStorefrontTaxAuthorityReadPlan, type StorefrontTaxAuthoritySnapshot } from "../tax";
-import { orderMarketId, planMarketMatrix, selectBackupPriceIncrement, storeCurrencyOf } from "../markets";
+import { backupPriceIncrementSql, storeCurrencyOf } from "../markets";
 
 /** Settings documents every checkout snapshot reads in its first statement. */
 const CHECKOUT_SETTINGS_DOCUMENTS = [
@@ -89,12 +89,6 @@ export type CheckoutCurrency = CurrencySettings & { priceIncrementMinor: number 
 export interface StorefrontCheckoutAuthoritySnapshot {
     authorityRevision: number;
     currency: CheckoutCurrency;
-    /**
-     * The market the order is placed in: the market of its shipping country,
-     * else the backup market (MARKETS-DESIGN D4). Payment and delivery
-     * methods are store-wide until markets link them (steps 3 and 6).
-     */
-    marketId: string;
     cartValidation: StorefrontCartValidationResult;
     deliveryPreflight: StorefrontDeliveryPreflightResult;
     checkoutSettings: StorefrontCheckoutSettingsAuthority;
@@ -112,6 +106,8 @@ export interface StorefrontCheckoutAuthoritySnapshot {
 interface CheckoutSideEffectSettingsRow {
     revision: number;
     hasActiveAdminPushTarget: number;
+    /** The backup market's stored price increment (MARKETS-DESIGN D1), read in this row. */
+    backupPriceIncrementMinor: number | null;
 }
 
 /**
@@ -205,7 +201,6 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
         inputs.map((input) => input.shippingMethodId),
     );
     const taxPlan = createStorefrontTaxAuthorityReadPlan(db);
-    const marketPlan = planMarketMatrix(db);
     const statements = [
         selectSettingsDocuments(db, CHECKOUT_SETTINGS_DOCUMENTS),
         selectSettingsDocuments(db, [checkoutDocument]),
@@ -221,16 +216,14 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
             hasActiveAdminPushTarget: sql<number>`EXISTS(
                 SELECT 1 FROM admin_fcm_tokens WHERE is_active = 1
             )`,
+            // The price increment every checkout prices at, in a row this read already runs.
+            backupPriceIncrementMinor: backupPriceIncrementSql(),
         })
             .from(checkoutAuthority)
             .where(inArray(checkoutAuthority.id, ["default"]))
             .limit(1),
         ...taxPlan.statements,
-        // The backup market's price increment, then the presence matrix (the order's market).
-        selectBackupPriceIncrement(db),
-        ...marketPlan.statements,
     ];
-    const marketOffset = 9 + taxPlan.statements.length;
 
     return {
         statements,
@@ -253,17 +246,14 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
                 ),
                 customerAuthDocument.fromRows(genericRows, documentContext),
             ]);
-            const backupRows = Array.isArray(results[marketOffset])
-                ? results[marketOffset] as Array<{ priceIncrementMinor: number | null }>
+            const sideEffectRows = Array.isArray(results[8])
+                ? results[8] as CheckoutSideEffectSettingsRow[]
                 : [];
+            const sideEffectSettings = sideEffectRows[0];
             const currency: CheckoutCurrency = {
                 ...currencyDocumentRead.value,
-                priceIncrementMinor: storeCurrencyOf(currencyDocumentRead.value, backupRows[0]?.priceIncrementMinor).priceIncrementMinor,
+                priceIncrementMinor: storeCurrencyOf(currencyDocumentRead.value, sideEffectSettings?.backupPriceIncrementMinor).priceIncrementMinor,
             };
-            const marketId = orderMarketId(resolveCheckoutAuthorityStage(
-                "CHECKOUT_MARKETS",
-                () => marketPlan.resolve(results, marketOffset + 1),
-            ));
             const site = checkoutRead.value;
             const meta = metaRead.value;
             // A stored token counts even when this isolate cannot decrypt it;
@@ -292,10 +282,6 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
             const bundleRows = Array.isArray(results[7])
                 ? results[7] as ProductBundleRow[]
                 : [];
-            const sideEffectRows = Array.isArray(results[8])
-                ? results[8] as CheckoutSideEffectSettingsRow[]
-                : [];
-            const sideEffectSettings = sideEffectRows[0];
             const orderCreatedChannels = notificationsRead.value.orderChannels.order_created ?? [];
             const adminOrderCreatedChannels = notificationsRead.value.adminChannels.order_created ?? [];
             // Staff order emails go to the notification settings' recipient list.
@@ -373,7 +359,6 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
                         snapshot: {
                             authorityRevision,
                             currency,
-                            marketId,
                             cartValidation,
                             deliveryPreflight,
                             checkoutSettings: {

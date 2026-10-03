@@ -5,7 +5,6 @@ import {
     agentStorefrontContexts,
     agentStorefrontContinuations,
     agentStorefrontOrderGrants,
-    BACKUP_MARKET_ID,
     checkoutAuthority,
     customers,
     customerHistory,
@@ -60,6 +59,7 @@ import {
 } from "./attempts";
 import { buildAppDiscountFactInserts } from "../order-kernel";
 import { appStorageCommitStatements, isAppStorageCommitConflict } from "../plugins";
+import { orderMarketIdSql } from "../markets";
 import { readCheckoutCopy } from "./store-copy";
 import type { StorefrontOrderCommitReads, SQLiteBatchItem } from "./reads";
 import {
@@ -452,8 +452,10 @@ function buildOrderWriteBatch(
             // Set once here; the orders trigger keeps it immutable.
             channel,
             channelSource: null,
-            // The market of the shipping country (the checkout authority), else the backup market.
-            marketId: od.marketId ?? BACKUP_MARKET_ID,
+            // The market of the shipping country, else the backup market, read
+            // inside this insert (MARKETS-DESIGN D4); the authority fence covers
+            // a market change between the quote and this commit.
+            marketId: orderMarketIdSql(),
             createdAt: sql`unixepoch()`,
             updatedAt: sql`unixepoch()`,
         }),

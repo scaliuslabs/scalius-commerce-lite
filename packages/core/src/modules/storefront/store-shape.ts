@@ -10,7 +10,7 @@
 // storefront lists with: a category is public when it is published and live
 // (and, for the tree, every ancestor too: `category_closure`), and a product
 // is public when `product_buyer_state.is_public` says so.
-import { sql } from "drizzle-orm";
+import { sql, type SQL } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import {
   STORE_SHAPE_COUNT_CAP,
@@ -48,9 +48,11 @@ const holdsPublicProduct = (alias: string) => sql.raw(`EXISTS (
 /**
  * One row of bounded facts; add it to a batch or run it alone. Column names
  * are written qualified by hand: drizzle renders a column reference inside a
- * raw subquery unqualified, which is ambiguous across the joins.
+ * raw subquery unqualified, which is ambiguous across the joins. `extra`
+ * adds the caller's own scalars to this row (the layout's market matrix), so
+ * they cost no statement of their own.
  */
-export function selectStoreShapeCounts(db: Database) {
+export function selectStoreShapeCounts<Extra extends Record<string, SQL>>(db: Database, extra: Extra = {} as Extra) {
   // `lm:shape`: the set of active products and their SKUs (insert, delete,
   // is_active, deleted_at or fulfilment kind), key-spec values and whether a
   // review is published. Public category/brand membership uses `lm:all`;
@@ -179,6 +181,7 @@ export function selectStoreShapeCounts(db: Database) {
           AND NOT (block."type" = 'rich-text' AND block."placement" = 'tabs')
         LIMIT 1
       ) AS capped_content_blocks)`,
+      ...extra,
     })
     .from(sql`(SELECT 1 AS one) AS store_shape_row`);
 }

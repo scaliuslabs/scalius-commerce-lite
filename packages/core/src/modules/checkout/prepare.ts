@@ -104,8 +104,6 @@ export interface StorefrontCheckoutPolicySnapshot {
     authorityRevision?: number;
     orderCreatedNotificationEnabled?: boolean;
     metaPurchaseEnabled?: boolean;
-    /** The market the order is placed in, from the checkout authority read. */
-    marketId?: string;
 }
 
 const STOREFRONT_DELIVERY_PREFLIGHT_RESULT_PROOF = Symbol("scalius.storefrontDeliveryPreflightResult");
@@ -711,7 +709,6 @@ export async function createStorefrontOrder(
             fulfillmentStatus: FulfillmentStatus.PENDING,
             inventoryPool: data.inventoryPool,
             inventoryAction: cartValidation.items.some(item => item.inventoryTracked) ? "reserved" : "none",
-            marketId: checkoutPolicySnapshot?.marketId ?? null,
         },
         items: preparedItems.map((item) => {
             const lineTax = taxQuote.lines.find(

@@ -517,7 +517,6 @@ app.openapi(createOrderRoute, async (c) => {
           checkoutAuthority.sideEffects.orderCreatedNotification,
         metaPurchaseEnabled: checkoutAuthority.sideEffects.metaPurchase,
         contactFields: checkoutAuthority.contactFields,
-        marketId: checkoutAuthority.marketId,
       }),
       checkoutAuthority.taxAuthority,
       { masterSecret: readMasterSecret(c.env) },

@@ -6,7 +6,6 @@
 // read cannot start to vary by market (price lists, FX, translations) without
 // its route entry saying so and its cache key changing with it.
 import type { Context } from "hono";
-import { readPresenceMarket, type PresenceMarket } from "@scalius/core/modules/markets";
 import { MARKET_PRESENCE_QUERY_PARAM, isMarketSubfolder } from "@scalius/shared/markets";
 import { isMarketKeyedPublicRead } from "@scalius/shared/public-api-cache-routes";
 import { NotFoundError } from "./api-error";
@@ -18,13 +17,16 @@ export class MarketInvariantRouteError extends Error {
   }
 }
 
-/** The active market of the request's presence (none: the root, the backup market); 404 for any other presence. */
-export async function readPublicMarket(c: Context): Promise<PresenceMarket> {
+/**
+ * The request's presence (`''`: the root, the backup market) for the route to
+ * read its market with (`readPresenceMarketWithDocuments`, joined into the
+ * statement the route already runs).
+ * Refuses a market-invariant route; a malformed presence is a 404.
+ */
+export function publicMarketPresence(c: Context): string {
   const url = new URL(c.req.url);
   if (!isMarketKeyedPublicRead(url)) throw new MarketInvariantRouteError(url.pathname);
   const value = url.searchParams.get(MARKET_PRESENCE_QUERY_PARAM) ?? "";
   if (value !== "" && !isMarketSubfolder(value)) throw new NotFoundError("Market not found");
-  const market = await readPresenceMarket(c.get("db"), value);
-  if (!market) throw new NotFoundError("Market not found");
-  return market;
+  return value;
 }

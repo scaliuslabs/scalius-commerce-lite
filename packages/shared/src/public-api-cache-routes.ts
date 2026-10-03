@@ -13,7 +13,7 @@
  * market (docs/MARKETS-DESIGN.md D4). A market-keyed read carries the page's
  * presence (`?presence=en-in`; none means the root, the backup market), so
  * the presence is part of its cache key, and the route reads its market
- * through `readPublicMarket`, which refuses a market-invariant route. A
+ * through `publicMarketPresence`, which refuses a market-invariant route. A
  * market-invariant read gets no presence: one cache entry serves every
  * market. Moving a read to market-keyed (price lists, FX and translations
  * in step 4) is a change of this table, never of a route alone.

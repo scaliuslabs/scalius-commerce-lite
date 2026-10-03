@@ -10,7 +10,7 @@ import { readinessSchema } from "../schemas/readiness";
 
 import { ok } from "../utils/api-response";
 import { getCredentialEncryptionKey } from "../utils/encryption-key";
-import { readPublicMarket } from "../utils/public-market";
+import { publicMarketPresence } from "../utils/public-market";
 import { NotFoundError } from "../utils/api-error";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -108,11 +108,10 @@ const getCheckoutConfigRoute = createRoute({
 app.openapi(getCheckoutConfigRoute, async (c) => {
   const db = c.get("db");
   const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
-  // The market and the settings are read together (one D1 wave); a missing
-  // market is a 404, never the unavailable-config answer below.
-  const [market, config] = await Promise.allSettled([
-    readPublicMarket(c),
-    getCheckoutConfig(
+  // The page's presence decides the market; it is read in the settings' D1 call.
+  const presence = publicMarketPresence(c);
+  try {
+    const config = await getCheckoutConfig(
       db,
       encryptionKey,
       c.env as unknown as Record<string, unknown>,
@@ -121,16 +120,14 @@ app.openapi(getCheckoutConfigRoute, async (c) => {
       () => requestPaymentProviders(c),
       // Customer sign-in channels may send through an app the merchant chose.
       requestAppProviders(c),
-    ),
-  ]);
-  // An unknown presence is a 404; a failed read of either fails closed below.
-  if (market.status === "rejected" && market.reason instanceof NotFoundError) throw market.reason;
-  try {
-    if (market.status === "rejected") throw market.reason;
-    if (config.status === "rejected") throw config.reason;
-    const { id, handle, name, presence } = market.value;
-    return ok(c, checkoutConfigSchema.parse({ ...config.value, market: { id, handle, name, locale: presence.locale } }));
+      presence,
+    );
+    // A presence no active market holds is a 404 (core's NotFoundError, rethrown below).
+    const { id, handle, name, presence: { locale } } = config.market!;
+    return ok(c, checkoutConfigSchema.parse({ ...config, market: { id, handle, name, locale } }));
   } catch (error: unknown) {
+    // An unknown presence is a 404, never the unavailable-config answer below.
+    if (error instanceof NotFoundError) throw error;
     console.error("[checkout] Error fetching checkout config:", error instanceof Error ? error.message : error);
     c.header("Cache-Control", "private, no-cache, no-store, must-revalidate");
     c.header("Pragma", "no-cache");

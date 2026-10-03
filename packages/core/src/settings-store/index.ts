@@ -221,7 +221,6 @@ export function selectSettingsDocuments(
   db: Database,
   documents: readonly { key: string }[],
 ) {
-  for (const document of documents) deps.settings(document.key, SETTINGS_DOCUMENT_ROW_KEY);
   return db
     .select({
       category: settingsTable.category,
@@ -229,10 +228,23 @@ export function selectSettingsDocuments(
       revision: settingsTable.revision,
     })
     .from(settingsTable)
-    .where(and(
-      eq(settingsTable.key, SETTINGS_DOCUMENT_ROW_KEY),
-      inArray(settingsTable.category, documents.map((document) => document.key)),
-    ));
+    .where(settingsDocumentsJoin(documents));
+}
+
+/**
+ * The condition that reads `documents` beside another source in a statement
+ * the caller already runs (`.leftJoin(settings, settingsDocumentsJoin(docs))`
+ * on a one-row source): a row per stored document, or one row with null
+ * settings columns. It pins the document rows, so each read declares only its
+ * own documents. Pass the joined `category`, `value` and `revision` to
+ * `fromRows`.
+ */
+export function settingsDocumentsJoin(documents: readonly { key: string }[]) {
+  for (const document of documents) deps.settings(document.key, SETTINGS_DOCUMENT_ROW_KEY);
+  return and(
+    eq(settingsTable.key, SETTINGS_DOCUMENT_ROW_KEY),
+    inArray(settingsTable.category, documents.map((document) => document.key)),
+  )!;
 }
 
 function maskedMessage(error: unknown): string {

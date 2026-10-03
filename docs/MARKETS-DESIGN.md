@@ -285,8 +285,8 @@ and backfills every order. A change of a market's status, increment or
 countries advances the checkout authority fence.
 
 **Price increment** (D1). The backup market row is the one source. The
-`markets` domain owns `readStoreCurrency()`, `selectBackupPriceIncrement()`
-and `storePriceIncrementSql()`. Settings → Markets edits it on the backup
+`markets` domain owns `readStoreCurrency()`, `backupPriceIncrementSql()` and
+`storePriceIncrementSql()`. Settings → Markets edits it on the backup
 market; Store details no longer does. A change queues a catalogue projection
 rebuild. A new shop currency resets it to that currency's default
 (`resetBackupPriceIncrement()`). The shop currency stays in the `currency`
@@ -306,7 +306,8 @@ function returns the market, the presence and the reason:
 - Geo: `cf-ipcountry` feeds only a dismissible suggestion
   (`/api/market-suggestion`), never a redirect.
 - Checkout: the shipping country decides the order's market
-  (`orderMarketId()`), else the backup market. The shipping country is BD
+  (`orderMarketId()`; its SQL twin `orderMarketIdSql()` runs inside each
+  order insert), else the backup market. The shipping country is BD
   until addresses are country-aware (step 3).
 
 **Presences and links.** One route tree serves every presence. The gateway
@@ -338,10 +339,19 @@ market's `price_increment_minor`; every price reader declares it).
 `PUBLIC_API_CACHE_ROUTES` gives every public read a `market` field, keyed or
 invariant with its reason. This is the one list of market-invariant reads.
 Only `/api/v1/checkout/config` is keyed: presence pages add `?presence=`, and
-it reads its market through `readPublicMarket()`, which refuses an invariant
+it learns its presence through `publicMarketPresence()`, which refuses an invariant
 route. All other reads are invariant today: one catalogue, store-wide
 delivery and store-wide text. Step 4 must mark a read keyed before it varies
 by market.
+
+**Cost.** A store pays the same D1 calls and statements as before markets:
+the free-plan budgets are unchanged. Every market read is a scalar or a join
+inside a statement that already runs. The layout's store shape row carries
+the matrix (`marketMatrixSql()`, one JSON text). The checkout authority row
+carries the backup increment. `readStoreCurrency()` joins the currency
+document beside it. The checkout config joins its settings documents to the
+presence market (`readPresenceMarketWithDocuments()`). Each order insert
+computes its market (`orderMarketIdSql()`).
 
 **Discovery.** Each presence serves its own `sitemap.xml`, child sitemaps,
 `/api/product-feed.xml` and `/api/facebook-feed.xml` with presence URLs. The

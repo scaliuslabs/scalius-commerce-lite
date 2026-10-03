@@ -34,6 +34,8 @@ import {
   marketingConsentDocument,
 } from "../settings";
 import { selectSettingsDocuments } from "../../settings-store";
+import { readPresenceMarketWithDocuments, type PresenceMarket } from "../markets";
+import { NotFoundError } from "../../errors";
 
 export interface CheckoutConfig {
     gateways: Array<Record<string, unknown>>;
@@ -64,6 +66,8 @@ export interface CheckoutConfig {
         channels: Array<"email" | "sms" | "whatsapp">;
         label: { en: string; bn: string };
     };
+    /** The market of the requested presence (MARKETS-DESIGN D4); absent when none was asked for. */
+    market?: PresenceMarket;
 }
 
 /**
@@ -81,14 +85,30 @@ export async function getCheckoutConfig(
     paymentProviders?: PaymentProvidersSource,
     /** The app providers a saved SMS or email choice may name (customer sign-in channels). */
     appProviders?: AppProviders,
+    /**
+     * The page's presence (`''` is the root). Its market is read in the same
+     * statement as the settings documents (the market row joined with them).
+     */
+    presence?: string,
 ): Promise<CheckoutConfig> {
-    const rows = await selectSettingsDocuments(db, [
+    const documents = [
         checkoutDocument,
         currencyDocument,
         customerAuthDocument,
         customerCountriesDocument,
         marketingConsentDocument,
-    ]);
+    ];
+    let rows: Awaited<ReturnType<typeof selectSettingsDocuments>>;
+    let market: PresenceMarket | undefined;
+    if (presence === undefined) {
+        rows = await selectSettingsDocuments(db, documents);
+    } else {
+        const read = await readPresenceMarketWithDocuments(db, presence, documents);
+        // No active market holds the presence: a 404, and nothing else is read.
+        if (!read.market) throw new NotFoundError("Market not found");
+        rows = read.documentRows;
+        market = read.market;
+    }
     const [checkout, currency, customerAuth, allowedCountriesConfig, marketing] = await Promise.all([
         checkoutDocument.fromRows(rows).then((result) => result.value),
         currencyDocument.fromRows(rows).then((result) => result.value),
@@ -130,6 +150,7 @@ export async function getCheckoutConfig(
             unavailable: true,
             unavailableMessage: CHECKOUT_READINESS_PUBLIC_UNAVAILABLE_MESSAGE,
             marketingConsent,
+            ...(market === undefined ? {} : { market }),
         };
     }
 
@@ -190,5 +211,6 @@ export async function getCheckoutConfig(
             ? "Checkout is temporarily unavailable while the merchant finishes payment setup."
             : undefined,
         marketingConsent,
+        ...(market === undefined ? {} : { market }),
     };
 }
