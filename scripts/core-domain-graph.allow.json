@@ -132,6 +132,7 @@
     "store-transfer -> brands",
     "store-transfer -> categories",
     "store-transfer -> customer-marketing",
+    "store-transfer -> customers",
     "store-transfer -> inventory",
     "store-transfer -> markets",
     "store-transfer -> product-admin",
