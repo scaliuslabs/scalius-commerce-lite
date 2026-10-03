@@ -11,6 +11,7 @@ import { rebuildCatalogProjections } from "@scalius/core/modules/products";
 import { refreshProductRecommendations, refreshProductSalesStats } from "@scalius/core/modules/catalog";
 import { cacheDepExemptReason, cacheDepKindsForTable } from "@scalius/shared/cache-deps";
 import { PUBLIC_API_CACHE_ROUTES, isPublicApiCacheRoute } from "@scalius/shared/public-api-cache-routes";
+import { DEFAULT_STOREFRONT_THEME } from "@scalius/shared/storefront-theme";
 import { fetchRuntimeApiApp } from "./runtime/fetch-runtime-app";
 
 const SEED = `
@@ -86,6 +87,7 @@ const URLS = [
   "/api/v1/collections/col_rail",
   "/api/v1/storefront/homepage",
   "/api/v1/storefront/layout",
+  "/api/v1/storefront/landing/eid",
   "/api/v1/storefront/product-apps/linen-panjabi",
   "/api/v1/storefront/pages/slug/about",
   "/api/v1/checkout/config",
@@ -112,6 +114,10 @@ describe("cache dependency registry coverage of public reads", () => {
   it("names a key kind or an exemption for every table a cached public read touches", async () => {
     const { sqlite, db } = createSqliteD1Database();
     sqlite.exec(SEED);
+    // A landing page made of the homepage's sections, for the landing read.
+    const theme = structuredClone(DEFAULT_STOREFRONT_THEME);
+    theme.pages.landing.eid = { title: "Eid", description: "", sections: structuredClone(theme.pages.home) };
+    sqlite.prepare("INSERT INTO theme_settings (id, colors, revision, created_at, updated_at) VALUES ('default', ?, 1, 1, 1)").run(JSON.stringify(theme));
     await rebuildCatalogProjections(db);
     await refreshProductSalesStats(db);
     await refreshProductRecommendations(db, ["p_linen", "p_cotton"]);

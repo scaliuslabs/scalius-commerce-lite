@@ -3,7 +3,7 @@
 // their worst case, and whole documents arrive only as an encrypted artifact.
 import "@hono/zod-openapi";
 import type { DatabaseSync } from "node:sqlite";
-import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { DEFAULT_STOREFRONT_THEME, THEME_VERSION_CHANGES_MAX, storefrontSectionDefault } from "@scalius/shared/storefront-theme";
 import { buildAgentOperationManifest, type AgentOperationManifestEntry } from "../openapi/agent-operation-manifest";
@@ -59,8 +59,13 @@ describe("theme operations through real MCP dispatch and D1", () => {
   let objects: Map<string, ArrayBuffer>;
   let server: ReturnType<typeof createAgentMcpServer>;
 
-  beforeEach(() => {
+  // The whole contract, once: building it is the slow part (under a full suite's load too).
+  beforeAll(() => {
     state.operations = buildAgentOperationManifest(finalizeOpenApiContract(app.getOpenAPIDocument({ openapi: "3.0.0", info: { title: "Theme MCP", version: "test" } })));
+  }, 120_000);
+
+  // A store with 20 published versions of a 400+ KiB document (about 9 MB of rows).
+  beforeEach(() => {
     state.principal = { kind: "agent", grantId: GRANT, credentialId: null, ownerUserId: OWNER, isSuperAdmin: false, resource: "dashboard", grantKind: "oauth", preset: "full", permissions: new Set(["settings.general.view", "settings.general.edit"]), riskCeiling: "destructive", authorityRevision: 1, expiresAt: new Date(Date.now() + 3600_000) };
     state.props = { grantId: GRANT, ownerUserId: OWNER, resource: "dashboard", permissions: [...state.principal.permissions], riskCeiling: "destructive", audience: ["https://api.example.test/api/v1/mcp/dashboard"] };
     const harness = createSqliteD1Database();
@@ -84,7 +89,7 @@ describe("theme operations through real MCP dispatch and D1", () => {
       BUCKET: { put: vi.fn(async (key: string, value: BodyInit) => { objects.set(key, await new Response(value).arrayBuffer()); return { key }; }), get: vi.fn(async (key: string) => { const value = objects.get(key); return value ? { arrayBuffer: async () => value, size: value.byteLength } : null; }), delete: vi.fn(async (key: string) => { objects.delete(key); }) },
     } as unknown as Env;
     server = createAgentMcpServer({ surface: "dashboard", env, ctx: { props: state.props, waitUntil: vi.fn(), passThroughOnException: vi.fn() } as unknown as ExecutionContext });
-  });
+  }, 60_000);
   afterEach(() => sqlite.close());
   afterAll(() => process.stdout.write(`Theme MCP measured bytes ${JSON.stringify(measured)}\n`));
 
