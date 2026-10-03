@@ -1,6 +1,6 @@
 # Demo-store media upload bridge
 
-This bridge turns the complete staging report of the [asset tools](../assets/README.md) (237 files) into the readiness report that [apply](../apply/README.md) requires. It is for operators of the Scalius demo deployment. It creates and updates Media records only, through the admin Media API. It has no client that changes a product, category, collection, publication, or setting. It also reads the Media library and the retained products.
+This bridge turns the complete staging report of the [asset tools](../assets/README.md) (237 files) into the readiness report that [apply](../apply/README.md) requires. It is for operators of the Scalius demo deployment. It creates and updates Media records through the admin Media API and reads the Media library and the retained products. It has no client that changes a product, category, collection, publication or setting.
 
 Run it from the repository root:
 
@@ -36,35 +36,12 @@ The command prompts for the admin email and a hidden password. It rejects creden
 
 ## Retained Media
 
-Rider and Halo must account for every existing ready Media identity, direct and poster. When the current bytes have approved provenance, reuse the exact identity with `remoteReuse` on the source record:
+Rider and Halo must account for every existing ready Media identity, direct and poster. A source record must cover each current ready direct or poster association of a retained product exactly once with `remoteReuse` or `retainedReplacement`. The two exclude each other for a logical key.
 
-```json
-{
-  "logicalKey": "rider-court-trainers:primary",
-  "remoteReuse": {
-    "productId": "prod_9XNNERD2XpAOIoI1SN6gx",
-    "mediaId": "media_exact_current_id"
-  }
-}
-```
+- **Reuse.** When the current bytes have approved provenance, set `"remoteReuse": { "productId": "prod_...", "mediaId": "media_exact_current_id" }`. The Media ID must be attached to that retained product in the expected direct or poster role. The bridge streams the current remote file through a bounded SHA-256 check and requires the provenance hash.
+- **Replacement.** When the current bytes have no ownership or license evidence, the only automated path is a generated replacement. Register the generated source with `--retained-product-id` and `--replaces-media-id` ([register-generated.mjs](../assets/README.md#register-a-generated-original)), or add `"retainedReplacement": { "productId": ..., "mediaId": ... }` with the exact current IDs. The bridge proves that every old direct and poster Media ID is covered, uploads each replacement in turn and carries the old authority into the report. Apply then removes the old associations with an exact SKU-image acknowledgement and points the same SKUs at the new images through the full option matrix. Only the unapproved asset and its product-media association are retired.
 
-The Media ID must be attached to that retained product in the expected direct or poster role. The bridge streams the current remote file through a bounded SHA-256 check and requires the provenance hash. `remoteReuse` or `retainedReplacement` must cover every current ready direct or poster association of a retained product exactly once.
-
-When the current bytes have no ownership or license evidence, the only automated path is a generated replacement. Register the generated source with `--retained-product-id` and `--replaces-media-id` ([register-generated.mjs](../assets/README.md#register-a-generated-original)), or add `retainedReplacement` with the exact current product and Media IDs:
-
-```json
-{
-  "logicalKey": "rider-court-trainers:primary",
-  "retainedReplacement": {
-    "productId": "prod_9XNNERD2XpAOIoI1SN6gx",
-    "mediaId": "media_exact_current_id"
-  }
-}
-```
-
-The bridge proves that every old direct and poster Media ID is covered, uploads each replacement in turn, and carries the old authority into the report. Apply then removes the old associations with an exact SKU-image acknowledgement and points the same SKUs at the new images through the full option matrix. Only the unapproved asset and its product-media association are retired.
-
-`remoteReuse` and `retainedReplacement` exclude each other for a logical key. A partial cover, a wrong product, role, or kind, an unknown old ID, or an unrelated current association stops the run before the first upload.
+A partial cover, a wrong product, role or kind, an unknown old ID, or an unrelated current association stops the run before the first upload.
 
 ## Resume and poster evidence
 
@@ -74,4 +51,4 @@ When all files are ready, the bridge links each video to its explicit poster ima
 
 ## The readiness report
 
-The `--output` file has `status: "complete"`, the manifest fingerprint, an `evidence` block (no product or publication mutation, sequential upload order, poster link count), and one entry per asset: `logicalKey`, `mediaId`, `sha256`, `url`, `filename`, `size`, `width`, `height`, `importAction` (`uploaded`, `adopted`, `resumed`, or `retained-reuse`), and, where they apply, `retainedReplacement` and poster fields. The bridge writes it only when the whole run checks out. A hash mismatch, a stale version, retained identity drift, or an incomplete poster relation stops the run without a report.
+The `--output` file has `status: "complete"`, the manifest fingerprint, an `evidence` block (no product or publication mutation, sequential upload order, poster link count) and one entry per asset: media identity and file facts (`mediaId`, `sha256`, `url`, `size`, dimensions), `importAction` (`uploaded`, `adopted`, `resumed` or `retained-reuse`) and, where they apply, `retainedReplacement` and poster fields. The bridge writes it only when the whole run checks out. A hash mismatch, a stale version, retained identity drift or an incomplete poster relation stops the run without a report.
