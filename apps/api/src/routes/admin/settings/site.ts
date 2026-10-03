@@ -538,9 +538,21 @@ app.openapi(createRoute({
   path: "/theme/restore",
   tags: ["Admin - Settings"],
   summary: "Put a published version in the draft (it goes live only when the draft is published)",
+  description: "A version that names images deleted from Files since is refused with THEME_VERSION_IMAGES_MISSING (details.missingImages: how many); send withoutMissingImages to restore it without them (slides, cards and tiles showing one are left out, other images become empty).",
   operationId: "dashboard.theme.version_restore",
   request: {
-    body: { required: true, content: { "application/json": { schema: z.object({ ...draftRevisionFields, sourceRevision: z.number().int().positive() }) } } },
+    body: {
+      required: true,
+      content: {
+        "application/json": {
+          schema: z.object({
+            ...draftRevisionFields,
+            sourceRevision: z.number().int().positive(),
+            withoutMissingImages: z.boolean().optional(),
+          }),
+        },
+      },
+    },
   },
   responses: themeStatusResponses,
 }), async (c) => {
@@ -548,6 +560,7 @@ app.openapi(createRoute({
   const user = c.get("user") as { id?: string } | undefined;
   return ok(c, boundedStatus(await restoreThemeVersion(
     c.get("db"), body.sourceRevision, body.expectedDraftRevision, body.basePublishedRevision, user?.id ?? null,
+    { withoutMissingImages: body.withoutMissingImages === true },
   )));
 });
 

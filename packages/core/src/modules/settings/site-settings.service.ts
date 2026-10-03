@@ -26,6 +26,7 @@ import {
   type Database,
 } from "@scalius/database/client";
 import {
+  AppError,
   ConflictError,
   NotFoundError,
   ServiceUnavailableError,
@@ -38,7 +39,9 @@ import {
   compareThemeDocuments,
   parseStoredStorefrontThemeDocument,
   storefrontThemeDocumentSchema,
+  storefrontThemeMediaIds,
   storefrontThemeMediaReferences,
+  storefrontThemeWithoutMedia,
   themeDocumentChangeSchema,
   type StorefrontLandingPage,
   type StorefrontThemeDocument,
@@ -439,6 +442,21 @@ async function assertThemeReferences(db: Database, theme: StorefrontThemeDocumen
   if (issues.length > 0) throw new ValidationError(issues[0]!.message, issues);
 }
 
+/** The images a theme names that are no longer (ready or trashed) images in Files. */
+async function readMissingThemeImages(db: Database, theme: StorefrontThemeDocument): Promise<Set<string>> {
+  const mediaIds = storefrontThemeMediaIds(theme);
+  if (mediaIds.length === 0) return new Set();
+  const rows = await db.select({ id: media.id, kind: media.kind }).from(media).where(and(
+    sql`${media.id} IN (SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(mediaIds)}))`,
+    notInArray(media.status, ["deleting", "deleted"]),
+  ));
+  const images = new Set(rows.filter((row) => row.kind === "image").map((row) => row.id));
+  return new Set(mediaIds.filter((id) => !images.has(id)));
+}
+
+/** A restore refused because the version names images deleted from Files since (`details.missingImages`: how many). */
+export const THEME_VERSION_IMAGES_MISSING = "THEME_VERSION_IMAGES_MISSING";
+
 function buildPublishedThemeRevisionGuard(db: Database, expectedRevision: number) {
   return buildBatchGuard(db, expectedRevision === 0
     ? sql`NOT EXISTS (SELECT 1 FROM ${themeSettings} WHERE ${themeSettings.id} = ${THEME_SETTINGS_ID})`
@@ -562,11 +580,22 @@ export async function restoreThemeVersion(
   expectedDraftRevision: number,
   basePublishedRevision: number,
   actorId: string | null = null,
+  options: {
+    /** Restore it anyway, leaving out the images deleted from Files since it was published. */
+    withoutMissingImages?: boolean;
+  } = {},
 ): Promise<ThemeStatus> {
   const version = await getThemeVersion(db, sourceRevision);
   const workspace = await getThemeWorkspace(db);
   if (workspace.published.revision !== basePublishedRevision) throw themeConflict();
-  const saved = await writeThemeDraft(db, version.theme, expectedDraftRevision, workspace.draft.basePublishedRevision, basePublishedRevision, actorId);
+  // A version may name images deleted from Files since: say so (with how many)
+  // rather than fail on the first one, and restore without them when asked.
+  const missing = await readMissingThemeImages(db, version.theme);
+  if (missing.size > 0 && !options.withoutMissingImages) {
+    throw new AppError(400, THEME_VERSION_IMAGES_MISSING, `This version uses ${missing.size === 1 ? "an image" : `${missing.size} images`} no longer in Files. Restore it without ${missing.size === 1 ? "it" : "them"}, or add ${missing.size === 1 ? "it" : "them"} back to Files first.`, { missingImages: missing.size });
+  }
+  const theme = storefrontThemeWithoutMedia(version.theme, missing);
+  const saved = await writeThemeDraft(db, theme, expectedDraftRevision, workspace.draft.basePublishedRevision, basePublishedRevision, actorId);
   return {
     ...themeStatus(workspace),
     draft: { revision: saved.revision, basePublishedRevision, updatedAt: saved.updatedAt },

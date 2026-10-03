@@ -318,6 +318,37 @@ describe("versioned storefront theme settings", () => {
     await expect(restoreThemeVersion(db, 99, 5, 3)).rejects.toMatchObject({ status: 404 });
   });
 
+  it("refuses a version naming images deleted since, with how many, and restores it without them when asked", async () => {
+    sqlite.exec(`INSERT INTO media (id, filename, kind, object_key, size, mime_type, status) VALUES
+      ('media_logo', 'logo.png', 'image', 'media/logo.png', 1, 'image/png', 'ready'),
+      ('media_slide', 'slide.jpg', 'image', 'media/slide.jpg', 1, 'image/jpeg', 'ready'),
+      ('media_kept', 'kept.jpg', 'image', 'media/kept.jpg', 1, 'image/jpeg', 'ready')`);
+    const theme = structuredClone(DEFAULT_STOREFRONT_THEME);
+    theme.brand.logo = "media_logo";
+    const heroIndex = theme.pages.home.findIndex((section) => section.type === "hero");
+    const slide = { image: "media_slide", focalPoint: { x: 50, y: 50 }, alt: "Eid", link: null };
+    theme.pages.home[heroIndex] = { ...theme.pages.home[heroIndex]!, settings: { ...theme.pages.home[heroIndex]!.settings, slides: [slide, { ...slide, image: "media_kept" }] } } as never;
+    seedPublishedWorkspace();
+    await saveThemeDraft(db, theme, 1, 1, "admin_1");
+    await publishThemeDraft(db, 1, 2, "admin_1");
+    await saveThemeDraft(db, DEFAULT_STOREFRONT_THEME, 3, 2, "admin_1");
+    // Both images leave Files after version 2 was published.
+    sqlite.exec(`UPDATE media SET status = 'deleted', trashed_at = unixepoch(), deleted_at = unixepoch() WHERE id IN ('media_logo', 'media_slide')`);
+
+    await expect(restoreThemeVersion(db, 2, 4, 2, "admin_2")).rejects.toMatchObject({
+      status: 400, code: "THEME_VERSION_IMAGES_MISSING", details: { missingImages: 2 },
+    });
+    expect((await getThemeWorkspace(db)).draft.revision).toBe(4);
+
+    const restored = await restoreThemeVersion(db, 2, 4, 2, "admin_2", { withoutMissingImages: true });
+    expect(restored).toMatchObject({ draft: { revision: 5 }, draftDiffersFromLive: true });
+    const draft = (await getThemeWorkspace(db)).draft.theme;
+    expect(draft.brand.logo).toBeNull();
+    expect(draft.pages.home[heroIndex]!.settings).toMatchObject({ slides: [{ image: "media_kept" }] });
+    // The published version itself is unchanged.
+    expect((await getThemeVersion(db, 2)).theme.brand.logo).toBe("media_logo");
+  });
+
   it("records what changed, the merchant's note and the author on every publish", async () => {
     seedPublishedWorkspace();
     sqlite.prepare("INSERT INTO user (id, name, email) VALUES ('staff_1', 'ফারহানা', 'farhana@example.test')").run();

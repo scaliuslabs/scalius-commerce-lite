@@ -62,7 +62,7 @@ import { useMediaQuery } from "~/hooks/use-media-query";
 import { formatDateTime, useMessages } from "~/i18n";
 import { onlineStoreMessages } from "~/i18n/online-store";
 import { themeEditorMessages } from "~/i18n/theme-editor";
-import { isAdminApiConflictError } from "~/lib/admin-api-error";
+import { AdminApiResponseError, isAdminApiConflictError } from "~/lib/admin-api-error";
 import { apiData } from "~/lib/api";
 import { readApiFieldIssues } from "~/lib/api-field-errors";
 import type { NavigationResourceOption } from "~/lib/api-query-options/navigation";
@@ -215,6 +215,8 @@ export function ThemeEditor({ workspace, refetch }: {
   const [publishNote, setPublishNote] = useState("");
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const [pendingRestore, setPendingRestore] = useState<number | null>(null);
+  /** A version that names images deleted from Files since: how many, before restoring it without them. */
+  const [restoreMissing, setRestoreMissing] = useState<{ revision: number; images: number } | null>(null);
   const [pendingRemoveLanding, setPendingRemoveLanding] = useState<string | null>(null);
   const [draftAction, setDraftAction] = useState(false);
   const [previewRevision, setPreviewRevision] = useState<number | null>(null);
@@ -327,18 +329,25 @@ export function ThemeEditor({ workspace, refetch }: {
     }
   };
 
-  /** Restore a published version to the draft, or discard the draft's changes (no revision). */
-  const replaceDraft = async (sourceRevision?: number) => {
+  /**
+   * Restore a published version to the draft, or discard the draft's changes
+   * (no revision). A version naming images deleted from Files since asks
+   * first, then restores without them.
+   */
+  const replaceDraft = async (sourceRevision?: number, withoutMissingImages = false) => {
     setDraftAction(true);
     try {
       const body = { expectedDraftRevision: saved.revision, basePublishedRevision: saved.basePublishedRevision };
       if (sourceRevision === undefined) await apiData(postApiV1AdminSettingsThemeDiscard({ body }));
-      else await apiData(postApiV1AdminSettingsThemeRestore({ body: { ...body, sourceRevision } }));
+      else await apiData(postApiV1AdminSettingsThemeRestore({ body: { ...body, sourceRevision, ...(withoutMissingImages ? { withoutMissingImages } : {}) } }));
       setSelected(null);
       toast.success(t(sourceRevision === undefined ? "discarded" : "restored"));
     } catch (error) {
       if (isAdminApiConflictError(error)) setConflict(true);
-      else toast.error(actionErrorText(error));
+      else if (sourceRevision !== undefined && error instanceof AdminApiResponseError && error.code === "THEME_VERSION_IMAGES_MISSING") {
+        const images = (error.details as { missingImages?: unknown } | undefined)?.missingImages;
+        setRestoreMissing({ revision: sourceRevision, images: typeof images === "number" ? images : 1 });
+      } else toast.error(actionErrorText(error));
       setDraftAction(false);
       return;
     }
@@ -847,6 +856,19 @@ export function ThemeEditor({ workspace, refetch }: {
           const revision = pendingRestore;
           setPendingRestore(null);
           if (revision !== null) void replaceDraft(revision);
+        }}
+      />
+      <ConfirmDialog
+        open={restoreMissing !== null}
+        onOpenChange={(open) => { if (!open) setRestoreMissing(null); }}
+        title={t("restoreMissingTitle", { revision: restoreMissing?.revision ?? "" })}
+        description={t("restoreMissingBody", { count: restoreMissing?.images ?? 1 })}
+        confirmLabel={t("restoreWithoutImages")}
+        variant="default"
+        onConfirm={() => {
+          const missing = restoreMissing;
+          setRestoreMissing(null);
+          if (missing) void replaceDraft(missing.revision, true);
         }}
       />
       <ConfirmDialog

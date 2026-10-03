@@ -145,6 +145,66 @@ export function storefrontThemeMediaReferences(theme: StorefrontThemeDocument): 
   ];
 }
 
+/** A section without the images in `missing` (see `storefrontThemeWithoutMedia`). */
+function sectionWithoutMedia(section: StorefrontSection, missing: ReadonlySet<string>): StorefrontSection {
+  const gone = (mediaId: string | null | undefined) => mediaId != null && missing.has(mediaId);
+  switch (section.type) {
+    case "hero": {
+      const { sideBanners, ...settings } = section.settings;
+      return {
+        ...section,
+        settings: {
+          ...settings,
+          slides: section.settings.slides.filter((slide) => !gone(slide.image)).map((slide) => {
+            if (!gone(slide.phoneImage)) return slide;
+            const { phoneImage: _phoneImage, ...rest } = slide;
+            return rest;
+          }),
+          ...(sideBanners ? { sideBanners: sideBanners.filter((banner) => !gone(banner.mediaId)) } : {}),
+        },
+      } as StorefrontSection;
+    }
+    case "banner":
+    case "lookbook":
+      return gone(section.settings.mediaId) ? { ...section, settings: { ...section.settings, mediaId: null } } as StorefrontSection : section;
+    case "editorial":
+      return section.settings.layout === "image-with-text" && gone(section.settings.mediaId)
+        ? { ...section, settings: { ...section.settings, mediaId: null } }
+        : section;
+    case "shop-by":
+      return { ...section, settings: { ...section.settings, cards: section.settings.cards.filter((card) => !gone(card.mediaId)) } };
+    case "banner-mosaic":
+      return { ...section, settings: { ...section.settings, tiles: section.settings.tiles.filter((tile) => !gone(tile.mediaId)) } };
+    default:
+      return section;
+  }
+}
+
+/**
+ * The document without the images in `missing` (deleted from Files since
+ * it was published): brand images and a section's single image become
+ * empty, a slide, side banner, card or mosaic tile showing one is left
+ * out, and a slide's phone image falls back to the slide's own. Restoring
+ * a version "without missing images" saves this.
+ */
+export function storefrontThemeWithoutMedia(theme: StorefrontThemeDocument, missing: ReadonlySet<string>): StorefrontThemeDocument {
+  if (missing.size === 0) return theme;
+  const brand = { ...theme.brand };
+  for (const key of ["logo", "footerLogo", "favicon"] as const) {
+    if (brand[key] && missing.has(brand[key]!)) brand[key] = null;
+  }
+  return {
+    ...theme,
+    brand,
+    pages: {
+      ...theme.pages,
+      home: theme.pages.home.map((section) => sectionWithoutMedia(section, missing)),
+      landing: Object.fromEntries(Object.entries(theme.pages.landing).map(([slug, page]) =>
+        [slug, { ...page, sections: page.sections.map((section) => sectionWithoutMedia(section, missing)) }])),
+    },
+  };
+}
+
 /** Every media id the document names, each once, in document order. */
 export function storefrontThemeMediaIds(theme: StorefrontThemeDocument): string[] {
   return [...new Set(storefrontThemeMediaReferences(theme).map((reference) => reference.mediaId))];

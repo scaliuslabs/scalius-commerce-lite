@@ -745,6 +745,27 @@ describe("theme editor: versions", () => {
     expect(container.textContent).toContain("Unpublished changes");
   });
 
+  it("offers to restore a version without the images deleted from Files since", async () => {
+    api.versions.mockResolvedValue({ versions: [VERSION(8)], nextBeforeRevision: null, retained: 20 });
+    api.restore
+      .mockRejectedValueOnce(new AdminApiResponseError("This version uses 2 images no longer in Files.", 400, "THEME_VERSION_IMAGES_MISSING", { missingImages: 2 }))
+      .mockResolvedValueOnce({ published: { revision: 1 }, draft: { revision: 2, basePublishedRevision: 1, updatedAt: null }, draftDiffersFromLive: true, lastPublished: null });
+    render();
+    await openVersions();
+    act(() => versionButton(8, "Restore to draft").click());
+    await act(async () => confirm("Restore to draft").click());
+    const dialog = await vi.waitFor(() => {
+      const found = document.querySelector("[role=alertdialog]");
+      expect(found?.textContent).toContain("2 of its images were deleted from Files.");
+      return found!;
+    });
+    expect(dialog.textContent).toContain("Version 8 uses images no longer in Files");
+    expect(toasts.error).not.toHaveBeenCalled();
+    await act(async () => confirm("Restore without missing images").click());
+    expect(api.restore).toHaveBeenLastCalledWith({ body: { sourceRevision: 8, expectedDraftRevision: 1, basePublishedRevision: 1, withoutMissingImages: true } });
+    await vi.waitFor(() => expect(toasts.success).toHaveBeenCalledWith("Version restored to draft"));
+  });
+
   it("discards the draft with confirmation and reloads the live theme", async () => {
     const live = storefrontTemplateTheme("boutique");
     api.discard.mockResolvedValue({ published: { revision: 1 }, draft: { revision: 2, basePublishedRevision: 1, updatedAt: null }, draftDiffersFromLive: false, lastPublished: null });
