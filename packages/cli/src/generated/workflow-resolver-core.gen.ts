@@ -2237,8 +2237,12 @@ export function createWorkflowResolver(
     }
 
     const scoredRoutes = scoreCandidates(boundedPrompt, surface, index, "route");
+    // A route that writes (a write or a mixed workflow) runs only for an
+    // action it supports: "Enable theme" never runs theme history (restore,
+    // discard) on the strength of the word "theme" alone.
     const topRouteIntentMismatch = Boolean(
-      scoredRoutes[0]?.candidate.route?.kind === "write" &&
+      scoredRoutes[0] &&
+      scoredRoutes[0].candidate.route?.kind !== "read" &&
       !fuzzyWriteSupportsIntent(boundedPrompt, scoredRoutes[0])
     );
     const topFixedWindowState = scoredRoutes[0]

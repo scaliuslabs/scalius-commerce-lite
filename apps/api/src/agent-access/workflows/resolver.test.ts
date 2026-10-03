@@ -2371,6 +2371,15 @@ describe("reviewed agent workflow resolver", () => {
     });
   });
 
+  it("runs a mixed workflow only for an action it supports, whatever the ranking margins", () => {
+    // Theme history lists, restores and discards; "enable" is none of those.
+    // The top routes for "Enable theme" are within 1% of each other, so a
+    // small corpus change once let theme history win and run.
+    expect(resolveWorkflow({ prompt: "Enable theme", surface: "dashboard" }).disposition).not.toBe("execute");
+    const restore = resolveWorkflow({ prompt: "Restore the previous theme version to my draft for review.", surface: "dashboard" });
+    expect(restore).toMatchObject({ disposition: "execute", plan: { routeIds: ["dashboard.theme-history"] } });
+  });
+
   it.each(AGENT_INTENT_OPERATION_CASES)("preserves action and target for $id", (testCase) => {
     const resolution = resolveWorkflow({ prompt: testCase.prompt, surface: "dashboard" });
     expect(resolution.disposition, testCase.id).toBe(testCase.expectedDisposition);
