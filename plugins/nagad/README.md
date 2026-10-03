@@ -53,8 +53,8 @@ The app compares Nagad's `status` without case, spaces, `_` and `-`:
 
 ## Refunds, webhooks and limits
 
-- **Refunds.** The app declares no refund operation. Refund in the Nagad merchant portal, then record the refund on the order in Scalius. The event's secondary reference is `issuerPaymentRefNo` (unverified: the id the portal shows).
-- **Webhooks.** `verifyWebhook` answers `ignored`. The source states that Nagad's public flow has no merchant webhook (unverified).
+- **Refunds.** The app declares no refund operation. Refund in the Nagad merchant portal, then record the refund on the order in Scalius.
+- **Webhooks.** `verifyWebhook` answers `ignored`.
 - **Amounts.** BDT only. The app declares no amount limits. Nagad refuses an amount it does not allow, and checkout shows `declined`.
 - **Time.** `limits.wallMs` is 15,000 ms. A return verification waits at most 8 s.
 
@@ -73,4 +73,4 @@ With a live merchant account, before production:
 pnpm exec vitest run plugins/nagad      # from the repository root
 ```
 
-`src/nagad.ts` holds the settings checks, the three Nagad calls and the status mapping. `src/index.ts` holds the manifest and the payment records (`ctx.storage.payments`). `src/rsa.ts` implements PKCS#1 v1.5 encryption with BigInt, because Web Crypto has none and the sandbox has no `node:crypto`. Its tests decrypt a ciphertext made by OpenSSL. `src/mock-nagad.ts` is a test-only server that decrypts and signature-checks every request and seals its answers.
+`src/nagad.ts` holds the settings checks, the three Nagad calls and the status mapping. `src/index.ts` holds the manifest and the payment records (`ctx.storage.payments`). `src/rsa.ts` implements PKCS#1 v1.5 encryption with BigInt, because Web Crypto has none and the sandbox has no `node:crypto`.

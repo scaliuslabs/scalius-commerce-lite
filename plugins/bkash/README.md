@@ -2,7 +2,7 @@
 
 A first-party app that takes bKash payments at checkout through bKash Tokenized Checkout (API `v1.2.0-beta`). It is for merchants who set it up and contributors who change it. The app is a hosted payment provider (`scalius.bkash:bkash`) built only on the public plugin contract (`packages/plugin-sdk/README.md`).
 
-The buyer pays on bKash's page. The order is marked paid only after bKash confirms the payment to the app server to server. Staff refund from the order page.
+The buyer pays on bKash's page. The order is marked paid only after bKash confirms the payment to the app server to server.
 
 ## Set it up
 
@@ -39,13 +39,13 @@ You configure no callback URL at bKash. Scalius sends one with every payment.
 
 - BDT only. The app declares no amount limits. bKash may refuse an amount when it creates the payment, and checkout then shows the payment as declined.
 - `limits.wallMs` is 30,000 ms. A return uses at most 25 s and a connection test at most 15 s.
-- **Webhooks.** `verifyWebhook` always answers `ignored`. The source reasons that Execute on the return and status queries already see every capture (unverified against bKash).
+- **Webhooks.** `verifyWebhook` always answers `ignored`.
 - **Agreements** (saved wallets) are not implemented: every payment is a one-off checkout.
 - **Importing refunds** made in the bKash merchant portal (`listRefunds`) is not implemented.
 
 ## Testing
 
-Choose **Sandbox** and enter sandbox credentials. Pay with a test wallet from bKash's developer documentation (unverified here).
+Choose **Sandbox** and enter sandbox credentials.
 
 The tests in `src/index.test.ts` run the app against a simulation of the bKash API. The repository records no run against bKash's sandbox or live system. Treat the flow as verified against bKash's published documentation only.
 
@@ -53,10 +53,4 @@ The tests in `src/index.test.ts` run the app against a simulation of the bKash A
 pnpm exec vitest run plugins/bkash    # from the repository root
 ```
 
-| File | What it holds |
-| --- | --- |
-| `src/index.ts` | Manifest, provider wiring, connection test |
-| `src/payments.ts` | `createSession`, `verifyReturn`, `queryPayment` |
-| `src/refunds.ts` | `refund`, `refundStatus` |
-| `src/client.ts` | bKash API calls, credentials, token cache, error mapping |
-| `src/hash.ts` | SHA-256 helper |
+Source: `src/index.ts` (manifest, wiring, connection test), `src/payments.ts`, `src/refunds.ts` and `src/client.ts` (bKash calls, credentials, token cache, error mapping).
