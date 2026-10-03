@@ -226,7 +226,7 @@ The rules that keep it this way:
   below them imports them. Work that needs two peers goes up into the
   orchestrator (or the API route) that calls both, not into either peer.
 - **The model sits below its editor**: `products` (rules) is below
-  `inventory` and `tax`; `product-admin` (the editor) is above them. `orders`
+  `inventory`; `product-admin` (the editor) is above `inventory` and `tax`. `orders`
   (workflows) is above `payments`, `delivery` and `notifications`, which share
   `order-kernel` instead of importing `orders`.
 
