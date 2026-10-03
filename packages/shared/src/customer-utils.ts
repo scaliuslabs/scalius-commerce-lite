@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { parsePhoneNumber, isValidPhoneNumber } from "libphonenumber-js";
+import { parsePhoneNumber, isSupportedCountry, isValidPhoneNumber, type CountryCode } from "libphonenumber-js";
 import { BD_MOBILE_REQUIRED_MESSAGE, compactPhone, isBangladeshNumber, normalizeBdMobile, toLatinDigits } from "./phone-input";
 
 // Re-exported for browser code that lazy-loads full validation (customer auth,
@@ -108,18 +108,31 @@ export function formatBdLandline(phone: string): string {
 export function validateAndFormatPhone(
   input: string,
   allowedCountries?: PhoneCountryPolicyInput,
+  /**
+   * The address country a national number (without `+`) is read in
+   * (MARKETS-DESIGN D7). Absent or BD: Bangladesh's rules, exactly as before.
+   */
+  options: { defaultCountry?: string | null } = {},
 ): string {
-  const mobile = normalizeBdMobile(input);
+  const defaultCountry = normalizePhoneCountryCodes(options.defaultCountry ? [options.defaultCountry] : [])[0] ?? null;
+  const bangladeshContext = defaultCountry === null || defaultCountry === "BD";
+  const international = compactPhone(input).startsWith("+");
+  const mobile = bangladeshContext || international ? normalizeBdMobile(input) : null;
   const trimmed = mobile ?? toLatinDigits(input).trim();
   if (!trimmed) throw new Error("Phone number is required");
   // Bangladesh numbers must be mobile numbers: couriers call and codes are sent by SMS.
-  if (!mobile && isBangladeshNumber(trimmed)) throw new Error(BD_MOBILE_REQUIRED_MESSAGE);
+  if (!mobile && (bangladeshContext ? isBangladeshNumber(trimmed) : /^\+880/.test(compactPhone(trimmed)))) {
+    throw new Error(BD_MOBILE_REQUIRED_MESSAGE);
+  }
 
-  if (!isValidPhoneNumber(trimmed)) {
+  const nationalCountry = !bangladeshContext && !trimmed.startsWith("+") && isSupportedCountry(defaultCountry!)
+    ? defaultCountry as CountryCode
+    : undefined;
+  if (!(nationalCountry ? isValidPhoneNumber(trimmed, nationalCountry) : isValidPhoneNumber(trimmed))) {
     throw new Error("Invalid phone number format");
   }
 
-  const parsed = parsePhoneNumber(trimmed);
+  const parsed = nationalCountry ? parsePhoneNumber(trimmed, nationalCountry) : parsePhoneNumber(trimmed);
   if (!parsed) throw new Error("Could not parse phone number");
   if (parsed.country === "BD" && !normalizeBdMobile(parsed.number)) throw new Error(BD_MOBILE_REQUIRED_MESSAGE);
 

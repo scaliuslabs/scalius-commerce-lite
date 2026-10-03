@@ -72,6 +72,13 @@ export const policies = [
     sample: 'import type { OrderListItem } from "@scalius/core/modules/orders";',
   },
   {
+    rule: "storefront and dashboard code never import the address metadata table (@scalius/shared/address-metadata*)",
+    why: "the whole libaddressinput table stays in the API Worker, which serves one country's rules at a time (GET /api/v1/address-rules/{countryCode}); browser code imports @scalius/shared/address only (MARKETS-DESIGN step 3a)",
+    paths: [storefront, "apps/admin-v2/src"],
+    forbid: [/["']@scalius\/shared\/address-metadata/],
+    sample: 'import { addressRulesFor } from "@scalius/shared/address-metadata";',
+  },
+  {
     rule: "storefront never puts receipt proof or bearer tokens in URLs or DOM attributes",
     why: "receipt proof travels only in httpOnly cookies and API headers/bodies; URLs and DOM leak to history, referrers, analytics",
     paths: [storefront],

@@ -52,6 +52,7 @@
     "check:build-canaries": "node scripts/check-build-canaries.mjs",
     "check:api-bundle": "node scripts/check-api-bundle.mjs",
     "free-plan:budget": "node scripts/free-plan-budget.mjs",
+    "generate:address-metadata": "node scripts/generate-address-metadata.mjs",
     "plugin": "node scripts/plugins.mjs",
     "generate:agent-contract": "pnpm --dir apps/api exec node --import tsx src/openapi/generate-agent-operation-manifest-cli.ts",
     "generate:sdk": "pnpm generate:agent-contract && node scripts/turbo-run.mjs generate --filter=@scalius/api-client",
