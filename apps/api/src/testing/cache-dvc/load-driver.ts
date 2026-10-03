@@ -11,6 +11,7 @@ import { eq, sql as drizzleSql } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import { withDependencyScope } from "@scalius/core/cache-deps";
 import * as products from "@scalius/core/modules/products";
+import * as productAdmin from "@scalius/core/modules/product-admin";
 import * as inventory from "@scalius/core/modules/inventory";
 import { drizzle } from "drizzle-orm/d1";
 import * as schema from "@scalius/database/schema";
@@ -313,7 +314,7 @@ export async function runDvcLoad(context: LoadContext, options: LoadOptions): Pr
       await context.sql("UPDATE products SET description = coalesce(description, '') || ' ' WHERE id = ?", [product.id]);
     } else if (kind === "membership") {
       const [row] = await context.sql("SELECT aggregate_revision AS revision, is_active AS active FROM products WHERE id = ?", [product.id]);
-      await products.bulkUpdateProducts(context.db, [{ id: String(product.id), expectedAggregateRevision: Number(row!.revision) }], { isActive: Number(row!.active) === 0 });
+      await productAdmin.bulkUpdateProducts(context.db, [{ id: String(product.id), expectedAggregateRevision: Number(row!.revision) }], { isActive: Number(row!.active) === 0 });
     } else {
       // A settings document save (the catalogue seed has none, so the first one inserts).
       await context.sql(
@@ -350,7 +351,7 @@ export async function runDvcLoad(context: LoadContext, options: LoadOptions): Pr
       const writtenBefore = context.postgresActivity ? (await context.postgresActivity()).written : phaseMeter.rowsWritten;
       const before = await clock();
       const began = performance.now();
-      await products.bulkUpdateProducts(context.db, claims, { isActive: active });
+      await productAdmin.bulkUpdateProducts(context.db, claims, { isActive: active });
       const ms = performance.now() - began;
       const writtenAfter = context.postgresActivity ? (await context.postgresActivity()).written : phaseMeter.rowsWritten;
       context.setPhase("harness");

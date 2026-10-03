@@ -11,7 +11,7 @@ import {
     buildNeedsRestockCondition,
     effectiveLowStockThresholdSql,
     storeDefaultLowStockThresholdSql,
-} from "./low-stock-policy";
+} from "../products/low-stock-policy";
 import { operationalSkuRowPredicate } from "../products/public-eligibility";
 
 const availableStockSql = sql<number>`(${productVariants.stock} - ${productVariants.reservedStock})`;

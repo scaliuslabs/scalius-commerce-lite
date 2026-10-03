@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { planLimits } from "@scalius/shared/plan-limits";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
-import { compareSqliteValues, walkBackward, walkForward, type FetchPage } from "../../../testing/keyset-walk";
+import { compareSqliteValues, walkBackward, walkForward, type FetchPage } from "../../testing/keyset-walk";
 import { listProducts } from "./read";
 
 const SORTS = ["name", "price", "category", "createdAt", "updatedAt"] as const;

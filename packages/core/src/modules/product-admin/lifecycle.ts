@@ -21,9 +21,9 @@ import {
     readProductAggregateRevisionResult,
     rethrowProductAggregateRevisionConflictIfStale,
     type ProductAggregateRevisionResult,
-} from "../aggregate-revision";
+} from "./aggregate-revision";
 import { type SQLiteBatchItem, defaultVariantValues } from "./write";
-import { catalogProjectionRefreshStatements } from "../catalog-projections";
+import { catalogProjectionRefreshStatements } from "../products/catalog-projections";
 
 /**
  * Soft-deletes a product by setting deletedAt.

@@ -18,10 +18,10 @@ import type { Database } from "@scalius/database/client";
 import { productBuyerState, productFacetValues } from "@scalius/database/schema";
 import { asc } from "drizzle-orm";
 
-import { createProduct } from "./admin/write";
-import { deleteProduct, restoreProduct } from "./admin/lifecycle";
-import { createProductSchema } from "./validation";
-import { updateProductSemanticSection } from "./semantic-sections";
+import { createProduct } from "../product-admin/write";
+import { deleteProduct, restoreProduct } from "../product-admin/lifecycle";
+import { createProductSchema } from "../product-admin/validation";
+import { updateProductSemanticSection } from "../product-admin/semantic-sections";
 import { rebuildCatalogProjections } from "./catalog-projections";
 import { adjustStock } from "../inventory/stock-adjustment";
 import { getStorefrontCategoryProducts, getStorefrontCollectionProducts, getStorefrontProducts } from "../catalog/listing";

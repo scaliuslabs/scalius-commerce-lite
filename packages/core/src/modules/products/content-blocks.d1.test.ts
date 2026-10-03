@@ -20,7 +20,7 @@ import {
     getProductSemanticSection,
     productSemanticSectionPatchSchema,
     updateProductSemanticSection,
-} from "./semantic-sections";
+} from "../product-admin/semantic-sections";
 
 const LONG_TITLE = "Care & washing ".repeat(20).trim();
 

@@ -1,5 +1,5 @@
 // Storefront product search.
-import { effectiveLowStockThresholdSql } from "../inventory/low-stock-policy";
+import { effectiveLowStockThresholdSql } from "../products/low-stock-policy";
 import { products, productVariants } from "@scalius/database/schema";
 import { and, sql, desc, isNull, inArray, type SQL } from "drizzle-orm";
 import { ftsMatch } from "../../search/fts5";

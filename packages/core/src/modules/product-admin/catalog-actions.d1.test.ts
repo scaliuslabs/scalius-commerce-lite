@@ -6,14 +6,14 @@ import { MAX_PRODUCT_PRICE } from "@scalius/shared/product-options";
 import { bulkUpdateProducts } from "./lifecycle";
 import { createProduct, duplicateProduct, updateProduct } from "./write";
 import { getProductsByIds, listProducts } from "./read";
-import { saveProductOptionMatrix } from "../option-matrix";
-import { updateProductSemanticSection } from "../semantic-sections";
-import { updateVariantSchema } from "../types";
-import { createProductSchema, updateProductSchema } from "../validation";
-import { deleteVariant, SkuTakenError, updateVariant } from "../variants";
-import { ValidationError } from "../../../errors";
+import { saveProductOptionMatrix } from "./option-matrix";
+import { updateProductSemanticSection } from "./semantic-sections";
+import { updateVariantSchema } from "../products/types";
+import { createProductSchema, updateProductSchema } from "./validation";
+import { deleteVariant, SkuTakenError, updateVariant } from "./variants";
+import { ValidationError } from "../../errors";
 
-vi.mock("../../inventory/alerts", () => ({ checkAndAlertLowStock: vi.fn() }));
+vi.mock("../inventory/alerts", () => ({ checkAndAlertLowStock: vi.fn() }));
 
 const base = {
   description: null,

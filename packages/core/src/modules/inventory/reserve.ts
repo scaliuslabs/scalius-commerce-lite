@@ -3,7 +3,7 @@
 // Reserves stock by incrementing reservedStock WITHOUT decrementing stock.
 // Stock is permanently deducted only on payment confirmation.
 
-import { effectiveLowStockThresholdSql } from "./low-stock-policy";
+import { effectiveLowStockThresholdSql } from "../products/low-stock-policy";
 import { eq, and, sql, inArray, isNull } from "drizzle-orm";
 import { inventoryMovements, products, productVariants } from "@scalius/database/schema";
 import {

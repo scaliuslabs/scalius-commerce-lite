@@ -9,14 +9,13 @@ import {
   getTaxConfiguration,
   getTaxSettingsDocument,
   listTaxClasses,
-  listTaxClassifications,
   listTaxJurisdictions,
   listTaxRates,
   updateTaxClass,
-  updateTaxClassification,
   updateTaxRate,
   updateTaxSettings,
 } from "@scalius/core/modules/tax";
+import { listTaxClassifications, updateTaxClassification } from "@scalius/core/modules/product-admin";
 import { type TaxJurisdictionType } from "@scalius/core/modules/tax/browser";
 import { getCurrencyConfig } from "@scalius/core/modules/settings";
 import { resolveActiveDeliveryLocationNames } from "@scalius/core/modules/delivery";

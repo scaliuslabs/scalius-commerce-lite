@@ -10,8 +10,8 @@ import { getStorefrontProductBySlug } from "../catalog/product-page";
 import { getStorefrontProducts } from "../catalog/listing";
 import { searchStorefrontProducts } from "../catalog/search";
 import { getStorefrontFeedProducts } from "../catalog/feed";
-import { getProductDetails } from "../products/admin/read";
-import { getProductVariants } from "../products/variants";
+import { getProductDetails } from "../product-admin/read";
+import { getProductVariants } from "../product-admin/variants";
 import { rebuildCatalogProjections } from "../products/catalog-projections";
 
 // A cost no price, stock or id in the fixture contains.

@@ -18,7 +18,6 @@ import {
     buildInventoryMovementCsvArtifact,
     INVENTORY_MOVEMENT_EXPORT_MAX_BYTES,
     INVENTORY_MOVEMENT_EXPORT_MAX_ROWS,
-    lowStockThresholdSchema,
     acknowledgeLowStockAlert,
     setDefaultLowStockThreshold,
     setLowStockThreshold,
@@ -38,6 +37,7 @@ import {
     setSkuCosts,
     setSkuCostsSchema,
 } from "@scalius/core/modules/inventory";
+import { lowStockThresholdSchema } from "@scalius/core/modules/products";
 import { INVENTORY_LOCATION_KINDS, INVENTORY_LOCATION_STATUSES } from "@scalius/database/schema";
 import { getCurrencyConfig } from "@scalius/core/modules/settings";
 import { NotFoundError, ValidationError } from "../../utils/api-error";

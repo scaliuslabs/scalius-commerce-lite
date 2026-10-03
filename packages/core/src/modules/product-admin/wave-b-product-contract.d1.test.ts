@@ -4,13 +4,13 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 import { ConflictError, ValidationError } from "@scalius/core/errors";
 import { createProduct, duplicateProduct, updateProduct } from "./write";
 import { getProductDetails } from "./read";
-import { createProductSchema, updateProductSchema } from "../validation";
-import { createVariant, updateVariant } from "../variants";
-import { saveProductOptionMatrix } from "../option-matrix";
-import { updateProductSemanticSection } from "../semantic-sections";
-import { GIFT_CARD_PRODUCT_RULES_MESSAGE } from "../gift-card-rules";
+import { createProductSchema, updateProductSchema } from "./validation";
+import { createVariant, updateVariant } from "./variants";
+import { saveProductOptionMatrix } from "./option-matrix";
+import { updateProductSemanticSection } from "./semantic-sections";
+import { GIFT_CARD_PRODUCT_RULES_MESSAGE } from "../products/gift-card-rules";
 
-vi.mock("../../inventory/alerts", () => ({ checkAndAlertLowStock: vi.fn() }));
+vi.mock("../inventory/alerts", () => ({ checkAndAlertLowStock: vi.fn() }));
 
 /**
  * Wave B product contract (design §4.2, §5.1): digital kinds are accepted, a

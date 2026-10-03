@@ -26,7 +26,7 @@ import {
 } from "@scalius/shared/seo-canonical";
 import { PRODUCT_CONDITION_VALUES } from "@scalius/shared/product-condition";
 import { templateAssignmentSchema } from "@scalius/shared/catalog-tree";
-import { defaultProductSkuValues } from "./public-eligibility";
+import { defaultProductSkuValues } from "../products/public-eligibility";
 import {
     PRODUCT_CONTENT_BLOCK_MEDIA_GUARD,
     PRODUCT_CONTENT_BLOCK_MEDIA_UNAVAILABLE_MESSAGE,
@@ -34,18 +34,18 @@ import {
     productContentBlockInputListSchema,
     readProductContentBlockChunk,
     readProductContentBlockSection,
-} from "./content-blocks";
+} from "../products/content-blocks";
 import {
     buildProductBundleReplaceStatements,
     productBundleTierInputListSchema,
     readProductBundleSection,
-} from "./bundles";
-import { catalogPriceColumns, presentCatalogPrice, readStoreDecimalPlaces } from "./money";
+} from "../products/bundles";
+import { catalogPriceColumns, presentCatalogPrice, readStoreDecimalPlaces } from "../products/money";
 import { storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../settings/store-money";
 import { executeProductAggregateMutationBatch } from "./aggregate-revision";
-import { updateProductMediaSection } from "./admin/write";
-import { MAX_PRODUCT_MEDIA_ASSOCIATIONS } from "./media";
-import { MAX_PRODUCT_PRICE } from "./types";
+import { updateProductMediaSection } from "./write";
+import { MAX_PRODUCT_MEDIA_ASSOCIATIONS } from "../products/media";
+import { MAX_PRODUCT_PRICE } from "../products/types";
 import {
     productBrandIdSchema,
     productMediaAssociationIdSchema,

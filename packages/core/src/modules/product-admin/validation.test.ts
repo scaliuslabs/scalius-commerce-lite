@@ -3,14 +3,14 @@ import { createProductSchema, updateProductSchema } from "./validation";
 import {
     createVariantSchema,
     updateVariantSchema,
-} from "./types";
+} from "../products/types";
 import {
     createProductOptionMatrixSchema,
     productOptionMatrixSchema,
 } from "./option-matrix";
 import {
     MAX_PRODUCT_OPTION_COMBINATIONS,
-} from "./option-model";
+} from "../products/option-model";
 import { DEFAULT_PRODUCT_CONDITION } from "@scalius/shared/product-condition";
 
 const productInput = {

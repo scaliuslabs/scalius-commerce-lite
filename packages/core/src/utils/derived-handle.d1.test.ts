@@ -11,8 +11,8 @@ import { createCategory } from "../modules/categories/categories.service";
 import { createCategorySchema } from "../modules/categories/categories.validation";
 import { createPage } from "../modules/pages/pages.service";
 import { createPageSchema } from "../modules/pages/pages.validation";
-import { createProduct } from "../modules/products/admin/write";
-import { createProductSchema } from "../modules/products/validation";
+import { createProduct } from "../modules/product-admin/write";
+import { createProductSchema } from "../modules/product-admin/validation";
 import { insertWithDerivedHandle } from "./derived-handle";
 
 vi.mock("../modules/inventory/alerts", () => ({ checkAndAlertLowStock: vi.fn() }));

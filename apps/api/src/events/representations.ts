@@ -8,7 +8,7 @@ import type { Database } from "@scalius/database/client";
 import { NotFoundError as CoreNotFoundError } from "@scalius/core/errors";
 import type { OutboxEvent, WebhookRepresentationResolver } from "@scalius/core/modules/events";
 import { getOrderDetails, getOrderReturn } from "@scalius/core/modules/orders";
-import { getProductDetails } from "@scalius/core/modules/products";
+import { getProductDetails } from "@scalius/core/modules/product-admin";
 import { getCustomerDetail } from "@scalius/core/modules/customers";
 import { getPurchaseOrder, getTransfer, getVariantInventoryLevels } from "@scalius/core/modules/inventory";
 import { composeOrderLineExtras, withOrderLineExtras } from "../routes/shared/order-line-extras";

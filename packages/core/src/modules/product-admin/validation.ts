@@ -11,17 +11,17 @@ import {
     PRODUCT_CONDITION_VALUES,
 } from "@scalius/shared/product-condition";
 import { isBrandId } from "@scalius/shared/catalog-brand";
-import { catalogMoneySchema, expectedStockVersionSchema, skuStockSchema, skuWeightSchema } from "./types";
-import { customizationSchemaInputSchema, editableFulfillmentKindSchema } from "./customization-schema";
+import { catalogMoneySchema, expectedStockVersionSchema, skuStockSchema, skuWeightSchema } from "../products/types";
+import { customizationSchemaInputSchema, editableFulfillmentKindSchema } from "../products/customization-schema";
 import { createProductOptionMatrixSchema, productOptionMatrixBodySchema } from "./option-matrix";
 import { unitCostAmountSchema } from "../inventory/unit-costs";
 import { templateAssignmentSchema } from "@scalius/shared/catalog-tree";
 import { MAX_PRODUCT_OPTION_COMBINATIONS } from "@scalius/shared/product-options";
-import { productContentBlockInputListSchema } from "./content-blocks";
-import { productBundleTierInputListSchema } from "./bundles";
-import { MAX_PRODUCT_MEDIA_ASSOCIATIONS } from "./media";
-import { addGiftCardInputIssues } from "./gift-card-rules";
-import { DIGITAL_STOCK_IS_KEYS_REASON, digitalStockInputIssues } from "./digital-stock-rules";
+import { productContentBlockInputListSchema } from "../products/content-blocks";
+import { productBundleTierInputListSchema } from "../products/bundles";
+import { MAX_PRODUCT_MEDIA_ASSOCIATIONS } from "../products/media";
+import { addGiftCardInputIssues } from "../products/gift-card-rules";
+import { DIGITAL_STOCK_IS_KEYS_REASON, digitalStockInputIssues } from "../products/digital-stock-rules";
 
 const canonicalPathSchema = z
     .string()

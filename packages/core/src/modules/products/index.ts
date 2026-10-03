@@ -1,25 +1,23 @@
-// Products domain: the merchant-edited product aggregate — products, SKUs
-// (variants), options, media, validation and the aggregate revision — plus the
-// product rules other domains read through: public eligibility, buyer
-// pricing and money. Buyer-facing catalogue reads live in modules/catalog.
+// Products domain: what a product and its SKUs are, and the product rules
+// other domains read through — public eligibility, buyer pricing and money,
+// media projections, options, the SKU alert level and availability band,
+// customization, content blocks, bundles, EMI, the digital and gift-card
+// stock rules — plus the catalogue projections that cache them. The
+// dashboard's product editor (writes, admin reads, the aggregate revision)
+// lives in modules/product-admin; buyer-facing catalogue reads live in
+// modules/catalog.
 export * from "./types";
-export * from "./admin/write";
-export * from "./admin/read";
-export * from "./admin/lifecycle";
-export * from "./variants";
 export * from "./option-model";
-export * from "./option-matrix";
-export * from "./validation";
 export * from "./media";
-export * from "./semantic-sections";
 export * from "./money";
 export * from "./public-eligibility";
 export * from "./buyer-projection";
 export * from "./variant-identity";
-export * from "./aggregate-revision";
 export * from "./customization";
 export * from "./catalog-projections";
+export * from "./low-stock-policy";
 export * from "./content-blocks";
 export * from "./bundles";
 export * from "./emi";
 export * from "./digital-stock-rules";
+export * from "./gift-card-rules";

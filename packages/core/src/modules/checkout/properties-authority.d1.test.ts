@@ -10,8 +10,8 @@ import { ValidationError } from "../../errors";
 import { createAtomicCheckoutAttempt } from "./attempts";
 import { commitStorefrontOrderPayload } from "./commit";
 import type { StorefrontOrderCommitPayload } from "../orders/types";
-import { updateProduct } from "../products/admin/write";
-import { updateProductSchema } from "../products/validation";
+import { updateProduct } from "../product-admin/write";
+import { updateProductSchema } from "../product-admin/validation";
 
 const SCHEMA = JSON.stringify({
   version: 1,

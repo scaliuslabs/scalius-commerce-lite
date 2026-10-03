@@ -9,10 +9,10 @@ import {
   createTaxRate,
   deleteTaxRate,
   updateTaxClass,
-  updateTaxClassification,
   updateTaxRate,
   updateTaxSettings,
 } from "./tax-admin.service";
+import { updateTaxClassification } from "../product-admin/tax-classification";
 
 const taxSettingsInput = {
   expectedVersion: 1,

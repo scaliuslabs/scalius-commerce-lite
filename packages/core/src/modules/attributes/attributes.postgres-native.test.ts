@@ -24,8 +24,8 @@ import { getCategoryAttributeSet, replaceCategoryAttributeSet } from "./category
 import { createAttribute, deleteAttributeValue, listAttributes, listAttributeValues, renameAttributeValue, updateAttribute } from "./attributes.service";
 import type { CatalogProjectionRefresh } from "./projection-refresh";
 import { catalogProjectionRefreshStatements, rebuildCatalogProjections } from "../products/catalog-projections";
-import { createProduct } from "../products/admin/write";
-import { createProductSchema } from "../products/validation";
+import { createProduct } from "../product-admin/write";
+import { createProductSchema } from "../product-admin/validation";
 
 const postgresUrl = process.env.SCALIUS_TEST_POSTGRES_URL?.trim();
 

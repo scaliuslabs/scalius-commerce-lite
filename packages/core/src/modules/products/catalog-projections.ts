@@ -39,7 +39,7 @@ import { alias } from "drizzle-orm/sqlite-core";
 import { OPTION_FACET_KEY_PREFIX } from "@scalius/shared/catalog-attributes";
 import { buildBuyerCatalogPricingProjection } from "./buyer-projection";
 import { publicProductHasBuyerResolvableSku } from "./public-eligibility";
-import { storeDefaultLowStockThresholdSql } from "../inventory/low-stock-policy";
+import { storeDefaultLowStockThresholdSql } from "./low-stock-policy";
 
 type SQLiteBatchItem = BatchItem<"sqlite">;
 

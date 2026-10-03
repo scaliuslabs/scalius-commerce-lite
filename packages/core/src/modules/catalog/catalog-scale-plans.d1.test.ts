@@ -7,7 +7,7 @@ import { resolvePublicAttributeFilters } from "./facets";
 import { resolveCollectionProductsBatch } from "../collections/collections.service";
 import { search } from "../../search";
 import { getHomepageData } from "../storefront/storefront.service";
-import { getProductsByIds, listProducts } from "../products/admin/read";
+import { getProductsByIds, listProducts } from "../product-admin/read";
 import {
     getStorefrontBrandProducts,
     getStorefrontCategoryProducts,

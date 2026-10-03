@@ -2,7 +2,7 @@
 // Reservation timeout logic: releases orphaned/expired reservations.
 // Designed to be called from a queue consumer or cron trigger.
 
-import { effectiveLowStockThresholdSql } from "./low-stock-policy";
+import { effectiveLowStockThresholdSql } from "../products/low-stock-policy";
 import { eq, and, sql, lt } from "drizzle-orm";
 import {
   inventoryMovements,

@@ -13,14 +13,10 @@ import {
     taxSettings,
 } from "@scalius/database/schema";
 import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
-import { and, asc, desc, eq, isNull, like, or, sql } from "drizzle-orm";
+import { and, asc, eq, isNull, like, or, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import { nanoid } from "nanoid";
 import type { TaxJurisdictionType } from "./types";
-import {
-    executeProductAggregateMutationBatch,
-} from "../products/aggregate-revision";
-import { variantOptionLabelSql } from "../products/option-model";
 
 const DEFAULT_SETTINGS = {
     id: "default" as const,
@@ -121,7 +117,8 @@ async function resolveJurisdiction(
 
 type ActiveTaxClass = Pick<typeof taxClasses.$inferSelect, "id" | "name" | "isExempt">;
 
-async function assertActiveTaxClass(
+/** The active tax class `id` names (null for none); throws when it is missing or deleted. */
+export async function assertActiveTaxClass(
     db: Database,
     id: string | null,
     label: string,
@@ -607,167 +604,4 @@ export async function deleteTaxRate(db: Database, id: string, expectedVersion: n
         : await update;
     if (rows[0]) return rows[0];
     throw new ConflictError("Tax rate changed. Reload and try again.");
-}
-
-export type TaxClassificationKind = "product" | "variant";
-
-export async function listTaxClassifications(db: Database, input: {
-    kind: TaxClassificationKind;
-    page: number;
-    limit: number;
-    search?: string;
-}) {
-    const offset = (input.page - 1) * input.limit;
-    const search = input.search?.trim();
-    if (input.kind === "product") {
-        const where = and(
-            isNull(products.deletedAt),
-            search ? or(like(products.name, `%${search}%`), like(products.slug, `%${search}%`)) : undefined,
-        );
-        const [rows, totalRow] = await Promise.all([
-            db.select({
-                id: products.id,
-                productId: products.id,
-                productName: products.name,
-                label: products.name,
-                sku: sql<string | null>`NULL`,
-                taxClassId: products.taxClassId,
-                taxClassName: taxClasses.name,
-                version: products.taxClassificationVersion,
-                aggregateRevision: products.aggregateRevision,
-            }).from(products).leftJoin(taxClasses, eq(products.taxClassId, taxClasses.id))
-                .where(where).orderBy(desc(products.updatedAt), asc(products.id)).limit(input.limit).offset(offset),
-            db.select({ count: sql<number>`count(*)` }).from(products).where(where).get(),
-        ]);
-        return { items: rows.map((row) => ({ ...row, kind: "product" as const })), total: totalRow?.count ?? 0 };
-    }
-
-    const where = and(
-        isNull(productVariants.deletedAt),
-        isNull(products.deletedAt),
-        search ? or(
-            like(products.name, `%${search}%`),
-            like(productVariants.sku, `%${search}%`),
-            sql`${variantOptionLabelSql(productVariants.id)} LIKE ${`%${search}%`}`,
-        ) : undefined,
-    );
-    const [rows, totalRow] = await Promise.all([
-        db.select({
-            id: productVariants.id,
-            productId: products.id,
-            productName: products.name,
-            label: sql<string>`trim(${products.name} || CASE WHEN ${variantOptionLabelSql(productVariants.id)} <> '' THEN ' · ' || ${variantOptionLabelSql(productVariants.id)} ELSE '' END)`,
-            sku: productVariants.sku,
-            taxClassId: productVariants.taxClassId,
-            taxClassName: taxClasses.name,
-            version: productVariants.taxClassificationVersion,
-            aggregateRevision: products.aggregateRevision,
-        }).from(productVariants).innerJoin(products, eq(productVariants.productId, products.id))
-            .leftJoin(taxClasses, eq(productVariants.taxClassId, taxClasses.id))
-            .where(where).orderBy(desc(productVariants.updatedAt), asc(productVariants.id)).limit(input.limit).offset(offset),
-        db.select({ count: sql<number>`count(*)` }).from(productVariants)
-            .innerJoin(products, eq(productVariants.productId, products.id)).where(where).get(),
-    ]);
-    return { items: rows.map((row) => ({ ...row, kind: "variant" as const })), total: totalRow?.count ?? 0 };
-}
-
-export async function updateTaxClassification(db: Database, input: {
-    kind: TaxClassificationKind;
-    id: string;
-    taxClassId: string | null;
-    expectedVersion: number;
-    expectedAggregateRevision: number;
-}) {
-    await assertActiveTaxClass(db, input.taxClassId, "Tax class");
-    if (input.kind === "product") {
-        const classificationGuard = buildBatchGuard(db, sql`EXISTS (
-                SELECT 1 FROM ${products}
-                WHERE ${products.id} = ${input.id}
-                  AND ${products.taxClassificationVersion} = ${input.expectedVersion}
-                  AND ${products.deletedAt} IS NULL
-            )`, "TAX_CLASSIFICATION_CONFLICT");
-        const update = db.update(products).set({
-            taxClassId: input.taxClassId,
-            taxClassificationVersion: sql`${products.taxClassificationVersion} + 1`,
-            updatedAt: sql`unixepoch()`,
-        }).where(and(
-            eq(products.id, input.id),
-            isNull(products.deletedAt),
-        )).returning({ id: products.id, taxClassId: products.taxClassId, version: products.taxClassificationVersion });
-        try {
-            const result = await executeProductAggregateMutationBatch(
-                db,
-                input.id,
-                input.expectedAggregateRevision,
-                [classificationGuard, update],
-            );
-            const row = (result.mutationResults[1] as Array<{
-                id: string;
-                taxClassId: string | null;
-                version: number;
-            }> | undefined)?.[0];
-            if (row) {
-                return {
-                    ...row,
-                    kind: input.kind,
-                    aggregateRevision: result.aggregateRevision,
-                };
-            }
-        } catch (error) {
-            if (isBatchGuardError(error, "TAX_CLASSIFICATION_CONFLICT")) {
-                throw new ConflictError("Tax classification changed or the catalog item is unavailable. Reload and try again.");
-            }
-            throw error;
-        }
-    } else {
-        const variant = await db
-            .select({ productId: productVariants.productId })
-            .from(productVariants)
-            .where(and(eq(productVariants.id, input.id), isNull(productVariants.deletedAt)))
-            .get();
-        if (!variant) {
-            throw new ConflictError("Tax classification changed or the catalog item is unavailable. Reload and try again.");
-        }
-        const classificationGuard = buildBatchGuard(db, sql`EXISTS (
-                SELECT 1 FROM ${productVariants}
-                WHERE ${productVariants.id} = ${input.id}
-                  AND ${productVariants.productId} = ${variant.productId}
-                  AND ${productVariants.taxClassificationVersion} = ${input.expectedVersion}
-                  AND ${productVariants.deletedAt} IS NULL
-            )`, "TAX_CLASSIFICATION_CONFLICT");
-        const update = db.update(productVariants).set({
-            taxClassId: input.taxClassId,
-            taxClassificationVersion: sql`${productVariants.taxClassificationVersion} + 1`,
-            updatedAt: sql`unixepoch()`,
-        }).where(and(
-            eq(productVariants.id, input.id),
-            isNull(productVariants.deletedAt),
-        )).returning({ id: productVariants.id, taxClassId: productVariants.taxClassId, version: productVariants.taxClassificationVersion });
-        try {
-            const result = await executeProductAggregateMutationBatch(
-                db,
-                variant.productId,
-                input.expectedAggregateRevision,
-                [classificationGuard, update],
-            );
-            const row = (result.mutationResults[1] as Array<{
-                id: string;
-                taxClassId: string | null;
-                version: number;
-            }> | undefined)?.[0];
-            if (row) {
-                return {
-                    ...row,
-                    kind: input.kind,
-                    aggregateRevision: result.aggregateRevision,
-                };
-            }
-        } catch (error) {
-            if (isBatchGuardError(error, "TAX_CLASSIFICATION_CONFLICT")) {
-                throw new ConflictError("Tax classification changed or the catalog item is unavailable. Reload and try again.");
-            }
-            throw error;
-        }
-    }
-    throw new ConflictError("Tax classification changed or the catalog item is unavailable. Reload and try again.");
 }

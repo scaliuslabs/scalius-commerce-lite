@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { defaultProductSkuValues } from "./public-eligibility";
+import { defaultProductSkuValues } from "../products/public-eligibility";
 import {
     normalizeVariantBarcode,
     resolveNewVariantBarcode,

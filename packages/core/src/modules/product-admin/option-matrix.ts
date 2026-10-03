@@ -27,7 +27,7 @@ import {
     MAX_PRODUCT_OPTION_COMBINATIONS,
     loadVariantSelectedOptions,
     normalizeOptionIdentity,
-} from "./option-model";
+} from "../products/option-model";
 import {
     catalogMoneySchema,
     skuStockSchema,
@@ -35,7 +35,7 @@ import {
     STOCK_CHANGED_MESSAGE,
     expectedProductAggregateRevisionSchema,
     expectedStockVersionSchema,
-} from "./types";
+} from "../products/types";
 import {
     normalizeVariantBarcode,
     resolveNewVariantBarcode,
@@ -49,13 +49,13 @@ import {
 } from "./aggregate-revision";
 import { buildStockMovementClaim } from "../inventory/stock-movement-claims";
 import { getDefaultInventoryLocation, readVariantStockAwayFromDefault } from "../inventory/locations";
-import { editableFulfillmentKindSchema } from "./customization-schema";
+import { editableFulfillmentKindSchema } from "../products/customization-schema";
 import {
     DIGITAL_STOCK_CANT_SPLIT_MESSAGE,
     digitalStockError,
     isDigitalKind,
     planDigitalSkuWrites,
-} from "./digital-stock-rules";
+} from "../products/digital-stock-rules";
 import { unitCostAmountSchema } from "../inventory/unit-costs";
 
 const optionValueInputSchema = z.object({

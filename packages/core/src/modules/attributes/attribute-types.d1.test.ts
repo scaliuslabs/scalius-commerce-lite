@@ -15,9 +15,9 @@ import { convertAttributeValueType } from "./attribute-types";
 import { prepareProductAttributeValueRows } from "./product-attribute-values";
 import type { CatalogProjectionRefresh } from "./projection-refresh";
 import { catalogProjectionRefreshStatements, rebuildCatalogProjections } from "../products/catalog-projections";
-import { createProduct, updateProduct } from "../products/admin/write";
-import { getProductDetails } from "../products/admin/read";
-import { createProductSchema, updateProductSchema } from "../products/validation";
+import { createProduct, updateProduct } from "../product-admin/write";
+import { getProductDetails } from "../product-admin/read";
+import { createProductSchema, updateProductSchema } from "../product-admin/validation";
 
 let sqlite: DatabaseSync;
 let db: Database;

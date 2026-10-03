@@ -3,7 +3,16 @@ import { productVariants, settings } from "@scalius/database/schema";
 import { sql, type SQL } from "drizzle-orm";
 import { defineSettingsDocument, SETTINGS_DOCUMENT_ROW_KEY } from "../settings/settings-store";
 import { deps } from "../../cache-deps";
-import { lowStockThresholdSchema } from "./inventory.validation";
+
+export const LOW_STOCK_THRESHOLD_MAX = 1_000_000;
+
+/** An alert level: alert when available stock falls to this or below. On a SKU, `null` uses the store default and 0 turns alerts off. */
+export const lowStockThresholdSchema = z
+  .number()
+  .int("Enter a whole number.")
+  .min(0, "Enter 0 or more.")
+  .max(LOW_STOCK_THRESHOLD_MAX, `Enter ${LOW_STOCK_THRESHOLD_MAX} or less.`)
+  .nullable();
 
 /** A null or non-positive threshold explicitly disables low-stock alerts. */
 export function isLowStockThresholdEnabled(

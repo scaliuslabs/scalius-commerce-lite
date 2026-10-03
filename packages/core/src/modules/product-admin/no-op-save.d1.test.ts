@@ -5,9 +5,9 @@ import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { describe, expect, it, vi } from "vitest";
 
 import { createProduct, updateProduct } from "./write";
-import { createProductSchema, updateProductSchema } from "../validation";
+import { createProductSchema, updateProductSchema } from "./validation";
 
-vi.mock("../../inventory/alerts", () => ({ checkAndAlertLowStock: vi.fn() }));
+vi.mock("../inventory/alerts", () => ({ checkAndAlertLowStock: vi.fn() }));
 
 const SEED = `
     INSERT INTO categories (id, name, slug, status) VALUES ('cat_mugs', 'Mugs', 'mugs', 'published');

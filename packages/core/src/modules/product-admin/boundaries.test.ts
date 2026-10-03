@@ -4,7 +4,7 @@ import { createProduct, updateProduct } from "./write";
 import { restoreProduct } from "./lifecycle";
 
 // These fakes carry no projection SQL; catalog-projections.d1.test.ts covers it.
-vi.mock("../catalog-projections", () => ({ catalogProjectionRefreshStatements: () => [] }));
+vi.mock("../products/catalog-projections", () => ({ catalogProjectionRefreshStatements: () => [] }));
 
 // Nor the typed attribute rows; attributes/attribute-types.d1.test.ts covers them.
 const attributeRows = vi.hoisted(() => ({
@@ -16,7 +16,7 @@ const attributeRows = vi.hoisted(() => ({
         return { statements: assignments.length > 0 ? [{ kind: "attribute-rows" }] : [] };
     }),
 }));
-vi.mock("../../attributes/product-attribute-values", () => ({
+vi.mock("../attributes/product-attribute-values", () => ({
     prepareProductAttributeValueRows: attributeRows.prepare,
 }));
 

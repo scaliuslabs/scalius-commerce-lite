@@ -1,5 +1,5 @@
 // The buyer product page read.
-import { effectiveLowStockThresholdSql } from "../inventory/low-stock-policy";
+import { effectiveLowStockThresholdSql } from "../products/low-stock-policy";
 import {
     products,
     categories,

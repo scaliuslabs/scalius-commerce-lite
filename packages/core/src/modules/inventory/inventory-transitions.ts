@@ -5,7 +5,7 @@
 // order status transitions. Every endpoint that changes order status must
 // call applyInventoryForStatusChange() instead of manually adjusting stock.
 
-import { effectiveLowStockThresholdSql } from "./low-stock-policy";
+import { effectiveLowStockThresholdSql } from "../products/low-stock-policy";
 import { and, eq, gte, inArray, sql, type SQL } from "drizzle-orm";
 import { inventoryMovements, orders, orderItems, orderReturns, InventoryPool, productVariants } from "@scalius/database/schema";
 import { safeBatch, type Database } from "@scalius/database/client";

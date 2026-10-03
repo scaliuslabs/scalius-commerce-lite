@@ -8,7 +8,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import type { Database } from "@scalius/database/client";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
-import { bulkUpdateProducts } from "./admin/lifecycle";
+import { bulkUpdateProducts } from "../product-admin/lifecycle";
 import { catalogProjectionRefreshStatements, rebuildCatalogProjections } from "./catalog-projections";
 import { safeBatch } from "@scalius/database/client";
 

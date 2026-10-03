@@ -1,5 +1,9 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import {
+    createVariantSchema,
+    updateVariantSchema,
+} from "@scalius/core/modules/products";
+import {
     bulkDeleteProducts,
     bulkUpdateProducts,
     deleteProduct,
@@ -27,9 +31,7 @@ import {
     productSemanticSectionQuerySchema,
     productSemanticSectionSchema,
     updateProductSemanticSection,
-    createVariantSchema,
-    updateVariantSchema,
-} from "@scalius/core/modules/products";
+} from "@scalius/core/modules/product-admin";
 import { PRODUCT_CONDITION_VALUES } from "@scalius/shared/product-condition";
 import { ConflictError, NotFoundError, ValidationError } from "../../utils/api-error";
 import { ok, created, noContent } from "../../utils/api-response";

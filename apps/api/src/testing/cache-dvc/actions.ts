@@ -12,12 +12,10 @@
 import type { DatabaseSync } from "node:sqlite";
 import type { Database } from "@scalius/database/client";
 import {
-  bulkUpdateProducts,
   catalogProjectionRefreshStatements,
-  deleteProduct,
   rebuildCatalogProjections,
-  restoreProduct,
 } from "@scalius/core/modules/products";
+import { bulkUpdateProducts, deleteProduct, restoreProduct } from "@scalius/core/modules/product-admin";
 import { adjustStock } from "@scalius/core/modules/inventory";
 import { moveCategory } from "@scalius/core/modules/categories";
 import { refreshProductRecommendations, refreshProductSalesStats } from "@scalius/core/modules/catalog";

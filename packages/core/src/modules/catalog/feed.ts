@@ -1,5 +1,5 @@
 // Product feed rows for the Google/Base and Meta catalogue feeds.
-import { effectiveLowStockThresholdSql } from "../inventory/low-stock-policy";
+import { effectiveLowStockThresholdSql } from "../products/low-stock-policy";
 import {
     products,
     categories,

@@ -2,7 +2,7 @@ import type { SQLInputValue } from "node:sqlite";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { describe, expect, it } from "vitest";
 
-import { updateProductMediaSection } from "./admin/write";
+import { updateProductMediaSection } from "../product-admin/write";
 import {
     resolveProductMediaProjectionRows,
     resolveSkuImageRepresentation,

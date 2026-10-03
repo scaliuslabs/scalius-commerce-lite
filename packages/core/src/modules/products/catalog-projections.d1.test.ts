@@ -29,12 +29,12 @@ import {
     catalogProjectionRefreshStatements,
     rebuildCatalogProjections,
 } from "./catalog-projections";
-import { createProduct, duplicateProduct, updateProduct } from "./admin/write";
-import { bulkUpdateProducts, deleteProduct, restoreProduct } from "./admin/lifecycle";
-import { getProductDetails } from "./admin/read";
-import { createProductSchema, updateProductSchema } from "./validation";
-import { deleteVariant, updateVariant } from "./variants";
-import { updateProductSemanticSection } from "./semantic-sections";
+import { createProduct, duplicateProduct, updateProduct } from "../product-admin/write";
+import { bulkUpdateProducts, deleteProduct, restoreProduct } from "../product-admin/lifecycle";
+import { getProductDetails } from "../product-admin/read";
+import { createProductSchema, updateProductSchema } from "../product-admin/validation";
+import { deleteVariant, updateVariant } from "../product-admin/variants";
+import { updateProductSemanticSection } from "../product-admin/semantic-sections";
 import { adjustStock, setStock } from "../inventory/stock-adjustment";
 import { setLowStockThreshold } from "../inventory/alerts";
 import { releaseExpiredReservations } from "../inventory/expiry";

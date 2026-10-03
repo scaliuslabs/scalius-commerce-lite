@@ -8,7 +8,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import type { Database } from "@scalius/database/client";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { ValidationError } from "@scalius/core/errors";
-import { createProduct, updateProduct } from "./admin/write";
+import { createProduct, updateProduct } from "./write";
 import { createProductSchema, updateProductSchema, type CreateProductInput } from "./validation";
 import { createVariant, updateVariant } from "./variants";
 import { saveProductOptionMatrix } from "./option-matrix";
@@ -18,7 +18,7 @@ import {
     DIGITAL_STOCK_CANT_SPLIT_MESSAGE,
     DIGITAL_STOCK_IS_KEYS_MESSAGE,
     DIGITAL_STOCK_IS_KEYS_REASON,
-} from "./digital-stock-rules";
+} from "../products/digital-stock-rules";
 import { createDigitalAsset } from "../digital/assets";
 import { importLicenceKeys, revokeLicenceKeys, listLicenceKeys } from "../digital/licence-keys";
 

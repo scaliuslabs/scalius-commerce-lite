@@ -8,9 +8,9 @@ import {
 import type { BatchItem } from "drizzle-orm/batch";
 import { eq, sql, type SQL } from "drizzle-orm";
 import { AppError, ConflictError } from "@scalius/core/errors";
-import { catalogProjectionRefreshStatements } from "./catalog-projections";
-import { buildGiftCardProductRulesGuard, rethrowGiftCardProductRuleViolation } from "./gift-card-rules";
-import { rethrowDigitalStockRuleViolation } from "./digital-stock-rules";
+import { catalogProjectionRefreshStatements } from "../products/catalog-projections";
+import { buildGiftCardProductRulesGuard, rethrowGiftCardProductRuleViolation } from "../products/gift-card-rules";
+import { rethrowDigitalStockRuleViolation } from "../products/digital-stock-rules";
 import {
     inventoryLocationErrorFrom,
     isInventoryLevelShortfallError,

@@ -4,11 +4,11 @@ import { describe, expect, it, vi } from "vitest";
 import { ValidationError } from "@scalius/core/errors";
 import { createProduct, duplicateProduct, updateProduct } from "./write";
 import { getProductDetails } from "./read";
-import { createProductSchema, updateProductSchema } from "../validation";
-import { createVariant, updateVariant } from "../variants";
-import { saveProductOptionMatrix } from "../option-matrix";
+import { createProductSchema, updateProductSchema } from "./validation";
+import { createVariant, updateVariant } from "./variants";
+import { saveProductOptionMatrix } from "./option-matrix";
 
-vi.mock("../../inventory/alerts", () => ({ checkAndAlertLowStock: vi.fn() }));
+vi.mock("../inventory/alerts", () => ({ checkAndAlertLowStock: vi.fn() }));
 
 const baseInput = {
     name: "Engraved mug",

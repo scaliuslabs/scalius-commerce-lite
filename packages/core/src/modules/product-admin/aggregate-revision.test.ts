@@ -7,7 +7,7 @@ import {
 } from "./aggregate-revision";
 
 // Projection SQL is covered by catalog-projections.d1.test.ts; here it is one marker statement.
-vi.mock("./catalog-projections", () => ({
+vi.mock("../products/catalog-projections", () => ({
     catalogProjectionRefreshStatements: () => [{ kind: "projection" }],
 }));
 

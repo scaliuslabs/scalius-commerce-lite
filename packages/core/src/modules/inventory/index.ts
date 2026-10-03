@@ -65,7 +65,6 @@ export type { StockAdjustResult, StockSetResult } from "./stock-adjustment";
 export * from "./inventory-label-artifacts";
 export * from "./inventory-movement-artifacts";
 export { acknowledgeLowStockAlert, setDefaultLowStockThreshold } from "./alerts";
-export { effectiveLowStockThresholdSql } from "./low-stock-policy";
 export { buildStockMovementClaim } from "./stock-movement-claims";
 export type { StockMovementClaimType } from "./stock-movement-claims";
 export * from "./stock-commands";

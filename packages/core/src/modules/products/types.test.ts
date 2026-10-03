@@ -5,7 +5,7 @@ import {
     createVariantSchema,
     updateVariantSchema,
 } from "./types";
-import { productOptionMatrixSchema } from "./option-matrix";
+import { productOptionMatrixSchema } from "../product-admin/option-matrix";
 
 const validVariant = {
     selectedOptionValueIds: ["value_m"],

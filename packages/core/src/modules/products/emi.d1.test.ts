@@ -8,7 +8,7 @@ import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { getStorefrontProductBySlug } from "../catalog/product-page";
 import { getEmiSettings, saveEmiSettings } from "../settings/emi-settings.service";
 import { rebuildCatalogProjections } from "./catalog-projections";
-import { productSemanticSectionPatchSchema, updateProductSemanticSection } from "./semantic-sections";
+import { productSemanticSectionPatchSchema, updateProductSemanticSection } from "../product-admin/semantic-sections";
 
 const cityBank = { id: "city-6", provider: "City Bank", months: 6, feePercentage: 3, minAmount: 5_000 };
 

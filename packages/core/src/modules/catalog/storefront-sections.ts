@@ -1,4 +1,4 @@
-import { effectiveLowStockThresholdSql } from "../inventory/low-stock-policy";
+import { effectiveLowStockThresholdSql } from "../products/low-stock-policy";
 import type { Database } from "@scalius/database/client";
 import { ValidationError } from "@scalius/core/errors";
 import {

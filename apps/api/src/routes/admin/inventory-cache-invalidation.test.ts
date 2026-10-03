@@ -61,7 +61,6 @@ vi.mock("@scalius/core/modules/inventory", async () => {
     setLowStockThreshold: mocks.setLowStockThreshold,
     setDefaultLowStockThreshold: mocks.setDefaultLowStockThreshold,
     inventoryOperationKeySchema: z.string().min(16).max(128),
-    lowStockThresholdSchema: z.number().int().min(0).max(1_000_000).nullable(),
     INVENTORY_LABEL_VARIANT_LIMIT: 150,
     INVENTORY_LABEL_ARTIFACT_MAX_COPIES: 1_000,
     INVENTORY_LABEL_ARTIFACT_MAX_BYTES: 16 * 1024 * 1024,

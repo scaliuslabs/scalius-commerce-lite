@@ -6,7 +6,8 @@ import {
     listOrders,
     loadOrderExportDetails,
 } from "@scalius/core/modules/orders";
-import { listProducts, readStoreDecimalPlaces, readStoredCustomization } from "@scalius/core/modules/products";
+import { readStoreDecimalPlaces, readStoredCustomization } from "@scalius/core/modules/products";
+import { listProducts } from "@scalius/core/modules/product-admin";
 import { customizationViewSchema } from "../../../schemas/order-lines";
 import { fromMinor } from "@scalius/shared/money";
 import { FulfillmentStatus, PaymentStatus, productVariants, products } from "@scalius/database/schema";

@@ -19,17 +19,17 @@ import { z } from "zod";
 import { AppError, NotFoundError, ConflictError, ValidationError } from "@scalius/core/errors";
 import { checkAndAlertLowStock } from "../inventory/alerts";
 import { fromMinor, percentToBps, toMinor } from "@scalius/shared/money";
-import { presentCatalogPrice, readStoreDecimalPlaces } from "./money";
+import { presentCatalogPrice, readStoreDecimalPlaces } from "../products/money";
 import { readStoreCurrency, toStoreMinor } from "../settings/store-money";
 import { buildStockMovementClaim } from "../inventory/stock-movement-claims";
 import {
     STOCK_CHANGED_MESSAGE,
     createVariantSchema,
     updateVariantSchema,
-} from "./types";
+} from "../products/types";
 import {
     operationalSkuRowPredicate,
-} from "./public-eligibility";
+} from "../products/public-eligibility";
 import {
     generateInternalCode128Barcode,
     getBarcodeIdentityKey,
@@ -44,12 +44,12 @@ import {
 import {
     productVariantBarcodeIdentityEquals,
     productVariantBarcodeIdentityIn,
-} from "./variant-identity";
+} from "../products/variant-identity";
 import {
     loadVariantSelectedOptions,
     resolveSelectedOptionValueIds,
-} from "./option-model";
-import { digitalStockError, isDigitalKind, planDigitalSkuWrites } from "./digital-stock-rules";
+} from "../products/option-model";
+import { digitalStockError, isDigitalKind, planDigitalSkuWrites } from "../products/digital-stock-rules";
 
 export function rethrowProductVariantIdentityConstraint(error: unknown): never {
     const message = error instanceof Error ? error.message : String(error);

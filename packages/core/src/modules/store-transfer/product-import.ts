@@ -38,11 +38,11 @@ import {
   type ProductImportVariant,
 } from "@scalius/shared/store-transfer/products";
 import { AppError } from "@scalius/core/errors";
-import { createProduct, updateProduct } from "../products/admin/write";
-import { getProductDetails } from "../products/admin/read";
-import { saveProductOptionMatrix } from "../products/option-matrix";
-import { updateVariant } from "../products/variants";
-import { createProductSchema, updateProductSchema } from "../products/validation";
+import { createProduct, updateProduct } from "../product-admin/write";
+import { getProductDetails } from "../product-admin/read";
+import { saveProductOptionMatrix } from "../product-admin/option-matrix";
+import { updateVariant } from "../product-admin/variants";
+import { createProductSchema, updateProductSchema } from "../product-admin/validation";
 import type { ProductWithDetails } from "../products/types";
 import { readStoreCurrency, type StoreCurrency } from "../settings/store-money";
 import { ImportReferenceResolver, type ReferenceCreationRights, type ReferencePlan } from "./references";

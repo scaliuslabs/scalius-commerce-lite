@@ -22,8 +22,8 @@ const mocks = vi.hoisted(() => ({
 
 }));
 
-vi.mock("@scalius/core/modules/products", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@scalius/core/modules/products")>()),
+vi.mock("@scalius/core/modules/product-admin", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/product-admin")>()),
   createProduct: mocks.createProduct,
   updateProduct: mocks.updateProduct,
   bulkDeleteProducts: mocks.bulkDeleteProducts,

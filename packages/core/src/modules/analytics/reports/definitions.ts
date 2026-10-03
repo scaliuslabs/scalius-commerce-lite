@@ -17,7 +17,7 @@ import { collectionMembershipForConfig } from "../../collections/collection-conf
 import {
   buildNeedsRestockCondition,
   effectiveLowStockThresholdSql,
-} from "../../inventory/low-stock-policy";
+} from "../../products/low-stock-policy";
 import { operationalSkuRowPredicate } from "../../products/public-eligibility";
 import { variantOptionLabelSql } from "../../products/option-model";
 import {

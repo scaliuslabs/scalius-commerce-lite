@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Database } from "@scalius/database/client";
 import * as schema from "@scalius/database/schema";
-import { createProduct } from "./admin/write";
+import { createProduct } from "./write";
 import { saveProductOptionMatrix } from "./option-matrix";
 import { updateVariant } from "./variants";
 import { createProductSchema } from "./validation";

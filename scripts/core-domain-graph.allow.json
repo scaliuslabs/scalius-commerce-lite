@@ -16,7 +16,6 @@
     "agent-storefront -> settings",
     "agent-storefront -> tax",
     "analytics -> collections",
-    "analytics -> inventory",
     "analytics -> orders",
     "analytics -> products",
     "analytics -> settings",
@@ -24,7 +23,6 @@
     "catalog -> brands",
     "catalog -> categories",
     "catalog -> custom-fields",
-    "catalog -> inventory",
     "catalog -> products",
     "catalog -> promotions",
     "catalog -> settings",
@@ -106,8 +104,11 @@
     "payments -> settings",
     "platform -> settings",
     "plugins -> events",
-    "products -> attributes",
-    "products -> inventory",
+    "product-admin -> attributes",
+    "product-admin -> inventory",
+    "product-admin -> products",
+    "product-admin -> settings",
+    "product-admin -> tax",
     "products -> settings",
     "promotions -> collections",
     "promotions -> customers",
@@ -123,6 +124,7 @@
     "store-transfer -> categories",
     "store-transfer -> customer-marketing",
     "store-transfer -> inventory",
+    "store-transfer -> product-admin",
     "store-transfer -> products",
     "store-transfer -> settings",
     "storefront -> analytics",
@@ -133,7 +135,6 @@
     "storefront -> pages",
     "storefront -> plugins",
     "storefront -> settings",
-    "tax -> products",
     "tax -> settings",
     "warranty -> conversations",
     "warranty -> media-references"
@@ -148,10 +149,6 @@
       "orders",
       "payments",
       "promotions"
-    ],
-    [
-      "inventory",
-      "products"
     ]
   ]
 }

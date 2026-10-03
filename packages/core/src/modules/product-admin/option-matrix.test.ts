@@ -14,7 +14,7 @@ import {
 import {
     MAX_PRODUCT_OPTION_AXES,
     MAX_PRODUCT_OPTION_COMBINATIONS,
-} from "./option-model";
+} from "../products/option-model";
 import { ConflictError, ValidationError } from "@scalius/core/errors";
 
 function row(id: string, values: string[]) {

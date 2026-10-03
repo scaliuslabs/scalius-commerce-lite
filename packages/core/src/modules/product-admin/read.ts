@@ -16,31 +16,31 @@ import {
     cappedCountQuery,
     cappedPagination,
     planKeysetPage,
-} from "../../../utils/keyset";
-import { ftsMatch, isFts5SearchEnabled, sanitizeFtsQuery } from "../../../search/fts5";
+} from "../../utils/keyset";
+import { ftsMatch, isFts5SearchEnabled, sanitizeFtsQuery } from "../../search/fts5";
 import { ValidationError } from "@scalius/core/errors";
-import type { ProductWithDetails } from "../types";
+import type { ProductWithDetails } from "../products/types";
 import { safeBatch, type Database } from "@scalius/database/client";
-import { presentCatalogPrice, readStoreDecimalPlaces } from "../money";
-import { readStoredCustomization } from "../customization";
+import { presentCatalogPrice, readStoreDecimalPlaces } from "../products/money";
+import { readStoredCustomization } from "../products/customization";
 import { bpsToPercent, fromMinor } from "@scalius/shared/money";
 import { unixToDate } from "@scalius/shared/timestamps";
 import { getBarcodeIdentityKey } from "@scalius/shared/barcode-identity";
-import { loadProductOptions, loadProductVariantSelectedOptions } from "../option-model";
-import { productVariantBarcodeIdentityEquals } from "../variant-identity";
+import { loadProductOptions, loadProductVariantSelectedOptions } from "../products/option-model";
+import { productVariantBarcodeIdentityEquals } from "../products/variant-identity";
 import {
     loadProductMediaProjections,
     resolveProductMediaProjectionRows,
     resolveProductImageRepresentation,
     selectProductMediaProjectionRows,
-} from "../media";
-import type { ProductMediaProjection, ProductMediaProjectionRow } from "../media";
+} from "../products/media";
+import type { ProductMediaProjection, ProductMediaProjectionRow } from "../products/media";
 import {
     buildBuyerCatalogPricingProjection,
     buyerPriceRangeColumns,
     presentBuyerPriceRange,
     type BuyerPriceRange,
-} from "../buyer-projection";
+} from "../products/buyer-projection";
 
 function requireProductTimestamp(
     value: Date | number | string | null | undefined,
