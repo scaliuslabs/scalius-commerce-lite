@@ -2,6 +2,7 @@
 
 export type { PaymentType } from "./gateways/port";
 import type { PaymentType } from "./gateways/port";
+import type { ReportedSettlement } from "@scalius/shared/money-chain";
 
 export type PaymentResult = "succeeded" | "failed" | "pending" | "cancelled";
 
@@ -43,4 +44,6 @@ export interface ProcessPaymentParams {
   providerRef: string;
   secondaryRef?: string;
   metadata?: Record<string, unknown>;
+  /** What the provider reported reached the merchant (the payment port's `settlement`); absent: settled as presented. */
+  settlement?: ReportedSettlement | null;
 }

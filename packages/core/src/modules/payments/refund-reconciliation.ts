@@ -10,6 +10,7 @@ import {
 import type { Database } from "@scalius/database/client";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { fromMinor } from "@scalius/shared/money";
+import { presentedSettlement } from "@scalius/shared/money-chain";
 import {
   assertOrderPaymentCurrency,
   resolveOrderCurrencySnapshot,
@@ -542,6 +543,8 @@ async function insertExternalRefundAttempt(
         orderId: params.sourcePayment.orderId,
         amountMinor: params.amountMinor,
         currency: params.sourcePayment.currency || params.refund.currency,
+        // A refund made outside Scalius, recorded in its presentment currency.
+        ...presentedSettlement(params.amountMinor, params.sourcePayment.currency || params.refund.currency),
         paymentMethod: provider,
         paymentType: "refund",
         status: PaymentRecordStatus.PENDING,

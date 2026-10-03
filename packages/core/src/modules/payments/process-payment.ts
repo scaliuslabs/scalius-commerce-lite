@@ -36,6 +36,7 @@ import {
   PAYMENT_BLOCKED_PAYMENT_STATUSES,
 } from "./payable-order";
 import { computePaymentStateAfterPayment } from "./payment-state";
+import { paymentSettlement, presentedSettlement } from "@scalius/shared/money-chain";
 import { assertOrderPaymentCurrency, resolveOrderCurrencySnapshot } from "./order-currency";
 
 const PAYMENT_CONFIRMATION_MAX_CAS_ATTEMPTS = 3;
@@ -429,6 +430,8 @@ export async function processPaymentConfirmed(
         deletedAt: orders.deletedAt,
         currencyCode: orders.currencyCode,
         currencyDecimalPlaces: orders.currencyDecimalPlaces,
+        shopCurrency: orders.shopCurrency,
+        fxRate: orders.fxRate,
       })
       .from(orders)
       .where(eq(orders.id, params.orderId))
@@ -474,6 +477,16 @@ export async function processPaymentConfirmed(
         .get())
       : false;
 
+    // What reached the merchant (D2): the provider's settlement report, else
+    // the payment as presented. The order's rate is immutable, so the
+    // adjustment computed now holds for every CAS attempt below.
+    const settlement = paymentSettlement({
+      amountMinor: incomingAmountMinor,
+      currency: currency.code,
+      settlement: params.settlement,
+      order: initialOrder,
+    });
+
     if (!paymentId) {
       paymentId = crypto.randomUUID();
       try {
@@ -482,6 +495,7 @@ export async function processPaymentConfirmed(
           orderId: params.orderId,
           amountMinor: incomingAmountMinor,
           currency: currency.code,
+          ...settlement,
           paymentMethod: params.provider,
           paymentType,
           status: PaymentRecordStatus.PENDING,
@@ -607,6 +621,7 @@ export async function processPaymentConfirmed(
         db.update(orderPayments).set({
           amountMinor: incomingAmountMinor,
           currency: currency.code,
+          ...settlement,
           paymentMethod: params.provider,
           paymentType,
           status: PaymentRecordStatus.SUCCEEDED,
@@ -863,6 +878,7 @@ export async function processPaymentFailed(
           orderId,
           amountMinor: 0,
           currency: currency.code,
+          ...presentedSettlement(0, currency.code),
           paymentMethod: provider,
           paymentType,
           status: PaymentRecordStatus.FAILED,

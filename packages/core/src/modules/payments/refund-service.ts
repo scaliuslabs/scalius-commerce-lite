@@ -22,6 +22,7 @@ import {
     type PaymentProvidersSource,
 } from "./gateways/registry";
 import { encodeProviderAmount } from "@scalius/shared/plugins/providers/amount";
+import { presentedSettlement } from "@scalius/shared/money-chain";
 import { providerErrorOf } from "@scalius/shared/plugins/providers/kinds";
 import { applyInventoryForStatusChangeWithImpact } from "../inventory";
 import type { Database } from "@scalius/database/client";
@@ -1538,6 +1539,8 @@ export async function processRefund(
                         orderId: params.orderId,
                         amountMinor: allocation.amountMinor,
                         currency: currency.code,
+                        // Refunds are made in the presentment currency (D2).
+                        ...presentedSettlement(allocation.amountMinor, currency.code),
                         paymentMethod: allocation.sourcePayment.paymentMethod,
                         paymentType: "refund",
                         // An internal settlement is done once this batch commits.

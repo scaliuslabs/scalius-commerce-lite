@@ -870,6 +870,8 @@ async function applyPaymentEvent(
         providerRef: event.providerRef,
         secondaryRef: event.secondaryRef,
         metadata: { currency, ...event.details },
+        // A provider that reports settlement (D2) has it recorded with the payment.
+        settlement: event.settlement,
       });
       const status = assertPaymentConfirmed(result, provider, event.orderId);
       if (result.success && !result.alreadyProcessed) {

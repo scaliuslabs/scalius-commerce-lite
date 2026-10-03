@@ -12,6 +12,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { chunkForD1, type Database } from "@scalius/database/client";
 import { giftCards, giftCardTransactions, orderPayments } from "@scalius/database/schema";
+import { presentedSettlement } from "@scalius/shared/money-chain";
 import type { GiftCardTransactionKind } from "./browser";
 
 type Statement = BatchItem<"sqlite">;
@@ -125,6 +126,8 @@ export function buildGiftCardRedemptionStatements(
             orderId: input.orderId,
             amountMinor: redemption.appliedMinor,
             currency: input.currencyCode,
+            // A gift card is a tender in the order's currency: settled as presented.
+            ...presentedSettlement(redemption.appliedMinor, input.currencyCode),
             paymentMethod: GIFT_CARD_PAYMENT_METHOD,
             paymentType: "full",
             status: "succeeded",

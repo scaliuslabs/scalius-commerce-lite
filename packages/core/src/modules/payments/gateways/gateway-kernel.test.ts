@@ -253,6 +253,37 @@ describe("gateway kernel with an app provider's adapter", () => {
       .toEqual({ n: 0 });
   });
 
+  it("records what a provider reported reached the merchant, and a payment as presented otherwise (D2)", async () => {
+    // An order presented in USD for a taka shop, its rate locked at 120.
+    sqlite.prepare(`UPDATE orders SET currency_code = 'USD', shop_currency = 'BDT', fx_rate = '120', fx_source = 'test'
+      WHERE id = 'order_1'`).run();
+    sqlite.prepare(`INSERT INTO payment_plans (id, order_id, total_amount_minor, deposit_amount_minor, balance_due_minor, status)
+      VALUES ('plan_1', 'order_1', 10000, 2500, 7500, 'pending')`).run();
+    const pay = (providerRef: string, amountMinor: number, paymentType: "deposit" | "balance", settlement?: { currency: string; amountMinor: number; exchangeRate?: string }) =>
+      processPaymentConfirmed(db, {
+        orderId: "order_1", provider: FAKE_GATEWAY_ID, amountMinor, currency: "USD", paymentType, providerRef,
+        secondaryRef: `txn_${providerRef}`, settlement,
+      });
+
+    await expect(pay("dep", 2_500, "deposit")).resolves.toMatchObject({ success: true });
+    // $75 settled as ৳8,962.50 at 119.5: ৳37.50 less than the locked rate's ৳9,000.
+    await expect(pay("bal", 7_500, "balance", { currency: "BDT", amountMinor: 896_250, exchangeRate: "119.5" }))
+      .resolves.toMatchObject({ success: true });
+    expect(sqlite.prepare(`SELECT provider_ref, amount_minor, currency, settlement_currency, settlement_amount_minor,
+        settlement_rate, exchange_adjustment_minor
+      FROM order_payments ORDER BY amount_minor`).all()).toEqual([
+      { provider_ref: "dep", amount_minor: 2_500, currency: "USD", settlement_currency: "USD", settlement_amount_minor: 2_500, settlement_rate: "1", exchange_adjustment_minor: 0 },
+      { provider_ref: "bal", amount_minor: 7_500, currency: "USD", settlement_currency: "BDT", settlement_amount_minor: 896_250, settlement_rate: "119.5", exchange_adjustment_minor: -3_750 },
+    ]);
+
+    // Refunds stay in the presentment currency, settled as presented.
+    sqlite.prepare("UPDATE orders SET status = ? WHERE id = 'order_1'").run(OrderStatus.DELIVERED);
+    await processRefund(db, { orderId: "order_1", amount: 10, reason: "damaged" }, undefined, providers);
+    expect(sqlite.prepare(`SELECT currency, amount_minor, settlement_currency, settlement_amount_minor, settlement_rate, exchange_adjustment_minor
+      FROM order_payments WHERE payment_type = 'refund'`).get())
+      .toEqual({ currency: "USD", amount_minor: 1_000, settlement_currency: "USD", settlement_amount_minor: 1_000, settlement_rate: "1", exchange_adjustment_minor: 0 });
+  });
+
   it("allocates across deposit and balance captures with distinct idempotency keys", async () => {
     sqlite.prepare(`INSERT INTO payment_plans (id, order_id, total_amount_minor, deposit_amount_minor, balance_due_minor, status)
       VALUES ('plan_1', 'order_1', 10000, 2500, 7500, 'pending')`).run();

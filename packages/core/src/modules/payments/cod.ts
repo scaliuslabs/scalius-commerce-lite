@@ -27,6 +27,7 @@ import type {
 } from "./types";
 import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
 import { cashOnDeliveryIncrementMinor } from "@scalius/shared/currency-policy";
+import { presentedSettlement } from "@scalius/shared/money-chain";
 import { fromMinor, PriceIncrementError, toIncrementMinor } from "@scalius/shared/money";
 import { computePaymentStateAfterPayment } from "./payment-state";
 import { assertOrderPaymentCurrency, resolveOrderCurrencySnapshot } from "./order-currency";
@@ -320,6 +321,8 @@ export async function recordCODCollection(
           orderId: params.orderId,
           amountMinor: collection.collectedAmountMinor,
           currency: currency.code,
+          // Cash in hand is settled as collected.
+          ...presentedSettlement(collection.collectedAmountMinor, currency.code),
           paymentMethod: PaymentMethod.COD,
           paymentType,
           status: PaymentRecordStatus.SUCCEEDED,
