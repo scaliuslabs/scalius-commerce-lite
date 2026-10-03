@@ -7,7 +7,9 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { usePermissions } from "~/contexts/PermissionContext";
+import { useLocale } from "~/i18n";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
+import { localizedSurfaces } from "../app-text";
 import { appSurfacesQueryOptions, type AppAdminSurfaces } from "~/lib/api-query-options/apps";
 import type { AppRouteMethod } from "~/lib/app-route";
 import type { PluginUiTarget } from "@scalius/shared/plugins/ui";
@@ -80,12 +82,19 @@ export function targetLocation(app: Pick<AppSurfaces, "id">, target: PluginUiTar
   }
 }
 
-/** Every active app's surfaces; empty without apps.view, while loading, or when the read failed. */
+/**
+ * Every active app's surfaces, titled in the dashboard's language; empty
+ * without apps.view, while loading, or when the read failed.
+ */
 export function useAppSurfaces(): readonly AppSurfaces[] {
   const { hasPermission } = usePermissions();
   const canView = hasPermission(ADMIN_PERMISSIONS.APPS_VIEW);
+  const locale = useLocale();
   const { data } = useQuery({ ...appSurfacesQueryOptions(), enabled: canView });
-  return canView && data ? data : NONE;
+  return useMemo(
+    () => (canView && data ? data.map((app) => localizedSurfaces(app, locale)) : NONE),
+    [canView, data, locale],
+  );
 }
 
 /** Staff may run apps' actions (buttons, forms, detail and bulk actions). */

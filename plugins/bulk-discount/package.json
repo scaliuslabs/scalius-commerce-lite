@@ -1,6 +1,6 @@
 {
   "name": "@scalius/plugin-bulk-discount",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Scalius Bulk discount: a settings-driven tiered quantity discount (checkout.discounts) and a per-line quantity limit (cart.validate)",
   "private": true,
   "type": "module",

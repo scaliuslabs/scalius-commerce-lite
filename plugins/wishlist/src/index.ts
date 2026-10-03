@@ -28,7 +28,7 @@ import {
 export const manifest = {
   id: "scalius.wishlist",
   name: "Wishlist",
-  version: "0.1.0",
+  version: "0.1.1",
   apiVersion: PLUGIN_API_VERSION,
   description: "Buyers save products with a heart button and find them again on their wishlist page; you see which products are wished most.",
   author: { name: "Scalius" },
@@ -58,6 +58,14 @@ export const manifest = {
     pages: [{ id: "most-wished", title: "Most wished", placement: "products", route: "most-wished" }],
     cards: [{ id: "wishes", target: "product", title: "Wishlist", route: "product-card" }],
   },
+  translations: {
+    bn: {
+      name: "উইশলিস্ট",
+      description: "ক্রেতারা হার্ট বাটনে প্রোডাক্ট সেভ করেন আর উইশলিস্ট পেজে আবার খুঁজে পান; আপনি দেখেন কোন প্রোডাক্ট সবচেয়ে বেশি সেভ হয়।",
+      pages: { "most-wished": "সবচেয়ে বেশি সেভ করা" },
+      cards: { wishes: "উইশলিস্ট" },
+    },
+  },
   storefront: {
     proxy: true,
     productBlocks: [{
@@ -74,6 +82,44 @@ export const manifest = {
 } satisfies PluginManifestInput;
 
 const APP = `/apps/${manifest.id}`;
+
+/** The dashboard screens' words, in the staff member's dashboard language (`adminContext().locale`). */
+const ADMIN_TEXT = {
+  en: {
+    savedProducts: "Saved products",
+    productsWished: "Products wished",
+    mostWished: "Most wished",
+    caption: "Products by how many buyers saved them",
+    product: "Product",
+    wishes: "Wishes",
+    status: "Status",
+    onSale: "On sale",
+    notAvailable: "Not available",
+    emptyTitle: "Nothing wished yet",
+    emptyText: "Add the Wishlist button to the product page in Online Store → Theme.",
+    pageDescription: "What buyers save for later, most wished first.",
+    openProduct: "Open a product to see its wishes.",
+    savedBy: "Buyers who saved it",
+    mostWishedProducts: "Most wished products",
+  },
+  bn: {
+    savedProducts: "সেভ করা প্রোডাক্ট",
+    productsWished: "যত প্রোডাক্ট সেভ হয়েছে",
+    mostWished: "সবচেয়ে বেশি সেভ করা",
+    caption: "কতজন ক্রেতা সেভ করেছেন সেই অনুযায়ী প্রোডাক্ট",
+    product: "প্রোডাক্ট",
+    wishes: "সেভ",
+    status: "স্ট্যাটাস",
+    onSale: "বিক্রি হচ্ছে",
+    notAvailable: "পাওয়া যাচ্ছে না",
+    emptyTitle: "এখনও কিছু সেভ হয়নি",
+    emptyText: "অনলাইন স্টোর → থিম-এ প্রোডাক্ট পেজে উইশলিস্ট বাটন যোগ করুন।",
+    pageDescription: "ক্রেতারা পরে কেনার জন্য যা সেভ করেন, সবচেয়ে বেশি সেভ করা আগে।",
+    openProduct: "কতজন সেভ করেছেন দেখতে একটি প্রোডাক্ট খুলুন।",
+    savedBy: "যত ক্রেতা সেভ করেছেন",
+    mostWishedProducts: "সবচেয়ে বেশি সেভ করা প্রোডাক্ট",
+  },
+} as const;
 const PRODUCT_ID = /^[A-Za-z0-9_-]{1,64}$/;
 const PAGE_SIZE = 24;
 
@@ -281,17 +327,19 @@ export default definePlugin({
 
     admin: {
       "most-wished": async (request, ctx) => {
+        const { cursor, locale } = adminContext(request);
+        const t = ADMIN_TEXT[locale];
         const [page, total] = await Promise.all([
-          products(ctx).query({ orderBy: { field: "wishes", direction: "desc" }, limit: 25, cursor: adminContext(request).cursor }),
+          products(ctx).query({ orderBy: { field: "wishes", direction: "desc" }, limit: 25, cursor }),
           wishes(ctx).count(),
         ]);
         return {
           body: ui.page([
-            ui.columns([ui.stat("Saved products", total), ui.stat("Products wished", page.records.length === 25 || page.nextCursor ? "25+" : page.records.length)]),
-            ui.card("Most wished", [
+            ui.columns([ui.stat(t.savedProducts, total), ui.stat(t.productsWished, page.records.length === 25 || page.nextCursor ? "25+" : page.records.length)]),
+            ui.card(t.mostWished, [
               ui.table({
-                caption: "Products by how many buyers saved them",
-                columns: [{ key: "product", label: "Product" }, { key: "wishes", label: "Wishes", align: "end" }, { key: "state", label: "Status" }],
+                caption: t.caption,
+                columns: [{ key: "product", label: t.product }, { key: "wishes", label: t.wishes, align: "end" }, { key: "state", label: t.status }],
                 rows: page.records.map((record) => {
                   const product = record.data as WishedProduct;
                   return {
@@ -300,26 +348,27 @@ export default definePlugin({
                     cells: {
                       product: { text: product.name || record.id, to: ui.to.resource("product", record.id) },
                       wishes: Number(product.wishes) || 0,
-                      state: product.available ? { badge: "On sale", tone: "success" } : { badge: "Not available", tone: "neutral" },
+                      state: product.available ? { badge: t.onSale, tone: "success" } : { badge: t.notAvailable, tone: "neutral" },
                     },
                   };
                 }),
                 pagination: { next: page.nextCursor },
-                empty: { title: "Nothing wished yet", text: "Add the Wishlist button to the product page in Online Store → Theme." },
+                empty: { title: t.emptyTitle, text: t.emptyText },
               }),
             ]),
-          ], { title: "Most wished", description: "What buyers save for later, most wished first." }),
+          ], { title: t.mostWished, description: t.pageDescription }),
         };
       },
 
       "product-card": async (request, ctx) => {
-        const { id } = adminContext(request);
-        if (!id) return { body: ui.view([ui.text("Open a product to see its wishes.")]) };
+        const { id, locale } = adminContext(request);
+        const t = ADMIN_TEXT[locale];
+        if (!id) return { body: ui.view([ui.text(t.openProduct)]) };
         const count = await wishes(ctx).count({ productId: id });
         return {
           body: ui.view([
-            ui.stat("Buyers who saved it", count),
-            ui.link("Most wished products", ui.to.page("most-wished")),
+            ui.stat(t.savedBy, count),
+            ui.link(t.mostWishedProducts, ui.to.page("most-wished")),
           ]),
         };
       },

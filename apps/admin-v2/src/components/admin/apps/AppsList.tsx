@@ -11,14 +11,17 @@ import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Card } from "~/components/ui/card";
 import { Skeleton } from "~/components/ui/skeleton";
-import { useMessages } from "~/i18n";
+import { useLocale, useMessages } from "~/i18n";
 import { installedAppsMessages } from "~/i18n/apps";
+import { localizedApp } from "./app-text";
 import { appsQueryOptions, type AppSummary } from "~/lib/api-query-options/apps";
 import { checkoutFunctions, isKnownFunctionPoint } from "./app-functions";
 import { AppStatusBadge } from "./app-status";
 
-function AppRow({ app }: { app: AppSummary }) {
+function AppRow({ app: installed }: { app: AppSummary }) {
   const t = useMessages(installedAppsMessages);
+  // The app's name and description in the dashboard's language.
+  const app = localizedApp(installed, useLocale());
   const functions = checkoutFunctions(app.functions);
   return (
     <li className="border-t border-border first:border-t-0">

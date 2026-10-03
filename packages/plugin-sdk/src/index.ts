@@ -35,7 +35,7 @@ export type {
   PluginUiNode,
   PluginUiTarget,
 } from "@scalius/shared/plugins";
-export { adminContext, ui, wantsPage, type PluginAdminContext } from "./ui";
+export { adminContext, adminLocale, ui, wantsPage, type PluginAdminContext, type PluginAdminLocale } from "./ui";
 
 export type PluginEventHandler<T extends EventTopic = EventTopic> = (event: PluginEvent<T>, ctx: PluginContext) => Promise<void> | void;
 

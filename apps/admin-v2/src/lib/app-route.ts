@@ -16,6 +16,7 @@ import { AdminApiResponseError } from "./admin-api-error";
 import { adminApiReadSignal } from "./admin-api-timeout";
 import { noticeAdminUnauthorized } from "./admin-session-lost";
 import { withDashboardBasePath } from "./dashboard-base-path";
+import { getLocale } from "~/i18n";
 
 export type AppRouteMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
@@ -57,7 +58,8 @@ function platformFailure(body: unknown): { code: string; message: string } | nul
 export async function fetchAppRoute(pluginId: string, route: string, request: AppRouteRequest = {}): Promise<AppRouteResponse> {
   const method = request.method ?? "GET";
   const search = new URLSearchParams(request.query ?? {}).toString();
-  const headers: Record<string, string> = { Accept: "application/json" };
+  // The dashboard's language: an app writes its screen in it (`adminContext().locale`).
+  const headers: Record<string, string> = { Accept: "application/json", "Accept-Language": getLocale() };
   if (request.body !== undefined) headers["Content-Type"] = "application/json";
   const response = await fetch(withDashboardBasePath(appRoutePath(pluginId, route, request.subpath)) + (search ? `?${search}` : ""), {
     method,

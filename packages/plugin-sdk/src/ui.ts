@@ -91,6 +91,20 @@ export interface PluginAdminContext {
   cursor: string | null;
   /** A form's values by input name. */
   values: Record<string, unknown>;
+  /**
+   * The staff member's dashboard language (the dashboard sends it as
+   * `Accept-Language`): write the screen's headings, labels and messages in
+   * it. The manifest's own titles take `translations`.
+   */
+  locale: PluginAdminLocale;
+}
+
+/** Dashboard languages. */
+export type PluginAdminLocale = "en" | "bn";
+
+/** The dashboard's language from a request's `Accept-Language` (English unless Bangla leads). */
+export function adminLocale(request: Pick<PluginRouteRequest, "headers">): PluginAdminLocale {
+  return /^\s*bn\b/i.test(request.headers["accept-language"] ?? "") ? "bn" : "en";
 }
 
 /** Reads the dashboard's request: GET carries `resource`, `id` and `cursor` in the query; actions send `{ resource, ids, action, values }`. */
@@ -106,6 +120,7 @@ export function adminContext(request: PluginRouteRequest): PluginAdminContext {
     action: typeof body.action === "string" ? body.action : null,
     cursor: request.query.cursor ?? null,
     values: typeof body.values === "object" && body.values !== null && !Array.isArray(body.values) ? body.values as Record<string, unknown> : {},
+    locale: adminLocale(request),
   };
 }
 

@@ -1,6 +1,6 @@
 {
   "name": "@scalius/plugin-wishlist",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Scalius Wishlist: a heart button on product pages, the buyer's wishlist page on the store, and the most wished products in the dashboard",
   "private": true,
   "type": "module",

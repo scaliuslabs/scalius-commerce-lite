@@ -5,27 +5,27 @@
   "plugins": [
     {
       "id": "scalius.bulk-discount",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "source": "plugins/bulk-discount",
-      "sha256": "5dbf2cc5545c38de70b2e52d46f2b0e87670369bab2dd2527d1d9b9cd9157005"
+      "sha256": "1636b4d354b6d8a5e0e349c0fb1b8b195a52373e77927b25f1b352a0921bafe6"
     },
     {
       "id": "scalius.hello",
-      "version": "0.3.0",
+      "version": "0.3.1",
       "source": "plugins/hello",
-      "sha256": "1f01c6ce43988416dffb4aa3270330ba2402adc47328403971bec9b0a84ae59b"
+      "sha256": "87bb9e19ea17c73d9a682fff3ce6eed7dac520cf1d20e34b377e7fa9177d69b6"
     },
     {
       "id": "scalius.order-tagger",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "source": "plugins/order-tagger",
-      "sha256": "66d8d66ff7f7233918b2eb0720fde0bffa2297f387557958ef09da126c86b87a"
+      "sha256": "979af1334a4a2bf02dcb36a08085577d864d473adb342a8e697864823a75f492"
     },
     {
       "id": "scalius.wishlist",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "source": "plugins/wishlist",
-      "sha256": "fc9b8002c47d754f744d2ea58263c067b061d2e5b87c5288430fa02ea5223bc8"
+      "sha256": "f688b0717064653f876cf713988d64cc87784872f21a51e301bf5fd7351b451b"
     }
   ]
 }

@@ -117,4 +117,20 @@ describe("scalius.wishlist", () => {
     const card = parsePluginUiDocument(((await harness.route("admin", "product-card", { query: { resource: "product", id: "p_linen" } })).value as { body: unknown }).body);
     expect(card).toMatchObject({ ok: true, document: { root: { children: [{ type: "stat", value: 2 }, expect.anything()] } } });
   });
+
+  it("writes its dashboard screens in the staff member's dashboard language", async () => {
+    const harness = createPluginTestHarness(wishlist, { api: productApi });
+    await harness.route("public", "toggle", { method: "POST", headers: json, body: { productId: "p_linen" }, customer: { id: "c1" } });
+    const bangla = { "accept-language": "bn" };
+    const page = JSON.stringify(((await harness.route("admin", "most-wished", { headers: bangla })).value as { body: unknown }).body);
+    expect(page).toContain("সবচেয়ে বেশি সেভ করা");
+    expect(page).toContain("বিক্রি হচ্ছে");
+    expect(page).not.toContain("Most wished");
+    expect(page).not.toContain("On sale");
+    const card = JSON.stringify(((await harness.route("admin", "product-card", { headers: bangla, query: { resource: "product", id: "p_linen" } })).value as { body: unknown }).body);
+    expect(card).toContain("যত ক্রেতা সেভ করেছেন");
+    // English without the header, and the manifest names the app in Bangla too.
+    expect(JSON.stringify(((await harness.route("admin", "most-wished")).value as { body: unknown }).body)).toContain("Most wished");
+    expect(wishlist.manifest.translations?.bn).toMatchObject({ name: "উইশলিস্ট", pages: { "most-wished": "সবচেয়ে বেশি সেভ করা" } });
+  });
 });

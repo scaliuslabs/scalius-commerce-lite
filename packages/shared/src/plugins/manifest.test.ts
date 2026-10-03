@@ -76,11 +76,26 @@ describe("plugin manifest", () => {
     ["a page whose route is missing", { admin: { pages: [{ id: "p", title: "P", route: "nope" }] } }, "admin.pages.0.route"],
     ["a section on an admin route", { storefront: { sections: [{ type: "s", name: "S", route: "dashboard" }] } }, "storefront.sections.0.route"],
     ["an unknown key", { extra: true }, "(root)"],
+    ["a translation of a page it doesn't have", { translations: { bn: { pages: { missing: "পাতা" } } } }, "translations.bn.pages.missing"],
+    ["a translation for a language the dashboard lacks", { translations: { fr: { name: "Fidélité" } } }, "translations"],
   ])("rejects %s", (_label, override, path) => {
     const result = parsePluginManifest({ ...FULL, ...override });
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.issues.map((issue) => issue.path)).toContain(path);
+  });
+
+  it("carries Bangla text for the dashboard, optional and per surface", () => {
+    const result = parsePluginManifest({
+      ...FULL,
+      translations: { bn: { name: "অ্যাকমি লয়্যালটি", description: "প্রতিটি অর্ডারে পয়েন্ট।", pages: { overview: "লয়্যালটি" }, actions: { grant: "পয়েন্ট দিন" } } },
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.manifest.translations?.bn).toMatchObject({ name: "অ্যাকমি লয়্যালটি", pages: { overview: "লয়্যালটি" } });
+    // Without translations the manifest is English only.
+    const english = parsePluginManifest(FULL);
+    expect(english.ok && english.manifest.translations).toBeUndefined();
   });
 
   it("asks for approval again only when an update widens the grant", () => {

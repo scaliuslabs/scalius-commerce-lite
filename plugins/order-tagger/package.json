@@ -1,6 +1,6 @@
 {
   "name": "@scalius/plugin-order-tagger",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Scalius Order tagger: tags new paid orders and notes them on the order timeline through the store's own API",
   "private": true,
   "type": "module",
