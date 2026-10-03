@@ -8,10 +8,12 @@ import {
   MAX_MARKETS,
 } from "@scalius/shared/markets";
 
-export const marketPresenceSchema = z.object({
+const presenceFields = {
   value: z.string().max(5).openapi({ description: "The subfolder (`en-in`: the language and the country), or `''` for the root URL, which only the backup market holds." }),
   locale: z.string().length(2).openapi({ description: "The language of the presence's pages (ISO 639-1)." }),
-}).openapi("MarketPresence");
+};
+
+export const marketPresenceSchema = z.object(presenceFields).openapi("MarketPresence");
 
 export const publicMarketSchema = z.object({
   id: z.string(),
@@ -36,7 +38,8 @@ export const marketRecordSchema = z.object({
   isBackup: z.boolean(),
   revision: z.number().int().positive(),
   countries: z.array(z.string().length(2)).max(MAX_MARKET_COUNTRIES),
-  presence: marketPresenceSchema.nullable().openapi({ description: "The root presence of the backup market, or the market's subfolder; null when it has none." }),
+  // Inline, not the named component: a nullable reference loses its null in the generated client types.
+  presence: z.object(presenceFields).nullable().openapi({ description: "The root presence of the backup market, or the market's subfolder; null when it has none." }),
   currencyCode: z.string().openapi({ description: "Every market sells in the shop currency until markets get their own currency." }),
   priceIncrementMinor: z.number().int().positive().openapi({ description: "The price increment its prices use, in minor units: the backup market's own, inherited by every other market." }),
   priceIncrementInherited: z.boolean(),

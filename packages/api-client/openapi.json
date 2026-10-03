@@ -10392,15 +10392,26 @@
             "maxItems": 250
           },
           "presence": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/MarketPresence"
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "value": {
+                "type": "string",
+                "maxLength": 5,
+                "description": "The subfolder (`en-in`: the language and the country), or `''` for the root URL, which only the backup market holds."
               },
-              {
-                "nullable": true,
-                "description": "The root presence of the backup market, or the market's subfolder; null when it has none."
+              "locale": {
+                "type": "string",
+                "minLength": 2,
+                "maxLength": 2,
+                "description": "The language of the presence's pages (ISO 639-1)."
               }
-            ]
+            },
+            "required": [
+              "value",
+              "locale"
+            ],
+            "description": "The root presence of the backup market, or the market's subfolder; null when it has none."
           },
           "currencyCode": {
             "type": "string",

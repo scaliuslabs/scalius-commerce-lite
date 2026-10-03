@@ -2126,7 +2126,19 @@ export type Market = {
     isBackup: boolean;
     revision: number;
     countries: Array<string>;
-    presence: MarketPresence & unknown;
+    /**
+     * The root presence of the backup market, or the market's subfolder; null when it has none.
+     */
+    presence: {
+        /**
+         * The subfolder (`en-in`: the language and the country), or `''` for the root URL, which only the backup market holds.
+         */
+        value: string;
+        /**
+         * The language of the presence's pages (ISO 639-1).
+         */
+        locale: string;
+    } | null;
     /**
      * Every market sells in the shop currency until markets get their own currency.
      */
