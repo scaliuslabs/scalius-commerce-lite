@@ -129,7 +129,7 @@ The catalog has 26 reports in six categories (`sales`, `customers`, `inventory`,
 
 | Report | Population and notes |
 |---|---|
-| Sales over time; by channel, payment method, city, delivery zone, location | Order-level measures. The delivery zone comes from the order's shipping method; `__no_delivery`, `__pickup`, `__unknown`, `__everywhere_else` name the rest. Location is the fulfilment location, else the default. |
+| Sales over time; by channel, payment method, city, delivery zone, location | Order-level measures. The delivery zone comes from the order's shipping method; `__no_delivery`, `__pickup`, `__unknown`, `__everywhere_else` name the rest (`__everywhere_else`: a delivery rate without a zone, which exists only from before migration 0114). Location is the fulfilment location, else the default. |
 | Sales by product, variant, category, brand | Line-level measures. Category and brand are the product's today. Rows do not add up to orders. |
 | Sales by collection | Today's membership (manual products, dynamic categories). At most 200 collections or 5,000 membership pairs (`collections_capped` note). Rows overlap. |
 | Sales by discount | Per promotion and code, including shipping discounts. Discounts with no promotion (manual, app) form one `__manual` row. |

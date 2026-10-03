@@ -350,7 +350,7 @@ A settings document is one `settings` row: `category` is the document key, `key`
 |--------------|-------------|-------|---------------|
 | `platform` | `platform/document.ts` | Public origins, cookie domain, CORS origins, identity handoff | -- |
 | `notifications`, `notification_templates` | `notifications/documents.ts` | Channel rules, staff email recipients, WhatsApp order template, message copy | -- |
-| `delivery_everywhere_else` | `delivery/zones.ts` | Revision counter for the zoneless delivery rates | -- |
+| `delivery_pickup` | `delivery/zones.ts` | Revision counter for the local pickup rates (store-wide, no zone) | -- |
 | `inventory` | `products/low-stock-policy.ts` | Default low-stock threshold | -- |
 | `staff-shortcuts:<userId>` | `settings/staff-shortcuts.ts` | One staff member's keyboard shortcuts | -- |
 | `checkout`, `customer_auth`, `customer_countries`, `customer_requests`, `marketing_consent` | `settings/documents.ts` | Checkout flow, sign-in policy, phone countries, buyer requests, marketing consent | -- |

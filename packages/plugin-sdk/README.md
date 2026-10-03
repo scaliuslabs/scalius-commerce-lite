@@ -191,7 +191,7 @@ A throw that is not a `ProviderError`, a timeout or an invalid answer counts as 
 
 ### Build a payment provider
 
-Declare `{ id, name, checkoutName?, flow: "hosted", chargeCurrencies, operations }` under `providers.payment`, plus optional `amountLimits: { currency, minMinor, maxMinor }` and `amountCodecs: { BDT: { wireExponent: 2 } }`. `hosted` (redirect to the provider) is the only app flow. `chargeCurrencies` is a list such as `["BDT"]`, or `"any"`.
+Declare `{ id, name, checkoutName?, flow: "hosted", chargeCurrencies, operations }` under `providers.payment`, plus optional `amountLimits: { currency, minMinor, maxMinor }` and `amountCodecs: { BDT: { wireExponent: 2 } }`. `hosted` (redirect to the provider) is the only app flow. `chargeCurrencies` is a list such as `["BDT"]`, or `"any"`. Optional `countries` (default `"any"`) lists the shipping countries the method serves; checkout never offers it for a delivery to another country.
 
 A hosted provider must declare `verifyReturn` and `queryPayment`. A provider that declares `refund` must declare `refundStatus`, and may add `listRefunds` to import refunds made in the provider's dashboard. For each session the platform builds the return URLs `/api/v1/payment/<provider id>/success|fail|cancel` and the webhook URL `/api/v1/webhooks/<provider id>`. `input.urls` holds them.
 

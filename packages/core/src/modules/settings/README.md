@@ -54,7 +54,7 @@ A document is `settings(category = <document key>, key = 'document', type = 'jso
 | `payment_methods` | `enabledMethods` (`null` = COD implied), `defaultMethod` | -- |
 | `meta_conversions` | `pixelId`, `testEventCode`, `isEnabled`, `logRetentionDays` | `accessToken` |
 
-Domains own other documents: `inventory` (products), `delivery_everywhere_else`
+Domains own other documents: `inventory` (products), `delivery_pickup`
 (delivery), `notifications` and `notification_templates` (notifications).
 
 Not documents, on purpose: the theme (header, footer, homepage and pages; its

@@ -74,6 +74,12 @@ gateway; the kernel suites in `gateways/gateway-kernel.test.ts` and
   (events, refunds) are ISO minor units: an adapter whose wire form differs
   decodes them with `decodeProviderAmount`, and a value it cannot decode
   becomes `NaN`, which the kernel refuses.
+- A payment method states the shipping countries it serves (`countries`:
+  `"any"`, the default, or ISO codes; MARKETS-DESIGN step 3b). Cash on
+  delivery serves `["BD"]` (`COD_COUNTRIES`). `PaymentProviders.countryIssue()`
+  refuses a method for a delivery country it does not serve. Checkout config,
+  the cart's methods, the agent quote and order placement apply it; staff
+  orders do not (staff decide).
 
 ## Storage
 

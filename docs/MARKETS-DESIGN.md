@@ -472,6 +472,80 @@ delivery methods (3b). Tax regions, the system tax provider and
 autocomplete. Quick checkout ("Buy now") and agent buyer contexts keep the
 Bangladesh address until 3b. Customer segments by country.
 
+## Step 3b implemented
+
+A store that sells only to Bangladesh behaves as before: the same delivery
+rates, fees and free-over amounts for the same City/Thana/Area, the same
+feed lines and JSON-LD, and the same D1 calls and statements in every
+free-plan budget scenario.
+
+**Zones** (Shopify's model). A shipping zone serves Bangladesh delivery
+locations (`delivery_zone_locations`, as before) and regions
+(`delivery_zone_regions`): a whole country, one admin area (the address
+rules' code) or a postal-code prefix. A region belongs to one zone (primary
+key). One rule (`zone-match.ts`, browser safe) picks an address's zone, most
+specific first: Bangladesh location (area, thana, city), the longest postal
+prefix, the admin area, the whole country. No zone means no delivery rate
+(fail closed); local pickup is store-wide and always offered. A country is
+served "entire" when one zone holds it whole and no other zone holds part of
+it.
+
+**Schema.** Migration `0114_shipping_zones` (D1/Turso file, PostgreSQL
+sidecar, ledger digest, schema contract 114) adds `delivery_zone_regions`.
+The live delivery rates without a zone ("Everywhere else", which served only
+Bangladesh) move to the zone `dz_bd` "Bangladesh" (region BD), with the same
+ids. Pickup keeps `zone_id` null; its revision document becomes
+`delivery_pickup`. A trigger refuses a live delivery rate without a zone
+(`SHIPPING_RATE_ZONE_REQUIRED`). Region writes advance the checkout
+authority revision and the `ship` cache dependency. Agent storefront
+contexts gain `country_code`, `admin_area` and `postal_code`.
+
+**Checkout.** The rate row statement carries its destination country's
+regions, and location rows carry their zone, so a Bangladesh checkout runs
+the same statements. Another country's address gets the rates of its zone
+(`deliveryRatesServeCountry()` is gone). The tax quote, cart validation,
+checkout, quick checkout ("Buy now", also without JavaScript) and agent
+buyer contexts take the country, admin area and postal code. The order
+keeps them.
+
+**Cash on delivery** has a country rule in the payment provider port:
+`countries` (`"any"` by default; COD `["BD"]`). Checkout config, the cart's
+methods, the agent quote and order placement hide or refuse a method for a
+delivery country it does not serve (`payment_method_unavailable`). Staff
+orders keep cash on delivery for any country (staff decide).
+
+**Discovery.** `GET /api/v1/shipping-methods` takes `countryCode`,
+`adminArea` and `postalCode`, and states each rate's `countries` (`entire`
+or not). Product JSON-LD emits one `shippingDestination` per country the
+page's market sells to, only where a zone serves every address there; a
+free-delivery product ships free to each country a zone serves. Each
+presence's feeds state `<g:shipping>` per country the same way. The feed
+row no longer carries a Bangladesh literal.
+
+**Dashboard.** Settings → Shipping and delivery lists zones with their
+countries, regions, postal prefixes and rates. A zone picks countries with
+the Markets country checklist; per country, all of it or part of it (admin
+areas from the address rules and postal prefixes; for Bangladesh the
+delivery area picker). Local pickup is its own card. The staff order form
+and the shipping policy template use the same rule. Copy is in English and
+Bangla.
+
+**Agents and MCP.** `dashboard.shipping_zones.everywhere_else_update` is
+replaced by `dashboard.shipping_zones.pickup_update` (`PUT
+/api/v1/admin/settings/shipping-methods/pickup`). Zone create and update
+take `regions` and `locationIds`. The SDK and agent contract are
+regenerated.
+
+**DVC.** `delivery_zone_regions` is registered with dependency `ship`
+(later table, migration 0114). The property and race gate reports zero
+findings. It also found a stale product page part (`product_buyer_state`
+delete): the product page EMI read now joins only public rows.
+
+**Left for later.** Rate conditions (weight, order value), a "Rest of the
+world" zone, carrier-calculated rates, per-market delivery methods, a
+country rule for staff cash on delivery, tax regions (3c) and address
+autocomplete.
+
 ## Non-goals in this wave
 
 Duties calculation, merchant-of-record, B2B company locations (later through
