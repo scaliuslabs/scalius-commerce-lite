@@ -41,7 +41,7 @@ export function TransferList({ tab, onTabChange }: { tab: TransferTab; onTabChan
         <Link
           to="/admin/inventory/transfers/$transferId"
           params={{ transferId: row.original.id }}
-          className="whitespace-nowrap font-medium hover:underline"
+          className="whitespace-nowrap font-mono font-medium hover:underline"
         >
           {row.original.displayNumber}
         </Link>
@@ -51,11 +51,10 @@ export function TransferList({ tab, onTabChange }: { tab: TransferTab; onTabChan
       id: "route",
       header: t("colRoute"),
       meta: { mobile: "secondary", priority: 85, minWidth: 200 },
-      cell: ({ row }) => (
-        <span className="line-clamp-2 break-words">
-          {t("route", { origin: row.original.origin.name, destination: row.original.destination.name })}
-        </span>
-      ),
+      cell: ({ row }) => {
+        const route = t("route", { origin: row.original.origin.name, destination: row.original.destination.name });
+        return <span className="block truncate" title={route}>{route}</span>;
+      },
     },
     {
       id: "status",

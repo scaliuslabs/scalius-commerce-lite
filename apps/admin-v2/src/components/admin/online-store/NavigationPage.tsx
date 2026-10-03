@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { ChevronRight, Plus } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "~/lib/toast";
 import {
   postApiV1AdminNavigationMenus,
   postApiV1AdminNavigationMenusByMenuIdPublish,

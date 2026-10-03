@@ -10,8 +10,9 @@
 // - create: new products only; a matched product is skipped, which is what
 //   makes running the same file again a no-op.
 // - upsert: creates new products and updates matched ones. An update changes
-//   only what the file states: product fields, prices, barcodes, weights,
-//   new SKUs and option values. Nothing missing from the file is removed,
+//   only what the file states: product fields, prices, costs per item,
+//   barcodes, weights, new SKUs and option values. Nothing missing from the
+//   file is removed (a blank cost keeps the SKU's cost),
 //   stock of existing SKUs is left to inventory import, and an update that
 //   changes nothing writes nothing (no revision bump).
 // - price: only prices of SKUs found by SKU.
@@ -25,7 +26,7 @@
 
 import type { Database } from "@scalius/database/client";
 import { products, productVariants } from "@scalius/database/schema";
-import { and, getTableColumns, isNull, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { detectBarcodeType } from "@scalius/shared/barcode-identity";
 import { normalizeProductOptionIdentity } from "@scalius/shared/product-options";
 import {
@@ -47,6 +48,7 @@ import { readStoreCurrency, type StoreCurrency } from "../settings/store-money";
 import { ImportReferenceResolver, type ReferenceCreationRights, type ReferencePlan } from "./references";
 import { ImportBudget, isWorkerLimitError } from "./budget";
 import { effectivePrice, type StoredPricing } from "./pricing";
+import { SKU_COST_BATCH_LIMIT, setSkuCosts, unitCostFromMinor, unitCostToMinor } from "../inventory/unit-costs";
 
 export type ProductImportStatus =
   | "created"
@@ -83,7 +85,7 @@ export interface ProductImportResponse {
   stoppedEarly: boolean;
   /** Dry run: brands, categories and attributes the write would create. */
   references: ReferencePlan;
-  /** Facts that apply to the whole batch (e.g. SKU costs not stored). */
+  /** Facts that apply to the whole batch. */
   notes: string[];
 }
 
@@ -116,19 +118,15 @@ class ItemError extends Error {
 function issueFromError(error: unknown): ProductImportIssue {
   if (error instanceof ItemError) return error.issue;
   if (error instanceof AppError) {
-    const details = error.details as { field?: unknown } | undefined;
+    const details = error.details as { field?: unknown; reason?: unknown } | undefined;
     return {
-      code: error.code.toLowerCase(),
+      // A rule's own reason when it names one (e.g. digital_stock_is_keys).
+      code: typeof details?.reason === "string" && details.reason ? details.reason : error.code.toLowerCase(),
       message: error.message,
       ...(typeof details?.field === "string" ? { field: details.field } : {}),
     };
   }
   return { code: "write_failed", message: error instanceof Error ? error.message : "The product could not be saved." };
-}
-
-/** Whether `product_variants` has the cost column yet (it lands with SKU costs). */
-export function skuCostColumnAvailable(): boolean {
-  return "costMinor" in (getTableColumns(productVariants) as Record<string, unknown>);
 }
 
 // ── Matching ───────────────────────────────────────────────────────────────
@@ -328,6 +326,7 @@ function buildCreateInput(
           ...barcodeFields(first.barcode),
           weight: first.weightGrams,
           fulfillmentKind: item.isGiftCard ? "digital" as const : fulfillmentKindFor(first),
+          cost: first.cost,
         },
       }
       : {
@@ -358,6 +357,7 @@ function buildCreateInput(
               discountPercentage: null,
               discountAmount: price.discountAmount > 0 ? price.discountAmount : null,
               fulfillmentKind: item.isGiftCard ? "digital" as const : fulfillmentKindFor(variant),
+              cost: variant.cost,
             };
           }),
         },
@@ -369,8 +369,10 @@ function zodIssues(error: { issues: ReadonlyArray<{ message: string; path: Reado
   return error.issues.map((issue) => {
     const path = issue.path.map(String);
     const variantIndex = path[0] === "optionMatrix" && path[1] === "variants" ? Number(path[2]) : undefined;
+    // A rule that names its reason (e.g. digital_stock_is_keys) keeps it as the code.
+    const reason = (issue as { params?: { reason?: unknown } }).params?.reason;
     return {
-      code: "invalid",
+      code: typeof reason === "string" && reason ? reason : "invalid",
       message: issue.message,
       field: path.join("."),
       ...(variantIndex !== undefined && Number.isInteger(variantIndex) && variantIndex < item.variants.length ? { variantIndex } : {}),
@@ -556,7 +558,42 @@ async function applyUpdate(
       revision = result.aggregateRevision;
     }
   }
+
+  // 4. Costs per item the file states (SKUs it adds included); a price list leaves costs alone.
+  if (scope === "all" && await applyFileCosts(db, details.id, item, storedSimple, currency)) changed = true;
   return { status: changed ? "updated" : "unchanged", aggregateRevision: revision, issues };
+}
+
+/**
+ * Sets each SKU's cost per item to the file's where it differs (a blank cost
+ * keeps the SKU's). Costs sit outside the product revision; each change names
+ * the cost it replaces, so a purchase receipt that moved a cost meanwhile
+ * refuses the write instead of being overwritten.
+ */
+async function applyFileCosts(
+  db: Database,
+  productId: string,
+  item: ProductImportItem,
+  storedSimple: boolean,
+  currency: StoreCurrency,
+): Promise<boolean> {
+  const costed = item.variants.filter((variant) => variant.cost !== null);
+  if (costed.length === 0) return false;
+  const live = await db.select({ id: productVariants.id, sku: productVariants.sku, isDefault: productVariants.isDefault, costMinor: productVariants.costMinor })
+    .from(productVariants)
+    .where(and(eq(productVariants.productId, productId), isNull(productVariants.deletedAt)));
+  const bySku = new Map(live.map((row) => [skuKey(row.sku), row]));
+  const changes = costed.flatMap((variant) => {
+    const row = storedSimple && item.options.length === 0
+      ? live.find((candidate) => candidate.isDefault)
+      : variant.sku ? bySku.get(skuKey(variant.sku)) : undefined;
+    if (!row || unitCostToMinor(variant.cost!, currency) === row.costMinor) return [];
+    return [{ variantId: row.id, cost: variant.cost, expectedCost: unitCostFromMinor(row.costMinor, currency.decimalPlaces) }];
+  });
+  for (let index = 0; index < changes.length; index += SKU_COST_BATCH_LIMIT) {
+    await setSkuCosts(db, { items: changes.slice(index, index + SKU_COST_BATCH_LIMIT) });
+  }
+  return changes.length > 0;
 }
 
 /**
@@ -695,9 +732,6 @@ export async function importProducts(
   const actorId = context.actorId ?? undefined;
   const references = new ImportReferenceResolver(db, batch.dryRun, context.rights);
   const notes: string[] = [];
-  if (batch.items.some((item) => item.variants.some((variant) => variant.cost !== null)) && !skuCostColumnAvailable()) {
-    notes.push("sku_cost_not_stored");
-  }
   const [lookup, currency] = await Promise.all([readMatches(db, batch.items), readStoreCurrency(db)]);
   const revisions = new Map<string, ProductMatch>();
   for (const match of lookup.bySlug.values()) revisions.set(match.productId, match);

@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { isPluginGrantablePermission } from "../../modules/plugins/grants";
 import { getPagePermission, hasPageAccess } from "./page-permissions";
-import { PERMISSIONS, getAllPermissions, isSensitivePermission, permissionPrerequisites } from "./permissions";
+import { PERMISSIONS, permissionPrerequisites } from "./permissions";
+import { getAllPermissions, isSensitivePermission } from "./permission-metadata";
 import { getRoutePermission } from "./route-permissions";
 
 describe("app (plugin) RBAC boundaries", () => {

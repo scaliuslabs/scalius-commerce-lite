@@ -18,9 +18,9 @@ import {
 } from "@scalius/core/auth/rbac/helpers";
 import {
     PERMISSIONS,
-    getPermissionsByCategory,
     permissionPrerequisites,
 } from "@scalius/core/auth/rbac/permissions";
+import { getPermissionsByCategory } from "@scalius/core/auth/rbac/permission-metadata";
 
 import { ok, created } from "../../utils/api-response";
 import { UnauthorizedError, ForbiddenError, NotFoundError, ValidationError, ConflictError } from "../../utils/api-error";

@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { Archive, ChevronLeft, ChevronRight, MessageCircle, MoreHorizontal, Phone } from "lucide-react";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { Alert } from "~/components/ui/alert";
-import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import {
   DropdownMenu,
@@ -16,13 +15,8 @@ import { PageHeader } from "~/components/admin/resource/PageHeader";
 import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions";
 import { useMessages } from "~/i18n";
 import { orderDetailMessages } from "~/i18n/order-detail";
-import { orderFormMessages } from "~/i18n/order-form";
-import {
-  fulfillmentStatusLabel,
-  orderMessages,
-  orderStatusLabel,
-  paymentStatusLabel,
-} from "~/i18n/orders";
+import { orderEditLockMessages } from "~/i18n/order-edit-locks";
+import { orderMessages } from "~/i18n/orders";
 import { useMarkOrderDelivered, useRestoreOrder, useUpdateOrderStatus } from "~/lib/api-mutations/orders";
 import { orderSkipReason } from "./order-list/order-bulk-actions";
 import { useArchiveOrdersWithUndo } from "./order-list/use-order-list-mutations";
@@ -32,8 +26,7 @@ import { editLockMessageKey } from "~/routes/admin/orders/-order-form-route-stat
 import { ErrorBoundary } from "./ErrorBoundary";
 import { OrderCustomerCard } from "./orderview/OrderCustomerCard";
 import { OrderFulfilmentCards, usePickupReadyAction } from "./orderview/OrderFulfilmentCards";
-import { OrderHoldNotice } from "./orderview/OrderHoldNotice";
-import { OrderSummaryCard } from "./orderview/OrderItemsCard";
+import { LazyOrderHoldCard } from "./orderview/LazyOrderHoldCard";
 import { OrderNotesCard } from "./orderview/OrderNotesCard";
 import { OrderNotificationsCard } from "./orderview/OrderNotificationsCard";
 import { OrderReturnsCard } from "./orderview/OrderReturnsCard";
@@ -41,21 +34,22 @@ import { OrderStatusCard } from "./orderview/OrderStatusCard";
 import { OrderConversationCard } from "./orderview/OrderConversationCard";
 import { OrderTimelineCard } from "./orderview/OrderTimelineCard";
 import { PaymentCard } from "./orderview/PaymentCard";
-import { hasDeliveryCard, ShipmentCard } from "./orderview/ShipmentCard";
+import { ShipmentCard } from "./orderview/ShipmentCard";
+import { hasDeliveryCard, hasHoldCard } from "./orderview/card-rules";
+import { OrderHeaderBadges } from "./orderview/OrderHeaderBadges";
 import { useCancelRequestGuard } from "./orderview/CancelRequestGuard";
 import { resolveOrderPrimaryAction, unitsLeftToSend, type OrderActionRequest } from "./orderview/primary-action";
-import { orderBadgeVisibility, statusBadgeVariant } from "./orderview/status-badges";
 import { customerContactLinks } from "./orderview/contact-links";
 import { useOrderNeighbours } from "./orderview/order-neighbours";
+import { ariaKeys } from "./layout/shortcuts";
+import { usePagerShortcuts } from "./shared/use-pager-shortcuts";
 import type { Order } from "./orderview/types";
-import { CustomFieldsCard } from "./custom-fields/CustomFieldsCard";
+import { LazyCustomFieldsCard } from "./custom-fields/LazyCustomFieldsCard";
 import { appActionKey, useAppActionRunner } from "./apps/ui/AppActions";
 import { AppResourceCards } from "./apps/ui/AppResourceCards";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { usePermissions } from "~/contexts/PermissionContext";
 
-/** Order statuses worth repeating in the header next to payment and delivery. */
-const HEADER_ORDER_STATUSES = new Set(["cancelled", "returned", "refunded", "incomplete"]);
 /** Item locks that the order's state already explains; the others get a reason. */
 const SELF_EXPLAINED_LOCKS = new Set(["shipped", "closed", "archived"]);
 
@@ -67,7 +61,7 @@ const SELF_EXPLAINED_LOCKS = new Set(["shipped", "closed", "archived"]);
 export function OrderView({ order }: { order: Order }) {
   const t = useMessages(orderDetailMessages);
   const o = useMessages(orderMessages);
-  const f = useMessages(orderFormMessages);
+  const f = useMessages(orderEditLockMessages);
   const actions = useOrderActionPermissions();
   const statusMutation = useUpdateOrderStatus();
   const restoreMutation = useRestoreOrder();
@@ -81,9 +75,10 @@ export function OrderView({ order }: { order: Order }) {
   const primary = resolveOrderPrimaryAction(order, actions);
   const leftToSend = primary === "sendOwnCourier" ? unitsLeftToSend(order) : 0;
   const primaryLabel = leftToSend > 0 ? t("primary.sendOwnCourierLeft", { count: leftToSend }) : primary ? t(`primary.${primary}`) : "";
-  const status = order.status.toLowerCase();
-  const badges = orderBadgeVisibility(order);
   const neighbours = useOrderNeighbours(order.id);
+  const navigate = useNavigate();
+  const openOrder = (id: string | null | undefined) => (id ? () => void navigate({ to: "/admin/orders/$orderId", params: { orderId: id } }) : null);
+  usePagerShortcuts({ previous: openOrder(neighbours?.previous), next: openOrder(neighbours?.next) });
   const contact = customerContactLinks(order.customerPhone);
   const name = formatOrderNumber(order.orderNumber, order.id);
   const archived = Boolean(order.archivedAt);
@@ -143,29 +138,7 @@ export function OrderView({ order }: { order: Order }) {
           <PageHeader
             backTo={backTo}
             title={o("order", { number: name })}
-            badge={
-              <div className="flex flex-wrap gap-1">
-                {archived ? <Badge variant="secondary">{o("archived")}</Badge> : null}
-                {order.conversation?.unread ? (
-                  // The Messages card sits lower on the page: an unread reply is still seen first.
-                  <a href="#order-requests" className="inline-flex rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                    <Badge variant="info">{t("messages.unread")}</Badge>
-                  </a>
-                ) : null}
-                {HEADER_ORDER_STATUSES.has(status) ? (
-                  <Badge variant={statusBadgeVariant(status, "order")}>{orderStatusLabel(o, status)}</Badge>
-                ) : null}
-                {badges.payment && order.paymentStatus ? (
-                  <Badge variant={statusBadgeVariant(order.paymentStatus, "payment")}>{paymentStatusLabel(o, order.paymentStatus)}</Badge>
-                ) : null}
-                {badges.fulfillment && order.fulfillmentStatus ? (
-                  // Phones see fulfilment in the Delivery card; keep the title readable.
-                  <span className="hidden sm:inline-flex">
-                    <Badge variant={statusBadgeVariant(order.fulfillmentStatus, "fulfillment")}>{fulfillmentStatusLabel(o, order.fulfillmentStatus)}</Badge>
-                  </span>
-                ) : null}
-              </div>
-            }
+            badge={<OrderHeaderBadges order={order} />}
             actions={
               <>
                 {actions.canPrintInvoices ? (
@@ -239,14 +212,15 @@ export function OrderView({ order }: { order: Order }) {
                 {appActions.dialogs}
                 {primaryButton ?<span className="hidden lg:inline-flex">{primaryButton}</span> : null}
                 <div className="hidden lg:flex">
-                  <NeighbourLink orderId={neighbours?.previous ?? null} label={t("nav.previous")}><ChevronLeft className="size-4" /></NeighbourLink>
-                  <NeighbourLink orderId={neighbours?.next ?? null} label={t("nav.next")}><ChevronRight className="size-4" /></NeighbourLink>
+                  <NeighbourLink orderId={neighbours?.previous ?? null} label={t("nav.previous")} keys={ariaKeys("previousItem")}><ChevronLeft className="size-4" /></NeighbourLink>
+                  <NeighbourLink orderId={neighbours?.next ?? null} label={t("nav.next")} keys={ariaKeys("nextItem")}><ChevronRight className="size-4" /></NeighbourLink>
                 </div>
               </>
             }
           />
 
-          <OrderHoldNotice order={order} />
+          {/* An app's hold for staff review, only while one is open (card-rules.ts). */}
+          {hasHoldCard(order) ? <LazyOrderHoldCard order={order} /> : null}
 
           {notice ? (
             <Alert variant="warning">
@@ -261,19 +235,21 @@ export function OrderView({ order }: { order: Order }) {
             <div className="contents lg:col-span-2 lg:block lg:space-y-4">
               {/* Messages: the order's requests, its conversation and the reply box (hidden without access). */}
               <div id="order-fulfilment" className="order-3 scroll-mt-4 space-y-4 lg:order-none"><OrderFulfilmentCards order={order} request={request} onRecordPayment={() => setRequest({ action: "collectCod", id: Date.now() })} /></div>
-              <div className="order-4 lg:order-none"><OrderSummaryCard order={order} /></div>
+              {/* Courier parcels once something was sent (card-rules.ts). */}
               {hasDeliveryCard(order) ? <div className="order-4 lg:order-none"><ShipmentCard order={order} /></div> : null}
+              {/* Shopify's Payment card: the order's money (subtotal, delivery, discounts, tax, total), then what was paid. */}
               <div className="order-5 lg:order-none"><PaymentCard order={order} request={request} /></div>
-              {/* As on Shopify, what to hand over and the money come first; the conversation sits above the timeline. */}
-              <div className="order-8 lg:order-none"><OrderReturnsCard order={order} onRefund={() => setRequest({ action: "refund", id: Date.now() })} /></div>
-              <div className="order-9 lg:order-none"><OrderConversationCard order={order} request={request} /></div>
+              {/* As on Shopify, what to hand over and the money come first; the conversation sits above the timeline.
+                  Cards that may not apply hide their wrapper too, so the gaps stay even. */}
+              <div className="order-8 empty:hidden lg:order-none"><OrderReturnsCard order={order} onRefund={() => setRequest({ action: "refund", id: Date.now() })} /></div>
+              <div className="order-9 empty:hidden lg:order-none"><OrderConversationCard order={order} request={request} /></div>
               <div className="order-10 lg:order-none"><OrderNotificationsCard order={order} /></div>
               <div className="order-11 lg:order-none"><OrderTimelineCard order={order} /></div>
             </div>
             <div className="contents lg:block lg:space-y-4">
               <div className="order-1 lg:order-none"><OrderStatusCard order={order} /></div>
               <div className="order-6 lg:order-none"><OrderCustomerCard order={order} /></div>
-              <div className="order-7 lg:order-none"><CustomFieldsCard ownerType="order" ownerId={order.id} canEdit={canEditCustomData} /></div>
+              <div className="order-7 empty:hidden lg:order-none"><LazyCustomFieldsCard ownerType="order" ownerId={order.id} canEdit={canEditCustomData} /></div>
               {order.notes ? <div className="order-7 lg:order-none"><OrderNotesCard notes={order.notes} /></div> : null}
               <AppResourceCards target="order" id={order.id} className="order-7 space-y-4 lg:order-none" />
             </div>
@@ -331,13 +307,13 @@ function PhoneActionBar({ children }: { children: ReactNode }) {
   );
 }
 
-function NeighbourLink({ orderId, label, children }: { orderId: string | null; label: string; children: ReactNode }) {
+function NeighbourLink({ orderId, label, keys, children }: { orderId: string | null; label: string; keys: string; children: ReactNode }) {
   if (!orderId) {
     return <Button variant="ghost" size="icon" disabled aria-label={label}>{children}</Button>;
   }
   return (
     <Button variant="ghost" size="icon" asChild>
-      <Link to="/admin/orders/$orderId" params={{ orderId }} aria-label={label}>{children}</Link>
+      <Link to="/admin/orders/$orderId" params={{ orderId }} aria-label={label} aria-keyshortcuts={keys} title={`${label} (${keys})`}>{children}</Link>
     </Button>
   );
 }

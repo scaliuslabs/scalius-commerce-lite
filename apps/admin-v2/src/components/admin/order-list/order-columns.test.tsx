@@ -54,10 +54,17 @@ const handlers = {
   onShipmentRefreshed: vi.fn(),
 };
 
+/** The delivery cells of one row: fulfilment, delivery status and delivery method. */
 function FulfillmentCell({ row }: { row: OrderListItem }) {
-  const column = getOrderColumns(handlers).find((candidate) => candidate.id === "fulfillment")!;
-  const cell = column.cell as (context: { row: { original: OrderListItem } }) => ReactNode;
-  return <>{cell({ row: { original: row } })}</>;
+  const columns = getOrderColumns(handlers).filter((candidate) => ["fulfillment", "deliveryStatus", "deliveryMethod"].includes(candidate.id!));
+  return (
+    <>
+      {columns.map((column) => {
+        const cell = column.cell as (context: { row: { original: OrderListItem } }) => ReactNode;
+        return <div key={column.id}>{cell({ row: { original: row } })}</div>;
+      })}
+    </>
+  );
 }
 
 describe("order list delivery state", () => {
@@ -151,14 +158,23 @@ describe("order columns on a narrow screen", () => {
     return layout().map((column) => column.id).filter((id) => !hidden.has(id) && id !== "select" && id !== "actions");
   };
 
-  it("drops Items, then Fulfillment, then Total, Status and Customer; never the order", () => {
-    expect([2000, 800, 700, 600, 450, 300].map(shownAt)).toEqual([
-      ["order", "customer", "total", "fulfillment", "items", "status"],
-      ["order", "customer", "total", "fulfillment", "status"],
-      ["order", "customer", "total", "status"],
-      ["order", "customer", "status"],
-      ["order", "customer"],
-      ["order"],
+  it("shows Shopify's columns when there is room, in Shopify's order", () => {
+    expect(shownAt(4000)).toEqual([
+      "order", "date", "customer", "channel", "total", "payment", "fulfillment", "items", "deliveryStatus", "deliveryMethod", "status",
     ]);
+  });
+
+  it("drops the delivery method, items and channel first; then delivery status, date, fulfilment, payment, total, status and customer; never the order", () => {
+    const dropped: string[] = [];
+    let previous = shownAt(4000);
+    for (let width = 4000; width >= 10; width -= 10) {
+      const shown = shownAt(width);
+      dropped.push(...previous.filter((id) => !shown.includes(id)));
+      previous = shown;
+    }
+    expect(dropped).toEqual([
+      "deliveryMethod", "items", "channel", "deliveryStatus", "date", "fulfillment", "payment", "total", "status", "customer",
+    ]);
+    expect(previous).toEqual(["order"]);
   });
 });

@@ -6,7 +6,8 @@
 // Columns follow Shopify's product template. Category paths are written to
 // Type ("Men > Shirts"); Product Category is Shopify's own taxonomy and is
 // left blank. Prices are the selling price plus a compare-at price when the
-// SKU is discounted. Images point at the original uploads.
+// SKU is discounted. Cost per item is each SKU's unit cost in major units
+// (with the minor units a cost may keep). Images point at the original uploads.
 //
 // The export is paged by product id: each request returns at most `limit`
 // products (a bounded number of queries, whatever the catalogue's size,
@@ -32,6 +33,7 @@ import { SHOPIFY_PRODUCT_COLUMNS } from "@scalius/shared/store-transfer/shopify-
 import { getCurrentPublicMediaUrl } from "../../integrations/storage";
 import { readStoreCurrency } from "../settings/store-money";
 import { exportPricing } from "./pricing";
+import { unitCostFromMinor } from "../inventory/unit-costs";
 
 export const PRODUCT_EXPORT_PAGE_DEFAULT = 250;
 export const PRODUCT_EXPORT_PAGE_MAX = 500;
@@ -102,7 +104,7 @@ export async function buildProductCsvPage(
   const rows = page.slice(0, limit);
   const ids = rows.map((row) => row.id);
   const lines: string[] = input.includeHeader === false ? [] : [SHOPIFY_PRODUCT_COLUMNS.map((column) => csvCell(column)).join(",")];
-  if (ids.length === 0) return { body: lines.length ? `﻿${lines.join("\r\n")}\r\n` : "", rowCount: 0, itemCount: 0, nextCursor: null };
+  if (ids.length === 0) return { body: lines.length ? `\uFEFF${lines.join("\r\n")}\r\n` : "", rowCount: 0, itemCount: 0, nextCursor: null };
 
   const [currency, paths, options, variants, selections, images] = await Promise.all([
     readStoreCurrency(db),
@@ -131,6 +133,7 @@ export async function buildProductCsvPage(
       fulfillmentKind: productVariants.fulfillmentKind,
       imageId: productVariants.imageId,
       isDefault: productVariants.isDefault,
+      costMinor: productVariants.costMinor,
     }).from(productVariants)
       .where(and(sql`${productVariants.productId} IN (SELECT CAST(value AS TEXT) FROM json_each(${json(ids)}))`, isNull(productVariants.deletedAt)))
       .orderBy(asc(productVariants.productId), asc(productVariants.createdAt), asc(productVariants.id)),
@@ -238,6 +241,7 @@ export async function buildProductCsvPage(
         "Variant Barcode": variant.barcode ?? "",
         "Variant Image": variant.imageId ? imageUrl.get(variant.imageId) ?? "" : "",
         "Variant Weight Unit": "g",
+        "Cost per item": unitCostFromMinor(variant.costMinor, decimals) ?? "",
       };
     });
     if (output.length === 0) {
@@ -261,6 +265,6 @@ export async function buildProductCsvPage(
     for (const row of output) lines.push(csvLine(row));
     rowCount += output.length;
   }
-  const body = lines.length ? `${input.includeHeader === false ? "" : "﻿"}${lines.join("\r\n")}\r\n` : "";
+  const body = lines.length ? `${input.includeHeader === false ? "" : "\uFEFF"}${lines.join("\r\n")}\r\n` : "";
   return { body, rowCount, itemCount: rows.length, nextCursor: hasMore ? rows[rows.length - 1]!.id : null };
 }

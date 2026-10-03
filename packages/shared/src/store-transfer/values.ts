@@ -87,7 +87,7 @@ export function parseImportDecimal(value: string): ParsedNumber {
   let text = toLatinDigits(value).trim();
   if (!text) return { ok: true, value: null };
   text = text.replace(/^(?:৳|tk\.?|bdt|taka|\$|usd|€|£|rs\.?)\s*/i, "").replace(/\s*(?:৳|tk\.?|bdt|taka)$/i, "");
-  text = text.replace(/[\s  ]/g, "");
+  text = text.replace(/[\s\u00A0\u202F]/g, "");
   if (/^\d{1,3}(,\d{2})+,\d{3}(\.\d+)?$/.test(text)) {
     // Indian/Bangladeshi grouping: 1,25,000
     text = text.replaceAll(",", "");

@@ -196,6 +196,8 @@ export interface OrderListItem {
     channelSource: string | null;
     /** The open customer request, so it isn't shipped unnoticed. */
     openRequestType: "cancel_pre_shipment" | "return" | "refund" | null;
+    /** An app put the order on hold for staff review: nothing ships or moves on until it is released. */
+    onHold: boolean;
     cod: { status: string; deliveryAttempts: number } | null;
     /** Value of received returns not yet given back (major units). */
     refundDue: number;

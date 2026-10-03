@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { lazy, Suspense, useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { UserRound } from "lucide-react";
@@ -18,16 +18,15 @@ import { queryKeys } from "~/lib/query-keys";
 import { warmRouteQuery } from "~/lib/route-query-warming";
 import { customersQueryOptions, type CustomersListPayload } from "~/lib/api-query-options/customers";
 import { useCurrency } from "~/hooks/use-currency";
+import { useOpenedOnce } from "~/hooks/use-opened-once";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { Button } from "~/components/ui/button";
 import type { ColumnDef } from "~/components/admin/data-table/table-config";
 import { ResourceListPage } from "~/components/admin/resource/ResourceListPage";
 import { DateText, sortHeader } from "~/components/admin/resource/columns";
-import { CustomerBulkActions } from "~/components/admin/customers/CustomerBulkActions";
 import { CustomerListFilters } from "~/components/admin/customers/CustomerListFilters";
-import { ExportCustomersDialog } from "~/components/admin/customers/ExportCustomersDialog";
-import { ImportDialog } from "~/components/admin/store-transfer/ImportDialog";
-import { storeTransferMessages } from "~/i18n/store-transfer";
+import { LazyImportDialog } from "~/components/admin/store-transfer/LazyImportDialog";
+import { resourceMessages } from "~/i18n/resource";
 import {
   CUSTOMER_FILTER_PARAMS,
   customerListFilters,
@@ -58,6 +57,11 @@ function listQuery(search: CustomerListSearch, term: string) {
   });
 }
 
+// The bulk tag dialog and the export dialog load when first used: the list
+// renders without their tag field, radio choices and CSV writer.
+const CustomerBulkActions = lazy(() => import("~/components/admin/customers/CustomerBulkActions").then((module) => ({ default: module.CustomerBulkActions })));
+const ExportCustomersDialog = lazy(() => import("~/components/admin/customers/ExportCustomersDialog").then((module) => ({ default: module.ExportCustomersDialog })));
+
 export const Route = createFileRoute("/admin/customers/")({
   validateSearch: validateCustomerSearch,
   loaderDeps: ({ search }) => search,
@@ -82,11 +86,12 @@ function CustomersPage() {
   const { hasPermission } = usePermissions();
   const canDelete = hasPermission(PERMISSIONS.CUSTOMERS_DELETE);
   const canEdit = hasPermission(PERMISSIONS.CUSTOMERS_EDIT);
-  const s = useMessages(storeTransferMessages);
+  const r = useMessages(resourceMessages);
   const [importing, setImporting] = useState(false);
   const openTo = (row: Customer) => `/admin/customers/${row.id}/edit`;
   // The export dialog: from the header (the filters) or the bulk bar (the selection).
   const [exporting, setExporting] = useState<{ open: boolean; ids: string[] }>({ open: false, ids: [] });
+  const exportLoaded = useOpenedOnce(exporting.open);
   // Same query as the table (shared cache): the export dialog names how many match.
   const { data: listed } = useQuery(listQuery(search, term));
 
@@ -127,7 +132,7 @@ function CustomersPage() {
         actions={
           <>
             {hasPermission(PERMISSIONS.CUSTOMERS_CREATE) || canEdit ? (
-              <Button variant="outline" onClick={() => setImporting(true)}>{s("import")}</Button>
+              <Button variant="outline" onClick={() => setImporting(true)}>{r("import")}</Button>
             ) : null}
             <Button variant="outline" onClick={() => setExporting({ open: true, ids: [] })}>{t("export")}</Button>
             {hasPermission(PERMISSIONS.CUSTOMERS_CREATE) ? <Button asChild><Link to="/admin/customers/new">{t("addCustomer")}</Link></Button> : null}
@@ -149,12 +154,14 @@ function CustomersPage() {
         filterParams={CUSTOMER_FILTER_PARAMS}
         filters={<CustomerListFilters search={search} />}
         bulkActions={(rows, done) => (
-          <CustomerBulkActions
-            rows={rows}
-            done={done}
-            canEdit={canEdit}
-            onExport={() => setExporting({ open: true, ids: rows.map((row) => row.id) })}
-          />
+          <Suspense fallback={null}>
+            <CustomerBulkActions
+              rows={rows}
+              done={done}
+              canEdit={canEdit}
+              onExport={() => setExporting({ open: true, ids: rows.map((row) => row.id) })}
+            />
+          </Suspense>
         )}
         rowTo={openTo}
         rowLabel={(row) => customerTitle(row, t).title}
@@ -175,16 +182,20 @@ function CustomersPage() {
           },
         }}
       />
-      <ImportDialog kind="customers" open={importing} onOpenChange={setImporting} />
-      <ExportCustomersDialog
-        open={exporting.open}
-        onOpenChange={(open) => setExporting((current) => ({ ...current, open }))}
-        filters={customerListFilters(search)}
-        selectedIds={exporting.ids}
-        // A capped count is a lower bound: the dialog then names the filters, not a number.
-        total={term || listed?.pagination.totalIsCapped ? null : listed?.pagination.total ?? null}
-        searchActive={Boolean(term)}
-      />
+      <LazyImportDialog kind="customers" open={importing} onOpenChange={setImporting} />
+      {exportLoaded ? (
+        <Suspense fallback={null}>
+          <ExportCustomersDialog
+            open={exporting.open}
+            onOpenChange={(open) => setExporting((current) => ({ ...current, open }))}
+            filters={customerListFilters(search)}
+            selectedIds={exporting.ids}
+            // A capped count is a lower bound: the dialog then names the filters, not a number.
+            total={term || listed?.pagination.totalIsCapped ? null : listed?.pagination.total ?? null}
+            searchActive={Boolean(term)}
+          />
+        </Suspense>
+      ) : null}
     </>
   );
 }

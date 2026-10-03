@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Star } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "~/lib/toast";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import type { ReviewRejectionReason } from "@scalius/shared/reviews";
 import { DataTableToolbar } from "~/components/admin/data-table/DataTableToolbar";

@@ -50,7 +50,8 @@ export const storeSettingsMessages = defineMessages({
     socialIcon: "Icon (optional)",
     addSocial: "Add profile",
     socialLimit: "You can list up to {count} profiles.",
-    reorderSocial: "Reorder {name}",
+    moveSocialUp: "Move {name} up",
+    moveSocialDown: "Move {name} down",
     removeSocial: "Remove {name}",
 
     addressesTitle: "Web addresses",
@@ -142,7 +143,8 @@ export const storeSettingsMessages = defineMessages({
     socialIcon: "আইকন (ঐচ্ছিক)",
     addSocial: "প্রোফাইল যোগ করুন",
     socialLimit: "সর্বোচ্চ {count}টি প্রোফাইল রাখা যায়।",
-    reorderSocial: "{name} এর ক্রম বদলান",
+    moveSocialUp: "{name} ওপরে নিন",
+    moveSocialDown: "{name} নিচে নিন",
     removeSocial: "{name} সরান",
 
     addressesTitle: "ওয়েব ঠিকানা",

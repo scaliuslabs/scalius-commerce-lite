@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Download, Info, Printer } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "~/lib/toast";
 import { cn } from "@scalius/shared/utils";
 import { analyticsReport, type AnalyticsColumn, type AnalyticsReportId } from "@scalius/shared/analytics-reports";
 import type { AnalyticsGranularity } from "@scalius/shared/analytics-period";

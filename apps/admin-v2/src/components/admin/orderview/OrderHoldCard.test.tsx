@@ -25,7 +25,7 @@ vi.mock("~/lib/api-mutations/orders", () => ({
   }),
 }));
 
-import { OrderHoldNotice } from "./OrderHoldNotice";
+import { OrderHoldCard } from "./OrderHoldCard";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -44,7 +44,7 @@ function Banner() {
   return <p data-testid="banner">{useOrderNotice("ord_1")}</p>;
 }
 
-describe("order hold notice", () => {
+describe("order hold card", () => {
   let root: Root;
   let container: HTMLDivElement;
 
@@ -64,12 +64,12 @@ describe("order hold notice", () => {
     document.body.innerHTML = "";
   });
 
-  const show = (order: Order) => act(() => root.render(<><OrderHoldNotice order={order} /><Banner /></>));
+  const show = (order: Order) => act(() => root.render(<><OrderHoldCard order={order} /><Banner /></>));
   const releaseButtons = () => [...container.querySelectorAll("button")].filter((button) => button.textContent === "Release hold");
 
   it("names the app, its reasons and when it held the order, and says what waits", () => {
     show(withHolds([open, released]));
-    const notice = container.querySelector('[data-slot="alert"]')!;
+    const notice = container.querySelector('[role="note"]')!;
     expect(notice.getAttribute("role")).toBe("note");
     expect(notice.textContent).toContain("On hold for review");
     expect(notice.textContent).toContain("can't be shipped, handed over or moved to another status");
@@ -86,9 +86,9 @@ describe("order hold notice", () => {
 
   it("shows nothing when no hold is open", () => {
     show(withHolds([released]));
-    expect(container.querySelector('[data-slot="alert"]')).toBeNull();
+    expect(container.querySelector('[role="note"]')).toBeNull();
     show(withHolds(undefined));
-    expect(container.querySelector('[data-slot="alert"]')).toBeNull();
+    expect(container.querySelector('[role="note"]')).toBeNull();
   });
 
   it("releases the hold after confirming, clearing an earlier refusal from the banner", async () => {

@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { Languages, LogOut, SunMoon, UserRound } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "~/lib/toast";
 import { mediaImageUrl } from "@scalius/shared/media-variants";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {

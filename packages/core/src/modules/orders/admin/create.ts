@@ -18,7 +18,7 @@ import type { ReservationEntry } from "../../inventory";
 import { sql, eq } from "drizzle-orm";
 import { guestRecordForPhone } from "../../customers/customer-identity";
 import { generateOrderId } from "@scalius/shared/order-utils";
-import { normalizeOrderChannelSource } from "@scalius/shared/order-channel";
+import { normalizeOrderChannelSource } from "@scalius/shared/order-channel-source";
 import { nanoid } from "nanoid";
 import type { CreateOrderInput } from "../validation";
 import { ValidationError, ConflictError, ServiceUnavailableError } from "@scalius/core/errors";

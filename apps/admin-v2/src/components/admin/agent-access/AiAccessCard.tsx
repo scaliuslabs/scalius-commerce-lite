@@ -2,7 +2,7 @@ import { useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Loader2, ShieldAlert } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "~/lib/toast";
 import type { PermissionName } from "@scalius/core/auth/rbac/types";
 
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";

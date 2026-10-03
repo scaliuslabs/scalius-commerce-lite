@@ -1,6 +1,6 @@
 import { useState, type SyntheticEvent } from "react";
 import { AlertCircle, Eye, EyeOff } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "~/lib/toast";
 import { postApiV1AdminAuthChangePassword } from "@scalius/api-client/sdk";
 import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";

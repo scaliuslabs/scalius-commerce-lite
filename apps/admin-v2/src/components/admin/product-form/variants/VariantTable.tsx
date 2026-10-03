@@ -44,7 +44,8 @@ import {
   type DraftVariant,
   type VariantGroup,
 } from "./option-matrix-editor-model";
-import { useProductKindRules } from "../product-kind-rules";
+import { useProductKindRules, isDigitalSku } from "../product-kind-rules";
+import { DigitalStockCell } from "../DigitalStock";
 import { CostInput, formatMargin } from "~/components/admin/inventory/cost-fields";
 import { costMargin, costProblem } from "~/lib/api-query-options/inventory-costs";
 import { getDecimalPlaces } from "@scalius/shared/currency";
@@ -129,6 +130,8 @@ export type VariantTableProps = {
   costs?: VariantCosts | null;
   /** Units on their way to each SKU (open purchase orders, transfers in transit). */
   incoming?: ReadonlyMap<string, IncomingUnits>;
+  /** The saved product: digital rows show their licence keys or files instead of a quantity. */
+  productId?: string;
 };
 
 /** The latest function behind a stable identity, so memoised rows never re-render for it. */
@@ -169,7 +172,8 @@ export function VariantTable(props: VariantTableProps) {
   }) as Money, [code, symbol, fmt, salePrice]);
 
   // The product kind decides the columns: a gift card tracks no quantity (and has no cost per item).
-  const { showInventory, giftCard } = useProductKindRules();
+  const kindRules = useProductKindRules();
+  const { showInventory, giftCard } = kindRules;
   const costs = giftCard ? null : props.costs ?? null;
   const layout = rowLayout(Boolean(props.fulfilmentColumn), showInventory);
   const kindColumn = layout.kind;
@@ -292,6 +296,8 @@ export function VariantTable(props: VariantTableProps) {
       quantityLabel={props.quantityLabel}
       elsewhere={props.stockElsewhere?.get(variant.id)}
       incoming={props.incoming?.get(variant.id)}
+      digital={isDigitalSku(kindRules, variant)}
+      productId={props.productId}
       cost={costs ? costs.of(variant.id) : undefined}
       images={props.images}
       money={money}
@@ -477,6 +483,9 @@ type VariantRowProps = {
   quantityLabel?: string;
   elsewhere?: StockElsewhere;
   incoming?: IncomingUnits;
+  /** A digital SKU: its keys or files stand where a quantity would (never typed in). */
+  digital: boolean;
+  productId?: string;
   /** The variant's cost per item (null: none); undefined where costs aren't edited. */
   cost: number | null | undefined;
   images: ProductSkuImageChoice[];
@@ -499,7 +508,7 @@ type VariantRowProps = {
 };
 
 const VariantRow = React.memo(function VariantRow({
-  variant, name, label, depth, selected, expanded, issue, committed, quantityLabel, elsewhere, incoming, cost, images, money, canRemove,
+  variant, name, label, depth, selected, expanded, issue, committed, quantityLabel, elsewhere, incoming, digital, productId, cost, images, money, canRemove,
   printable, customData, layout, onChange, onCostChange, onSelect, onToggleExpand, onRemove, onPrint, onCustomData, appActions, onAppAction,
 }: VariantRowProps) {
   const kindColumn = layout.kind;
@@ -586,7 +595,9 @@ const VariantRow = React.memo(function VariantRow({
         {layout.quantity ? (
           <div className="min-w-0">
             <span className="block text-body text-muted-foreground md:hidden">{quantityLabel ?? t("quantity")}</span>
-            {variant.trackInventory ? (
+            {digital ? (
+              <DigitalStockCell productId={productId} variantId={variant.id} tracked={variant.trackInventory} />
+            ) : variant.trackInventory ? (
               <InventoryQuantityInput
                 cell="stock"
                 ariaLabel={t("quantityFor", { name })}
@@ -663,7 +674,10 @@ const GroupRow = React.memo(function GroupRow({ group, open, images, money, sele
   const kindColumn = layout.kind;
   const t = useMessages(productMessages);
   const ids = group.variants.map((variant) => variant.id);
-  const tracked = group.variants.filter((variant) => variant.trackInventory);
+  const kindRules = useProductKindRules();
+  // Digital rows' stock is their keys or files: a group quantity never writes it.
+  const tracked = group.variants.filter((variant) => variant.trackInventory && !isDigitalSku(kindRules, variant));
+  const allDigital = group.variants.every((variant) => isDigitalSku(kindRules, variant));
   const same = <T,>(values: T[]): T | undefined => (values.every((value) => value === values[0]) ? values[0] : undefined);
   const prices = group.variants.map((variant) => variant.price).filter(Number.isFinite);
   const commonPrice = same(group.variants.map((variant) => variant.price));
@@ -723,7 +737,7 @@ const GroupRow = React.memo(function GroupRow({ group, open, images, money, sele
               if (stock !== null && Number.isInteger(stock)) onChangeMany(new Set(tracked.map((variant) => variant.id)), { stock: Math.max(0, stock) });
             }}
           />
-        ) : (
+        ) : allDigital ? <span /> : (
           <p className="py-2 text-body text-muted-foreground">{t("notTracked")}</p>
         )}
         {kindColumn ? (
@@ -781,6 +795,7 @@ function BulkBar({ count, allSelected, printableIds, printingDisabled, canEditCo
 }) {
   const t = useMessages(productMessages);
   const r = useMessages(resourceMessages);
+  const { fulfilmentMode } = useProductKindRules();
   const toggle = (next: BulkPanel) => onPanel(panel === next ? null : next);
   return (
     <div className={cn("col-span-3 col-start-2 flex min-w-0 flex-wrap items-center gap-1 py-1", layout.bulkSpan)}>
@@ -789,7 +804,7 @@ function BulkBar({ count, allSelected, printableIds, printingDisabled, canEditCo
       <Button type="button" variant={panel === "price" ? "secondary" : "outline"} size="sm" aria-pressed={panel === "price"} onClick={() => toggle("price")}>
         {t("editPrices")}
       </Button>
-      {layout.quantity ? (
+      {layout.quantity && fulfilmentMode !== "digital" ? (
         <Button type="button" variant={panel === "stock" ? "secondary" : "outline"} size="sm" aria-pressed={panel === "stock"} onClick={() => toggle("stock")}>
           {t("editQuantities")}
         </Button>
@@ -843,7 +858,10 @@ function BulkPanelRow({ panel, options, images, money, productName, selectedVari
   const [imageId, setImageId] = React.useState<string | null | undefined>(undefined);
   const [pattern, setPattern] = React.useState(() => defaultSkuPattern(productName, options));
   const count = selectedVariants.length;
-  const trackedCount = selectedVariants.filter((variant) => variant.trackInventory).length;
+  const kindRules = useProductKindRules();
+  // Only typed quantities: a digital row's stock is its licence keys.
+  const typedStock = (variant: DraftVariant) => variant.trackInventory && !isDigitalSku(kindRules, variant);
+  const trackedCount = selectedVariants.filter(typedStock).length;
   const preview = selectedVariants[0] ? skuFromPattern(pattern, options, selectedVariants[0]) : "";
   const inputId = React.useId();
 
@@ -870,7 +888,7 @@ function BulkPanelRow({ panel, options, images, money, productName, selectedVari
     field = <CostInput id={inputId} autoFocus symbol={money.symbol} value={cost} onValueChange={setCost} className="w-36" />;
   } else if (panel === "stock") {
     ready = stock !== null && Number.isInteger(stock) && stock >= 0 && trackedCount > 0;
-    apply = () => onApply((variant) => (variant.trackInventory ? { stock: stock! } : {}));
+    apply = () => onApply((variant) => (typedStock(variant) ? { stock: stock! } : {}));
     field = <NumberInput id={inputId} autoFocus integer value={stock} onValueChange={setStock} className="w-28" />;
   } else if (panel === "sku") {
     ready = preview.length >= 3;

@@ -63,16 +63,6 @@ describe("StatusCard", () => {
     expect(host.querySelector("select")).toBeNull();
   });
 
-  it("switches free delivery on", async () => {
-    await act(async () => root.render(<Harness isActive={false} />));
-
-    const freeDelivery = host.querySelector<HTMLButtonElement>('button[role="switch"]');
-    await act(async () => freeDelivery?.click());
-
-    expect(freeDelivery?.getAttribute("aria-checked")).toBe("true");
-    expect(form?.getValues("freeDelivery")).toBe(true);
-  });
-
   it("links to the storefront only for saved products", async () => {
     await act(async () => root.render(<Harness isActive />));
     expect(host.querySelector("a")).toBeNull();

@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { ArrowLeft, MessagesSquare } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "~/lib/toast";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { cn } from "@scalius/shared/utils";
 import { Badge, type BadgeVariant } from "~/components/ui/badge";

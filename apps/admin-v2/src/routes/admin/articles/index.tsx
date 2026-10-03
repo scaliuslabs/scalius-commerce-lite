@@ -2,7 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { warmRouteQuery } from "~/lib/route-query-warming";
 import { ContentList } from "~/components/admin/pages/ContentList";
-import { contentListQuery, validatePageSearch } from "~/components/admin/pages/page-list-state";
+import { validatePageSearch } from "~/components/admin/pages/page-list-state";
+import { contentListQuery } from "~/lib/api-query-options/pages";
 import { pageHead } from "~/i18n/page-titles";
 
 export const Route = createFileRoute("/admin/articles/")({

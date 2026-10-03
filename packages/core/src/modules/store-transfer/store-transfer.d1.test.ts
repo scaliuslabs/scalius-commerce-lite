@@ -132,6 +132,9 @@ describe("Shopify product import", () => {
       "SELECT price_minor, discount_type, discount_amount_minor, stock, weight, fulfillment_kind FROM product_variants WHERE sku = 'DT-TEE-NAV-M'",
     );
     expect(navyM).toEqual({ price_minor: 80000, discount_type: "flat", discount_amount_minor: 15000, stock: 12, weight: 180, fulfillment_kind: "physical" });
+    // Cost per item lands on each SKU in minor units; a row without one stays unset.
+    expect(all("SELECT DISTINCT cost_minor FROM product_variants WHERE sku LIKE 'DT-TEE-%'")).toEqual([{ cost_minor: 31000 }]);
+    expect(one("SELECT cost_minor FROM product_variants WHERE sku = 'MC-MUG-350'")).toEqual({ cost_minor: null });
     expect(all("SELECT name FROM product_option_definitions WHERE product_id = ? ORDER BY position", tee.id)).toEqual([{ name: "Color" }, { name: "Size" }]);
 
     // Category tree: Men > T-Shirts, published; brand published.
@@ -420,6 +423,42 @@ describe("customer import", () => {
     expect(one("SELECT name, email, address FROM customers WHERE id = 'cust_a'")).toEqual({ name: "Karim Ahmed", email: "karim@example.com", address: "Agrabad" });
     expect(one("SELECT state, source FROM customer_marketing_consents WHERE customer_id = 'cust_a'")).toEqual({ state: "subscribed", source: "import" });
     expect(count("customers")).toBe(2);
+  });
+});
+
+describe("cost per item", () => {
+  const costOf = (sku: string) => one<{ cost_minor: number | null }>("SELECT cost_minor FROM product_variants WHERE sku = ?", sku).cost_minor;
+  const exportedCosts = async () => {
+    const page = await withPublicMediaUrl("https://media.example.com", () => buildProductCsvPage(db, { limit: 50 }));
+    const { table } = parseImportText(page.body);
+    const sku = table.headers.indexOf("Variant SKU");
+    const cost = table.headers.indexOf("Cost per item");
+    return new Map(table.rows.filter((row) => row.cells[sku]).map((row) => [row.cells[sku]!, row.cells[cost]!]));
+  };
+
+  it("exports each SKU's cost in major units, and an upsert sets the file's cost", async () => {
+    await runProducts(shopifyItems(), "create");
+    // A cost with paisa: costs keep the currency's minor units.
+    sqlite.prepare("UPDATE product_variants SET cost_minor = 12345 WHERE sku = 'MC-MUG-350'").run();
+
+    const costs = await exportedCosts();
+    expect(costs.get("MC-MUG-350")).toBe("123.45");
+    expect(costs.get("DT-TEE-NAV-M")).toBe("310");
+    expect(costs.get("GC-500")).toBe("");
+
+    const text = "Handle,Title,Option1 Name,Option1 Value,Variant SKU,Variant Price,Variant Compare At Price,Variant Inventory Tracker,Cost per item\n"
+      + "ceramic-mug,Ceramic Coffee Mug,Title,Default Title,MC-MUG-350,450,500,shopify,130.5\n";
+    const mug = mapShopifyProducts(parseImportText(text).table, { currency: BDT }).items;
+    const [updated] = await runProducts(mug, "upsert");
+    expect(updated).toMatchObject({ status: "updated", issues: [] });
+    expect(costOf("MC-MUG-350")).toBe(13050);
+    const [again] = await runProducts(mug, "upsert");
+    expect(again!.status).toBe("unchanged");
+
+    // Price mode changes prices only.
+    const cheaper = mapShopifyProducts(parseImportText(text.replace("130.5", "99")).table, { currency: BDT }).items;
+    await runProducts(cheaper, "price");
+    expect(costOf("MC-MUG-350")).toBe(13050);
   });
 });
 

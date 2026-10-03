@@ -3,7 +3,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useQueryClient } from "@tanstack/react-query";
 import type { UseFormReturn } from "react-hook-form";
 import { Check, ChevronsUpDown, Loader2, Plus } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "~/lib/toast";
 import { cn } from "@scalius/shared/utils";
 import { postApiV1AdminCategories } from "@scalius/api-client/sdk";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";

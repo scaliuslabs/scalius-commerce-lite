@@ -10,19 +10,20 @@ export const Route = createFileRoute("/auth/setup")({
     // Only accessible while no administrator exists.
     const { adminExists } = await readDashboardSession();
     if (adminExists) throw redirect({ to: "/auth/login" });
-    // The API decides whether setup is token-gated (Platform setting). A
-    // failed read must not block the form: the API rejects an unaccompanied
-    // request anyway, so the gate is never weakened by guessing here.
-    const setupTokenRequired = await apiData(getApiV1Setup())
-      .then((status) => status.setupTokenRequired === true)
-      .catch(() => false);
-    return { setupTokenRequired };
   },
+  // The API decides whether setup is token-gated (Platform setting). A
+  // failed read must not block the form: the API rejects an unaccompanied
+  // request anyway, so the gate is never weakened by guessing here.
+  loader: async () => ({
+    setupTokenRequired: await apiData(getApiV1Setup())
+      .then((status) => status.setupTokenRequired === true)
+      .catch(() => false),
+  }),
   head: () => pageHead("setup"),
   component: SetupPage,
 });
 
 function SetupPage() {
-  const { setupTokenRequired } = Route.useRouteContext();
+  const { setupTokenRequired } = Route.useLoaderData();
   return <SetupForm setupTokenRequired={setupTokenRequired} />;
 }

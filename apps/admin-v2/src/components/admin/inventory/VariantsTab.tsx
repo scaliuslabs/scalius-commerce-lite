@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { SelectionSheet } from "~/components/admin/shared/SelectionSheet";
 import { Link } from "@tanstack/react-router";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -31,8 +31,6 @@ import { queryKeys } from "~/lib/query-keys";
 import { formatNumber, useMessages } from "~/i18n";
 import { inventoryMessages } from "~/i18n/inventory";
 import { resourceMessages } from "~/i18n/resource";
-import { AdjustStockDialog } from "./AdjustStockDialog";
-import { BulkCostDialog } from "./BulkCostDialog";
 import {
   STOCK_FILTERS,
   variantsQuery,
@@ -41,6 +39,10 @@ import {
   type StockFilter,
   type VariantSort,
 } from "./inventory-search";
+
+// The adjust and bulk cost dialogs load on the first Adjust or Edit cost, then stay mounted.
+const AdjustStockDialog = lazy(() => import("./AdjustStockDialog").then((module) => ({ default: module.AdjustStockDialog })));
+const BulkCostDialog = lazy(() => import("./BulkCostDialog").then((module) => ({ default: module.BulkCostDialog })));
 
 const FILTER_LABEL = { all: "filterAll", low: "filterLow", out: "filterOut", reserved: "filterReserved" } as const;
 const STATUS_HELP = { inStock: "inStockHelp", lowStock: "lowStockHelp", soldOut: "soldOutHelp" } as const;
@@ -429,28 +431,36 @@ export function VariantsTab({ filters, onFiltersChange, onSelectionChange }: Var
               ),
             }}
       />
-      <AdjustStockDialog
-        key={adjustSession}
-        variant={adjusting}
-        storeLevel={storeLevel}
-        locations={activeLocations}
-        levels={levels}
-        initialLocationId={locationId || null}
-        open={adjustOpen && permissions.canAdjustStock}
-        onClose={() => setAdjustOpen(false)}
-        onSaved={() => void Promise.all([
-          queryClient.invalidateQueries({ queryKey: queryKeys.inventory.all }),
-          queryClient.invalidateQueries({ queryKey: inventoryLocationKeys.all }),
-        ])}
-      />
-      <BulkCostDialog
-        key={costSession}
-        variants={selectedRows}
-        open={costOpen && canEditCosts}
-        onClose={() => setCostOpen(false)}
-        onSaved={() => void queryClient.invalidateQueries({ queryKey: queryKeys.inventory.all })}
-        onReload={async () => (await queryClient.fetchQuery({ ...listQuery, staleTime: 0 })).variants ?? []}
-      />
+      {adjustSession > 0 ? (
+        <Suspense fallback={null}>
+          <AdjustStockDialog
+            key={adjustSession}
+            variant={adjusting}
+            storeLevel={storeLevel}
+            locations={activeLocations}
+            levels={levels}
+            initialLocationId={locationId || null}
+            open={adjustOpen && permissions.canAdjustStock}
+            onClose={() => setAdjustOpen(false)}
+            onSaved={() => void Promise.all([
+              queryClient.invalidateQueries({ queryKey: queryKeys.inventory.all }),
+              queryClient.invalidateQueries({ queryKey: inventoryLocationKeys.all }),
+            ])}
+          />
+        </Suspense>
+      ) : null}
+      {costSession > 0 ? (
+        <Suspense fallback={null}>
+          <BulkCostDialog
+            key={costSession}
+            variants={selectedRows}
+            open={costOpen && canEditCosts}
+            onClose={() => setCostOpen(false)}
+            onSaved={() => void queryClient.invalidateQueries({ queryKey: queryKeys.inventory.all })}
+            onReload={async () => (await queryClient.fetchQuery({ ...listQuery, staleTime: 0 })).variants ?? []}
+          />
+        </Suspense>
+      ) : null}
       <SelectionSheet count={showSelectionBar ? selectedIds.length : 0} clearLabel={t("clearSelection")} onClear={clearSelection}>
         {canEditCosts ? <Button type="button" variant="outline" onClick={openCostEdit}>{t("editCost")}</Button> : null}
         <Button asChild>

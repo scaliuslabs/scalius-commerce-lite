@@ -5,10 +5,8 @@
 import { z } from "zod";
 import { phoneNumberSchema } from "@scalius/shared/customer-utils";
 import { LINE_PROPERTY_INPUT_LIMITS } from "@scalius/shared/line-properties";
-import {
-    ORDER_CHANNEL_SOURCE_MAX_LENGTH,
-    normalizeOrderChannelSource,
-} from "@scalius/shared/order-channel";
+import { ORDER_CHANNEL_SOURCE_MAX_LENGTH } from "@scalius/shared/order-channel";
+import { normalizeOrderChannelSource } from "@scalius/shared/order-channel-source";
 
 export const MAX_ORDER_LINE_ITEMS = 99;
 

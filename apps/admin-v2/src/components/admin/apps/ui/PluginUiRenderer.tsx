@@ -10,7 +10,7 @@
 // card is never drawn inside a card.
 import { createContext, useContext, useId, useMemo, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { toast } from "sonner";
+import { toast } from "~/lib/toast";
 import { ChevronLeft, ChevronRight, CircleAlert, CircleCheck, ExternalLink, Info, TriangleAlert, type LucideIcon } from "lucide-react";
 import {
   pluginUiRouteActions,

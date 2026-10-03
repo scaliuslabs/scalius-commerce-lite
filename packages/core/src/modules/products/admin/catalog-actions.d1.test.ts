@@ -159,6 +159,58 @@ describe("catalog actions on D1 storage", () => {
       .toEqual([{ sku: "PANJABI-L-COPY-2" }, { sku: "PANJABI-M-COPY-2" }]);
   });
 
+  it("copies cost per item, custom fields and selling settings, never stock or SKU identity", async () => {
+    const source = await create({
+      name: "Panjabi", slug: "panjabi",
+      optionMatrix: {
+        options: [{ id: "o", name: "Size", standardMapping: "size", values: [{ id: "m", value: "M" }, { id: "l", value: "L" }] }],
+        variants: [{ ...variant("s1", "m", "PANJABI-M"), cost: 120.5 }, { ...variant("s2", "l", "PANJABI-L", 300), cost: 140 }],
+      },
+    });
+    const sku = (code: string) => (sqlite.prepare("SELECT id FROM product_variants WHERE sku = ?").get(code) as { id: string }).id;
+    sqlite.exec(`
+      INSERT INTO tax_classes (id, name) VALUES ('txc_reduced', 'Reduced');
+      UPDATE products SET emi_eligible = 1, tax_class_id = 'txc_reduced' WHERE id = '${source.id}';
+      UPDATE product_variants SET low_stock_threshold = 2, allow_backorder = 1, backorder_limit = 5, barcode = '4006381333931', barcode_type = 'ean13'
+        WHERE id = '${sku("PANJABI-M")}';
+      INSERT INTO custom_field_definitions (id, owner_type, namespace, key, name, type) VALUES
+        ('cfd_care_guide', 'product', 'custom', 'care', 'Care', 'single_line_text'),
+        ('cfd_fit_note', 'variant', 'custom', 'fit', 'Fit', 'single_line_text'),
+        ('cfd_loyalty_points', 'product', 'scalius.loyalty', 'points', 'Points', 'integer');
+      INSERT INTO custom_field_values (definition_id, owner_type, owner_id, value) VALUES
+        ('cfd_care_guide', 'product', '${source.id}', 'Hand wash'),
+        ('cfd_loyalty_points', 'product', '${source.id}', '5'),
+        ('cfd_fit_note', 'variant', '${sku("PANJABI-M")}', 'Runs small');
+    `);
+
+    const copy = await duplicateProduct(db, source.id, "Copy of Panjabi");
+
+    expect(sqlite.prepare("SELECT emi_eligible, tax_class_id FROM products WHERE id = ?").get(copy.id))
+      .toEqual({ emi_eligible: 1, tax_class_id: "txc_reduced" });
+    expect(sqlite.prepare(`SELECT sku, stock, cost_minor, low_stock_threshold, allow_backorder, backorder_limit, barcode = '4006381333931' AS same_barcode
+      FROM product_variants WHERE product_id = ? ORDER BY sku`).all(copy.id)).toEqual([
+      { sku: "PANJABI-L-COPY", stock: 0, cost_minor: 14000, low_stock_threshold: null, allow_backorder: 0, backorder_limit: 0, same_barcode: 0 },
+      { sku: "PANJABI-M-COPY", stock: 0, cost_minor: 12050, low_stock_threshold: 2, allow_backorder: 1, backorder_limit: 5, same_barcode: 0 },
+    ]);
+    // The merchant's fields come along; an app's own fields stay with the source.
+    expect(sqlite.prepare("SELECT definition_id, owner_type, owner_id, value FROM custom_field_values WHERE owner_id IN (?, ?) ORDER BY definition_id")
+      .all(copy.id, sku("PANJABI-M-COPY"))).toEqual([
+      { definition_id: "cfd_care_guide", owner_type: "product", owner_id: copy.id, value: "Hand wash" },
+      { definition_id: "cfd_fit_note", owner_type: "variant", owner_id: sku("PANJABI-M-COPY"), value: "Runs small" },
+    ]);
+    expect(sqlite.prepare("SELECT aggregate_revision FROM products WHERE id = ?").get(copy.id)).toEqual({ aggregate_revision: copy.aggregateRevision });
+  });
+
+  it("copies a simple product's cost per item", async () => {
+    const source = await create({ name: "Mug", slug: "mug", defaultSku: { sku: "MUG-1", trackInventory: true, stock: 4, cost: 99.99 } });
+    expect(sqlite.prepare("SELECT cost_minor FROM product_variants WHERE product_id = ?").get(source.id)).toEqual({ cost_minor: 9999 });
+
+    const copy = await duplicateProduct(db, source.id, "Copy of Mug");
+
+    expect(sqlite.prepare("SELECT sku, stock, cost_minor FROM product_variants WHERE product_id = ?").all(copy.id))
+      .toEqual([{ sku: "MUG-1-COPY", stock: 0, cost_minor: 9999 }]);
+  });
+
   it("copies content blocks, quantity bundles and the page template with the product", async () => {
     const source = await create({
       name: "Serum", slug: "serum",

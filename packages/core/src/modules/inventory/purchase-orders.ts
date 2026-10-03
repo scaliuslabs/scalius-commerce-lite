@@ -34,6 +34,7 @@ import { fromMinor } from "@scalius/shared/money";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
 import { variantOptionLabelSql } from "../products/option-model";
+import { digitalStockError, isDigitalKind } from "../products/digital-stock-rules";
 import { readStoreCurrency, type StoreCurrency } from "../settings/store-money";
 import { inventoryOperationKeySchema } from "./inventory.validation";
 import { resolveActiveInventoryLocation } from "./locations";
@@ -476,9 +477,13 @@ async function planLines(
     throw new ValidationError("Each SKU appears once on a purchase order; change its quantity instead.");
   }
   const skus = await readStockCommandSkus(db, lines.map((line) => line.variantId));
-  return lines.map((line) => {
+  return lines.map((line, index) => {
     const sku = skus.get(line.variantId);
     if (!sku || sku.deletedAt) throw new ValidationError("A SKU on this purchase order no longer exists.");
+    // A digital SKU's stock is its licence keys: it is never bought into stock.
+    if (isDigitalKind(sku.fulfillmentKind)) {
+      throw digitalStockError({ field: `lines.${index}.variantId`, sku: sku.sku, variantId: sku.id });
+    }
     if (sku.fulfillmentKind !== "physical") {
       throw new ValidationError(`SKU ${sku.sku} is not a physical item, so it is not bought into stock.`);
     }

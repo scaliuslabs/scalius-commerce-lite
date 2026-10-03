@@ -2,7 +2,7 @@
 // makes the next revision (the API does it in one batch, guarded by the
 // version this dialog opened with); orders keep the revision they bought.
 import { useEffect, useState, type FormEvent } from "react";
-import { toast } from "sonner";
+import { toast } from "~/lib/toast";
 import {
   WARRANTY_DURATION_UNITS,
   WARRANTY_LIMITS,
@@ -13,6 +13,7 @@ import {
 } from "@scalius/shared/warranty";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
 import { useDirtyDialogClose } from "~/components/admin/shared/use-dirty-dialog-close";
+import { useSubmitOnce } from "~/components/admin/shared/use-submit-once";
 import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "~/components/ui/dialog";
@@ -89,6 +90,7 @@ export function WarrantyPolicyDialog({ policy, open, onOpenChange }: {
   const [draft, setDraft] = useState<Draft>(() => draftOf(policy));
   const [errors, setErrors] = useState<Errors>({});
   const save = useSaveWarrantyPolicy();
+  const submitOnce = useSubmitOnce();
   const reset = save.reset;
 
   useEffect(() => {
@@ -107,7 +109,6 @@ export function WarrantyPolicyDialog({ policy, open, onOpenChange }: {
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (save.isPending) return;
     const result = policyBody(draft);
     if ("errors" in result) {
       setErrors(result.errors);
@@ -115,15 +116,12 @@ export function WarrantyPolicyDialog({ policy, open, onOpenChange }: {
       if (first) document.getElementById(`warranty-policy-${first}`)?.focus();
       return;
     }
-    save.mutate(
-      { id: policy?.id ?? null, version: policy?.version ?? null, body: result.body },
-      {
-        onSuccess: () => {
-          toast.success(t(policy ? "saved" : "created"));
-          onOpenChange(false);
-        },
-      },
-    );
+    // One request at a time: a double click must not create the policy twice.
+    submitOnce(async () => {
+      await save.mutateAsync({ id: policy?.id ?? null, version: policy?.version ?? null, body: result.body });
+      toast.success(t(policy ? "saved" : "created"));
+      onOpenChange(false);
+    });
   };
 
   const serverError = save.error

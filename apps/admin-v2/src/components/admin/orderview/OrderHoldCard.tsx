@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
+import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
 import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions";
 import { useMessages } from "~/i18n";
@@ -15,10 +16,12 @@ import type { Order, OrderHold } from "./types";
 /**
  * An app put the order on hold for staff review (`order.risk`): which app,
  * why and when, at the top of the page, with Release for staff who may
- * change the order's status. Released holds are listed with the apps' risk
- * checks in the customer card.
+ * change the order's status. Shown only while a hold is open
+ * (card-rules.ts); released holds are listed with the apps' risk checks in
+ * the customer card. Loaded lazily (LazyOrderHoldCard): most orders never
+ * carry one.
  */
-export function OrderHoldNotice({ order }: { order: Pick<Order, "id" | "holds"> }) {
+export function OrderHoldCard({ order }: { order: Pick<Order, "id" | "holds"> }) {
   const t = useMessages(orderDetailMessages);
   const { canChangeOrderStatus } = useOrderActionPermissions();
   const release = useReleaseOrderHold();
@@ -30,11 +33,14 @@ export function OrderHoldNotice({ order }: { order: Pick<Order, "id" | "holds"> 
 
   return (
     <>
-      <Alert variant="warning" role="note">
-        <AlertTitle>{t("holds.title")}</AlertTitle>
-        <AlertDescription>
-          <p>{t("holds.help")}</p>
-          <ul className="space-y-3 pt-2">
+      <Card role="note" aria-labelledby="order-hold-title">
+        <CardHeader className="flex-row flex-wrap items-center justify-between gap-2">
+          <CardTitle id="order-hold-title">{t("holds.title")}</CardTitle>
+          <Badge variant="warning">{t("holds.badge")}</Badge>
+        </CardHeader>
+        <CardContent className="space-y-3 text-body">
+          <p className="text-muted-foreground">{t("holds.help")}</p>
+          <ul className="space-y-3">
             {open.map((hold) => {
               const when = formatOrderTimestamp(hold.placedAt);
               return (
@@ -65,8 +71,8 @@ export function OrderHoldNotice({ order }: { order: Pick<Order, "id" | "holds"> 
               );
             })}
           </ul>
-        </AlertDescription>
-      </Alert>
+        </CardContent>
+      </Card>
       <ConfirmDialog
         open={confirming}
         onOpenChange={setConfirming}

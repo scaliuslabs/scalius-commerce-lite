@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
+import { toast } from "~/lib/toast";
 import {
   MARKETING_CHANNELS,
   MARKETING_CONSENT_NOTE_MAX,
@@ -31,6 +31,7 @@ import {
 } from "~/lib/api-query-options/customers";
 import { queryKeys } from "~/lib/query-keys";
 import { formatDateTime, useMessages } from "~/i18n";
+import { customerMarketingMessages } from "~/i18n/customer-marketing";
 import { customersMessages } from "~/i18n/customers";
 import { resourceMessages } from "~/i18n/resource";
 import { CONSENT_BADGE, consentFacts, suggestedConsentChange } from "./marketing-display";
@@ -49,7 +50,8 @@ const when = (value: string | null | undefined) => {
 };
 
 function ChannelStatus({ consent }: { consent: CustomerConsent }) {
-  const t = useMessages(customersMessages);
+  const t = useMessages(customerMarketingMessages);
+  const c = useMessages(customersMessages);
   const facts = consentFacts(consent);
   const detail = facts.kind === "no_contact"
     ? t(consent.channel === "email" ? "noEmail" : "noPhone")
@@ -61,7 +63,7 @@ function ChannelStatus({ consent }: { consent: CustomerConsent }) {
   return (
     <li className="space-y-0.5">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="text-body font-medium">{t(`channel.${consent.channel}`)}</span>
+        <span className="text-body font-medium">{c(`channel.${consent.channel}`)}</span>
         <Badge variant={CONSENT_BADGE[consent.status]}>{t(`status.${consent.status}`)}</Badge>
       </div>
       {detail ? <p className="text-body text-muted-foreground">{detail}</p> : null}
@@ -70,7 +72,8 @@ function ChannelStatus({ consent }: { consent: CustomerConsent }) {
 }
 
 function ConsentEvent({ event }: { event: CustomerConsentEvent }) {
-  const t = useMessages(customersMessages);
+  const t = useMessages(customerMarketingMessages);
+  const c = useMessages(customersMessages);
   const actor = event.actor === "staff"
     ? event.actorName ? t("eventByStaff", { name: event.actorName }) : t("eventByStaffUnknown")
     : event.actor === "buyer"
@@ -79,7 +82,7 @@ function ConsentEvent({ event }: { event: CustomerConsentEvent }) {
   return (
     <li className="text-body">
       <p>
-        <span className="font-medium">{t(`channel.${event.channel}`)}</span>
+        <span className="font-medium">{c(`channel.${event.channel}`)}</span>
         {": "}
         {t(`status.${event.state}`)}
       </p>
@@ -98,7 +101,8 @@ function ConsentEvent({ event }: { event: CustomerConsentEvent }) {
  * gave outside the store (a note saying how is required) or withdraw it.
  */
 export function CustomerMarketingCard({ customerId, canEdit }: { customerId: string; canEdit: boolean }) {
-  const t = useMessages(customersMessages);
+  const t = useMessages(customerMarketingMessages);
+  const c = useMessages(customersMessages);
   const r = useMessages(resourceMessages);
   const queryClient = useQueryClient();
   const marketing = useQuery(customerMarketingQueryOptions(customerId));
@@ -202,7 +206,7 @@ export function CustomerMarketingCard({ customerId, canEdit }: { customerId: str
                   <div key={consent.channel} className="flex min-h-9 items-center gap-2">
                     <RadioGroupItem id={`consent-channel-${consent.channel}`} value={consent.channel} />
                     <Label htmlFor={`consent-channel-${consent.channel}`}>
-                      {t(`channel.${consent.channel}`)}
+                      {c(`channel.${consent.channel}`)}
                       <span className="font-normal text-muted-foreground"> · {t(`status.${consent.status}`)}</span>
                     </Label>
                   </div>

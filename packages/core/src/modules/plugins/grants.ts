@@ -4,7 +4,7 @@
 // plugin can neither request nor be granted them, and operations guarded by
 // them are refused at dispatch whatever the grant says.
 
-import { PERMISSION_METADATA } from "../../auth/rbac/permissions";
+import { PERMISSION_METADATA } from "../../auth/rbac/permission-metadata";
 import type { PluginGrantRequest } from "@scalius/shared/plugins";
 
 /**

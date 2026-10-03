@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
+import { toast } from "~/lib/toast";
 import { Code2, Loader2, ShieldCheck } from "lucide-react";
 import {
   deleteApiV1AdminAnalyticsById,

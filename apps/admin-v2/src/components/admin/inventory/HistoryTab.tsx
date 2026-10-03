@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { toast } from "sonner";
+import { toast } from "~/lib/toast";
 import { Calendar as CalendarIcon, Download } from "lucide-react";
 import type { DateRange } from "react-day-picker";
 import { DataTableToolbar } from "~/components/admin/data-table/DataTableToolbar";

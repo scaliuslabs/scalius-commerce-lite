@@ -11,7 +11,15 @@
 import { and, eq, isNotNull, isNull, ne, or, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import { safeBatch, type Database } from "@scalius/database/client";
-import { customerHistory, customers, orders } from "@scalius/database/schema";
+import {
+    customerHistory,
+    customerMarketingConsentEvents,
+    customerMarketingConsents,
+    customerTagLinks,
+    customers,
+    customFieldValues,
+    orders,
+} from "@scalius/database/schema";
 
 export type CustomerKind = "account" | "guest" | "merchant";
 
@@ -128,7 +136,8 @@ export function chooseOrderCustomer(
  * order that leaves another record is written to both change logs with the
  * contact that proved it. A guest record's other orders stay where they are
  * (a phone can be shared, so nothing about them is shown to the account); a
- * guest record left with no orders is retired and marked merged. Returns the
+ * guest record left with no orders is retired and marked merged, and its tags,
+ * custom fields and consent (with its history) join the account. Returns the
  * ordered statements for the caller's batch; empty when nothing is verified.
  */
 export function buildVerifiedContactOrderLink(
@@ -144,9 +153,16 @@ export function buildVerifiedContactOrderLink(
     const joins = sql`${orders.accountOwnerCustomerId} IS NULL AND ${orders.deletedAt} IS NULL AND (${sql.join(contactMatch, sql` OR `)})`;
     const leaves = and(joins, isNotNull(orders.customerId), ne(orders.customerId, input.customerId))!;
     const via = phoneMatch ? sql`CASE WHEN ${phoneMatch} THEN 'phone' ELSE 'email' END` : sql`'email'`;
+    // Guest records whose every order is about to join the account: they are merged into it.
+    // (Aliases are spelled out: an aliased table interpolated into sql`` loses its alias.)
+    const mergingGuestIds = sql`SELECT "merging_guest"."id" FROM "customers" AS "merging_guest"
+        WHERE "merging_guest"."account_claimed_at" IS NULL AND "merging_guest"."deleted_at" IS NULL
+          AND EXISTS (SELECT 1 FROM ${orders} WHERE ${orders.customerId} = "merging_guest"."id" AND ${joins})
+          AND NOT EXISTS (SELECT 1 FROM ${orders} WHERE ${orders.customerId} = "merging_guest"."id" AND (${joins}) IS NOT TRUE)`;
 
     // All of these read the orders before the last statement moves them.
     return [
+        ...carryMergedGuestFacts(db, input.customerId, mergingGuestIds),
         movedOrderHistory(db, {
             changeType: "order_moved_out",
             owner: customers,
@@ -174,6 +190,7 @@ export function buildVerifiedContactOrderLink(
                 sql`EXISTS (SELECT 1 FROM ${orders} WHERE ${orders.customerId} = ${customers.id} AND ${joins})`,
                 sql`NOT EXISTS (SELECT 1 FROM ${orders} WHERE ${orders.customerId} = ${customers.id} AND (${joins}) IS NOT TRUE)`,
             )),
+        // Its order statistics (segments read them) follow the orders, by trigger.
         db.update(orders)
             .set({ customerId: input.customerId, accountOwnerCustomerId: input.customerId })
             .where(joins),
@@ -181,6 +198,56 @@ export function buildVerifiedContactOrderLink(
 }
 
 const account = alias(customers, "account");
+
+/**
+ * What the merchant knows about a guest record merged into an account comes
+ * with it: its tags and customer custom fields (the account's own win), and
+ * its marketing consent. Per channel the latest consent wins, and every
+ * consent event moves to the account, so the audit trail stays whole. A moved
+ * consent row keeps its state and address (no new event, no outbox fact), and
+ * reads compare its address with the account's as for any customer.
+ * Statements for the merge batch, before the guest record is retired.
+ */
+function carryMergedGuestFacts(db: Database, accountId: string, mergingGuestIds: SQL) {
+    return [
+        db.insert(customerTagLinks).select(db.select({
+            customerId: sql<string>`${accountId}`.as("customer_id"),
+            tag: customerTagLinks.tag,
+            createdAt: customerTagLinks.createdAt,
+        }).from(customerTagLinks).where(sql`${customerTagLinks.customerId} IN (${mergingGuestIds})`)).onConflictDoNothing(),
+        db.insert(customFieldValues).select(db.select({
+            definitionId: customFieldValues.definitionId,
+            ownerType: customFieldValues.ownerType,
+            ownerId: sql<string>`${accountId}`.as("owner_id"),
+            value: customFieldValues.value,
+            updatedAt: customFieldValues.updatedAt,
+        }).from(customFieldValues).where(and(
+            eq(customFieldValues.ownerType, "customer"),
+            sql`${customFieldValues.ownerId} IN (${mergingGuestIds})`,
+        ))).onConflictDoNothing(),
+        db.update(customerMarketingConsentEvents)
+            .set({ customerId: accountId })
+            .where(sql`${customerMarketingConsentEvents.customerId} IN (${mergingGuestIds})`),
+        // The account's consent gives way to a guest record's newer one...
+        db.delete(customerMarketingConsents).where(and(
+            eq(customerMarketingConsents.customerId, accountId),
+            sql`EXISTS (SELECT 1 FROM "customer_marketing_consents" AS "guest_consent"
+                WHERE "guest_consent"."customer_id" IN (${mergingGuestIds})
+                  AND "guest_consent"."channel" = ${customerMarketingConsents.channel}
+                  AND "guest_consent"."updated_at" > ${customerMarketingConsents.updatedAt})`,
+        )),
+        // ...and the newest guest consent of each channel the account has none for moves to it.
+        db.update(customerMarketingConsents).set({ customerId: accountId }).where(and(
+            sql`${customerMarketingConsents.customerId} = (SELECT "guest_consent"."customer_id" FROM "customer_marketing_consents" AS "guest_consent"
+                WHERE "guest_consent"."customer_id" IN (${mergingGuestIds})
+                  AND "guest_consent"."channel" = ${customerMarketingConsents.channel}
+                ORDER BY "guest_consent"."updated_at" DESC, "guest_consent"."customer_id" DESC LIMIT 1)`,
+            sql`NOT EXISTS (SELECT 1 FROM "customer_marketing_consents" AS "account_consent"
+                WHERE "account_consent"."customer_id" = ${accountId}
+                  AND "account_consent"."channel" = ${customerMarketingConsents.channel})`,
+        )),
+    ];
+}
 
 /** A snapshot of the customer's current details, for one change-log row. */
 function customerSnapshot(owner: typeof customers | typeof account) {

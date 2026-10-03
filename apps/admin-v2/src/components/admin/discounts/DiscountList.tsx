@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { TicketPercent } from "lucide-react";
 import { useMemo, useState } from "react";
-import { toast } from "sonner";
+import { toast } from "~/lib/toast";
 
 import { DiscountStatusBadge } from "./DiscountStatusBadge";
 import { DiscountTypeDialog } from "./DiscountTypeDialog";

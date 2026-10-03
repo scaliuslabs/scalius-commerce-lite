@@ -25,10 +25,9 @@ export const Route = createFileRoute("/admin/analytics/reports/$reportId")({
   // Only catalogued reports exist; anything else is a page that doesn't exist (no request).
   loader: ({ params }) => {
     if (!isAnalyticsReportId(params.reportId)) throw new AdminApiResponseError("Report not found", 404);
+    return { title: translate(analyticsMessages, `report.${params.reportId}` as AnalyticsMessageKey) };
   },
-  head: ({ params }) => titleHead(isAnalyticsReportId(params.reportId)
-    ? translate(analyticsMessages, `report.${params.reportId}` as AnalyticsMessageKey)
-    : translate(analyticsMessages, "reports")),
+  head: ({ loaderData }) => titleHead(loaderData?.title ?? ""),
   errorComponent: RouteErrorComponent,
   component: AnalyticsReportRoute,
 });

@@ -30,6 +30,9 @@ export const SHORTCUTS = {
   navigation: { label: "navigation", group: "general", combos: [{ key: "b", mod: true }] },
   tableSearch: { label: "tableSearch", group: "general", combos: [{ key: "/" }] },
   cancel: { label: "cancel", group: "general", combos: [{ key: "escape" }] },
+  // Polaris pagination's keys: the order and product pages step through the list they came from.
+  previousItem: { label: "previousItem", group: "general", combos: [{ key: "j" }] },
+  nextItem: { label: "nextItem", group: "general", combos: [{ key: "k" }] },
   save: { label: "save", group: "editing", combos: [{ key: "s", mod: true }] },
   submit: { label: "submit", group: "editing", combos: [{ key: "enter", mod: true }] },
   undo: { label: "undo", group: "editing", combos: [{ key: "z", mod: true }] },

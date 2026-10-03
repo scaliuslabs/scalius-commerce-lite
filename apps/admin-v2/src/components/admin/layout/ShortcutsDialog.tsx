@@ -1,6 +1,6 @@
 import { Fragment, useState, type KeyboardEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
+import { toast } from "~/lib/toast";
 import { putApiV1AdminAuthShortcuts } from "@scalius/api-client/sdk";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";

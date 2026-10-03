@@ -45,7 +45,9 @@ import { ProductImagesSection } from "./product-form/ProductImagesSection";
 import { PricingCard } from "./product-form/PricingCard";
 import { AttributesSection } from "./product-form/AttributesSection";
 import { ProductSearchListing } from "./product-form/ProductSearchListing";
-import { FulfilmentCard } from "./product-form/FulfilmentCard";
+import { ShippingCard } from "./product-form/ShippingCard";
+import { CollapsibleCard } from "./product-form/CollapsibleCard";
+import { ProductEditorSlotsContext, type ProductEditorSlots } from "./product-form/editor-slots";
 import { DigitalDeliveryCard } from "./product-form/DigitalDeliveryCard";
 import { GiftCardProductCard } from "./product-form/GiftCardProductCard";
 import { BuyerInputsCard } from "./product-form/BuyerInputsCard";
@@ -71,9 +73,7 @@ import { useMessages } from "~/i18n";
 import { productMessages } from "~/i18n/products";
 import { resourceMessages } from "~/i18n/resource";
 import { saveBarMessages } from "~/i18n/save-bar";
-import { readProductRevisionConflict, type ProductRevisionConflict } from "@/lib/admin-api-error";
-import { readApiFieldIssues } from "@/lib/api-field-errors";
-import { getServerFnError } from "@/lib/api-helpers";
+import type { ProductRevisionConflict } from "@/lib/admin-api-error";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query-keys";
 import type {
@@ -83,7 +83,7 @@ import type {
   VariantPriceRange,
 } from "./product-form/variants/option-matrix-editor-model";
 import type { ProductSkuImageChoice } from "@/lib/api-query-options/products";
-import { CustomFieldsCard } from "./custom-fields/CustomFieldsCard";
+import { LazyCustomFieldsCard } from "./custom-fields/LazyCustomFieldsCard";
 
 // The product page's own cards load after the editor, off its first download.
 const loadCards = () => import("./product-form/merchandising/cards");
@@ -252,6 +252,7 @@ function ProductEditor({
     onProductSaved,
     createComposition,
     onVariantIssue: (path, message) => matrixRef.current?.showServerIssue(path, message) ?? null,
+    onCompositionSaved: (revision) => matrixRef.current?.compositionSaved(revision),
   });
   const productFormDirty = form.formState.isDirty;
   // Read while rendering so react-hook-form keeps tracking which fields changed.
@@ -277,6 +278,10 @@ function ProductEditor({
   // With options the variants carry the prices: the product price follows the cheapest one,
   // as the server keeps it, and is not the merchant's to edit (or a change to save).
   const [variantPrices, setVariantPrices] = React.useState<VariantPriceRange | null>(null);
+  // The Inventory card and the Shipping card's weight: drawn there by the variant editor.
+  const [inventorySlot, setInventorySlot] = React.useState<HTMLDivElement | null>(null);
+  const [shippingSlot, setShippingSlot] = React.useState<HTMLDivElement | null>(null);
+  const slots = React.useMemo<ProductEditorSlots>(() => ({ inventory: inventorySlot, shipping: shippingSlot }), [inventorySlot, shippingSlot]);
   React.useEffect(() => {
     form.resetField("variantPriced", { defaultValue: variantPrices !== null });
     if (variantPrices) form.resetField("price", { defaultValue: variantPrices.min });
@@ -298,59 +303,33 @@ function ProductEditor({
     const matrixBlocks = optionMatrixIssue && (!isEdit || optionMatrixDirty);
     const pending = isEdit ? sections.dirtyHandles() : [];
     const sectionProblems = pending.flatMap((handle) => handle.problems ?? []);
-    let values: ProductFormValues | null = null;
-    if (!isEdit || productFormDirty) {
-      let invalid: FieldErrors<ProductFormValues> = {};
-      values = await new Promise<ProductFormValues | null>((resolve) => {
-        void form.handleSubmit(resolve, (errors) => {
-          invalid = errors;
-          resolve(null);
-        })();
-      });
-      if (!values || matrixBlocks || sectionProblems.length > 0) {
-        if (matrixBlocks) matrixRef.current?.reveal();
-        const lines = [...describeInvalid(invalid), ...(matrixBlocks ? [optionMatrixIssue] : []), ...sectionProblems];
-        throw new SaveNotCompleted(lines[0], lines);
-      }
-    } else if (sectionProblems.length > 0) {
-      throw new SaveNotCompleted(sectionProblems[0], sectionProblems);
+    // A Save is one write of the whole page (fields, variants, sections, costs): every part
+    // is checked first, and all of it saves or none of it does.
+    let invalid: FieldErrors<ProductFormValues> = {};
+    let values = await new Promise<ProductFormValues | null>((resolve) => {
+      void form.handleSubmit(resolve, (errors) => {
+        invalid = errors;
+        resolve(null);
+      })();
+    });
+    if (!values || matrixBlocks || sectionProblems.length > 0) {
+      if (matrixBlocks) matrixRef.current?.reveal();
+      const lines = [...describeInvalid(invalid), ...(matrixBlocks ? [optionMatrixIssue] : []), ...sectionProblems];
+      throw new SaveNotCompleted(lines[0], lines);
     }
-    let revision = aggregateRevision;
-    for (const handle of pending) {
-      if (!revision) break;
-      try {
-        revision = await handle.save(revision);
-      } catch (error) {
-        throw explainSectionError(handle.label, error);
-      }
-      onAggregateRevisionChange?.(revision);
-    }
+    const composition = isEdit && optionMatrixDirty ? matrixRef.current?.composition() ?? null : null;
+    const sectionChanges = Object.assign({}, ...pending.map((handle) => handle.changes()));
+    // Moved tabs become blocks in this write, which also removes the originals.
     if (tabsMoved.current) {
       form.setValue("additionalInfo", [], { shouldDirty: true });
-      values = { ...(values ?? form.getValues()), additionalInfo: [] };
+      values = { ...values, additionalInfo: [] };
     }
-    if (values) {
-      revision = await submit(values, revision);
-      if (tabsMoved.current) {
-        tabsMoved.current = false;
-        void queryClient.invalidateQueries({ queryKey: [...queryKeys.products.detail(productId ?? ""), "section"] });
-      }
+    await submit(values, aggregateRevision, { ...composition, ...sectionChanges });
+    for (const handle of pending) handle.saved();
+    if (tabsMoved.current) {
+      tabsMoved.current = false;
+      void queryClient.invalidateQueries({ queryKey: [...queryKeys.products.detail(productId ?? ""), "section"] });
     }
-    if (isEdit && optionMatrixDirty) await matrixRef.current?.save(revision);
-  };
-
-  /** A section's rejected save, in the banner (a newer version opens the conflict dialog). */
-  const explainSectionError = (label: string, error: unknown): Error => {
-    const conflict = readProductRevisionConflict(error);
-    if (conflict) {
-      onRevisionConflict?.(conflict);
-      return new SaveNotCompleted(t("changedElsewhere"));
-    }
-    const issues = readApiFieldIssues(error);
-    const lines = issues
-      ? issues.map((issue) => `${label}: ${issue.message}`)
-      : [`${label}: ${getServerFnError(error)}`];
-    return new SaveNotCompleted(lines[0], lines);
   };
 
   useSaveBar({
@@ -446,12 +425,19 @@ function ProductEditor({
           <SaveErrorBanner />
           <ProductKindRulesProvider form={form}>
           <ProductSectionsProvider registry={sections.registry}>
+          <ProductEditorSlotsContext.Provider value={slots}>
+          {/* Shopify's product page: what every product needs in the main column, in its order
+              (title, media, pricing, inventory, shipping, variants), then the advanced cards, each
+              always listed by title and closed while empty. The side column holds status,
+              organisation and the page template. */}
           <fieldset disabled={readOnly} className="grid min-w-0 gap-4 lg:grid-cols-3">
             <div className="min-w-0 space-y-4 lg:col-span-2">
               <TitleDescriptionSection form={form} readOnly={readOnly} />
               <ProductImagesSection form={form} readOnly={readOnly} />
               <PricingCard form={form} variantPrices={variantPrices} />
-              <Card>
+              <div ref={setInventorySlot} className="empty:hidden" />
+              <ShippingCard form={form} hasOptions={variantPrices !== null} weightSlot={setShippingSlot} />
+              <Card id="product-variants" className="scroll-mt-4">
                 <CardHeader>
                   <CardTitle>{t("variants")}</CardTitle>
                 </CardHeader>
@@ -471,14 +457,15 @@ function ProductEditor({
                   <ProductVariants form={form} optionManager={optionManager} onPricesChange={setVariantPrices} />
                 </CardContent>
               </Card>
+              <DigitalDeliveryCard form={form} productId={productId} readOnly={readOnly} />
+              <GiftCardProductCard form={form} productId={productId} readOnly={readOnly} />
               {isEdit && productId ? (
                 <React.Suspense fallback={<LoadingFallback height="h-20" />}>
                   <BundlesCard productId={productId} readOnly={readOnly} />
                 </React.Suspense>
-              ) : null}
-              <FulfilmentCard form={form} hasOptions={variantPrices !== null} />
-              <GiftCardProductCard form={form} productId={productId} readOnly={readOnly} />
-              <DigitalDeliveryCard form={form} productId={productId} readOnly={readOnly} />
+              ) : (
+                <AfterSaveCard title={t("bundles")} />
+              )}
               <BuyerInputsCard
                 form={form}
                 readOnly={readOnly}
@@ -504,16 +491,19 @@ function ProductEditor({
                 <ProductStatusCard form={form} isEdit={isEdit} getStorefrontPath={getStorefrontPath} />
               </div>
               <OrganizationCard form={form} categories={categories} brandName={brandName} />
-              <WarrantyCard form={form} readOnly={readOnly} />
               {isEdit && productId ? (
                 <React.Suspense fallback={<LoadingFallback height="h-40" />}>
                   <ProductPageCard productId={productId} readOnly={readOnly} />
                 </React.Suspense>
-              ) : null}
-              {isEdit && productId ? <CustomFieldsCard ownerType="product" ownerId={productId} canEdit={!readOnly} /> : null}
+              ) : (
+                <AfterSaveCard title={t("productPage")} />
+              )}
+              <WarrantyCard form={form} readOnly={readOnly} />
+              {isEdit && productId ? <LazyCustomFieldsCard ownerType="product" ownerId={productId} canEdit={!readOnly} /> : null}
               {isEdit && productId ? <AppResourceCards target="product" id={productId} /> : null}
             </div>
           </fieldset>
+          </ProductEditorSlotsContext.Provider>
           </ProductSectionsProvider>
           </ProductKindRulesProvider>
           {readOnly ? null : (
@@ -640,5 +630,16 @@ function ProductVariants({ form, optionManager, onPricesChange }: {
   return React.useMemo(
     () => optionManager({ skuImages, productName, productPrice, isActive: Boolean(isActive), onPricesChange, fulfilmentMode: mode }),
     [optionManager, skuImages, productName, productPrice, isActive, onPricesChange, mode],
+  );
+}
+
+/** An advanced card a new product gets once it is saved: listed by title, so it is never a surprise. */
+function AfterSaveCard({ title }: { title: string }) {
+  const t = useMessages(productMessages);
+  const note = <p className="text-body text-muted-foreground">{t("availableAfterSave")}</p>;
+  return (
+    <CollapsibleCard title={title} summary={note}>
+      {note}
+    </CollapsibleCard>
   );
 }

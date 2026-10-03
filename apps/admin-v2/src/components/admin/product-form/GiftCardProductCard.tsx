@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { useWatch, type UseFormReturn } from "react-hook-form";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useMessages } from "~/i18n";
 import { giftCardProductMessages } from "~/i18n/gift-card-product";
 import { productMessages } from "~/i18n/products";
+import { CollapsibleCard } from "./CollapsibleCard";
 import type { ProductFormValues } from "./types";
 
 const RULES = [
@@ -54,11 +54,13 @@ export function GiftCardProductCard({ form, readOnly }: {
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{p("giftCardProduct")}</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3">
+    // Closed unless the product is a gift card: the switch stays one click away.
+    <CollapsibleCard
+      id="product-gift-card"
+      title={p("giftCardProduct")}
+      defaultOpen={isGiftCard}
+      summary={<p className="text-body text-muted-foreground">{t(isGiftCard ? "productSummaryOn" : "productSummaryOff")}</p>}
+    >
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 space-y-1">
             <Label htmlFor="product-gift-card">{t("productSwitch")}</Label>
@@ -82,7 +84,6 @@ export function GiftCardProductCard({ form, readOnly }: {
             {switchedOn ? <p role="status" className="text-body">{t("productSwitchedOn")}</p> : null}
           </div>
         ) : null}
-      </CardContent>
-    </Card>
+    </CollapsibleCard>
   );
 }

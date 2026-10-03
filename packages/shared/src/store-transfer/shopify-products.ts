@@ -226,6 +226,7 @@ export function mapShopifyProducts(table: CsvTable, options: ProductMappingOptio
       const problems: Array<[string, string, string]> = [];
       if (!price.ok || price.value === null) problems.push(["price_invalid", "Variant Price", `Price "${at("Variant Price")}" is not a number.`]);
       if (!compareAt.ok) problems.push(["compare_at_invalid", "Variant Compare At Price", `Compare-at price "${at("Variant Compare At Price")}" is not a number.`]);
+      if (!cost.ok || (cost.value !== null && cost.value < 0)) problems.push(["cost_invalid", "Cost per item", `Cost per item "${at("Cost per item")}" is not a number.`]);
       if (!grams.ok) problems.push(["weight_invalid", "Variant Grams", `Weight "${at("Variant Grams")}" is not a number.`]);
       if (!quantity.ok) problems.push(["quantity_invalid", "Variant Inventory Qty", `Quantity "${at("Variant Inventory Qty")}" is not a whole number.`]);
       if (quantity.ok && quantity.value !== null && quantity.value < 0) problems.push(["quantity_negative", "Variant Inventory Qty", "Negative quantities can't be imported; set 0 and adjust stock later."]);
@@ -246,9 +247,6 @@ export function mapShopifyProducts(table: CsvTable, options: ProductMappingOptio
       const fulfillmentService = at("Variant Fulfillment Service").toLowerCase();
       if (fulfillmentService && fulfillmentService !== "manual") {
         context.unsupported.add("fulfillment_service", "Third-party fulfillment services.", fulfillmentService);
-      }
-      if (cost.ok && cost.value !== null) {
-        context.unsupported.add("sku_cost", "Cost per item (SKU costs are not stored yet).", sku || ref);
       }
       draft.variants.push({
         line: row.line,

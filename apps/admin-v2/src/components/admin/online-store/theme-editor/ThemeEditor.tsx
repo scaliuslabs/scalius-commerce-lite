@@ -13,7 +13,7 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type Rea
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { ArrowLeft, Laptop, Monitor, Redo2, Smartphone, Undo2 } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "~/lib/toast";
 import {
   postApiV1AdminSettingsThemeDraft,
   postApiV1AdminSettingsThemePublish,

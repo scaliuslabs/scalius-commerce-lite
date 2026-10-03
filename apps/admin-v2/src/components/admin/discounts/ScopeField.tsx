@@ -27,7 +27,7 @@ import {
   collectionsByIdsQueryOptions,
 } from "~/lib/api-query-options/collections";
 import { productsByIdsQueryOptions } from "~/lib/api-query-options/products";
-import { priceRangeText, type BuyerPriceRange } from "~/lib/format-utils";
+import { priceRangeText, type BuyerPriceRange } from "~/lib/price-range";
 
 const LIMIT = 90;
 

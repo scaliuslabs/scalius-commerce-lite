@@ -1,8 +1,10 @@
 import React from "react";
+import { createPortal } from "react-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, Plus, Trash2, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { NumberInput } from "@/components/ui/number-input";
@@ -29,6 +31,7 @@ import { ConfirmDialog } from "../../shared/ConfirmDialog";
 import { readSkuTaken } from "../hooks/useProductSubmit";
 import { formatNumber, useMessages } from "~/i18n";
 import { productMessages } from "~/i18n/products";
+import { digitalMessages } from "~/i18n/digital";
 import type {
   ProductSkuImageChoice,
   ProductOptionDefinition,
@@ -61,11 +64,15 @@ import {
   type OptionMatrixEditorHandle,
   type ProductCreateComposition,
   type ProductFulfilmentMode,
+  type ProductUpdateComposition,
   type SimpleSkuDraft,
   type VariantPriceRange,
   withFulfilmentMode,
 } from "./option-matrix-editor-model";
-import { constrainSkuForKind, productKindRules, useProductKindRules } from "../product-kind-rules";
+import { constrainSkuForKind, isDigitalSku, productKindRules, useProductKindRules } from "../product-kind-rules";
+import { DigitalStockStatus } from "../DigitalStock";
+import { digitalAssetsQueryOptions, digitalSkuStock } from "../digital-stock";
+import { useProductEditorSlots } from "../editor-slots";
 import { usePublishSkuCostRows, useSkuCosts, type SkuCostRow } from "../sku-costs";
 import { barcodePatch, Field, InventoryQuantityInput, type IncomingUnits, type IssueFor, type StockElsewhere } from "./variant-fields";
 import { VariantTable, type VariantCosts } from "./VariantTable";
@@ -133,6 +140,7 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
   fulfilmentMode = "physical",
 }, ref) {
   const t = useMessages(productMessages);
+  const d = useMessages(digitalMessages);
   const queryClient = useQueryClient();
   const defaultSku = savedVariants.find((variant) => variant.isDefault && !variant.deletedAt);
   const [simpleSku, setSimpleSku] = React.useState<SimpleSkuDraft>(() => initialSimpleSku(defaultSku));
@@ -165,19 +173,33 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
     [fulfilmentMode, giftCard],
   );
   // One constrained row per draft row and rules, so an edit re-renders only the edited row.
-  const constrained = React.useMemo(() => ({ rules: kindRules, rows: new WeakMap<DraftVariant, DraftVariant>() }), [kindRules]);
+  // A digital SKU's stock is its licence keys: a saved one shows (and saves) its recorded stock, never a typed one.
+  const constrained = React.useMemo(() => ({
+    rules: kindRules,
+    rows: new WeakMap<DraftVariant, DraftVariant>(),
+    savedStock: new Map(savedVariants.map((variant) => [variant.id, variant.stock])),
+  }), [kindRules, savedVariants]);
   const shownVariants = React.useMemo(() => variants.map((variant) => {
     let shown = constrained.rows.get(variant);
     if (!shown) {
       shown = constrainSkuForKind(variant, constrained.rules, !variant.id.startsWith("draft_"));
+      const saved = constrained.savedStock.get(variant.id);
+      if (saved !== undefined && shown.stock !== saved && isDigitalSku(constrained.rules, shown)) shown = { ...shown, stock: saved };
       constrained.rows.set(variant, shown);
     }
     return shown;
   }), [constrained, variants]);
-  const shownSimpleSku = React.useMemo(
-    () => constrainSkuForKind(simpleSku, kindRules, Boolean(defaultSku)),
-    [defaultSku, kindRules, simpleSku],
-  );
+  // A product without options that is digital: its quantity is its licence keys (or unlimited files).
+  const digitalSimple = isDigitalSku(kindRules, {});
+  const shownSimpleSku = React.useMemo(() => {
+    const shown = constrainSkuForKind(simpleSku, kindRules, Boolean(defaultSku));
+    return digitalSimple && defaultSku && shown.stock !== defaultSku.stock ? { ...shown, stock: defaultSku.stock } : shown;
+  }, [defaultSku, digitalSimple, kindRules, simpleSku]);
+  const slots = useProductEditorSlots();
+  // A licence-key pool is the SKU's stock: tracking stays on while it has one (the server refuses otherwise).
+  const digitalAssets = useQuery({ ...digitalAssetsQueryOptions(productId ?? ""), enabled: digitalSimple && Boolean(productId) });
+  const keepsTracking = digitalSimple && simpleSku.trackInventory
+    && digitalSkuStock(defaultSku?.id, digitalAssets.data ?? []).keys !== null;
   const savedOptionDraft = React.useMemo(() => initialOptions(savedOptions), [savedOptions]);
   const savedTopology = React.useMemo(() => optionTopologySignature(savedOptionDraft), [savedOptionDraft]);
   // Stock that must reach the new rows (the server's rule): a simple product's stock when
@@ -506,65 +528,88 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
     });
   }, [stockElsewhere, updateVariants]);
 
+  /** What the draft saves, without a revision: the hidden SKU's edits, or the whole matrix. */
+  const compositionBody = (): ProductUpdateComposition => simpleMode && defaultSku
+    ? {
+        defaultSku: {
+          sku: simpleSku.sku.trim(),
+          weight: simpleSku.weight,
+          trackInventory: shownSimpleSku.trackInventory,
+          barcode: simpleSku.barcode,
+          barcodeType: simpleSku.barcodeType,
+          // Unedited quantity is omitted so a concurrent sale is never overwritten;
+          // a digital SKU's quantity is never sent (its keys move it).
+          ...(simpleStockEdited && shownSimpleSku.trackInventory && !digitalSimple
+            ? { stock: simpleSku.stock, expectedStockVersion: defaultSku.stockVersion }
+            : {}),
+        },
+      }
+    : { optionMatrix: { options, variants: matrixSaveVariants(shownVariants, savedVariants, fulfilmentMode) } };
+
   const mutation = useMutation({
-    mutationFn: (revisionOverride?: number) => simpleMode && defaultSku
-      ? apiData(putApiV1AdminProductsByIdVariantsByVariantId({
-          path: { id: productId!, variantId: defaultSku.id },
-          body: {
-            selectedOptionValueIds: [],
-            imageId: defaultSku.imageId,
-            weight: simpleSku.weight,
-            sku: simpleSku.sku.trim(),
-            price: productPrice,
-            trackInventory: shownSimpleSku.trackInventory,
-            barcode: simpleSku.barcode,
-            barcodeType: simpleSku.barcodeType,
-            // Unedited quantity is omitted so a concurrent sale is never overwritten.
-            ...(simpleStockEdited && shownSimpleSku.trackInventory
-              ? { stock: simpleSku.stock, expectedStockVersion: defaultSku.stockVersion }
-              : {}),
-            discountType: "percentage",
-            discountPercentage: null,
-            discountAmount: null,
-            expectedAggregateRevision: revisionOverride ?? aggregateRevision!,
-          },
-        }))
-      : apiData(putApiV1AdminProductsByIdOptionsMatrix({
-          path: { id: productId! },
-          body: {
-            options,
-            variants: matrixSaveVariants(shownVariants, savedVariants, fulfilmentMode),
-            expectedAggregateRevision: revisionOverride ?? aggregateRevision!,
-          },
-        })),
-    onSuccess: async (result) => {
-      onAggregateRevisionChange?.(result.aggregateRevision);
-      // Edits made while the save was on its way stay unsaved.
-      setSavedDraft(sentDraft.current);
-      setRevealed(false);
-      setCombinationsPending(false);
-      setTopologyChanged(false);
-      setOmittedVariantsByKey(new Map());
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: queryKeys.products.list() }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.products.byIds() }),
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.products.collectionOptions(),
-        }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.products.stats() }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.inventory.list() }),
-        queryClient.invalidateQueries({ queryKey: inventoryLocationKeys.productLevels(productId!) }),
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.products.detail(productId!),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.products.variants(productId!),
-        }),
-      ]);
-      // `onSaved` (the page reloads the variants) runs once the costs are sent too: see `save`.
+    mutationFn: (revisionOverride?: number) => {
+      const body = compositionBody();
+      const expectedAggregateRevision = revisionOverride ?? aggregateRevision!;
+      return body.defaultSku && defaultSku
+        ? apiData(putApiV1AdminProductsByIdVariantsByVariantId({
+            path: { id: productId!, variantId: defaultSku.id },
+            body: {
+              ...body.defaultSku,
+              selectedOptionValueIds: [],
+              imageId: defaultSku.imageId,
+              price: productPrice,
+              discountType: "percentage",
+              discountPercentage: null,
+              discountAmount: null,
+              expectedAggregateRevision,
+            },
+          }))
+        : apiData(putApiV1AdminProductsByIdOptionsMatrix({
+            path: { id: productId! },
+            body: { ...body.optionMatrix!, expectedAggregateRevision },
+          }));
     },
+    onSuccess: (result) => settle(result.aggregateRevision),
   });
+
+  /** After a save that carried the draft (this editor's own, or the product's): the draft is the saved one. */
+  const settle = async (revision: number) => {
+    onAggregateRevisionChange?.(revision);
+    // Edits made while the save was on its way stay unsaved.
+    setSavedDraft(sentDraft.current);
+    setRevealed(false);
+    setCombinationsPending(false);
+    setTopologyChanged(false);
+    setOmittedVariantsByKey(new Map());
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: queryKeys.products.list() }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.products.byIds() }),
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.products.collectionOptions(),
+      }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.products.stats() }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.inventory.list() }),
+      queryClient.invalidateQueries({ queryKey: inventoryLocationKeys.productLevels(productId!) }),
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.products.detail(productId!),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.products.variants(productId!),
+      }),
+    ]);
+    // `onSaved` (the page reloads the variants) runs once the costs are sent too: see `save`.
+  };
+
+  /** Costs go after the variants, so new variants have their ids; a refused cost keeps its edit. */
+  const finishSave = async (variantsSaved: boolean, sendCosts: boolean) => {
+    try {
+      if (costs && sendCosts && productId) await costs.save(productId);
+    } finally {
+      // The page reloads the variants after the costs, so it never shows a cost from before them.
+      if (variantsSaved) onSaved?.();
+    }
+  };
 
   /** Puts a server rejection on its field; returns the banner line, or null when it names no field. */
   const showServerIssue = React.useCallback((path: string, message: string): string | null => {
@@ -594,104 +639,143 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
         reveal();
         throw new SaveNotCompleted(lineFor(draftIssue));
       }
-      let variantsSaved = false;
-      try {
-        if (dirty) {
-          try {
-            sentDraft.current = draft;
-            await mutation.mutateAsync(revisionOverride);
-            variantsSaved = true;
-          } catch (error) {
-            const conflict = readProductRevisionConflict(error);
-            if (conflict) {
-              onRevisionConflict?.(conflict);
-              throw new SaveNotCompleted(t("changedElsewhere"));
-            }
-            const issue = readSkuTaken(error) ?? readApiFieldIssues(error)?.[0];
-            const line = issue ? showServerIssue(issue.path, issue.message) : null;
-            throw new SaveNotCompleted(line ?? getServerFnError(error, t("saveFailed")));
+      if (dirty) {
+        try {
+          sentDraft.current = draft;
+          await mutation.mutateAsync(revisionOverride);
+        } catch (error) {
+          const conflict = readProductRevisionConflict(error);
+          if (conflict) {
+            onRevisionConflict?.(conflict);
+            throw new SaveNotCompleted(t("changedElsewhere"));
           }
+          const issue = readSkuTaken(error) ?? readApiFieldIssues(error)?.[0];
+          const line = issue ? showServerIssue(issue.path, issue.message) : null;
+          throw new SaveNotCompleted(line ?? getServerFnError(error, t("saveFailed")));
         }
-        // Costs go after the variants, so new variants have their ids; a refused cost keeps its edit.
-        if (costs && sendCosts) await costs.save(productId);
-      } finally {
-        // The page reloads the variants after the costs, so it never shows a cost from before them.
-        if (variantsSaved) onSaved?.();
       }
+      await finishSave(dirty, sendCosts);
+    },
+    composition: () => {
+      if (!productId || !dirty || mutation.isPending) return null;
+      if (draftIssue) {
+        reveal();
+        throw new SaveNotCompleted(lineFor(draftIssue));
+      }
+      sentDraft.current = draft;
+      return compositionBody();
+    },
+    compositionSaved: async (revision) => {
+      // The write carried the typed costs too; the page reloads the variants.
+      await settle(revision);
+      onSaved?.();
     },
     reveal,
     showServerIssue,
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [costs, costsDirty, dirty, draft, draftIssue, mutation, onSaved, productId, reveal, showServerIssue]);
 
+  // A product without options edits its one hidden SKU here: drawn into the page's
+  // Inventory and Shipping cards (editor-slots.ts), or in place outside the page.
+  const simpleInventory = (
+    <>
+      {/* Untracked kinds (gift cards) have no quantity to track. */}
+      {kindRules.showInventory ? (
+        <div className="space-y-1">
+          <label className="flex min-h-11 items-center gap-2 text-body md:min-h-0">
+            <Checkbox
+              checked={simpleSku.trackInventory}
+              disabled={keepsTracking}
+              onCheckedChange={(checked) => updateSimple({ trackInventory: checked === true })}
+            />
+            {t("trackQuantity")}
+          </label>
+          {digitalSimple ? (
+            <p className="text-body text-muted-foreground">
+              {d(keepsTracking ? "stockPoolKeepsTracking" : shownSimpleSku.trackInventory ? "stockTrackedHelp" : "stockUntrackedHelp")}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+      {digitalSimple ? (
+        <DigitalStockStatus productId={productId} variantId={defaultSku?.id} tracked={shownSimpleSku.trackInventory} />
+      ) : null}
+      <div className="grid gap-3 sm:grid-cols-2">
+        {shownSimpleSku.trackInventory && !digitalSimple ? (
+          <Field label={quantityLabel ?? t("quantity")} error={issueFor(undefined, "stock")}>
+            {(invalid) => (
+              <InventoryQuantityInput
+                ariaLabel={quantityLabel ?? t("quantity")}
+                invalid={invalid}
+                value={simpleSku.stock - simpleElsewhere}
+                committed={simpleCommitted}
+                elsewhere={defaultSku ? stockElsewhere.get(defaultSku.id) : undefined}
+                incoming={defaultSku ? incomingByVariant.get(defaultSku.id) : undefined}
+                onChange={(stock) => {
+                  updateSimple({ stock: Number.isFinite(stock) ? stock + simpleElsewhere : stock });
+                  setSimpleStockEdited(true);
+                }}
+              />
+            )}
+          </Field>
+        ) : null}
+        <Field label={t("sku")} error={issueFor(undefined, "sku")}>
+          {(invalid) => (
+            <Input
+              value={simpleSku.sku}
+              aria-invalid={invalid}
+              placeholder={productId ? undefined : t("skuAuto")}
+              onChange={(event) => updateSimple({ sku: event.target.value })}
+            />
+          )}
+        </Field>
+        <Field label={t("barcode")} help={productId ? undefined : t("barcodeHint")} error={issueFor(undefined, "barcode")}>
+          {(invalid) => (
+            <Input
+              value={simpleSku.barcode ?? ""}
+              aria-invalid={invalid}
+              inputMode="text"
+              autoComplete="off"
+              onChange={(event) => updateSimple(barcodePatch(event.target.value))}
+            />
+          )}
+        </Field>
+      </div>
+    </>
+  );
+  // Only what is packed is weighed (never a download, a service or a gift card).
+  const simpleWeight = kindRules.showWeight ? (
+    <div className="grid gap-3 sm:grid-cols-2">
+      <Field label={t("weightGrams")} error={issueFor(undefined, "weight")}>
+        {(invalid) => (
+          <NumberInput
+            value={simpleSku.weight}
+            aria-invalid={invalid}
+            onValueChange={(weight) => updateSimple({ weight })}
+          />
+        )}
+      </Field>
+    </div>
+  ) : null;
+
   return (
     <section data-option-matrix data-variant-editor tabIndex={-1} className="space-y-3 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
-      {simpleMode ? (
+      {simpleMode && slots?.inventory ? createPortal(
+        // The product page's Inventory card (after Pricing), as in Shopify.
+        <Card id="product-inventory" className="scroll-mt-4">
+          <CardHeader>
+            <CardTitle>{t("inventory")}</CardTitle>
+          </CardHeader>
+          <CardContent data-variant-editor className="space-y-3">{simpleInventory}</CardContent>
+        </Card>,
+        slots.inventory,
+      ) : null}
+      {simpleMode && slots?.shipping && simpleWeight ? createPortal(simpleWeight, slots.shipping) : null}
+      {simpleMode && !slots?.inventory ? (
         <div className="space-y-3">
           <h3 className="text-body font-medium">{t("inventory")}</h3>
-          {/* Untracked kinds (gift cards) have no quantity to track. */}
-          {kindRules.showInventory ? (
-            <label className="flex min-h-11 items-center gap-2 text-body md:min-h-0">
-              <Checkbox
-                checked={simpleSku.trackInventory}
-                onCheckedChange={(checked) => updateSimple({ trackInventory: checked === true })}
-              />
-              {t("trackQuantity")}
-            </label>
-          ) : null}
-          <div className="grid gap-3 sm:grid-cols-2">
-            {shownSimpleSku.trackInventory ? (
-              <Field label={quantityLabel ?? t("quantity")} error={issueFor(undefined, "stock")}>
-                {(invalid) => (
-                  <InventoryQuantityInput
-                    ariaLabel={quantityLabel ?? t("quantity")}
-                    invalid={invalid}
-                    value={simpleSku.stock - simpleElsewhere}
-                    committed={simpleCommitted}
-                    elsewhere={defaultSku ? stockElsewhere.get(defaultSku.id) : undefined}
-                    incoming={defaultSku ? incomingByVariant.get(defaultSku.id) : undefined}
-                    onChange={(stock) => {
-                      updateSimple({ stock: Number.isFinite(stock) ? stock + simpleElsewhere : stock });
-                      setSimpleStockEdited(true);
-                    }}
-                  />
-                )}
-              </Field>
-            ) : null}
-            <Field label={t("sku")} error={issueFor(undefined, "sku")}>
-              {(invalid) => (
-                <Input
-                  value={simpleSku.sku}
-                  aria-invalid={invalid}
-                  placeholder={productId ? undefined : t("skuAuto")}
-                  onChange={(event) => updateSimple({ sku: event.target.value })}
-                />
-              )}
-            </Field>
-            <Field label={t("barcode")} help={productId ? undefined : t("barcodeHint")} error={issueFor(undefined, "barcode")}>
-              {(invalid) => (
-                <Input
-                  value={simpleSku.barcode ?? ""}
-                  aria-invalid={invalid}
-                  inputMode="text"
-                  autoComplete="off"
-                  onChange={(event) => updateSimple(barcodePatch(event.target.value))}
-                />
-              )}
-            </Field>
-            {/* A service or a gift card is never packed or weighed. */}
-            {!kindRules.showWeight ? null : (
-              <Field label={t("weightGrams")} error={issueFor(undefined, "weight")}>
-                {(invalid) => (
-                  <NumberInput
-                    value={simpleSku.weight}
-                    aria-invalid={invalid}
-                    onValueChange={(weight) => updateSimple({ weight })}
-                  />
-                )}
-              </Field>
-            )}
-          </div>
+          {simpleInventory}
+          {simpleWeight}
         </div>
       ) : null}
 
@@ -787,6 +871,7 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
           stockElsewhere={stockElsewhere}
           incoming={incomingByVariant}
           costs={costsShown ? variantCosts : null}
+          productId={productId}
         />
       ) : options.length > 0 && !combinationsPending ? (
         <p className="text-body text-muted-foreground">{t("addOptionValues")}</p>

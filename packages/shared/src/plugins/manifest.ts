@@ -9,6 +9,7 @@ import { z } from "zod";
 import { isEventTopicFilter, topicMatchesAnyFilter, type EventTopic, type EventTopicFilter } from "../events";
 import { SUPPORTED_PLUGIN_API_VERSIONS } from "./api-version";
 import { parsePluginCronSchedule } from "./cron";
+import { FIRST_PARTY_PLUGIN_VENDOR, PLUGIN_ID_PATTERN } from "./ids";
 import { pluginSettingsSchemaSchema } from "./settings-schema";
 import { pluginProvidersSchema } from "./providers/descriptors";
 import { PROVIDER_KINDS } from "./providers/kinds";
@@ -16,9 +17,8 @@ import { PROVIDER_KINDS } from "./providers/kinds";
 /** Date-versioned like the event catalog; a manifest names the version it was built for. */
 export { PLUGIN_API_VERSION, SUPPORTED_PLUGIN_API_VERSIONS, type PluginApiVersion } from "./api-version";
 
-/** `vendor.name`: lowercase slugs; `scalius.*` is reserved for first-party plugins. */
-export const PLUGIN_ID_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?$/;
-export const FIRST_PARTY_PLUGIN_VENDOR = "scalius";
+/** `vendor.name` (in ./ids.ts, so id checks don't need this schema module). */
+export { FIRST_PARTY_PLUGIN_VENDOR, PLUGIN_ID_PATTERN };
 const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]{1,40})?$/;
 /**
  * RBAC permission names, as staff roles use them (`orders.view`,

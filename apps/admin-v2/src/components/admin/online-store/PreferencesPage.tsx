@@ -2,7 +2,7 @@ import { Fragment, useMemo, useState } from "react";
 import { useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Copy } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "~/lib/toast";
 import { postApiV1AdminSettingsSeo } from "@scalius/api-client/sdk";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";

@@ -1,7 +1,7 @@
 // Unit tests for Order tagger with the SDK's test harness (the platform's
 // runtime over an in-memory bridge; ctx.api answers from the callback).
 import { describe, expect, it } from "vitest";
-import { createPluginTestHarness } from "@scalius/plugin-sdk/testing";
+import { createPluginTestHarness, parsePluginUiDocument } from "@scalius/plugin-sdk/testing";
 import type { PluginApiCallInput } from "@scalius/plugin-sdk";
 import tagger from "./index";
 
@@ -53,13 +53,24 @@ describe("scalius.order-tagger", () => {
     expect(broken.records.get("tagged")?.size).toBe(0);
   });
 
-  it("summarizes what it handled on its admin page", async () => {
+  it("summarizes what it handled on its admin page, as a UI document the dashboard draws", async () => {
     const calls = api();
     const harness = createPluginTestHarness(tagger, { api: calls.answer });
-    await harness.event("order.paid", { type: "order", id: "ord_a" });
-    const page = await harness.route("admin", "summary");
-    expect(page.value).toMatchObject({
-      body: { type: "page", children: [{ type: "stat", label: "Orders handled", value: 1 }, { type: "list", items: [{ id: "ord_a", subtitle: "#paid" }] }] },
+    await harness.event("order.paid", { type: "order", id: "ord_a" }, {}, { occurredAt: "2026-10-03T08:00:00.000Z" });
+    const page = parsePluginUiDocument(((await harness.route("admin", "summary")).value as { body: unknown }).body);
+    expect(page).toMatchObject({
+      ok: true,
+      document: {
+        version: 1,
+        root: {
+          type: "page",
+          title: "Order tagger",
+          children: [
+            { type: "stat", label: "Orders handled", value: 1 },
+            { type: "card", children: [{ type: "table", rows: [{ id: "ord_a", to: { kind: "resource", resource: "order", id: "ord_a" }, cells: { tag: { badge: "#paid" }, at: { date: "2026-10-03T08:00:00.000Z" } } }] }] },
+          ],
+        },
+      },
     });
   });
 });

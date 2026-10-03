@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type SetStateAction } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
+import { toast } from "~/lib/toast";
 import { useSaveBar, type SaveBarEntry } from "~/components/admin/shared/SaveBar";
 import { readSettingsRevisionConflict } from "~/lib/admin-api-error";
 import { translate } from "~/i18n";

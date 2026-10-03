@@ -62,6 +62,27 @@ export interface FulfilledGroup {
  * order). Units the projection counts but no active row explains, as on
  * orders fulfilled before the ledger, go in one card per type at the end.
  */
+/**
+ * Units that came back, per hand-over card: a return line names the order
+ * line, not the parcel, so each line's returned units are taken from its
+ * hand-overs oldest first (FIFO), never more than a card holds. The cards
+ * together show exactly the units returned, each unit once.
+ */
+export function returnedByGroup(groups: readonly FulfilledGroup[], returned: ReadonlyMap<string, number>): Array<Map<string, number>> {
+  const left = new Map(returned);
+  return groups.map((group) => {
+    const taken = new Map<string, number>();
+    for (const line of group.lines) {
+      const remaining = left.get(line.item.id) ?? 0;
+      const take = Math.min(remaining, line.quantity);
+      if (take <= 0) continue;
+      taken.set(line.item.id, (taken.get(line.item.id) ?? 0) + take);
+      left.set(line.item.id, remaining - take);
+    }
+    return taken;
+  });
+}
+
 export function fulfilledGroups(order: Pick<Order, "items" | "fulfillments">): FulfilledGroup[] {
   const items = new Map(order.items.map((item) => [item.id, item]));
   const covered = new Map<string, number>();
@@ -127,4 +148,16 @@ export function isReadyForPickup(order: Pick<Order, "pickupReadyAt" | "pickup">)
 export function counterCashDue(order: Pick<Order, "paymentMethod" | "balanceDue" | "requiresShipping">): number | null {
   const due = Number(order.balanceDue ?? 0);
   return order.paymentMethod === "cod" && order.requiresShipping === false && due > 0 ? due : null;
+}
+
+/** What staff hand over by hand: own rider, counter pickup, a performed service. */
+export type ManualFulfillmentKind = "ship" | "pickup" | "service";
+
+/** Units of a line not handed to a courier yet (ship lines only). */
+export function remainingToSend(item: OrderItem): number {
+  return lineFulfillmentType(item) === "ship" ? unfulfilledUnits(item) : 0;
+}
+
+export function canSendWithOwnCourier(order: Order): boolean {
+  return canHandOver(order) && order.items.some((item) => remainingToSend(item) > 0);
 }

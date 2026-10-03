@@ -14,6 +14,7 @@ import { useResourceMutation } from "~/components/admin/resource/ResourceListPag
 import { bulkUpdateCustomerTags } from "~/lib/api-mutations/customers";
 import { queryKeys } from "~/lib/query-keys";
 import { useMessages } from "~/i18n";
+import { customerBulkMessages } from "~/i18n/customer-bulk";
 import { customersMessages } from "~/i18n/customers";
 import { resourceMessages } from "~/i18n/resource";
 import { TagInput, type TagInputHandle } from "./TagInput";
@@ -39,6 +40,7 @@ export function CustomerBulkActions({
   onExport: () => void;
 }) {
   const t = useMessages(customersMessages);
+  const b = useMessages(customerBulkMessages);
   const r = useMessages(resourceMessages);
   const [mode, setMode] = useState<Mode | null>(null);
   const [tags, setTags] = useState<string[]>([]);
@@ -67,7 +69,7 @@ export function CustomerBulkActions({
     const chosen = input.current?.flush() ?? tags;
     if (!mode || chosen.length === 0) return;
     change.mutate(
-      { variables: { mode, tags: chosen }, success: t(mode === "add" ? "tagsAdded" : "tagsRemoved") },
+      { variables: { mode, tags: chosen }, success: b(mode === "add" ? "tagsAdded" : "tagsRemoved") },
       {
         onSuccess: () => {
           setMode(null);
@@ -77,15 +79,15 @@ export function CustomerBulkActions({
     );
   };
   const title = mode === "remove"
-    ? count === 1 ? t("removeTagsTitleOne") : t("removeTagsTitle", { count })
-    : count === 1 ? t("addTagsTitleOne") : t("addTagsTitle", { count });
+    ? count === 1 ? b("removeTagsTitleOne") : b("removeTagsTitle", { count })
+    : count === 1 ? b("addTagsTitleOne") : b("addTagsTitle", { count });
 
   return (
     <>
       {canEdit ? (
         <>
-          <Button type="button" variant="outline" size="sm" onClick={() => open("add")}>{t("addTags")}</Button>
-          <Button type="button" variant="outline" size="sm" onClick={() => open("remove")}>{t("removeTags")}</Button>
+          <Button type="button" variant="outline" size="sm" onClick={() => open("add")}>{b("addTags")}</Button>
+          <Button type="button" variant="outline" size="sm" onClick={() => open("remove")}>{b("removeTags")}</Button>
         </>
       ) : null}
       <Button type="button" variant="outline" size="sm" onClick={onExport}>{t("export")}</Button>
@@ -94,7 +96,7 @@ export function CustomerBulkActions({
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{title}</DialogTitle>
-            <DialogDescription>{t("bulkTagsHelp", { count: CUSTOMER_TAGS_PER_REQUEST_MAX })}</DialogDescription>
+            <DialogDescription>{b("bulkTagsHelp", { count: CUSTOMER_TAGS_PER_REQUEST_MAX })}</DialogDescription>
           </DialogHeader>
           <div className="space-y-1.5">
             <Label htmlFor="customer-bulk-tags">{t("tags")}</Label>
@@ -113,7 +115,7 @@ export function CustomerBulkActions({
           <DialogFooter>
             <Button type="button" variant="outline" disabled={change.isPending} onClick={close}>{r("cancel")}</Button>
             <Button type="button" disabled={tags.length === 0 && !pending} loading={change.isPending} onClick={apply}>
-              {mode === "remove" ? t("removeTags") : t("addTags")}
+              {mode === "remove" ? b("removeTags") : b("addTags")}
             </Button>
           </DialogFooter>
         </DialogContent>

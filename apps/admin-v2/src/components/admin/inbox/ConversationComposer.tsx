@@ -1,6 +1,6 @@
 import { useId, useRef, useState } from "react";
 import { ImagePlus, X } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "~/lib/toast";
 import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs";

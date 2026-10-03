@@ -7,6 +7,7 @@ import {
     orderReturns,
     orderReturnLines,
     orderSupportRequests,
+    orderHolds,
     orderTaxSnapshots,
     customers,
     deliveryShipments,
@@ -428,6 +429,8 @@ export interface OrderListFactsRow {
     channel: OrderChannel;
     channelSource: string | null;
     openRequestType: string | null;
+    /** An app's hold for staff review is open (orders/holds.ts). */
+    onHold: number | boolean;
     codStatus: string | null;
     codDeliveryAttempts: number | null;
     returnedValueMinor: number;
@@ -458,6 +461,11 @@ export function orderListFactsSelection() {
             WHERE ${orderSupportRequests.orderId} = ${outerOrderId}
               AND ${orderSupportRequests.activeKey} IS NOT NULL
             LIMIT 1
+        )`,
+        // The partial open-holds index answers this per row.
+        onHold: sql<number>`EXISTS (
+            SELECT 1 FROM ${orderHolds}
+            WHERE ${orderHolds.orderId} = ${outerOrderId} AND ${orderHolds.releasedAt} IS NULL
         )`,
         codStatus: codTracking.codStatus,
         codDeliveryAttempts: codTracking.deliveryAttempts,
@@ -500,6 +508,7 @@ export function presentOrderListFacts(order: OrderListFactsRow & {
         channel: order.channel,
         channelSource: order.channelSource,
         openRequestType: order.openRequestType as OrderListItem["openRequestType"],
+        onHold: Boolean(Number(order.onHold)),
         cod: order.paymentMethod === PaymentMethod.COD && order.codStatus
             ? { status: order.codStatus, deliveryAttempts: order.codDeliveryAttempts ?? 0 }
             : null,

@@ -1,8 +1,9 @@
 // Add or edit one custom field definition (Settings › Custom data). The key,
 // type and owner are fixed once created; an edit is guarded by the revision
 // the dialog opened with. Validations are checked with the shared codec.
-import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { toast } from "sonner";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "~/lib/toast";
 import {
   CUSTOM_FIELD_MERCHANT_NAMESPACE,
   CUSTOM_FIELD_SCALAR_TYPES,
@@ -24,6 +25,7 @@ import {
 import { DEFAULT_CURRENCY, getDecimalPlaces } from "@scalius/shared/currency";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
 import { useDirtyDialogClose } from "~/components/admin/shared/use-dirty-dialog-close";
+import { useSubmitOnce } from "~/components/admin/shared/use-submit-once";
 import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -38,7 +40,11 @@ import { useMessages } from "~/i18n";
 import { customFieldMessages, type CustomFieldMessageKey } from "~/i18n/custom-fields";
 import { isAdminApiConflictError, readAdminApiErrorCode } from "~/lib/admin-api-error";
 import { getServerFnError } from "~/lib/api-helpers";
-import { useSaveCustomFieldDefinition, type CustomFieldDefinition } from "~/lib/api-query-options/custom-fields";
+import {
+  customFieldDefinitionsQueryOptions,
+  useSaveCustomFieldDefinition,
+  type CustomFieldDefinition,
+} from "~/lib/api-query-options/custom-fields";
 import { localDateTime } from "~/components/admin/custom-fields/custom-field-draft";
 
 /** Scalar types with a list form (all but true/false and JSON). */
@@ -123,11 +129,16 @@ export function CustomFieldDefinitionDialog({ ownerType, definition, open, onOpe
   const [errors, setErrors] = useState<Errors>({});
   const save = useSaveCustomFieldDefinition();
   const reset = save.reset;
+  const queryClient = useQueryClient();
+  const submitOnce = useSubmitOnce();
+  // Keys this dialog has sent a create for since it opened.
+  const sentKeys = useRef(new Set<string>());
 
   useEffect(() => {
     if (!open) return;
     setDraft(draftOf(definition));
     setErrors({});
+    sentKeys.current = new Set();
     reset();
   }, [open, definition, reset]);
 
@@ -149,7 +160,6 @@ export function CustomFieldDefinitionDialog({ ownerType, definition, open, onOpe
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (save.isPending) return;
     const found: Errors = {};
     const name = draft.name.trim();
     if (!name) found.name = t("nameRequired");
@@ -169,29 +179,52 @@ export function CustomFieldDefinitionDialog({ ownerType, definition, open, onOpe
       onOpenChange(false);
     };
     if (creating) {
-      save.mutate({
-        id: null,
-        body: {
-          ownerType,
-          name,
-          key: draft.key.trim(),
-          description,
-          type,
-          validations,
-          storefrontVisible: storefrontAllowed && draft.storefrontVisible,
-        },
-      }, { onSuccess });
+      const body = {
+        ownerType,
+        name,
+        key: draft.key.trim(),
+        description,
+        type,
+        validations,
+        storefrontVisible: storefrontAllowed && draft.storefrontVisible,
+      };
+      submitOnce(async () => {
+        const sentBefore = sentKeys.current.has(body.key);
+        sentKeys.current.add(body.key);
+        try {
+          await save.mutateAsync({ id: null, body });
+        } catch (error) {
+          // This dialog's own earlier create (its answer lost) made the field: that is a success.
+          if (!sentBefore || readAdminApiErrorCode(error) !== "CUSTOM_FIELD_KEY_TAKEN" || !await createdAlready(body)) throw error;
+          save.reset();
+        }
+        onSuccess();
+      });
     } else {
-      save.mutate({
-        id: definition.id,
-        body: {
-          expectedRevision: definition.revision,
-          name,
-          description,
-          validations,
-          ...(storefrontAllowed ? { storefrontVisible: draft.storefrontVisible } : {}),
-        },
-      }, { onSuccess });
+      submitOnce(async () => {
+        await save.mutateAsync({
+          id: definition.id,
+          body: {
+            expectedRevision: definition.revision,
+            name,
+            description,
+            validations,
+            ...(storefrontAllowed ? { storefrontVisible: draft.storefrontVisible } : {}),
+          },
+        });
+        onSuccess();
+      });
+    }
+  };
+
+  /** Whether the field this dialog asked for exists now, as asked (key, type and name). */
+  const createdAlready = async (body: { ownerType: CustomFieldOwnerType; key: string; type: CustomFieldType; name: string }) => {
+    try {
+      const { definitions } = await queryClient.fetchQuery({ ...customFieldDefinitionsQueryOptions(), staleTime: 0 });
+      return definitions.some((field) => field.ownerType === body.ownerType && field.namespace === CUSTOM_FIELD_MERCHANT_NAMESPACE
+        && field.key === body.key && field.type === body.type && field.name === body.name);
+    } catch {
+      return false;
     }
   };
 

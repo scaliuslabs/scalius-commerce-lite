@@ -5,7 +5,7 @@ import {
   type QueryClient,
   type UseMutationOptions,
 } from "@tanstack/react-query";
-import { toast } from "sonner";
+import { toast } from "~/lib/toast";
 import {
   deleteApiV1AdminOrdersByIdTimelineByEventId,
   postApiV1AdminOrders,

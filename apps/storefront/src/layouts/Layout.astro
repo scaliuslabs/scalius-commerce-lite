@@ -5,6 +5,7 @@ import Header from "../components/header/header.astro";
 import Footer from "../components/Footer.astro";
 import SidebarNav from "../components/header/SidebarNav.astro";
 import ThemeFonts from "../components/ThemeFonts.astro";
+import ThemePreviewBar from "../components/ThemePreviewBar.astro";
 import { getLayoutData, type LayoutData } from "@/lib/api";
 import { resolveRequestTheme } from "@/lib/storefront-theme-context";
 import { productGridFluidCss, productGridSpec } from "@/lib/product-card-layout";
@@ -28,6 +29,7 @@ import {
 } from "@/lib/commerce-structured-data";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import { themePreviewBridgeScript } from "@/lib/theme-preview-bridge";
+import { showsThemePreviewBar, themePreviewBarCopy } from "@/lib/theme-preview-bar";
 import { themeEditorOrigin } from "@scalius/shared/theme-editor-bridge";
 import {
   buildDocumentTitle,
@@ -121,6 +123,10 @@ const isThemePreview = themePreview !== null;
 const themeEditorBridge = isThemePreview
   ? themePreviewBridgeScript(themeEditorOrigin(getRuntimeDashboardUrl()))
   : "";
+// The merchant browsing the storefront under a live preview is told so, and can leave it.
+const themePreviewBar = showsThemePreviewBar(isThemePreview, Astro.request)
+  ? themePreviewBarCopy(layoutData?.storefrontCopy?.languageCode)
+  : null;
 if (themePreviewToken) {
   Astro.response.headers.set(
     "Cache-Control",
@@ -458,6 +464,8 @@ if (!window.$RefreshReg$) {
     >
       Skip to content
     </a>
+
+    {themePreviewBar && <ThemePreviewBar copy={themePreviewBar} />}
 
     <div class="site-wrapper grow">
       {

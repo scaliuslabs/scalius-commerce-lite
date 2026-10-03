@@ -55,6 +55,7 @@ export const orderDetailMessages = defineMessages({
     "appRisk.high": "High risk",
     "appRisk.checkedAt": "Checked {when}",
     "holds.title": "On hold for review",
+    "holds.badge": "Needs review",
     "holds.help": "It can't be shipped, handed over or moved to another status until the hold is released. You can still cancel it.",
     "holds.placedAt": "Held {when}",
     "holds.release": "Release hold",
@@ -295,7 +296,7 @@ export const orderDetailMessages = defineMessages({
     "requests.status.completed": "Done",
     "requests.status.cancelled": "Cancelled",
 
-    "messages.title": "Messages",
+    "messages.title": "Notifications sent",
     "messages.empty": "No messages sent yet.",
     "messages.loadFailed": "Couldn't load messages.",
     "messages.sendAgain": "Send again",
@@ -529,7 +530,6 @@ export const orderDetailMessages = defineMessages({
     archive: "Archive",
 
     // Wave A: fulfilment groups, pickup, service, buyer inputs.
-    "summary.title": "Summary",
     "group.ship": "Shipping",
     "group.pickup": "Pickup",
     "group.service": "Service",
@@ -653,6 +653,7 @@ export const orderDetailMessages = defineMessages({
     "appRisk.high": "বেশি ঝুঁকি",
     "appRisk.checkedAt": "যাচাই হয়েছে {when}",
     "holds.title": "রিভিউর জন্য আটকে রাখা হয়েছে",
+    "holds.badge": "রিভিউ দরকার",
     "holds.help": "হোল্ড ছেড়ে না দেওয়া পর্যন্ত অর্ডারটি পাঠানো, হস্তান্তর বা অন্য স্ট্যাটাসে নেওয়া যাবে না। চাইলে বাতিল করতে পারবেন।",
     "holds.placedAt": "আটকে রাখা হয়েছে {when}",
     "holds.release": "হোল্ড ছেড়ে দিন",
@@ -893,7 +894,7 @@ export const orderDetailMessages = defineMessages({
     "requests.status.completed": "সম্পন্ন",
     "requests.status.cancelled": "বাতিল করা",
 
-    "messages.title": "মেসেজ",
+    "messages.title": "পাঠানো নোটিফিকেশন",
     "messages.empty": "এখনো কোনো মেসেজ পাঠানো হয়নি।",
     "messages.loadFailed": "মেসেজ লোড হয়নি।",
     "messages.sendAgain": "আবার পাঠান",
@@ -1125,7 +1126,6 @@ export const orderDetailMessages = defineMessages({
     "timeline.rejectedCount": "{count}টি অনুমোদিত হয়নি",
     moreActions: "আরও অ্যাকশন",
     archive: "আর্কাইভ",
-    "summary.title": "সারসংক্ষেপ",
     "group.ship": "শিপিং",
     "group.pickup": "পিকআপ",
     "group.service": "সার্ভিস",

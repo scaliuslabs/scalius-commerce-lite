@@ -1,7 +1,7 @@
 import { canProcessOrderCodAction } from "@scalius/shared/order-state";
 import { getAdminOrderStatusTransitions } from "~/lib/admin-order-status-policy";
 import type { OrderActionPermissions } from "~/lib/order-action-permissions";
-import { canSendWithOwnCourier, remainingToSend } from "./ManualFulfillmentDialog";
+import { canSendWithOwnCourier, remainingToSend } from "./fulfilment-groups";
 import { canHandOver, fulfilledUnits, isReadyForPickup, lineFulfillmentType, unitsLeft } from "./fulfilment-groups";
 import type { Order, OrderHold, OrderSupportRequest } from "./types";
 

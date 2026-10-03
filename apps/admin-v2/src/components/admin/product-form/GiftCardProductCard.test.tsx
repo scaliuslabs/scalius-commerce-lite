@@ -44,10 +44,17 @@ describe("GiftCardProductCard", () => {
   });
 
   const toggle = () => host.querySelector<HTMLButtonElement>('button[role="switch"]');
+  /** Not a gift card: the card is listed closed, by its title and a one-line summary. */
+  const openCard = async () => {
+    expect(host.textContent).toContain(translate(giftCardProductMessages, "productSummaryOff"));
+    expect(toggle()).toBeNull();
+    await act(async () => host.querySelector<HTMLButtonElement>('button[aria-expanded="false"]')!.click());
+  };
 
   it("makes the product a gift card, digital and undiscounted, and explains the rules", async () => {
     await act(async () => root.render(<Harness isGiftCard={false} />));
     expect(host.textContent).not.toContain(translate(giftCardProductMessages, "productRuleNoGiftCardTender"));
+    await openCard();
 
     await act(async () => toggle()?.click());
 
@@ -69,6 +76,7 @@ describe("GiftCardProductCard", () => {
 
   it("can't be changed read-only", async () => {
     await act(async () => root.render(<Harness isGiftCard={false} readOnly />));
+    await openCard();
     expect(toggle()?.disabled).toBe(true);
   });
 });

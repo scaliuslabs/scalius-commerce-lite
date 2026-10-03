@@ -2,7 +2,7 @@ import { useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { ArrowDown, ArrowUp } from "lucide-react";
 import { useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { toast } from "sonner";
+import { toast } from "~/lib/toast";
 import {
   postApiV1AdminSettingsThemeDraft,
   postApiV1AdminSettingsThemePublish,

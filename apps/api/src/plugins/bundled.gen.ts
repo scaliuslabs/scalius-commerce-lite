@@ -31,8 +31,8 @@ export const BUNDLED_PLUGINS: Readonly<Record<string, BundledPluginEntry>> = {
     load: () => import("../../../../plugins/nagad/src/index"),
   },
   "scalius.order-tagger": {
-    version: "0.1.0",
-    sha256: "deb33b13dc0cd7dc36c26c4cdeb9957a19411f8e7618f7deff6f7f193c7c875f",
+    version: "0.1.1",
+    sha256: "09490a1adc6bdc77d8110293dfd7828a3ff8255e070ef645195ae0fc6eb1ef6f",
     load: () => import("../../../../plugins/order-tagger/src/index"),
   },
   "scalius.wishlist": {

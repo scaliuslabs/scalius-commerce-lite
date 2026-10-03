@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { X } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "~/lib/toast";
 import {
   getApiV1AdminSettingsPlatform,
   postApiV1AdminSettingsMedia,

@@ -65,6 +65,9 @@ describe("BuyerInputsCard", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
   const openAdd = async () => {
+    // A product without inputs lists the card closed, by its title.
+    const card = host.querySelector<HTMLButtonElement>('button[aria-expanded="false"]');
+    if (card) await act(async () => card.click());
     await act(async () => button(en.addBuyerInput)!.click());
     await settle();
   };

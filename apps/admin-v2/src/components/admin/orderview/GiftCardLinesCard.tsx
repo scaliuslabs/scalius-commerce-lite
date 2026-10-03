@@ -2,7 +2,7 @@
 // masked recipient, with "Resend" for staff who manage gift cards. The code is
 // never on this page; resending mails it to the card's contact.
 import { useMutation } from "@tanstack/react-query";
-import { toast } from "sonner";
+import { toast } from "~/lib/toast";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";

@@ -26,6 +26,6 @@ Public entries: `index.ts` (server) and `browser.ts` (asset kinds, upload and ke
 
 - Entitlements and keys only after settlement (and staff confirmation in `after_confirmation` mode).
 - A key is assigned at most once (trigger); too few keys delivers nothing: the batch rolls back, a `digital_keys_exhausted` staff alert is recorded (deduped per variant per day), and the 15-minute sweep retries after an import.
-- Pool = stock: import and revoke move keys and stock in one batch; delivery deducts through `reconcileInventoryForStatus(DELIVERED)`.
+- Pool = stock: import and revoke move keys and stock in one batch; delivery deducts through `reconcileInventoryForStatus(DELIVERED)`. No manual path changes a digital SKU's stock (`products/digital-stock-rules.ts`): editor quantities, inventory adjust/count, the scanner, CSV import, purchase orders and transfers refuse it, a SKU turns digital only without stock, and one with a ready pool keeps tracking.
 - A download count never passes its limit under concurrent mints. Tickets are bound to the cookie proof; a logged URL alone downloads nothing. Objects only under `private/digital/`, served as sandboxed attachments with Range.
 - Keys are encrypted at rest; plaintext never reaches logs, outbox payloads or delivery receipts. Staff see `last4` only.

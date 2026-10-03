@@ -61,6 +61,11 @@ describe("customer requests", () => {
     ));
     const review = [...host.querySelectorAll("button")].find((button) => button.textContent === en["requests.review"])!;
     await act(async () => review.click());
+    // The answer form loads the first time a request is reviewed.
+    await act(async () => {
+      await import("./OrderRequestResolveDialog");
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
 
     const dialog = document.querySelector('[role="dialog"]')!;
     expect(dialog.querySelector('[role="radio"][data-state="checked"]')).toBeNull();
@@ -87,6 +92,11 @@ describe("customer requests", () => {
         <OrderConversationCard order={order} request={{ action: "reviewCancellation", id: 1 }} />
       </QueryClientProvider>,
     ));
+    // The answer form loads the first time a request is reviewed.
+    await act(async () => {
+      await import("./OrderRequestResolveDialog");
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
     expect(document.querySelector('[role="dialog"]')?.textContent).toContain(request.reason);
   });
 
@@ -97,6 +107,11 @@ describe("customer requests", () => {
         <OrderConversationCard order={partlySent} request={{ action: "reviewCancellation", id: 1 }} />
       </QueryClientProvider>,
     ));
+    // The answer form loads the first time a request is reviewed.
+    await act(async () => {
+      await import("./OrderRequestResolveDialog");
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
     const dialog = document.querySelector('[role="dialog"]')!;
     await act(async () => dialog.querySelector<HTMLButtonElement>("#resolution-approved")!.click());
     expect(dialog.textContent).toContain(en["cancel.shippedOne"].replace("{count}", "1"));

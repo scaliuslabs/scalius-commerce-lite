@@ -40,6 +40,7 @@ import {
 import { normalizeInventoryOperationKey } from "./inventory-operations";
 import { checkAndAlertLowStock } from "./alerts";
 import { catalogBuyerStateRefreshStatementsForSkus } from "../products/catalog-projections";
+import { digitalStockError, isDigitalKind } from "../products/digital-stock-rules";
 import { mapWithBoundedConcurrency } from "../../utils/bounded-concurrency";
 
 const MAX_ATTEMPTS = 3;
@@ -238,7 +239,12 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/** Every edge landed: the SKU sits on its planned version and stock, and its movement is the edge into it. */
+/**
+ * Every edge landed: the SKU sits on its planned version and stock, and its
+ * movement is the edge into it. The SKU is still physical, so a SKU that
+ * turned digital meanwhile (its stock is its licence keys) loses the race and
+ * the re-plan refuses it.
+ */
 function casGuards(db: Database, edges: readonly StockCommandEdge[]): BatchItem<"sqlite">[] {
   const guards: BatchItem<"sqlite">[] = [];
   for (let index = 0; index < edges.length; index += GUARD_CHUNK) {
@@ -248,6 +254,7 @@ function casGuards(db: Database, edges: readonly StockCommandEdge[]): BatchItem<
       WHERE sku.id = ${edge.before.id}
         AND sku.stock_version = ${edge.stockVersionAfter}
         AND sku.stock = ${edge.stockAfter}
+        AND sku.fulfillment_kind = 'physical'
         AND edge.variant_id = sku.id
         AND edge.stock_version_after = sku.stock_version
     )`);
@@ -296,6 +303,8 @@ function assertLinesMovable(lines: readonly StockCommandLine[], skus: Map<string
     if (sku.deletedAt && !line.allowRetired) {
       throw new ConflictError(`SKU ${sku.sku} was removed from its product. Restore it, or leave it out.`);
     }
+    // A digital SKU's stock is its licence keys: no receipt or transfer moves it.
+    if (isDigitalKind(sku.fulfillmentKind)) throw digitalStockError({ sku: sku.sku, variantId: sku.id });
     if (sku.fulfillmentKind !== "physical") {
       throw new ValidationError(`SKU ${sku.sku} is not a physical item, so it has no stock to move.`);
     }

@@ -4,7 +4,7 @@ import { adminOrderCreateAttempts } from "@scalius/database/schema";
 import { and, eq, isNull, lte, or, sql } from "drizzle-orm";
 import { AppError, ServiceUnavailableError } from "@scalius/core/errors";
 import { generateOrderId } from "@scalius/shared/order-utils";
-import { normalizeOrderChannelSource } from "@scalius/shared/order-channel";
+import { normalizeOrderChannelSource } from "@scalius/shared/order-channel-source";
 import type { CreateOrderInput } from "../validation";
 
 export interface AdminOrderCreateAttemptIdentity {

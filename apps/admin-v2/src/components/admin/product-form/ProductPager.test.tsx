@@ -9,10 +9,12 @@ import { translate } from "~/i18n";
 import { productMessages } from "~/i18n/products";
 import { ProductPager } from "./ProductPager";
 
+const navigate = vi.hoisted(() => vi.fn());
 vi.mock("@tanstack/react-router", () => ({
   Link: ({ children, params, ...props }: { children: React.ReactNode; params: { productId: string } }) => (
     <a href={`/admin/products/${params.productId}/edit`} {...props}>{children}</a>
   ),
+  useNavigate: () => navigate,
 }));
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -67,5 +69,23 @@ describe("ProductPager", () => {
 
     expect(button("previousProduct")?.hasAttribute("disabled")).toBe(true);
     expect(button("nextProduct")?.getAttribute("href")).toBe("/admin/products/prod_b/edit");
+  });
+
+  it("opens the previous and next product with J and K, never while typing", async () => {
+    navigate.mockClear();
+    const client = new QueryClient();
+    client.setQueryData(queryKeys.products.list({ page: 1 }), page(["prod_a", "prod_b", "prod_c"]));
+    await render(client, "prod_b");
+    expect(button("nextProduct")?.getAttribute("aria-keyshortcuts")).toBe("K");
+
+    const input = document.createElement("input");
+    host.append(input);
+    act(() => { input.dispatchEvent(new KeyboardEvent("keydown", { key: "k", bubbles: true })); });
+    expect(navigate).not.toHaveBeenCalled();
+
+    act(() => { document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "k", bubbles: true })); });
+    expect(navigate).toHaveBeenLastCalledWith({ to: "/admin/products/$productId/edit", params: { productId: "prod_c" } });
+    act(() => { document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "j", bubbles: true })); });
+    expect(navigate).toHaveBeenLastCalledWith({ to: "/admin/products/$productId/edit", params: { productId: "prod_a" } });
   });
 });

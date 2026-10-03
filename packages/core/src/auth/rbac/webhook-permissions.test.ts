@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { getPagePermission, hasPageAccess } from "./page-permissions";
 import { getRoutePermission } from "./route-permissions";
-import { PERMISSIONS, getAllPermissions, isSensitivePermission } from "./permissions";
+import { PERMISSIONS } from "./permissions";
+import { getAllPermissions, isSensitivePermission } from "./permission-metadata";
 
 describe("webhook RBAC boundaries", () => {
   it("separates reads (webhooks.view) from every mutation and send (webhooks.manage)", () => {

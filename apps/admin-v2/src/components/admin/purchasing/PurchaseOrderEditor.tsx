@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { flushSync } from "react-dom";
 import { useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { toast } from "sonner";
+import { toast } from "~/lib/toast";
 import { X } from "lucide-react";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { PageHeader } from "~/components/admin/resource/PageHeader";

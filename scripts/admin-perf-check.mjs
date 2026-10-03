@@ -109,16 +109,18 @@ export function routeAncestry(routeFile, parentByFile) {
 
 /**
  * `chunks`: [{ fileName, isEntry, imports, moduleIds }]. Returns the chunk
- * file names that carry each route file's lazy page component.
+ * file names that carry each route file's lazy page component and loader
+ * (both load before the page renders).
  */
-export function componentChunksByRoute(chunks, routesDir) {
+export function renderChunksByRoute(chunks, routesDir) {
   const byRoute = new Map();
   const prefix = `${routesDir.split("\\").join("/")}/`;
   for (const chunk of chunks) {
     for (const id of chunk.moduleIds) {
       const normalized = id.split("\\").join("/");
-      if (!normalized.startsWith(prefix) || !normalized.endsWith("?tsr-split=component")) continue;
-      const routeFile = normalized.slice(prefix.length, -"?tsr-split=component".length);
+      const split = normalized.match(/\?tsr-split=(?:component|loader)$/);
+      if (!split || !normalized.startsWith(prefix)) continue;
+      const routeFile = normalized.slice(prefix.length, -split[0].length);
       const list = byRoute.get(routeFile) ?? [];
       list.push(chunk.fileName);
       byRoute.set(routeFile, list);
@@ -144,7 +146,7 @@ export function staticClosure(fileNames, chunkByName) {
 export function measureRoutes({ chunks, parentByFile, routesDir, brotliBytes }) {
   const chunkByName = new Map(chunks.map((chunk) => [chunk.fileName, chunk]));
   const entry = staticClosure(chunks.filter((chunk) => chunk.isEntry).map((chunk) => chunk.fileName), chunkByName);
-  const componentChunks = componentChunksByRoute(chunks, routesDir);
+  const renderChunks = renderChunksByRoute(chunks, routesDir);
   const sizeOf = (files) => [...files].reduce((sum, file) => sum + brotliBytes(file), 0);
   const lazyOnlyIn = (files, routeFile) => {
     const found = new Set();
@@ -162,7 +164,7 @@ export function measureRoutes({ chunks, parentByFile, routesDir, brotliBytes }) 
 
   const routes = [];
   for (const routeFile of [...parentByFile.keys()].sort()) {
-    const own = routeAncestry(routeFile, parentByFile).flatMap((file) => componentChunks.get(file) ?? []);
+    const own = routeAncestry(routeFile, parentByFile).flatMap((file) => renderChunks.get(file) ?? []);
     const files = new Set([...entry, ...staticClosure(own, chunkByName)]);
     routes.push({
       route: routeFile,

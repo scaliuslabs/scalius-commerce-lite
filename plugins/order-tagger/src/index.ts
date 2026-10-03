@@ -9,12 +9,12 @@
 // id, so the API returns the first note on a replay) and the custom field
 // (setting the same value again is a no-op for the merchant).
 
-import { definePlugin, PLUGIN_API_VERSION, type PluginContext, type PluginManifestInput } from "@scalius/plugin-sdk";
+import { adminContext, definePlugin, PLUGIN_API_VERSION, ui, type PluginContext, type PluginManifestInput } from "@scalius/plugin-sdk";
 
 export const manifest = {
   id: "scalius.order-tagger",
   name: "Order tagger",
-  version: "0.1.0",
+  version: "0.1.1",
   apiVersion: PLUGIN_API_VERSION,
   description: "Tags new paid orders and notes them on the order timeline, so your team sees at a glance what to pack.",
   author: { name: "Scalius" },
@@ -87,27 +87,37 @@ export default definePlugin({
 
   routes: {
     admin: {
-      summary: async (_request, ctx) => {
+      // A UI document (`ui.page`), which the dashboard checks and draws with its own components.
+      summary: async (request, ctx) => {
         const [count, recent] = await Promise.all([
           tagged(ctx).count(),
-          tagged(ctx).query({ orderBy: { field: "taggedAt", direction: "desc" }, limit: 10 }),
+          tagged(ctx).query({ orderBy: { field: "taggedAt", direction: "desc" }, limit: 10, cursor: adminContext(request).cursor }),
         ]);
         return {
-          body: {
-            type: "page",
-            title: "Order tagger",
-            children: [
-              { type: "stat", label: "Orders handled", value: count },
-              {
-                type: "list",
-                items: recent.records.map((record) => ({
-                  id: record.id,
-                  title: String(record.data.orderId),
-                  subtitle: record.data.tag === null ? "Below the minimum" : `#${String(record.data.tag)}`,
-                })),
-              },
-            ],
-          },
+          body: ui.page([
+            ui.stat("Orders handled", count),
+            ui.card("Recent orders", [
+              ui.table({
+                columns: [{ key: "order", label: "Order" }, { key: "tag", label: "Tag" }, { key: "at", label: "Paid" }],
+                rows: recent.records.map((record) => {
+                  const orderId = String(record.data.orderId);
+                  return {
+                    id: record.id,
+                    to: ui.to.resource("order", orderId),
+                    cells: {
+                      order: { text: orderId, to: ui.to.resource("order", orderId) },
+                      tag: record.data.tag === null
+                        ? { badge: "Below the minimum", tone: "neutral" as const }
+                        : { badge: `#${String(record.data.tag)}`, tone: "success" as const },
+                      at: { date: new Date(Number(record.data.taggedAt) || 0).toISOString() },
+                    },
+                  };
+                }),
+                pagination: { next: recent.nextCursor },
+                empty: { title: "No paid orders yet", text: "Orders show here once they are paid." },
+              }),
+            ]),
+          ], { title: "Order tagger", description: "Paid orders this app tagged and noted on their timeline." }),
         };
       },
     },
