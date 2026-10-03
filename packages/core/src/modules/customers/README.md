@@ -4,7 +4,7 @@ Customer records, the buyer's sign-in by one-time code, the identity rules that 
 
 - Layer L2. The domain imports only `settings` (`scripts/core-domain-graph.allow.json`).
 - Two entries. `index.ts` is the server API. `browser.ts` is the closed browser-safe entry: it exports only `otp-transport.ts` (`OtpQueuePayload`, `buildOtpQueuePayload`).
-- Main files: `customers.service.ts` (admin records), `customer-identity.ts` (identity rules), `customer-auth.service.ts` (sign-in, sessions, cookies, profile), `customer-auth-otp-challenges.ts`, `customer-auth-rate-limit.ts`, `otp-delivery-receipts.ts`, `customer-code-channels.ts` and `sign-in-readiness.ts` (channels and readiness), `customer-tags.ts`, `customer-segments.ts` and `customer-export.ts`.
+- Main files: `customers.service.ts` (admin records), `addresses.ts` (the address book and the one address resolution), `customer-identity.ts` (identity rules), `customer-auth.service.ts` (sign-in, sessions, cookies, profile), `customer-auth-otp-challenges.ts`, `customer-auth-rate-limit.ts`, `otp-delivery-receipts.ts`, `customer-code-channels.ts` and `sign-in-readiness.ts` (channels and readiness), `customer-tags.ts`, `customer-segments.ts` and `customer-export.ts`.
 - Not here: the buyer's account orders and guest-order claims (`orders`: `account-orders.ts`, `account-claims.ts`), marketing consent (`customer-marketing`), and order codes for Track your order and payment recovery (`orders`; they use the code channels from this domain).
 
 ## Identity rules (`customer-identity.ts`)
@@ -43,7 +43,7 @@ The queue consumer (`apps/api/src/queue-consumer.ts`) decrypts the delivery targ
 1. Find the owner of the proven identifier (`resolveProofOwner`): an e-mail resolves only to an account whose e-mail is verified, a phone only to an account whose phone is verified.
 2. Owner found: consume the code atomically, set `emailVerifiedAt` or `phoneVerifiedAt` and `lastAuthenticatedAt`, and create the session.
 3. No owner: check the code without using it up (it stays valid 10 minutes). A closed (soft-deleted) account gets "contact the store". Otherwise the route returns `needs_account_details` with a `suggestion` read from the latest order placed with that contact.
-4. The second call carries `account` (`name`, `phone`, `email`, `saveOrderAddress`). The name and phone are required (an e-mail sign-up must give a phone), and the e-mail is required when `customer_auth.email` is `required`. One batch inserts the customer (`origin = account`), a `signed_up` history row, the session and the verified-contact order link.
+4. The second call carries `account` (`name`, `phone`, `email`, `saveOrderAddress`). The name and phone are required (an e-mail sign-up must give a phone), and the e-mail is required when `customer_auth.email` is `required`. One batch inserts the customer (`origin = account`), a `signed_up` history row, the session and the verified-contact order link. With `saveOrderAddress`, the same batch copies the latest order's address snapshot as the first (default) address.
 
 A phone typed during an e-mail sign-up is only a contact. Proving it by code links its orders: `POST /phone/send-code` and `POST /phone/verify`.
 
@@ -74,7 +74,17 @@ Send limits (`customer-auth-rate-limit.ts`) use the D1 table `customer_auth_otp_
 - The selected relational provider is the authority for sessions. KV is not consulted. `getCustomerBySession` requires an unrevoked, unexpired row and a live (not soft-deleted) customer.
 - `POST /logout` clears the cookies and revokes the row. The storefront proxy `/api/auth/logout` also clears the order-receipt cookies.
 - Soft-deleting a customer revokes its sessions. `cleanupExpiredCustomerSessions` deletes expired rows and revoked rows older than 7 days.
-- `updateCustomerProfile` (`PUT /profile`) saves name, address, city, zone and area and checks the active city, zone and area hierarchy. `profileComplete` means address, city and zone are saved. It is never required.
+- `updateCustomerProfile` (`PUT /profile`) saves the name. The profile and the session carry `defaultAddress` (joined in the statement that reads them). `profileComplete` means the default address is complete (a line and, in Bangladesh, a city and thana) and was not saved with validation skipped. It is never required.
+
+## Address book (`addresses.ts`, MARKETS-DESIGN D7)
+
+- Table `customer_addresses` (migration 0113): canonical fields (`country_code`, `name`, `company`, `line1`, `line2`, `dependent_locality`, `locality`, `admin_area`, `postal_code`, `phone_e164`, `phone_raw`, `validation_skipped`) and the Bangladesh adapter (`city`, `zone`, `area` ids and names). At most one default per customer (partial unique index `customer_addresses_default_unique`). At most 50 addresses (`MAX_CUSTOMER_ADDRESSES`). The adapter columns are for Bangladesh only (check constraint).
+- `resolveAddress()` is the one resolution for the address book, staff orders and agents: the country's rules (`@scalius/shared/address-metadata`) decide what is required and drop unused fields; a known admin area is stored as its code. A Bangladesh address resolves its City/Thana/Area ids to active delivery locations in one statement, and the adapter fills `locality` (city name) and `dependent_locality` (thana name), never `admin_area`. The phone is read in the address country (E.164). Staff may pass `skipValidation`: the address is kept as typed and marked `validation_skipped`; a value too long for its field is never kept. A buyer never skips. A refusal is `AddressValidationError` (`details.reason = "address_invalid"`, `details.issues` per field).
+- `createCustomerAddress`, `updateCustomerAddress`, `setDefaultCustomerAddress`, `deleteCustomerAddress`, `listCustomerAddresses`: the first address is the default; a new default clears the old one in the same batch; deleting the default promotes the most recently changed other address.
+- First address of a new record: its id is `firstCustomerAddressId(customerId)` (`caddr_<customer id>`). Staff create, a new account with `saveOrderAddress`, a staff order edit or amendment that makes a new record, the store import and trigger `orders_seed_customer_address` use it. Its insert announces no `customer.updated`: the record's `customer.created` carries it, as when the address was a customer column. Every later address change is a `customer.updated`.
+- Trigger `orders_seed_customer_address`: a guest record (no account) without addresses takes its first shipping order's snapshot as its default address, for every order writer, with no extra statement in their batches. An order never writes an account's address book.
+- Routes: staff `dashboard.customers.addresses_{list,create,update,set_default,delete}` (`/api/v1/admin/customers/{id}/addresses`, `customers.view` to list, `customers.edit` to change); the signed-in buyer `/api/v1/customer-auth/addresses` (cookie, excluded from agents); agents `storefront.customer_addresses.manage` (one action per call, live delegated authority).
+- Privacy: the address book is private (`CACHE_DEP_EXEMPT_TABLES` in `@scalius/shared/cache-deps`): only the account, staff and agents with grants read it, never a public cached read.
 
 ## Code channels and readiness
 

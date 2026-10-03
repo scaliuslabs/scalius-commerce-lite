@@ -54,6 +54,7 @@ The service functions (list, get, save, delete, test, lookup) are in `index.ts`.
 - A list skips rows that fail to decrypt or parse. `getFraudProvider` returns `null` for a missing or unreadable row.
 - `saveFraudProvider` needs `name`, a public HTTPS `apiUrl` and the preset's credentials for a built-in checker.
 - `fraudLookupWithActiveProvider` uses the first active checker and throws `NotFoundError` when none is active.
+- A checker states the countries of the buyers it knows (`countries`: `"any"` or ISO codes; the built-in checkers know `["BD"]`). The lookup takes the order's shipping country (else the phone's country). For a country the checker does not know, it does not call the checker and returns `{ status: "country_unsupported", provider, countryCode }`; the route answers `unsupportedCountry` and the order page says so (MARKETS-DESIGN step 3a).
 - `getFraudProviderUrlIssue()` allows only an absolute public HTTPS URL: no credentials, port other than 443, query, fragment, `localhost`, `.local`, `.internal`, IP address or hostname without a dot.
 
 ## Routes

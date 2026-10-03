@@ -151,11 +151,26 @@ language with the merchant's edits).
 - **Market** (MARKETS-DESIGN step 2). The `checkout_authority` row of the
   authority batch also carries the backup market's price increment (no extra
   statement). The order insert writes `orders.market_id` itself
-  (`orderMarketIdSql()`): the active market of the shipping country (BD until
-  addresses are country-aware), else the backup market. A change of a
+  (`orderMarketIdSql()`): the active market of the shipping country, else
+  the backup market. A change of a
   market's status, increment or countries bumps `checkout_authority` (0112
   triggers). The checkout config reads the presence's market joined with its
   settings documents, in the statement it already ran.
+
+- **Shipping country** (MARKETS-DESIGN step 3a). The order takes
+  `shippingCountryCode` (absent: Bangladesh) and the canonical address
+  fields. The `checkout_authority` row also carries the countries of the
+  active markets (`sellingCountriesSql()`); another country is refused with
+  `details.reason = "shipping_country_unavailable"`. The address follows its
+  country's rules (`resolveStorefrontShippingAddress()`), and the phone is
+  read in the address country (E.164). Bangladesh keeps City/Thana/Area.
+  Delivery rates serve Bangladesh only until shipping zones by country
+  (`deliveryRatesServeCountry()`, the step 3b seam): another country gets
+  no delivery rate (`delivery_country_unavailable`), never a wrong fee.
+  The order insert writes the snapshot (`orderShippingAddressInsertColumns()`
+  leaves absent values out, so no extra bound parameter). No address-book
+  write: trigger `orders_seed_customer_address` gives a new guest record its
+  first address.
 
 ## Quantity bundles (catalogue slice 1c)
 

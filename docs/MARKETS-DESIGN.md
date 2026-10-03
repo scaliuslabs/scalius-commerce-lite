@@ -307,8 +307,8 @@ function returns the market, the presence and the reason:
   (`/api/market-suggestion`), never a redirect.
 - Checkout: the shipping country decides the order's market
   (`orderMarketId()`; its SQL twin `orderMarketIdSql()` runs inside each
-  order insert), else the backup market. The shipping country is BD
-  until addresses are country-aware (step 3).
+  order insert), else the backup market. Step 3a made addresses
+  country-aware.
 
 **Presences and links.** One route tree serves every presence. The gateway
 (`apps/storefront/src/worker.ts`, `src/lib/market-presence.ts`) removes the
@@ -373,10 +373,104 @@ step 6. A market with orders cannot be deleted; set it to draft. The API is
 (`market`). Delivery and payment methods are still store-wide.
 
 **Left for later steps.** Domain presences. Per-market delivery and payment
-methods (steps 3 and 6). Country-aware addresses, so every order's market is
-BD's today (step 3). Translations and localized slugs: a presence page shows
+methods (steps 3 and 6). Translations and localized slugs: a presence page shows
 the store's text under its own `lang` (step 4). The root page keeps the
 store's `lang`. Market currencies (step 6).
+
+## Step 3a implemented
+
+A store that sells only to Bangladesh behaves as before: the same checkout
+form, payloads, couriers and D1 calls and statements. Another country is
+possible wherever an address is entered, and fails closed where the store
+cannot serve it yet.
+
+**Rules** (D7). `scripts/generate-address-metadata.mjs` (`pnpm
+generate:address-metadata`) writes `packages/shared/src/address-metadata.data.ts`
+(252 countries) from Google libaddressinput (Apache-2.0, notice in the file)
+at a pinned commit. It merges `RegionDataConstants.java` (format, required
+and upper fields, label types), `region_metadata_constants.cc` (postal
+examples) and `testdata/countryinfo.txt` (postal pattern, admin areas). It
+keeps a postal pattern only when every example matches it, and admin areas
+only when the format uses them. `@scalius/shared/address-metadata` (server
+only; a source policy refuses it in storefront and dashboard code) gives
+Saleor's `addressValidationRules` shape. `@scalius/shared/address` (browser
+safe) holds the type, `validatePostalAddress()` and the display formats. The
+API serves `GET /api/v1/address-rules` and `/{countryCode}`
+(`storefront.address_rules.countries`, `.get`): public cached reads, the same
+in every market, no D1.
+
+**Schema.** Migration `0113_country_aware_addresses` (D1/Turso file,
+PostgreSQL sidecar, ledger digest, schema contract 113) adds the order
+snapshot: `shipping_address_line2`, `shipping_country_code`,
+`shipping_dependent_locality`, `shipping_locality`, `shipping_admin_area`,
+`shipping_postal_code`, `shipping_company`, `shipping_name` and
+`shipping_phone` (null: the order contact), `shipping_validation_skipped`.
+`shipping_address` stays the first line. Existing orders with an address are
+backfilled BD, with `locality` from the city name and `dependent_locality`
+from the thana name; no admin area is invented. It adds the address book
+`customer_addresses` (customers README), moves each customer's address into
+it as the default (marked `validation_skipped` when incomplete), and drops
+the address columns of `customers` and `customer_history`. Billing addresses
+are not in this step.
+
+**Triggers.** The shipping address triggers refuse a shipped order without
+the fields its country requires: Bangladesh needs City and Thana; another
+country needs its required fields unless staff skipped validation. A raw row
+without a country counts as Bangladesh (like `market_id`). The bodies are one
+statement and the guards are in `WHEN` (remote D1 rule).
+`orders_seed_customer_address` gives a new guest record its first address
+from its first shipping order. Event triggers: a change to the order snapshot
+is `order.updated`; an address-book change is `customer.updated`, except a
+record's first address written with the record (`caddr_<customer id>`).
+
+**Checkout.** The countries the active markets sell to are the checkout's
+countries (read in the authority statement); others are refused. The address
+follows its country's rules; the phone is read in the address country. The
+order's market is the shipping country's. Delivery rates serve Bangladesh
+only until shipping zones by country (step 3b): another country gets no
+delivery rate (`deliveryRatesServeCountry()` is the seam), and pickup still
+works.
+
+**Couriers and fraud checkers** state their countries in the provider port
+(`countries`: `"any"` or ISO codes). Pathao, Steadfast and the built-in fraud
+checkers state `["BD"]`. The order page offers a courier only for an order
+shipping to its countries and names the others with the reason; a fraud
+check for another country is not sent and says why.
+
+**Dashboard.** The customer page has an address book (add, edit, set as
+default, delete); a new customer may get a first address. The staff order
+form and the order's edit dialog pick a country and show its fields from the
+rules; Bangladesh keeps the City → Thana → Area picker. Staff may save an
+address that breaks its rules after the API refused it; it shows "Not
+checked". Copy is in English and Bangla.
+
+**Storefront.** The country field shows only when the store sells to two or
+more countries. The chosen country's block shows with CSS alone, so checkout
+and the account address book work without JavaScript; with it, the rules
+hide unused fields, mark required ones, show a postal example and offer the
+regions. Another country's delivery says "We don't deliver to {country}
+yet". Checkout prefills the account's default address. Account → Profile is
+an address book on plain POSTs.
+
+**Agents and MCP.** New registry rows: `dashboard.customers.addresses_*`,
+`storefront.customer_addresses.manage` and `storefront.address_rules.*`. Staff
+and agent order creation, order edits and customer creation take the
+canonical address (`shippingCountryCode` and `shipping*`, or `address`).
+The SDK is regenerated.
+
+**DVC.** No buyer-visible column: orders and the address book are private
+(`customer_addresses` is exempt with its reason). Address rules are code;
+the Worker version in every cache key covers them.
+
+**Cost.** D1 calls and statements are unchanged in every free-plan budget
+scenario (29 per plan). An order that seeds an address book writes one more
+row (the address); nothing else changes.
+
+**Left for later steps.** Shipping zones and rates by country, and per-market
+delivery methods (3b). Tax regions, the system tax provider and
+`prices_include_tax` per market (3c). Billing addresses. Address
+autocomplete. Quick checkout ("Buy now") and agent buyer contexts keep the
+Bangladesh address until 3b. Customer segments by country.
 
 ## Non-goals in this wave
 

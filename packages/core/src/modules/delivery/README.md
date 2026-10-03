@@ -24,6 +24,7 @@ The `delivery` domain owns the courier port and its adapters, saved courier acco
 
 - Every courier implements the courier port (`@scalius/shared/plugins/providers/courier`). `couriers/port.ts` adds `setup()`, `preflight()` and `trackingUrl()`.
 - A delivery provider row names its courier in `type`: `pathao`, `steadfast`, or an installed app's `<plugin id>:<provider id>`. Delivery and fulfilment code never branch on the courier.
+- A courier states the countries it delivers to (`countries`: `"any"` or ISO codes; Pathao and Steadfast deliver to `["BD"]`). The provider list returns them. The order page offers a courier only for an order shipping to one of its countries and names the others with the reason; the bulk booking skips such orders. `createShipment()` refuses the country before any write, as a last guard (MARKETS-DESIGN step 3a).
 - `createCourierProviders(apps)` builds one request's catalog: built-in couriers first, then app couriers. An app cannot shadow a built-in id. The API loads app couriers only when a row names one (`requestCourierProviders()` in `apps/api/src/plugins/providers/courier.ts`). Without that source, only built-ins exist.
 - `Courier.setup(row, key)` reads a row once. It returns the call settings (null when unreadable: never call the courier), the readiness summary and a setup fingerprint.
 - A built-in courier keeps encrypted credentials on the row. `readRowCourierSetup()` reads them strictly with `CREDENTIAL_ENCRYPTION_KEY`. An app courier's row has no credentials: its settings and readiness live in the app.
