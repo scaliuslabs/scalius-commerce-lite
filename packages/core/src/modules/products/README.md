@@ -1,102 +1,85 @@
-# Products Core Module
+# Products
 
-What a product and its SKUs are, and the product rules other domains read through: public eligibility, buyer pricing and projections, money, media projections, the option model, the SKU alert level that bands buyer availability, customization, content blocks, bundles, EMI and the digital and gift-card stock rules, plus the catalogue projections that cache them. It depends on settings only.
+The product model and the rules other domains read: public eligibility, buyer pricing, the option model, money, product media, the low-stock policy, and the catalogue projections that cache them. Audience: contributors and coding agents.
 
-The dashboard's product editor (create, update, duplicate, trash, delete, variants, the option matrix and the aggregate revision) lives in [`../product-admin`](../product-admin/README.md) and builds on this module and inventory. Buyer-facing catalogue reads (listings, facets, product page, search, feeds, sitemaps, recommendations, storefront sections) live in [`../catalog`](../catalog/README.md). Both depend on this module, never the reverse.
+This domain reads and defines. [`product-admin`](../product-admin/README.md) writes products (the dashboard editor). [`catalog`](../catalog/README.md) serves buyer reads (listings, product page, feeds, sitemaps). Both depend on this domain, never the reverse.
 
-Public entry: `index.ts`.
+## Entries
 
-## Features
+- `index.ts` is the only entry. There is no `browser.ts`. It re-exports every file in the table below.
 
-- Paginated product listing with FTS5 full-text search (admin + storefront)
-- Barcode-aware search: auto-detects digit-only 8-13 char queries and searches by exact barcode match in addition to FTS
-- Product CRUD with slug uniqueness enforcement
-- Soft delete / restore / permanent delete lifecycle with order/discount safety checks
-- Bulk soft-delete and bulk permanent-delete with order/discount guards
-- Ordered product media: up to 250 immutable associations to global Media assets, with one explicit featured item and dense request order stored in `productMedia`
-- Image-only projection uses featured image, featured-video poster, ordered image, then ordered-video poster; it never returns a placeholder or video URL as an image
-- Rich content sections (additional info): arbitrary titled HTML blocks stored in `productRichContent`, ordered by `sortOrder`
-- Product attributes: many-to-many via `productAttributeValues`, linked to global `productAttributes` definitions
-- Normalized product options: up to five merchant-named axes and 150 potential Cartesian combinations, with any non-empty active SKU subset stored in `productOptionDefinitions`, `productOptionValues`, and `productVariantOptionValues`
-- Variant CRUD: selected option values, optional exact image association, weight, globally unique SKU/barcode identities, price, stock, and percentage or flat discount. `NULL` image means featured/product image fallback; videos are never exact SKU images.
-- Atomic full-matrix save with aggregate-revision concurrency, stock-version guards, movement-ledger claims, safe combination retirement, and D1-batched writes
-- Soft-deleted variants filtered out: all variant queries use `isNull(deletedAt)` or `deletedAt IS NULL` conditions
-- Discount type support: both percentage and flat amount discounts at product and variant level
-- `ProductWithDetails` type includes `additionalInfo` (`{id, title, content, sortOrder}[]`) and `attributes` (`{attributeId, value}[]`)
-- `ProductListItem` type includes `discountType`, `discountAmount`, and `discountPercentage` fields
-- `getProducts()` selects `discountType` and `discountAmount` alongside `discountPercentage` for the admin list
-- `getProductDetails()` fetches `productRichContent` (mapped to `additionalInfo`) and `productAttributeValues` (mapped to `attributes`)
-- Storefront product listing with attribute-based filtering (AND logic across attributes), with page rows/count read in one DB wave and image/category enrichment read in one dependent wave
-- Storefront category-product listing delegates to `getStorefrontCategoryProducts()`, which reuses the shared public product predicate/sort/attribute-filter helpers without paying for the global product list's variant/category enrichment
-- Storefront product detail: parallel fetching of images, variants, rich content, attributes, category, and ranked recommendations (`catalog/recommendations.ts`)
-- Storefront search: lightweight variant-aware product search for cart/checkout use
-- Discounted price calculation supporting both percentage and flat discount types
-- Feature extraction from description (parses bullet-point lines)
-- SKU-first purchasability: every sellable product has a persisted `productVariants` row. Simple products use exactly one protected default SKU with no option assignments. Optioned products use non-default SKUs whose assignment set contains exactly one active value for every active product option; incomplete, mixed-shape, or fake default rows fail closed.
-- Product options are arbitrary merchant-defined axes, not fixed size/color slots. An axis may explicitly map to `size`, `color`, `material`, `pattern`, or `none` for catalog standards; each non-`none` mapping can be claimed by only one axis. Combination identity is the axis-ordered option-value ID sequence, independent of request order.
-- Product editor concurrency is aggregate-versioned. Admin detail and list/trash rows expose `aggregateRevision`; every direct product-editor mutation requires `expectedAggregateRevision`, increments the product revision exactly once in the same D1 batch, and returns the new revision. External category/attribute/tax cascades bump affected product revisions atomically so an open editor becomes stale. Stale direct writes fail with `PRODUCT_REVISION_CONFLICT` and safe expected/current revision details. Operational inventory transitions remain separately guarded by SKU `stockVersion` and ledger v2.
-- SKU and barcode writes trim values and use global case-insensitive identity. New SKUs without a merchant barcode receive a stable internal `code128` identity; retail barcode types validate supported shape/checksum rules, and discovery outputs whitelist only true retail identifiers. Migration 0006 installs normalized unique indexes plus canonical row triggers, and scanner/admin lookup uses those indexed identities.
-- Public catalog eligibility is centralized in `public-eligibility.ts`: storefront lists/details/search, global search, filterable attributes, and collection/homepage product resolution must all require a buyer-resolvable active SKU topology, while stock availability remains a separate display/checkout concern. Buyer-facing `hasVariants` means at least one non-default SKU with a real customer option, not the protected default SKU. Public product lists also project `availableForSale` from the same SKU topology (`trackInventory = false` or positive `stock - reservedStock`), so catalog feeds can match product-page JSON-LD and checkout availability without variant N+1 reads. The dedicated feed projection carries `canonicalPath`, option-axis mapping, and supported variant barcode fields so storefront XML can emit canonical product links, `variant_option` pairs, ProductGroup-compatible standard attributes, and true GTINs without expanding normal listing cards.
-- Storefront buyer availability uses `apps/storefront/src/lib/product-sellable-variants.ts` so product detail, JSON-LD, stock badges, and `/buy/{slug}` all classify simple/optioned/unavailable products through one resolver.
+| File | Owns |
+|------|------|
+| `types.ts` | Zod schemas for variant create and update, `ProductWithDetails`, `ProductListItem`, listing filter and feed projection types. |
+| `option-model.ts` | Option reads, selected-value resolution, axis-ordered combination keys, `MAX_PRODUCT_OPTION_AXES` (5), `MAX_PRODUCT_OPTION_COMBINATIONS` (150). |
+| `variant-identity.ts` | SQL predicates that match the partial normalized barcode index. Use them for every barcode lookup. |
+| `public-eligibility.ts` | `publicProductBaseConditions`, `publicProductHasBuyerResolvableSku`, `publicProductHasAvailableBuyerSku`, `operationalSkuRowPredicate`, `defaultProductSkuValues`. |
+| `buyer-projection.ts`, `money.ts` | The one-row-per-product buyer pricing projection, price ranges, `effectivePriceMinorSql`, and minor-unit to decimal conversion. |
+| `media.ts` | Product media reads and the image resolvers: product image, card images, exact SKU image. |
+| `low-stock-policy.ts` | The `inventory` settings document and the effective alert level SQL. |
+| `catalog-projections.ts` | Refresh and rebuild of `product_buyer_state` and `product_facet_values`. |
+| `content-blocks.ts`, `bundles.ts`, `customization.ts`, `emi.ts` | Product page sections: content blocks, quantity bundles, buyer inputs, the informational EMI line. |
+| `digital-stock-rules.ts`, `gift-card-rules.ts` | Write guards that keep digital and gift-card SKUs consistent. |
 
-## Files
+## Layer and imports
 
-| Path | Description |
-|------|-------------|
-| `index.ts` | Public entry |
-| `types.ts` | Zod schemas for single-SKU create/update and shared product/storefront projection types. |
-| `media.ts` | Bounded association loader and the shared product/SKU image resolvers. |
-| `option-model.ts` | Normalized option reads, assignment resolution, axis-ordered combination labels/keys, the five-axis/150-combination limits. |
-| `variant-identity.ts` | Normalized SKU/barcode identity: the predicates that match the partial normalized barcode index exactly. |
-| `public-eligibility.ts` | Shared public catalogue predicates and default simple-SKU values. Every buyer-facing surface uses these instead of checking only `products.isActive` and `products.deletedAt`. |
-| `buyer-projection.ts`, `money.ts` | Integer buyer pricing and availability projections, store-currency helpers. |
-| `low-stock-policy.ts` | A SKU's alert level (its own, else the store default from the `inventory` settings document) and the dashboard low/needs-restock conditions; the same level bands buyer availability, so it lives with the buyer rules. |
-| `catalog-projections.ts` | `catalogProjectionRefreshStatements()` (both projections, per product) and `catalogBuyerStateRefreshStatementsForSkus()` (buyer state, per SKU, for stock writes): statements every product, SKU, stock and checkout batch appends after its ledger edge and CAS, at most 90 products each through one `json_each` parameter; `rebuildCatalogProjections()` recomputes them in keyset pages. Single-sourced from the buyer pricing projection and the public eligibility predicate. `catalog-projections.d1.test.ts` is the drift test. |
-| `content-blocks.ts` | The `content_blocks` section (bounded list, `content_block` chunk read, replace with keep-by-id; strict `@scalius/shared/product-content-blocks` schemas, sanitised rich-text HTML, ready media checked and guarded in the batch) and the product page's one ordered block read. Tabs mirrored from `product_rich_content` (0090 triggers, id `pcb_<row id>`) are read-only here and keep their legacy ids on the page until the contract step drops that table. |
-| `bundles.ts` | The `bundles` section (quantity tiers, whole taka, no gift cards) and the active-tier reads the product page and checkout price from. |
-| `emi.ts` | The product page's "EMI on card payment, from X/month" line from the `emi` settings document; informational only. |
-| `digital-stock-rules.ts` | A digital SKU's stock is its licence keys: every manual path (create, product/variant/option-matrix saves, inventory adjust and count, scanner, CSV import, purchase orders, transfers) refuses to change it with one `ValidationError` (`details.reason = "digital_stock_is_keys"`, `details.field` where there is one). A SKU turns digital only with no stock (or exactly its unused keys), and a digital SKU with a ready key pool keeps tracking. Batch guards keep it true against a racing kind or stock change. Key import/revoke and order flows still move the stock; gift cards keep their own rules (`gift-card-rules.ts`). Tests: `digital-stock.d1.test.ts` (here, `inventory/`, `store-transfer/digital-stock-import`). |
+- Layer L2. Imports `settings` only (currency helpers and the `currency` and `emi` documents). It also uses `settings-store`, `cache-deps` and `packages/core/src/integrations/storage.ts` (public media URL).
+- Imported by `analytics`, `catalog`, `categories`, `checkout`, `inventory`, `orders`, `product-admin`, `promotions` and `store-transfer`.
 
+## Tables
 
-## API Endpoints
+| Table | Role and constraints |
+|-------|----------------------|
+| `products` | Merchandising container. No stock column. Unique `slug`. Carries `aggregate_revision`, `price_minor`, discount columns, `product_condition` (`new`, `refurbished`, `used`, or null), `brand_id`, `tax_class_id`, `warranty_policy_id`, `page_template`, `emi_eligible`, `is_gift_card`, SEO flags, `customization_schema` (JSON, at most 4,096 characters). |
+| `product_variants` | The SKU: the only sellable and inventory identity. Unique `lower(trim(sku))`. Unique `lower(trim(barcode))` when set. CHECK: a default SKU has no option key, a non-default SKU has one. Unique `(product_id, option_combination_key)` among live non-default SKUs. Holds `stock`, `reserved_stock`, `stock_version`, `cost_minor`, `fulfillment_kind`, `image_id`. |
+| `product_option_definitions` | One option axis. `position` 0 to 4. `standard_mapping` is `size`, `color`, `material`, `pattern` or `none` (default). Unique live name per product. |
+| `product_option_values` | One value of an axis. Unique live value per axis. |
+| `product_variant_option_values` | SKU to value assignment. Primary key `(variant_id, option_definition_id)`. |
+| `product_media` | Ordered gallery. Id prefix `pmed_`. Unique `(product_id, media_id)` and `(product_id, sort_order)`. At most one primary row. Foreign key to `media` is `restrict`. |
+| `product_content_blocks`, `product_bundles` | Typed page blocks (at most 40) and quantity tiers (at most 6). |
+| `product_rich_content` | Legacy tabs. Triggers mirror each row into a read-only `tabs` content block (`pcb_<row id>`). |
+| `product_buyer_state`, `product_facet_values` | Projections of public eligibility, card pricing, availability band, brand, category and facet values (migration 0090). Never checkout authority. |
 
-### Admin Attributes (`/api/v1/admin/attributes`)
+## Rules
 
-| Method | Path | Handler | Description |
-|--------|------|---------|-------------|
-| GET | `/` | inline | Paginated list with search, sort, trash toggle, value counts |
-| POST | `/` | inline | Create attribute (name, slug, filterable, options) |
-| PUT | `/{id}` | inline | Update attribute fields |
-| DELETE | `/{id}` | inline | Soft delete (blocked if in use by products) |
-| DELETE | `/{id}/permanent` | inline | Hard delete |
-| POST | `/{id}/restore` | inline | Restore soft-deleted attribute |
-| POST | `/bulk-delete` | inline | Bulk soft or permanent delete |
-| POST | `/bulk-restore` | inline | Bulk restore |
-| GET | `/{id}/values` | inline | List unique values with product counts, preset flags, sample products |
-| POST | `/{id}/values` | inline | Add preset value to options array |
-| PUT | `/{id}/values` | inline | Rename value across all products + options array |
-| DELETE | `/{id}/values` | inline | Remove value from all products + options array |
+- A product holds no inventory. Every sellable item is a SKU. A simple product has exactly one hidden default SKU (`is_default = 1`, no option key, id `var_default_<productId>`).
+- A product with options keeps one active SKU per chosen combination. Each active SKU assigns exactly one value of every active axis. Mixed shapes fail closed (`publicProductHasBuyerResolvableSku`).
+- Option axes are merchant-named, up to five. `size` and `color` are two optional `standard_mapping` values, not fixed slots. A mapping other than `none` belongs to one axis. Feeds and ProductGroup read the saved name and mapping, never an assumed size or color.
+- A combination key is the value ids in axis order joined by `|`. Request order never creates a second identity.
+- SKU and barcode identity is global and case-insensitive (migration 0006). A new SKU without a barcode gets an internal Code 128 identity.
+- `product_variants.image_id` is the only variant-image authority (migration 0007 removed the mapping tables). It is null or a ready image association of the same product. The triggers `product_variants_identity_insert_guard` and `product_variants_identity_update_guard` enforce this.
+- Image precedence: exact SKU image, then the product's featured image. A null `image_id` means the product image. A video never serves as an image URL. Its poster image can.
+- A public product is active, not trashed and has a buyer-resolvable SKU topology. Stock is not part of eligibility. Buyer reads use the predicates in `public-eligibility.ts`, never `is_active` and `deleted_at` alone.
+- A product is `availableForSale` when at least one SKU in its buyer pool is untracked or has `stock - reserved_stock > 0`. Feeds, JSON-LD and checkout read the same rule.
+- A product's brand is the record `brand_id`, never an attribute. The editor accepts any brand that is not in trash (draft is allowed). Feeds, JSON-LD and the product page publish only a published, live brand and never a placeholder.
+- `product_condition` null means unknown. Feeds and JSON-LD emit a condition only from this column, and omit it when it is null.
+- A valid SKU discount overrides the product discount. A percentage discount rounds half-up to the store currency's cash unit (whole taka for BDT) and never exceeds the price.
+- The alert level of a SKU is its own `low_stock_threshold`, else the store default. Level 0 turns alerts off. The same level bands buyer availability.
+- Money is integer minor units. `presentCatalogPrice` converts to decimal once, at the edge. A staff read of a SKU row adds `cost`. Buyer reads never carry it.
+- A digital SKU's stock is its licence keys. Every manual stock path refuses to change it (`details.reason = "digital_stock_is_keys"`). A SKU turns digital only with no stock, and a digital SKU with a ready key pool keeps tracking.
+- A gift-card product has only digital, untracked, undiscounted SKUs and no bundles. Every aggregate batch ends with `buildGiftCardProductRulesGuard`.
+- Customization: at most 10 fields. Prices are minor units in storage. A change advances the aggregate revision and fences in-flight checkouts.
+- Bundle tiers need a quantity from 2 to 100. Triggers on `product_bundles` bump `checkout_authority` on every insert, price-relevant update and delete.
+- The EMI line is informational. It shows only when the `emi` document is enabled, the product is `emi_eligible` and a plan applies.
 
-### Storefront reads
+## Catalogue projections
 
-See [catalog](../catalog/README.md#api-endpoints).
+- Every write that can change a projection appends `catalogProjectionRefreshStatements` (or the SKU-scoped `catalogBuyerStateRefreshStatementsForSkus` for stock writes) to its own batch, after the ledger edge and the `stockVersion` CAS.
+- A statement group covers at most 90 products through one `json_each` parameter.
+- The per-write facet refresh rewrites only rows that differ, so unchanged saves fire no DVC trigger.
+- `rebuildCatalogProjections` recomputes in keyset pages of 90. One call handles 900 products by default and 2,700 at most.
+- The API queues the queue job `catalog.projections.rebuild` nightly (first cron tick at or after 20:00 UTC) and on the first cron tick of a new API version (`apps/api/src/scheduled/catalog-projections.ts`).
+- To heal or fill by hand, call `POST /api/v1/admin/catalog/projections/rebuild` (`PRODUCTS_EDIT`). Send `{}`, then `{ "afterProductId": <nextAfterProductId> }`, until `done` is true.
 
-## Dependencies
+## Settings and DVC
 
-### This module depends on:
-- `@scalius/database/schema` -- products, normalized option definitions/values/assignments, variants, images, rich content, attributes, categories, orders, and inventory history
-- `@scalius/core/search` -- `ftsMatch`, `sanitizeFtsQuery` for FTS5 full-text search
-- `@scalius/core/errors` -- `NotFoundError`, `ConflictError`, `ValidationError`
-- `drizzle-orm` -- query building, batch operations
-- `nanoid` -- ID generation (prefixed: `prod_`, `img_`, `var_`, `prc_`, `val_`, `attr_`)
-- `zod` -- validation schemas
+- Declares the settings document `inventory` (`defaultLowStockThreshold`) in `low-stock-policy.ts`. Reads `currency` and `emi` from `settings`.
+- Readers declare `deps.inventoryBands()`, `deps.settings()` for `currency` and `emi`, `deps.media()` for an unready poster, and `deps.mediaItems()` for content-block files.
+- Triggers on each product table advance `p:<id>` and the list keys. The registry is `packages/shared/src/cache-deps.ts`. See [`cache-deps`](../../cache-deps/README.md).
 
-### Depends on this module:
-- `apps/api/src/routes/admin/products.ts` -- admin API routes
-- `apps/api/src/routes/products.ts` -- storefront API routes
-- `apps/admin-v2/src/lib/api-query-options/products.ts` -- dashboard queries (generated SDK)
-- `apps/admin-v2/src/components/admin/ProductForm.tsx` -- admin form (generated SDK)
-- `apps/admin-v2/src/components/admin/ProductView.tsx` -- admin product view (via route query, uses `info.title`/`info.content` for additionalInfo)
-- `apps/admin-v2/src/components/admin/product-form/variants/` -- variant management (via fetch)
-- `apps/storefront/src/lib/api/products.ts` -- storefront API client (via fetch, edge-cached)
-- `apps/storefront/src/pages/products/[slug].astro` -- product detail page
+## Where to look
+
+- Writers: [`product-admin`](../product-admin/README.md). Buyer reads: [`catalog`](../catalog/README.md). Stock movements: [`inventory`](../inventory/README.md).
+- Dashboard: `apps/admin-v2/src/routes/admin/products/**`, `components/admin/ProductForm.tsx`, `components/admin/product-form/`.
+- Storefront SKU classification: `apps/storefront/src/lib/product-sellable-variants.ts`.
+- Tests: `public-eligibility.test.ts`, `buyer-projection.test.ts`, `option-model.test.ts`, `catalog-projections.d1.test.ts` (drift), `content-blocks.d1.test.ts`. Digital stock rules: `product-admin/digital-stock.d1.test.ts`, `inventory/digital-stock.d1.test.ts`, `store-transfer/digital-stock-import.d1.test.ts`.
