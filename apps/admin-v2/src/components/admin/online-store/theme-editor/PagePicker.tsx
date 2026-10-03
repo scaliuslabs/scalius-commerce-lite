@@ -124,6 +124,7 @@ export function CreateLandingDialog({ open, onOpenChange, theme, onCreate }: {
         </DialogHeader>
         <form
           id="new-landing-form"
+          method="post"
           className="space-y-3"
           onSubmit={(event) => {
             event.preventDefault();

@@ -113,8 +113,8 @@ function Row({ row, index, count, selected, onSelect, onHover, onMove, onDuplica
         </span>
       </button>
       {onToggle ? (
-        // A shown row's eye appears on hover or focus; a hidden row's stays, so the state reads at a glance.
-        <span className={cn("flex", !row.hidden && "opacity-0 group-hover:opacity-100 focus-within:opacity-100")}>
+        // A shown row's eye appears on hover or focus (always on touch screens); a hidden row's stays, so the state reads at a glance.
+        <span className={cn("flex", !row.hidden && "opacity-0 group-hover:opacity-100 focus-within:opacity-100 pointer-coarse:opacity-100")}>
           <Button
             type="button"
             variant="ghost"

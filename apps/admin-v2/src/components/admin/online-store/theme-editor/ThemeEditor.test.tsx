@@ -317,8 +317,14 @@ describe("theme editor: settings and saving", () => {
 
   it("selects what a click in the preview names, and goes back to the page's tree", () => {
     render();
+    // The preview names every page's header, announcement bar and footer, and the page's sections.
+    expect(Object.keys(preview.props.names!)).toEqual(["announcement", "header", "footer", "hero", "rail", "faq"]);
     act(() => preview.select!("faq"));
     expect(panelTitle()).toBe("Questions and answers");
+    act(() => preview.select!("header"));
+    expect(panelTitle()).toBe("Header");
+    act(() => preview.select!("footer"));
+    expect(panelTitle()).toBe("Footer");
     act(() => button("Back to the page").click());
     expect(rows()).toEqual(["hero", "rail", "faq"]);
   });
