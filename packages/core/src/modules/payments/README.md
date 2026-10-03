@@ -2,17 +2,42 @@
 
 Gateway adapters speak one provider's protocol; everything else (session
 orchestration, webhook claim-once, payment application, refunds,
-reconciliation) is written once and never branches on a gateway id.
+reconciliation) is written once and never branches on a gateway id, or on
+whether a gateway is built in or an app's.
 
-## Adding a gateway
+## Gateways
 
-1. Write `gateways/<id>.ts` implementing `PaymentGateway` from `gateways/port.ts`.
-2. Add one line to `PAYMENT_GATEWAYS` in `gateways/registry.ts`.
-3. Define the gateway's credential document in `settings/documents.ts` and its
-   reader in `gateway-settings.ts` (storage only).
+Every gateway implements the shared payment port
+(`@scalius/shared/plugins/providers`, `PAYMENT_PORT`) through `PaymentGateway`
+in `gateways/port.ts`: each operation takes its port input and a call context
+(`{ settings, signal }`). Built-in gateways (Stripe, SSLCommerz) are adapter
+files listed in `BUILT_IN_GATEWAYS`; app payment providers
+(`<plugin id>:<provider id>`, e.g. `scalius.bkash:bkash`) are built per request
+by the API (`apps/api/src/plugins/providers/payment.ts`) and run through the
+plugin host in either loader.
 
-`gateways/testing.ts` registers a complete test-only adapter this way; the
-kernel suites in `gateways/gateway-kernel.test.ts` and
+- `PaymentProviders` (`gateways/registry.ts`) is one request's catalog:
+  lookups, labels, currency eligibility and the pre-commit amount checks.
+  `BUILT_IN_PAYMENT_PROVIDERS` serves code that never meets an app id.
+- `PaymentProvidersSource` is the catalog or a loader called only when a row
+  or a saved method names an app gateway (`paymentProvidersFor`), so work on
+  built-in gateways never reads the plugin tables. Checkout reads app
+  registrations inside the statements it already batches.
+- `gateways/identity.ts` says what a stored id means without loading any
+  adapter: built-in ids, qualified app ids (still online after the app is
+  removed, so recovery and refunds fail closed instead of misclassifying),
+  COD and the gift-card tender.
+
+### Adding a built-in gateway
+
+1. Write `gateways/<id>.ts` implementing `PaymentGateway`.
+2. Add it to `BUILT_IN_GATEWAYS` and `BUILT_IN_PAYMENT_GATEWAY_IDS`.
+3. Define its credential document in `settings/documents.ts` and its reader in
+   `gateway-settings.ts` (storage only).
+
+A third party builds the same thing as an app (`packages/plugin-sdk/README.md`,
+"Build a payment provider"). `gateways/testing.ts` is a complete test-only app
+gateway; the kernel suites in `gateways/gateway-kernel.test.ts` and
 `apps/api/src/routes/payment/payment-routes.test.ts` run against it.
 
 ## Port rules
@@ -26,8 +51,12 @@ kernel suites in `gateways/gateway-kernel.test.ts` and
 - A provider fact reached through a webhook and a buyer return yields the same
   `eventType` + `eventId`, so `webhook_events` claims it once.
 - `refund()` validates inputs before any network call (a `ValidationError` is a
-  terminal pre-dispatch failure); any other error is an unknown outcome that
-  reconciliation must resolve.
+  terminal pre-dispatch failure); a port `ProviderError` that is certain the
+  provider did nothing ends the attempt; any other error is an unknown outcome
+  that reconciliation must resolve.
+- Amounts go out in the gateway's declared wire form (`amountCodecs`,
+  `encodeProviderAmount`); a charge or refund the wire form cannot carry
+  exactly is refused before the call, never rounded up.
 
 ## Storage
 

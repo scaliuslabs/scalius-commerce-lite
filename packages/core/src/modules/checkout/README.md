@@ -47,7 +47,11 @@ order runs the apps again and the quote fingerprint compares the totals, so
 an app answering differently at placement sends the buyer back to review.
 Any app that throws, times out (1.5 s) or answers invalid output is skipped
 and logged on its page (fail-open); a semantic problem (an unknown line or
-rate) is logged the same way.
+rate) is logged the same way. An app registered with `onError: "block"`
+(cart.validate and checkout.payment_methods only) instead stops checkout on
+every channel: `400 details.reason = "CHECKOUT_APP_UNAVAILABLE"` with the
+store's `checkoutAppUnavailableText` (`store-copy.ts`, the active checkout
+language with the merchant's edits).
 
 - **The cart apps see** (`functionCartSchema`): lines keyed by the tax
   allocation line id, unit price and the line total after the platform's
@@ -70,6 +74,16 @@ rate) is logged the same way.
   code-driven discount needs its code typed and claims it (no longer
   `not_found`); a discount naming a line not in the cart is skipped. Tax is
   quoted after every discount (the platform and app allocations together).
+- **Snapshot commits** (`checkout.discounts` with `snapshot`): the API reads
+  the signed-in buyer's record in the declared collection and passes it in
+  with its revision; an answer's `commit` becomes an `AppStorageCommit`
+  (checked and indexed by the platform). `resolveAppDiscounts` keeps the
+  commits of apps whose discounts applied; the order payload carries them as
+  `appStorageCommits` and `commitStorefrontOrderPayload` writes them in the
+  same batch behind revision guards (`plugins/storage.ts`). A record changed
+  since pricing fails the whole order with `APP_OFFER_CHANGED` and the store's
+  `checkoutAppOfferChangedText`: a balance is never spent twice. Staff orders
+  price without a signed-in buyer, so no commit can arise there.
 - **Persistence**: no schema change. Line `discount_amount_minor` is the
   platform part plus the app part; each app discount is an immutable
   `app_discount` row in `order_events` (`orders/app-facts.ts`: app id and
@@ -92,8 +106,10 @@ rate) is logged the same way.
 - **`order.risk`**: after the commit, in `waitUntil` (never on the buyer's
   path), with the order total, method and the buyer's earlier order counts.
   Each app's advice is one `app_risk` order fact (a retry adds nothing),
-  shown on the dashboard order next to the courier fraud check. Nothing acts
-  on it.
+  shown on the dashboard order next to the courier fraud check. An answer
+  with `hold: true` also places one hold per app (`orders/holds.ts`): the
+  order is not shipped, handed over, auto-fulfilled or moved on by status
+  edits until staff release it; cancelling stays possible.
 - **Channels**: every channel runs the same merge rules. Buyer agents
   (`channel: "agent"`, `agent-storefront/`): the quote and submit price
   through `priceStorefrontCheckout`/`createStorefrontOrder` with the apps the
