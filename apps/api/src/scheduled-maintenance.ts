@@ -25,6 +25,7 @@ import { backfillMissingMediaVariants, enqueueMediaVariantsBacklog } from "@scal
 import { planLimits } from "@scalius/shared/plan-limits";
 import { getCredentialEncryptionKey } from "./utils/encryption-key";
 import { failStaleQueuedPaymentWebhookEvents } from "./utils/webhook-idempotency";
+import { appPaymentProvidersLoader } from "./plugins/providers/payment";
 import { enqueueOrderRefundNotificationForOrder } from "./utils/order-notification-queue";
 import { bulkQueueState } from "./utils/queue-lanes";
 import { maintenanceSliceDue, type SweepSlice } from "./scheduled/slices";
@@ -415,6 +416,7 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
         reconcileDueRefundAttempts(db, {
           encryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
           limit: scaled(REFUND_ATTEMPT_RECONCILIATION_LIMIT),
+          providers: appPaymentProvidersLoader(env, db),
         }),
       );
       if (refundReconciliation.refundNotifications.length > 0) {
@@ -447,6 +449,7 @@ export const MAINTENANCE_SWEEPS: readonly MaintenanceSweep[] = [
         reconcileExternalRefundWebhooks(db, {
           encryptionKey: getCredentialEncryptionKey(env as unknown as Record<string, unknown>),
           limit: scaled(EXTERNAL_REFUND_RECONCILIATION_LIMIT),
+          providers: appPaymentProvidersLoader(env, db),
         }),
       );
       if (externalRefunds.refundNotifications.length > 0) {

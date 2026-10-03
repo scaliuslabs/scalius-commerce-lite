@@ -1,0 +1,41 @@
+// What a stored payment method id means, whatever is installed today. A leaf:
+// settings, checkout and order code classify ids without loading adapters.
+
+import { isQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
+import { sql, type AnyColumn, type SQL } from "drizzle-orm";
+
+/** The built-in gateways (registry.ts holds their adapters, in this order). */
+export const BUILT_IN_PAYMENT_GATEWAY_IDS = ["stripe", "sslcommerz"] as const;
+
+export const COD_PAYMENT_METHOD = "cod";
+export const COD_LABEL = "Cash on Delivery";
+
+/**
+ * A gift-card tender (`orders.payment_method` of an order the buyer's gift
+ * cards cover, and the `order_payments` rows they paid). Not a gateway and
+ * not a checkout setting: the gift-cards domain records it with no provider.
+ */
+export const GIFT_CARD_TENDER_METHOD = "gift_card";
+export const GIFT_CARD_TENDER_LABEL = "Gift card";
+
+/**
+ * Whether an id names an online gateway: a built-in one or an app provider
+ * (`<plugin id>:<provider id>`). Stored orders, attempts and payments keep
+ * this meaning after the app is deactivated or removed, so recovery,
+ * reconciliation and refunds still treat them as online (and fail closed
+ * when the gateway cannot be reached).
+ */
+export function isOnlinePaymentMethod(id: unknown): id is string {
+  return typeof id === "string"
+    && ((BUILT_IN_PAYMENT_GATEWAY_IDS as readonly string[]).includes(id) || isQualifiedProviderId(id));
+}
+
+export function isPaymentMethodId(id: unknown): id is string {
+  return id === COD_PAYMENT_METHOD || isOnlinePaymentMethod(id);
+}
+
+/** SQL twin of `isOnlinePaymentMethod` for a stored column (built-in ids never contain a colon). */
+export function onlinePaymentMethodCondition(column: AnyColumn | SQL): SQL {
+  const builtIns = sql.join(BUILT_IN_PAYMENT_GATEWAY_IDS.map((id) => sql`${id}`), sql`, `);
+  return sql`(${column} IN (${builtIns}) OR instr(${column}, ':') > 0)`;
+}

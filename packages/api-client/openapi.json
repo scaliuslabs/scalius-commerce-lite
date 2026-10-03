@@ -31095,12 +31095,8 @@
                   },
                   "paymentMethod": {
                     "type": "string",
-                    "enum": [
-                      "stripe",
-                      "sslcommerz",
-                      "cod"
-                    ],
-                    "description": "Selected active checkout payment method. Online methods continue through storefront.orders.payment.begin."
+                    "maxLength": 160,
+                    "description": "Selected active checkout payment method (`cod`, a gateway id, or an app provider's `<plugin id>:<provider id>`). Online methods continue through storefront.orders.payment.begin."
                   }
                 },
                 "required": [
@@ -76021,12 +76017,7 @@
                   },
                   "paymentMethod": {
                     "type": "string",
-                    "enum": [
-                      "stripe",
-                      "sslcommerz",
-                      "cod",
-                      "gift_card"
-                    ],
+                    "maxLength": 160,
                     "default": "cod"
                   },
                   "inventoryPool": {
@@ -177152,6 +177143,62 @@
                         "activeDefaultMethod": {
                           "type": "string"
                         },
+                        "gateways": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "label": {
+                                "type": "string"
+                              },
+                              "checkoutName": {
+                                "type": "string"
+                              },
+                              "flow": {
+                                "type": "string",
+                                "enum": [
+                                  "card",
+                                  "hosted"
+                                ]
+                              },
+                              "pluginId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "supportsRefund": {
+                                "type": "boolean"
+                              },
+                              "chargeCurrencies": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "any"
+                                    ]
+                                  },
+                                  {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  }
+                                ]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "label",
+                              "checkoutName",
+                              "flow",
+                              "pluginId",
+                              "supportsRefund",
+                              "chargeCurrencies"
+                            ]
+                          }
+                        },
                         "gatewayStatus": {
                           "type": "object",
                           "properties": {
@@ -177316,13 +177363,66 @@
                             "stripe",
                             "sslcommerz",
                             "cod"
-                          ]
+                          ],
+                          "additionalProperties": {
+                            "type": "object",
+                            "properties": {
+                              "configured": {
+                                "type": "boolean"
+                              },
+                              "enabled": {
+                                "type": "boolean"
+                              },
+                              "usable": {
+                                "type": "boolean"
+                              },
+                              "missingFields": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "credentialErrors": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "blockedReason": {
+                                "type": "string"
+                              },
+                              "providerEnabled": {
+                                "type": "boolean"
+                              },
+                              "checkoutSelected": {
+                                "type": "boolean"
+                              },
+                              "checkoutVisible": {
+                                "type": "boolean"
+                              },
+                              "environment": {
+                                "type": "string",
+                                "enum": [
+                                  "test",
+                                  "live",
+                                  "mixed",
+                                  "unknown",
+                                  "not_applicable"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "configured",
+                              "enabled"
+                            ]
+                          }
                         }
                       },
                       "required": [
                         "enabledMethods",
                         "defaultMethod",
                         "revision",
+                        "gateways",
                         "gatewayStatus"
                       ],
                       "additionalProperties": {}
@@ -177612,22 +177712,14 @@
                     "type": "array",
                     "items": {
                       "type": "string",
-                      "enum": [
-                        "stripe",
-                        "sslcommerz",
-                        "cod"
-                      ]
+                      "maxLength": 160
                     },
                     "minItems": 1,
-                    "maxItems": 3
+                    "maxItems": 20
                   },
                   "defaultMethod": {
                     "type": "string",
-                    "enum": [
-                      "stripe",
-                      "sslcommerz",
-                      "cod"
-                    ]
+                    "maxLength": 160
                   },
                   "expectedRevision": {
                     "type": "integer",
@@ -206893,13 +206985,8 @@
                   },
                   "gateway": {
                     "type": "string",
-                    "enum": [
-                      "gift_card",
-                      "stripe",
-                      "sslcommerz",
-                      "cod"
-                    ],
-                    "description": "Refund only payments taken by this method (gift_card: only the gift-card tenders)."
+                    "maxLength": 160,
+                    "description": "Refund only payments taken by this method (`cod`, a gateway id, an app provider's `<plugin id>:<provider id>`, or gift_card: only the gift-card tenders)."
                   },
                   "manualSettlementConfirmed": {
                     "type": "boolean"
@@ -214134,11 +214221,7 @@
           {
             "schema": {
               "type": "string",
-              "enum": [
-                "stripe",
-                "sslcommerz",
-                "cod"
-              ],
+              "maxLength": 160,
               "description": "Filter by payment method"
             },
             "required": false,
@@ -215634,11 +215717,7 @@
           {
             "schema": {
               "type": "string",
-              "enum": [
-                "stripe",
-                "sslcommerz",
-                "cod"
-              ]
+              "maxLength": 160
             },
             "required": false,
             "name": "paymentMethod",
@@ -216153,11 +216232,7 @@
           {
             "schema": {
               "type": "string",
-              "enum": [
-                "stripe",
-                "sslcommerz",
-                "cod"
-              ],
+              "maxLength": 160,
               "description": "Filter by payment gateway"
             },
             "required": false,
@@ -217146,11 +217221,7 @@
           {
             "schema": {
               "type": "string",
-              "enum": [
-                "stripe",
-                "sslcommerz",
-                "cod"
-              ],
+              "maxLength": 160,
               "description": "Filter by payment gateway"
             },
             "required": false,
@@ -315294,7 +315365,7 @@
             "schema": {
               "type": "string",
               "minLength": 1,
-              "maxLength": 64
+              "maxLength": 160
             },
             "required": true,
             "name": "provider",
@@ -315822,7 +315893,7 @@
             "schema": {
               "type": "string",
               "minLength": 1,
-              "maxLength": 64
+              "maxLength": 160
             },
             "required": true,
             "name": "provider",

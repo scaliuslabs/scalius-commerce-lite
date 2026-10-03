@@ -12,7 +12,8 @@ import {
     firstWhatsAppPlaceholderConfigError,
     getWhatsAppCloudApiSettings,
 } from "@scalius/core/integrations/whatsapp";
-import { getActivePaymentMethods, filterPaymentMethodsForCurrency } from "@scalius/core/modules/payments";
+import { getActivePaymentMethods } from "@scalius/core/modules/payments";
+import { requestPaymentProviders } from "../../../plugins/providers/payment";
 import {
     CUSTOMER_AUTH_OTP_CHANNELS,
     EMAIL_COLLECTION_MODES,
@@ -370,16 +371,18 @@ app.openapi(saveCheckoutFlowRoute, async (c) => {
             throw new ValidationError(CHECKOUT_READINESS_CUSTOMER_SIGN_IN_ISSUE.message);
         }
     }
+    const paymentProviders = await requestPaymentProviders(c);
     const [activePaymentMethods, currencySettings] = await Promise.all([
-        getActivePaymentMethods(db, credentialEncryptionKey),
+        getActivePaymentMethods(db, credentialEncryptionKey, paymentProviders),
         getCurrencySettings(db),
     ]);
     const saved = await saveCheckoutFlowSettingsDocument(db, {
         ...body,
-        availablePaymentMethods: filterPaymentMethodsForCurrency(
+        availablePaymentMethods: paymentProviders.filterForCurrency(
             activePaymentMethods.enabledMethods,
             currencySettings.currencyCode,
         ),
+        paymentProviders,
     });
 
     return ok(c, saved);

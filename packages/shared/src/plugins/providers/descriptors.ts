@@ -42,8 +42,8 @@ export const paymentProviderDescriptorSchema = z.object({
   ...base("payment"),
   /** The method name buyers see at checkout (default: `name`). */
   checkoutName: title.optional(),
-  /** Apps redirect to a hosted page or show instructions; in-page card forms are built in. */
-  flow: z.enum(["hosted", "instructions"]).default("hosted"),
+  /** Apps redirect the buyer to the provider's hosted page; in-page card forms are built in. */
+  flow: z.enum(["hosted"]).default("hosted"),
   /** The currencies the provider can charge; checkout offers it in no other. */
   chargeCurrencies: z.union([z.literal("any"), z.array(providerCurrencySchema).min(1).max(50)]),
   amountLimits: paymentAmountLimitsSchema.optional(),

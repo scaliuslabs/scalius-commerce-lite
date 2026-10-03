@@ -8,6 +8,7 @@ import {
   type CheckoutLanguageData,
 } from "@scalius/shared/checkout-language";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
+import { isPaymentMethodIdShape } from "./payment-method-id";
 import { orderDeliveryMode, type OrderFulfilmentView } from "./order-line-groups";
 import { giftCardCheckoutCopy } from "./checkout/gift-cards";
 
@@ -120,11 +121,12 @@ function normalize(value: string | null | undefined): string {
 
 /**
  * Every payment method except cash on delivery and a gift-card-paid order is
- * an online gateway (a gift card settles at commit: nothing to confirm or retry).
+ * an online gateway (a gift card settles at commit: nothing to confirm or
+ * retry): a built-in id or an app provider's `<plugin id>:<provider id>`.
  */
 function isOnlinePaymentMethod(paymentMethod: string | null | undefined): boolean {
   const method = normalize(paymentMethod);
-  return /^[a-z][a-z0-9_-]{0,63}$/.test(method) && method !== "cod" && method !== GIFT_CARD_PAYMENT_METHOD;
+  return isPaymentMethodIdShape(method) && method !== "cod" && method !== GIFT_CARD_PAYMENT_METHOD;
 }
 
 /** Paid before anything is handed over: online, or entirely by gift card. */

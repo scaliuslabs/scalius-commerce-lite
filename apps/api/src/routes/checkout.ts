@@ -3,6 +3,7 @@
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { getCheckoutConfig } from "@scalius/core/modules/settings";
+import { requestPaymentProviders } from "../plugins/providers/payment";
 import { successEnvelope, errorResponses, errorResponseSchema } from "../schemas/responses";
 import { readinessSchema } from "../schemas/readiness";
 
@@ -92,6 +93,9 @@ app.openapi(getCheckoutConfigRoute, async (c) => {
       db,
       encryptionKey,
       c.env as unknown as Record<string, unknown>,
+      // The store's gateways now: built in plus the active app providers
+      // (read only when the merchant enabled an app's method).
+      () => requestPaymentProviders(c),
     );
 
     return ok(c, checkoutConfigSchema.parse(config));

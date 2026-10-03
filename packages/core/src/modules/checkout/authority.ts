@@ -4,6 +4,7 @@ import { inArray, sql } from "drizzle-orm";
 import { ValidationError } from "@scalius/core/errors";
 import {
     resolveActivePaymentMethodsFromRows,
+    type AppPaymentUsability,
     type GatewaySettingsStoredRow,
     type PaymentMethodsConfig,
 } from "../payments/gateway-settings";
@@ -104,11 +105,16 @@ interface CheckoutSideEffectSettingsRow {
     hasActiveAdminPushTarget: number;
 }
 
+/**
+ * `appPayments`: which app payment providers can take a payment now
+ * (`resolveAppPaymentUsability`); app methods missing from it are not offered.
+ */
 export interface StorefrontCheckoutAuthorityReadPlan {
     statements: unknown[];
     resolve(
         results: readonly unknown[],
         credentialEncryptionKey?: string,
+        appPayments?: AppPaymentUsability,
     ): Promise<StorefrontCheckoutAuthoritySnapshot>;
 }
 
@@ -117,10 +123,12 @@ export interface StorefrontCheckoutAuthorityBatchReadPlan {
     resolveSettled(
         results: readonly unknown[],
         credentialEncryptionKey?: string,
+        appPayments?: AppPaymentUsability,
     ): Promise<StorefrontCheckoutAuthorityResolution[]>;
     resolve(
         results: readonly unknown[],
         credentialEncryptionKey?: string,
+        appPayments?: AppPaymentUsability,
     ): Promise<StorefrontCheckoutAuthoritySnapshot[]>;
 }
 
@@ -212,7 +220,7 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
 
     return {
         statements,
-        async resolveSettled(results, credentialEncryptionKey) {
+        async resolveSettled(results, credentialEncryptionKey, appPayments) {
             if (results.length !== statements.length) {
                 throw new Error("Checkout authority read returned an unexpected result count.");
             }
@@ -275,6 +283,7 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
                 activePaymentMethods = await resolveActivePaymentMethodsFromRows(
                     genericRows,
                     credentialEncryptionKey,
+                    appPayments,
                 );
             } catch (error) {
                 if (error instanceof Error && !("code" in error)) {
@@ -382,8 +391,8 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
                 }
             });
         },
-        async resolve(results, credentialEncryptionKey) {
-            const resolutions = await this.resolveSettled(results, credentialEncryptionKey);
+        async resolve(results, credentialEncryptionKey, appPayments) {
+            const resolutions = await this.resolveSettled(results, credentialEncryptionKey, appPayments);
             return resolutions.map((resolution) => {
                 if (!resolution.ok) throw resolution.error;
                 return resolution.snapshot;
@@ -405,8 +414,8 @@ export function createStorefrontCheckoutAuthorityReadPlan(
 
     return {
         statements: batchPlan.statements,
-        async resolve(results, credentialEncryptionKey) {
-            const snapshots = await batchPlan.resolve(results, credentialEncryptionKey);
+        async resolve(results, credentialEncryptionKey, appPayments) {
+            const snapshots = await batchPlan.resolve(results, credentialEncryptionKey, appPayments);
             return snapshots[0]!;
         },
     };
@@ -416,6 +425,7 @@ export async function loadStorefrontCheckoutAuthority(
     db: Database,
     input: StorefrontCheckoutAuthorityInput,
     credentialEncryptionKey?: string,
+    appPayments?: AppPaymentUsability,
 ): Promise<StorefrontCheckoutAuthoritySnapshot> {
     const plan = createStorefrontCheckoutAuthorityReadPlan(db, input);
     let results: unknown[];
@@ -433,7 +443,7 @@ export async function loadStorefrontCheckoutAuthority(
         throw error;
     }
     try {
-        return await plan.resolve(results, credentialEncryptionKey);
+        return await plan.resolve(results, credentialEncryptionKey, appPayments);
     } catch (error) {
         if (error instanceof Error && !("code" in error)) {
             Object.defineProperty(error, "code", {

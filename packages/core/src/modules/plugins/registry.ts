@@ -6,17 +6,20 @@
 import type { Database } from "@scalius/database/client";
 import { pluginInstallations, pluginRegistrations } from "@scalius/database/schema";
 import type { PluginFunctionPoint } from "@scalius/shared/plugins";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import type { ProviderKind } from "@scalius/shared/plugins/providers/kinds";
+import { and, asc, eq, inArray, or } from "drizzle-orm";
 import { toPluginInstallation, type PluginInstallation } from "./installations";
 
 export interface RegisteredPlugin {
   installation: PluginInstallation;
   priority: number;
-  /** The registration's name: the function point, topic filter or cron job. */
+  /** The registration's name: the function point, topic filter, cron job or provider port. */
   name: string;
+  /** Set when the read selected several kinds (`selectActiveCheckoutRegistrations`). */
+  kind?: "event" | "function" | "cron" | "provider";
 }
 
-async function activeRegistrations(db: Database, kind: "event" | "function" | "cron", names: readonly string[]): Promise<RegisteredPlugin[]> {
+async function activeRegistrations(db: Database, kind: "event" | "function" | "cron" | "provider", names: readonly string[]): Promise<RegisteredPlugin[]> {
   if (names.length === 0) return [];
   const rows = await db.select({ priority: pluginRegistrations.priority, name: pluginRegistrations.name, installation: pluginInstallations })
     .from(pluginRegistrations)
@@ -57,17 +60,48 @@ export function selectActiveFunctionRegistrations(db: Database) {
 export interface ActiveFunctionRegistrationRow {
   priority: number;
   name: string;
+  kind?: RegisteredPlugin["kind"];
   installation: typeof pluginInstallations.$inferSelect;
 }
 
-/** The rows of `selectActiveFunctionRegistrations`, parsed (an unreadable manifest is skipped). */
+/** The rows of `selectActiveFunctionRegistrations` (or the checkout read), parsed (an unreadable manifest is skipped). */
 export function resolveActiveFunctionRegistrations(rows: readonly ActiveFunctionRegistrationRow[]): RegisteredPlugin[] {
   const result: RegisteredPlugin[] = [];
   for (const row of rows) {
     const installation = toPluginInstallation(row.installation);
-    if (installation) result.push({ installation, priority: row.priority, name: row.name });
+    if (installation) result.push({ installation, priority: row.priority, name: row.name, ...(row.kind ? { kind: row.kind } : {}) });
   }
   return result;
+}
+
+/**
+ * Checkout's one plugin read: every active function registration and every
+ * active payment provider registration, as one statement its read batch
+ * carries. No app at either: no rows, and checkout does no app work.
+ */
+export function selectActiveCheckoutRegistrations(db: Database) {
+  return db.select({
+    kind: pluginRegistrations.kind,
+    priority: pluginRegistrations.priority,
+    name: pluginRegistrations.name,
+    installation: pluginInstallations,
+  })
+    .from(pluginRegistrations)
+    .innerJoin(pluginInstallations, eq(pluginInstallations.pluginId, pluginRegistrations.pluginId))
+    .where(and(
+      eq(pluginInstallations.status, "active"),
+      or(
+        eq(pluginRegistrations.kind, "function"),
+        and(eq(pluginRegistrations.kind, "provider"), eq(pluginRegistrations.name, "payment")),
+      ),
+    ))
+    .orderBy(asc(pluginRegistrations.priority), asc(pluginRegistrations.pluginId));
+}
+
+/** Active installations providing a port, by plugin id (one indexed read; none: no rows). */
+export async function listActiveProviderPlugins(db: Database, kind: ProviderKind): Promise<PluginInstallation[]> {
+  const rows = await activeRegistrations(db, "provider", [kind]);
+  return rows.map((row) => row.installation).sort((left, right) => left.pluginId.localeCompare(right.pluginId));
 }
 
 /** Every active function registration (all points), by priority then plugin id. */
@@ -115,4 +149,9 @@ export async function getActivePluginInstallation(db: Database, pluginId: string
     .where(and(eq(pluginInstallations.pluginId, pluginId), eq(pluginInstallations.status, "active")))
     .get();
   return row ? toPluginInstallation(row) : null;
+}
+
+/** `selectActiveCheckoutRegistrations`, run on its own and parsed (routes that read it in their first wave). */
+export async function listActiveCheckoutRegistrations(db: Database): Promise<RegisteredPlugin[]> {
+  return resolveActiveFunctionRegistrations(await selectActiveCheckoutRegistrations(db).all());
 }

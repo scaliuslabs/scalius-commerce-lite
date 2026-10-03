@@ -15,7 +15,14 @@ import {
     PaymentRecordStatus,
     type OrderPayment,
 } from "@scalius/database/schema";
-import { COD_PAYMENT_METHOD, getPaymentGateway, isPaymentMethodId } from "./gateways/registry";
+import {
+    COD_PAYMENT_METHOD,
+    isPaymentMethodId,
+    paymentProvidersFor,
+    type PaymentProvidersSource,
+} from "./gateways/registry";
+import { encodeProviderAmount } from "@scalius/shared/plugins/providers/amount";
+import { providerErrorOf } from "@scalius/shared/plugins/providers/kinds";
 import { applyInventoryForStatusChangeWithImpact } from "../inventory/inventory-transitions";
 import type { Database } from "@scalius/database/client";
 import { NotFoundError, ValidationError, ConflictError, ServiceUnavailableError } from "@scalius/core/errors";
@@ -1112,10 +1119,11 @@ async function dispatchRefund(
     currency: OrderCurrencySnapshot,
     params: RefundRequest,
     providerMetadata: { idempotencyKey: string; refundReference: string } & Record<string, string>,
-    encryptionKey?: string,
+    encryptionKey: string | undefined,
+    providers: PaymentProvidersSource | undefined,
 ): Promise<string | undefined> {
     if (payment.paymentMethod === COD_PAYMENT_METHOD) return undefined;
-    const gateway = getPaymentGateway(payment.paymentMethod);
+    const gateway = (await paymentProvidersFor(providers, payment.paymentMethod)).get(payment.paymentMethod);
     if (!gateway?.refund) throw new ValidationError(`Unsupported refund gateway: ${payment.paymentMethod}`);
     const settings = await gateway.loadSettings(db, encryptionKey);
     if (!settings) throw new ServiceUnavailableError(`${gateway.label} is not configured`);
@@ -1126,21 +1134,30 @@ async function dispatchRefund(
         throw new ValidationError(`${gateway.label} refund must resolve to a positive provider amount.`);
     }
 
+    // A refund is asked for exactly; a wire form that cannot carry it is refused before the call.
+    const encoded = encodeProviderAmount(refundAmountMinor, currency.code, gateway.amountCodecs);
+    if (encoded.roundingMinor !== 0) {
+        throw new ValidationError(`${gateway.label} cannot refund this exact amount in ${currency.code}.`);
+    }
+
     let timeout: ReturnType<typeof setTimeout> | undefined;
+    const deadline = new AbortController();
     try {
         const result = await Promise.race([
-            gateway.refund(settings, {
+            gateway.refund({
                 providerRef: payment.providerRef,
                 secondaryRef: payment.providerSecondaryRef,
                 amountMinor: refundAmountMinor,
                 currency: currency.code,
+                wireAmount: encoded.wire,
                 reason: params.reason,
                 idempotencyKey: providerMetadata.idempotencyKey,
                 reference: providerMetadata.refundReference,
                 metadata: providerMetadata,
-            }),
+            }, { settings, signal: deadline.signal }),
             new Promise<never>((_, reject) => {
                 timeout = setTimeout(() => {
+                    deadline.abort();
                     reject(new Error(`Refund provider did not settle within ${REFUND_PROVIDER_DEADLINE_MS}ms`));
                 }, REFUND_PROVIDER_DEADLINE_MS);
             }),
@@ -1149,6 +1166,9 @@ async function dispatchRefund(
     } catch (error: unknown) {
         // Adapters validate their inputs before any network call.
         if (error instanceof ValidationError) throw error;
+        // A port error that is certain the provider did nothing ends the attempt.
+        const failure = providerErrorOf(error);
+        if (failure && !failure.uncertain) throw new ValidationError(failure.message);
         throw new ProviderRefundOutcomeUnknownError(error);
     } finally {
         if (timeout) clearTimeout(timeout);
@@ -1313,6 +1333,8 @@ export async function processRefund(
     db: Database,
     params: RefundRequest,
     encryptionKey?: string,
+    /** The request's gateways (built-in and app providers); built-in ones alone by default. */
+    providers?: PaymentProvidersSource,
 ): Promise<RefundResult> {
     // 1. Fetch order (include version for CAS to prevent concurrent refund races)
     const order = await db
@@ -1626,6 +1648,7 @@ export async function processRefund(
                     refundGroupId,
                 },
                 encryptionKey,
+                providers,
             );
 
             const completedAllocation = { ...allocation, refundId };

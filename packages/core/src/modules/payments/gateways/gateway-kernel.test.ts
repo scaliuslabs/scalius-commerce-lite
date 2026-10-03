@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Database } from "@scalius/database/client";
 import { orders, OrderStatus, PaymentRecordStatus, PaymentStatus, webhookEvents } from "@scalius/database/schema";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
+import { ProviderError } from "@scalius/shared/plugins/providers/kinds";
 
 import { processPaymentConfirmed } from "../process-payment";
 import { processRefund } from "../refund-service";
@@ -19,20 +20,31 @@ import {
   REFUND_OBSERVED_EVENT_TYPE,
 } from "../refund-reconciliation";
 import { buildPaymentCorrelationId, parsePaymentCorrelationId, PAYMENT_CORRELATION_ID_MAX_LENGTH } from "./correlation";
+import { BUILT_IN_PAYMENT_GATEWAY_IDS } from "./identity";
 import type { GatewayRequest } from "./port";
-import {
-  filterPaymentMethodsForCurrency,
-  getCheckoutGatewayPrecommitIssue,
-  getPaymentMethodCurrencyIssue,
-  isPaymentMethodCurrencyEligible,
-} from "./registry";
+import { BUILT_IN_PAYMENT_PROVIDERS, type PaymentProviders } from "./registry";
 import { sslcommerzGateway } from "./sslcommerz";
 import { stripeGateway } from "./stripe";
-import { registerFakeGateway, type FakeGatewayState } from "./testing";
+import { createFakeGateway, FAKE_GATEWAY_ID, type FakeGatewayState } from "./testing";
 
 function request(init: Partial<GatewayRequest> & { rawBody?: string }): GatewayRequest {
-  return { method: "POST", rawBody: "", headers: new Headers(), query: {}, ...init };
+  return { method: "POST", rawBody: "", headers: {}, query: {}, ...init };
 }
+
+const call = <S,>(settings: S) => ({ settings, signal: new AbortController().signal });
+const {
+  filterForCurrency: filterPaymentMethodsForCurrency,
+  currencyIssue: getPaymentMethodCurrencyIssue,
+  precommitIssue: getCheckoutGatewayPrecommitIssue,
+} = BUILT_IN_PAYMENT_PROVIDERS;
+const isPaymentMethodCurrencyEligible = (id: string, currency: string) => getPaymentMethodCurrencyIssue(id, currency) === null;
+
+describe("built-in gateway registry", () => {
+  it("lists the built-in adapters under the ids identity checks know", () => {
+    expect(BUILT_IN_PAYMENT_PROVIDERS.gateways.map((gateway) => gateway.id)).toEqual([...BUILT_IN_PAYMENT_GATEWAY_IDS]);
+    expect(BUILT_IN_PAYMENT_PROVIDERS.methodIds()).toEqual(["stripe", "sslcommerz", "cod"]);
+  });
+});
 
 describe("registry currency and limit policy", () => {
   it("keeps every method for BDT and drops SSLCommerz elsewhere without touching the saved order", () => {
@@ -79,7 +91,7 @@ describe("Stripe adapter", () => {
   async function signed(event: Record<string, unknown>) {
     const rawBody = JSON.stringify({ object: "event", api_version: "2024-06-20", created: 1, ...event });
     const signature = await Stripe.webhooks.generateTestHeaderStringAsync({ payload: rawBody, secret: settings.webhookSecret });
-    return request({ rawBody, headers: new Headers({ "stripe-signature": signature }) });
+    return request({ rawBody, headers: { "stripe-signature": signature } });
   }
 
   it("normalizes an authentic succeeded event to integer minor units and rejects a tampered body", async () => {
@@ -91,20 +103,20 @@ describe("Stripe adapter", () => {
         latest_charge: "ch_1", metadata: { orderId: "order_1", paymentType: "deposit" },
       } },
     });
-    await expect(stripeGateway.verifyWebhook(settings, authentic)).resolves.toEqual({
+    await expect(stripeGateway.verifyWebhook(authentic, call(settings))).resolves.toEqual({
       status: "event",
       event: {
         kind: "confirmed", eventType: "payment_intent.succeeded", eventId: "evt_1", orderId: "order_1",
         providerRef: "pi_1", secondaryRef: "ch_1", amountMinor: 12_550, currency: "BDT", paymentType: "deposit",
       },
     });
-    await expect(stripeGateway.verifyWebhook(settings, { ...authentic, rawBody: `${authentic.rawBody} ` }))
+    await expect(stripeGateway.verifyWebhook({ ...authentic, rawBody: `${authentic.rawBody} ` }, call(settings)))
       .resolves.toMatchObject({ status: "invalid" });
   });
 
   it("ignores authentic events the kernel does not act on", async () => {
     const other = await signed({ id: "evt_2", type: "customer.created", data: { object: { id: "cus_1", object: "customer" } } });
-    await expect(stripeGateway.verifyWebhook(settings, other)).resolves.toMatchObject({ status: "ignored" });
+    await expect(stripeGateway.verifyWebhook(other, call(settings))).resolves.toMatchObject({ status: "ignored" });
   });
 });
 
@@ -126,7 +138,7 @@ describe("SSLCommerz adapter", () => {
 
   it("trusts an IPN only after server-to-server validation of its val_id", async () => {
     fetchMock.mockImplementation(async () => Response.json(validation));
-    await expect(sslcommerzGateway.verifyWebhook(settings, request({ rawBody: "val_id=val_1&amount=999999" })))
+    await expect(sslcommerzGateway.verifyWebhook(request({ rawBody: "val_id=val_1&amount=999999" }), call(settings)))
       .resolves.toEqual({
         status: "event",
         event: {
@@ -142,19 +154,19 @@ describe("SSLCommerz adapter", () => {
 
   it("asks the provider to retry when validation is unreachable and ignores unfinished or inconsistent results", async () => {
     fetchMock.mockRejectedValueOnce(new Error("network"));
-    await expect(sslcommerzGateway.verifyWebhook(settings, request({ rawBody: "val_id=val_1" })))
+    await expect(sslcommerzGateway.verifyWebhook(request({ rawBody: "val_id=val_1" }), call(settings)))
       .resolves.toMatchObject({ status: "retry" });
 
     fetchMock.mockResolvedValueOnce(Response.json({ ...validation, status: "PENDING" }));
-    await expect(sslcommerzGateway.verifyWebhook(settings, request({ rawBody: "val_id=val_1" })))
+    await expect(sslcommerzGateway.verifyWebhook(request({ rawBody: "val_id=val_1" }), call(settings)))
       .resolves.toMatchObject({ status: "ignored" });
 
     fetchMock.mockResolvedValueOnce(Response.json({ ...validation, value_b: "order_2" }));
-    await expect(sslcommerzGateway.verifyWebhook(settings, request({ rawBody: "val_id=val_1" })))
+    await expect(sslcommerzGateway.verifyWebhook(request({ rawBody: "val_id=val_1" }), call(settings)))
       .resolves.toMatchObject({ status: "ignored" });
 
     fetchMock.mockResolvedValueOnce(Response.json({ ...validation, status: "FAILED" }));
-    await expect(sslcommerzGateway.verifyWebhook(settings, request({ rawBody: "val_id=val_1" })))
+    await expect(sslcommerzGateway.verifyWebhook(request({ rawBody: "val_id=val_1" }), call(settings)))
       .resolves.toMatchObject({ status: "event", event: { kind: "failed", providerRef: "val_1" } });
   });
 
@@ -164,28 +176,27 @@ describe("SSLCommerz adapter", () => {
       rawBody: "tran_id=order_1_full_ABC12345&val_id=val_1",
       query: { order_id: "order_1", payment_type: "full" },
     });
-    const ipn = await sslcommerzGateway.verifyWebhook(settings, request({ rawBody: "val_id=val_1" }));
-    const returned = await sslcommerzGateway.verifyReturn!(settings, buyerReturn, new AbortController().signal);
+    const ipn = await sslcommerzGateway.verifyWebhook(request({ rawBody: "val_id=val_1" }), call(settings));
+    const returned = await sslcommerzGateway.verifyReturn!(buyerReturn, call(settings));
     expect(returned).toEqual(ipn);
 
     await expect(sslcommerzGateway.verifyReturn!(
-      settings,
       { ...buyerReturn, query: { order_id: "order_1", payment_type: "deposit" } },
-      new AbortController().signal,
+      call(settings),
     )).resolves.toMatchObject({ status: "ignored" });
   });
 });
 
-describe("gateway kernel with a newly registered adapter", () => {
+describe("gateway kernel with an app provider's adapter", () => {
   let sqlite: DatabaseSync;
   let db: Database;
   let state: FakeGatewayState;
-  let unregister: () => void;
+  let providers: PaymentProviders;
 
   beforeEach(async () => {
     vi.spyOn(console, "error").mockImplementation(() => undefined);
     ({ sqlite, db } = createSqliteD1Database());
-    ({ state, unregister } = registerFakeGateway());
+    ({ state, providers } = createFakeGateway());
     await db.insert(orders).values({
       id: "order_1",
       customerName: "Buyer",
@@ -195,7 +206,7 @@ describe("gateway kernel with a newly registered adapter", () => {
       zone: "zone_1",
       totalAmountMinor: 10_000,
       balanceDueMinor: 10_000,
-      paymentMethod: "fakepay",
+      paymentMethod: FAKE_GATEWAY_ID,
       status: OrderStatus.INCOMPLETE,
       currencyCode: "BDT",
       currencyDecimalPlaces: 2,
@@ -203,13 +214,12 @@ describe("gateway kernel with a newly registered adapter", () => {
   });
 
   afterEach(() => {
-    unregister();
     sqlite.close();
   });
 
   async function capture(providerRef: string, amountMinor: number, paymentType: "full" | "deposit" | "balance" = "full") {
     const result = await processPaymentConfirmed(db, {
-      orderId: "order_1", provider: "fakepay", amountMinor, currency: "BDT", paymentType, providerRef, secondaryRef: `txn_${providerRef}`,
+      orderId: "order_1", provider: FAKE_GATEWAY_ID, amountMinor, currency: "BDT", paymentType, providerRef, secondaryRef: `txn_${providerRef}`,
     });
     expect(result).toMatchObject({ success: true });
     sqlite.prepare("UPDATE orders SET status = ? WHERE id = 'order_1'").run(OrderStatus.DELIVERED);
@@ -227,16 +237,16 @@ describe("gateway kernel with a newly registered adapter", () => {
   it("refunds through the adapter in integer minor units, once, and never beyond the paid amount", async () => {
     await capture("pay_1", 10_000);
 
-    const refund = await processRefund(db, { orderId: "order_1", amount: 40, reason: "damaged" });
-    expect(refund).toMatchObject({ success: true, gateway: "fakepay", amount: 40, isFullRefund: false, refundId: "fr_1" });
+    const refund = await processRefund(db, { orderId: "order_1", amount: 40, reason: "damaged" }, undefined, providers);
+    expect(refund).toMatchObject({ success: true, gateway: FAKE_GATEWAY_ID, amount: 40, isFullRefund: false, refundId: "fr_1" });
     expect(state.refunds).toEqual([expect.objectContaining({ amountMinor: 4_000, currency: "BDT", secondaryRef: "txn_pay_1" })]);
     expect(orderState()).toMatchObject({ status: OrderStatus.DELIVERED, payment_status: PaymentStatus.PARTIALLY_REFUNDED, paid_amount_minor: 6_000 });
 
-    await expect(processRefund(db, { orderId: "order_1", amount: 61, reason: "again" })).rejects.toThrow(/exceeds paid amount/);
-    await processRefund(db, { orderId: "order_1", reason: "rest" });
+    await expect(processRefund(db, { orderId: "order_1", amount: 61, reason: "again" }, undefined, providers)).rejects.toThrow(/exceeds paid amount/);
+    await processRefund(db, { orderId: "order_1", reason: "rest" }, undefined, providers);
     expect(state.refunds.map((entry) => entry.amountMinor)).toEqual([4_000, 6_000]);
     expect(orderState()).toMatchObject({ status: OrderStatus.REFUNDED, payment_status: PaymentStatus.REFUNDED, paid_amount_minor: 0 });
-    await expect(processRefund(db, { orderId: "order_1", reason: "third" })).rejects.toThrow();
+    await expect(processRefund(db, { orderId: "order_1", reason: "third" }, undefined, providers)).rejects.toThrow();
     expect(state.refunds).toHaveLength(2);
     // Refund rows never take a provider reference: UNIQUE(provider, provider_ref) belongs to captures.
     expect(sqlite.prepare("SELECT count(*) AS n FROM order_payments WHERE payment_type = 'refund' AND provider_ref IS NOT NULL").get())
@@ -246,10 +256,10 @@ describe("gateway kernel with a newly registered adapter", () => {
   it("allocates across deposit and balance captures with distinct idempotency keys", async () => {
     sqlite.prepare(`INSERT INTO payment_plans (id, order_id, total_amount_minor, deposit_amount_minor, balance_due_minor, status)
       VALUES ('plan_1', 'order_1', 10000, 2500, 7500, 'pending')`).run();
-    await processPaymentConfirmed(db, { orderId: "order_1", provider: "fakepay", amountMinor: 2_500, currency: "BDT", paymentType: "deposit", providerRef: "dep", secondaryRef: "txn_dep" });
+    await processPaymentConfirmed(db, { orderId: "order_1", provider: FAKE_GATEWAY_ID, amountMinor: 2_500, currency: "BDT", paymentType: "deposit", providerRef: "dep", secondaryRef: "txn_dep" });
     await capture("bal", 7_500, "balance");
 
-    await processRefund(db, { orderId: "order_1", reason: "cancelled" });
+    await processRefund(db, { orderId: "order_1", reason: "cancelled" }, undefined, providers);
 
     expect(state.refunds.map((entry) => [entry.secondaryRef, entry.amountMinor]).sort()).toEqual([["txn_bal", 7_500], ["txn_dep", 2_500]]);
     expect(new Set(state.refunds.map((entry) => entry.idempotencyKey)).size).toBe(2);
@@ -260,31 +270,44 @@ describe("gateway kernel with a newly registered adapter", () => {
     await capture("pay_1", 10_000);
     state.refundError = new Error("socket hang up");
 
-    await expect(processRefund(db, { orderId: "order_1", reason: "retry me" })).rejects.toThrow(/unknown/i);
+    await expect(processRefund(db, { orderId: "order_1", reason: "retry me" }, undefined, providers)).rejects.toThrow(/unknown/i);
     expect(attemptStatuses()).toEqual(["provider_unknown"]);
-    await expect(processRefund(db, { orderId: "order_1", reason: "retry me" })).rejects.toThrow(/in progress|pending/i);
+    await expect(processRefund(db, { orderId: "order_1", reason: "retry me" }, undefined, providers)).rejects.toThrow(/in progress|pending/i);
     expect(state.refunds).toHaveLength(1);
 
     state.refundStatus = { outcome: "processing", providerStatus: "pending" };
     const attemptId = (sqlite.prepare("SELECT id FROM refund_attempts").get() as { id: string }).id;
-    const processing = await reconcileRefundAttemptForOrder(db, "order_1", attemptId);
+    const processing = await reconcileRefundAttemptForOrder(db, "order_1", attemptId, { providers });
     expect(processing).toMatchObject({ found: true, status: "deferred" });
     expect(processing.refundNotifications).toEqual([expect.objectContaining({ notificationType: "refund_processing" })]);
 
     state.refundStatus = { outcome: "accepted", providerStatus: "refunded", providerRefundId: "fr_late" };
     sqlite.prepare("UPDATE refund_attempts SET next_probe_at = 0").run();
-    const settled = await reconcileDueRefundAttempts(db, { nowSeconds: Math.floor(Date.now() / 1000) + 60 });
+    const settled = await reconcileDueRefundAttempts(db, { nowSeconds: Math.floor(Date.now() / 1000) + 60, providers });
     expect(settled).toMatchObject({ finalized: 1 });
     expect(attemptStatuses()).toEqual(["refunded"]);
     expect(orderState()).toMatchObject({ payment_status: PaymentStatus.REFUNDED, paid_amount_minor: 0 });
     expect(state.refunds).toHaveLength(1);
   });
 
+  it("ends a refund the port says never reached the provider, and keeps one that may have", async () => {
+    await capture("pay_1", 10_000);
+    state.refundError = new ProviderError("declined", "The refund window has closed.", { code: "fake.window_closed" });
+    await expect(processRefund(db, { orderId: "order_1", reason: "late" }, undefined, providers)).rejects.toThrow("The refund window has closed.");
+    expect(attemptStatuses()).toEqual(["failed"]);
+    expect(orderState()).toMatchObject({ payment_status: PaymentStatus.PAID, paid_amount_minor: 10_000 });
+
+    state.refundError = new ProviderError("retryable", "Timed out after sending.", { uncertain: true });
+    await expect(processRefund(db, { orderId: "order_1", reason: "again" }, undefined, providers)).rejects.toThrow(/unknown/i);
+    expect(attemptStatuses().sort()).toEqual(["failed", "provider_unknown"]);
+    expect(state.refunds).toHaveLength(2);
+  });
+
   it("fails a refund before dispatch when the gateway settings are not readable", async () => {
     await capture("pay_1", 10_000);
     state.settings = { enabled: true, apiKey: "live_key", credentialErrors: ["cannot decrypt"] };
 
-    await expect(processRefund(db, { orderId: "order_1", reason: "x" })).rejects.toThrow(/not readable/);
+    await expect(processRefund(db, { orderId: "order_1", reason: "x" }, undefined, providers)).rejects.toThrow(/not readable/);
     expect(state.refunds).toEqual([]);
     expect(attemptStatuses()).toEqual(["failed"]);
     expect(orderState()).toMatchObject({ payment_status: PaymentStatus.PAID });
@@ -296,21 +319,21 @@ describe("gateway kernel with a newly registered adapter", () => {
       { id: "ext_1", succeeded: true, amountMinor: 3_000, currency: "BDT", sourceRef: "txn_pay_1", status: "succeeded" },
     ];
     await db.insert(webhookEvents).values({
-      id: "fakepay:refund:evt_1",
-      provider: "fakepay",
+      id: `${FAKE_GATEWAY_ID}:refund:evt_1`,
+      provider: FAKE_GATEWAY_ID,
       eventType: REFUND_OBSERVED_EVENT_TYPE,
       orderId: "order_1",
       status: "manual_reconciliation",
       result: JSON.stringify({ providerRef: "pay_1", secondaryRef: "txn_pay_1" }),
     });
 
-    const first = await reconcileExternalRefundWebhooks(db);
+    const first = await reconcileExternalRefundWebhooks(db, { providers });
     expect(first).toMatchObject({ imported: 1, finalized: 1, deferred: 0 });
     expect(orderState()).toMatchObject({ status: OrderStatus.DELIVERED, payment_status: PaymentStatus.PARTIALLY_REFUNDED, paid_amount_minor: 7_000 });
     expect(sqlite.prepare("SELECT status FROM webhook_events").get()).toEqual({ status: "processed" });
 
     sqlite.prepare("UPDATE webhook_events SET status = 'manual_reconciliation'").run();
-    await expect(reconcileExternalRefundWebhooks(db)).resolves.toMatchObject({ imported: 0, skipped: 1 });
+    await expect(reconcileExternalRefundWebhooks(db, { providers })).resolves.toMatchObject({ imported: 0, skipped: 1 });
     expect(orderState()).toMatchObject({ paid_amount_minor: 7_000 });
     expect(state.refunds).toEqual([]);
   });
@@ -321,8 +344,8 @@ describe("gateway kernel with a newly registered adapter", () => {
     sqlite.prepare(`INSERT INTO order_payments (id, order_id, amount_minor, currency, payment_method, payment_type, status)
       VALUES ('cod_1', 'order_1', 10000, 'BDT', 'cod', 'full', 'succeeded')`).run();
 
-    await expect(processRefund(db, { orderId: "order_1", reason: "x" })).rejects.toThrow(/manual COD refund/);
-    await expect(processRefund(db, { orderId: "order_1", reason: "x", manualSettlementConfirmed: true }))
+    await expect(processRefund(db, { orderId: "order_1", reason: "x" }, undefined, providers)).rejects.toThrow(/manual COD refund/);
+    await expect(processRefund(db, { orderId: "order_1", reason: "x", manualSettlementConfirmed: true }, undefined, providers))
       .resolves.toMatchObject({ success: true, manualSettlementRecorded: true });
     expect(state.refunds).toEqual([]);
     expect(orderState()).toMatchObject({ payment_status: PaymentStatus.REFUNDED });

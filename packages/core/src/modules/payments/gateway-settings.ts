@@ -6,6 +6,10 @@
 
 import type { Database } from "@scalius/database/client";
 import { getStripeCredentialEnvironment } from "@scalius/shared/payment-gateway-environment";
+import { isQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
+import { isPaymentMethodId } from "./gateways/identity";
+import type { PaymentGateway } from "./gateways/port";
+import type { PaymentProviders, PaymentProvidersSource } from "./gateways/registry";
 import {
   paymentMethodsDocument,
   sslcommerzDocument,
@@ -314,26 +318,29 @@ async function resolveSSLCommerzSettingsFromRows(
 const PAYMENT_METHODS_CATEGORY = paymentMethodsDocument.key;
 
 export interface PaymentMethodsConfig {
-  /** Which payment methods are enabled for the storefront */
-  enabledMethods: ("stripe" | "sslcommerz" | "cod")[];
+  /** Which payment methods are enabled for the storefront: `cod`, built-in gateways, app providers. */
+  enabledMethods: string[];
   /** Default payment method shown first on checkout */
-  defaultMethod: "stripe" | "sslcommerz" | "cod";
+  defaultMethod: string;
 }
 
 export interface PaymentMethodPreferences {
   /** Raw merchant-selected checkout allowlist before gateway readiness filtering. */
-  enabledMethods: ("stripe" | "sslcommerz" | "cod")[];
+  enabledMethods: string[];
   /** Raw merchant-selected default before gateway readiness filtering. */
-  defaultMethod: "stripe" | "sslcommerz" | "cod";
+  defaultMethod: string;
   /** Whether the allowlist was explicitly saved by the merchant. */
   hasExplicitEnabledMethods: boolean;
 }
 
-type PaymentMethodId = PaymentMethodsConfig["defaultMethod"];
+/**
+ * Whether each app payment provider (`<plugin id>:<provider id>`) can take a
+ * payment now: its settings loaded strictly and its readiness checked
+ * (`resolveAppPaymentUsability`). An app method missing here is not usable.
+ */
+export type AppPaymentUsability = ReadonlyMap<string, boolean>;
 
-function isPaymentMethodId(method: unknown): method is PaymentMethodId {
-  return method === "stripe" || method === "sslcommerz" || method === "cod";
-}
+const NO_APP_PAYMENTS: AppPaymentUsability = new Map();
 
 /**
  * Without a saved allowlist, COD is the implied checkout method. A saved but
@@ -363,6 +370,8 @@ export const STOREFRONT_GATEWAY_SETTING_CATEGORIES = [
 export interface PaymentGatewaySettingsSnapshot {
   preferences: PaymentMethodPreferences;
   activePaymentMethods: PaymentMethodsConfig;
+  /** The providers asked for the enabled app methods; absent when none is enabled. */
+  providers?: PaymentProviders;
   settings: {
     stripe: StripeSettings | null;
     sslcommerz: SSLCommerzSettings | null;
@@ -375,12 +384,16 @@ type ResolvedGatewaySettings = PaymentGatewaySettingsSnapshot["settings"];
 function buildActivePaymentMethods(
   preferences: PaymentMethodPreferences,
   resolved: ResolvedGatewaySettings,
+  apps: AppPaymentUsability,
 ): PaymentMethodsConfig {
-  const validMethods: ("stripe" | "sslcommerz" | "cod")[] = [];
+  const validMethods: string[] = [];
   for (const method of preferences.enabledMethods) {
     if (method === "cod") validMethods.push(method);
-    else if (method === "stripe" && isStripeCheckoutUsable(resolved.stripe)) validMethods.push(method);
-    else if (method === "sslcommerz" && isSSLCommerzCheckoutUsable(resolved.sslcommerz)) validMethods.push(method);
+    else if (method === "stripe") {
+      if (isStripeCheckoutUsable(resolved.stripe)) validMethods.push(method);
+    } else if (method === "sslcommerz") {
+      if (isSSLCommerzCheckoutUsable(resolved.sslcommerz)) validMethods.push(method);
+    } else if (apps.get(method) === true) validMethods.push(method);
   }
   if (validMethods.length === 0 && !preferences.hasExplicitEnabledMethods) {
     validMethods.push("cod");
@@ -395,7 +408,8 @@ function buildActivePaymentMethods(
 
 async function resolvePaymentGatewaySettingsSnapshotFromRows(
   rows: readonly GatewaySettingsStoredRow[],
-  encryptionKey?: string,
+  encryptionKey: string | undefined,
+  apps: AppPaymentUsability,
 ): Promise<PaymentGatewaySettingsSnapshot> {
   const [preferences, stripe, sslcommerz] = await Promise.all([
     resolvePaymentMethodPreferences(rows),
@@ -405,7 +419,7 @@ async function resolvePaymentGatewaySettingsSnapshotFromRows(
   const resolved = { stripe, sslcommerz, cod: { enabled: true as const } };
   return {
     preferences,
-    activePaymentMethods: buildActivePaymentMethods(preferences, resolved),
+    activePaymentMethods: buildActivePaymentMethods(preferences, resolved, apps),
     settings: resolved,
   };
 }
@@ -413,6 +427,7 @@ async function resolvePaymentGatewaySettingsSnapshotFromRows(
 export async function resolveActivePaymentMethodsFromRows(
   rows: readonly GatewaySettingsStoredRow[],
   encryptionKey?: string,
+  apps: AppPaymentUsability = NO_APP_PAYMENTS,
 ): Promise<PaymentMethodsConfig> {
   const preferences = await resolvePaymentMethodPreferences(rows);
   const enabled = new Set(preferences.enabledMethods);
@@ -424,14 +439,37 @@ export async function resolveActivePaymentMethodsFromRows(
     stripe,
     sslcommerz,
     cod: { enabled: true },
-  });
+  }, apps);
+}
+
+/**
+ * Usability of the app methods the merchant enabled. `providers` is asked
+ * only when one is enabled, so a store whose methods are all built in reads
+ * no plugin table; without it app methods are not usable.
+ */
+async function enabledAppPayments(
+  db: Database,
+  rows: readonly GatewaySettingsStoredRow[],
+  encryptionKey: string | undefined,
+  source: PaymentProvidersSource | undefined,
+): Promise<{ apps: AppPaymentUsability; providers?: PaymentProviders }> {
+  const appIds = (await resolvePaymentMethodPreferences(rows)).enabledMethods.filter(isQualifiedProviderId);
+  if (appIds.length === 0 || !source) return { apps: NO_APP_PAYMENTS };
+  const providers = typeof source === "function" ? await source() : source;
+  const enabled = providers.gateways.filter((gateway) => appIds.includes(gateway.id));
+  return { apps: await resolveAppPaymentUsability(db, enabled, encryptionKey), providers };
 }
 
 export async function getPaymentGatewaySettingsSnapshot(
   db: Database,
   encryptionKey?: string,
+  /** The request's gateways, for enabled app methods (see `enabledAppPayments`). */
+  providers?: PaymentProvidersSource,
 ): Promise<PaymentGatewaySettingsSnapshot> {
-  return resolvePaymentGatewaySettingsSnapshotFromRows(await readGatewayRows(db), encryptionKey);
+  const rows = await readGatewayRows(db);
+  const app = await enabledAppPayments(db, rows, encryptionKey, providers);
+  const snapshot = await resolvePaymentGatewaySettingsSnapshotFromRows(rows, encryptionKey, app.apps);
+  return app.providers ? { ...snapshot, providers: app.providers } : snapshot;
 }
 
 export async function getPaymentMethodPreferences(
@@ -445,11 +483,36 @@ export async function getPaymentMethodPreferences(
  *
  * Reads the admin's configuration AND cross-checks that each gateway
  * actually has valid credentials configured. A method is only returned
- * if it's both enabled AND has credentials (COD always works).
+ * if it's both enabled AND has credentials (COD always works). App payment
+ * methods count only when their provider is among `providers` and ready.
  */
 export async function getActivePaymentMethods(
   db: Database,
   encryptionKey?: string,
+  /** The request's gateways, for enabled app methods (see `enabledAppPayments`). */
+  providers?: PaymentProvidersSource,
 ): Promise<PaymentMethodsConfig> {
-  return resolveActivePaymentMethodsFromRows(await readGatewayRows(db), encryptionKey);
+  const rows = await readGatewayRows(db);
+  const { apps } = await enabledAppPayments(db, rows, encryptionKey, providers);
+  return resolveActivePaymentMethodsFromRows(rows, encryptionKey, apps);
+}
+
+/**
+ * Loads each app gateway's settings strictly and checks its readiness, in
+ * parallel: the usability map the functions above take.
+ */
+export async function resolveAppPaymentUsability(
+  db: Database,
+  gateways: readonly PaymentGateway[],
+  encryptionKey?: string,
+): Promise<AppPaymentUsability> {
+  const apps = gateways.filter((gateway) => isQualifiedProviderId(gateway.id));
+  const usable = await Promise.all(apps.map(async (gateway) => {
+    try {
+      return gateway.readiness(await gateway.loadSettings(db, encryptionKey)).usable;
+    } catch {
+      return false;
+    }
+  }));
+  return new Map(apps.map((gateway, index) => [gateway.id, usable[index]!]));
 }

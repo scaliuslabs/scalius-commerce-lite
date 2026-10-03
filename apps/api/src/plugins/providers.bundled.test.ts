@@ -73,7 +73,7 @@ describe("app providers through the bundled loader", () => {
     const first = await host.invokeProvider(installation, "payment", "wallet", "createSession", walletSessionInput(12_550));
     expect(first).toEqual({
       providerRef: "W-ORD1_full_12550",
-      instructions: { title: "Send money", body: "Send 125.50 BDT to 01700000000." },
+      redirectUrl: "https://wallet.acme.test/pay?amount=125.50&currency=BDT",
     });
     expect(await host.invokeProvider(installation, "payment", "wallet", "createSession", walletSessionInput(12_550))).toEqual(first);
     expect(await getPluginRecord(db, WALLET_FIXTURE_ID, "sessions", "attempt-12550")).toMatchObject({ orderId: "ORD1" });
@@ -108,7 +108,7 @@ describe("app providers through the bundled loader", () => {
   });
 
   it("refuses what the app did not declare or was not approved for, without running it", async () => {
-    await expect(host.invokeProvider(installation, "payment", "wallet", "queryPayment", { providerRef: "W-1", orderId: "ORD1", requestTimeoutMs: 1000 }))
+    await expect(host.invokeProvider(installation, "payment", "wallet", "listRefunds", { sourceRef: "W-1" }))
       .rejects.toMatchObject({ category: "misconfigured", code: "provider.unsupported" });
     await expect(host.invokeProvider(installation, "courier", "wallet", "trackShipment", { externalId: "x" }))
       .rejects.toMatchObject({ category: "misconfigured" });

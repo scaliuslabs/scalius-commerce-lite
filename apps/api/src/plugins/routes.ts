@@ -190,6 +190,7 @@ const FAILURE_STATUS: Record<PluginInvocationFailure, { status: number; code: st
   outdated: { status: 503, code: "APP_UPDATING", message: "The app was just updated. Try again in a few seconds." },
   unavailable: { status: 503, code: "APP_UNAVAILABLE", message: "The app cannot run on this store's plan." },
   load_failed: { status: 502, code: "APP_FAILED", message: "The app could not be loaded." },
+  settings_unreadable: { status: 503, code: "APP_UNAVAILABLE", message: "The app's settings cannot be read. Save them again in the dashboard." },
   timeout: { status: 504, code: "APP_TIMEOUT", message: "The app took too long to answer." },
   error: { status: 502, code: "APP_FAILED", message: "The app could not answer." },
   invalid: { status: 502, code: "APP_FAILED", message: "The app gave an invalid answer." },

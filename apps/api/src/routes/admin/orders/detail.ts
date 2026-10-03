@@ -1,5 +1,6 @@
 // One order: detail, items, payments, timeline and comments, notifications, edits, restore, recovery links and form data.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { requestPaymentProviders } from "../../../plugins/providers/payment";
 import {
     ORDER_COMMENT_MAX_LENGTH,
     ORDER_EVENT_KINDS,
@@ -446,7 +447,10 @@ app.openapi(createPaymentRecoveryLinkRoute, async (c) => {
     const db = c.get("db");
     const orderId = c.req.valid("param").id;
     const storefrontUrl = resolveStorefrontUrl(c.env);
-    const recoveryLink = await previewOrderPaymentRecoveryLink(db, orderId);
+    const recoveryLink = await previewOrderPaymentRecoveryLink(db, orderId, {
+        // An app's hosted gateway can be recovered like a built-in one (read only when one is named).
+        paymentProviders: () => requestPaymentProviders(c),
+    });
     const url = buildPaymentRecoveryUrl(storefrontUrl, recoveryLink);
 
     return created(c, {

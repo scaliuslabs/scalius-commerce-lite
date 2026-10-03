@@ -13,7 +13,7 @@ import {
 } from "@scalius/database/schema";
 import { applyInventoryForStatusChange } from "../inventory";
 import { hasActiveShipmentClaim, noActiveShipmentClaimCondition } from "./shipment-claim";
-import { isOnlinePaymentMethod, listPaymentGateways } from "../payments/gateways/registry";
+import { isOnlinePaymentMethod, onlinePaymentMethodCondition } from "../payments/gateways/registry";
 import {
     GIFT_CARD_PAYMENT_METHOD,
     buildGiftCardReleaseStatements,
@@ -39,7 +39,6 @@ const STALE_INCOMPLETE_PAYMENT_STATUSES: RecoverableStalePaymentStatus[] = [
     PaymentStatus.PARTIAL,
 ];
 
-const HOSTED_PAYMENT_METHODS = listPaymentGateways().map((gateway) => gateway.id);
 
 // A gift-card tender is not a gateway claim: it is the hold this cleanup
 // releases. Any other pending or succeeded row keeps the order for payment
@@ -152,7 +151,7 @@ export async function archiveStaleIncompleteOrders(
     const candidates = await db.select().from(orders).where(
         and(
             eq(orders.status, OrderStatus.INCOMPLETE),
-            inArray(orders.paymentMethod, HOSTED_PAYMENT_METHODS),
+            onlinePaymentMethodCondition(orders.paymentMethod),
             inArray(orders.paymentStatus, STALE_INCOMPLETE_PAYMENT_STATUSES),
             onlyGiftCardMoneyCondition,
             sql`${orders.createdAt} <= ${cutoffTimestamp}`,

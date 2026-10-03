@@ -52,6 +52,7 @@ import {
 } from "./payment/payment-session-create";
 import { acceptedPaymentSessionProcessing, paymentSessionProcessingResponse } from "./payment/payment-session-response";
 import { reconcileOrderPayment } from "./payment/payment-events";
+import { requestPaymentProviders } from "../plugins/providers/payment";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -386,6 +387,7 @@ app.openapi(reconcilePaymentRoute, async (c) => {
     db: c.get("db"),
     env: c.env,
     orderId: access.orderId,
+    providers: () => requestPaymentProviders(c),
   });
   return accepted
     ? c.json({ success: true as const, data: {

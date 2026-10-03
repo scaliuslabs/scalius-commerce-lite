@@ -18,7 +18,7 @@ import {
     quoteGiftCardTender,
 } from "../gift-cards";
 import { isGiftCardTenderBlocked } from "@scalius/shared/gift-card-tender";
-import { getPaymentGateway } from "../payments/gateways/registry";
+import { BUILT_IN_PAYMENT_PROVIDERS, type PaymentProviders } from "../payments/gateways/registry";
 import { assertDiscountCodesApplied } from "../promotions";
 import type { CheckoutAppFunctions } from "./app-functions";
 import { assertNoCheckoutRuleErrors, priceStorefrontCheckout } from "./pricing";
@@ -440,8 +440,12 @@ export async function createStorefrontOrder(
     taxAuthoritySnapshot?: StorefrontTaxAuthoritySnapshot,
     /** SCALIUS_SECRET, which opens gift-card apply handles (null: every handle is unusable). */
     giftCardAuthority: { masterSecret?: string | null } = {},
-    /** The apps' checkout functions (none: platform pricing only) and the order channel they see. */
-    appOptions: { apps?: CheckoutAppFunctions; channel?: "online_store" | "agent" } = {},
+    /**
+     * The apps' checkout functions (none: platform pricing only), the order
+     * channel they see, and the request's payment gateways (built-in only
+     * when absent).
+     */
+    appOptions: { apps?: CheckoutAppFunctions; channel?: "online_store" | "agent"; paymentProviders?: PaymentProviders } = {},
 ): Promise<CreateStorefrontOrderResult> {
     if (data.items.length > MAX_ORDER_LINE_ITEMS) {
         throw new ValidationError(
@@ -624,7 +628,7 @@ export async function createStorefrontOrder(
     }
     if (giftCardsApplied) {
         // A gateway charges the remainder: below its minimum it cannot.
-        const limits = getPaymentGateway(paymentMethod)?.amountLimits;
+        const limits = (appOptions.paymentProviders ?? BUILT_IN_PAYMENT_PROVIDERS).get(paymentMethod)?.amountLimits;
         if (
             limits
             && limits.currency === taxQuote.currencyCode.toUpperCase()

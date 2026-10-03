@@ -29,6 +29,7 @@ import { addOrderToCart } from "@/lib/account-buy-again";
 import { accountPill, orderStatusTone } from "@/lib/account-ui";
 import { getProductImageUrl } from "@/lib/product-media";
 import { getGatewayPresentation } from "@/lib/checkout/gateway-presentation";
+import { isPaymentMethodIdShape } from "@/lib/payment-method-id";
 import { isGatewayEligibleForPaymentAmount } from "@/lib/checkout/gateway-amount-eligibility";
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 import { escapeHtml } from "@scalius/shared/html-escape";
@@ -169,7 +170,7 @@ function setRecoveryButton(label: string, disabled = false): void {
 }
 
 function isOnlineGateway(value: string): boolean {
-  return /^[a-z][a-z0-9_-]{0,63}$/.test(value) && value !== "cod";
+  return isPaymentMethodIdShape(value) && value !== "cod";
 }
 
 function gatewayMarkup(gateway: string): string {

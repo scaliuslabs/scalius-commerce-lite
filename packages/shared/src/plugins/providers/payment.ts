@@ -39,11 +39,9 @@ export type PaymentType = z.infer<typeof paymentTypeSchema>;
 /**
  * How the buyer pays: `card` confirms in the storefront with a client
  * secret (built-in card gateways); `hosted` redirects to the provider's page
- * (wallets, hosted card pages); `instructions` shows the buyer what to do
- * (a bank transfer, a manual wallet send) and stays pending until the
- * provider, or staff, confirms.
+ * (wallets, hosted card pages).
  */
-export const PAYMENT_FLOWS = ["card", "hosted", "instructions"] as const;
+export const PAYMENT_FLOWS = ["card", "hosted"] as const;
 export type PaymentFlow = (typeof PAYMENT_FLOWS)[number];
 
 /** A provider's charge limits, in minor units of `currency`. */
@@ -93,8 +91,6 @@ export const paymentSessionSchema = z.object({
   /** Card flows (built-in gateways): the browser confirmation secret and its public key. */
   clientSecret: z.string().max(4096).optional(),
   publishableKey: z.string().max(4096).optional(),
-  /** Instruction flows: what the buyer must do to pay. */
-  instructions: z.object({ title: z.string().min(1).max(120), body: z.string().min(1).max(2000) }).strict().optional(),
 }).strict();
 export type PaymentSession = z.infer<typeof paymentSessionSchema>;
 

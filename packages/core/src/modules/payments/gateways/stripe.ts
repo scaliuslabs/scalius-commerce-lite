@@ -118,7 +118,7 @@ export const stripeGateway: PaymentGateway<StripeSettings> = {
   label: "Stripe",
   checkoutName: "Card Payment",
   flow: "card",
-  currencies: "any",
+  chargeCurrencies: "any",
   supportsRefund: true,
 
   loadSettings: getStripeSettings,
@@ -130,10 +130,10 @@ export const stripeGateway: PaymentGateway<StripeSettings> = {
     testMode: getStripeCredentialEnvironment(settings) === "test",
   }),
 
-  async createSession(settings, input) {
+  async createSession(input, { settings }) {
     try {
       const intent = await stripeClient(settings.secretKey).paymentIntents.create({
-        amount: input.amountMinor,
+        amount: input.wireAmount.minor,
         currency: input.currency.toLowerCase(),
         capture_method: "automatic",
         metadata: { orderId: input.orderId, paymentType: input.paymentType },
@@ -152,12 +152,12 @@ export const stripeGateway: PaymentGateway<StripeSettings> = {
     }
   },
 
-  async verifyWebhook(settings, request) {
+  async verifyWebhook(request, { settings }) {
     let event: Stripe.Event;
     try {
       event = await stripeClient(settings.secretKey).webhooks.constructEventAsync(
         request.rawBody,
-        request.headers.get("stripe-signature") ?? "",
+        request.headers["stripe-signature"] ?? "",
         settings.webhookSecret,
       );
     } catch {
@@ -169,13 +169,13 @@ export const stripeGateway: PaymentGateway<StripeSettings> = {
       : { status: "ignored", reason: `Unhandled Stripe event ${event.type}` };
   },
 
-  async query(settings, input, requestTimeoutMs) {
+  async queryPayment(input, { settings }) {
     let intent: Stripe.PaymentIntent;
     try {
       intent = await stripeClient(settings.secretKey).paymentIntents.retrieve(
         input.providerRef,
         {},
-        { timeout: requestTimeoutMs },
+        { timeout: input.requestTimeoutMs },
       );
     } catch (error) {
       throw providerError(error, "Failed to retrieve Stripe payment intent");
@@ -190,7 +190,7 @@ export const stripeGateway: PaymentGateway<StripeSettings> = {
     };
   },
 
-  async refund(settings, input) {
+  async refund(input, { settings }) {
     if (!input.secondaryRef) throw new ValidationError("No Stripe charge ID found on payment record");
     const reason = input.reason === "duplicate" || input.reason === "fraudulent"
       ? input.reason
@@ -198,7 +198,7 @@ export const stripeGateway: PaymentGateway<StripeSettings> = {
     try {
       const refund = await stripeClient(settings.secretKey).refunds.create({
         charge: input.secondaryRef,
-        amount: input.amountMinor,
+        amount: input.wireAmount.minor,
         reason,
         metadata: input.metadata,
       }, { idempotencyKey: input.idempotencyKey });
@@ -208,7 +208,7 @@ export const stripeGateway: PaymentGateway<StripeSettings> = {
     }
   },
 
-  async refundStatus(settings, input): Promise<GatewayRefundProbe> {
+  async refundStatus(input, { settings }): Promise<GatewayRefundProbe> {
     const stripe = stripeClient(settings.secretKey);
     let refund: Stripe.Refund | undefined;
     try {
@@ -249,7 +249,7 @@ export const stripeGateway: PaymentGateway<StripeSettings> = {
     return { outcome: pending ? "processing" : "unknown", providerRefundId: refund.id, providerStatus: refund.status ?? "unknown", responsePayload: payload };
   },
 
-  async listRefunds(settings, sourceRef) {
+  async listRefunds({ sourceRef }, { settings }) {
     const listed = await stripeClient(settings.secretKey).refunds.list({ charge: sourceRef, limit: 100 });
     return listed.data.map(refundOf);
   },

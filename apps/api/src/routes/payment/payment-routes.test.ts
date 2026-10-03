@@ -1,7 +1,7 @@
 // Behaviour tests for the gateway-agnostic payment routes on the migrated
 // SQLite schema: session creation (SSLCommerz adapter with a stubbed provider),
-// webhook and buyer-return claim-once (a test-only adapter registered with one
-// registry line), and queue application that credits an order exactly once.
+// webhook and buyer-return claim-once (a test-only app gateway in the request's
+// providers), and queue application that credits an order exactly once.
 import { OpenAPIHono } from "@hono/zod-openapi";
 import type { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -16,7 +16,8 @@ import {
 } from "@scalius/core/modules/settings";
 import { recordOrderReceipt } from "@scalius/core/modules/orders";
 import type { PaymentEvent } from "@scalius/core/modules/payments";
-import { registerFakeGateway, type FakeGatewayState } from "@scalius/core/testing";
+import { createFakeGateway, FAKE_GATEWAY_ID, type FakeGatewayState } from "@scalius/core/testing";
+import type { PaymentProviders } from "@scalius/core/modules/payments";
 
 import { errorResponseFromError } from "../../utils/api-response";
 import { handleQueueBatch } from "../../queue-consumer";
@@ -33,6 +34,17 @@ let binding: D1Database;
 let sent: PaymentEventQueueMessage[];
 let env: Env;
 const fetchMock = vi.fn();
+
+// The request's gateways: an app gateway joins them the way an installed app does.
+const requestProviders = vi.hoisted(() => ({ current: null as PaymentProviders | null }));
+vi.mock("../../plugins/providers/payment", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../plugins/providers/payment")>();
+  return {
+    ...actual,
+    requestPaymentProviders: (...args: Parameters<typeof actual.requestPaymentProviders>) =>
+      requestProviders.current ? Promise.resolve(requestProviders.current) : actual.requestPaymentProviders(...args),
+  };
+});
 
 function createApp() {
   const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1");
@@ -168,14 +180,17 @@ describe("POST /payment/{provider}/session", () => {
   });
 });
 
-describe("a newly registered gateway: webhooks, returns, and queue application", () => {
+describe("an app gateway: webhooks, returns, and queue application", () => {
   let state: FakeGatewayState;
-  let unregister: () => void;
 
   beforeEach(() => {
-    ({ state, unregister } = registerFakeGateway());
+    const fake = createFakeGateway();
+    state = fake.state;
+    requestProviders.current = fake.providers;
   });
-  afterEach(() => unregister());
+  afterEach(() => {
+    requestProviders.current = null;
+  });
 
   const event: PaymentEvent = {
     kind: "confirmed",
@@ -190,11 +205,11 @@ describe("a newly registered gateway: webhooks, returns, and queue application",
   };
 
   function webhook(app: ReturnType<typeof createApp>, body: unknown, signature = "live_key") {
-    return post(app, "/webhooks/fakepay", body, { "x-fake-signature": signature });
+    return post(app, `/webhooks/${FAKE_GATEWAY_ID}`, body, { "x-fake-signature": signature });
   }
 
   it("rejects an unauthenticated callback before any state change and claims an authentic one once", async () => {
-    await seed({ paymentMethod: "fakepay", enabledMethods: ["cod"] });
+    await seed({ paymentMethod: FAKE_GATEWAY_ID, enabledMethods: ["cod"] });
     const app = createApp();
 
     expect((await webhook(app, event, "forged")).status).toBe(400);
@@ -204,8 +219,9 @@ describe("a newly registered gateway: webhooks, returns, and queue application",
     await expect((await webhook(app, event)).json()).resolves.toMatchObject({ received: true, duplicate: true });
     expect(sent).toEqual([{
       type: "payment.event",
-      provider: "fakepay",
-      webhookEventId: "fakepay:charge:evt_1",
+      provider: FAKE_GATEWAY_ID,
+      // The claim id keeps the provider id's shape in the claim alphabet.
+      webhookEventId: "acme-fake:pay:charge:evt_1",
       event,
     }]);
     expect(sqlite.prepare("SELECT event_type, status FROM webhook_events").get())
@@ -214,18 +230,18 @@ describe("a newly registered gateway: webhooks, returns, and queue application",
   });
 
   it("applies a webhook racing the buyer return once, and credits the order once", async () => {
-    await seed({ paymentMethod: "fakepay", enabledMethods: ["cod"] });
+    await seed({ paymentMethod: FAKE_GATEWAY_ID, enabledMethods: ["cod"] });
     const app = createApp();
 
     // The buyer return verifies the same provider fact as the webhook.
-    const buyerReturn = await app.request("/api/v1/payment/fakepay/success?order_id=order_1&payment_type=full", {
+    const buyerReturn = await app.request(`/api/v1/payment/${FAKE_GATEWAY_ID}/success?order_id=order_1&payment_type=full`, {
       method: "POST",
       headers: { "x-fake-signature": "live_key" },
       body: JSON.stringify(event),
     }, env);
     expect(buyerReturn.status).toBe(302);
     expect(buyerReturn.headers.get("location"))
-      .toBe("https://shop.example.test/order-success?orderId=order_1&payment=fakepay&paymentType=full");
+      .toBe(`https://shop.example.test/order-success?orderId=order_1&payment=${encodeURIComponent(FAKE_GATEWAY_ID)}&paymentType=full`);
     await webhook(app, event);
     expect(sent).toHaveLength(1);
 

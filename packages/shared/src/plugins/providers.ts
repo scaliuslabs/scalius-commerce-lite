@@ -45,10 +45,16 @@ export type ProviderOperation<K extends ProviderKind> = keyof Ports[K] & string;
 export type ProviderOperationInput<K extends ProviderKind, M extends keyof Ports[K]> = z.output<Schemas<K, M>["input"]>;
 export type ProviderOperationOutput<K extends ProviderKind, M extends keyof Ports[K]> = z.output<Schemas<K, M>["output"]>;
 
-type Operation<K extends ProviderKind, M extends keyof Ports[K], C, R> =
-  (input: ProviderOperationInput<K, M>, context: C) => R extends "sync-or-async"
+/**
+ * One operation. Declared in method form (the `method` key) so a port over a
+ * narrower context (a gateway's own settings type) still fits where the
+ * general port is expected, as interface methods do.
+ */
+type Operation<K extends ProviderKind, M extends keyof Ports[K], C, R> = {
+  method(input: ProviderOperationInput<K, M>, context: C): R extends "sync-or-async"
     ? ProviderOperationOutput<K, M> | Promise<ProviderOperationOutput<K, M>>
     : Promise<ProviderOperationOutput<K, M>>;
+}["method"];
 
 /**
  * A port as the platform calls it: every required operation, the optional

@@ -1,3 +1,5 @@
+import { isPaymentMethodIdShape } from "../payment-method-id";
+
 const CHECKOUT_TRANSFER_KEYS = [
   "scalius_checkout_data",
   "scalius_checkout_gateways",
@@ -281,9 +283,7 @@ function checkoutRecoveryBaseOrigin(): string {
 }
 
 function normalizeCheckoutRecoveryGateway(value: unknown): CheckoutRecoveryGateway | null {
-  return typeof value === "string" && /^[a-z][a-z0-9_-]{0,63}$/.test(value)
-    ? value
-    : null;
+  return isPaymentMethodIdShape(value) ? value : null;
 }
 
 function normalizeHostedPaymentRecoveryHref(

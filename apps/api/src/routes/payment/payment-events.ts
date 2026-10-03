@@ -9,13 +9,14 @@ import type { Context } from "hono";
 import type { Database } from "@scalius/database/client";
 import { orders, PaymentStatus } from "@scalius/database/schema";
 import {
-  getPaymentGateway,
   REFUND_OBSERVED_EVENT_TYPE,
   PaymentProviderError,
   type GatewayRequest,
   type GatewaySettings,
   type PaymentEvent,
   type PaymentGateway,
+  paymentProvidersFor,
+  type PaymentProvidersSource,
 } from "@scalius/core/modules/payments";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
 import { NotFoundError, ServiceUnavailableError, ValidationError } from "../../utils/api-error";
@@ -94,11 +95,12 @@ export async function claimAndEnqueuePaymentEvent(input: {
   return { status: "queued" };
 }
 
+/** The request as gateways read it: the exact body text, header names lowercased. */
 export async function toGatewayRequest(c: Context): Promise<GatewayRequest> {
   return {
     method: c.req.method,
     rawBody: c.req.method === "POST" ? await c.req.text() : "",
-    headers: c.req.raw.headers,
+    headers: Object.fromEntries(c.req.raw.headers),
     query: c.req.query(),
   };
 }
@@ -140,6 +142,8 @@ export async function reconcileOrderPayment(input: {
   orderId: string;
   /** The gateway the caller expects; must match the order's current gateway. */
   provider?: string;
+  /** The request's gateways (built-in and app providers), read only when the order names an app's. */
+  providers: PaymentProvidersSource;
 }): Promise<{ data: PaymentReconciliationResult; accepted: boolean }> {
   const order = await input.db.select({
     id: orders.id,
@@ -148,8 +152,8 @@ export async function reconcileOrderPayment(input: {
     paymentIntentId: orders.paymentIntentId,
   }).from(orders).where(eq(orders.id, input.orderId)).get();
   if (!order) throw new NotFoundError("Order not found");
-  const gateway = getPaymentGateway(order.paymentMethod);
-  if (!gateway?.query || !order.paymentIntentId || (input.provider && input.provider !== gateway.id)) {
+  const gateway = (await paymentProvidersFor(input.providers, order.paymentMethod)).get(order.paymentMethod);
+  if (!gateway?.queryPayment || !order.paymentIntentId || (input.provider && input.provider !== gateway.id)) {
     throw new ValidationError("This order does not have an online payment to verify.");
   }
   if (order.paymentStatus === PaymentStatus.PAID) {
@@ -159,11 +163,14 @@ export async function reconcileOrderPayment(input: {
   const unavailable = new ServiceUnavailableError(`${gateway.label} payment verification is temporarily unavailable.`);
   const loaded = await loadCallbackSettings(gateway, input.db, input.env);
   if (loaded.status !== "ready" || !loaded.settings.enabled) throw unavailable;
-  let query: Awaited<ReturnType<NonNullable<PaymentGateway["query"]>>>;
+  let query: Awaited<ReturnType<NonNullable<PaymentGateway["queryPayment"]>>>;
   try {
     query = await withPaymentProviderDeadline(
       gateway.label,
-      (_signal, requestTimeoutMs) => gateway.query!(loaded.settings, { providerRef: order.paymentIntentId!, orderId: order.id }, requestTimeoutMs),
+      (signal, requestTimeoutMs) => gateway.queryPayment!(
+        { providerRef: order.paymentIntentId!, orderId: order.id, requestTimeoutMs },
+        { settings: loaded.settings, signal },
+      ),
     );
   } catch (error) {
     if (error instanceof PaymentProviderError) throw unavailable;

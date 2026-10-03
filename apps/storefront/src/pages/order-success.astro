@@ -21,6 +21,7 @@ import {
   type LayoutData,
 } from "@/lib/api";
 import { getCheckoutConfig, isCodOnly, type CheckoutConfig } from "@/lib/api/checkout";
+import { isPaymentMethodIdShape } from "@/lib/payment-method-id";
 import {
   createPurchaseTrackingPayload,
   formatOrderSuccessPaymentMethod,
@@ -129,7 +130,7 @@ const requestedPaymentType = Astro.url.searchParams.get("paymentType");
 const requestedDepositAmount = normalizeRetryDepositAmount(Astro.url.searchParams.get("depositAmount"));
 // Hosted (redirect) gateways return here; card (Stripe) and COD never do.
 const hostedRecoveryPayment = requestedPayment
-  && /^[a-z][a-z0-9_-]{0,63}$/.test(requestedPayment)
+  && isPaymentMethodIdShape(requestedPayment)
   && requestedPayment !== "stripe"
   && requestedPayment !== "cod"
   && requestedPayment !== "gift_card"

@@ -174,8 +174,9 @@ describe("provider declarations", () => {
     expect(parses({ ...wallet, flow: "card", operations: HOSTED_REFUNDS })).toBe(false);
     expect(parses({ ...wallet, operations: ["queryPayment"] })).toBe(false);
     expect(parses({ ...wallet, operations: ["verifyReturn", "queryPayment", "refund"] })).toBe(false);
-    expect(parses({ ...wallet, flow: "instructions" })).toBe(true);
-    expect(parses({ ...wallet, flow: "instructions", operations: ["capture"] })).toBe(false);
+    expect(parses({ ...wallet, flow: "hosted", operations: HOSTED_REFUNDS })).toBe(true);
+    expect(parses({ ...wallet, flow: "instructions" })).toBe(false);
+    expect(parses({ ...wallet, operations: ["capture"] })).toBe(false);
     expect(parsePluginManifest({ ...manifest, providers: { sms: [{ id: "a", name: "A" }], email: [{ id: "a", name: "B" }] } }).ok).toBe(false);
   });
 

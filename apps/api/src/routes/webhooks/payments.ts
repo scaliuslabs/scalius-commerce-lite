@@ -1,16 +1,18 @@
-// POST /webhooks/{provider} for every payment gateway. The adapter
-// authenticates the callback (signature or server-to-server validation)
-// before any state changes; the kernel claims the provider event once and
-// hands it to the queue. Configure this URL in the provider dashboard.
+// POST /webhooks/{provider} for every payment gateway, built-in or an app's
+// (`<plugin id>:<provider id>`). The adapter authenticates the callback
+// (signature or server-to-server validation) before any state changes; the
+// kernel claims the provider event once and hands it to the queue. Configure
+// this URL in the provider dashboard.
 
 import { OpenAPIHono } from "@hono/zod-openapi";
-import { getPaymentGateway } from "@scalius/core/modules/payments";
+import { requestPaymentProviders } from "../../plugins/providers/payment";
 import { claimAndEnqueuePaymentEvent, loadCallbackSettings, toGatewayRequest } from "../payment/payment-events";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 app.post("/:provider", async (c) => {
-  const gateway = getPaymentGateway(c.req.param("provider"));
+  const providerId = c.req.param("provider");
+  const gateway = (await requestPaymentProviders(c, providerId)).get(providerId);
   if (!gateway) return c.json({ error: "Not found" }, 404);
   const db = c.get("db");
 
@@ -21,7 +23,10 @@ app.post("/:provider", async (c) => {
     return c.json({ received: true, skipped: true });
   }
 
-  const verification = await gateway.verifyWebhook(loaded.settings, await toGatewayRequest(c));
+  const verification = await gateway.verifyWebhook(await toGatewayRequest(c), {
+    settings: loaded.settings,
+    signal: new AbortController().signal,
+  });
   if (verification.status === "invalid") {
     console.warn(`[payment-webhook] ${gateway.id} rejected: ${verification.reason}`);
     return c.json({ error: "Invalid signature" }, 400);

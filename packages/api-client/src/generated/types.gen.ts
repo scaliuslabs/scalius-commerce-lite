@@ -7980,9 +7980,9 @@ export type PostApiV1StorefrontAgentContextsByContextIdCheckoutSubmitData = {
         shippingAddress?: string | null;
         notes: string | null;
         /**
-         * Selected active checkout payment method. Online methods continue through storefront.orders.payment.begin.
+         * Selected active checkout payment method (`cod`, a gateway id, or an app provider's `<plugin id>:<provider id>`). Online methods continue through storefront.orders.payment.begin.
          */
-        paymentMethod: 'stripe' | 'sslcommerz' | 'cod';
+        paymentMethod: string;
     };
     headers?: {
         /**
@@ -20796,7 +20796,7 @@ export type PostApiV1OrdersData = {
         discountCodes?: Array<string>;
         shippingCharge: number;
         shippingMethodId?: string | null;
-        paymentMethod?: 'stripe' | 'sslcommerz' | 'cod' | 'gift_card';
+        paymentMethod?: string;
         inventoryPool?: 'regular' | 'preorder' | 'backorder';
         /**
          * Gift-card apply handles from `POST /checkout/gift-cards/apply`, in the order the buyer added them (at most 5). Omit for no gift cards.
@@ -48290,6 +48290,15 @@ export type GetApiV1AdminSettingsPaymentMethodsResponses = {
             revision: number;
             activeMethods?: Array<string>;
             activeDefaultMethod?: string;
+            gateways: Array<{
+                id: string;
+                label: string;
+                checkoutName: string;
+                flow: 'card' | 'hosted';
+                pluginId: string | null;
+                supportsRefund: boolean;
+                chargeCurrencies: 'any' | Array<string>;
+            }>;
             gatewayStatus: {
                 stripe: {
                     configured: boolean;
@@ -48327,6 +48336,51 @@ export type GetApiV1AdminSettingsPaymentMethodsResponses = {
                     checkoutVisible?: boolean;
                     environment?: 'test' | 'live' | 'mixed' | 'unknown' | 'not_applicable';
                 };
+                [key: string]: {
+                    configured: boolean;
+                    enabled: boolean;
+                    usable?: boolean;
+                    missingFields?: Array<string>;
+                    credentialErrors?: Array<string>;
+                    blockedReason?: string;
+                    providerEnabled?: boolean;
+                    checkoutSelected?: boolean;
+                    checkoutVisible?: boolean;
+                    environment?: 'test' | 'live' | 'mixed' | 'unknown' | 'not_applicable';
+                } | {
+                    configured: boolean;
+                    enabled: boolean;
+                    usable?: boolean;
+                    missingFields?: Array<string>;
+                    credentialErrors?: Array<string>;
+                    blockedReason?: string;
+                    providerEnabled?: boolean;
+                    checkoutSelected?: boolean;
+                    checkoutVisible?: boolean;
+                    environment?: 'test' | 'live' | 'mixed' | 'unknown' | 'not_applicable';
+                } | {
+                    configured: boolean;
+                    enabled: boolean;
+                    usable?: boolean;
+                    missingFields?: Array<string>;
+                    credentialErrors?: Array<string>;
+                    blockedReason?: string;
+                    providerEnabled?: boolean;
+                    checkoutSelected?: boolean;
+                    checkoutVisible?: boolean;
+                    environment?: 'test' | 'live' | 'mixed' | 'unknown' | 'not_applicable';
+                } | {
+                    configured: boolean;
+                    enabled: boolean;
+                    usable?: boolean;
+                    missingFields?: Array<string>;
+                    credentialErrors?: Array<string>;
+                    blockedReason?: string;
+                    providerEnabled?: boolean;
+                    checkoutSelected?: boolean;
+                    checkoutVisible?: boolean;
+                    environment?: 'test' | 'live' | 'mixed' | 'unknown' | 'not_applicable';
+                };
             };
             [key: string]: unknown;
         };
@@ -48337,8 +48391,8 @@ export type GetApiV1AdminSettingsPaymentMethodsResponse = GetApiV1AdminSettingsP
 
 export type PostApiV1AdminSettingsPaymentMethodsData = {
     body: {
-        enabledMethods: Array<'stripe' | 'sslcommerz' | 'cod'>;
-        defaultMethod: 'stripe' | 'sslcommerz' | 'cod';
+        enabledMethods: Array<string>;
+        defaultMethod: string;
         expectedRevision: number;
     };
     path?: never;
@@ -56385,9 +56439,9 @@ export type PostApiV1AdminOrdersByIdRefundData = {
         amount?: number;
         reason?: string;
         /**
-         * Refund only payments taken by this method (gift_card: only the gift-card tenders).
+         * Refund only payments taken by this method (`cod`, a gateway id, an app provider's `<plugin id>:<provider id>`, or gift_card: only the gift-card tenders).
          */
-        gateway?: 'gift_card' | 'stripe' | 'sslcommerz' | 'cod';
+        gateway?: string;
         manualSettlementConfirmed?: boolean;
         /**
          * original (default): back to the payments it came from. store_credit: one new gift card for the whole amount, sent to the order contact; no cash or provider refund.
@@ -58383,7 +58437,7 @@ export type GetApiV1AdminOrdersData = {
         /**
          * Filter by payment method
          */
-        paymentMethod?: 'stripe' | 'sslcommerz' | 'cod';
+        paymentMethod?: string;
         /**
          * Filter by fulfillment status
          */
@@ -58791,7 +58845,7 @@ export type GetApiV1AdminOrdersExportData = {
          */
         format?: 'summary' | 'items';
         paymentStatus?: 'unpaid' | 'partial' | 'paid' | 'partially_refunded' | 'refunded' | 'failed';
-        paymentMethod?: 'stripe' | 'sslcommerz' | 'cod';
+        paymentMethod?: string;
         fulfillmentStatus?: 'pending' | 'partial' | 'complete';
         /**
          * How the order reaches the buyer: delivery (ships to an address), pickup, or none (nothing physical).
@@ -58930,7 +58984,7 @@ export type GetApiV1AdminOrdersPaymentRecoveryData = {
         /**
          * Filter by payment gateway
          */
-        paymentMethod?: 'stripe' | 'sslcommerz' | 'cod';
+        paymentMethod?: string;
         /**
          * Sort field
          */
@@ -59206,7 +59260,7 @@ export type GetApiV1AdminOrdersPaymentRecoveryExportData = {
         /**
          * Filter by payment gateway
          */
-        paymentMethod?: 'stripe' | 'sslcommerz' | 'cod';
+        paymentMethod?: string;
         /**
          * Filter by fulfillment status
          */

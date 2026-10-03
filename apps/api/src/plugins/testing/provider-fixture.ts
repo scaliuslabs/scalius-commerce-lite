@@ -19,7 +19,12 @@ export const WALLET_FIXTURE_MANIFEST = {
   settings: [{ key: "secret", label: "Webhook secret", type: "secret", required: true }],
   storage: { sessions: { indexes: [], unique: [] } },
   providers: {
-    payment: [{ id: "wallet", name: "Acme Wallet", flow: "instructions", chargeCurrencies: ["BDT"], operations: ["testConnection"] }],
+    payment: [{
+      id: "wallet",
+      name: "Acme Wallet",
+      chargeCurrencies: ["BDT"],
+      operations: ["verifyReturn", "queryPayment", "testConnection"],
+    }],
   },
 } as const;
 
@@ -48,7 +53,7 @@ export default {
         if (existing) return existing.session;
         const session = {
           providerRef: "W-" + input.correlationId,
-          instructions: { title: "Send money", body: "Send " + input.wireAmount.decimal + " " + input.currency + " to 01700000000." },
+          redirectUrl: "https://wallet.acme.test/pay?amount=" + input.wireAmount.decimal + "&currency=" + input.currency,
         };
         await ctx.storage.sessions.put(input.attemptKey, { session, orderId: input.orderId });
         ctx.log.info("Session created", { orderId: input.orderId });
@@ -64,6 +69,12 @@ export default {
             providerRef: body.ref, amountMinor: body.amountMinor, currency: "BDT",
           },
         };
+      },
+      async verifyReturn(request, ctx) {
+        return this.verifyWebhook(request, ctx);
+      },
+      async queryPayment(input) {
+        return { providerStatus: "pending" };
       },
       async testConnection(_input, ctx) {
         return { ok: ctx.settings.secret.length > 8, message: "Secret saved." };

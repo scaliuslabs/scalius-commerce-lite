@@ -29,6 +29,7 @@ import { getCurrencySettings } from "@scalius/core/modules/settings";
 import { assertDiscountCodesApplied, quoteStorefrontDiscount } from "@scalius/core/modules/promotions";
 import { buildStorefrontTaxAllocationLineId } from "@scalius/core/modules/tax";
 import { getActivePaymentMethods } from "../payments/gateway-settings";
+import { BUILT_IN_PAYMENT_PROVIDERS, type PaymentProviders } from "../payments/gateways/registry";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { fromMinor } from "@scalius/shared/money";
 import { and, eq, gt, isNull, sql } from "drizzle-orm";
@@ -817,6 +818,8 @@ export async function quoteAgentStorefrontCheckout(
     apps?: CheckoutAppFunctions;
     /** Reads the enabled payment methods, only when an app adjusts them. */
     credentialEncryptionKey?: string;
+    /** The request's gateways (built-in and active app providers); built-in ones alone by default. */
+    paymentProviders?: PaymentProviders;
   } = {},
 ): Promise<AgentStorefrontCheckoutQuote> {
   const row = await loadActiveOwnedContext(db, grantId, contextId, input.now ?? new Date());
@@ -846,11 +849,12 @@ export async function quoteAgentStorefrontCheckout(
   assertDiscountCodesApplied(pricing.typedCodes);
   const quote = pricing.taxQuote;
   // Apps narrow and present the methods submit accepts (read only when an app adjusts them).
+  const paymentProviders = input.paymentProviders ?? BUILT_IN_PAYMENT_PROVIDERS;
   const payment = apps.points.has("checkout.payment_methods")
     ? await resolveAppPaymentMethods(apps, pricing.appCart, resolveCartPaymentMethods(
-      (await getActivePaymentMethods(db, input.credentialEncryptionKey)).enabledMethods,
+      (await getActivePaymentMethods(db, input.credentialEncryptionKey, paymentProviders)).enabledMethods,
       delivery.fulfilment,
-    ))
+    ), paymentProviders)
     : null;
   const toAmount = (minor: number) => fromMinor(minor, quote.decimalPlaces);
   const currentQuoteFingerprint = await buildAgentStorefrontCheckoutQuoteFingerprint({

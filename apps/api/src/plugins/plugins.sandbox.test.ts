@@ -248,7 +248,7 @@ describe("plugins in the sandbox loader (Miniflare workerLoaders)", () => {
     const session = await provider("createSession", walletSessionInput(12_550));
     expect(session).toEqual({
       ok: true,
-      value: { providerRef: "W-ORD1_full_12550", instructions: { title: "Send money", body: "Send 125.50 BDT to 01700000000." } },
+      value: { providerRef: "W-ORD1_full_12550", redirectUrl: "https://wallet.acme.test/pay?amount=125.50&currency=BDT" },
     });
     expect(await provider("createSession", walletSessionInput(12_550))).toEqual(session);
     expect(await getPluginRecord(db, WALLET_FIXTURE_ID, "sessions", "attempt-12550")).toMatchObject({ orderId: "ORD1" });
@@ -263,7 +263,7 @@ describe("plugins in the sandbox loader (Miniflare workerLoaders)", () => {
     expect(timeout.error.message).not.toContain(WALLET_FIXTURE_SECRET);
     expect((await provider("createSession", walletSessionInput(1500))).error).toMatchObject({ category: "retryable", uncertain: true, code: "provider.invalid_response" });
     expect((await provider("createSession", walletSessionInput(1600))).error).toMatchObject({ category: "retryable", uncertain: true, code: "provider.error" });
-    expect((await provider("queryPayment", { providerRef: "W-1", orderId: "ORD1", requestTimeoutMs: 1000 })).error)
+    expect((await provider("listRefunds", { sourceRef: "W-1" })).error)
       .toMatchObject({ category: "misconfigured", code: "provider.unsupported" });
   });
 

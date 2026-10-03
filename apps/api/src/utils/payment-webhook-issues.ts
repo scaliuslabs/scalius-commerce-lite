@@ -1,7 +1,7 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import { webhookEvents } from "@scalius/database/schema";
-import { PAYMENT_WEBHOOK_PROVIDERS, type WebhookEventStatus } from "./webhook-idempotency";
+import { paymentWebhookEventCondition, type WebhookEventStatus } from "./webhook-idempotency";
 
 const PAYMENT_WEBHOOK_ISSUE_STATUSES = ["failed", "manual_reconciliation"] as const satisfies readonly WebhookEventStatus[];
 const MAX_PAYMENT_WEBHOOK_ISSUES_PER_ORDER = 10;
@@ -55,7 +55,7 @@ export async function listPaymentWebhookIssuesForOrder(
     .from(webhookEvents)
     .where(and(
       eq(webhookEvents.orderId, orderId),
-      inArray(webhookEvents.provider, PAYMENT_WEBHOOK_PROVIDERS),
+      paymentWebhookEventCondition(),
       inArray(webhookEvents.status, PAYMENT_WEBHOOK_ISSUE_STATUSES),
     ))
     .orderBy(desc(webhookEvents.processedAt))

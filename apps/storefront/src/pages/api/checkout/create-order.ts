@@ -4,6 +4,7 @@
 
 import type { APIRoute } from "astro";
 import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
+import { isPaymentMethodIdShape } from "@/lib/payment-method-id";
 import { apiFetch } from "@/lib/api/transport";
 import type { CreateOrderPayload } from "@/lib/api/types";
 import { createOrder } from "../../../lib/api/orders";
@@ -36,11 +37,11 @@ type InitialPaymentSessionResult =
 
 /**
  * Every payment method except cash on delivery and a gift-card-paid order
- * (nothing left to collect) is an online gateway id.
+ * (nothing left to collect) is an online gateway id: a built-in one or an
+ * app provider's `<plugin id>:<provider id>`.
  */
 function isOnlinePaymentMethod(value: unknown): value is string {
-  return typeof value === "string" && value !== "cod" && value !== "gift_card" &&
-    /^[a-z][a-z0-9_-]{0,63}$/.test(value);
+  return isPaymentMethodIdShape(value) && value !== "cod" && value !== "gift_card";
 }
 
 async function createInitialPaymentSession(

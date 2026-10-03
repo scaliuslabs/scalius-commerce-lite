@@ -24,7 +24,7 @@ import {
     PaymentStatus,
     ShipmentStatus,
 } from "@scalius/database/schema";
-import { isOnlinePaymentMethod, listPaymentGateways } from "../../payments/gateways/registry";
+import { isOnlinePaymentMethod, onlinePaymentMethodCondition } from "../../payments/gateways/registry";
 import { sql, eq, inArray, isNull, and, type SQL } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import { calculateCustomerStats } from "@scalius/shared/customer-utils";
@@ -116,7 +116,8 @@ type OrderRecoverySourceRow = {
     shipmentClaimExpiresAt?: Date | number | string | null;
 };
 
-export const HOSTED_PAYMENT_METHODS = listPaymentGateways().map((gateway) => gateway.id);
+/** Orders whose method is an online gateway (built-in or app), as SQL over `column`. */
+export const onlinePaymentMethod = onlinePaymentMethodCondition;
 
 const DEFAULT_PAYMENT_RECOVERY_SUMMARY: OrderPaymentRecoverySummary = {
     state: "none",
@@ -182,7 +183,8 @@ export function paymentRecoveryLifecycleCondition() {
         WHEN EXISTS (
             SELECT 1 FROM ${webhookEvents}
             WHERE ${webhookEvents.orderId} = ${orderIdSql}
-              AND ${inArray(webhookEvents.provider, [...HOSTED_PAYMENT_METHODS])}
+              AND ${onlinePaymentMethodCondition(webhookEvents.provider)}
+              AND ${webhookEvents.eventType} NOT LIKE 'courier.%'
               AND ${webhookEvents.status} IN ('processing', 'queued', 'failed', 'manual_reconciliation')
         ) THEN 1
         ELSE 0
