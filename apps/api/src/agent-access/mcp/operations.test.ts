@@ -116,7 +116,13 @@ describe("MCP operation descriptions", () => {
         fields: [
           // Settings saves carry the revision they read (a stale one gets a 409).
           { name: "expectedRevision", required: true, type: "integer", minimum: 0 },
-          { name: "provider", required: false, type: "string", enum: ["cloudflare", "resend"] },
+          // A built-in sender or an app's email provider (`<plugin id>:<provider id>`).
+          {
+            name: "provider",
+            required: false,
+            type: "anyOf",
+            variants: [{ type: "string", enum: ["cloudflare", "resend"] }, { type: "string", maxLength: 160 }],
+          },
           { name: "apiKey", required: false, type: "string", maxLength: 512 },
           { name: "sender", required: false, type: "string", maxLength: 320 },
         ],

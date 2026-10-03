@@ -93,11 +93,21 @@ export function createAppProviders(runtime: AppProviderRuntime, encryptionKey: s
 
 const perRequest = new WeakMap<Request, AppProviders>();
 
-/** The app providers of one Hono request (one plugin host, one lookup per id). */
+/**
+ * The app providers of one Hono request (one plugin host, one lookup per id).
+ * Nothing is built until an app id is resolved: a request on built-in
+ * providers only carries the handle.
+ */
 export function requestAppProviders(c: RequestLike): AppProviders {
   let providers = perRequest.get(c.req.raw);
   if (!providers) {
-    providers = createAppProviders(requestProviderRuntime(c), getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>));
+    let built: AppProviders | null = null;
+    providers = {
+      resolve(kind, id) {
+        built ??= createAppProviders(requestProviderRuntime(c), getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>));
+        return built.resolve(kind, id);
+      },
+    };
     perRequest.set(c.req.raw, providers);
   }
   return providers;
