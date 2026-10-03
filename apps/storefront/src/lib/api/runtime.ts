@@ -34,6 +34,7 @@ import {
 import type { LayoutData } from "./storefront";
 import type { PendingReadBatch } from "./transport";
 import { currentPageDependencies, type PageDependencies } from "../page-dependencies";
+import { presenceOfRenderRequest } from "../market-presence";
 
 /** Bindings and secrets the middleware hands to the request runtime. */
 export interface RequestRuntimeEnv extends MasterSecretEnvironment {
@@ -61,6 +62,11 @@ export interface StorefrontRuntime {
   API_TOKEN?: string;
   /** Merchant CSP sources from the layout payload (Settings -> Security). */
   CSP_ALLOWED_DOMAINS?: string;
+  /**
+   * The subfolder presence this render is in (`en-in`), from the header only
+   * the gateway sets; absent for the root (the backup market).
+   */
+  MARKET_PRESENCE?: string;
   /** The request's single layout read, shared by the middleware and pages. */
   layout?: Promise<LayoutData | null>;
   /** Request-local read coalescing. Never share in-flight I/O across requests. */
@@ -127,6 +133,11 @@ export function getRuntimeCdnDomain(): string | undefined {
 /** Returns the platform media base URL from the per-request runtime. */
 export function getRuntimeMediaUrl(): string | undefined {
   return getRuntime()?.MEDIA_URL;
+}
+
+/** The subfolder presence this render is in, or null for the root (MARKETS-DESIGN D4). */
+export function getRuntimePresence(): string | null {
+  return getRuntime()?.MARKET_PRESENCE ?? null;
 }
 
 /** Returns the dashboard origin from the per-request runtime. */
@@ -252,6 +263,7 @@ export async function createRequestRuntime(
   return {
     BACKEND_API: env?.BACKEND_API,
     STOREFRONT_URL: optional(publicRequestOrigin(request.url)),
+    MARKET_PRESENCE: presenceOfRenderRequest(request) ?? undefined,
     ...(await deriveRuntimeTokens(env)),
     inflightReads: new Map<string, Promise<unknown>>(),
     pageDependencies: currentPageDependencies(),

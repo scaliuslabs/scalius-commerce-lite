@@ -57,6 +57,11 @@ import {
   partytownForwardFor,
 } from "@/lib/partytown-config";
 import { partytownLoaderPath } from "virtual:scalius/partytown";
+import { getRuntimePresence } from "@/lib/api/runtime";
+import { hreflangAlternates, marketOfPresence, stripPresencePath } from "@scalius/shared/markets";
+import { hasSeveralPresences } from "@/lib/market-selector";
+import MarketSelector from "../components/markets/MarketSelector.astro";
+import MarketSuggestion from "../components/markets/MarketSuggestion.astro";
 
 interface Props {
   title: string;
@@ -182,10 +187,28 @@ const storeDisplayName = resolveStoreDisplayName(businessInfo, storefrontUrl);
 const documentTitle = buildDocumentTitle(title, storeDisplayName);
 const storePhone = resolveStorePhone(businessInfo);
 const storeSocial = resolveStoreSocialLinks(businessInfo?.socialLinks, storePhone);
-// Open Graph locale from the document language and the store's country.
-const ogLocale = `${documentLanguage}_${
-  /^(bangladesh|bd)$/i.test(businessInfo?.country?.trim() ?? "") ? "BD" : "US"
-}`;
+// Markets (MARKETS-DESIGN D4): a page under a subfolder presence (`/en-in`)
+// is in that presence's language; root pages keep today's language rule.
+const marketPresence = getRuntimePresence();
+const marketMatrix = layoutData?.markets ?? { markets: [] };
+const presenceEntry = marketPresence ? marketOfPresence(marketMatrix, marketPresence) : null;
+const pageLanguage = presenceEntry?.presence.locale ?? documentLanguage;
+// Open Graph locale from the document language and the store's (or the presence's) country.
+const ogLocale = presenceEntry
+  ? `${presenceEntry.presence.locale}_${presenceEntry.presence.value.slice(3).toUpperCase()}`
+  : `${documentLanguage}_${
+    /^(bangladesh|bd)$/i.test(businessInfo?.country?.trim() ?? "") ? "BD" : "US"
+  }`;
+// hreflang, the market selector and the geo suggestion exist only while the
+// store sells at more than one URL, so a single-presence store's HTML is unchanged.
+const severalPresences = hasSeveralPresences(marketMatrix);
+const canonicalLocation = canonicalUrl ? new URL(canonicalUrl) : null;
+const hreflangLinks = severalPresences && canonicalLocation && storefrontUrl && !noindex && !isThemePreview
+  ? hreflangAlternates(marketMatrix, `${stripPresencePath(canonicalLocation.pathname, marketPresence)}${canonicalLocation.search}`, storefrontUrl)
+  : [];
+const marketReturnTo = `${stripPresencePath(Astro.url.pathname, marketPresence)}${Astro.url.search}`;
+// The site's own URL in WebSite JSON-LD: the presence's home on a presence page.
+const siteUrl = storefrontUrl && marketPresence ? `${storefrontUrl}/${marketPresence}` : storefrontUrl;
 const merchantReturnPolicyJsonLd = buildMerchantReturnPolicyJsonLd({
   settings: layoutData?.seo?.returnPolicy,
   storefrontUrl,
@@ -213,17 +236,17 @@ const orgJsonLd = onlineStoreJsonLd
 
 // WebSite JSON-LD with SearchAction for Google Sitelinks Search Box (per SEO-06)
 const websiteJsonLd =
-  storefrontUrl && storeSchemaName
+  siteUrl && storeSchemaName
     ? serializeJsonForInlineScript({
         "@context": "https://schema.org",
         "@type": "WebSite",
         name: storeSchemaName,
-        url: storefrontUrl,
+        url: siteUrl,
         potentialAction: {
           "@type": "SearchAction",
           target: {
             "@type": "EntryPoint",
-            urlTemplate: `${storefrontUrl}/search?q={search_term_string}`,
+            urlTemplate: `${siteUrl}/search?q={search_term_string}`,
           },
           "query-input": "required name=search_term_string",
         },
@@ -354,7 +377,8 @@ if (!window.$RefreshReg$) {
 
 <!doctype html>
 <html
-  lang={documentLanguage}
+  lang={pageLanguage}
+  data-market-presence={marketPresence ?? undefined}
   data-theme-preview={isThemePreview ? "true" : undefined}
   data-mobile-nav={showMobileTabs ? "tabs" : undefined}
 >
@@ -403,6 +427,8 @@ if (!window.$RefreshReg$) {
 
     {/* Canonical URL — per CAN-01, CAN-02 */}
     {canonicalUrl && <link rel="canonical" href={canonicalUrl} />}
+    {/* Localized versions: every active presence and x-default (only with several presences). */}
+    {hreflangLinks.map((alternate) => <link rel="alternate" hreflang={alternate.hreflang} href={alternate.href} />)}
 
     {/* Open Graph tags — per OG-01 through OG-05 */}
     {storeDisplayName && <meta property="og:site_name" content={storeDisplayName} />}
@@ -470,6 +496,7 @@ if (!window.$RefreshReg$) {
     </a>
 
     {themePreviewBar && <ThemePreviewBar copy={themePreviewBar} />}
+    {severalPresences && !isThemePreview && <MarketSuggestion language={pageLanguage} returnTo={marketReturnTo} />}
 
     <div class="site-wrapper grow">
       {
@@ -509,6 +536,15 @@ if (!window.$RefreshReg$) {
             business={businessInfo}
             languageCode={layoutData?.storefrontCopy?.languageCode}
           />
+          {severalPresences && (
+            <MarketSelector
+              matrix={marketMatrix}
+              presence={marketPresence}
+              currencyCode={currencyCode}
+              language={pageLanguage}
+              returnTo={marketReturnTo}
+            />
+          )}
         </div>
       )
     }

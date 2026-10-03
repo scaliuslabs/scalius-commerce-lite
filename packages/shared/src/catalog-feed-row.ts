@@ -13,6 +13,7 @@ import {
   type ProductCondition,
 } from "./product-condition";
 import { normalizeResourceCanonicalPath } from "./seo-canonical";
+import { presencePath } from "./markets";
 
 export const CATALOG_FEED_MAX_PRODUCTS_PER_PROJECTION = 100;
 export const CATALOG_FEED_MAX_VARIANTS_PER_PRODUCT = 250;
@@ -108,6 +109,11 @@ export interface CatalogFeedProjectionPolicy {
 export interface ProjectCatalogFeedRowsInput {
   products: readonly CatalogFeedProductInput[];
   storefrontBaseUrl: string;
+  /**
+   * The subfolder presence the feed is for (`en-in`): every product link is
+   * that presence's page. Absent (or empty) for the root, the backup market.
+   */
+  presence?: string | null;
   currencyCode: string;
   /** The market's price increment: feed prices are what checkout charges. */
   priceIncrementMinor: number;
@@ -455,11 +461,12 @@ function linkForRow(
   product: CatalogFeedProductInput,
   variant: CatalogFeedVariantInput | null,
   storefrontBaseUrl: string,
+  presence: string | null | undefined,
 ): string {
   const productPath =
     normalizeResourceCanonicalPath("product", product.canonicalPath) ??
     `/products/${product.slug}`;
-  const link = new URL(productPath, `${storefrontBaseUrl}/`);
+  const link = new URL(presencePath(presence, productPath), `${storefrontBaseUrl}/`);
   if (variant) link.searchParams.set("variant", variant.id);
   return link.toString();
 }
@@ -537,7 +544,7 @@ function buildRow(
       : product.id,
     title: titleForRow(product, variant),
     description: htmlToPlainText(product.description) || product.name,
-    link: linkForRow(product, variant, input.storefrontBaseUrl),
+    link: linkForRow(product, variant, input.storefrontBaseUrl, input.presence),
     imageLink: image,
     availability: rowAvailability(availability),
     condition: normalizeSavedProductCondition(product.productCondition),

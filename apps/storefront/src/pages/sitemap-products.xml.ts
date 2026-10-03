@@ -5,7 +5,13 @@
  * Limit: 50,000 URLs per sitemap page (as per sitemap protocol)
  */
 
-import { generateSitemap, getBaseUrl, getSitemapHeaders, xmlDataUnavailableResponse } from '@/lib/sitemap-utils';
+import {
+  generateSitemap,
+  getBaseUrl,
+  getSitemapHeaders,
+  xmlDataUnavailableResponse,
+  sitemapPageUrl,
+} from '@/lib/sitemap-utils';
 import type { SitemapUrl } from '@/lib/sitemap-utils';
 import { getSitemapProducts } from '@/lib/api/products';
 import type { APIContext, APIRoute } from 'astro';
@@ -57,7 +63,7 @@ export const GET: APIRoute = async ({ url }: APIContext) => {
     }
 
     const productUrls: SitemapUrl[] = allProducts.map((product) => ({
-      loc: `${baseUrl}${normalizeResourceCanonicalPath('product', product.canonicalPath) ?? `/products/${product.slug}`}`,
+      loc: sitemapPageUrl(baseUrl, normalizeResourceCanonicalPath('product', product.canonicalPath) ?? `/products/${product.slug}`),
       lastmod: product.updatedAt ?? undefined,
     }));
 

@@ -36,6 +36,8 @@ import {
   createPageDependencies,
   pageEntryFromDependencies,
 } from "@/lib/page-dependencies";
+import { presenceOfPath } from "@scalius/shared/markets";
+import { logicalUrl, withPresencePrefix } from "@/lib/market-presence";
 
 // Anonymous public pages carry dependency proofs and are validated against a
 // frontier at most one second old. Worker versions separate deployed code;
@@ -202,6 +204,12 @@ function hasBoundedPublicQuery(url: URL): boolean {
   );
 }
 
+/**
+ * Whether a request may use the shared page cache, and its canonical URL.
+ * A subfolder presence (`/en-in/...`) is classified by the page it renders
+ * and keeps its prefix in the canonical URL, so every presence has its own
+ * entries and a root URL's key is exactly what it was before presences.
+ */
 export function getPublicStorefrontCachePolicy(
   request: Request,
 ): PublicStorefrontCachePolicy | null {
@@ -209,18 +217,20 @@ export function getPublicStorefrontCachePolicy(
   if (requestBypassesPublicStorefrontCache(request.headers)) return null;
 
   const url = new URL(request.url);
-  if (!hasBoundedPublicQuery(url)) return null;
-  if (hasStorefrontProductVariantSelectionParams(url)) return null;
-  if (!isPublicCachePath(url.pathname)) return null;
-  const normalizedPathname = url.pathname.replace(/\/$/, "") || "/";
+  const presence = presenceOfPath(url.pathname);
+  const logical = logicalUrl(url);
+  if (!hasBoundedPublicQuery(logical)) return null;
+  if (hasStorefrontProductVariantSelectionParams(logical)) return null;
+  if (!isPublicCachePath(logical.pathname)) return null;
+  const normalizedPathname = logical.pathname.replace(/\/$/, "") || "/";
   // The cart shell reads no query parameter on the server, so every /cart URL
   // shares one entry and a query can neither split nor poison it.
   const canonicalCachePath = isBuyerShellPathname(normalizedPathname)
     ? normalizedPathname
-    : canonicalizeStorefrontHtmlCachePath(`${normalizedPathname}${url.search}`);
+    : canonicalizeStorefrontHtmlCachePath(`${normalizedPathname}${logical.search}`);
   if (!canonicalCachePath) return null;
 
-  return { canonicalUrl: new URL(canonicalCachePath, url.origin).toString() };
+  return { canonicalUrl: new URL(withPresencePrefix(presence, canonicalCachePath), url.origin).toString() };
 }
 
 /** Cache API key: build, Worker version and generation first, then the canonical URL. */
@@ -360,7 +370,7 @@ export async function servePublicStorefrontRequest(
   }
 
   const key = publicStorefrontCacheKey(policy.canonicalUrl, context.buildId, workerVersion, generation);
-  const pathname = new URL(policy.canonicalUrl).pathname;
+  const pathname = logicalUrl(new URL(policy.canonicalUrl)).pathname;
   const stored = await context.cache.match(key);
   if (stored) return fromStoredResponse(stored, request, pathname);
 
@@ -449,6 +459,8 @@ async function serveFrontierValidated(
   client: CacheFrontierClient,
 ): Promise<Response> {
   const canonical = new URL(policy.canonicalUrl);
+  // Browser cache rules follow the page a presence URL renders.
+  const pathname = logicalUrl(canonical).pathname;
   const key = publicStorefrontDvcCacheKey(policy.canonicalUrl, context.buildId, workerVersion);
   const stored = await context.cache.match(key);
   const entry = stored ? readStoredPageEntry(stored.headers) : null;
@@ -461,7 +473,7 @@ async function serveFrontierValidated(
     if (decision === "serve") {
       // Unrelated writes must not copy the HTML body. Rebase only when the
       // frontier horizon requires the indexed slow check below.
-      return fromStoredResponse(stored, request, canonical.pathname);
+      return fromStoredResponse(stored, request, pathname);
     }
     if (decision === "slow") {
       // Concurrent hits of one stored entry share one check (and one D1 scan);
@@ -481,7 +493,7 @@ async function serveFrontierValidated(
           const copy = stored.clone();
           context.waitUntil(context.cache.put(key, toStoredResponse(copy, { ...entry, s0: check.S })).catch(() => undefined));
         }
-        return fromStoredResponse(stored, request, canonical.pathname);
+        return fromStoredResponse(stored, request, pathname);
       }
     }
   }

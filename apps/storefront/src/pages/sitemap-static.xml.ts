@@ -9,6 +9,7 @@ import {
   getBaseUrl,
   getSitemapHeaders,
   xmlDataUnavailableResponse,
+  sitemapPageUrl,
 } from '@/lib/sitemap-utils';
 import type { SitemapUrl } from '@/lib/sitemap-utils';
 import type { APIContext, APIRoute } from 'astro';
@@ -22,7 +23,7 @@ export const GET: APIRoute = async (_context: APIContext) => {
 
     const staticPages: SitemapUrl[] = [
       {
-        loc: `${baseUrl}/`,
+        loc: sitemapPageUrl(baseUrl, '/'),
       },
     ];
     // The blog index is a real, indexable page once there is a post.
@@ -30,7 +31,7 @@ export const GET: APIRoute = async (_context: APIContext) => {
     if (!articles) {
       return xmlDataUnavailableResponse('Static sitemap is temporarily unavailable');
     }
-    if (articles.data.length > 0) staticPages.push({ loc: `${baseUrl}/blog` });
+    if (articles.data.length > 0) staticPages.push({ loc: sitemapPageUrl(baseUrl, '/blog') });
 
     const xml = generateSitemap(staticPages, baseUrl);
 

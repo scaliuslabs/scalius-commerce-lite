@@ -17,6 +17,8 @@ import { describe, expect, it, vi } from "vitest";
 const API = process.env.CATALOG_SCALE_API;
 const reads = { count: 0, ms: 0 };
 
+const runtimePresence = vi.hoisted(() => ({ value: null as string | null }));
+
 vi.mock("@/lib/api/products", () => ({
   getFeedProducts: async (options: Record<string, unknown>) => {
     const query = new URLSearchParams(Object.entries(options).map(([key, value]) => [key, String(value)]));
@@ -34,6 +36,7 @@ vi.mock("@/lib/api", () => ({
   getShippingMethods: async () => [],
 }));
 vi.mock("@/lib/api/runtime", () => ({
+  getRuntimePresence: () => runtimePresence.value,
   getRuntimeStorefrontUrl: () => "https://storefront.example.test",
   setRuntimeImageCdnPolicy: () => undefined,
 }));

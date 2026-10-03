@@ -20,6 +20,7 @@ import {
   type ReviewFormCopy,
 } from "@/lib/account-reviews";
 import { escapeHtml } from "@scalius/shared/html-escape";
+import { pagePath } from "@/lib/presence-url";
 
 type CtaCopy = ReviewFormCopy & {
   reviewsSignInToReviewText: string;
@@ -75,10 +76,10 @@ export function setupReviewCta(): void {
 
   const form = (): string => {
     if (state.state === "eligible") {
-      return reviewFormMarkup({ access: { kind: "account" }, returnTo: "/account/reviews", copy, orderItemId: state.orderItemId, idPrefix: "pdp-review" });
+      return reviewFormMarkup({ access: { kind: "account" }, returnTo: pagePath("/account/reviews"), copy, orderItemId: state.orderItemId, idPrefix: "pdp-review" });
     }
     if (state.state === "reviewed") {
-      return reviewFormMarkup({ access: { kind: "account" }, returnTo: "/account/reviews", copy, orderItemId: state.review.orderItemId, idPrefix: "pdp-review", review: state.review });
+      return reviewFormMarkup({ access: { kind: "account" }, returnTo: pagePath("/account/reviews"), copy, orderItemId: state.review.orderItemId, idPrefix: "pdp-review", review: state.review });
     }
     return "";
   };

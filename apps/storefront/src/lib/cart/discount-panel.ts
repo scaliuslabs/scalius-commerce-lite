@@ -13,6 +13,7 @@ import {
   type CheckoutDiscountOffer,
   type CheckoutRejectedCode,
 } from "../checkout/tax-quote-contract";
+import { pagePath } from "@/lib/presence-url";
 
 export interface DiscountPanelActions {
   removeCode(code: string): void;
@@ -119,7 +120,7 @@ function offerActions(
       row.append(button);
     } else {
       const link = element("a", ACTION_CLASS, `${copy.offerChooseOptionsText}: ${product.name}`);
-      link.href = `/products/${encodeURIComponent(product.slug)}`;
+      link.href = pagePath(`/products/${encodeURIComponent(product.slug)}`);
       row.append(link);
     }
   });

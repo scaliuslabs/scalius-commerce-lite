@@ -104,6 +104,7 @@ function layout(document: StorefrontThemeDocument) {
 interface Api {
   document: StorefrontThemeDocument;
   homeProduct: { id: string; slug: string } | null;
+  markets?: unknown;
   preview?: { document: StorefrontThemeDocument; homeProduct: { id: string; slug: string } | null };
 }
 
@@ -111,7 +112,9 @@ interface Api {
 function stubApi(api: Api) {
   const calls: string[] = [];
   const answer = (path: string): { status: number; body: string } => {
-    if (path === "/api/v1/storefront/layout") return { status: 200, body: envelope(layout(api.document)) };
+    if (path === "/api/v1/storefront/layout") {
+      return { status: 200, body: envelope({ ...layout(api.document), ...(api.markets ? { markets: api.markets } : {}) }) };
+    }
     if (path === "/api/v1/storefront/homepage") {
       return { status: 200, body: envelope({ seo: { homepageTitle: null, homepageMetaDescription: null }, sections: sections(api.homeProduct) }) };
     }
@@ -150,9 +153,15 @@ function stubApi(api: Api) {
   return calls;
 }
 
-async function renderHome(api: Api, cookie?: string) {
+async function renderHome(api: Api, cookie?: string, presence?: string) {
   const calls = stubApi(api);
-  const runtime = { PUBLIC_API_URL: API, PUBLIC_API_BASE_URL: "https://api.shop.test", inflightReads: new Map() };
+  const runtime = {
+    PUBLIC_API_URL: API,
+    PUBLIC_API_BASE_URL: "https://api.shop.test",
+    STOREFRONT_URL: "https://shop.test",
+    inflightReads: new Map(),
+    ...(presence ? { MARKET_PRESENCE: presence } : {}),
+  };
   const request = new Request("https://shop.test/", cookie ? { headers: { Cookie: cookie } } : {});
   const response = await runtimeModule.requestRuntime.run(runtime, () =>
     container.renderToResponse(HomePage, { request, locals: {} }),
@@ -199,5 +208,47 @@ describe("the homepage route", () => {
       preview: { document: SECTIONS_HOME, homeProduct: null },
     }, cookie);
     expect(draftSections.response.status).toBe(200);
+  });
+});
+
+describe("the homepage under markets", () => {
+  const BACKUP = { id: "mkt_backup", handle: "bangladesh", name: "Bangladesh", isBackup: true, countries: ["BD"], presences: [{ value: "", locale: "bn" }] };
+  const INDIA = { id: "mkt_in", handle: "india", name: "India", isBackup: false, countries: ["IN"], presences: [{ value: "en-in", locale: "en" }] };
+
+  it("adds nothing while the store has one presence", async () => {
+    const plain = await (await renderHome({ document: SECTIONS_HOME, homeProduct: null })).response.text();
+    const single = await (await renderHome({ document: SECTIONS_HOME, homeProduct: null, markets: { markets: [BACKUP] } })).response.text();
+    expect(single).toBe(plain);
+    expect(single).not.toContain("hreflang");
+    expect(single).not.toContain("data-market-presence");
+    expect(single).not.toContain("data-market-selector");
+  });
+
+  it("names every presence with hreflang and offers the selector once there are two", async () => {
+    const html = await (await renderHome({ document: SECTIONS_HOME, homeProduct: null, markets: { markets: [BACKUP, INDIA] } })).response.text();
+    expect(html).toContain('<link rel="alternate" hreflang="bn-BD" href="https://shop.test/">');
+    expect(html).toContain('<link rel="alternate" hreflang="en-IN" href="https://shop.test/en-in">');
+    expect(html).toContain('<link rel="alternate" hreflang="x-default" href="https://shop.test/">');
+    expect(html).toMatch(/<form method="post" action="\/localization"[^>]*data-market-selector/);
+    expect(html).toMatch(/<option value="BD" selected[^>]*>Bangladesh \(BDT\)<\/option><option value="IN"[^>]*>India \(BDT\)<\/option>/);
+    expect(html).toContain('name="return_to" value="/"');
+    expect(html).toContain("data-market-suggestion");
+  });
+
+  it("renders a presence page in its language, with its own canonical URL and market-keyed reads", async () => {
+    const { response, calls } = await renderHome({ document: SECTIONS_HOME, homeProduct: null, markets: { markets: [BACKUP, INDIA] } }, undefined, "en-in");
+    const html = await response.text();
+    expect(html).toMatch(/<html lang="en" data-market-presence="en-in"/);
+    expect(html).toContain('<link rel="canonical" href="https://shop.test/en-in">');
+    expect(html).toContain('<meta property="og:url" content="https://shop.test/en-in">');
+    expect(html).toContain('<meta property="og:locale" content="en_IN">');
+    expect(html).toContain('"url":"https://shop.test/en-in"');
+    expect(html).toContain('"urlTemplate":"https://shop.test/en-in/search?q={search_term_string}"');
+    // Only the market-keyed read carries the presence: one batch, invariant parts unchanged.
+    const batch = calls.find((call) => call.startsWith("/api/v1/storefront/batch"))!;
+    const parts = new URL(batch, "https://api.shop.test").searchParams.getAll("r");
+    expect(parts).toContain("/api/v1/checkout/config?presence=en-in");
+    expect(parts).toContain("/api/v1/storefront/layout");
+    expect(parts).toContain("/api/v1/storefront/homepage");
   });
 });

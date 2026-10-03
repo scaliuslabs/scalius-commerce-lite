@@ -49,6 +49,7 @@ import {
   recommendationTitle,
 } from "@/lib/recommendations";
 import { formatDiscountLineLabel } from "@scalius/shared/checkout-language-format";
+import { pagePath } from "@/lib/presence-url";
 
 export const cartOpenState = atom<boolean>(false);
 
@@ -283,7 +284,7 @@ export default function CartFlyout({ onReady }: Props) {
       if (!event.detail) return;
       if (!(await addToCart(event.detail))) return;
       if (event.detail.redirectToCart) {
-        window.location.href = "/cart";
+        window.location.href = pagePath("/cart");
       } else {
         const activeElement = document.activeElement;
         cartTriggerRef.current = activeElement instanceof HTMLElement
@@ -332,7 +333,7 @@ export default function CartFlyout({ onReady }: Props) {
   }, [checkScroll, clearAutoCloseTimer, disableAutoClose, onReady, startAutoCloseTimer]);
 
   const handleCheckout = () => {
-    window.location.href = "/cart";
+    window.location.href = pagePath("/cart");
     setCartOpen(false);
   };
 
@@ -464,7 +465,7 @@ export default function CartFlyout({ onReady }: Props) {
                         <div className="space-y-0.5 min-w-0 flex-1">
                           <h3 className="line-clamp-2 pr-1 text-[12px] font-bold leading-tight text-foreground sm:text-[13.5px]">
                             <a
-                              href={`/products/${item.slug || item.id}`}
+                              href={pagePath(`/products/${item.slug || item.id}`)}
                               className="hover:text-muted-foreground transition-colors"
                             >
                               {item.name}
@@ -608,7 +609,7 @@ export default function CartFlyout({ onReady }: Props) {
                       {recommendations.products.map((product) => (
                         <li key={product.id} className="w-28 shrink-0">
                           <a
-                            href={`/products/${encodeURIComponent(product.slug)}`}
+                            href={pagePath(`/products/${encodeURIComponent(product.slug)}`)}
                             onClick={disableAutoClose}
                             className="flex h-full flex-col rounded-lg border border-border bg-card p-1.5 transition-colors hover:border-foreground/30"
                           >
@@ -692,7 +693,7 @@ export default function CartFlyout({ onReady }: Props) {
                     Add
                   </button>
                 ) : offer.products[0] ? (
-                  <a href={`/products/${encodeURIComponent(offer.products[0].slug)}`} className="shrink-0 text-sm font-medium underline underline-offset-2">
+                  <a href={pagePath(`/products/${encodeURIComponent(offer.products[0].slug)}`)} className="shrink-0 text-sm font-medium underline underline-offset-2">
                     View
                   </a>
                 ) : null}

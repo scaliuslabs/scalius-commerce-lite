@@ -17,6 +17,7 @@ import {
   type LicenceKeyView,
 } from "@/lib/account-downloads";
 import { escapeHtml } from "@scalius/shared/html-escape";
+import { pagePath } from "@/lib/presence-url";
 
 /** `extras.downloads`: the files the line received (OrderLineDownloadExtra). */
 export type DigitalDownloadsExtra = ReadonlyArray<Omit<DownloadFileView, "available" | "sizeBytes">>;
@@ -38,10 +39,10 @@ function browserNotice(): DownloadNotice | null {
 }
 
 function defaultReturnTo(context: LineExtrasContext): string {
-  if (context.access === "account") return `/account/orders/${encodeURIComponent(context.orderId)}`;
+  if (context.access === "account") return pagePath(`/account/orders/${encodeURIComponent(context.orderId)}`);
   const location = (globalThis as { location?: Location }).location;
   const here = location ? safeDownloadReturnPath(`${location.pathname}${location.search}`) : null;
-  return here ?? `/order-success?${new URLSearchParams({ orderId: context.orderId })}`;
+  return here ?? pagePath(`/order-success?${new URLSearchParams({ orderId: context.orderId })}`);
 }
 
 export function digitalLineDeliveryMarkup(

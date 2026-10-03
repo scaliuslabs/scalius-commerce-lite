@@ -67,6 +67,7 @@ import {
   type GiftCardCheckoutCopy,
   type StoredGiftCard,
 } from "./gift-cards";
+import { pagePath } from "@/lib/presence-url";
 
 // COD, the card flow and a fully gift-card-paid order have their own handlers;
 // every hosted gateway shares one.
@@ -202,7 +203,7 @@ function clearCheckoutPresentation(): void {
 
 function checkoutRecoveryHref(orderId: string, gateway: string): string {
   const params = new URLSearchParams({ orderId, payment: gateway });
-  return `/order-success?${params.toString()}`;
+  return pagePath(`/order-success?${params.toString()}`);
 }
 
 function applySelectedMethodStyles(methodId: string | null): void {
@@ -531,7 +532,7 @@ function appendReviewRow(parent: HTMLElement, label: string, lines: string[]): v
   for (const value of values) appendTextElement(body, "p", "break-words text-sm text-foreground", value);
   row.appendChild(body);
   const change = document.createElement("a");
-  change.href = "/cart";
+  change.href = pagePath("/cart");
   change.className = "shrink-0 text-sm font-medium text-foreground underline underline-offset-2 hover:text-primary";
   change.textContent = checkoutCopy.changeText;
   change.setAttribute("aria-label", `${checkoutCopy.changeText}: ${label}`);
@@ -619,7 +620,7 @@ function redirectToCartForRepair(result: CheckoutCartFreshnessResult): void {
     issues: result.issues,
     ...(result.ruleErrors?.length ? { ruleErrors: result.ruleErrors } : {}),
   });
-  window.location.href = "/cart?checkoutIssues=1";
+  window.location.href = pagePath("/cart?checkoutIssues=1");
 }
 
 /**
@@ -700,7 +701,7 @@ function loadCheckoutData(): boolean {
       showError(checkoutCopy.orderAlreadyPlacedText);
       const action = document.getElementById("checkoutRecoveryAction") as HTMLAnchorElement | null;
       if (action) {
-        action.href = `/order-success?${new URLSearchParams({ orderId: placedOrderId })}`;
+        action.href = pagePath(`/order-success?${new URLSearchParams({ orderId: placedOrderId })}`);
         action.textContent = checkoutCopy.viewOrderText;
         action.hidden = false;
       }

@@ -49,8 +49,10 @@ const nextHref = nextPage > 1 ? `/search?page=${nextPage}` : "/search";
 </section>
 
 <script>
+  import { pagePath } from "@/lib/presence-url";
   const LISTING_PAGE_SIZE = 20;
-  const cardLink = (card: Element) => card.querySelector<HTMLAnchorElement>('a[href^="/products/"]')?.getAttribute("href");
+  // A presence page's card links carry its prefix (`/en-in/products/x`).
+  const cardLink = (card: Element) => card.querySelector<HTMLAnchorElement>('a[href*="/products/"]')?.getAttribute("href");
 
   function setupEndlessGrids() {
     document.querySelectorAll<HTMLElement>("[data-endless-grid]").forEach((section) => {
@@ -86,7 +88,7 @@ const nextHref = nextPage > 1 ? `/search?page=${nextPage}` : "/search";
             return;
           }
           more.dataset.nextPage = String(page + 1);
-          more.href = `/search?page=${page + 1}`;
+          more.href = pagePath(`/search?page=${page + 1}`);
         } catch {
           // The link still works: follow it to the listing.
           window.location.href = more.href;

@@ -25,6 +25,7 @@ import {
 import { toLatinDigits } from "@scalius/shared/phone-input";
 import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
 import { quickBuyNoScriptForm } from "@/lib/checkout/quick-checkout";
+import { serverPagePath } from "@/lib/server-presence";
 
 export const prerender = false;
 
@@ -384,7 +385,7 @@ async function quickBuy({
               throw new Error('Quick-buy storage was not persisted.');
             }
             setTimeout(() => {
-              window.location.href = '/cart';
+              window.location.href = '${serverPagePath("/cart")}';
             }, 400);
           } catch (e) {
             console.error('Could not save quick-buy data to session storage.', e);
@@ -393,7 +394,7 @@ async function quickBuy({
               statusText.textContent = 'Could not prepare quick buy. Returning to cart...';
             }
             setTimeout(() => {
-              window.location.href = '/cart?quickBuyStorage=blocked';
+              window.location.href = '${serverPagePath("/cart?quickBuyStorage=blocked")}';
             }, 400);
           }
         </script>

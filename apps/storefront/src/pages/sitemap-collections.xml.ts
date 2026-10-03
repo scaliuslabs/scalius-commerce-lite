@@ -9,6 +9,7 @@ import {
   getBaseUrl,
   getSitemapHeaders,
   xmlDataUnavailableResponse,
+  sitemapPageUrl,
 } from '@/lib/sitemap-utils';
 import type { SitemapUrl } from '@/lib/sitemap-utils';
 import { getSitemapCollections } from '@/lib/api/collections';
@@ -29,7 +30,7 @@ export const GET: APIRoute = async (_context: APIContext) => {
     }
 
     const collectionUrls: SitemapUrl[] = collections.map((collection) => ({
-      loc: `${baseUrl}${normalizeResourceCanonicalPath('collection', collection.canonicalPath) ?? `/collections/${encodeURIComponent(collection.id)}`}`,
+      loc: sitemapPageUrl(baseUrl, normalizeResourceCanonicalPath('collection', collection.canonicalPath) ?? `/collections/${encodeURIComponent(collection.id)}`),
       lastmod: collection.updatedAt ?? undefined,
     }));
 

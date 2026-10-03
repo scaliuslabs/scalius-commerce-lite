@@ -135,6 +135,7 @@ const {
 
 <script>
   import { shouldUseCompactHeader } from "./header-scroll-state";
+  import { pagePath } from "@/lib/presence-url";
 
   let isCompact = false;
   let scrollFrame: number | null = null;
@@ -236,7 +237,7 @@ const {
         const query = (form.querySelector<HTMLInputElement>("input[name='q']")?.value ?? "").trim();
         const target = new URL(scope, window.location.origin);
         if (query) target.searchParams.set("q", query);
-        window.location.assign(target.pathname + target.search);
+        window.location.assign(pagePath(target.pathname + target.search));
       });
     });
   }

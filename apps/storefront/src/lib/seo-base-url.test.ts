@@ -4,7 +4,10 @@ const mocks = vi.hoisted(() => ({
   getRuntimeStorefrontUrl: vi.fn(),
 }));
 
+const runtimePresence = vi.hoisted(() => ({ value: null as string | null }));
+
 vi.mock("@/lib/api/runtime", () => ({
+  getRuntimePresence: () => runtimePresence.value,
   getRuntimeStorefrontUrl: mocks.getRuntimeStorefrontUrl,
 }));
 

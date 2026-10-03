@@ -9,6 +9,7 @@ import {
   getBaseUrl,
   getSitemapHeaders,
   xmlDataUnavailableResponse,
+  sitemapPageUrl,
 } from '@/lib/sitemap-utils';
 import type { SitemapUrl } from '@/lib/sitemap-utils';
 import { getSitemapCategories } from '@/lib/api/categories';
@@ -29,7 +30,7 @@ export const GET: APIRoute = async (_context: APIContext) => {
     }
 
     const categoryUrls: SitemapUrl[] = categories.map((category) => ({
-      loc: `${baseUrl}${normalizeResourceCanonicalPath('category', category.canonicalPath) ?? `/categories/${category.slug}`}`,
+      loc: sitemapPageUrl(baseUrl, normalizeResourceCanonicalPath('category', category.canonicalPath) ?? `/categories/${category.slug}`),
       lastmod: category.updatedAt ?? undefined,
     }));
 

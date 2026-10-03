@@ -10,6 +10,7 @@ import {
   getBaseUrl,
   getSitemapHeaders,
   xmlDataUnavailableResponse,
+  sitemapPageUrl,
 } from '@/lib/sitemap-utils';
 import type { SitemapUrl } from '@/lib/sitemap-utils';
 import { getAllPages } from '@/lib/api/pages';
@@ -63,13 +64,13 @@ export const GET: APIRoute = async (_context: APIContext) => {
     }
     const landingUrls: SitemapUrl[] = Object.entries(readStorefrontTheme(layout.theme).pages.landing)
       .filter(([, landing]) => !landing.noIndex && !landing.excludeFromSitemap)
-      .map(([slug]) => ({ loc: `${baseUrl}/pages/${slug}` }));
+      .map(([slug]) => ({ loc: sitemapPageUrl(baseUrl, `/pages/${slug}`) }));
 
     const pageUrls: SitemapUrl[] = [
       ...allPages
         .filter((page) => page.isPublished && page.slug && !page.noIndex && !page.excludeFromSitemap)
         .map((page) => ({
-          loc: `${baseUrl}${normalizeResourceCanonicalPath('page', page.canonicalPath) ?? `/${page.slug}`}`,
+          loc: sitemapPageUrl(baseUrl, normalizeResourceCanonicalPath('page', page.canonicalPath) ?? `/${page.slug}`),
           lastmod: page.updatedAt ?? undefined,
         })),
       ...landingUrls,

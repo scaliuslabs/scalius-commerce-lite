@@ -7,7 +7,10 @@ const mocks = vi.hoisted(() => ({
   getArticles: vi.fn(),
 }));
 
+const runtimePresence = vi.hoisted(() => ({ value: null as string | null }));
+
 vi.mock("@/lib/api/runtime", () => ({
+  getRuntimePresence: () => runtimePresence.value,
   getRuntimeStorefrontUrl: mocks.getRuntimeStorefrontUrl,
 }));
 vi.mock("@/lib/api/articles", () => ({ getArticles: mocks.getArticles }));

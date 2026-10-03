@@ -20,6 +20,7 @@ import {
 } from "@/lib/account-reviews";
 import { ENGLISH_CHECKOUT_LANGUAGE_DATA } from "@scalius/shared/checkout-language";
 import { setupReviewForms } from "./review-form-client";
+import { pagePath } from "@/lib/presence-url";
 
 /** `extras.review` from the API: whether the line can be reviewed, and the buyer's review of it. */
 export type ReviewLineExtra = LineReviewExtra;
@@ -43,8 +44,8 @@ function defaultReturnTo(context: LineExtrasContext): string {
   const here = location ? safeReviewReturnPath(`${location.pathname}${location.search}`) : null;
   if (here) return here;
   return context.access === "account"
-    ? `/account/orders/${encodeURIComponent(context.orderId)}`
-    : `/order-success?${new URLSearchParams({ orderId: context.orderId })}`;
+    ? pagePath(`/account/orders/${encodeURIComponent(context.orderId)}`)
+    : pagePath(`/order-success?${new URLSearchParams({ orderId: context.orderId })}`);
 }
 
 export function reviewLineActionMarkup(line: OrderLine, context: LineExtrasContext, options: ReviewLineActionOptions = {}): string {
@@ -60,6 +61,6 @@ export function reviewLineActionMarkup(line: OrderLine, context: LineExtrasConte
     copy: options.copy ?? pickReviewFormCopy(null, ENGLISH_CHECKOUT_LANGUAGE_DATA),
     notice: options.notice === undefined ? (location ? readReviewNotice(location.search) : null) : options.notice,
     review: options.reviews?.find((review) => review.orderItemId === line.id) ?? null,
-    editHref: access.kind === "account" ? (reviewId) => `/account/reviews#written-${reviewId}` : undefined,
+    editHref: access.kind === "account" ? (reviewId) => pagePath(`/account/reviews#written-${reviewId}`) : undefined,
   });
 }

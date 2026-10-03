@@ -12,6 +12,8 @@ const mocks = vi.hoisted(() => ({
   resolveMediaUrl: vi.fn((url: string) => url),
 }));
 
+const runtimePresence = vi.hoisted(() => ({ value: null as string | null }));
+
 vi.mock("@/lib/api/products", () => ({
   getFeedProducts: mocks.getFeedProducts,
 }));
@@ -23,6 +25,7 @@ vi.mock("@/lib/api", () => ({
 }));
 
 vi.mock("@/lib/api/runtime", () => ({
+  getRuntimePresence: () => runtimePresence.value,
   getRuntimeStorefrontUrl: mocks.getRuntimeStorefrontUrl,
   setRuntimeImageCdnPolicy: mocks.setRuntimeImageCdnPolicy,
 }));
@@ -112,6 +115,7 @@ function expectFeedPriceInvariant(body: string): void {
 
 describe("Facebook product feed route", () => {
   beforeEach(() => {
+    runtimePresence.value = null;
     mocks.getFeedProducts.mockReset();
     mocks.getLayoutData.mockReset();
     mocks.getSeoSettings.mockReset();
@@ -720,6 +724,31 @@ describe("Facebook product feed route", () => {
     expect(body).toContain("<g:identifier_exists>no</g:identifier_exists>");
     expect(body).not.toContain("<g:brand>Generic</g:brand>");
     expect(body).not.toContain("<g:brand>");
+  });
+
+  it("links a subfolder presence's feed to that presence's pages, prices unchanged", async () => {
+    const products = {
+      data: [{
+        id: "prod_shirt", slug: "linen-shirt", canonicalPath: "/products/linen-shirt-canonical", name: "Linen Shirt",
+        description: "Soft shirt", price: 1200, discountedPrice: 1200, isActive: true, hasVariants: false,
+        availableForSale: true, imageUrl: "https://cdn.example.test/products/shirt.jpg", variants: [],
+      }],
+      pagination: { page: 1, limit: 100, total: 1, totalPages: 1 },
+    };
+    mocks.getFeedProducts.mockResolvedValueOnce(products);
+    const root = await (await GOOGLE_FEED_GET(context("https://storefront.example.test/api/product-feed.xml"))).text();
+    runtimePresence.value = "en-in";
+    mocks.getFeedProducts.mockResolvedValueOnce(products);
+    const india = await (await GOOGLE_FEED_GET(context("https://storefront.example.test/api/product-feed.xml"))).text();
+
+    expect(root).toContain("<link>https://storefront.example.test</link>");
+    expect(root).toContain("<g:link>https://storefront.example.test/products/linen-shirt-canonical</g:link>");
+    expect(india).toContain("<link>https://storefront.example.test/en-in</link>");
+    expect(india).toContain("<g:link>https://storefront.example.test/en-in/products/linen-shirt-canonical</g:link>");
+    // Every market sells the same catalogue at base prices in the shop currency.
+    const prices = (body: string) => body.match(/<g:(?:sale_)?price>[^<]+<\/g:(?:sale_)?price>/g);
+    expect(prices(india)).toEqual(prices(root));
+    expect(india.replaceAll("/en-in", "")).toBe(root);
   });
 
   it("keeps an expanded product variant group atomic within one product continuation", async () => {

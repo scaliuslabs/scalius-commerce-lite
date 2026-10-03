@@ -107,6 +107,7 @@ const tab = "relative inline-flex min-h-12 shrink-0 items-center gap-2 whitespac
 
 <script>
   import { signOutCustomer } from "@/lib/customer-sign-out";
+  import { pagePath } from "@/lib/presence-url";
 
   const shell = document.querySelector<HTMLElement>("[data-account-shell]");
   // The current tab in view on a phone, without moving the page.
@@ -118,7 +119,7 @@ const tab = "relative inline-flex min-h-12 shrink-0 items-center gap-2 whitespac
   shell?.querySelectorAll<HTMLFormElement>("form[data-account-sign-out]").forEach((form) => {
     form.addEventListener("submit", (event) => {
       event.preventDefault();
-      void signOutCustomer().finally(() => window.location.assign("/"));
+      void signOutCustomer().finally(() => window.location.assign(pagePath("/")));
     });
   });
   // Signing in from the prompt shows the page for the account.

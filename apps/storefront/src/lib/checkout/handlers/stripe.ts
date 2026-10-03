@@ -1,6 +1,7 @@
 import type { GatewayHandler, PaymentContext, PaymentResult } from "../types";
 import { CheckoutOrderError, createOrder } from "../create-order";
 import { fetchPaymentSessionWithProcessingRetry } from "../payment-session-retry";
+import { pagePath } from "@/lib/presence-url";
 
 declare global {
   interface Window {
@@ -208,7 +209,7 @@ export const stripeHandler: GatewayHandler = {
       if (paymentIntent?.status === "succeeded" || paymentIntent?.status === "requires_capture") {
         return {
           success: true,
-          redirectUrl: `/order-success?orderId=${encodeURIComponent(orderId)}&payment=stripe`,
+          redirectUrl: pagePath(`/order-success?orderId=${encodeURIComponent(orderId)}&payment=stripe`),
         };
       }
 

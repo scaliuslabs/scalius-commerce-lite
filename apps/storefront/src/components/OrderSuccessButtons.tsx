@@ -19,6 +19,7 @@ import type { AuthModalOpenDetail, AuthModalPrefill } from "@/components/AuthMod
 import { getCustomerSession, type CustomerInfo } from "@/lib/api/customer-auth";
 import { AlertCircle, CheckCircle2, HelpCircle, Loader2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { pagePath } from "@/lib/presence-url";
 
 type OrderSuccessButtonsProps = {
   orderId?: string;
@@ -270,7 +271,7 @@ export default function OrderSuccessButtons({
     <div className="no-print flex flex-col items-center space-y-6">
       <div className="mt-6 flex w-full max-w-md flex-col justify-center gap-2 sm:flex-row">
         {!statusView && <a
-          href="/"
+          href={pagePath("/")}
           data-astro-prefetch="false"
           className="inline-flex min-h-10 flex-1 items-center justify-center rounded-xl bg-black px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-gray-800"
         >
@@ -319,7 +320,7 @@ export default function OrderSuccessButtons({
             <p className="text-sm text-foreground">
               {copy.orderReceiptAccountSavedText} ·{" "}
               <a
-                href={`/account/orders/${encodeURIComponent(orderId ?? "")}`}
+                href={pagePath(`/account/orders/${encodeURIComponent(orderId ?? "")}`)}
                 data-astro-prefetch="false"
                 className="font-medium text-primary underline-offset-4 hover:underline"
               >
@@ -363,7 +364,7 @@ export default function OrderSuccessButtons({
           <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold text-foreground">{copy.orderReceiptHelpText}</p>
             <a
-              href="/track-order"
+              href={pagePath("/track-order")}
               data-astro-prefetch="false"
               className="inline-flex min-h-11 items-center text-sm font-medium text-primary underline-offset-4 hover:underline"
             >

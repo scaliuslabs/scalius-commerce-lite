@@ -144,6 +144,7 @@ const active = {
 </nav>
 
 <script>
+  import { pagePath } from "@/lib/presence-url";
   // The Compare tab opens the buyer's list (CompareTray keeps it in this
   // browser); without JavaScript or a list it opens the empty comparison.
   const tab = document.querySelector<HTMLAnchorElement>("[data-compare-tab]");
@@ -156,7 +157,7 @@ const active = {
       } catch {
         // Private mode: the tab keeps /compare.
       }
-      tab.href = ids.length > 0 ? `/compare?ids=${ids.map(encodeURIComponent).join(",")}` : "/compare";
+      tab.href = pagePath(ids.length > 0 ? `/compare?ids=${ids.map(encodeURIComponent).join(",")}` : "/compare");
     };
     point();
     addEventListener("storage", point);

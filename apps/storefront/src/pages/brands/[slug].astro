@@ -12,6 +12,7 @@ import {
   buildResourceCanonicalSeoUrl,
   getAbsoluteStorefrontSeoBaseUrl,
   toAbsoluteStorefrontSeoUrl,
+  buildAbsoluteStorefrontSeoUrl,
 } from "@/lib/seo-base-url";
 import { loadPageWithLayout } from "@/lib/page-data";
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
@@ -83,7 +84,7 @@ const breadcrumbJsonLd =
         "@context": "https://schema.org",
         "@type": "BreadcrumbList",
         itemListElement: [
-          { "@type": "ListItem", position: 1, name: "Home", item: `${storefrontUrl}/` },
+          { "@type": "ListItem", position: 1, name: "Home", item: buildAbsoluteStorefrontSeoUrl("/") },
           { "@type": "ListItem", position: 2, name: brand.name, item: brandUrl },
         ],
       })

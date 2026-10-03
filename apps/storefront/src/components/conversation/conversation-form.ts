@@ -8,6 +8,7 @@ import {
   conversationStatusMessage,
   newClientMessageKey,
 } from "@/lib/account-inbox";
+import { pagePath } from "@/lib/presence-url";
 
 type Tone = "success" | "error";
 
@@ -111,7 +112,7 @@ function bindForm(form: HTMLFormElement): void {
     }
 
     if (typeof answer?.data?.redirect === "string" && answer.data.redirect.startsWith("/")) {
-      window.location.assign(answer.data.redirect);
+      window.location.assign(pagePath(answer.data.redirect));
       return;
     }
     if (typeof answer?.data?.messagesHtml === "string") {

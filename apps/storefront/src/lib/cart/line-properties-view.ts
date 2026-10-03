@@ -7,6 +7,7 @@ import { formatMoney, getCurrencyCode, getDecimalPlaces } from "@scalius/shared/
 import { formatCheckoutLanguageText } from "@scalius/shared/checkout-language-format";
 import { fromMinor } from "@scalius/shared/money";
 import type { CartLineProperty } from "@/store/cart";
+import { pagePath } from "@/lib/presence-url";
 
 function escapeHtml(value: string): string {
   return value
@@ -43,7 +44,7 @@ export function cartLinePropertyText(
 export function cartLineEditHref(item: { slug?: string; variantId?: string }): string | null {
   if (!item.slug) return null;
   const query = item.variantId ? `?${new URLSearchParams({ variant: item.variantId })}` : "";
-  return `/products/${encodeURIComponent(item.slug)}${query}`;
+  return pagePath(`/products/${encodeURIComponent(item.slug)}${query}`);
 }
 
 /**

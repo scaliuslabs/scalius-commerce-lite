@@ -10,6 +10,7 @@ import {
   normalizeCartItemOptions,
   type CartItemOption,
 } from "@/lib/cart/item-options";
+import { logicalPathname } from "@/lib/presence-url";
 
 export type { CartItemOption } from "@/lib/cart/item-options";
 
@@ -212,7 +213,7 @@ if (typeof window !== "undefined") {
   // Leaving a Buy now checkout (including Back into a cached page) puts the
   // buyer's own cart back.
   window.addEventListener?.("pageshow", () => {
-    if (!isBuyNowCheckoutPath(window.location.pathname)) endBuyNow();
+    if (!isBuyNowCheckoutPath(logicalPathname(window.location.pathname))) endBuyNow();
   });
 }
 

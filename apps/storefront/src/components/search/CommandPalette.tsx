@@ -16,6 +16,7 @@ import { formatMoney } from "@/lib/currency";
 import { getProductImageUrl, hasProductImage } from "@/lib/product-media";
 import { createApiUrl } from "@/lib/api/transport";
 import { normalizeSearchQuery } from "@/lib/search-query";
+import { pagePath } from "@/lib/presence-url";
 
 interface SearchResultItem {
   id: string;
@@ -302,9 +303,9 @@ export default function CommandPalette() {
   const navigateToItem = (entry: { type: string; item: SearchResultItem }) => {
     if (!entry) return;
     const { type, item } = entry;
-    if (type === "product") window.location.href = `/products/${item.slug}`;
+    if (type === "product") window.location.href = pagePath(`/products/${item.slug}`);
     else if (type === "category")
-      window.location.href = `/categories/${item.slug}`;
+      window.location.href = pagePath(`/categories/${item.slug}`);
     else if (type === "page") window.location.href = `/${item.slug}`;
   };
 
@@ -474,7 +475,7 @@ export default function CommandPalette() {
               <p className="font-medium text-foreground">No results for “{normalizedQuery}”</p>
               <p className="mt-1 text-sm">Check the spelling or try a more general word.</p>
               <a
-                href="/search"
+                href={pagePath("/search")}
                 className="mt-4 inline-flex min-h-11 items-center rounded-lg border border-border bg-background px-4 text-sm font-medium text-foreground hover:bg-muted"
               >
                 Browse all products
@@ -716,7 +717,7 @@ function ProductThumbnail({
 }
 
 function searchPageHref(query: string): string {
-  return `/search?${new URLSearchParams({ q: query })}`;
+  return pagePath(`/search?${new URLSearchParams({ q: query })}`);
 }
 
 function isAbortError(error: unknown): boolean {

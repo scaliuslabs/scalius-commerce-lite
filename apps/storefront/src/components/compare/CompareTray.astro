@@ -8,6 +8,7 @@
 ---
 
 <script>
+  import { logicalPathname, pagePath } from "@/lib/presence-url";
   const KEY = "scalius:compare";
   const MAX = 4;
   const ID = /^[A-Za-z0-9_-]{1,80}$/;
@@ -39,7 +40,7 @@
       const label = toggle.querySelector("[data-compare-label]");
       if (label) label.textContent = on ? "Added to Compare" : "Add to Compare";
     }
-    if (ids.length === 0 || location.pathname === "/compare") {
+    if (ids.length === 0 || logicalPathname(location.pathname) === "/compare") {
       tray?.remove();
       tray = null;
       return;
@@ -50,12 +51,12 @@
       tray.rel = "nofollow";
       document.body.append(tray);
     }
-    tray.href = `/compare?ids=${ids.map(encodeURIComponent).join(",")}`;
+    tray.href = pagePath(`/compare?ids=${ids.map(encodeURIComponent).join(",")}`);
     tray.textContent = `Compare (${ids.length})`;
   }
 
   // The comparison page's own list becomes the tray's list.
-  if (location.pathname === "/compare") {
+  if (logicalPathname(location.pathname) === "/compare") {
     const shown = (new URLSearchParams(location.search).get("ids") ?? "")
       .split(",").map((id) => id.trim()).filter((id) => ID.test(id)).slice(0, MAX);
     ids = [...new Set(shown)];

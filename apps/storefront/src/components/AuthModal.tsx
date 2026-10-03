@@ -28,6 +28,7 @@ import {
   formatWait,
   resolveCustomerAuthUi,
 } from "@/lib/customer-auth-ui";
+import { pagePath } from "@/lib/presence-url";
 
 export interface AuthModalPrefill {
   name?: string;
@@ -634,7 +635,7 @@ export default function AuthModal() {
               {step === "signed_in" ? (
                 <>
                   <a
-                    href="/account"
+                    href={pagePath("/account")}
                     data-astro-prefetch="false"
                     className="flex min-h-11 flex-1 items-center justify-center rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
@@ -667,7 +668,7 @@ export default function AuthModal() {
             </div>
             {step === "contact" && !fromReceipt && (
               <p className="text-center text-sm text-muted-foreground">
-                Ordered as a guest? <a href="/track-order" className="font-medium text-primary hover:underline">Track your order</a>
+                Ordered as a guest? <a href={pagePath("/track-order")} className="font-medium text-primary hover:underline">Track your order</a>
               </p>
             )}
           </div>

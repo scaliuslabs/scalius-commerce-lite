@@ -21,6 +21,13 @@ import {
   FRONT_PROXY_SIGNATURE_HEADER,
   applyTrustedFrontProxy,
 } from "@scalius/shared/trusted-front-proxy";
+import type { MarketMatrix } from "@scalius/shared/markets";
+import {
+  localizePresenceResponse,
+  marketChoiceRedirect,
+  presenceRenderTarget,
+  withoutInboundPresence,
+} from "./lib/market-presence";
 
 /**
  * Honours a signed front proxy's forwarded host, proto, and client IP. The
@@ -57,11 +64,36 @@ function frontierClient(env: Env): CacheFrontierClient | null {
   );
 }
 
+/**
+ * The active presence matrix from the API (a validated public read), for a
+ * buyer's market choice. Null when it cannot be read: no redirect then.
+ */
+async function readMarketMatrix(env: Env): Promise<MarketMatrix | null> {
+  if (!env.BACKEND_API) return null;
+  const response = await env.BACKEND_API.fetch(new Request(`${INTERNAL_SERVICE_ORIGIN}/api/v1/storefront/markets`, {
+    headers: { Accept: "application/json" },
+  }));
+  if (!response.ok) return null;
+  const envelope = await response.json() as { data?: MarketMatrix };
+  return Array.isArray(envelope.data?.markets) ? envelope.data! : null;
+}
+
+const PRESENCE_NOT_FOUND = () => new Response("Not Found", {
+  status: 404,
+  headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "private, no-store" },
+});
+
 export default class StorefrontGateway extends WorkerEntrypoint<Env> {
   async fetch(incoming: Request): Promise<Response> {
-    const request = await resolveFrontProxy(incoming, this.env);
+    // Only this gateway names a render's market presence.
+    const request = withoutInboundPresence(await resolveFrontProxy(incoming, this.env));
     const httpsRedirect = httpsRedirectResponse(request);
     if (httpsRedirect) return httpsRedirect;
+    // A presence serves its pages and its own sitemaps and feeds, nothing else.
+    if (presenceRenderTarget(request) === "not_found") return PRESENCE_NOT_FOUND();
+    // A buyer's explicit market choice; never geo, never a crawler.
+    const choice = await marketChoiceRedirect(request, () => readMarketMatrix(this.env));
+    if (choice) return choice;
     // A mail client's RFC 8058 one-click unsubscribe (no Origin, a form
     // body) reaches the unsubscribe page as JSON; everything else as sent.
     const oneClick = await oneClickUnsubscribeRequest(request);
@@ -69,9 +101,21 @@ export default class StorefrontGateway extends WorkerEntrypoint<Env> {
       cache: caches.default,
       buildId: BUILD_ID,
       workerVersion: readWorkerVersion(this.env),
-      render: (renderRequest) => handle(renderRequest, this.env, this.ctx),
+      render: (renderRequest) => this.render(renderRequest),
       waitUntil: (promise) => this.ctx.waitUntil(promise),
       frontier: frontierClient(this.env),
     });
+  }
+
+  /**
+   * A presence URL renders its page from the one route tree; the response is
+   * localized before it is stored. A root URL renders exactly as before.
+   */
+  private async render(renderRequest: Request): Promise<Response> {
+    const target = presenceRenderTarget(renderRequest);
+    if (target === "not_found") return PRESENCE_NOT_FOUND();
+    if (!target) return handle(renderRequest, this.env, this.ctx);
+    const response = await handle(target.render, this.env, this.ctx);
+    return localizePresenceResponse(response, target.presence, new URL(renderRequest.url).origin);
   }
 }

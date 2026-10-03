@@ -1,0 +1,59 @@
+---
+// The market selector (Shopify's country/region form): a plain POST to
+// /localization that works without JavaScript. The server saves the choice
+// (the `localization` cookie) and sends the buyer to the same page under the
+// chosen market's presence. Rendered only while the store has more than one
+// active presence.
+import { MARKET_SELECTION_PATH, type MarketMatrix } from "@scalius/shared/markets";
+import { marketCountryOptions, marketSelectorCopy, selectedMarketCountry } from "@/lib/market-selector";
+
+interface Props {
+  matrix: MarketMatrix;
+  /** The page's presence (null at the root). */
+  presence: string | null;
+  /** Every market sells in the shop currency until markets get their own. */
+  currencyCode: string;
+  language: string;
+  /** The page's path without its presence, where the choice returns the buyer. */
+  returnTo: string;
+}
+
+const { matrix, presence, currencyCode, language, returnTo } = Astro.props;
+const copy = marketSelectorCopy(language);
+const options = marketCountryOptions(matrix, language);
+const selected = selectedMarketCountry(matrix, presence);
+---
+
+<form method="post" action={MARKET_SELECTION_PATH} class="market-selector" data-market-selector>
+  <label for="market-selector-country">{copy.label}</label>
+  <select id="market-selector-country" name="country_code" autocomplete="country">
+    {options.map((option) => (
+      <option value={option.code} selected={option.code === selected}>{option.name} ({currencyCode})</option>
+    ))}
+  </select>
+  <input type="hidden" name="return_to" value={returnTo} />
+  <button type="submit">{copy.submit}</button>
+</form>
+
+<style>
+  .market-selector {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    max-width: 80rem;
+    margin: 0 auto;
+    padding: 0.75rem 1rem;
+    font-size: 0.875rem;
+    color: var(--muted-foreground);
+  }
+  .market-selector select,
+  .market-selector button {
+    min-height: 2.5rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius, 0.375rem);
+    background: var(--background);
+    color: var(--foreground);
+    padding: 0 0.75rem;
+  }
+</style>

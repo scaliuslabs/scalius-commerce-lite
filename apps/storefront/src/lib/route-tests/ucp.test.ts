@@ -13,6 +13,8 @@ const mocks = vi.hoisted(() => ({
   setRuntimeImageCdnPolicy: vi.fn(),
 }));
 
+const runtimePresence = vi.hoisted(() => ({ value: null as string | null }));
+
 vi.mock("@/lib/api/products", () => ({
   getFeedProducts: mocks.getFeedProducts,
   getProductBySlug: mocks.getProductBySlug,
@@ -23,6 +25,7 @@ vi.mock("@/lib/api/storefront", () => ({
 }));
 
 vi.mock("@/lib/api/runtime", () => ({
+  getRuntimePresence: () => runtimePresence.value,
   getRuntimeStorefrontUrl: mocks.getRuntimeStorefrontUrl,
   getRuntimeCdnDomain: mocks.getRuntimeCdnDomain,
   getRuntimeImageCdnBaseUrl: mocks.getRuntimeImageCdnBaseUrl,

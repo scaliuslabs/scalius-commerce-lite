@@ -1,0 +1,60 @@
+---
+// The geo hint (docs/MARKETS-DESIGN.md D4): never a redirect. After the page
+// loads, the browser asks the private /api/market-suggestion which market
+// the buyer's location suggests; a different one shows this banner, whose
+// form makes it an explicit choice (the same POST as the selector). A buyer
+// who chose a market, or dismissed the banner, never sees it. The page's
+// HTML is the same for every buyer, so it stays in the shared cache.
+import { MARKET_SELECTION_PATH, MARKET_SUGGESTION_PATH } from "@scalius/shared/markets";
+import { marketSelectorCopy } from "@/lib/market-selector";
+
+interface Props {
+  language: string;
+  /** The page's path without its presence. */
+  returnTo: string;
+}
+
+const { language, returnTo } = Astro.props;
+const copy = marketSelectorCopy(language);
+---
+
+<div class="market-suggestion" data-market-suggestion data-endpoint={MARKET_SUGGESTION_PATH} data-template={copy.suggestion} hidden role="region" aria-live="polite">
+  <form method="post" action={MARKET_SELECTION_PATH}>
+    <p data-market-suggestion-text></p>
+    <input type="hidden" name="country_code" value="" data-market-suggestion-country />
+    <input type="hidden" name="return_to" value={returnTo} />
+    <button type="submit">{copy.go}</button>
+    <button type="button" data-market-suggestion-dismiss>{copy.dismiss}</button>
+  </form>
+</div>
+
+<script>
+  import { initMarketSuggestion } from "@/scripts/market-suggestion";
+  initMarketSuggestion();
+</script>
+
+<style>
+  .market-suggestion form {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem 0.75rem;
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    background: var(--muted);
+    color: var(--foreground);
+    border-bottom: 1px solid var(--border);
+  }
+  .market-suggestion p {
+    margin: 0;
+  }
+  .market-suggestion button {
+    min-height: 2.25rem;
+    padding: 0 0.75rem;
+    border-radius: var(--radius, 0.375rem);
+    border: 1px solid var(--border);
+    background: var(--background);
+    color: var(--foreground);
+  }
+</style>

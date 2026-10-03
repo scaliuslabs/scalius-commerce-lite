@@ -60,6 +60,7 @@ import {
   showsOrderLineGroupHeadings,
   supportActionDescription,
 } from "@/lib/order-line-groups";
+import { pagePath } from "@/lib/presence-url";
 
 /** The customer order-detail payload, including the buyer tracking fields. */
 export type AccountOrderDetail = CustomerOrderDetail;
@@ -544,7 +545,7 @@ function renderItemsAndSummary(detail: AccountOrderDetail): void {
       return `<li class="py-4 first:pt-0 last:pb-0"><div class="flex gap-3">
         <img src="${escapeHtml(getProductImageUrl(item.productImage, 128))}" alt="" class="h-16 w-16 shrink-0 rounded-lg border border-border bg-card object-contain" loading="lazy" />
         <div class="min-w-0 flex-1 text-sm">
-          ${item.productSlug ? `<a href="/products/${encodeURIComponent(item.productSlug)}" class="font-medium text-foreground hover:underline">${name}</a>` : `<p class="font-medium text-foreground">${name}</p>`}
+          ${item.productSlug ? `<a href="${escapeHtml(pagePath(`/products/${encodeURIComponent(item.productSlug)}`))}" class="font-medium text-foreground hover:underline">${name}</a>` : `<p class="font-medium text-foreground">${name}</p>`}
           ${item.variantLabel ? `<p class="text-muted-foreground">${escapeHtml(item.variantLabel)}</p>` : ""}
           ${properties.length > 0 ? `<ul class="text-muted-foreground">${properties.map((row) => `<li class="break-words"><span class="text-foreground">${escapeHtml(row.label)}:</span> ${escapeHtml(row.value)}${row.surcharge ? ` (${escapeHtml(row.surcharge)})` : ""}</li>`).join("")}</ul>` : ""}
           <p class="text-muted-foreground">Qty ${item.quantity} × ${escapeHtml(unit)}</p>

@@ -105,6 +105,8 @@ const NON_PAGE_SEGMENTS = new Set([
   "health",
   "theme-preview",
   "agent",
+  // The market selector's form target: the same for every presence.
+  "localization",
 ]);
 
 /**
@@ -248,17 +250,19 @@ export interface HreflangAlternate {
  * Reciprocal, self-referencing alternates of one page (Google's localized
  * versions), one per active presence plus `x-default` (the root), or none
  * while the store has a single presence (today's HTML stays as it is).
- * `pathname` is the page's path without its presence; `origin` the store URL.
+ * `path` is the page's path (and query) without its presence; `origin` the
+ * store URL.
  */
-export function hreflangAlternates(matrix: MarketMatrix, pathname: string, origin: string): HreflangAlternate[] {
+export function hreflangAlternates(matrix: MarketMatrix, path: string, origin: string): HreflangAlternate[] {
   const presences = activePresences(matrix);
+  const pathname = path.split(/[?#]/)[0]!;
   if (presences.length < 2 || !isStorefrontPagePath(pathname)) return [];
   const base = origin.replace(/\/$/, "");
   const alternates = presences.map(({ market, presence }) => ({
     hreflang: presenceHreflang(market, presence),
-    href: `${base}${presencePath(presence.value, pathname)}`,
+    href: `${base}${presencePath(presence.value, path)}`,
   }));
-  return [...alternates, { hreflang: "x-default", href: `${base}${pathname}` }];
+  return [...alternates, { hreflang: "x-default", href: `${base}${path}` }];
 }
 
 // ---------------------------------------------------------------------------

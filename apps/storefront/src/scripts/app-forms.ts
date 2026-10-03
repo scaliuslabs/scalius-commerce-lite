@@ -18,6 +18,7 @@
  * Nothing from an answer ever enters the DOM as HTML. Without JavaScript the
  * plain form posts, and the proxy answers the navigation with a redirect back.
  */
+import { logicalPathname } from "@/lib/presence-url";
 
 /** What an app answers a form or state read with (anything else is ignored). */
 export interface AppFormAnswer {
@@ -68,7 +69,8 @@ export function appProxyUrl(value: unknown, origin: string): string | null {
     return null;
   }
   if (url.origin !== origin || url.username || url.password) return null;
-  if (!/^\/apps\/[a-z0-9][a-z0-9.-]*\/[^/]/.test(url.pathname)) return null;
+  // A presence page's app links carry its prefix (`/en-in/apps/...`).
+  if (!/^\/apps\/[a-z0-9][a-z0-9.-]*\/[^/]/.test(logicalPathname(url.pathname))) return null;
   if (url.pathname.split("/").some((segment) => segment === "." || segment === ".." || /%2e|%2f|%5c/i.test(segment))) return null;
   return `${url.origin}${url.pathname}${url.search}`;
 }

@@ -6,6 +6,8 @@ const mocks = vi.hoisted(() => ({
   validateCartItems: vi.fn(),
 }));
 
+const runtimePresence = vi.hoisted(() => ({ value: null as string | null }));
+
 vi.mock("@/lib/api", () => ({
   getProductBySlug: mocks.getProductBySlug,
 }));
@@ -15,6 +17,7 @@ vi.mock("@/lib/api/storefront", () => ({
 }));
 
 vi.mock("@/lib/api/runtime", () => ({
+  getRuntimePresence: () => runtimePresence.value,
   setRuntimeImageCdnPolicy: vi.fn(),
 }));
 

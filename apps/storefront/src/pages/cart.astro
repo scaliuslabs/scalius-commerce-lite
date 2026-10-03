@@ -907,6 +907,7 @@ const marketingConsent = marketingConsentCheckbox(checkoutConfig, lang.code);
 />
 
 <script>
+  import { pagePath } from "@/lib/presence-url";
   import {
     initCartFunctionality,
     isDiscountValidationPending,
@@ -1847,7 +1848,7 @@ const marketingConsent = marketingConsentCheckbox(checkoutConfig, lang.code);
             title: checkoutCopy.openingPaymentOptionsTitle,
             message: checkoutCopy.openingPaymentOptionsMessage,
           });
-          window.location.href = "/checkout";
+          window.location.href = pagePath("/checkout");
           return;
         }
 

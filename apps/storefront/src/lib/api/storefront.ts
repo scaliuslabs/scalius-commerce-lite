@@ -15,6 +15,7 @@ import type {
   AnalyticsConfig,
 } from "./types";
 import type { SeoDiscoverySettings } from "@scalius/shared/seo-discovery";
+import type { MarketMatrix } from "@scalius/shared/markets";
 import type { HomepageAppSurface } from "@/lib/app-surfaces";
 import type { ProductPageCopy } from "@scalius/shared/checkout-language";
 import type {
@@ -156,6 +157,12 @@ export interface LayoutData {
   /** The footer menus (Online store -> Navigation), in order. */
   footerMenus?: FooterMenu[];
   currency?: CurrencyData;
+  /**
+   * Every active market with its countries and subfolder presences (backup
+   * first): hreflang, the market selector and the presence a page renders.
+   * Absent from an older API: the store has its root presence only.
+   */
+  markets?: MarketMatrix;
   /**
    * The published theme document (v7). Untrusted until
    * `readStorefrontTheme` (lib/storefront-theme-context) validates it.

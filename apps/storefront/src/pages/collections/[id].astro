@@ -8,6 +8,7 @@ import {
   buildResourceCanonicalSeoUrl,
   getAbsoluteStorefrontSeoBaseUrl,
   toAbsoluteStorefrontSeoUrl,
+  buildAbsoluteStorefrontSeoUrl,
 } from "@/lib/seo-base-url";
 import { loadPageWithLayout } from "@/lib/page-data";
 import { getProductImageUrl } from "@/lib/product-media";
@@ -109,7 +110,7 @@ const collectionBreadcrumbJsonLd =
             "@type": "ListItem",
             position: 1,
             name: "Home",
-            item: `${storefrontUrl}/`,
+            item: buildAbsoluteStorefrontSeoUrl("/"),
           },
           {
             "@type": "ListItem",

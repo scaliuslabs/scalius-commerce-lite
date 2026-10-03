@@ -69,6 +69,7 @@ import { setRuntimeImageCdnPolicy } from "@/lib/api/runtime";
 import {
   buildResourceCanonicalSeoUrl,
   getAbsoluteStorefrontSeoBaseUrl,
+  buildAbsoluteStorefrontSeoUrl,
 } from "@/lib/seo-base-url";
 import {
   buildMerchantReturnPolicyJsonLd,
@@ -642,7 +643,7 @@ const productJsonLd =
 
 // BreadcrumbList JSON-LD -- per SEO-02
 const breadcrumbItems = [
-  { "@type": "ListItem", position: 1, name: "Home", item: `${storefrontUrl}/` },
+  { "@type": "ListItem", position: 1, name: "Home", item: buildAbsoluteStorefrontSeoUrl("/") },
   ...(productCategory && productCategoryUrl
     ? [
         {

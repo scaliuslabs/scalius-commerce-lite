@@ -26,10 +26,12 @@ import {
   STOREFRONT_BATCH_PATH,
   storefrontBatchPart,
   storefrontBatchPath,
+  withMarketPresence,
   type StorefrontBatchResponse,
 } from "@scalius/shared/public-api-cache-routes";
 import {
   getRuntime,
+  getRuntimePresence,
   requestRuntime,
   getRuntimeApiToken,
   getRuntimeApiUrl,
@@ -300,6 +302,22 @@ export interface ApiFetchPolicy {
   batch?: boolean;
 }
 
+/**
+ * A public read of a market-keyed route (`PUBLIC_API_CACHE_ROUTES`) on a
+ * page under a subfolder presence carries that presence, so its answer and
+ * its cache key are the presence's market's. Every other read, and every
+ * read of a root page, is sent as it is.
+ */
+function withRuntimePresence(url: string, options: RequestInit, requiresAuth: boolean): string {
+  const presence = import.meta.env.SSR ? getRuntimePresence() : null;
+  if (!presence || requiresAuth || (options.method ?? "GET").toUpperCase() !== "GET") return url;
+  try {
+    return withMarketPresence(new URL(url), presence).toString();
+  } catch {
+    return url;
+  }
+}
+
 function isAbsoluteUrl(target: string): boolean {
   return /^https?:\/\//i.test(target);
 }
@@ -323,7 +341,7 @@ export async function apiFetch(
     auth: requiresAuth = true,
     logTerminalFailure = true,
   } = policy;
-  const url = isAbsoluteUrl(target) ? target : createApiUrl(target);
+  const url = withRuntimePresence(isAbsoluteUrl(target) ? target : createApiUrl(target), options, requiresAuth);
   if (import.meta.env.SSR && !requiresAuth && policy.batch !== false) {
     const batched = joinReadBatch(url, options, policy);
     if (batched) return batched;

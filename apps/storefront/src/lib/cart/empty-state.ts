@@ -1,4 +1,5 @@
 import type { CheckoutLanguageData } from "../api/types";
+import { pagePath } from "@/lib/presence-url";
 
 export interface EmptyCartRecoveryAction {
   href: string;
@@ -39,7 +40,7 @@ export function renderEmptyCartState(
   actionWrapper.className = "mt-6 flex flex-col items-center justify-center gap-2 sm:flex-row";
 
   const continueLink = document.createElement("a");
-  continueLink.href = "/";
+  continueLink.href = pagePath("/");
   continueLink.className =
     "inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-primary-foreground bg-primary hover:bg-primary/90";
 

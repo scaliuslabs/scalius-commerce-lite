@@ -9,6 +9,7 @@ import {
   type ProductListFilterState,
   type ProductListRangeBound,
 } from "./product-list-query";
+import { pagePath } from "@/lib/presence-url";
 
 function selectedValues(currentFilters: ProductListFilterState, key: string): string[] {
   const value = currentFilters[key];
@@ -360,7 +361,7 @@ function appendFacetRows(group: HTMLElement, facets: readonly ProductFacet[]): H
       if (text) text.textContent = value.label;
       if (count) count.textContent = String(value.count);
       if (category) {
-        (row as HTMLAnchorElement).href = `/categories/${encodeURIComponent(value.value)}${carriedListingQuery()}`;
+        (row as HTMLAnchorElement).href = pagePath(`/categories/${encodeURIComponent(value.value)}${carriedListingQuery()}`);
         const item = document.createElement("li");
         item.append(row);
         after.after(item);

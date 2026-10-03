@@ -158,6 +158,7 @@ const cards = orders.map((order) => {
 
 <script>
   import { addOrderToCart } from "@/lib/account-buy-again";
+  import { pagePath } from "@/lib/presence-url";
   import { renderPhoneVerification } from "@/lib/account-phone-verification";
   import { ACCOUNT_OFFLINE_MESSAGE } from "@/lib/account-format";
 
@@ -189,7 +190,7 @@ const cards = orders.map((order) => {
   if (phoneBox?.dataset.phone) {
     renderPhoneVerification(phoneBox, { phone: phoneBox.dataset.phone }, {
       storeContact: document.getElementById("phoneVerificationContact"),
-      onVerified: () => window.location.assign("/account?phone=verified"),
+      onVerified: () => window.location.assign(pagePath("/account?phone=verified")),
     });
   }
 </script>

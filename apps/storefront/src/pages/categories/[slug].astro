@@ -20,6 +20,7 @@ import {
   buildResourceCanonicalSeoUrl,
   getAbsoluteStorefrontSeoBaseUrl,
   toAbsoluteStorefrontSeoUrl,
+  buildAbsoluteStorefrontSeoUrl,
 } from "@/lib/seo-base-url";
 import { mediaImageSrcSet, mediaImageUrl } from "@/lib/media-url";
 import { MEDIA_DISCOVERY_IMAGE_WIDTH } from "@scalius/shared/media-variants";
@@ -160,7 +161,7 @@ const categoryBreadcrumbJsonLd =
         "@context": "https://schema.org",
         "@type": "BreadcrumbList",
         itemListElement: [
-          { name: "Home", item: `${storefrontUrl}/` },
+          { name: "Home", item: buildAbsoluteStorefrontSeoUrl("/") },
           ...ancestors.map((crumb) => ({
             name: crumb.name,
             item: buildResourceCanonicalSeoUrl("category", `/categories/${crumb.slug}`, crumb.canonicalPath),

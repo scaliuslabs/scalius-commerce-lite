@@ -21,6 +21,7 @@ import {
 import { getProductImageUrl, hasProductImage, PRODUCT_IMAGE_FALLBACK, productImageSources } from "@/lib/product-media";
 import { isVariantAvailable, resolveBuyerVariants } from "@/lib/product-sellable-variants";
 import { roundPriceToPrecision } from "@scalius/shared/price-utils";
+import { pagePath } from "@/lib/presence-url";
 
 export default function ProductShortcode({ productData }: { productData: ProductPageData }) {
   const { product, media, variants } = productData;
@@ -118,7 +119,7 @@ export default function ProductShortcode({ productData }: { productData: Product
       console.error("Failed to track add to cart:", error);
     });
     showToast("Added to cart successfully!", "success");
-    if (redirect) window.setTimeout(() => { window.location.href = "/cart"; }, 300);
+    if (redirect) window.setTimeout(() => { window.location.href = pagePath("/cart"); }, 300);
     else document.dispatchEvent(new CustomEvent("open-cart"));
   };
 
@@ -188,7 +189,7 @@ export default function ProductShortcode({ productData }: { productData: Product
           {needsProductPage ? (
             <div className="pt-2">
               <Button asChild size="lg" className="w-full">
-                <a href={`/products/${encodeURIComponent(product.slug)}`}>View product</a>
+                <a href={pagePath(`/products/${encodeURIComponent(product.slug)}`)}>View product</a>
               </Button>
             </div>
           ) : (

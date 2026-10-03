@@ -13,7 +13,7 @@ import type { ShippingMethod } from "@/lib/api/types";
 import { splitDeliveryRates } from "@/lib/delivery-facts";
 import { formatCatalogFeedAmount } from "@scalius/shared/catalog-feed-money";
 import { resolvePriceIncrementMinor } from "@scalius/shared/currency-policy";
-import { setRuntimeImageCdnPolicy } from "@/lib/api/runtime";
+import { getRuntimePresence, setRuntimeImageCdnPolicy } from "@/lib/api/runtime";
 import { resolveMediaUrl } from "@/lib/media-url";
 import { getBaseUrl, xmlDataUnavailableResponse } from "@/lib/sitemap-utils";
 import { resolveStoreName } from "@/lib/store-identity";
@@ -97,6 +97,8 @@ function toCatalogFeedRows(
   return projectCatalogFeedRows({
     products,
     storefrontBaseUrl: baseUrl,
+    // A presence's feed (`/en-in/api/product-feed.xml`) links to its pages.
+    presence: getRuntimePresence(),
     currencyCode,
     priceIncrementMinor,
     policy: {
@@ -238,7 +240,9 @@ function generateCatalogFeed(
   xml += '<rss xmlns:g="http://base.google.com/ns/1.0" version="2.0">\n';
   xml += "<channel>\n";
   xml += `<title>${escapeXml(title)}</title>\n`;
-  xml += `<link>${escapeXml(baseUrl)}</link>\n`;
+  // The presence's home (`/en-in`) for a presence's feed; the root's is unchanged.
+  const presence = getRuntimePresence();
+  xml += `<link>${escapeXml(presence ? `${baseUrl}/${presence}` : baseUrl)}</link>\n`;
   xml += `<description>${escapeXml(description)}</description>\n`;
 
   for (const row of rows) {

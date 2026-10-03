@@ -47,6 +47,7 @@ import {
 } from "../lib/product-actions";
 import { moneyPlaces, unitPriceWithSurcharge } from "../lib/buyer-inputs";
 import { initBuyerInputs, type BuyerInputsController } from "./buyer-inputs-controller";
+import { pagePath } from "@/lib/presence-url";
 
 const state = {
   variants: [] as Variant[],
@@ -676,7 +677,7 @@ async function addSelected(redirect: boolean) {
     return showError("This product option could not be added. Please refresh and try again.");
   if (edit) {
     clearCartLineEdit();
-    window.location.href = "/cart";
+    window.location.href = pagePath("/cart");
     return;
   }
   // Analytics get the product, SKU, quantity and price, never the buyer inputs.
@@ -687,7 +688,7 @@ async function addSelected(redirect: boolean) {
       variant: convertVariantToAnalyticsData(validation.variant),
       quantity,
     });
-  if (redirect) window.location.href = "/cart";
+  if (redirect) window.location.href = pagePath("/cart");
   else document.dispatchEvent(new CustomEvent("open-cart"));
 }
 

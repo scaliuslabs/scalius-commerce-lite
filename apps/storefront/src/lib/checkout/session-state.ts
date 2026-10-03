@@ -1,4 +1,5 @@
 import { isPaymentMethodIdShape } from "../payment-method-id";
+import { logicalPathname } from "@/lib/presence-url";
 
 const CHECKOUT_TRANSFER_KEYS = [
   "scalius_checkout_data",
@@ -294,7 +295,7 @@ function normalizeHostedPaymentRecoveryHref(
     const baseOrigin = checkoutRecoveryBaseOrigin();
     const url = new URL(href, baseOrigin);
     if (url.origin !== baseOrigin) return null;
-    if (url.pathname !== "/order-success") return null;
+    if (logicalPathname(url.pathname) !== "/order-success") return null;
 
     const storedGateway = normalizeCheckoutRecoveryGateway(expectedGateway);
     const queryGateway = normalizeCheckoutRecoveryGateway(url.searchParams.get("payment"));

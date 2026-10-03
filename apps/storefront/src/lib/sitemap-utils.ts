@@ -3,6 +3,7 @@
  * Following XML sitemap protocol: https://www.sitemaps.org/protocol.html
  */
 import { getRuntimeStorefrontUrl } from "./api/runtime";
+import { serverPagePath } from "./server-presence";
 import { normalizeAbsoluteStorefrontOriginUrl } from "./storefront-origin";
 
 export interface SitemapUrl {
@@ -141,6 +142,15 @@ export function getBaseUrl(): string {
   }
 
   return normalized;
+}
+
+/**
+ * The absolute URL of a page in a sitemap: under the request's subfolder
+ * presence (`/en-in/sitemap-products.xml` lists `/en-in/products/x`), else
+ * exactly the root URL.
+ */
+export function sitemapPageUrl(baseUrl: string, path: string): string {
+  return `${baseUrl}${serverPagePath(path)}`;
 }
 
 /**

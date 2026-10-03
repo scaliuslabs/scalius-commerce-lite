@@ -1158,6 +1158,7 @@ const orderRecommendations = order && showsSuccessHero && !statusView
 
 <script>
   import { stripeHandler } from "@/lib/checkout/handlers/stripe";
+  import { pagePath } from "@/lib/presence-url";
   import { fetchPaymentSessionWithProcessingRetry } from "@/lib/checkout/payment-session-retry";
   import { SLOW_REDIRECT_AFTER_MS } from "@/lib/checkout/loading-overlay";
   import {
@@ -1201,7 +1202,7 @@ const orderRecommendations = order && showsSuccessHero && !statusView
       if (paymentType === "deposit" && Number.isFinite(depositAmount) && depositAmount > 0) {
         params.set("depositAmount", String(depositAmount));
       }
-      return `/order-success?${params.toString()}`;
+      return pagePath(`/order-success?${params.toString()}`);
     };
 
     buttons.forEach((button) => button.addEventListener("click", async () => {

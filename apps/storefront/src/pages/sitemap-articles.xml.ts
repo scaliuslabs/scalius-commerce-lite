@@ -6,6 +6,7 @@ import {
   getSitemapHeaders,
   xmlDataUnavailableResponse,
   type SitemapUrl,
+  sitemapPageUrl,
 } from "@/lib/sitemap-utils";
 import { normalizeResourceCanonicalPath } from "@scalius/shared/seo-canonical";
 
@@ -29,7 +30,7 @@ export const GET: APIRoute = async () => {
             normalizeResourceCanonicalPath("article", article.canonicalPath) ??
             `/blog/${article.slug}`;
           urls.push({
-            loc: `${baseUrl}${path}`,
+            loc: sitemapPageUrl(baseUrl, path),
             lastmod: article.updatedAt || article.publishedAt || undefined,
           });
         }

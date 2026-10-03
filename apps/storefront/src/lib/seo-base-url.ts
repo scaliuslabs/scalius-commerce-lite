@@ -4,16 +4,29 @@ import {
   type CanonicalResourceKind,
 } from "@scalius/shared/seo-canonical";
 import { normalizeAbsoluteStorefrontOriginUrl } from "./storefront-origin";
+import { serverPagePath } from "./server-presence";
 
+/** The absolute Store URL origin (Platform settings), or null when it is not one. */
 export function getAbsoluteStorefrontSeoBaseUrl(): string | null {
   return normalizeAbsoluteStorefrontOriginUrl(getRuntimeStorefrontUrl());
 }
 
-export function buildAbsoluteStorefrontSeoUrl(path: string): string | null {
+/** An absolute URL on the store's origin for an asset or file path, never under a presence. */
+function buildAbsoluteStorefrontAssetUrl(path: string): string | null {
   const baseUrl = getAbsoluteStorefrontSeoBaseUrl();
   if (!baseUrl) return null;
 
   return new URL(path, `${baseUrl}/`).toString();
+}
+
+/**
+ * The absolute URL of a page: under the request's subfolder presence when it
+ * has one (`/en-in/products/x`), so canonical links, Open Graph URLs and
+ * JSON-LD URLs of a presence page name that presence's page. Root pages are
+ * unchanged.
+ */
+export function buildAbsoluteStorefrontSeoUrl(path: string): string | null {
+  return buildAbsoluteStorefrontAssetUrl(serverPagePath(path));
 }
 
 export function buildResourceCanonicalSeoUrl(
@@ -26,6 +39,7 @@ export function buildResourceCanonicalSeoUrl(
   );
 }
 
+/** An absolute image or file URL (logos, share images): relative values resolve on the store's origin. */
 export function toAbsoluteStorefrontSeoUrl(
   value: string | null | undefined,
 ): string | null {
@@ -43,6 +57,6 @@ export function toAbsoluteStorefrontSeoUrl(
       ? parsed.toString()
       : null;
   } catch {
-    return buildAbsoluteStorefrontSeoUrl(trimmed);
+    return buildAbsoluteStorefrontAssetUrl(trimmed);
   }
 }

@@ -9,6 +9,7 @@ import {
   getBaseUrl,
   getSitemapHeaders,
   xmlDataUnavailableResponse,
+  sitemapPageUrl,
 } from "@/lib/sitemap-utils";
 import type { SitemapUrl } from "@/lib/sitemap-utils";
 import { getSitemapBrands } from "@/lib/api/brands";
@@ -27,7 +28,7 @@ export const GET: APIRoute = async (_context: APIContext) => {
     }
 
     const brandUrls: SitemapUrl[] = brands.map((brand) => ({
-      loc: `${baseUrl}${normalizeResourceCanonicalPath("brand", brand.canonicalPath) ?? `/brands/${brand.slug}`}`,
+      loc: sitemapPageUrl(baseUrl, normalizeResourceCanonicalPath("brand", brand.canonicalPath) ?? `/brands/${brand.slug}`),
       lastmod: brand.updatedAt ?? undefined,
     }));
 

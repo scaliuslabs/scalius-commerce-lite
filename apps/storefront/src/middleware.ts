@@ -9,9 +9,11 @@ import {
   getRuntimeCspAllowedDomains,
   getRuntimeDashboardUrl,
   getRuntimeMediaUrl,
+  getRuntimePresence,
   getRuntimeStorefrontUrl,
   runWithRequestRuntime,
 } from "@/lib/api/runtime";
+import { marketOfPresence } from "@scalius/shared/markets";
 import { getLayoutData } from "@/lib/api/storefront";
 import { getCdnBase } from "@/lib/media-url";
 import {
@@ -94,6 +96,17 @@ const responsePolicyMiddleware = defineMiddleware(async (context, next) => {
   // The CSP below needs the platform origins and the app scripts the page
   // loads; pages already awaited this read.
   const layout = await getLayoutData();
+  // A subfolder presence no active market holds is not a page (MARKETS-DESIGN
+  // D4): the URL alone decides, so it is a 404 for every buyer. Astro renders
+  // the 404 page for this empty answer; that render is left alone.
+  const presence = getRuntimePresence();
+  if (
+    presence && layout && !marketOfPresence(layout.markets ?? { markets: [] }, presence)
+    && context.routePattern !== "/404" && context.routePattern !== "/500"
+  ) {
+    await response.body?.cancel().catch(() => undefined);
+    return new Response(null, { status: 404, headers: { "Cache-Control": PRIVATE_NO_STORE_CACHE_CONTROL } });
+  }
   response.headers.set("X-Storefront-Build", BUILD_ID);
   const isGet = request.method === "GET" || request.method === "HEAD";
   const hasVariantSelection = hasStorefrontProductVariantSelectionParams(url);

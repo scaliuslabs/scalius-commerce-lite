@@ -71,7 +71,7 @@ describe("presence paths", () => {
     expect(presencePath("en-in", "/cart")).toBe("/en-in/cart");
     expect(presencePath("en-in", "/en-in/cart")).toBe("/en-in/cart");
     expect(presencePath("en-in", "/hi-in/cart")).toBe("/hi-in/cart");
-    for (const href of ["/api/checkout/create-order", "/_astro/a.js", "/media/x.webp", "/robots.txt", "/sitemap.xml", "/favicon.svg",
+    for (const href of ["/localization", "/api/checkout/create-order", "/_astro/a.js", "/media/x.webp", "/robots.txt", "/sitemap.xml", "/favicon.svg",
       "/.well-known/ucp", "/ucp/catalog/search", "/theme-preview", "//cdn.example/x", "https://other.example/x", "#top", "?page=2", "mailto:a@b.c"]) {
       expect(presencePath("en-in", href), href).toBe(href);
     }
@@ -121,6 +121,10 @@ describe("hreflang", () => {
       "https://shop.example/", "https://shop.example/en-in", "https://shop.example/hi-in", "https://shop.example/",
     ]);
     expect(hreflangAlternates(MATRIX, "/api/product-feed.xml", "https://shop.example")).toEqual([]);
+    expect(hreflangAlternates(MATRIX, "/categories/bags?page=2", "https://shop.example").map((each) => each.href)).toEqual([
+      "https://shop.example/categories/bags?page=2", "https://shop.example/en-in/categories/bags?page=2",
+      "https://shop.example/hi-in/categories/bags?page=2", "https://shop.example/categories/bags?page=2",
+    ]);
   });
 });
 
