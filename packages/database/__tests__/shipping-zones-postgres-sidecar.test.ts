@@ -102,6 +102,8 @@ describe.runIf(postgresUrl)("0114 shipping zones PostgreSQL sidecar", () => {
       .rejects.toThrow(/duplicate key/);
     await expect(client.query("INSERT INTO delivery_zone_regions (country_code, admin_area, postal_prefix, zone_id) VALUES ('US', 'CA', '941', 'dz_dhaka')"))
       .rejects.toThrow(/check constraint/);
+    // The canonical schema has no seed rows: the fence row is the store's.
+    await client.query("INSERT INTO checkout_authority (id, revision) VALUES ('default', 1) ON CONFLICT (id) DO NOTHING");
     const revision = async () => Number((await client.query("SELECT revision FROM checkout_authority WHERE id = 'default'")).rows[0].revision);
     const fence = await revision();
     await client.query("INSERT INTO delivery_zone_regions (country_code, postal_prefix, zone_id) VALUES ('GB', 'SW1', 'dz_dhaka')");
