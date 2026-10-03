@@ -166,7 +166,7 @@ describe("storefront private cache policy", () => {
 
   it("reads only the selected landing page and rejects public query overrides", async () => {
     const draft = storefrontTemplateTheme("marketplace");
-    const landing = { title: "Eid offers", sections: [], overrideCms: false };
+    const landing = { title: "Eid offers", description: "", sections: [] };
     draft.pages.landing["eid-offers"] = landing;
     mocks.resolveThemePreviewSession.mockResolvedValue({ theme: draft });
     vi.mocked(getHomepageData).mockResolvedValue({ sections: { lists: [], media: [] } } as never);

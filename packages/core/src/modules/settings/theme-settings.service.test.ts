@@ -351,8 +351,8 @@ describe("versioned storefront theme settings", () => {
     await saveThemeDraft(db, theme, 1, 1);
     await publishThemeDraft(db, 1, 2);
     const [version] = await listThemeVersions(db);
-    expect(version!.changes).toHaveLength(30);
-    expect(version!.moreChanges).toBe(total - 30);
+    expect(version!.changes).toHaveLength(20);
+    expect(version!.moreChanges).toBe(total - 20);
   });
 
   it("pages the history back without documents", async () => {
@@ -364,8 +364,9 @@ describe("versioned storefront theme settings", () => {
       draft = (await publishThemeDraft(db, live, draft)).draft.revision;
     }
     const first = await listThemeVersions(db);
-    expect(first.map((version) => version.revision)).toEqual([13, 12, 11, 10, 9, 8, 7, 6, 5, 4]);
+    expect(first.map((version) => version.revision)).toEqual([13, 12, 11, 10, 9]);
     const next = await listThemeVersions(db, { beforeRevision: 4, limit: 50 });
+    expect(await listThemeVersions(db, { beforeRevision: 9 })).toHaveLength(5);
     expect(next.map((version) => version.revision)).toEqual([3, 2, 1]);
   });
 

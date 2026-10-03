@@ -13,8 +13,8 @@ export const THEME_CHANGE_AREAS = [
 export type ThemeChangeArea = (typeof THEME_CHANGE_AREAS)[number];
 
 /** `home`, or `landing/<slug>`. */
-const pageKey = z.string().max(120);
-const sectionRef = { page: pageKey, sectionId: z.string().max(64), sectionType: z.string().max(64) };
+const pageKey = z.string().max(108);
+const sectionRef = { page: pageKey, sectionId: z.string().max(40), sectionType: z.string().max(32) };
 
 export const themeDocumentChangeSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("section-added"), ...sectionRef }).strict(),
@@ -29,7 +29,7 @@ export const themeDocumentChangeSchema = z.discriminatedUnion("kind", [
 export type ThemeDocumentChange = z.infer<typeof themeDocumentChangeSchema>;
 
 /** Most changes a version keeps; the rest are counted. */
-export const THEME_VERSION_CHANGES_MAX = 30;
+export const THEME_VERSION_CHANGES_MAX = 20;
 
 const TOKEN_AREA: Record<string, ThemeChangeArea> = { colors: "colors", typography: "typography", typeScale: "typography", headingCase: "typography" };
 const BLOCK_AREA: Record<string, ThemeChangeArea> = {

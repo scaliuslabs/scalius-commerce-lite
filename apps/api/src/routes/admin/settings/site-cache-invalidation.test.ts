@@ -7,7 +7,7 @@ import {
   storefrontTemplateTheme,
   type StorefrontThemeDocument,
 } from "@scalius/shared/storefront-theme";
-import { THEME_VERSION_HISTORY_LIMIT } from "@scalius/core/modules/settings";
+import { THEME_VERSION_HISTORY_LIMIT, THEME_VERSION_PAGE_LIMIT } from "@scalius/core/modules/settings";
 
 import { errorResponseFromError } from "../../../utils/api-response";
 
@@ -20,7 +20,7 @@ const mocks = vi.hoisted(() => ({
   saveThemeDraft: vi.fn(),
   publishThemeDraft: vi.fn(),
   listThemeVersions: vi.fn(),
-  rollbackThemeSettings: vi.fn(),
+  getThemeVersion: vi.fn(),
   restoreThemeVersion: vi.fn(),
   discardThemeDraft: vi.fn(),
   saveThemePageDraft: vi.fn(),
@@ -56,7 +56,7 @@ vi.mock("@scalius/core/modules/settings", async (importOriginal) => ({
   saveThemeDraft: mocks.saveThemeDraft,
   publishThemeDraft: mocks.publishThemeDraft,
   listThemeVersions: mocks.listThemeVersions,
-  rollbackThemeSettings: mocks.rollbackThemeSettings,
+  getThemeVersion: mocks.getThemeVersion,
   restoreThemeVersion: mocks.restoreThemeVersion,
   discardThemeDraft: mocks.discardThemeDraft,
   saveThemePageDraft: mocks.saveThemePageDraft,
@@ -144,34 +144,23 @@ function createTestApp() {
       revision: 1,
     },
     draft: themeDraft,
+    draftDiffersFromLive: false,
+    lastPublished: null,
   };
   mocks.getThemeWorkspace.mockResolvedValue(themeWorkspace);
   mocks.saveThemeDraft.mockResolvedValue(themeDraft);
   mocks.readThemeMedia.mockResolvedValue([]);
   mocks.readStoreShape.mockResolvedValue(EMPTY_STORE_SHAPE);
-  mocks.publishThemeDraft.mockResolvedValue({
-    published: {
-      theme: DEFAULT_STOREFRONT_THEME,
-      revision: 2,
-    },
-    draft: {
-      ...themeDraft,
-      revision: 3,
-      basePublishedRevision: 2,
-    },
-  });
+  const themeStatus = {
+    published: { revision: 2 },
+    draft: { revision: 3, basePublishedRevision: 2, updatedAt: new Date(1_000) },
+    draftDiffersFromLive: false,
+    lastPublished: null,
+  };
+  mocks.publishThemeDraft.mockResolvedValue(themeStatus);
+  mocks.restoreThemeVersion.mockResolvedValue(themeStatus);
+  mocks.discardThemeDraft.mockResolvedValue(themeStatus);
   mocks.listThemeVersions.mockResolvedValue([]);
-  mocks.rollbackThemeSettings.mockResolvedValue({
-    published: {
-      theme: DEFAULT_STOREFRONT_THEME,
-      revision: 2,
-    },
-    draft: {
-      ...themeDraft,
-      revision: 3,
-      basePublishedRevision: 2,
-    },
-  });
   mocks.createThemePreviewSession.mockResolvedValue({
     continuationId: `tpc_${"a".repeat(48)}`,
     draftRevision: 2,
@@ -835,7 +824,7 @@ describe("site settings write behavior", () => {
 
   });
 
-  it("rejects invalid version 5 theme documents before saving", async () => {
+  it("rejects invalid theme documents before saving", async () => {
     const { app, env } = createTestApp();
     const lowContrast = structuredClone(DEFAULT_STOREFRONT_THEME) as StorefrontThemeDocument;
     lowContrast.tokens.colors.foreground = "#f5f5f5";
@@ -853,13 +842,14 @@ describe("site settings write behavior", () => {
       { ...DEFAULT_STOREFRONT_THEME, blocks: { ...DEFAULT_STOREFRONT_THEME.blocks, header: { variant: "spec-two-row", settings: { cartTotal: true } } } },
       {
         ...DEFAULT_STOREFRONT_THEME,
-        pages: { home: [...DEFAULT_STOREFRONT_THEME.pages.home, { id: "promo", type: "video", version: 1, settings: {} }] },
+        pages: { ...DEFAULT_STOREFRONT_THEME.pages, home: [...DEFAULT_STOREFRONT_THEME.pages.home, { id: "promo", type: "video", version: 1, settings: {} }] },
       },
       {
         ...DEFAULT_STOREFRONT_THEME,
-        pages: { home: DEFAULT_STOREFRONT_THEME.pages.home.map((section) => ({ ...section, version: 2 })) },
+        pages: { ...DEFAULT_STOREFRONT_THEME.pages, home: DEFAULT_STOREFRONT_THEME.pages.home.map((section) => ({ ...section, version: 2 })) },
       },
-      { ...DEFAULT_STOREFRONT_THEME, pages: { home: DEFAULT_STOREFRONT_THEME.pages.home.map((section) => ({ ...section, id: "same" })) } },
+      { ...DEFAULT_STOREFRONT_THEME, pages: { ...DEFAULT_STOREFRONT_THEME.pages, home: DEFAULT_STOREFRONT_THEME.pages.home.map((section) => ({ ...section, id: "same" })) } },
+      { ...DEFAULT_STOREFRONT_THEME, pages: { ...DEFAULT_STOREFRONT_THEME.pages, product: { blocks: [] } } },
     ];
 
     for (const theme of invalidThemes) {
@@ -886,7 +876,7 @@ describe("site settings write behavior", () => {
     });
 
     expect(response.status).toBe(409);
-    expect(mocks.publishThemeDraft).toHaveBeenCalledWith({ id: "db" }, 1, 2, null, null, null);
+    expect(mocks.publishThemeDraft).toHaveBeenCalledWith({ id: "db" }, 1, 2, null, null);
   });
 
   it("saves theme drafts, and publishing goes only through the draft", async () => {
@@ -899,6 +889,8 @@ describe("site settings write behavior", () => {
 
     const saveResponse = await requestJson(app, env, "POST", "/theme/draft", payload);
     expect(saveResponse.status).toBe(200);
+    // A receipt: the editor keeps its own document, agents get revisions only.
+    expect(((await saveResponse.json()) as { data: unknown }).data).toEqual({ revision: 2, basePublishedRevision: 1, updatedAt: new Date(1_000).toISOString() });
     expect(mocks.saveThemeDraft).toHaveBeenCalledWith(
       { id: "db" },
       DEFAULT_STOREFRONT_THEME,
@@ -908,7 +900,7 @@ describe("site settings write behavior", () => {
     );
 
     // No direct publish and no rebase: a draft is always based on the live revision.
-    for (const path of ["/theme", "/theme/draft/rebase"]) {
+    for (const path of ["/theme", "/theme/draft/rebase", "/theme/rollback"]) {
       const response = await requestJson(app, env, "POST", path, { expectedRevision: 1, ...payload });
       expect(response.status).toBe(404);
     }
@@ -916,17 +908,19 @@ describe("site settings write behavior", () => {
     expect(legacyRead.status).toBe(404);
   });
 
-  it("loads the workspace with every image the draft names and the store shape in one read", async () => {
+  it("opens the editor with every image the draft names and the store shape in one read", async () => {
     const { app, env } = createTestApp();
     const draftTheme = storefrontTemplateTheme("heritage-editorial");
     const media = [{ id: "media_draft", url: "https://cdn.example.com/story.jpg", alt: "", width: 1200, height: 800 }];
     mocks.getThemeWorkspace.mockResolvedValueOnce({
       published: { theme: DEFAULT_STOREFRONT_THEME, revision: 1 },
       draft: { theme: draftTheme, revision: 3, basePublishedRevision: 1, updatedAt: new Date(1_000) },
+      draftDiffersFromLive: true,
+      lastPublished: null,
     });
     mocks.readThemeMedia.mockResolvedValueOnce(media);
 
-    const response = await app.request("/api/v1/admin/settings/theme/workspace", { method: "GET" }, env);
+    const response = await app.request("/api/v1/admin/settings/theme/editor", { method: "GET" }, env);
     const body = (await response.json()) as { data?: Record<string, unknown> };
 
     expect(response.status).toBe(200);
@@ -947,6 +941,8 @@ describe("site settings write behavior", () => {
     mocks.getThemeWorkspace.mockResolvedValueOnce({
       published: { theme: DEFAULT_STOREFRONT_THEME, revision: 1 },
       draft: { theme: DEFAULT_STOREFRONT_THEME, revision: 1, basePublishedRevision: 1, updatedAt: new Date(1_000) },
+      draftDiffersFromLive: false,
+      lastPublished: null,
     });
     mocks.readThemeMedia.mockResolvedValueOnce([]);
     const { parsePluginManifest } = await import("@scalius/shared/plugins");
@@ -970,7 +966,7 @@ describe("site settings write behavior", () => {
       { pluginId: "acme.ungranted", status: "active", grant: { storefrontSurfaces: false }, manifest: manifest("acme.ungranted", {}) },
     ]);
 
-    const response = await app.request("/api/v1/admin/settings/theme/workspace", { method: "GET" }, env);
+    const response = await app.request("/api/v1/admin/settings/theme/editor", { method: "GET" }, env);
     const body = (await response.json()) as { data: { apps: unknown[] } };
     expect(response.status).toBe(200);
     expect(body.data.apps).toEqual([{
@@ -991,15 +987,13 @@ describe("site settings write behavior", () => {
     const { app, env } = createTestApp();
     const response = await requestJson(app, env, "POST", "/theme/publish", { expectedPublishedRevision: 1, expectedDraftRevision: 2, note: "Eid release" });
     expect(response.status).toBe(200);
-    expect(mocks.publishThemeDraft).toHaveBeenCalledWith({ id: "db" }, 1, 2, null, "Eid release", null);
+    expect(mocks.publishThemeDraft).toHaveBeenCalledWith({ id: "db" }, 1, 2, null, "Eid release");
     const invalid = await requestJson(app, env, "POST", "/theme/publish", { expectedPublishedRevision: 1, expectedDraftRevision: 2, note: "x".repeat(501) });
     expect(invalid.status).toBe(400);
   });
 
   it("restores versions and discards only through explicit draft CAS commands", async () => {
     const { app, env } = createTestApp();
-    mocks.restoreThemeVersion.mockResolvedValue({});
-    mocks.discardThemeDraft.mockResolvedValue({});
     expect((await requestJson(app, env, "POST", "/theme/restore", { sourceRevision: 4, expectedDraftRevision: 8, basePublishedRevision: 6 })).status).toBe(200);
     expect(mocks.restoreThemeVersion).toHaveBeenCalledWith({ id: "db" }, 4, 8, 6, null);
     expect((await requestJson(app, env, "POST", "/theme/discard", { expectedDraftRevision: 8, basePublishedRevision: 6 })).status).toBe(200);
@@ -1010,21 +1004,74 @@ describe("site settings write behavior", () => {
   it("validates individual page edits and exposes version preview selection", async () => {
     const { app, env } = createTestApp();
     mocks.saveThemePageDraft.mockResolvedValue({ theme: DEFAULT_STOREFRONT_THEME, revision: 3, basePublishedRevision: 1, updatedAt: new Date(1_000) });
-    const value = { title: "Eid", sections: DEFAULT_STOREFRONT_THEME.pages.home, overrideCms: false };
-    expect((await requestJson(app, env, "POST", "/theme/page-draft", { page: "landing", slug: "eid", value, expectedDraftRevision: 2, basePublishedRevision: 1 })).status).toBe(200);
-    expect(mocks.saveThemePageDraft).toHaveBeenCalledWith({ id: "db" }, "landing", value, 2, 1, null, "eid");
+    const value = { title: "Eid", description: "", sections: DEFAULT_STOREFRONT_THEME.pages.home };
+    const saved = await requestJson(app, env, "POST", "/theme/page-draft", { page: "landing", slug: "eid", value, expectedDraftRevision: 2, basePublishedRevision: 1 });
+    expect(saved.status).toBe(200);
+    expect(((await saved.json()) as { data: unknown }).data).toEqual({ revision: 3, basePublishedRevision: 1, updatedAt: new Date(1_000).toISOString() });
+    expect(mocks.saveThemePageDraft).toHaveBeenCalledWith({ id: "db" }, { page: "landing", slug: "eid", value }, 2, 1, null);
+    expect((await requestJson(app, env, "POST", "/theme/page-draft", { page: "home", value: [], expectedDraftRevision: 2, basePublishedRevision: 1 })).status).toBe(200);
+    expect(mocks.saveThemePageDraft).toHaveBeenLastCalledWith({ id: "db" }, { page: "home", value: [] }, 2, 1, null);
     expect((await requestJson(app, env, "POST", "/theme/page-draft", { page: "product", value: { blocks: [] }, expectedDraftRevision: 2, basePublishedRevision: 1 })).status).toBe(400);
+    expect((await requestJson(app, env, "POST", "/theme/page-draft", { page: "landing", slug: "products", value, expectedDraftRevision: 2, basePublishedRevision: 1 })).status).toBe(400);
     expect((await requestJson(app, env, "POST", "/theme/preview-session", { expectedDraftRevision: 0, sourceRevision: 1 })).status).toBe(200);
     expect(mocks.createThemePreviewSession).toHaveBeenCalledWith({ id: "db" }, 0, null, 1);
   });
 
-  it("bounds the history list to the versions publishing keeps", async () => {
+  it("pages the history list five versions at a time", async () => {
     const { app, env } = createTestApp();
-    const ok = await app.request(`/api/v1/admin/settings/theme/versions?limit=${THEME_VERSION_HISTORY_LIMIT}`, { method: "GET" }, env);
-    const tooMany = await app.request(`/api/v1/admin/settings/theme/versions?limit=${THEME_VERSION_HISTORY_LIMIT + 1}`, { method: "GET" }, env);
+    const version = (revision: number) => ({
+      id: `themev_${revision}`, revision, source: "publish", sourceRevision: null, publishedBy: "staff_1",
+      publishedByName: "ক".repeat(300), createdAt: new Date(1_000), changes: [], moreChanges: 0, note: null,
+    });
+    mocks.listThemeVersions.mockResolvedValueOnce([9, 8, 7, 6, 5].map(version));
+    const ok = await app.request(`/api/v1/admin/settings/theme/versions?limit=${THEME_VERSION_PAGE_LIMIT}&beforeRevision=10`, { method: "GET" }, env);
+    const tooMany = await app.request(`/api/v1/admin/settings/theme/versions?limit=${THEME_VERSION_PAGE_LIMIT + 1}`, { method: "GET" }, env);
     expect(ok.status).toBe(200);
     expect(tooMany.status).toBe(400);
-    expect(mocks.listThemeVersions).toHaveBeenCalledWith({ id: "db" }, THEME_VERSION_HISTORY_LIMIT);
+    expect(mocks.listThemeVersions).toHaveBeenCalledWith({ id: "db" }, { limit: THEME_VERSION_PAGE_LIMIT, beforeRevision: 10 });
+    const body = (await ok.json()) as { data: { versions: Array<{ publishedByName: string }>; nextBeforeRevision: number | null; retained: number } };
+    expect(body.data.nextBeforeRevision).toBe(5);
+    expect(body.data.retained).toBe(THEME_VERSION_HISTORY_LIMIT);
+    expect(body.data.versions[0]!.publishedByName).toHaveLength(200);
+  });
+
+  it("reads one version's document or one of its pages, and refuses mismatched queries", async () => {
+    const { app, env } = createTestApp();
+    const theme = structuredClone(DEFAULT_STOREFRONT_THEME);
+    theme.pages.landing.eid = { title: "Eid", description: "", sections: [] };
+    mocks.getThemeVersion.mockResolvedValue({ revision: 4, theme });
+    const page = await app.request("/api/v1/admin/settings/theme/document?source=version&revision=4&page=landing&slug=eid", { method: "GET" }, env);
+    expect(page.status).toBe(200);
+    expect(page.headers.get("Content-Disposition")).toBe('inline; filename="theme-version-4.json"');
+    expect(page.headers.get("Cache-Control")).toContain("no-store");
+    expect(((await page.json()) as { data: unknown }).data).toEqual({ source: "version", revision: 4, page: "landing", slug: "eid", document: theme.pages.landing.eid });
+    for (const query of ["source=version", "source=draft&revision=4", "page=landing", "page=landing&slug=missing"]) {
+      const refused = await app.request(`/api/v1/admin/settings/theme/document?${query}`, { method: "GET" }, env);
+      expect(refused.status, query).toBeGreaterThanOrEqual(400);
+    }
+    const draft = await app.request("/api/v1/admin/settings/theme/document", { method: "GET" }, env);
+    expect(((await draft.json()) as { data: { revision: number; document: unknown } }).data).toMatchObject({ revision: 2, document: DEFAULT_STOREFRONT_THEME });
+  });
+
+  it("reports compact revisions and the landing pages to agents", async () => {
+    const { app, env } = createTestApp();
+    const theme = structuredClone(DEFAULT_STOREFRONT_THEME);
+    theme.pages.landing.eid = { title: "Eid", description: "", sections: theme.pages.home };
+    mocks.getThemeWorkspace.mockResolvedValueOnce({
+      published: { theme: DEFAULT_STOREFRONT_THEME, revision: 1 },
+      draft: { theme, revision: 2, basePublishedRevision: 1, updatedAt: new Date(1_000) },
+      draftDiffersFromLive: true,
+      lastPublished: { revision: 1, publishedBy: "staff_1", publishedByName: "Rina", createdAt: new Date(500) },
+    });
+    const response = await app.request("/api/v1/admin/settings/theme/workspace", { method: "GET" }, env);
+    const body = (await response.json()) as { data: Record<string, unknown> };
+    expect(body.data).toEqual({
+      published: { revision: 1 },
+      draft: { revision: 2, basePublishedRevision: 1, updatedAt: new Date(1_000).toISOString() },
+      draftDiffersFromLive: true,
+      lastPublished: { revision: 1, publishedBy: "staff_1", publishedByName: "Rina", createdAt: new Date(500).toISOString() },
+      landingPages: [{ slug: "eid", title: "Eid", sections: theme.pages.home.length }],
+    });
   });
 
   it("creates a private preview of the saved draft", async () => {
@@ -1124,20 +1171,22 @@ describe("site settings write behavior", () => {
       "/theme/publish",
       { expectedPublishedRevision: 1, expectedDraftRevision: 2 },
     );
-    const rollbackResponse = await requestJson(
+    const restoreResponse = await requestJson(
       app,
       env,
       "POST",
-      "/theme/rollback",
+      "/theme/restore",
       {
         sourceRevision: 1,
-        expectedPublishedRevision: 1,
-        expectedDraftRevision: 2,
+        expectedDraftRevision: 3,
+        basePublishedRevision: 2,
       },
     );
 
     expect(publishResponse.status).toBe(200);
-    expect(rollbackResponse.status).toBe(200);
+    expect(restoreResponse.status).toBe(200);
+    // Commands answer revisions only, never a document.
+    expect(JSON.stringify(await restoreResponse.json())).not.toContain("\"theme\"");
 
   });
 });

@@ -120,21 +120,21 @@ export const DASHBOARD_CONTENT_OPERATIONS = {
   "dashboard.navigation.products_preview_count": { limits: { response: 16_384 } },
   "dashboard.navigation.publications_list": {},
   "dashboard.navigation.resources_search": {},
-  // Browser editor routes retain full documents; stable agent IDs use compact siblings.
-  "dashboard.theme.editor_workspace_get": { exposure: "excluded", reason: "Browser editor full-document response; agents use the compact theme operation." },
-  "dashboard.theme.editor_draft_save": { exposure: "excluded", reason: "Browser editor full-document response; agents use the compact theme operation." },
-  "dashboard.theme.editor_publish": { exposure: "excluded", reason: "Browser editor full-document response; agents use the compact theme operation." },
-  "dashboard.theme.editor_versions_list": { exposure: "excluded", reason: "Browser editor full-document response; agents use the compact theme operation." },
-  "dashboard.theme.editor_rollback": { exposure: "excluded", reason: "Browser editor full-document response; agents use the compact theme operation." },
-  "dashboard.theme.editor_version_restore": { exposure: "excluded", reason: "Browser editor full-document response; agents use the compact theme operation." },
-  "dashboard.theme.editor_draft_discard": { exposure: "excluded", reason: "Browser editor full-document response; agents use the compact theme operation." },
-  "dashboard.theme.editor_page_draft_update": { exposure: "excluded", reason: "Browser editor full-document response; agents use the compact theme operation." },
-  "dashboard.theme.page_draft_verify": { risk: "read", limits: { response: 4096 } },
-  "dashboard.theme.document_get": { batch: "forbidden", artifact: { mediaTypes: ["application/json"], disposition: "inline", filenamePolicy: "content-disposition", maxArtifactBytes: 1024 * 1024, delivery: "authenticated-handle" } },
-  "dashboard.theme.draft_discard": { risk: "destructive", revision: "required", limits: { response: 4096 } },
-  "dashboard.theme.version_restore": { revision: "required", limits: { response: 4096 } },
-  "dashboard.theme.page_draft_update": { revision: "required", limits: { response: 4096 } },
+  // Theme: commands answer revisions only; whole documents reach agents as a JSON artifact.
+  "dashboard.theme.editor_get": {
+    exposure: "excluded",
+    reason: "The editor's opening bundle (both documents, image previews, app surfaces); agents read workspace_get and document_get.",
+  },
+  "dashboard.theme.workspace_get": { limits: { response: 16_384 } },
+  "dashboard.theme.document_get": {
+    batch: "forbidden",
+    artifact: { mediaTypes: ["application/json"], disposition: "inline", filenamePolicy: "content-disposition", maxArtifactBytes: 1024 * 1024, delivery: "authenticated-handle" },
+  },
+  "dashboard.theme.versions_list": { limits: { request: 16_384, response: 65_536 } },
   "dashboard.theme.draft_save": { revision: "required", limits: { response: 4096 } },
+  "dashboard.theme.page_draft_update": { revision: "required", limits: { response: 4096 } },
+  "dashboard.theme.version_restore": { revision: "required", limits: { response: 4096 } },
+  "dashboard.theme.draft_discard": { risk: "destructive", revision: "required", limits: { response: 4096 } },
   "dashboard.theme.preview_session_create": {
     exposure: "continuation",
     risk: "read",
@@ -149,7 +149,4 @@ export const DASHBOARD_CONTENT_OPERATIONS = {
     },
   },
   "dashboard.theme.publish": { revision: "required", limits: { response: 4096 } },
-  "dashboard.theme.rollback": { revision: "required", limits: { response: 4096 } },
-  "dashboard.theme.versions_list": { limits: { response: 65_536 } },
-  "dashboard.theme.workspace_get": { limits: { response: 4096 } },
 } satisfies Record<string, OperationRegistryEntry>;

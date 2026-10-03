@@ -1124,12 +1124,12 @@ export const DRAFT_LANDING_PAGE_WORKFLOW: AgentWorkflowCard = {
   id: "theme.draft-landing-page.v1",
   surface: "dashboard",
   title: "Draft a landing page",
-  summary: "Compose one campaign page in the shared theme draft and verify its saved content.",
+  summary: "Compose one campaign page in the shared theme draft and verify the saved draft; publishing stays a separate instruction.",
   examples: ["Draft an Eid campaign landing page at /pages/eid-offers."],
   tags: ["theme", "landing", "campaign", "draft"],
   requiredFacts: [
     { id: "slug", title: "Page handle", description: "Exact non-reserved landing-page URL handle.", required: true, source: { kind: "merchant" }, nonInferenceRule: "Use the merchant's exact handle; do not guess or replace another campaign." },
-    { id: "page", title: "Page content", description: "Merchant-approved title, section IDs/types/settings, images and overrideCms flag.", required: true, source: { kind: "merchant" }, nonInferenceRule: "Use approved copy, ready Files media IDs and supported sections; never invent images or claims." },
+    { id: "page", title: "Page content", description: "Merchant-approved title, search description and sections (ids, types, settings, Files media ids).", required: true, source: { kind: "merchant" }, nonInferenceRule: "Use approved copy, ready Files media IDs and supported sections; never invent images or claims." },
   ],
   phases: [
     {
@@ -1155,25 +1155,30 @@ export const DRAFT_LANDING_PAGE_WORKFLOW: AgentWorkflowCard = {
       stopConditions: ["Do not publish or discard other draft work."],
     },
     {
-      id: "verify", surface: "dashboard", title: "Verify saved draft", summary: "Reread the draft and check the named page's exact content and advanced revision.", dependsOn: ["draft"],
+      id: "verify", surface: "dashboard", title: "Verify saved draft", summary: "Reread the theme status: the draft advanced to the saved revision, live is unchanged and the page is listed.", dependsOn: ["draft"],
       steps: [{
-        id: "page", title: "Verify exact page", operationId: "dashboard.theme.page_draft_verify", mutation: "read",
-        input: {
-          template: { body: { page: "landing", slug: null, value: null, expectedDraftRevision: null, expectedPublishedRevision: null } },
-          dependencies: [
-            { templatePointer: "/body/slug", source: { kind: "fact", factId: "slug" } },
-            { templatePointer: "/body/value", source: { kind: "fact", factId: "page" } },
-            { templatePointer: "/body/expectedDraftRevision", source: { kind: "step", phaseId: "draft", stepId: "save", responsePointer: "/data/revision" } },
-            { templatePointer: "/body/expectedPublishedRevision", source: { kind: "step", phaseId: "read", stepId: "workspace", responsePointer: "/data/published/revision" } },
-          ], defaults: [],
-        },
-        output: { selectors: [{ pointer: "/data/matches", alias: "matches" }, { pointer: "/data/draftRevision", alias: "draftRevision" }, { pointer: "/data/publishedRevision", alias: "publishedRevision" }] },
-        policies: { ...readPolicies, stopConditions: ["matches:false means changed copy or stale draft/live revision: stop and report."] },
+        id: "status", title: "Reread workspace", operationId: "dashboard.theme.workspace_get", mutation: "read",
+        input: { template: {}, dependencies: [], defaults: [] },
+        output: { selectors: [
+          { pointer: "/data/draft/revision", alias: "draftRevision" },
+          { pointer: "/data/published/revision", alias: "publishedRevision" },
+          { pointer: "/data/landingPages", alias: "landingPages", maxItems: 20, fields: [
+            { pointer: "/slug", alias: "slug" },
+            { pointer: "/title", alias: "title" },
+            { pointer: "/sections", alias: "sections" },
+          ] },
+        ] },
+        policies: { ...readPolicies, stopConditions: ["A draft revision other than the saved one, a changed live revision or a missing page means another session edited: stop and report."] },
       }],
-      stopConditions: ["Unexpected content or concurrent revision: stop and report; never silently retry."],
+      stopConditions: ["Unexpected revision: stop and report; never silently retry."],
     },
   ],
-  verification: [{ id: "saved", surface: "dashboard", operationId: "dashboard.theme.page_draft_verify", responsePointers: ["/data/matches", "/data/draftRevision", "/data/publishedRevision"], proves: ["matches:true proves exact approved page content, saved draft revision, and unchanged live publication."], bounds: { maxCalls: 1, maxItems: 1, maxResponseBytes: 4096 } }],
+  verification: [{
+    id: "saved", surface: "dashboard", operationId: "dashboard.theme.workspace_get",
+    responsePointers: ["/data/draft/revision", "/data/published/revision", "/data/landingPages"],
+    proves: ["The draft is at the revision the page save returned, live is unchanged and the handle is among the draft's landing pages; nothing was published."],
+    bounds: { maxCalls: 1, maxItems: 20, maxResponseBytes: 16_384 },
+  }],
 };
 
 export const CURATED_AGENT_WORKFLOW_CARDS: readonly AgentWorkflowCard[] = [

@@ -509,7 +509,6 @@ const pageBySlugRoute = createRoute({
       description: "Page render data",
       content: { "application/json": { schema: successEnvelope(z.object({
         page: publicPageDetailSchema,
-        template: landingPageDataSchema.optional(),
       })) } },
     },
     404: errorResponses[404],
@@ -520,7 +519,7 @@ const pageBySlugRoute = createRoute({
 app.openapi(pageBySlugRoute, async (c) => {
   const db = c.get("db");
   const { slug } = c.req.valid("param");
-  const data = await getPageRenderData(db, slug, { renderApps: homeAppRenderer(c) });
+  const data = await getPageRenderData(db, slug);
   if (!data) throw new NotFoundError("Page not found");
   return ok(c, data);
 });

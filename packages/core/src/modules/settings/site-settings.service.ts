@@ -143,8 +143,8 @@ const THEME_SETTINGS_ID = "default";
 
 /** Published versions kept for history and restore, pruned in the publish batch. */
 export const THEME_VERSION_HISTORY_LIMIT = 20;
-/** Most versions one history page lists (metadata only, under the 64 KiB agent result ceiling). */
-export const THEME_VERSION_PAGE_LIMIT = 10;
+/** Most versions one history page lists: metadata only, and five worst-case entries stay under the 64 KiB agent result ceiling. */
+export const THEME_VERSION_PAGE_LIMIT = 5;
 /** Largest stored theme document: bounds each D1 row and the retained history on Workers Free. */
 export const THEME_DOCUMENT_MAX_BYTES = 512 * 1024;
 /** A publication note's length. */
