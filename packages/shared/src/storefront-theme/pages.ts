@@ -23,6 +23,10 @@ export function storefrontLandingPageSchemaOf<Sections extends typeof storefront
     /** The search-result description; blank leaves the meta description out. */
     description: z.string().trim().max(STOREFRONT_LANDING_DESCRIPTION_MAX),
     sections,
+    /** Hidden from search engines: the page stays public (`noindex,follow`) and leaves the sitemap. */
+    noIndex: z.boolean().optional(),
+    /** Left out of the XML sitemap only; the page stays indexable. */
+    excludeFromSitemap: z.boolean().optional(),
   }).strict();
 }
 

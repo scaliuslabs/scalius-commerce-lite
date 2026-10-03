@@ -155,7 +155,7 @@ export interface LayoutData {
   footerMenus?: FooterMenu[];
   currency?: CurrencyData;
   /**
-   * The published theme document (v6). Untrusted until
+   * The published theme document (v7). Untrusted until
    * `readStorefrontTheme` (lib/storefront-theme-context) validates it.
    */
   theme?: unknown;

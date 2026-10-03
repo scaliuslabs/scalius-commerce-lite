@@ -1,15 +1,32 @@
 // @vitest-environment node
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { DEFAULT_STOREFRONT_THEME, type StorefrontThemeDocument } from "@scalius/shared/storefront-theme";
 
 const mocks = vi.hoisted(() => ({
   getAllPages: vi.fn(),
+  getLayoutData: vi.fn(),
   getRuntimeStorefrontUrl: vi.fn(() => "https://storefront.example.test"),
 }));
 
 vi.mock("@/lib/api/pages", () => ({
   getAllPages: mocks.getAllPages,
 }));
+
+vi.mock("@/lib/api/storefront", () => ({
+  getLayoutData: mocks.getLayoutData,
+}));
+
+/** The live theme with landing pages: one listed, one hidden from search engines, one left out of the sitemap. */
+function themeWithLandingPages(): StorefrontThemeDocument {
+  const theme = structuredClone(DEFAULT_STOREFRONT_THEME);
+  theme.pages.landing = {
+    "eid-offers": { title: "Eid offers", description: "", sections: [] },
+    "staff-sale": { title: "Staff sale", description: "", sections: [], noIndex: true },
+    "winter-drop": { title: "Winter drop", description: "", sections: [], excludeFromSitemap: true },
+  };
+  return theme;
+}
 
 vi.mock("@/lib/api/runtime", () => ({
   getRuntimeStorefrontUrl: mocks.getRuntimeStorefrontUrl,
@@ -20,6 +37,8 @@ import { GET } from "../../pages/sitemap-pages.xml";
 describe("pages sitemap route", () => {
   beforeEach(() => {
     mocks.getAllPages.mockReset();
+    mocks.getLayoutData.mockReset();
+    mocks.getLayoutData.mockResolvedValue({ theme: DEFAULT_STOREFRONT_THEME });
     mocks.getRuntimeStorefrontUrl.mockReturnValue("https://storefront.example.test");
   });
 
@@ -157,5 +176,30 @@ describe("pages sitemap route", () => {
     expect(body).toContain("https://storefront.example.test/visible");
     expect(body).not.toContain("https://storefront.example.test/noindex");
     expect(body).not.toContain("https://storefront.example.test/excluded");
+  });
+
+  it("lists the live theme's landing pages unless hidden from search engines or left out of the sitemap", async () => {
+    mocks.getAllPages.mockResolvedValueOnce({ data: [], pagination: { page: 1, limit: 100, total: 0, totalPages: 0 } });
+    mocks.getLayoutData.mockResolvedValueOnce({ theme: themeWithLandingPages() });
+
+    const response = await GET({} as never);
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain("<loc>https://storefront.example.test/pages/eid-offers</loc>");
+    expect(body).not.toContain("staff-sale");
+    expect(body).not.toContain("winter-drop");
+    // Nothing records when one landing page alone changed: no lastmod for it.
+    expect(body.slice(body.indexOf("pages/eid-offers"), body.indexOf("</url>", body.indexOf("pages/eid-offers")))).not.toContain("<lastmod>");
+  });
+
+  it("returns non-cacheable 503 when the live theme cannot be read", async () => {
+    mocks.getAllPages.mockResolvedValueOnce({ data: [], pagination: { page: 1, limit: 100, total: 0, totalPages: 0 } });
+    mocks.getLayoutData.mockResolvedValueOnce(null);
+
+    const response = await GET({} as never);
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get("Cache-Control")).toContain("no-store");
   });
 });

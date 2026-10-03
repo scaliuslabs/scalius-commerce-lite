@@ -649,9 +649,15 @@ describe("theme editor: landing pages", () => {
     expect(storefrontThemeDocumentSchema.safeParse(lastSaved().theme).success).toBe(true);
     act(() => button("Back to the page").click());
     act(() => part("page-settings").click());
-    type(field<HTMLTextAreaElement>("landing-description"), "Eid gifts, delivered.");
+    // The shared search engine listing card: its address, description and hiding the page.
+    const card = container.querySelector("[data-settings-panel]")!;
+    expect(card.textContent).toContain("/pages/eid-offers");
+    act(() => button("Edit search engine listing").click());
+    const description = [...card.querySelectorAll("label")].find((label) => label.textContent === "Meta description")!;
+    type(field<HTMLTextAreaElement>(description.htmlFor), "Eid gifts, delivered.");
+    act(() => [...card.querySelectorAll<HTMLButtonElement>("[role=checkbox]")][0]!.click());
     await autosaved(2);
-    expect(lastSaved().theme.pages.landing["eid-offers"]!.description).toBe("Eid gifts, delivered.");
+    expect(lastSaved().theme.pages.landing["eid-offers"]).toMatchObject({ description: "Eid gifts, delivered.", noIndex: true });
     act(() => button("Delete landing page").click());
     act(() => confirm("Delete landing page").click());
     expect(preview.props.previewPath).toBe("/");

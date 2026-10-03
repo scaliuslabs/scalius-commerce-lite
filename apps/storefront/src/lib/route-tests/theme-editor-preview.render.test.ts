@@ -285,6 +285,18 @@ describe("theme landing pages", () => {
     expect(result.html).not.toContain("data-theme-section-id");
   });
 
+  it("keeps a landing page hidden from search engines public, with noindex,follow", async () => {
+    const document = campaign();
+    document.pages.landing.eid = { ...document.pages.landing.eid!, noIndex: true };
+    const result = await renderPage(LandingPage, { document, platform: true }, { url: "https://shop.test/pages/eid" });
+    expect(result.response.status).toBe(200);
+    expect(result.html).toContain('<meta name="robots" content="noindex,follow"');
+    expect(result.html).toContain("ঈদের অফার");
+    expect(result.calls).toHaveLength(1);
+    const listed = await renderPage(LandingPage, { document: campaign(), platform: true }, { url: "https://shop.test/pages/eid" });
+    expect(listed.html).not.toContain('name="robots"');
+  });
+
   it("previews a draft-only landing page and its individual sections privately", async () => {
     const preview = campaign();
     const result = await renderPage(LandingPage, { document: fixedTheme(), preview }, { cookie: PREVIEW_COOKIE, url: "https://shop.test/pages/eid" });

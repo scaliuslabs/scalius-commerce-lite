@@ -1,7 +1,8 @@
 /**
  * A page's own settings: what the homepage shows (its sections, or one
- * product's page), a landing page's title, search description and address,
- * and where a CMS page's words are edited.
+ * product's page), a landing page's search engine listing (title,
+ * description, address, hidden from search engines), and where a CMS page's
+ * words are edited.
  */
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -10,12 +11,10 @@ import {
   STOREFRONT_LANDING_DESCRIPTION_MAX,
   STOREFRONT_LANDING_TITLE_MAX,
 } from "@scalius/shared/storefront-theme";
+import { SearchListingCard } from "~/components/admin/search-listing/SearchListingCard";
 import { Button } from "~/components/ui/button";
-import { Input } from "~/components/ui/input";
-import { Label } from "~/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import { SearchableSelect, type SearchableSelectLoader } from "~/components/ui/searchable-select";
-import { Textarea } from "~/components/ui/textarea";
 import { useMessages } from "~/i18n";
 import { onlineStoreMessages } from "~/i18n/online-store";
 import { themeEditorMessages } from "~/i18n/theme-editor";
@@ -91,7 +90,12 @@ export function HomePageSettings({ theme, setDraft }: { theme: Theme; setDraft: 
   );
 }
 
-/** A landing page's title, search-result description and address, and removing it. */
+/**
+ * A landing page's search engine listing (the shared card every resource
+ * uses): its title (the page's `<title>` and heading), description, address
+ * and whether search engines may list it; and removing the page. Its handle
+ * is fixed once created: a new address is a new page.
+ */
 export function LandingPageSettings({ theme, slug, setDraft, onRemove }: {
   theme: Theme;
   slug: string;
@@ -107,19 +111,22 @@ export function LandingPageSettings({ theme, slug, setDraft, onRemove }: {
   });
   return (
     <div className="space-y-4">
-      <div className="space-y-1">
-        <Label htmlFor="landing-title">{t("landingTitle")}</Label>
-        <Input id="landing-title" value={page.title} maxLength={STOREFRONT_LANDING_TITLE_MAX} aria-invalid={page.title.trim() === ""} onChange={(event) => update({ title: event.target.value })} />
-      </div>
-      <div className="space-y-1">
-        <Label htmlFor="landing-description">{t("landingDescription")}</Label>
-        <Textarea id="landing-description" value={page.description} maxLength={STOREFRONT_LANDING_DESCRIPTION_MAX} aria-describedby="landing-description-help" onChange={(event) => update({ description: event.target.value })} />
-        <p id="landing-description-help" className="text-body text-muted-foreground">{t("landingDescriptionHelp")}</p>
-      </div>
-      <div className="space-y-1">
-        <p className="text-body font-medium">{t("landingAddress")}</p>
-        <p className="text-body text-muted-foreground"><code>/pages/{slug}</code></p>
-      </div>
+      <SearchListingCard
+        resource="page"
+        path={`/pages/${slug}`}
+        value={{ title: page.title, description: page.description, hidden: page.noIndex === true }}
+        fallbackTitle=""
+        errors={{
+          title: page.title.trim() === "" ? t("landingTitleRequired") : undefined,
+          description: page.description.length > STOREFRONT_LANDING_DESCRIPTION_MAX ? t("landingDescriptionTooLong", { max: STOREFRONT_LANDING_DESCRIPTION_MAX }) : undefined,
+        }}
+        onChange={(next) => update({
+          ...(next.title !== undefined ? { title: next.title.slice(0, STOREFRONT_LANDING_TITLE_MAX) } : {}),
+          ...(next.description !== undefined ? { description: next.description } : {}),
+          // Hiding a page from search engines also leaves the sitemap; showing it again keeps the stored sitemap choice.
+          ...(next.hidden !== undefined ? { noIndex: next.hidden || undefined } : {}),
+        })}
+      />
       <Button type="button" variant="destructive" size="sm" onClick={onRemove}>{t("removeLanding")}</Button>
     </div>
   );

@@ -1,6 +1,8 @@
 /**
- * CMS Pages Sitemap
- * Contains all published CMS pages
+ * Pages sitemap: the published CMS pages and the live theme's landing pages
+ * (`/pages/<slug>`), each unless it is hidden from search engines or left
+ * out of the sitemap. Landing pages carry no lastmod: nothing records when
+ * one alone last changed.
  */
 
 import {
@@ -11,6 +13,8 @@ import {
 } from '@/lib/sitemap-utils';
 import type { SitemapUrl } from '@/lib/sitemap-utils';
 import { getAllPages } from '@/lib/api/pages';
+import { getLayoutData } from '@/lib/api/storefront';
+import { readStorefrontTheme } from '@/lib/storefront-theme-context';
 import type { Page } from '@/lib/api/types';
 import type { APIContext, APIRoute } from 'astro';
 import { normalizeResourceCanonicalPath } from '@scalius/shared/seo-canonical';
@@ -21,6 +25,8 @@ export const GET: APIRoute = async (_context: APIContext) => {
   try {
     const baseUrl = getBaseUrl();
 
+    // The live theme (the layout read) names the landing pages.
+    const layoutPromise = getLayoutData();
     const allPages: Page[] = [];
     let currentPage = 1;
     let hasMore = true;
@@ -51,22 +57,21 @@ export const GET: APIRoute = async (_context: APIContext) => {
       }
     }
 
-    if (allPages.length === 0) {
-      console.log('No published pages found for sitemap');
-      // Return empty sitemap instead of error
-      const xml = generateSitemap([], baseUrl);
-      return new Response(xml, {
-        status: 200,
-        headers: getSitemapHeaders(),
-      });
+    const layout = await layoutPromise;
+    if (!layout) {
+      return xmlDataUnavailableResponse('Pages sitemap is temporarily unavailable');
     }
+    const landingUrls: SitemapUrl[] = Object.entries(readStorefrontTheme(layout.theme).pages.landing)
+      .filter(([, landing]) => !landing.noIndex && !landing.excludeFromSitemap)
+      .map(([slug]) => ({ loc: `${baseUrl}/pages/${slug}` }));
 
     const pageUrls: SitemapUrl[] = allPages
       .filter((page) => page.isPublished && page.slug && !page.noIndex && !page.excludeFromSitemap)
       .map((page) => ({
         loc: `${baseUrl}${normalizeResourceCanonicalPath('page', page.canonicalPath) ?? `/${page.slug}`}`,
         lastmod: page.updatedAt ?? undefined,
-      }));
+      }))
+      .concat(landingUrls);
 
     const xml = generateSitemap(pageUrls, baseUrl);
 

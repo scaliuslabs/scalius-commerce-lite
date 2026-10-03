@@ -52,6 +52,7 @@ const deliveryFacts = homeSectionsShowDeliveryFacts(sections)
   layoutData={layoutData}
   canonicalUrl={buildAbsoluteStorefrontSeoUrl(`/pages/${slug}`) ?? undefined}
   ogType="website"
+  noindex={landing.noIndex === true}
 >
   <Fragment slot="head"><AppHeadTags heads={homepageAppHeads(sections, homepageContent(data, deliveryFacts))} /></Fragment>
   <h1 class="sr-only">{landing.title}</h1>
