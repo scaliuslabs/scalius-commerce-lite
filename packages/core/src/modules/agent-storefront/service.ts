@@ -70,7 +70,8 @@ export interface AgentStorefrontContextView {
   revision: number;
   cart: AgentStorefrontCartLine[];
   discountCode: string | null;
-  delivery: AgentStorefrontDeliverySelection;
+  /** The delivery selection; `countryCode` is BD unless another country was set. */
+  delivery: Required<AgentStorefrontDeliverySelection> & { countryCode: string };
   customerAuthorized: boolean;
   expiresAt: string;
   lastUsedAt: string;

@@ -78,9 +78,12 @@ const contextSchema = z.object({
   cart: z.array(cartLineSchema).max(99),
   discountCode: z.string().nullable(),
   delivery: z.object({
+    countryCode: z.string().length(2).openapi({ description: "The delivery country (BD unless another was set)." }),
     cityId: z.string().nullable(),
     zoneId: z.string().nullable(),
     areaId: z.string().nullable(),
+    adminArea: z.string().nullable(),
+    postalCode: z.string().nullable(),
     shippingMethodId: z.string().nullable(),
   }),
   customerAuthorized: z.boolean(),
@@ -205,7 +208,7 @@ const checkoutQuoteSchema = z.object({
     description: "The delivery options for this cart when an installed app changed them (hid, renamed, priced or reordered); null when none did. A hidden option is refused at quote and submit.",
   }),
   paymentMethods: z.array(z.object({ id: z.string(), name: z.string() })).nullable().openapi({
-    description: "The payment methods submit accepts for this cart when an installed app changed them; null when none did. A hidden method is refused at submit.",
+    description: "The payment methods submit accepts for this cart when an installed app or the delivery country changed them (cash on delivery serves Bangladesh); null when none did. A hidden method is refused at submit.",
   }),
 });
 
@@ -240,6 +243,15 @@ const checkoutSubmitSchema = z.object({
   customerEmail: z.email().nullable(),
   shippingAddress: z.string().trim().min(10).max(500).nullable().optional().openapi({
     description: "Street address. Required only when a line ships; omit it for a pickup method or a cart with nothing physical (services).",
+  }),
+  shippingAddressLine2: z.string().trim().max(200).nullable().optional().openapi({
+    description: "Outside Bangladesh: the second address line. The country, region and postal code are the context's delivery.",
+  }),
+  shippingLocality: z.string().trim().max(120).nullable().optional().openapi({
+    description: "Outside Bangladesh: the city or town, when the country's address rules ask for it (storefront.address_rules.get).",
+  }),
+  shippingDependentLocality: z.string().trim().max(120).nullable().optional().openapi({
+    description: "Outside Bangladesh: the district or suburb, when the country's address rules ask for it.",
   }),
   notes: z.string().trim().max(500).nullable(),
   paymentMethod: z.string().max(160).refine(isPaymentMethodId, "Unknown payment method").openapi({
@@ -607,9 +619,18 @@ const setDeliveryRoute = cartMutationRoute(
   "Set and validate storefront delivery selection",
   z.object({
     revision: revisionSchema,
+    countryCode: z.string().trim().regex(/^[A-Za-z]{2}$/, "Use a two-letter ISO country code.").nullable().optional().openapi({
+      description: "The delivery country (absent or null: Bangladesh). Its shipping zone decides the delivery rates (storefront.shipping_methods.list).",
+    }),
     cityId: z.string().trim().min(1).max(180).nullable(),
     zoneId: z.string().trim().min(1).max(180).nullable(),
     areaId: z.string().trim().min(1).max(180).nullable(),
+    adminArea: z.string().trim().min(1).max(120).nullable().optional().openapi({
+      description: "Outside Bangladesh: the region (state, province) as its address rules name or code it.",
+    }),
+    postalCode: z.string().trim().min(1).max(20).nullable().optional().openapi({
+      description: "Outside Bangladesh: the postal code. Zones by postal-code prefix match on it.",
+    }),
     shippingMethodId: z.string().trim().min(1).max(180).nullable(),
   }).strict(),
 );

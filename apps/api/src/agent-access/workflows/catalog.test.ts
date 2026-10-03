@@ -472,9 +472,9 @@ describe("agent workflow catalog", () => {
     const zones = delivery.selectors.find((selector) => selector.alias === "zones")!;
     expect(zones.maxItems).toBe(100);
     expect(zones.fields?.map((field) => field.pointer)).toEqual(["/id", "/name"]);
-    const everywhereElse = delivery.selectors.find((selector) => selector.alias === "everywhereElseRates")!;
-    expect(everywhereElse.maxItems).toBe(20);
-    expect(everywhereElse.fields?.map((field) => field.pointer)).toEqual([
+    const pickup = delivery.selectors.find((selector) => selector.alias === "pickupRates")!;
+    expect(pickup.maxItems).toBe(20);
+    expect(pickup.fields?.map((field) => field.pointer)).toEqual([
       "/id",
       "/kind",
       "/name",

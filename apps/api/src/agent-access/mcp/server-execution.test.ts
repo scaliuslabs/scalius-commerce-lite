@@ -236,7 +236,7 @@ describe("MCP split operation execution", () => {
         },
       },
       "dashboard.shipping_methods.list": {
-        data: { zones: [], everywhereElse: { revision: 0, rates: [] } },
+        data: { zones: [], pickup: { revision: 0, rates: [] } },
       },
     };
     mocks.dispatchAgentOperation.mockImplementation(async ({ operation, input }) => {

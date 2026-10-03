@@ -1165,9 +1165,15 @@ export type AgentContext = {
     }>;
     discountCode: string | null;
     delivery: {
+        /**
+         * The delivery country (BD unless another was set).
+         */
+        countryCode: string;
         cityId: string | null;
         zoneId: string | null;
         areaId: string | null;
+        adminArea: string | null;
+        postalCode: string | null;
         shippingMethodId: string | null;
     };
     customerAuthorized: boolean;
@@ -6276,9 +6282,21 @@ export type PutApiV1StorefrontAgentContextsByContextIdDiscountResponse = PutApiV
 export type PutApiV1StorefrontAgentContextsByContextIdDeliveryData = {
     body: {
         revision: number;
+        /**
+         * The delivery country (absent or null: Bangladesh). Its shipping zone decides the delivery rates (storefront.shipping_methods.list).
+         */
+        countryCode?: string | null;
         cityId: string | null;
         zoneId: string | null;
         areaId: string | null;
+        /**
+         * Outside Bangladesh: the region (state, province) as its address rules name or code it.
+         */
+        adminArea?: string | null;
+        /**
+         * Outside Bangladesh: the postal code. Zones by postal-code prefix match on it.
+         */
+        postalCode?: string | null;
         shippingMethodId: string | null;
     };
     path: {
@@ -6484,7 +6502,7 @@ export type PostApiV1StorefrontAgentContextsByContextIdCheckoutQuoteResponses = 
                 amountMinor: number;
             }> | null;
             /**
-             * The payment methods submit accepts for this cart when an installed app changed them; null when none did. A hidden method is refused at submit.
+             * The payment methods submit accepts for this cart when an installed app or the delivery country changed them (cash on delivery serves Bangladesh); null when none did. A hidden method is refused at submit.
              */
             paymentMethods: Array<{
                 id: string;
@@ -6514,6 +6532,18 @@ export type PostApiV1StorefrontAgentContextsByContextIdCheckoutSubmitData = {
          * Street address. Required only when a line ships; omit it for a pickup method or a cart with nothing physical (services).
          */
         shippingAddress?: string | null;
+        /**
+         * Outside Bangladesh: the second address line. The country, region and postal code are the context's delivery.
+         */
+        shippingAddressLine2?: string | null;
+        /**
+         * Outside Bangladesh: the city or town, when the country's address rules ask for it (storefront.address_rules.get).
+         */
+        shippingLocality?: string | null;
+        /**
+         * Outside Bangladesh: the district or suburb, when the country's address rules ask for it.
+         */
+        shippingDependentLocality?: string | null;
         notes: string | null;
         /**
          * Selected active checkout payment method (`cod`, a gateway id, or an app provider's `<plugin id>:<provider id>`). Online methods continue through storefront.orders.payment.begin.
@@ -8096,6 +8126,7 @@ export type GetApiV1CheckoutConfigResponses = {
                 name: string;
                 flow: 'card' | 'hosted' | 'cod';
                 currencies: Array<string>;
+                countries?: Array<string>;
                 testMode?: boolean;
                 publishableKey?: string;
                 amountLimits?: {
@@ -12389,9 +12420,12 @@ export type GetApiV1ShippingMethodsData = {
     body?: never;
     path?: never;
     query?: {
+        countryCode?: string;
         cityId?: string;
         zoneId?: string;
         areaId?: string;
+        adminArea?: string;
+        postalCode?: string;
     };
     url: '/api/v1/shipping-methods';
 };
@@ -12423,9 +12457,15 @@ export type GetApiV1ShippingMethodsResponses = {
                 freeOver: number | null;
                 kind: 'delivery' | 'pickup';
                 /**
-                 * True for a rate that applies outside every delivery zone (the store's default rates); false for a rate of one delivery zone.
+                 * The countries the rate's shipping zone serves. Empty for local pickup, which is offered to every buyer.
                  */
-                everywhereElse: boolean;
+                countries: Array<{
+                    code: string;
+                    /**
+                     * True when every address in the country gets this rate's zone; false when only part of it does (a region, postal codes or Bangladesh delivery areas, or another zone holds part of it).
+                     */
+                    entire: boolean;
+                }>;
                 pickupAddress: string | null;
                 pickupHours: string | null;
                 description: string | null;
@@ -15476,6 +15516,8 @@ export type PostApiV1OrdersCartValidationData = {
         city?: string | null;
         zone?: string | null;
         area?: string | null;
+        shippingAdminArea?: string | null;
+        shippingPostalCode?: string | null;
         shippingMethodId?: string | null;
         /**
          * Gift-card apply handles from `POST /checkout/gift-cards/apply`, in the order the buyer added them (at most 5). Omit for no gift cards.
@@ -15642,6 +15684,8 @@ export type PostApiV1OrdersTaxQuoteData = {
         city?: string | null;
         zone?: string | null;
         area?: string | null;
+        shippingAdminArea?: string | null;
+        shippingPostalCode?: string | null;
         shippingMethodId?: string | null;
         /**
          * Discount codes the buyer applied. Codes of different discount classes combine when either allows it.
@@ -15736,7 +15780,7 @@ export type PostApiV1OrdersTaxQuoteResponses = {
                 hours: string | null;
             } | null;
             /**
-             * Payment methods for the amount due. Exactly ["gift_card"] when gift cards cover the whole order; cash on delivery only when something is shipped, collected or performed.
+             * Payment methods for the amount due. Exactly ["gift_card"] when gift cards cover the whole order; cash on delivery only when something is shipped, collected or performed, and only for a delivery to a country it serves (Bangladesh).
              */
             allowedPaymentMethods: Array<string>;
             /**
@@ -33320,6 +33364,7 @@ export type GetApiV1AdminSettingsPaymentMethodsResponses = {
                 pluginId: string | null;
                 supportsRefund: boolean;
                 chargeCurrencies: 'any' | Array<string>;
+                countries: 'any' | Array<string>;
             }>;
             gatewayStatus: {
                 stripe: {
@@ -34775,6 +34820,11 @@ export type GetApiV1AdminSettingsShippingMethodsResponses = {
                 id: string;
                 name: string;
                 revision: number;
+                regions: Array<{
+                    countryCode: string;
+                    adminArea: string | null;
+                    postalPrefix: string | null;
+                }>;
                 locations: Array<{
                     id: string;
                     name: string;
@@ -34793,7 +34843,7 @@ export type GetApiV1AdminSettingsShippingMethodsResponses = {
                     isActive: boolean;
                 }>;
             }>;
-            everywhereElse: {
+            pickup: {
                 revision: number;
                 rates: Array<{
                     id: string;
@@ -34816,7 +34866,24 @@ export type GetApiV1AdminSettingsShippingMethodsResponse = GetApiV1AdminSettings
 export type PostApiV1AdminSettingsShippingMethodsData = {
     body: {
         name: string;
-        locationIds: Array<string>;
+        /**
+         * Countries, admin areas and postal-code prefixes. A region belongs to one zone. Bangladesh is served whole here or through `locationIds`.
+         */
+        regions?: Array<{
+            countryCode: string;
+            /**
+             * One admin area (state, province, division) of the country: its address rules' code or name. Omit for the whole country.
+             */
+            adminArea?: string | null;
+            /**
+             * Postal codes that start with these letters and digits (spaces and dashes are ignored, at most 10). Omit for the whole country.
+             */
+            postalPrefix?: string | null;
+        }>;
+        /**
+         * Bangladesh delivery areas (cities, thanas, areas). A place belongs to one zone.
+         */
+        locationIds?: Array<string>;
         rates: Array<{
             id?: string | null;
             name: string;
@@ -34882,7 +34949,7 @@ export type PostApiV1AdminSettingsShippingMethodsResponses = {
 
 export type PostApiV1AdminSettingsShippingMethodsResponse = PostApiV1AdminSettingsShippingMethodsResponses[keyof PostApiV1AdminSettingsShippingMethodsResponses];
 
-export type PutApiV1AdminSettingsShippingMethodsEverywhereElseData = {
+export type PutApiV1AdminSettingsShippingMethodsPickupData = {
     body: {
         rates: Array<{
             id?: string | null;
@@ -34899,10 +34966,10 @@ export type PutApiV1AdminSettingsShippingMethodsEverywhereElseData = {
     };
     path?: never;
     query?: never;
-    url: '/api/v1/admin/settings/shipping-methods/everywhere-else';
+    url: '/api/v1/admin/settings/shipping-methods/pickup';
 };
 
-export type PutApiV1AdminSettingsShippingMethodsEverywhereElseErrors = {
+export type PutApiV1AdminSettingsShippingMethodsPickupErrors = {
     /**
      * Validation error
      */
@@ -34933,9 +35000,9 @@ export type PutApiV1AdminSettingsShippingMethodsEverywhereElseErrors = {
     500: ErrorResponse;
 };
 
-export type PutApiV1AdminSettingsShippingMethodsEverywhereElseError = PutApiV1AdminSettingsShippingMethodsEverywhereElseErrors[keyof PutApiV1AdminSettingsShippingMethodsEverywhereElseErrors];
+export type PutApiV1AdminSettingsShippingMethodsPickupError = PutApiV1AdminSettingsShippingMethodsPickupErrors[keyof PutApiV1AdminSettingsShippingMethodsPickupErrors];
 
-export type PutApiV1AdminSettingsShippingMethodsEverywhereElseResponses = {
+export type PutApiV1AdminSettingsShippingMethodsPickupResponses = {
     /**
      * Rates saved
      */
@@ -34948,15 +35015,11 @@ export type PutApiV1AdminSettingsShippingMethodsEverywhereElseResponses = {
     };
 };
 
-export type PutApiV1AdminSettingsShippingMethodsEverywhereElseResponse = PutApiV1AdminSettingsShippingMethodsEverywhereElseResponses[keyof PutApiV1AdminSettingsShippingMethodsEverywhereElseResponses];
+export type PutApiV1AdminSettingsShippingMethodsPickupResponse = PutApiV1AdminSettingsShippingMethodsPickupResponses[keyof PutApiV1AdminSettingsShippingMethodsPickupResponses];
 
 export type PutApiV1AdminSettingsShippingMethodsTemplateData = {
     body: {
         template: 'dhaka_two_zone' | 'dhaka_three_zone';
-        /**
-         * The Everywhere else revision the dashboard loaded.
-         */
-        expectedRevision: number;
     };
     path?: never;
     query?: never;
@@ -35055,7 +35118,24 @@ export type DeleteApiV1AdminSettingsShippingMethodsByIdResponse = DeleteApiV1Adm
 export type PutApiV1AdminSettingsShippingMethodsByIdData = {
     body: {
         name: string;
-        locationIds: Array<string>;
+        /**
+         * Countries, admin areas and postal-code prefixes. A region belongs to one zone. Bangladesh is served whole here or through `locationIds`.
+         */
+        regions?: Array<{
+            countryCode: string;
+            /**
+             * One admin area (state, province, division) of the country: its address rules' code or name. Omit for the whole country.
+             */
+            adminArea?: string | null;
+            /**
+             * Postal codes that start with these letters and digits (spaces and dashes are ignored, at most 10). Omit for the whole country.
+             */
+            postalPrefix?: string | null;
+        }>;
+        /**
+         * Bangladesh delivery areas (cities, thanas, areas). A place belongs to one zone.
+         */
+        locationIds?: Array<string>;
         rates: Array<{
             id?: string | null;
             name: string;
@@ -41145,6 +41225,8 @@ export type PostApiV1AdminOrdersQuoteData = {
         city?: string | null;
         zone?: string | null;
         area?: string | null;
+        shippingAdminArea?: string | null;
+        shippingPostalCode?: string | null;
         items: Array<{
             productId: string;
             variantId: string | null;

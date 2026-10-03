@@ -74,7 +74,7 @@ const DAILY_RESPONSES: Record<string, unknown> = {
   "dashboard.shipping_methods.list": {
     data: {
       zones: [],
-      everywhereElse: { rates: [] },
+      pickup: { rates: [] },
     },
   },
 };

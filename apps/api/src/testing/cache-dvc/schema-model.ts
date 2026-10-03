@@ -86,6 +86,15 @@ function checkInLists(createSql: string): Map<string, string[]> {
   return lists;
 }
 
+/** Text columns a table's CHECK constraints require to hold JSON (`json_valid(col)`). */
+function checkJsonColumns(createSql: string): Set<string> {
+  const columns = new Set<string>();
+  for (const match of createSql.matchAll(/json_valid\(\s*(?:[`"]?[A-Za-z_][A-Za-z0-9_]*[`"]?\.)?[`"]?([A-Za-z_][A-Za-z0-9_]*)[`"]?\s*\)/gi)) {
+    columns.add(match[1]!);
+  }
+  return columns;
+}
+
 /** FTS5 virtual tables and their shadow tables are maintained by triggers, never written directly. */
 function isDerivedStorage(name: string, virtualTables: ReadonlySet<string>): boolean {
   if (virtualTables.has(name)) return true;
@@ -109,6 +118,7 @@ export function loadSchemaModel(sqlite: DatabaseSync): SchemaModel {
     }>;
     const facts = drizzle.get(row.name);
     const checkLists = checkInLists(row.sql ?? "");
+    const jsonChecked = checkJsonColumns(row.sql ?? "");
     const spec = isCacheDepTable(row.name) ? CACHE_DEP_TABLES[row.name] : null;
     const noise = new Set<string>(spec ? spec.noise : []);
     const columns: ColumnModel[] = info.map((column) => {
@@ -125,7 +135,8 @@ export function loadSchemaModel(sqlite: DatabaseSync): SchemaModel {
       return {
         name: column.name,
         declaredType: declared,
-        shape: fact?.shape ?? baseShape,
+        // A text column its CHECK keeps JSON gets JSON values (a NULL one too).
+        shape: fact?.shape ?? (baseShape === "text" && jsonChecked.has(column.name) ? "json" : baseShape),
         notNull: column.notnull === 1,
         pk: column.pk,
         enumValues: fact?.enumValues ?? checkLists.get(column.name) ?? null,

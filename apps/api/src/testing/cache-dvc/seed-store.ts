@@ -289,11 +289,18 @@ function seedSql(): string {
     ('loc_mirpur', 'Mirpur', 'zone', 'loc_dhaka', '{}', '{}', 1, 0),
     ('loc_gulshan', 'Gulshan', 'zone', 'loc_dhaka', '{}', '{}', 1, 1),
     ('loc_mirpur10', 'Mirpur 10', 'area', 'loc_mirpur', '{}', '{}', 1, 0);
-  INSERT INTO delivery_zones (id, name, sort_order) VALUES ('zone_dhaka', 'Inside Dhaka', 0), ('zone_ctg', 'Chattogram', 1);
+  INSERT INTO delivery_zones (id, name, sort_order) VALUES ('zone_dhaka', 'Inside Dhaka', 0), ('zone_ctg', 'Chattogram', 1),
+    ('zone_bd', 'Bangladesh', 2), ('zone_us', 'United States', 3), ('zone_west', 'West coast', 4);
   INSERT INTO delivery_zone_locations (location_id, zone_id) VALUES ('loc_dhaka', 'zone_dhaka'), ('loc_ctg', 'zone_ctg');
+  -- Zones by region (MARKETS-DESIGN step 3b): the rest of Bangladesh, the United States, and a part of it.
+  INSERT INTO delivery_zone_regions (country_code, admin_area, postal_prefix, zone_id) VALUES
+    ('BD', '', '', 'zone_bd'), ('US', '', '', 'zone_us'), ('US', 'CA', '', 'zone_west'), ('US', '', '97', 'zone_west');
   INSERT INTO shipping_methods (id, name, description, is_active, sort_order, fee_minor, zone_id, free_over_minor, kind) VALUES
     ('ship_dhaka', 'Inside Dhaka', '1-2 days', 1, 0, 6000, 'zone_dhaka', 150000, 'delivery'),
-    ('ship_ctg', 'Chattogram', NULL, 1, 1, 12000, 'zone_ctg', NULL, 'delivery');
+    ('ship_ctg', 'Chattogram', NULL, 1, 1, 12000, 'zone_ctg', NULL, 'delivery'),
+    ('ship_bd', 'Outside Dhaka', NULL, 1, 2, 15000, 'zone_bd', NULL, 'delivery'),
+    ('ship_us', 'US standard', NULL, 1, 3, 250000, 'zone_us', NULL, 'delivery'),
+    ('ship_west', 'West coast', NULL, 1, 4, 150000, 'zone_west', 500000, 'delivery');
 
   INSERT INTO tax_classes (id, name, description, is_exempt) VALUES ('tax_std', 'Standard', NULL, 0), ('tax_zero', 'Zero rated', NULL, 1);
   INSERT INTO tax_rates (id, tax_class_id, name, rate_bps, jurisdiction_type, jurisdiction_id, jurisdiction_label, priority, is_compound, is_active) VALUES

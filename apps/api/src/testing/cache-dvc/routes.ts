@@ -82,6 +82,10 @@ function otherParts(): string[] {
     "/api/v1/storefront/markets",
     "/api/v1/checkout-languages/active",
     "/api/v1/shipping-methods",
+    // A destination's zone: a Bangladesh place, and abroad by postal prefix, admin area and country.
+    "/api/v1/shipping-methods?cityId=loc_dhaka&zoneId=loc_mirpur",
+    "/api/v1/shipping-methods?countryCode=US&adminArea=CA&postalCode=94103",
+    "/api/v1/shipping-methods?countryCode=US&postalCode=97201",
     "/api/v1/locations/cities",
     "/api/v1/locations/zones?cityId=loc_dhaka",
     "/api/v1/locations/areas?zoneId=loc_mirpur",

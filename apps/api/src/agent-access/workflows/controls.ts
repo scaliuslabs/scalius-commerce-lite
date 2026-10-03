@@ -19,7 +19,7 @@ const BANGLADESH_SETUP_FORBIDDEN_WRITES = [
   "dashboard.shipping_zones.create",
   "dashboard.shipping_zones.update",
   "dashboard.shipping_zones.delete",
-  "dashboard.shipping_zones.everywhere_else_update",
+  "dashboard.shipping_zones.pickup_update",
   "dashboard.shipping_zones.apply_template",
   "dashboard.checkout.flow_update",
   "dashboard.seo.settings_update",

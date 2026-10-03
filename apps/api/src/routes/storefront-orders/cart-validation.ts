@@ -112,11 +112,14 @@ const cartValidationRoute = createRoute({
             inventoryPool: z
               .enum([InventoryPool.REGULAR, InventoryPool.PREORDER, InventoryPool.BACKORDER])
               .default(InventoryPool.REGULAR),
-            /** The shipping country (absent: Bangladesh); a foreign country gets pickup only until shipping zones by country. */
+            /** The shipping country (absent: Bangladesh); a delivery rate must be one of its shipping zone's. */
             shippingCountryCode: z.string().trim().length(2).optional().nullable(),
             city: z.string().min(1).optional().nullable(),
             zone: z.string().min(1).optional().nullable(),
             area: z.string().optional().nullable(),
+            /** Another country's admin area and postal code: its shipping zone matches on them. */
+            shippingAdminArea: z.string().trim().max(120).optional().nullable(),
+            shippingPostalCode: z.string().trim().max(20).optional().nullable(),
             /** A delivery or pickup rate. A pickup rate needs no city or zone. */
             shippingMethodId: z.string().optional().nullable(),
             giftCards: giftCardHandlesSchema,
@@ -230,7 +233,7 @@ app.openapi(cartValidationRoute, async (c) => {
     listActiveCheckoutRegistrations(db),
   ]);
   // App payment methods join only when an app provides payment (then one more read).
-  const { paymentMethods } = await checkoutPaymentMethods(c, registrations, builtInPaymentMethods, encryptionKey);
+  const { providers: paymentProviders, paymentMethods } = await checkoutPaymentMethods(c, registrations, builtInPaymentMethods, encryptionKey);
   const apps = createCheckoutAppFunctions({
     env: c.env,
     ctx: getOptionalExecutionContext(c) as ExecutionContext | undefined,
@@ -292,6 +295,8 @@ app.openapi(cartValidationRoute, async (c) => {
       city: data.city,
       zone: data.zone,
       area: data.area,
+      shippingAdminArea: data.shippingAdminArea,
+      shippingPostalCode: data.shippingPostalCode,
       shippingMethodId: data.shippingMethodId,
     },
     result,
@@ -302,7 +307,12 @@ app.openapi(cartValidationRoute, async (c) => {
     ...presentStorefrontCartValidation(result, decimalPlaces, delivery.fulfilment, propertiesHashes),
     valid: result.valid && ruleErrors.length === 0,
     ruleErrors,
-    allowedPaymentMethods: resolveCartPaymentMethods(paymentMethods.enabledMethods, delivery.fulfilment),
+    allowedPaymentMethods: resolveCartPaymentMethods(
+      paymentMethods.enabledMethods,
+      delivery.fulfilment,
+      delivery.address?.countryCode ?? null,
+      paymentProviders,
+    ),
     giftCardIssues,
     ...(delivery.kind && delivery.shippingMethod
       ? {

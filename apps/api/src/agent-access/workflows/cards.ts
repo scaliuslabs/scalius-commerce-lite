@@ -879,8 +879,8 @@ export const DAILY_OPERATING_SNAPSHOT_WORKFLOW: AgentWorkflowCard = {
                 ],
               },
               {
-                pointer: "/data/everywhereElse/rates",
-                alias: "everywhereElseRates",
+                pointer: "/data/pickup/rates",
+                alias: "pickupRates",
                 maxItems: 20,
                 fields: [
                   { pointer: "/id", alias: "id" },
@@ -943,8 +943,8 @@ export const DAILY_OPERATING_SNAPSHOT_WORKFLOW: AgentWorkflowCard = {
       id: "delivery",
       surface: "dashboard",
       operationId: "dashboard.shipping_methods.list",
-      responsePointers: ["/data/zones", "/data/everywhereElse"],
-      proves: ["Saved zones and everywhere-else charges."],
+      responsePointers: ["/data/zones", "/data/pickup"],
+      proves: ["Saved shipping zones and local pickup charges."],
       bounds: { maxCalls: 1, maxItems: 100, maxResponseBytes: 65_536 },
     },
   ],

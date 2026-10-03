@@ -188,6 +188,8 @@ const paymentGatewaySchema = z.object({
     pluginId: z.string().nullable(),
     supportsRefund: z.boolean(),
     chargeCurrencies: z.union([z.literal("any"), z.array(z.string())]),
+    /** The delivery countries it serves ("any" for every country). */
+    countries: z.union([z.literal("any"), z.array(z.string())]),
 });
 
 const paymentMethodsResponseSchema = z.object({
@@ -292,6 +294,7 @@ app.openapi(getPaymentMethodsRoute, async (c) => {
             pluginId: parseQualifiedProviderId(gateway.id)?.pluginId ?? null,
             supportsRefund: gateway.supportsRefund,
             chargeCurrencies: gateway.chargeCurrencies === "any" ? "any" as const : [...gateway.chargeCurrencies],
+            countries: providers.countries(gateway.id) === "any" ? "any" as const : [...providers.countries(gateway.id) as readonly string[]],
         })),
         gatewayStatus,
     });

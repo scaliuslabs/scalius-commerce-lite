@@ -103,7 +103,7 @@ const taxQuoteResponseSchema = z.object({
   /** Pickup location and hours, for a pickup method. */
   pickup: z.object({ address: z.string().nullable(), hours: z.string().nullable() }).nullable(),
   allowedPaymentMethods: allowedPaymentMethodsSchema.openapi({
-    description: "Payment methods for the amount due. Exactly [\"gift_card\"] when gift cards cover the whole order; cash on delivery only when something is shipped, collected or performed.",
+    description: "Payment methods for the amount due. Exactly [\"gift_card\"] when gift cards cover the whole order; cash on delivery only when something is shipped, collected or performed, and only for a delivery to a country it serves (Bangladesh).",
   }),
   discounts: z.array(quotedDiscountLineSchema).openapi({
     description: "One line per applied discount (automatic and code), with its own amount.",
@@ -174,14 +174,17 @@ const taxQuoteRoute = createRoute({
               InventoryPool.BACKORDER,
             ]).default(InventoryPool.REGULAR),
             /**
-             * The shipping country (absent: Bangladesh). A country the
-             * delivery rates do not serve gets pickup only (MARKETS-DESIGN step 3a).
+             * The shipping country (absent: Bangladesh). A delivery rate must
+             * be one of the destination's shipping zone (MARKETS-DESIGN step 3b).
              */
             shippingCountryCode: z.string().trim().length(2).optional().nullable(),
-            /** Required for a delivery method; omitted for pickup or when nothing is physical. */
+            /** Bangladesh's City/Thana/Area: required for a delivery method there; omitted for pickup or when nothing is physical. */
             city: z.string().min(1).max(180).optional().nullable(),
             zone: z.string().min(1).max(180).optional().nullable(),
             area: z.string().max(180).optional().nullable(),
+            /** Another country's admin area and postal code: its shipping zone matches on them. */
+            shippingAdminArea: z.string().trim().max(120).optional().nullable(),
+            shippingPostalCode: z.string().trim().max(20).optional().nullable(),
             /** Required when a line is physical; omitted when nothing is. */
             shippingMethodId: z.string().min(1).max(180).optional().nullable(),
             discountCodes: discountCodesSchema,
@@ -244,6 +247,8 @@ app.openapi(taxQuoteRoute, async (c) => {
     city: data.city,
     zone: data.zone,
     area: data.area,
+    shippingAdminArea: data.shippingAdminArea,
+    shippingPostalCode: data.shippingPostalCode,
     shippingMethodId: data.shippingMethodId,
   }, cartValidation);
   const lineTypes = assertStorefrontLineFulfilment(cartValidation, delivery);
@@ -263,7 +268,14 @@ app.openapi(taxQuoteRoute, async (c) => {
     },
     apps,
     channel: "online_store",
-    location: { countryCode: data.shippingCountryCode, city: data.city, zone: data.zone, area: data.area },
+    location: {
+      countryCode: data.shippingCountryCode,
+      city: data.city,
+      zone: data.zone,
+      area: data.area,
+      adminArea: data.shippingAdminArea,
+      postalCode: data.shippingPostalCode,
+    },
   });
   assertNoCheckoutRuleErrors(pricing.ruleErrors);
   const quote = pricing.taxQuote;
@@ -282,7 +294,13 @@ app.openapi(taxQuoteRoute, async (c) => {
   // Apps narrow and present the methods checkout allows; gift-card cover is tender, not a method.
   const payment = coveredByGiftCards
     ? { methods: [], changed: false }
-    : await resolveAppPaymentMethods(apps, pricing.appCart, resolveCartPaymentMethods(paymentMethods.enabledMethods, delivery.fulfilment), paymentProviders);
+    : await resolveAppPaymentMethods(apps, pricing.appCart, resolveCartPaymentMethods(
+      paymentMethods.enabledMethods,
+      delivery.fulfilment,
+      // A method that doesn't serve the delivery country is not offered (cash on delivery: Bangladesh).
+      delivery.address?.countryCode ?? null,
+      paymentProviders,
+    ), paymentProviders);
   const toAmount = (minor: number) => fromMinor(minor, quote.decimalPlaces);
   return ok(c, {
     valid: true as const,

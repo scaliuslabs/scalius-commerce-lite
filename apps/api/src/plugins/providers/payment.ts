@@ -92,6 +92,7 @@ export function appPaymentGateway(
     checkoutName: declaration.checkoutName ?? declaration.name,
     flow: declaration.flow,
     chargeCurrencies: declaration.chargeCurrencies,
+    countries: declaration.countries,
     ...(declaration.amountLimits ? { amountLimits: declaration.amountLimits } : {}),
     ...(declaration.amountCodecs ? { amountCodecs: declaration.amountCodecs } : {}),
     supportsRefund: operations.has("refund"),

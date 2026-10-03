@@ -418,6 +418,7 @@ export class RowMutator {
     if (column.shape === "boolean") return current === null ? 1 : Number(current) === 0 ? 1 : 0;
     if (current === null) {
       if (peers.length > 0) return this.rng.pick(peers);
+      if (column.shape === "json") return "[]";
       if (column.shape === "timestamp") return 1_790_000_000 + this.rng.int(-10, 10) * 86_400;
       if (column.shape === "integer") return this.rng.int(0, 5);
       if (column.shape === "real") return this.rng.int(0, 500) / 10;

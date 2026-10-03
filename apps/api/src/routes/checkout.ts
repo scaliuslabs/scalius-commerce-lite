@@ -21,6 +21,12 @@ const checkoutGatewaySchema = z.object({
   /** card: confirm in the browser; hosted: redirect to the provider; cod: no online payment. */
   flow: z.enum(["card", "hosted", "cod"]),
   currencies: z.array(z.string()).max(4),
+  /**
+   * The delivery countries it serves, when not every country (cash on
+   * delivery: ["BD"]). Checkout hides it for a delivery elsewhere; pickup
+   * and orders that ship nothing have no delivery country.
+   */
+  countries: z.array(z.string().length(2)).max(250).optional(),
   testMode: z.boolean().optional(),
   publishableKey: z.string().optional(),
   amountLimits: z.object({

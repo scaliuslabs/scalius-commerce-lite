@@ -5861,6 +5861,12 @@
           "delivery": {
             "type": "object",
             "properties": {
+              "countryCode": {
+                "type": "string",
+                "minLength": 2,
+                "maxLength": 2,
+                "description": "The delivery country (BD unless another was set)."
+              },
               "cityId": {
                 "type": "string",
                 "nullable": true
@@ -5873,15 +5879,26 @@
                 "type": "string",
                 "nullable": true
               },
+              "adminArea": {
+                "type": "string",
+                "nullable": true
+              },
+              "postalCode": {
+                "type": "string",
+                "nullable": true
+              },
               "shippingMethodId": {
                 "type": "string",
                 "nullable": true
               }
             },
             "required": [
+              "countryCode",
               "cityId",
               "zoneId",
               "areaId",
+              "adminArea",
+              "postalCode",
               "shippingMethodId"
             ]
           },
@@ -24401,6 +24418,12 @@
                     "type": "integer",
                     "minimum": 1
                   },
+                  "countryCode": {
+                    "type": "string",
+                    "nullable": true,
+                    "pattern": "^[A-Za-z]{2}$",
+                    "description": "The delivery country (absent or null: Bangladesh). Its shipping zone decides the delivery rates (storefront.shipping_methods.list)."
+                  },
                   "cityId": {
                     "type": "string",
                     "nullable": true,
@@ -24418,6 +24441,20 @@
                     "nullable": true,
                     "minLength": 1,
                     "maxLength": 180
+                  },
+                  "adminArea": {
+                    "type": "string",
+                    "nullable": true,
+                    "minLength": 1,
+                    "maxLength": 120,
+                    "description": "Outside Bangladesh: the region (state, province) as its address rules name or code it."
+                  },
+                  "postalCode": {
+                    "type": "string",
+                    "nullable": true,
+                    "minLength": 1,
+                    "maxLength": 20,
+                    "description": "Outside Bangladesh: the postal code. Zones by postal-code prefix match on it."
                   },
                   "shippingMethodId": {
                     "type": "string",
@@ -24976,7 +25013,7 @@
                               "name"
                             ]
                           },
-                          "description": "The payment methods submit accepts for this cart when an installed app changed them; null when none did. A hidden method is refused at submit."
+                          "description": "The payment methods submit accepts for this cart when an installed app or the delivery country changed them (cash on delivery serves Bangladesh); null when none did. A hidden method is refused at submit."
                         }
                       },
                       "required": [
@@ -25180,6 +25217,24 @@
                     "minLength": 10,
                     "maxLength": 500,
                     "description": "Street address. Required only when a line ships; omit it for a pickup method or a cart with nothing physical (services)."
+                  },
+                  "shippingAddressLine2": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 200,
+                    "description": "Outside Bangladesh: the second address line. The country, region and postal code are the context's delivery."
+                  },
+                  "shippingLocality": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 120,
+                    "description": "Outside Bangladesh: the city or town, when the country's address rules ask for it (storefront.address_rules.get)."
+                  },
+                  "shippingDependentLocality": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 120,
+                    "description": "Outside Bangladesh: the district or suburb, when the country's address rules ask for it."
                   },
                   "notes": {
                     "type": "string",
@@ -30101,6 +30156,15 @@
                                   "type": "string"
                                 },
                                 "maxItems": 4
+                              },
+                              "countries": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "minLength": 2,
+                                  "maxLength": 2
+                                },
+                                "maxItems": 250
                               },
                               "testMode": {
                                 "type": "boolean"
@@ -43977,9 +44041,18 @@
         "tags": [
           "Shipping Methods"
         ],
-        "summary": "List the delivery rates offered for an address",
-        "description": "With cityId (plus zoneId/areaId when chosen), returns the rates of the delivery zone that address resolves to plus every local pickup rate (`kind: \"pickup\"`); an empty list means the store doesn't deliver there. Without an address, returns every active rate. `fee` is the rate's charge; checkout charges nothing once the items subtotal (before discounts) reaches `freeOver`.",
+        "summary": "List the delivery rates offered for a destination",
+        "description": "With a destination, returns the rates of the shipping zone it belongs to plus every local pickup rate (`kind: \"pickup\"`); no delivery rate means the store doesn't deliver there. A destination is Bangladesh's cityId (plus zoneId/areaId when chosen), or another country's countryCode with its adminArea and postalCode when known. Its zone is the most specific match: Bangladesh location, then postal-code prefix, then admin area, then the whole country. Without a destination, returns every active rate. `fee` is the rate's charge; checkout charges nothing once the items subtotal (before discounts) reaches `freeOver`. `countries` are the countries the rate's zone serves, `entire` when every address there gets this zone.",
         "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z]{2}$"
+            },
+            "required": false,
+            "name": "countryCode",
+            "in": "query"
+          },
           {
             "schema": {
               "type": "string",
@@ -44008,6 +44081,26 @@
             },
             "required": false,
             "name": "areaId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            },
+            "required": false,
+            "name": "adminArea",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 20
+            },
+            "required": false,
+            "name": "postalCode",
             "in": "query"
           }
         ],
@@ -44057,9 +44150,28 @@
                                   "pickup"
                                 ]
                               },
-                              "everywhereElse": {
-                                "type": "boolean",
-                                "description": "True for a rate that applies outside every delivery zone (the store's default rates); false for a rate of one delivery zone."
+                              "countries": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "code": {
+                                      "type": "string",
+                                      "minLength": 2,
+                                      "maxLength": 2
+                                    },
+                                    "entire": {
+                                      "type": "boolean",
+                                      "description": "True when every address in the country gets this rate's zone; false when only part of it does (a region, postal codes or Bangladesh delivery areas, or another zone holds part of it)."
+                                    }
+                                  },
+                                  "required": [
+                                    "code",
+                                    "entire"
+                                  ]
+                                },
+                                "maxItems": 250,
+                                "description": "The countries the rate's shipping zone serves. Empty for local pickup, which is offered to every buyer."
                               },
                               "pickupAddress": {
                                 "type": "string",
@@ -44093,7 +44205,7 @@
                               "fee",
                               "freeOver",
                               "kind",
-                              "everywhereElse",
+                              "countries",
                               "pickupAddress",
                               "pickupHours",
                               "description",
@@ -54951,6 +55063,16 @@
                     "type": "string",
                     "nullable": true
                   },
+                  "shippingAdminArea": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 120
+                  },
+                  "shippingPostalCode": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 20
+                  },
                   "shippingMethodId": {
                     "type": "string",
                     "nullable": true
@@ -55601,6 +55723,16 @@
                     "nullable": true,
                     "maxLength": 180
                   },
+                  "shippingAdminArea": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 120
+                  },
+                  "shippingPostalCode": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 20
+                  },
                   "shippingMethodId": {
                     "type": "string",
                     "nullable": true,
@@ -55868,7 +56000,7 @@
                           "items": {
                             "type": "string"
                           },
-                          "description": "Payment methods for the amount due. Exactly [\"gift_card\"] when gift cards cover the whole order; cash on delivery only when something is shipped, collected or performed."
+                          "description": "Payment methods for the amount due. Exactly [\"gift_card\"] when gift cards cover the whole order; cash on delivery only when something is shipped, collected or performed, and only for a delivery to a country it serves (Bangladesh)."
                         },
                         "discounts": {
                           "type": "array",
@@ -115262,6 +115394,22 @@
                                     }
                                   }
                                 ]
+                              },
+                              "countries": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "any"
+                                    ]
+                                  },
+                                  {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  }
+                                ]
                               }
                             },
                             "required": [
@@ -115271,7 +115419,8 @@
                               "flow",
                               "pluginId",
                               "supportsRefund",
-                              "chargeCurrencies"
+                              "chargeCurrencies",
+                              "countries"
                             ]
                           }
                         },
@@ -119655,9 +119804,9 @@
       "get": {
         "operationId": "dashboard.shipping_methods.list",
         "tags": [
-          "Admin - Delivery Zones"
+          "Admin - Shipping Zones"
         ],
-        "summary": "List delivery zones, their areas and rates, plus the Everywhere else rates",
+        "summary": "List shipping zones (their regions, delivery areas and rates) and local pickup",
         "responses": {
           "200": {
             "description": "Delivery zones",
@@ -119688,6 +119837,30 @@
                               },
                               "revision": {
                                 "type": "integer"
+                              },
+                              "regions": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "countryCode": {
+                                      "type": "string"
+                                    },
+                                    "adminArea": {
+                                      "type": "string",
+                                      "nullable": true
+                                    },
+                                    "postalPrefix": {
+                                      "type": "string",
+                                      "nullable": true
+                                    }
+                                  },
+                                  "required": [
+                                    "countryCode",
+                                    "adminArea",
+                                    "postalPrefix"
+                                  ]
+                                }
                               },
                               "locations": {
                                 "type": "array",
@@ -119780,12 +119953,13 @@
                               "id",
                               "name",
                               "revision",
+                              "regions",
                               "locations",
                               "rates"
                             ]
                           }
                         },
-                        "everywhereElse": {
+                        "pickup": {
                           "type": "object",
                           "properties": {
                             "revision": {
@@ -119854,7 +120028,7 @@
                       },
                       "required": [
                         "zones",
-                        "everywhereElse"
+                        "pickup"
                       ]
                     }
                   },
@@ -119960,9 +120134,9 @@
       "post": {
         "operationId": "dashboard.shipping_zones.create",
         "tags": [
-          "Admin - Delivery Zones"
+          "Admin - Shipping Zones"
         ],
-        "summary": "Create a delivery zone with its areas and rates",
+        "summary": "Create a shipping zone with its regions, delivery areas and rates",
         "requestBody": {
           "required": true,
           "content": {
@@ -119975,6 +120149,37 @@
                     "minLength": 1,
                     "maxLength": 100
                   },
+                  "regions": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "countryCode": {
+                          "type": "string",
+                          "minLength": 2,
+                          "maxLength": 2
+                        },
+                        "adminArea": {
+                          "type": "string",
+                          "nullable": true,
+                          "maxLength": 120,
+                          "description": "One admin area (state, province, division) of the country: its address rules' code or name. Omit for the whole country."
+                        },
+                        "postalPrefix": {
+                          "type": "string",
+                          "nullable": true,
+                          "maxLength": 20,
+                          "description": "Postal codes that start with these letters and digits (spaces and dashes are ignored, at most 10). Omit for the whole country."
+                        }
+                      },
+                      "required": [
+                        "countryCode"
+                      ]
+                    },
+                    "maxItems": 500,
+                    "default": [],
+                    "description": "Countries, admin areas and postal-code prefixes. A region belongs to one zone. Bangladesh is served whole here or through `locationIds`."
+                  },
                   "locationIds": {
                     "type": "array",
                     "items": {
@@ -119982,8 +120187,9 @@
                       "minLength": 1,
                       "maxLength": 128
                     },
-                    "minItems": 1,
-                    "maxItems": 2000
+                    "maxItems": 2000,
+                    "default": [],
+                    "description": "Bangladesh delivery areas (cities, thanas, areas). A place belongs to one zone."
                   },
                   "rates": {
                     "type": "array",
@@ -120049,7 +120255,6 @@
                 },
                 "required": [
                   "name",
-                  "locationIds",
                   "rates"
                 ]
               }
@@ -120195,13 +120400,13 @@
         }
       }
     },
-    "/api/v1/admin/settings/shipping-methods/everywhere-else": {
+    "/api/v1/admin/settings/shipping-methods/pickup": {
       "put": {
-        "operationId": "dashboard.shipping_zones.everywhere_else_update",
+        "operationId": "dashboard.shipping_zones.pickup_update",
         "tags": [
-          "Admin - Delivery Zones"
+          "Admin - Shipping Zones"
         ],
-        "summary": "Replace the rates for addresses outside every delivery zone",
+        "summary": "Replace the local pickup rates (offered to every buyer)",
         "requestBody": {
           "required": true,
           "content": {
@@ -120426,9 +120631,9 @@
       "put": {
         "operationId": "dashboard.shipping_zones.apply_template",
         "tags": [
-          "Admin - Delivery Zones"
+          "Admin - Shipping Zones"
         ],
-        "summary": "Start from Dhaka-centric zones (inside/outside, or inside/near/outside Dhaka)",
+        "summary": "Start from Dhaka-centric zones (inside/outside, or inside/near/outside Dhaka), only without zones",
         "requestBody": {
           "required": true,
           "content": {
@@ -120442,16 +120647,10 @@
                       "dhaka_two_zone",
                       "dhaka_three_zone"
                     ]
-                  },
-                  "expectedRevision": {
-                    "type": "integer",
-                    "minimum": 0,
-                    "description": "The Everywhere else revision the dashboard loaded."
                   }
                 },
                 "required": [
-                  "template",
-                  "expectedRevision"
+                  "template"
                 ]
               }
             }
@@ -120549,7 +120748,7 @@
           "risk": "write",
           "openWorld": false,
           "idempotency": "none",
-          "revision": "required",
+          "revision": "none",
           "batch": "forbidden",
           "transport": "json",
           "maximumResponseBytes": 65536,
@@ -120567,9 +120766,9 @@
       "put": {
         "operationId": "dashboard.shipping_zones.update",
         "tags": [
-          "Admin - Delivery Zones"
+          "Admin - Shipping Zones"
         ],
-        "summary": "Replace a delivery zone's name, areas and rates",
+        "summary": "Replace a shipping zone's name, regions, delivery areas and rates",
         "parameters": [
           {
             "schema": {
@@ -120594,6 +120793,37 @@
                     "minLength": 1,
                     "maxLength": 100
                   },
+                  "regions": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "countryCode": {
+                          "type": "string",
+                          "minLength": 2,
+                          "maxLength": 2
+                        },
+                        "adminArea": {
+                          "type": "string",
+                          "nullable": true,
+                          "maxLength": 120,
+                          "description": "One admin area (state, province, division) of the country: its address rules' code or name. Omit for the whole country."
+                        },
+                        "postalPrefix": {
+                          "type": "string",
+                          "nullable": true,
+                          "maxLength": 20,
+                          "description": "Postal codes that start with these letters and digits (spaces and dashes are ignored, at most 10). Omit for the whole country."
+                        }
+                      },
+                      "required": [
+                        "countryCode"
+                      ]
+                    },
+                    "maxItems": 500,
+                    "default": [],
+                    "description": "Countries, admin areas and postal-code prefixes. A region belongs to one zone. Bangladesh is served whole here or through `locationIds`."
+                  },
                   "locationIds": {
                     "type": "array",
                     "items": {
@@ -120601,8 +120831,9 @@
                       "minLength": 1,
                       "maxLength": 128
                     },
-                    "minItems": 1,
-                    "maxItems": 2000
+                    "maxItems": 2000,
+                    "default": [],
+                    "description": "Bangladesh delivery areas (cities, thanas, areas). A place belongs to one zone."
                   },
                   "rates": {
                     "type": "array",
@@ -120672,7 +120903,6 @@
                 },
                 "required": [
                   "name",
-                  "locationIds",
                   "rates",
                   "expectedRevision"
                 ]
@@ -120821,9 +121051,9 @@
       "delete": {
         "operationId": "dashboard.shipping_zones.delete",
         "tags": [
-          "Admin - Delivery Zones"
+          "Admin - Shipping Zones"
         ],
-        "summary": "Delete a delivery zone; its areas get the Everywhere else rates",
+        "summary": "Delete a shipping zone; its addresses fall to the next matching zone, or get no delivery rate",
         "parameters": [
           {
             "schema": {
@@ -142184,6 +142414,16 @@
                   "area": {
                     "type": "string",
                     "nullable": true
+                  },
+                  "shippingAdminArea": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 120
+                  },
+                  "shippingPostalCode": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 20
                   },
                   "items": {
                     "type": "array",
@@ -201075,8 +201315,8 @@
                       ]
                     },
                     {
-                      "pointer": "/data/everywhereElse/rates",
-                      "alias": "everywhereElseRates",
+                      "pointer": "/data/pickup/rates",
+                      "alias": "pickupRates",
                       "maxItems": 20,
                       "fields": [
                         {
@@ -201211,10 +201451,10 @@
             "operationId": "dashboard.shipping_methods.list",
             "responsePointers": [
               "/data/zones",
-              "/data/everywhereElse"
+              "/data/pickup"
             ],
             "proves": [
-              "Saved zones and everywhere-else charges."
+              "Saved shipping zones and local pickup charges."
             ],
             "bounds": {
               "maxCalls": 1,
@@ -201944,7 +202184,7 @@
         "title": "Bangladesh checkout setup",
         "summary": "Apply reviewed Bangladesh payment, delivery-zone, and guest setup; verify buyer truth.",
         "examples": [
-          "Configure accepted Bangladesh setup: supplied BDT symbol/rate; keep Dhaka time/phone fixed; preserve payments/default; add COD/proven SSLCommerz; Inside Dhaka zone 80 and everywhere else 150; turn on guests only after readiness; verify buyer checkout."
+          "Configure accepted Bangladesh setup: supplied BDT symbol/rate; keep Dhaka time/phone fixed; preserve payments/default; add COD/proven SSLCommerz; Inside Dhaka zone 80 and the Bangladesh zone 150; turn on guests only after readiness; verify buyer checkout."
         ],
         "tags": [
           "bangladesh",
@@ -201962,7 +202202,6 @@
           "dashboard.payments.methods_update",
           "dashboard.shipping_zones.create",
           "dashboard.shipping_zones.update",
-          "dashboard.shipping_zones.everywhere_else_update",
           "dashboard.checkout.readiness_get",
           "dashboard.checkout.flow_update",
           "storefront.checkout.get_config",
@@ -201976,7 +202215,7 @@
           "BDT needs unlocked code, explicit symbol, positive USD rate; write/reread all or stop.",
           "Set only {enabled:true} after configured/no-error SSLCommerz status; no secrets/sandbox. Reread usable; no charge proof.",
           "Require keep/disable intent per payment and exact default; union COD/usable SSLCommerz into fresh enabledMethods. Never choose.",
-          "Require zone name/places/charge name/fee/active and everywhere-else charges. One exact zone: update at its revision; none: create; near/duplicate: ask; never delete.",
+          "Require zone name/places/charge name/fee/active and the charge for the rest of Bangladesh (the zone holding the whole of BD). One exact zone: update at its revision; none: create; near/duplicate: ask; never delete.",
           "Require readiness + active shipping/delivery hierarchy; revision-merge guest only. Failure: stop/reread/report partial; no rollback/retry. Never touch SEO/analytics; verify both audiences."
         ]
       },
@@ -203138,8 +203377,8 @@
         "id": "dashboard.shipping-method",
         "surface": "dashboard",
         "kind": "write",
-        "title": "Create a delivery zone",
-        "summary": "Create a delivery zone with its places and charges and verify admin and storefront visibility.",
+        "title": "Create a shipping zone",
+        "summary": "Create a shipping zone with its countries, regions or delivery areas and its charges, and verify admin and storefront visibility.",
         "examples": [
           "Add a Dhaka delivery zone with the merchant-provided price and make sure it appears at checkout."
         ],
@@ -203158,8 +203397,8 @@
         "requiresConfirmation": true,
         "requiresVerification": true,
         "rules": [
-          "Require the merchant's zone name, existing places, charge name, fee, optional free-over amount, and active state.",
-          "A place belongs to one zone; the most specific place wins.",
+          "Require the merchant's zone name, its countries, regions, postal-code prefixes or existing Bangladesh places, charge name, fee, optional free-over amount, and active state.",
+          "A region or place belongs to one zone; the most specific match wins: Bangladesh place, postal prefix, region, country.",
           "Confirm creation before the write.",
           "Verify the zone in the admin list and the charge in the buyer list for an address in it."
         ]
@@ -204081,7 +204320,7 @@
           "dashboard.shipping_zones.create",
           "dashboard.shipping_zones.update",
           "dashboard.shipping_zones.delete",
-          "dashboard.shipping_zones.everywhere_else_update",
+          "dashboard.shipping_zones.pickup_update",
           "dashboard.shipping_zones.apply_template",
           "dashboard.checkout.flow_update",
           "dashboard.seo.settings_update",
@@ -204147,7 +204386,7 @@
           "dashboard.shipping_zones.create",
           "dashboard.shipping_zones.update",
           "dashboard.shipping_zones.delete",
-          "dashboard.shipping_zones.everywhere_else_update",
+          "dashboard.shipping_zones.pickup_update",
           "dashboard.shipping_zones.apply_template",
           "dashboard.checkout.flow_update",
           "dashboard.seo.settings_update",
@@ -204303,7 +204542,7 @@
           "dashboard.shipping_zones.create",
           "dashboard.shipping_zones.update",
           "dashboard.shipping_zones.delete",
-          "dashboard.shipping_zones.everywhere_else_update",
+          "dashboard.shipping_zones.pickup_update",
           "dashboard.shipping_zones.apply_template",
           "dashboard.checkout.flow_update",
           "dashboard.seo.settings_update",
@@ -204368,7 +204607,7 @@
           "dashboard.shipping_zones.create",
           "dashboard.shipping_zones.update",
           "dashboard.shipping_zones.delete",
-          "dashboard.shipping_zones.everywhere_else_update",
+          "dashboard.shipping_zones.pickup_update",
           "dashboard.shipping_zones.apply_template",
           "dashboard.checkout.flow_update",
           "dashboard.seo.settings_update",
@@ -204428,7 +204667,7 @@
           "dashboard.shipping_zones.create",
           "dashboard.shipping_zones.update",
           "dashboard.shipping_zones.delete",
-          "dashboard.shipping_zones.everywhere_else_update",
+          "dashboard.shipping_zones.pickup_update",
           "dashboard.shipping_zones.apply_template",
           "dashboard.checkout.flow_update",
           "dashboard.seo.settings_update",
@@ -204546,7 +204785,7 @@
           "dashboard.shipping_zones.create",
           "dashboard.shipping_zones.update",
           "dashboard.shipping_zones.delete",
-          "dashboard.shipping_zones.everywhere_else_update",
+          "dashboard.shipping_zones.pickup_update",
           "dashboard.shipping_zones.apply_template",
           "dashboard.checkout.flow_update",
           "dashboard.seo.settings_update",
@@ -204610,7 +204849,7 @@
           "dashboard.shipping_zones.create",
           "dashboard.shipping_zones.update",
           "dashboard.shipping_zones.delete",
-          "dashboard.shipping_zones.everywhere_else_update",
+          "dashboard.shipping_zones.pickup_update",
           "dashboard.shipping_zones.apply_template",
           "dashboard.checkout.flow_update",
           "dashboard.seo.settings_update",
@@ -204672,7 +204911,7 @@
           "dashboard.shipping_zones.create",
           "dashboard.shipping_zones.update",
           "dashboard.shipping_zones.delete",
-          "dashboard.shipping_zones.everywhere_else_update",
+          "dashboard.shipping_zones.pickup_update",
           "dashboard.shipping_zones.apply_template",
           "dashboard.checkout.flow_update",
           "dashboard.seo.settings_update",
@@ -204739,7 +204978,7 @@
           "dashboard.shipping_zones.create",
           "dashboard.shipping_zones.update",
           "dashboard.shipping_zones.delete",
-          "dashboard.shipping_zones.everywhere_else_update",
+          "dashboard.shipping_zones.pickup_update",
           "dashboard.shipping_zones.apply_template",
           "dashboard.checkout.flow_update",
           "dashboard.seo.settings_update",
@@ -204803,7 +205042,7 @@
           "dashboard.shipping_zones.create",
           "dashboard.shipping_zones.update",
           "dashboard.shipping_zones.delete",
-          "dashboard.shipping_zones.everywhere_else_update",
+          "dashboard.shipping_zones.pickup_update",
           "dashboard.shipping_zones.apply_template",
           "dashboard.checkout.flow_update",
           "dashboard.seo.settings_update",
@@ -204869,7 +205108,7 @@
           "dashboard.shipping_zones.create",
           "dashboard.shipping_zones.update",
           "dashboard.shipping_zones.delete",
-          "dashboard.shipping_zones.everywhere_else_update",
+          "dashboard.shipping_zones.pickup_update",
           "dashboard.shipping_zones.apply_template",
           "dashboard.checkout.flow_update",
           "dashboard.seo.settings_update",
@@ -205619,7 +205858,7 @@
           "dashboard.shipping_zones.create",
           "dashboard.shipping_zones.update",
           "dashboard.shipping_zones.delete",
-          "dashboard.shipping_zones.everywhere_else_update",
+          "dashboard.shipping_zones.pickup_update",
           "dashboard.shipping_zones.apply_template",
           "dashboard.checkout.flow_update",
           "dashboard.seo.settings_update",
@@ -205735,7 +205974,7 @@
           "dashboard.shipping_zones.create",
           "dashboard.shipping_zones.update",
           "dashboard.shipping_zones.delete",
-          "dashboard.shipping_zones.everywhere_else_update",
+          "dashboard.shipping_zones.pickup_update",
           "dashboard.shipping_zones.apply_template",
           "dashboard.checkout.flow_update",
           "dashboard.seo.settings_update",
@@ -209700,11 +209939,11 @@
           ]
         },
         {
-          "operationId": "dashboard.shipping_zones.everywhere_else_update",
+          "operationId": "dashboard.shipping_zones.pickup_update",
           "surface": "dashboard",
-          "mode": "curated",
+          "mode": "operation-fallback",
           "workflowIds": [
-            "dashboard.bangladesh-checkout-supported-setup"
+            "operation.dashboard.shipping_zones.pickup_update"
           ]
         },
         {

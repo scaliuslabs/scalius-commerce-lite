@@ -458,6 +458,8 @@ app.openapi(createOrderRoute, async (c) => {
         city: data.city,
         zone: data.zone,
         area: data.area,
+        shippingAdminArea: data.shippingAdminArea,
+        shippingPostalCode: data.shippingPostalCode,
         shippingMethodId: data.shippingMethodId,
         customerEmail: data.customerEmail,
         customerPhone: data.customerPhone,
@@ -564,6 +566,8 @@ app.openapi(createOrderRoute, async (c) => {
       await assertStorefrontAppPaymentMethod(apps, result.appCart, result.paymentMethod, resolveCartPaymentMethods(
         checkoutAuthority.activePaymentMethods.enabledMethods,
         deliveryPreflight.fulfilment,
+        deliveryPreflight.address?.countryCode ?? null,
+        paymentProviders,
       ), paymentProviders);
     }
     // Then the gift cards: still usable, and the amount due the buyer reviewed.

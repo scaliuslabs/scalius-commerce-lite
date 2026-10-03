@@ -197,12 +197,12 @@ function dailyData(): Record<string, unknown> {
             internalProviderToken: "hidden-shipping-token",
           },
         ],
-        everywhereElse: {
+        pickup: {
           rates: [
             {
               id: "ship_1",
-              kind: "delivery",
-              name: "Standard delivery",
+              kind: "pickup",
+              name: "Shop pickup",
               fee: 80,
               freeOver: 1000,
               isActive: true,
@@ -414,10 +414,10 @@ describe("executeAuthorizedWorkflowRead", () => {
         },
         "readiness.delivery": {
           zones: [{ id: "zone_dhaka", name: "Inside Dhaka" }],
-          everywhereElseRates: [{
+          pickupRates: [{
             id: "ship_1",
-            kind: "delivery",
-            name: "Standard delivery",
+            kind: "pickup",
+            name: "Shop pickup",
             fee: 80,
             freeOver: 1000,
             isActive: true,

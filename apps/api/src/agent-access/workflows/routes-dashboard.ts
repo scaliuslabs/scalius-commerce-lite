@@ -699,7 +699,7 @@ export const DASHBOARD_AGENT_WORKFLOW_ROUTES = [
     title: "Bangladesh checkout setup",
     summary: "Apply reviewed Bangladesh payment, delivery-zone, and guest setup; verify buyer truth.",
     examples: [
-      "Configure accepted Bangladesh setup: supplied BDT symbol/rate; keep Dhaka time/phone fixed; preserve payments/default; add COD/proven SSLCommerz; Inside Dhaka zone 80 and everywhere else 150; turn on guests only after readiness; verify buyer checkout.",
+      "Configure accepted Bangladesh setup: supplied BDT symbol/rate; keep Dhaka time/phone fixed; preserve payments/default; add COD/proven SSLCommerz; Inside Dhaka zone 80 and the Bangladesh zone 150; turn on guests only after readiness; verify buyer checkout.",
     ],
     tags: ["bangladesh", "bdt", "checkout", "delivery-zones"],
     operationIds: [
@@ -712,7 +712,6 @@ export const DASHBOARD_AGENT_WORKFLOW_ROUTES = [
       "dashboard.payments.methods_update",
       "dashboard.shipping_zones.create",
       "dashboard.shipping_zones.update",
-      "dashboard.shipping_zones.everywhere_else_update",
       "dashboard.checkout.readiness_get",
       "dashboard.checkout.flow_update",
       "storefront.checkout.get_config",
@@ -726,7 +725,7 @@ export const DASHBOARD_AGENT_WORKFLOW_ROUTES = [
       "BDT needs unlocked code, explicit symbol, positive USD rate; write/reread all or stop.",
       "Set only {enabled:true} after configured/no-error SSLCommerz status; no secrets/sandbox. Reread usable; no charge proof.",
       "Require keep/disable intent per payment and exact default; union COD/usable SSLCommerz into fresh enabledMethods. Never choose.",
-      "Require zone name/places/charge name/fee/active and everywhere-else charges. One exact zone: update at its revision; none: create; near/duplicate: ask; never delete.",
+      "Require zone name/places/charge name/fee/active and the charge for the rest of Bangladesh (the zone holding the whole of BD). One exact zone: update at its revision; none: create; near/duplicate: ask; never delete.",
       "Require readiness + active shipping/delivery hierarchy; revision-merge guest only. Failure: stop/reread/report partial; no rollback/retry. Never touch SEO/analytics; verify both audiences.",
     ],
   },
@@ -813,8 +812,8 @@ export const DASHBOARD_AGENT_WORKFLOW_ROUTES = [
     id: "dashboard.shipping-method",
     surface: "dashboard",
     kind: "write",
-    title: "Create a delivery zone",
-    summary: "Create a delivery zone with its places and charges and verify admin and storefront visibility.",
+    title: "Create a shipping zone",
+    summary: "Create a shipping zone with its countries, regions or delivery areas and its charges, and verify admin and storefront visibility.",
     examples: [
       "Add a Dhaka delivery zone with the merchant-provided price and make sure it appears at checkout.",
     ],
@@ -828,8 +827,8 @@ export const DASHBOARD_AGENT_WORKFLOW_ROUTES = [
     requiresConfirmation: true,
     requiresVerification: true,
     rules: [
-      "Require the merchant's zone name, existing places, charge name, fee, optional free-over amount, and active state.",
-      "A place belongs to one zone; the most specific place wins.",
+      "Require the merchant's zone name, its countries, regions, postal-code prefixes or existing Bangladesh places, charge name, fee, optional free-over amount, and active state.",
+      "A region or place belongs to one zone; the most specific match wins: Bangladesh place, postal prefix, region, country.",
       "Confirm creation before the write.",
       "Verify the zone in the admin list and the charge in the buyer list for an address in it.",
     ],

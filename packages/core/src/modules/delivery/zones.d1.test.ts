@@ -404,6 +404,38 @@ describe("shipping zone editing", () => {
     });
 });
 
+describe("D1 cost of zones by region (MARKETS-DESIGN step 3b)", () => {
+    it("reads a destination's rates in the statements a Bangladesh address cost before", async () => {
+        let statements = 0;
+        let batches = 0;
+        const harness = createSqliteD1Database({
+            onQuery: () => { statements += 1; },
+            beforeBatch: () => { batches += 1; },
+        });
+        harness.sqlite.exec(`
+            INSERT INTO delivery_locations (id, name, type, parent_id, external_ids, metadata, is_active) VALUES
+                ('dhaka', 'Dhaka', 'city', NULL, '{}', '{}', 1), ('mirpur', 'Mirpur', 'zone', 'dhaka', '{}', '{}', 1),
+                ('ctg', 'Chattogram', 'city', NULL, '{}', '{}', 1), ('agrabad', 'Agrabad', 'zone', 'ctg', '{}', '{}', 1);
+            INSERT INTO delivery_zones (id, name) VALUES ('dz_dhaka', 'Inside Dhaka'), ('dz_bd', 'Bangladesh');
+            INSERT INTO delivery_zone_locations (location_id, zone_id) VALUES ('dhaka', 'dz_dhaka');
+            INSERT INTO delivery_zone_regions (country_code, zone_id) VALUES ('BD', 'dz_bd');
+            INSERT INTO shipping_methods (id, name, fee_minor, zone_id) VALUES ('sm_in', 'Inside Dhaka', 6000, 'dz_dhaka'), ('sm_out', 'Outside Dhaka', 12000, 'dz_bd');
+        `);
+        const cost = async (read: () => Promise<unknown>) => {
+            [statements, batches] = [0, 0];
+            await read();
+            return { statements, batches };
+        };
+        // One statement for the zone candidates (locations and regions), one for the rates: as before.
+        expect(await cost(() => listDeliveryRatesForDestination(harness.db, { city: "ctg", zone: "agrabad" }))).toEqual({ statements: 2, batches: 0 });
+        expect(await cost(() => listDeliveryRatesForDestination(harness.db, { countryCode: "US", postalCode: "94103" }))).toEqual({ statements: 2, batches: 0 });
+        expect(await cost(() => listDeliveryRatesForDestination(harness.db, null))).toEqual({ statements: 1, batches: 0 });
+        // The preflight: one batch of the locations and the rate (which carries its country's regions).
+        expect(await cost(() => validateStorefrontDeliveryPreflight(harness.db, { city: "ctg", zone: "agrabad", shippingMethodId: "sm_out" }, cart(10_000))))
+            .toEqual({ statements: 2, batches: 1 });
+    });
+});
+
 describe("0072 delivery zones migration", () => {
     it.each(["d1", "turso"] as const)("keeps existing flat charges as zoneless rates (%s)", (provider) => {
         const sqlite = createMigratedSqlite({ provider, beforeMigration: "0072_" });

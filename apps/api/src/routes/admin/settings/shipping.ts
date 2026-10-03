@@ -3,12 +3,13 @@ import {
     MAX_DELIVERY_AMOUNT,
     MAX_ZONE_LOCATIONS,
     MAX_ZONE_RATES,
+    MAX_ZONE_REGIONS,
     applyDeliveryZoneTemplate,
     createDeliveryZone,
     deleteDeliveryZone,
     listDeliveryZones,
     updateDeliveryZone,
-    updateEverywhereElseRates,
+    updatePickupRates,
 } from "@scalius/core/modules/delivery";
 import { getCurrencyConfig } from "@scalius/core/modules/settings";
 import { readStoreCurrency } from "@scalius/core/modules/markets";
@@ -16,11 +17,14 @@ import { readStoreCurrency } from "@scalius/core/modules/markets";
 import { ok, created, noContent } from "../../../utils/api-response";
 import { successEnvelope, noContentResponse, errorResponses, conflictResponse } from "../../../schemas/responses";
 
-// Delivery zones and their rates. Rates are checkout data and feed
-// Product/Offer JSON-LD on cached pages; database triggers advance dependencies.
+// Shipping zones (Shopify's model, MARKETS-DESIGN step 3b): the countries,
+// admin areas, postal-code prefixes and Bangladesh delivery areas each zone
+// serves, its delivery rates, and local pickup. Rates are checkout data and
+// feed Product/Offer JSON-LD and catalog feeds on cached pages; database
+// triggers advance dependencies.
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
-const TAGS = ["Admin - Delivery Zones"];
+const TAGS = ["Admin - Shipping Zones"];
 
 const amount = (message: string) => z.number().min(0, "Enter 0 or more.").max(MAX_DELIVERY_AMOUNT, message);
 
@@ -37,11 +41,25 @@ const rateInputSchema = z.object({
 });
 const ratesSchema = z.array(rateInputSchema).max(MAX_ZONE_RATES);
 
+const regionInputSchema = z.object({
+    countryCode: z.string().trim().length(2, "Use a two-letter ISO country code."),
+    adminArea: z.string().trim().max(120).optional().nullable().openapi({
+        description: "One admin area (state, province, division) of the country: its address rules' code or name. Omit for the whole country.",
+    }),
+    postalPrefix: z.string().trim().max(20).optional().nullable().openapi({
+        description: "Postal codes that start with these letters and digits (spaces and dashes are ignored, at most 10). Omit for the whole country.",
+    }),
+});
+
 const zoneInputSchema = z.object({
     name: z.string().trim().min(1, "Enter a zone name.").max(100),
+    regions: z.array(regionInputSchema).max(MAX_ZONE_REGIONS).default([]).openapi({
+        description: "Countries, admin areas and postal-code prefixes. A region belongs to one zone. Bangladesh is served whole here or through `locationIds`.",
+    }),
     locationIds: z.array(z.string().trim().min(1).max(128))
-        .min(1, "Choose at least one city, thana or area.")
-        .max(MAX_ZONE_LOCATIONS),
+        .max(MAX_ZONE_LOCATIONS)
+        .default([])
+        .openapi({ description: "Bangladesh delivery areas (cities, thanas, areas). A place belongs to one zone." }),
     rates: ratesSchema,
 });
 
@@ -62,6 +80,11 @@ const zonesSchema = z.object({
         id: z.string(),
         name: z.string(),
         revision: z.number().int(),
+        regions: z.array(z.object({
+            countryCode: z.string(),
+            adminArea: z.string().nullable(),
+            postalPrefix: z.string().nullable(),
+        })),
         locations: z.array(z.object({
             id: z.string(),
             name: z.string(),
@@ -70,7 +93,7 @@ const zonesSchema = z.object({
         })),
         rates: z.array(rateSchema),
     })),
-    everywhereElse: z.object({ revision: z.number().int(), rates: z.array(rateSchema) }),
+    pickup: z.object({ revision: z.number().int(), rates: z.array(rateSchema) }),
 });
 
 const revisionSchema = z.object({ id: z.string().optional(), revision: z.number().int() });
@@ -85,7 +108,7 @@ const listRoute = createRoute({
     path: "/",
     operationId: "dashboard.shipping_methods.list",
     tags: TAGS,
-    summary: "List delivery zones, their areas and rates, plus the Everywhere else rates",
+    summary: "List shipping zones (their regions, delivery areas and rates) and local pickup",
     responses: {
         200: { description: "Delivery zones", content: { "application/json": { schema: successEnvelope(zonesSchema) } } },
         ...errorResponses,
@@ -102,7 +125,7 @@ const createZoneRoute = createRoute({
     path: "/",
     operationId: "dashboard.shipping_zones.create",
     tags: TAGS,
-    summary: "Create a delivery zone with its areas and rates",
+    summary: "Create a shipping zone with its regions, delivery areas and rates",
     request: { body: { required: true, content: { "application/json": { schema: zoneInputSchema } } } },
     responses: {
         201: { description: "Zone created", content: { "application/json": { schema: successEnvelope(revisionSchema) } } },
@@ -118,12 +141,12 @@ app.openapi(createZoneRoute, async (c) => {
     return created(c, result);
 });
 
-const everywhereElseRoute = createRoute({
+const pickupRoute = createRoute({
     method: "put",
-    path: "/everywhere-else",
-    operationId: "dashboard.shipping_zones.everywhere_else_update",
+    path: "/pickup",
+    operationId: "dashboard.shipping_zones.pickup_update",
     tags: TAGS,
-    summary: "Replace the rates for addresses outside every delivery zone",
+    summary: "Replace the local pickup rates (offered to every buyer)",
     request: {
         body: {
             required: true,
@@ -137,10 +160,10 @@ const everywhereElseRoute = createRoute({
     },
 });
 
-app.openapi(everywhereElseRoute, async (c) => {
+app.openapi(pickupRoute, async (c) => {
     const db = c.get("db");
     const { rates, expectedRevision } = c.req.valid("json");
-    const result = await updateEverywhereElseRates(db, rates, expectedRevision, await readStoreCurrency(db));
+    const result = await updatePickupRates(db, rates, expectedRevision, await readStoreCurrency(db));
 
     return ok(c, result);
 });
@@ -150,7 +173,7 @@ const templateRoute = createRoute({
     path: "/template",
     operationId: "dashboard.shipping_zones.apply_template",
     tags: TAGS,
-    summary: "Start from Dhaka-centric zones (inside/outside, or inside/near/outside Dhaka)",
+    summary: "Start from Dhaka-centric zones (inside/outside, or inside/near/outside Dhaka), only without zones",
     request: {
         body: {
             required: true,
@@ -158,7 +181,6 @@ const templateRoute = createRoute({
                 "application/json": {
                     schema: z.object({
                         template: z.enum(["dhaka_two_zone", "dhaka_three_zone"]),
-                        expectedRevision: z.number().int().min(0).openapi({ description: "The Everywhere else revision the dashboard loaded." }),
                     }),
                 },
             },
@@ -173,8 +195,8 @@ const templateRoute = createRoute({
 
 app.openapi(templateRoute, async (c) => {
     const db = c.get("db");
-    const { template, expectedRevision } = c.req.valid("json");
-    await applyDeliveryZoneTemplate(db, template, expectedRevision, await readStoreCurrency(db));
+    const { template } = c.req.valid("json");
+    await applyDeliveryZoneTemplate(db, template, await readStoreCurrency(db));
 
     return noContent(c);
 });
@@ -184,7 +206,7 @@ const updateZoneRoute = createRoute({
     path: "/{id}",
     operationId: "dashboard.shipping_zones.update",
     tags: TAGS,
-    summary: "Replace a delivery zone's name, areas and rates",
+    summary: "Replace a shipping zone's name, regions, delivery areas and rates",
     request: {
         params: zoneParams,
         body: {
@@ -213,7 +235,7 @@ const deleteZoneRoute = createRoute({
     path: "/{id}",
     operationId: "dashboard.shipping_zones.delete",
     tags: TAGS,
-    summary: "Delete a delivery zone; its areas get the Everywhere else rates",
+    summary: "Delete a shipping zone; its addresses fall to the next matching zone, or get no delivery rate",
     request: { params: zoneParams },
     responses: {
         204: noContentResponse,
