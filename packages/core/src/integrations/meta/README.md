@@ -12,7 +12,7 @@ Storefront (Browser)              API Worker (Hono)                Core Package
 meta-capi.ts                      meta-conversions.ts              conversions-api.ts
   sendServerEvent() --fetch-----> POST /api/v1/meta/events ------> sendCapiEvent()
                                                                      prepareUserData()
-                                                                     meta.service.ts (settings/logging)
+                                                                     capi-settings.ts (settings/logging)
                                                                      crypto-utils.ts (hashing)
 
 order-success.astro               orders/queue/scheduled           purchase-outbox.ts
@@ -107,7 +107,7 @@ Event logs are stored in `metaConversionsLogs` table:
 - Duplicate event ids update the existing diagnostic row instead of inserting noisy duplicates; a successful event is not downgraded by a later failed duplicate
 - Auto-cleaned based on `logRetentionDays` setting via lazy cleanup on each log write
 
-## Service Layer (`packages/core/src/modules/analytics/meta.service.ts`)
+## Service Layer (`packages/core/src/integrations/meta/capi-settings.ts`)
 
 Standalone functions (not a class):
 - `getCapiSettings(db, encryptionKey?)` -- Fetches singleton settings row, tolerates legacy plaintext tokens, and returns no access token when an encrypted token cannot be decrypted with `CREDENTIAL_ENCRYPTION_KEY`
@@ -131,4 +131,4 @@ This runs in the browser. The actual CAPI call happens server-side in the API wo
 
 - Web Crypto API (`crypto.subtle`) -- SHA-256 hashing
 - `@scalius/database` -- `settings` (`meta_conversions` document), `metaConversionsLogs`, `metaCapiPurchaseOutbox`, `orders`, and `orderItems` tables
-- `modules/analytics/meta.service.ts` (analytics domain) -- `getCapiSettings()` and `logCapiEvent()` functions
+- `capi-settings.ts` (this directory) -- `getCapiSettings()` and `logCapiEvent()` functions

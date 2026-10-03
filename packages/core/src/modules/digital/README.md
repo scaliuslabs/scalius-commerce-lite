@@ -20,7 +20,7 @@ Public entries: `index.ts` (server) and `browser.ts` (asset kinds, upload and ke
 
 ## Edges
 
-`digital → inventory` (key import/revoke as ledger-v2 stock edges). `fulfilment → digital` only through `fulfilment/auto/digital.ts`; `checkout → digital` only through `deliverable.ts`. Nothing in the existing cycle group imports `digital`; notification content is resolved by `apps/api/src/notification-content/digital.ts`.
+`digital → inventory` (key import/revoke as ledger-v2 stock edges). `fulfilment → digital` only through `fulfilment/auto/digital.ts`; `checkout → digital` only through `deliverable.ts`. Nothing else imports `digital`; notification content is resolved by `apps/api/src/notification-content/digital.ts`.
 
 ## Invariants (design §3.6, tests in `digital.d1.test.ts`)
 

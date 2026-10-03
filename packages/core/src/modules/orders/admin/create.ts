@@ -422,7 +422,7 @@ export async function createManualOrder(
 
     // App discounts (checkout functions) sit on top of the staff discount:
     // line discount = staff part + app part, recorded as `app_discount` facts
-    // exactly as a storefront order records them (orders/app-facts.ts).
+    // exactly as a storefront order records them (order-kernel/app-facts.ts).
     if (appDiscounts.length > 0) {
         const orderItemIdByLineId = new Map(preparedOrderItems.map(({ id }, index) => [allocationLineIds[index]!, id]));
         writeBatch.push(...buildAppDiscountFactInserts(db, {

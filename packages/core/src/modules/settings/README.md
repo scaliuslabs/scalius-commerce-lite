@@ -7,14 +7,14 @@ wrappers over the documents.
 
 ## Files
 
-- `settings-store.ts` -- `defineSettingsDocument()` and `selectSettingsDocuments()`: the only code that reads or writes document rows
-- `documents.ts` -- the shared document definitions (key, zod schema, defaults, secret fields, optional KV mirror); a domain that owns a document declares it itself (`notifications/documents.ts`, `delivery/zones.ts`, `inventory/low-stock-policy.ts`)
+- `@scalius/core/settings-store` (`packages/core/src/settings-store/`, infrastructure, not a domain) -- `defineSettingsDocument()` and `selectSettingsDocuments()`: the only code that reads or writes document rows. It imports no domain, so any domain can own a document without depending on `settings`
+- `documents.ts` -- the shared document definitions (key, zod schema, defaults, secret fields, optional KV mirror); a domain that owns a document declares it itself (`platform/document.ts`, `notifications/documents.ts`, `delivery/zones.ts`, `products/low-stock-policy.ts`)
 - `staff-shortcuts.ts` -- one per-staff-member document (`staff-shortcuts:<userId>`, no KV, no secrets) for dashboard keyboard shortcuts; saves replace the whole map; the row is deleted with staff removal and invitation revocation
-- `../platform/platform-settings.service.ts` (the platform domain) -- deployment public origins (storefront/API/dashboard/media URLs, customer cookie domain, extra CORS origins) and their KV-first Worker-entry resolution
+- `../platform/` (the platform domain owns the `platform` document and its service) -- deployment public origins (storefront/API/dashboard/media URLs, customer cookie domain, extra CORS origins) and their KV-first Worker-entry resolution
 - `site-settings.service.ts` -- currency, header/footer/homepage presentation (CAS), published theme/draft workflow, media delivery, SEO, storefront URL, allowed countries
 - `settings.service.ts` -- `getCurrencyConfig()`
 - `business-settings.service.ts`, `customer-request-policy.ts` -- one document each
-- `checkout-readiness.ts` -- checkout and customer sign-in readiness (the checkout domain's `config.ts` assembles the public checkout configuration from it)
+- Readiness is not here: checkout readiness lives in `checkout/readiness.ts`, customer sign-in readiness in `customers/sign-in-readiness.ts`, and their shared shapes and codes in `@scalius/shared/checkout-readiness`
 
 ## Settings documents
 

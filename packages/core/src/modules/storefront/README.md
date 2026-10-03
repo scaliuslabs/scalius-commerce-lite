@@ -134,7 +134,7 @@ The look (logo, announcement, footer words) is the theme document and
 ## Dependencies
 
 - `@scalius/database` -- `categories`, `collections`, `media`, `theme_settings`, `analytics`, `pages`, `settings`
-- `@scalius/core/integrations/analytics` -- `processAnalyticsScript()`, `shouldUsePartytown()`
+- `../analytics` -- `processAnalyticsScript()`, `shouldUsePartytown()`
 - `../catalog` -- `resolveCollectionProductsBatch()`
 
 ## Known Gaps

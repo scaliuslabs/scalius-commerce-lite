@@ -13,7 +13,7 @@ Typed product attributes (migration 0090): definitions, spec groups, the value v
 | `attribute-groups.ts` | Spec groups (`atg_`); trashing a group ungroups its attributes |
 | `attribute-types.ts` | `convertAttributeValueType`: validate everything, switch the type, then rewrite rows in resumable keyset chunks |
 | `category-attribute-sets.ts` | Effective set through `category_closure`; order key `(3 - depth) * 100000 + sort_order`, lowest per attribute, ties by name |
-| `product-attribute-values.ts` | `prepareProductAttributeValueRows`, used by `products/admin/write.ts` |
+| `product-attribute-values.ts` | `prepareProductAttributeValueRows`, used by `product-admin/write.ts` |
 | `projection-refresh.ts` | `CatalogProjectionRefresh` (injected by the caller) and the 90-products-per-batch walker |
 
 ## Rules

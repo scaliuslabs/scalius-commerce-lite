@@ -14,9 +14,9 @@ Policy CRUD with immutable revisions, the product warranty projection, the per-l
 - Routers: `apps/api/src/routes/admin/warranty-policies.ts`, `routes/admin/warranty-claims.ts`, `routes/admin/orders/warranty-claims.ts` (staff opens a claim from an order), `routes/customer-auth/warranties.ts`, `routes/storefront-orders/warranties.ts`.
 - Permissions (`PRODUCTS_EDIT` for policies, `ORDERS_EDIT` for claims) in `route-permissions/warranty.ts`; operations in `operation-registry/{dashboard,storefront}-warranty.ts`.
 
-## Planned edges
+## Domain edges
 
-`warranty → conversations` (claim threads), `orders` (line and fulfilment reads), `products` (the product's policy). No domain in the existing cycle group may import `warranty`.
+`warranty → conversations` (claim threads) and `warranty → media-references`. Nothing imports `warranty`; an edge back from a lower domain would close a cycle, which the domain graph check rejects.
 
 ## Invariants (design §5.4)
 

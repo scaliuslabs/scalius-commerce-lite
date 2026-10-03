@@ -59,8 +59,9 @@ Browser (Admin)                  Browser (Customer)
                        │
 ┌──────────────────────┴──────────────────────────────┐
 │  @scalius/core (domain services)                     │
-│  27 domains under src/modules, plus auth,            │
-│  integrations, search, errors, utils                 │
+│  39 domains under src/modules (an acyclic graph),    │
+│  plus settings-store, auth, integrations, search,    │
+│  cache-deps, errors, utils                           │
 └──────────────────────┬──────────────────────────────┘
                        │
 ┌──────────────────────┴──────────────────────────────┐
@@ -84,7 +85,7 @@ this document does not certify a clean tree by itself.
 |-------|-----------|---------------|
 | Dashboard browser code (`apps/admin-v2/src`) | `@scalius/shared`, `@scalius/api-client`, `@scalius/core/modules/<domain>/browser` | A domain `index`, any deeper core path, relational provider clients |
 | API routes (`apps/api/src/routes/`) | `@scalius/core/modules/<domain>` and `/browser`, `@scalius/database`, `@scalius/shared` | Deeper core paths; nothing imports routes |
-| Core domains (`packages/core/src/modules/<domain>/`) | Their own files, other domains' public files, `@scalius/database`, `@scalius/shared` | Routes, apps, other domains' internal files |
+| Core domains (`packages/core/src/modules/<domain>/`) | Their own files, lower domains' `index.ts`/`browser.ts` entries, core's shared areas, `@scalius/database`, `@scalius/shared` | Routes, apps, any file inside another domain, a domain that imports them back |
 | Schema (`@scalius/database/schema/`) | `drizzle-orm` only | Services or routes |
 | Shared (`@scalius/shared/`) | Nothing | Pure utilities |
 | Storefront (`apps/storefront`) | `@scalius/shared`, `@scalius/api-client` | `@scalius/core`, `@scalius/database` |
@@ -115,30 +116,42 @@ two public entries:
   included, is itself exported by a browser entry, and it imports nothing but
   `zod`, `@scalius/shared/*` and other browser files.
 
+Other code reaches a domain only through those entries: `../<domain>` or
+`../<domain>/browser` inside core, `@scalius/core/modules/<domain>` (and
+`/browser`) outside it. Next to the domains, core has shared areas that are not
+domains: `settings-store` (the settings document store), `cache-deps`,
+`errors`, `auth`, `integrations`, `search` and `utils`.
+
 | Domain | Owns | Entries |
 |--------|------|---------|
-| `orders` | The order record: dashboard list/detail, manual orders and COD amendments, detail edits, archive, the status lifecycle kernel (`status/`), returns, invoices, receipts, lookup, payment recovery | index, browser |
-| `checkout` | Storefront cart validation, the checkout authority and policy, delivery preflight and pricing, idempotent attempts, the single commit and post-commit side effects, quote fingerprint, abandoned checkouts | index, browser |
+| `orders` | The order record: dashboard list/detail, manual orders and COD amendments, detail edits, archive, the status lifecycle (`status/`), returns, invoices, receipts, lookup, payment recovery, the buyer's account orders and order claims | index, browser |
+| `order-kernel` | What every order writer shares: the order/payment/fulfilment state machine, the shipment claim lease, the payment-session and refund-attempt locks, app facts on an order. Imports no domain | index, browser |
+| `checkout` | Storefront cart validation, the checkout authority and policy, checkout flow settings, public checkout configuration and readiness, delivery preflight and pricing, idempotent attempts, the single commit and post-commit side effects, quote fingerprint, abandoned checkouts | index, browser |
 | `fulfilment` | The actions that hand units over, all written to the fulfilment ledger (`ledger.ts`, the only writer of `order_fulfillments`; `fulfilled_quantity` is its trigger projection): own-rider parcels, courier bookings and their reconciliation, pickup (ready / picked up with cash at the counter), service done, void, delivery outcomes (delivered, COD collected/failed/returned), and the fulfiller registry plus the automatic-fulfilment seam (Wave B fulfillers) | index |
-| `products` | The merchant-edited product aggregate (products, SKUs, options, media, validation, aggregate revision) and the product rules others read through (public eligibility, buyer pricing, money) | index |
-| `catalog` | Buyer-facing catalogue reads: listings, facets, product page, search, feeds, sitemaps, recommendations, storefront sections, feed diagnostics | index |
-| `categories`, `collections`, `attributes` | Their records, publication rules and admin writes; `categories` also owns the tree (placement pre-check, moves, trash rules and tree reads over the trigger-maintained closure) | index, browser |
+| `products` | The product model and the rules others read through: public eligibility, buyer pricing and projections, option model, money, low-stock policy, catalog projections | index |
+| `product-admin` | The dashboard's product editor: create/update/duplicate, SKUs and the option matrix, trash/restore/delete, admin reads, tax classification, all under one aggregate revision with stock written to the inventory ledger in the same batch | index |
+| `catalog` | Buyer-facing catalogue reads: listings, facets, product page, collection reads, site search, feeds, sitemaps, recommendations, storefront sections, feed diagnostics | index |
+| `categories`, `collections`, `attributes`, `custom-fields` | Their records, publication rules and admin writes; `categories` also owns the tree (placement pre-check, moves, trash rules and tree reads over the trigger-maintained closure) | index, browser |
 | `brands` | Brand records, their revision-guarded writes and buyer reads (brand page, list, sitemap); `catalog` joins a product's published brand through it | index, browser |
-| `inventory` | Reservations, deductions, releases, restores, ledger v2, low-stock alerts, stock adjustment | index |
-| `payments` | Gateway port and adapters, sessions, payment application, refunds and reconciliation, COD records | index, browser |
+| `inventory` | Reservations, deductions, releases, restores, ledger v2, low-stock alerts, stock adjustment, purchase orders and transfers | index |
+| `payments` | Gateway port and adapters, gateway settings, sessions, payment application, refunds and reconciliation, COD records | index, browser |
 | `delivery` | Courier providers, shipments, tracking, delivery zones and locations | index, browser |
 | `promotions` | The discount engine, checkout snapshots, redemptions | index, browser |
 | `tax` | Tax classes, rates, the quote calculator | index, browser |
-| `customers` | Customer records, account auth and OTP, identity, order claims | index, browser |
-| `notifications` | Order notification outbox, delivery receipts, templates, provider health | index, browser |
-| `conversations` | Buyer↔store threads (empty until Wave A) | index, browser |
-| `reviews` | Verified-purchase reviews of delivered lines, moderation, replies, the rating projection, review requests (stubs until Wave B B1) | index, browser |
-| `digital` | Private-R2 files, licence-key pools that are the variant's stock, entitlements, cookie-bound download tickets (stubs until B3) | index, browser |
-| `gift-cards` | Codes, the append-only balance ledger, issue, redemption as a tender, release and refund credit (stubs until B4); a leaf domain that imports no other domain | index, browser |
-| `warranty` | Revisioned warranty policies, per-fulfilment-line warranty records, claims backed by threads (stubs until B5) | index, browser |
-| `settings` | Typed settings documents, their store, and the settings services | index, browser |
-| `platform` | Public origins, CORS and identity handoff for the Worker entry | index |
-| `media`, `pages`, `navigation`, `storefront`, `analytics`, `fraud-checker` | Their records and reads | index (browser where listed in `package.json`) |
+| `customers` | Customer records, account auth and OTP, identity, sign-in readiness, tags and segments | index, browser |
+| `customer-marketing` | Marketing consent per customer and channel, double opt-in, unsubscribe links | index |
+| `notifications` | Its settings documents and channel preferences, order notification outbox, delivery receipts, templates, provider health | index, browser |
+| `conversations` | Buyer↔store threads | index, browser |
+| `reviews` | Verified-purchase reviews of delivered lines, moderation, replies, the rating projection, review requests | index, browser |
+| `digital` | Private-R2 files, licence-key pools that are the variant's stock, entitlements, cookie-bound download tickets | index, browser |
+| `gift-cards` | Codes, the append-only balance ledger, issue, redemption as a tender, release and refund credit. Imports no domain | index, browser |
+| `warranty` | Revisioned warranty policies, per-fulfilment-line warranty records, claims backed by threads | index, browser |
+| `settings` | The shared settings documents and the settings services (currency, presentation, SEO, business, EMI, staff shortcuts). A domain that owns a document declares it itself | index, browser |
+| `platform` | The `platform` document: public origins, CORS and identity handoff for the Worker entry | index |
+| `media` | The Files library: uploads, the usage index, permanent delete | index |
+| `media-references` | How records point at a stored file: the published-object key and URL projection, the deleting-reference batch guard. Imports no domain | index |
+| `events`, `plugins` | The domain event catalogue and outbox fan-out; installed apps' state and lifecycle (`plugins` imports only `events`) | index |
+| `pages`, `navigation`, `storefront`, `analytics`, `fraud-checker`, `store-transfer` | Their records and reads; `pages` also owns the store policy pages, `analytics` the analytics scripts | index (browser where listed in `package.json`) |
 | `agent-access`, `agent-storefront` | Agent connections and the agent storefront workflows | index |
 
 ### How the boundaries are enforced
@@ -151,48 +164,82 @@ two public entries:
    fixtures (the fake payment gateway) for other packages' tests.
 2. **Source policies** (`scripts/check-source-policies.mjs`, samples in its
    test): no deep `@scalius/core/modules` path anywhere; dashboard code imports
-   only browser entries; and `scripts/core-boundaries.mjs` checks the exports
-   map against the domain directories, that every cross-domain import inside
-   core resolves to a file the other domain's entries export, and that browser
-   entries are closed.
+   only browser entries. `scripts/core-boundaries.mjs` checks, inside core:
+   - the exports map matches the domain directories;
+   - **entry-only imports**: every import of a domain from another domain or
+     from a shared area resolves to that domain's `index.ts` or `browser.ts`,
+     never to a file inside it, even one the entry re-exports;
+   - **no import cycle leaves a unit**: in the file import graph, no cycle
+     spans two units (a unit is a domain, or a shared-area directory or file
+     such as `auth/rbac` or `integrations/meta`);
+   - browser entries are closed.
 3. **Graph ratchet** (`scripts/core-domain-graph.test.mjs`): the directed
    domain edges (type imports included) must equal
-   `scripts/core-domain-graph.allow.json`. A new edge needs a reviewed
-   allowlist diff; a removed edge must be deleted from the allowlist, so the
+   `scripts/core-domain-graph.allow.json`, and its `cycles` list is empty: the
+   domain graph is acyclic. A new edge needs a reviewed allowlist diff and may
+   not close a cycle; a removed edge must be deleted from the allowlist, so the
    graph only shrinks. `node scripts/core-boundaries.mjs --write-allowlist`
    regenerates it.
 4. **Dashboard boundary test**
    (`apps/admin-v2/src/lib/browser-core-boundaries.test.ts`) and the admin
    build's bundle scan.
 
-Inside core, a domain imports another domain's *public file* directly
-(`../payments/refund-service`) rather than through its `index.ts`. The domains
-still form one dependency cycle group, and routing internal imports through
-the barrels turns that into module-level cycles where values read while a
-module loads (zod schemas, document definitions, registries) are not yet
-defined. The public-file rule keeps the same boundary without that hazard.
+Because the domain graph has no cycle and no file cycle crosses a unit,
+importing a domain through its `index.ts` is safe: an entry never re-enters a
+module that is still loading, so zod schemas, document definitions and
+registries are always defined when another domain reads them.
 
 ### The dependency graph
 
-The allowlist has 93 directed edges. Fifteen domains form one cycle group
-(catalog, categories, collections, customers, delivery, inventory, media,
-notifications, orders, pages, payments, products, promotions, settings, tax);
-the reciprocal pairs are the debt to pay down first:
+129 directed edges, no cycle. Each layer imports only layers below it
+(computed from the allowlist; a domain sits one layer above the highest domain
+it imports):
 
-| Pair | Why it exists today |
-|------|--------------------|
-| orders ↔ payments | Payment application moves order status; order reads show payment facts. The atomic commit coupling below is intentional. |
-| inventory ↔ products | Stock writes read product pricing and SKU rules; product writes record stock movements. |
-| customers ↔ orders | Order commits update customer stats; customer views read order money and support requests. |
-| delivery ↔ orders | Courier tracking moves order status; order code reads delivery location names. |
-| payments ↔ settings | Gateway settings documents; checkout flow reads the gateway registry. |
-| notifications ↔ settings | Channel preferences live in settings; settings validate notification types. |
-| media ↔ settings | Media usage reads presentation documents; settings resolve media. |
+```
+L10  agent-storefront
+L9   checkout · storefront · warranty
+L8   analytics · conversations · fulfilment
+L7   orders · store-transfer
+L6   customer-marketing · payments · reviews
+L5   navigation · notifications
+L4   catalog · delivery · digital · product-admin
+L3   brands · categories · inventory · pages · promotions
+L2   custom-fields · customers · media · platform · products · tax
+L1   settings · plugins
+L0   order-kernel · media-references · collections · gift-cards · attributes
+     events · agent-access · fraud-checker
+```
 
-Moving the buyer reads out of `products` into `catalog` removed
-`products → categories` and `products → promotions`, so `categories ↔ products`
-and `products ↔ promotions` are gone; `catalog` depends on `products`, never
-the reverse.
+The rules that keep it this way:
+
+- **Leaf modules import no domain**: `order-kernel`, `media-references`,
+  `collections`, `gift-cards`, `attributes`, `events`. Put a fact here when
+  several domains act on it and none of them should own the others.
+- **`settings` imports only `media-references`.** The document store is
+  infrastructure (`@scalius/core/settings-store`), so a domain owns its own
+  document (`platform/document.ts`, `notifications/documents.ts`,
+  `delivery/zones.ts`, `products/low-stock-policy.ts`) and settings never
+  reaches up into the domain that reads it.
+- **`plugins` imports only `events`** (plus `@scalius/shared` and the database).
+- **Orchestrators sit on top**: `checkout`, `fulfilment`, `storefront`,
+  `agent-storefront` and `store-transfer` compose lower domains, and nothing
+  below them imports them. Work that needs two peers goes up into the
+  orchestrator (or the API route) that calls both, not into either peer.
+- **The model sits below its editor**: `products` (rules) is below
+  `inventory` and `tax`; `product-admin` (the editor) is above them. `orders`
+  (workflows) is above `payments`, `delivery` and `notifications`, which share
+  `order-kernel` instead of importing `orders`.
+
+How the old 17-domain cycle group was taken apart: the state machine, the
+shipment claim, the payment-session and refund-attempt locks and app facts
+moved from `orders`/`payments` into `order-kernel`; the product editor moved
+from `products` into `product-admin`; media presentation and the reference
+guard moved from `media` into `media-references`; the settings store became
+infrastructure and the checkout flow, configuration and readiness, the
+notification documents, the store policy pages and the platform document moved
+into the domains that own them; the buyer's account orders and order claims
+moved from `customers` into `orders`; collection reads and site search moved
+into `catalog`.
 
 #### The intentional triangle
 
@@ -205,7 +252,9 @@ PAYMENTS ──── INVENTORY
 ```
 
 Payment confirmation must atomically update inventory and order status. The
-provider-backed `safeBatch()` boundary keeps all three consistent or none.
+provider-backed `safeBatch()` boundary keeps all three consistent or none;
+`payments` writes the order row through `order-kernel`'s state machine and
+locks, so the batch needs no import of `orders`.
 
 ### Per-domain registries and seams
 
@@ -361,7 +410,7 @@ INCOMPLETE ──→ PENDING ──→ (PROCESSING) ──→ CONFIRMED ──�
 ```
 
 The state machine (`packages/shared/src/order-state.ts`, checked by
-`validateTransition()` in `orders/status/state-machine.ts`) lists every legal
+`validateTransition()` in `order-kernel/state-machine.ts`) lists every legal
 move. Who may make it is narrower:
 
 - **The generic status editor** (`updateOrderStatus`, dashboard and agents

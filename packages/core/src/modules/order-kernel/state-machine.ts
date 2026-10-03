@@ -1,4 +1,4 @@
-// src/modules/orders/status/state-machine.ts
+// src/modules/order-kernel/state-machine.ts
 // State machine for validating order status, payment status,
 // and fulfillment status transitions. Prevents invalid status
 // changes that would leave orders in inconsistent states.

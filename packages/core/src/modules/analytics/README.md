@@ -6,12 +6,13 @@ Third-party analytics script management, Meta Conversions API integration, admin
 
 | File | Purpose |
 |------|---------|
-| `index.ts` | Barrel exports (re-exports dashboard.service, analytics.validation, analytics.service, meta.service, meta-pixel-parity, provider-health, reports) |
+| `index.ts` | Server entry (re-exports browser.ts, dashboard.service, analytics.service, meta-pixel-parity, provider-health, reports) |
 | `reports/` | The Analytics overview and reports (see "Analytics and reports") |
 | `analytics.service.ts` | Standalone functions for CRUD on analytics scripts |
 | `analytics.validation.ts` | Zod validation schemas for create/update/toggle |
 | `dashboard.service.ts` | `getDashboardHomeSummary()`, `getDailyActivityData()` |
-| `meta.service.ts` | Standalone functions for Meta Conversions API settings and log management |
+| `browser.ts` | Browser-safe entry: analytics.validation and analytics-scripts |
+| `analytics-scripts.ts` | `processAnalyticsScript()`, `shouldUsePartytown()` and the script policies the storefront and API share |
 | `meta-pixel-parity.ts` | Pure parser/diagnostic helpers for comparing CAPI Pixel ID with active browser Pixel snippets |
 | `provider-health.ts` | Read-only provider readiness summary for admin UI/API without provider calls or secret/script echo |
 
@@ -292,7 +293,7 @@ Past that, or for transaction-dated (Shopify-style) returns:
 
 ## Meta Conversions API
 
-### Exported Functions (`meta.service.ts`)
+### Exported Functions (`@scalius/core/integrations/meta/capi-settings`)
 
 | Function | Signature | Description |
 |----------|-----------|-------------|

@@ -18,7 +18,7 @@ The purchase fulfiller lives in `fulfilment/auto/gift-card.ts` (one card, one `i
 
 ## Edges: none (leaf domain)
 
-`gift-cards` imports only `@scalius/database`, `@scalius/shared` and core `utils`/`errors`. `checkout` (tender at commit), `payments` (refund to card, store credit), `orders` (release on abandon and cancel) and `fulfilment` (issue) import it; any edge back would grow the existing cycle group. Outbox rows are built by callers and settings are passed in.
+`gift-cards` imports only `@scalius/database`, `@scalius/shared` and core `utils`/`errors`. `checkout` (tender at commit), `payments` (refund to card, store credit), `orders` (release on abandon and cancel) and `fulfilment` (issue) import it; any edge back would close a cycle, which the domain graph check rejects. Outbox rows are built by callers and settings are passed in.
 
 ## Invariants (design §4.6)
 

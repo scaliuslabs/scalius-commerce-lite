@@ -20,7 +20,7 @@ function createDb(
         from: vi.fn().mockReturnThis(),
         where: vi.fn(async () => items),
     };
-    // The `app_discount` order facts (orders/app-facts.ts).
+    // The `app_discount` order facts (order-kernel/app-facts.ts).
     const appFactQuery = {
         from: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),

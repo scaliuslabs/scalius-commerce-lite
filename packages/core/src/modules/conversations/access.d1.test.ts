@@ -64,7 +64,7 @@ describe("conversation access (C1) and identity safety (C2)", () => {
     const before = sqlite.prepare("SELECT * FROM conversations").all();
     await expect(resolveBuyerThread(db, { kind: "customer", customerId: "acct_other" }, guest.conversationId)).rejects.toThrow();
 
-    // The order is claimed by a verified account (customers/order-account-claim).
+    // The order is claimed by a verified account (orders/account-claims).
     sqlite.exec("UPDATE orders SET account_owner_customer_id = 'acct_other' WHERE id = 'order_guest'");
     await expect(resolveBuyerThread(db, { kind: "customer", customerId: "acct_other" }, guest.conversationId)).resolves.toMatchObject({ id: guest.conversationId });
     expect((await listBuyerThreads(db, "acct_other")).items.map((item) => item.id)).toEqual([guest.conversationId]);

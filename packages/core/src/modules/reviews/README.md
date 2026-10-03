@@ -26,4 +26,4 @@ The public reads (product page `reviews` field, `GET /products/{id}/reviews`) li
 
 ## Domain edges
 
-`reviews → settings` (the reviews document), `reviews → notifications` (outbox rows built in the review's own batch), `reviews → media` (published image keys). Orders, order items, fulfilments, products and the review thread row are read or written through the schema (no `orders`, `products` or `conversations` edge). The three targets sit in the existing cycle group, but no member of that group imports `reviews`, so the group does not grow.
+`reviews → settings` (the reviews document), `reviews → notifications` (outbox rows built in the review's own batch), `reviews → media-references` (published image keys). Orders, order items, fulfilments, products and the review thread row are read or written through the schema (no `orders`, `products` or `conversations` edge). Nothing imports `reviews`.
