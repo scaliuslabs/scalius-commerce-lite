@@ -39,7 +39,7 @@ Public entries: `index.ts` (the server API) and `browser.ts` (the quote fingerpr
 
 ## App functions (plugin platform phase 2b)
 
-Installed apps (`docs/platform/PLUGINS.md`) can declare checkout function
+Installed apps ([plugin SDK](../../../../plugin-sdk/README.md)) can declare checkout function
 points. The API builds one runner per request (`apps/api/src/plugins/
 checkout-functions.ts`) from the active registrations, read in a wave the
 request already makes (the checkout read batch, or the first `Promise.all`

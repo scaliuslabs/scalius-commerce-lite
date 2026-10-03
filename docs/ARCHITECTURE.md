@@ -130,7 +130,7 @@ The graph has no cycle, and no file cycle crosses a unit. So importing a domain 
 
 ### The dependency graph
 
-The allowlist holds 129 directed edges. A domain sits one layer above the highest domain it imports. There are 11 layers:
+The allowlist holds 130 directed edges. A domain sits one layer above the highest domain it imports. There are 11 layers:
 
 ```text
 L10  agent-storefront

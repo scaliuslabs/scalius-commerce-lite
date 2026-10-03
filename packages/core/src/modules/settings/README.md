@@ -11,8 +11,9 @@ wrappers over the documents.
 - `documents.ts` -- the shared document definitions (key, zod schema, defaults, secret fields, optional KV mirror); a domain that owns a document declares it itself (`platform/document.ts`, `notifications/documents.ts`, `delivery/zones.ts`, `products/low-stock-policy.ts`)
 - `staff-shortcuts.ts` -- one per-staff-member document (`staff-shortcuts:<userId>`, no KV, no secrets) for dashboard keyboard shortcuts; saves replace the whole map; the row is deleted with staff removal and invitation revocation
 - `../platform/` (the platform domain owns the `platform` document and its service) -- deployment public origins (storefront/API/dashboard/media URLs, customer cookie domain, extra CORS origins) and their KV-first Worker-entry resolution
-- `site-settings.service.ts` -- currency, header/footer/homepage presentation (CAS), published theme/draft workflow, media delivery, SEO, storefront URL, allowed countries
+- `site-settings.service.ts` -- currency (code, symbol, price increment), the theme (live, draft, versions, preview sessions), media delivery, SEO, allowed countries
 - `settings.service.ts` -- `getCurrencyConfig()`
+- `store-money.ts` -- the store's pricing currency (`readStoreCurrency()`, `toStoreMinor()`, `orderPricePolicy()`) and the SQL twin of its price increment (`storePriceIncrementSql()`)
 - `business-settings.service.ts`, `customer-request-policy.ts` -- one document each
 - Readiness is not here: checkout readiness lives in `checkout/readiness.ts`, customer sign-in readiness in `customers/sign-in-readiness.ts`, and their shared shapes and codes in `@scalius/shared/checkout-readiness`
 
@@ -33,12 +34,16 @@ A document is `settings(category = <document key>, key = 'document', type = 'jso
 | `security` | `cspAllowedDomains` | -- |
 | `media` | image optimization / delivery hosts | -- |
 | `business` | company, TIN, logo, address, invoice prefix/logo | -- |
-| `currency` | `currencyCode`, `currencySymbol` | -- |
+| `currency` | `currencyCode`, `currencySymbol`, optional `priceIncrementMinor` | -- |
 | `customer_countries` | `allowedCountries`, `allowedCountriesMode` | -- |
 | `checkout` | `guestCheckoutEnabled`, `checkoutMode`, `partialPaymentEnabled`, `partialPaymentAmount` (admin CAS revision) | -- |
 | `customer_auth` | Customer accounts: `email` / `whatsapp` collection and code `channels` (any other shape resets to defaults) | -- |
 | `customer_requests` | buyer self-service request policy | -- |
-| `header` / `footer` / `homepage` | storefront presentation (independent CAS revisions) | -- |
+| `marketing_consent` | checkout consent checkbox, e-mail double opt-in | -- |
+| `reviews` | reviews on/off, moderation, request delay, block words | -- |
+| `gift_cards` | `defaultExpiryMonths` | -- |
+| `policies` | the page id of each store policy (refund, privacy, terms, shipping, contact) | -- |
+| `emi` | EMI plans shown on eligible products (informational) | -- |
 | `seo` | titles, meta description, robots, `discovery`, `returnPolicy` | -- |
 | `notifications` | customer/admin order channels, order WhatsApp template | -- |
 | `email` | `provider`, `sender` | `resendApiKey` |
@@ -49,8 +54,11 @@ A document is `settings(category = <document key>, key = 'document', type = 'jso
 | `payment_methods` | `enabledMethods` (`null` = COD implied), `defaultMethod` | -- |
 | `meta_conversions` | `pixelId`, `testEventCode`, `isEnabled`, `logRetentionDays` | `accessToken` |
 
-Not documents, on purpose: the published theme and theme drafts (their own
-draft/publish tables), tax settings (tax module), and collections such as
+Domains own other documents: `inventory` (products), `delivery_everywhere_else`
+(delivery), `notifications` and `notification_templates` (notifications).
+
+Not documents, on purpose: the theme (header, footer, homepage and pages; its
+own live, draft and version tables), tax settings (tax module), and collections such as
 checkout languages, analytics scripts, shipping methods, delivery
 providers/locations, hero sliders, navigation menus, and fraud-checker provider
 rows. `notification_provider_health` rows are operational pause markers in the
@@ -110,12 +118,24 @@ with a 60s `Cache-Control`; the storefront gets them in the `platform` block of
 
 ## Currency
 
-`getCurrencyConfig(db)` returns `{ code, symbol, decimalPlaces }`
-from the `currency` document; `decimalPlaces` comes from ISO 4217 via
-`getDecimalPlaces()` in `@scalius/shared/currency`. A missing document yields
-the BDT defaults; a relational read error throws. Catalog, shipping and order
-amounts are stored as integer minor units of this currency, so once any product,
+`getCurrencyConfig(db)` returns `{ code, symbol, decimalPlaces,
+priceIncrementMinor }` from the `currency` document. `decimalPlaces` is the
+ISO 4217 exponent from the currency policy table
+(`@scalius/shared/currency-policy`). A missing document yields the BDT
+defaults; a relational read error throws. Catalog, shipping and order amounts
+are stored as integer minor units of this currency, so once any product,
 shipping method or order exists the code is locked (`isCurrencyCodeLocked`).
+
+The price increment is the step every price, discount, fee and computed total
+rounds to: the minor unit (1) or one whole unit (10^exponent).
+`priceIncrementOf()` resolves a missing or invalid value to the currency's
+default: whole taka for BDT, the minor unit otherwise. Merchants change it in
+Settings → Store details; it stays editable after the code locks. Saved
+prices are never rewritten. A save that changes it returns
+`priceIncrementChanged`, and the route queues a full catalogue projection
+rebuild, because stored card prices round to it. A change of currency drops a
+saved increment. Readers that price in SQL use `storePriceIncrementSql()`,
+which reads the document inline and falls back to the default.
 
 ## Notification channels
 
@@ -130,7 +150,8 @@ WhatsApp saves require a ready provider that is not paused by
 
 ## Admin routes (`apps/api/src/routes/admin/settings/`)
 
-- `site.ts` -- currency, header/footer (`expectedRevision` CAS), homepage (CAS + media guard), theme draft/publish, SEO (partial discovery/return-policy patches), storefront URL, allowed countries, notification channels. Saves bump the cache generation after commit.
+- `site.ts` -- currency (a price-increment change queues the projection rebuild), the theme (editor, workspace, document, versions, draft, page draft, publish, restore, discard, preview session), media, SEO (partial discovery/return-policy patches, feed diagnostics, live probe), storefront URL, allowed countries. Public caches need no bump: a save advances the document's cache dependency in the same transaction (dependency-validated caching, `packages/shared/src/cache-deps.ts`).
+- `notification-channels.ts`, `notification-templates.ts` -- customer and admin order channels, message templates.
 - `system.ts` -- customer auth + WhatsApp (policy saves fail closed unless every selected OTP channel is deliverable; WhatsApp token saves require `CREDENTIAL_ENCRYPTION_KEY`, reject placeholders, skip masked values, and clear WhatsApp provider pauses in the same batch), checkout flow (`expectedRevision` CAS, revision `0` before the first save), checkout readiness, security (CSP only; never widens API CORS), email, Firebase.
 - `payments.ts` -- payment methods, Stripe, SSLCommerz. Secret saves require `CREDENTIAL_ENCRYPTION_KEY`; enabled saves require non-placeholder credentials.
 - `meta-conversions-admin.ts` -- Meta CAPI settings; a save clears the `meta-capi:browser-events:circuit` KV marker.
