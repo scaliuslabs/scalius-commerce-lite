@@ -40,6 +40,12 @@ export interface ServerColumnMeta {
   priority?: number;
   /** Narrowest width (px) the column still reads well at (default 120). */
   minWidth?: number;
+  /**
+   * Widest the column grows (px). Free text (a customer's name) is cut with
+   * an ellipsis there, with the whole value on hover, so one long value
+   * never pushes the money and status columns out of the table.
+   */
+  maxWidth?: number;
 }
 
 /**
