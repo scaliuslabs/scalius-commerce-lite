@@ -1,0 +1,11 @@
+---
+// A page part the theme editor selects from its preview (THEME_EDITOR_MARKS):
+// only a theme preview passes an id, so a buyer's page carries no wrapper.
+// The wrapper takes no box of its own (display: contents); the editor's
+// bridge measures what it holds.
+interface Props {
+  id: string | null;
+}
+const { id } = Astro.props;
+---
+{id ? <div class="contents" data-theme-section-id={id}><slot /></div> : <slot />}

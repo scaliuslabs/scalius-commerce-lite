@@ -41,7 +41,7 @@ if (!layoutData) return refuse(503);
 const requestTheme = await resolveRequestTheme(Astro, layoutData);
 if (!requestTheme.preview) return refuse(401, { "Set-Cookie": clearThemePreviewCookieHeader() });
 
-const homeSections = pageSlug ? requestTheme.theme.pages.landing[pageSlug]?.sections ?? [] : requestTheme.resolved.pages.home;
+const homeSections = pageSlug ? requestTheme.resolved.pages.landing[pageSlug]?.sections ?? [] : requestTheme.resolved.pages.home;
 // A section the draft no longer has: the bridge loads the page again.
 if (!homeSections.some((section) => section.id === sectionId)) return refuse(404);
 

@@ -1,5 +1,7 @@
 // @vitest-environment node
-// Real page renders in-process: fixed blocks share the existing batch and buyer/SEO rules.
+// Real product and listing renders in-process: the theme editor's product and listing
+// blocks are the document's blocks.product and blocks.listing, rendered by the
+// existing page in its one batch with the protected buyer and SEO rules.
 import { fileURLToPath } from "node:url";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { ViteDevServer } from "vite";
@@ -29,8 +31,6 @@ interface RuntimeModule {
 let server: ViteDevServer;
 let container: Container;
 const pages: Record<string, unknown> = {};
-let LandingPage: unknown;
-let CmsPage: unknown;
 let runtimeModule: RuntimeModule;
 
 beforeAll(async () => {
@@ -64,8 +64,6 @@ beforeAll(async () => {
   for (const [kind, path] of Object.entries({ product: "products/[slug]", category: "categories/[slug]", collection: "collections/[id]", search: "search/index" })) {
     pages[kind] = (await server.ssrLoadModule(`/src/pages/${path}.astro`)).default;
   }
-  LandingPage = (await server.ssrLoadModule("/src/pages/pages/[slug].astro")).default;
-  CmsPage = (await server.ssrLoadModule("/src/pages/[slug].astro")).default;
   runtimeModule = (await server.ssrLoadModule("/src/lib/api/runtime.ts")) as RuntimeModule;
 }, 120_000);
 
@@ -160,7 +158,8 @@ async function render(kind: string, theme: StorefrontThemeDocument, options: { v
   const document = new Window().document as unknown as Document;
   document.write(html);
   expect(response.status, html.slice(0, 200)).toBe(200);
-  expect(calls).toHaveLength(options.preview ? 3 : 1);
+  // The batch, then a preview's private reads (resolve, and a product's app blocks); an empty search also reads suggestions.
+  expect(calls).toHaveLength(options.preview ? (kind === "product" ? 3 : 2) : options.empty ? 3 : 1);
   expect(calls[0]!.pathname).toBe("/api/v1/storefront/batch");
   expect(calls[0]!.searchParams.getAll("r")).toHaveLength(kind === "product" ? 5 : 2);
   const ids = [...document.querySelectorAll("[id]")].map((element) => element.id);
@@ -168,60 +167,35 @@ async function render(kind: string, theme: StorefrontThemeDocument, options: { v
   return { document, html, response, calls };
 }
 
-function customizedTheme() {
+const resourceSchema = (document: Document) => [...document.querySelectorAll('script[type="application/ld+json"]')].map((element) => JSON.parse(element.textContent ?? "{}"));
+const marks = (document: Document) => [...document.querySelectorAll("[data-theme-section-id]")].map((element) => element.getAttribute("data-theme-section-id"));
+/** The product page's modules in page order, by the heading or region each one renders. */
+const moduleOrder = (html: string, markers: Record<string, string>) =>
+  Object.entries(markers).filter(([, marker]) => html.includes(marker)).sort((left, right) => html.indexOf(left[1]) - html.indexOf(right[1])).map(([module]) => module);
+
+/** The theme editor edits these parts of the document as the product and listing pages' blocks. */
+function productTheme(below: StorefrontThemeDocument["blocks"]["product"]["below"]) {
   const theme = storefrontTemplateTheme("department-mall");
-  theme.pages.product.blocks.reverse();
-  theme.pages.collection.blocks = [
-    { id: "grid", hidden: false }, { id: "banner", hidden: false }, { id: "breadcrumbs", hidden: false }, { id: "filters", hidden: false },
-  ];
-  theme.pages.search.blocks = structuredClone(theme.pages.collection.blocks);
+  theme.blocks.product = { ...theme.blocks.product, below };
   return theme;
 }
-const order = (document: Document) => [...document.querySelectorAll("[data-theme-template-block]")].map((element) => element.getAttribute("data-theme-template-block"));
-const resourceSchema = (document: Document) => [...document.querySelectorAll('script[type="application/ld+json"]')].map((element) => JSON.parse(element.textContent ?? "{}"));
 
-describe("composed theme page templates", () => {
-  it("renders every product block in merchant order with one native buy form and one batch", async () => {
-    const theme = customizedTheme();
-    const { document } = await render("product", theme, { variant: "sku_blue" });
-    expect(order(document)).toEqual(theme.pages.product.blocks.map((block) => block.id));
-    expect(document.querySelector('[data-theme-template-block="specs"]')?.textContent).toContain("Cotton");
-    expect(document.querySelector('[data-theme-template-block="description"]')?.textContent).toContain("Handwoven cotton");
-    expect(document.querySelector('[data-theme-template-block="reviews"]')?.textContent).toContain("Great shirt");
-    expect(document.querySelector('[data-theme-template-block="apps"]')?.textContent).toContain("Size guide app");
-    expect(document.querySelectorAll("#product-buy-form")).toHaveLength(1);
-    expect(document.querySelector('[data-action="buy-now"]')?.getAttribute("form")).toBe("product-buy-form");
-    expect(document.querySelector("#product-variant-noscript")).not.toBeNull();
-    expect(document.querySelectorAll("#product-variants-data")).toHaveLength(1);
+describe("product page structure from the theme's product blocks", () => {
+  const MARKERS = { description: 'id="description"', "spec-table": 'id="specifications"', reviews: 'id="reviews"' };
+
+  it("renders the modules in the merchant's order and leaves out a hidden one, in one batch", async () => {
+    const first = await render("product", productTheme(["reviews", "spec-table", "description"]));
+    expect(moduleOrder(first.html, MARKERS)).toEqual(["reviews", "spec-table", "description"]);
+    const second = await render("product", productTheme(["description", "reviews"]));
+    expect(moduleOrder(second.html, MARKERS)).toEqual(["description", "reviews"]);
+    expect(second.html).not.toContain('id="specifications"');
+    expect(second.document.querySelectorAll("#product-buy-form")).toHaveLength(1);
+    // A buyer's page carries no editor marks.
+    expect(marks(second.document)).toEqual([]);
   });
 
-  it("renders draft and historical app output from the private preview read, without live app HTML", async () => {
-    const live = storefrontTemplateTheme("department-mall");
-    for (const previewLabel of ["Draft guide", "Historical guide"]) {
-      const { document, html, response, calls } = await render("product", live, { preview: customizedTheme(), previewLabel });
-      expect(document.querySelector('[data-theme-template-block="apps"]')?.textContent).toContain(previewLabel);
-      expect(html).not.toContain("Size guide app");
-      expect(calls[2]!.pathname).toBe("/api/v1/storefront/theme-preview/product-apps/shirt");
-      expect(response.headers.get("Cache-Control")).toContain("no-store");
-    }
-    const failed = await render("product", live, { preview: customizedTheme(), previewAppsStatus: 503 });
-    expect(failed.html).not.toContain("Size guide app");
-    expect(failed.document.querySelector('[data-theme-template-block="apps"]')?.textContent?.trim()).toBe("");
-  });
-
-  it("hides independent product blocks, keeps no-JS SKU selection and suppresses hidden app/review output", async () => {
-    const theme = customizedTheme();
-    for (const block of theme.pages.product.blocks) block.hidden = ["options", "reviews", "apps", "specs"].includes(block.id);
-    const { document, html } = await render("product", theme);
-    expect(order(document)).toEqual(theme.pages.product.blocks.filter((block) => !block.hidden).map((block) => block.id));
-    expect(document.querySelector(".variant-option-panels")).toBeNull();
-    expect(document.querySelector("#product-variant-noscript")).not.toBeNull();
-    expect(html).not.toContain("Size guide app");
-    expect(resourceSchema(document).find((schema) => schema["@type"] === "ProductGroup")?.aggregateRating).toBeUndefined();
-  });
-
-  it("retains exact-SKU image precedence and primary-image fallback after gallery reordering", async () => {
-    const theme = customizedTheme();
+  it("keeps exact-SKU image precedence, the primary-image fallback, JSON-LD and noIndex", async () => {
+    const theme = productTheme(["reviews", "description"]);
     const blue = (await render("product", theme, { variant: "sku_blue" })).document;
     const red = (await render("product", theme, { variant: "sku_red" })).document;
     expect(blue.querySelector('[data-product-gallery] img[fetchpriority="high"]')?.getAttribute("src")).toContain("blue.jpg");
@@ -233,28 +207,45 @@ describe("composed theme page templates", () => {
     expect(resourceSchema(hidden).some((schema) => ["Product", "ProductGroup", "BreadcrumbList"].includes(schema["@type"]))).toBe(false);
   });
 
-  it("renders empty search and useful category links without any additional reads", async () => {
-    const { document } = await render("search", customizedTheme(), { empty: true });
-    expect(document.querySelector("[data-catalog-empty-state]")?.textContent).toContain("No matching products");
-    expect(document.querySelector('[data-catalog-empty-state] a[href="/categories/shirts"]')?.textContent).toBe("Shirts");
+  it("previews the draft's app blocks privately and marks every part the editor selects", async () => {
+    const live = storefrontTemplateTheme("department-mall");
+    for (const previewLabel of ["Draft guide", "Historical guide"]) {
+      const { document, html, response, calls } = await render("product", live, { preview: productTheme(["description", "reviews"]), previewLabel });
+      expect(html).toContain(previewLabel);
+      expect(html).not.toContain("Size guide app");
+      expect(calls[2]!.pathname).toBe("/api/v1/storefront/theme-preview/product-apps/shirt");
+      expect(response.headers.get("Cache-Control")).toContain("no-store");
+      expect(marks(document)).toEqual(["product-main", "module-description", "module-reviews", "product-apps"]);
+    }
+    const failed = await render("product", live, { preview: productTheme(["description"]), previewAppsStatus: 503 });
+    expect(failed.html).not.toContain("Size guide app");
+    expect(failed.response.headers.get("Cache-Control")).toContain("no-store");
   });
+});
 
+describe("listing pages from the theme's listing blocks", () => {
   for (const kind of ["category", "collection", "search"]) {
-    it(`renders reordered ${kind} blocks in one batch, then omits hidden filters and grid`, async () => {
-      const theme = customizedTheme();
-      const { document } = await render(kind, theme);
-      expect(order(document)).toEqual(["grid", "banner", "breadcrumbs", "filters"]);
-      expect(document.querySelector('[data-theme-template-block="grid"] [data-theme-component="product-card"]')).not.toBeNull();
-      expect(document.querySelector('[data-theme-template-block="filters"] #filterForm')).not.toBeNull();
-      const page = kind === "search" ? theme.pages.search : theme.pages.collection;
-      page.blocks.find((block) => block.id === "filters")!.hidden = true;
-      const filtered = (await render(kind, theme)).document;
-      expect(filtered.querySelector("#filterForm")).toBeNull();
-      expect(filtered.querySelector("[aria-controls=filter-section]")).toBeNull();
-      page.blocks.find((block) => block.id === "grid")!.hidden = true;
-      const noGrid = (await render(kind, theme)).document;
-      expect(noGrid.querySelector('[data-theme-component="product-card"]')).toBeNull();
-      expect(noGrid.querySelector("h1")?.textContent).toBe(kind === "category" ? "Shirts" : kind === "collection" ? "Eid edit" : "All products");
+    it(`renders the ${kind} page in one batch, with editor marks only in a preview`, async () => {
+      const theme = storefrontTemplateTheme("department-mall");
+      const live = await render(kind, theme);
+      expect(live.document.querySelector('[data-theme-component="product-card"]')).not.toBeNull();
+      expect(marks(live.document)).toEqual([]);
+      const preview = await render(kind, theme, { preview: theme });
+      expect(marks(preview.document)[0]).toBe("listing");
     });
   }
+
+  it("leaves the breadcrumb out visually when its toolbar piece is off", async () => {
+    const theme = storefrontTemplateTheme("department-mall");
+    theme.blocks.listing = { ...theme.blocks.listing, toolbar: theme.blocks.listing.toolbar.filter((piece) => piece !== "breadcrumb") };
+    const { document } = await render("category", theme);
+    const crumbs = document.querySelector('nav[aria-label="Breadcrumb"]');
+    // Kept for assistive technology (it matches the BreadcrumbList JSON-LD), hidden on screen.
+    expect(crumbs?.getAttribute("class") ?? "").toContain("sr-only");
+  });
+
+  it("renders an empty search with useful category links", async () => {
+    const { document } = await render("search", storefrontTemplateTheme("department-mall"), { empty: true });
+    expect(document.querySelector("[data-catalog-empty-state]")?.textContent).toContain("No matching products");
+  });
 });

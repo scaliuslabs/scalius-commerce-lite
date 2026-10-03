@@ -1,14 +1,21 @@
 ---
 // src/pages/search/index.astro
 import Layout from "@/layouts/Layout.astro";
+import ProductCard from "@/components/cards/ProductCard.astro";
+import ProductGrid from "@/components/cards/ProductGrid.astro";
 import CatalogListingPage from "@/components/catalog/CatalogListingPage.astro";
 import {
+  getAllCategories,
   getAllProducts,
   getLayoutData,
+  getProductRecommendations,
+  type Category,
   type Product,
   type PaginatedResponse,
   type LayoutData,
+  type ProductRecommendations,
 } from "@/lib/api";
+import { recommendationTitle } from "@/lib/recommendations";
 import { catalogCountText } from "@/lib/catalog-paging";
 import { setRuntimeImageCdnPolicy } from "@/lib/api/runtime";
 import {
@@ -64,9 +71,18 @@ if (isMissingProductListPage(pagination)) return new Response(null, { status: 40
 const activeFilterCount = countActiveProductListFilters(currentFilters);
 const refinements = activeFilterCount - (query ? 1 : 0);
 
-// Empty results reuse the published category links already read with the
-// layout, so the helpful empty state stays inside the page's single batch.
-const categories = products.length === 0 ? (layoutData.categoryTree?.nodes ?? []).slice(0, 12) : [];
+// Nothing matched: help instead of a dead end (Baymard) with the store's
+// popular products (or its newest, titled as such) and categories.
+let suggestions: ProductRecommendations | null = null;
+let categories: Category[] = [];
+if (products.length === 0) {
+  const [storeRecommendations, allCategories] = await Promise.all([
+    getProductRecommendations([], 8).catch(() => null),
+    getAllCategories().catch(() => null),
+  ]);
+  suggestions = storeRecommendations?.products.length ? storeRecommendations : null;
+  categories = (allCategories ?? []).slice(0, 12);
+}
 
 const resultCountLabel = `${catalogCountText(pagination.total, pagination.totalIsCapped)} ${pagination.total === 1 && !pagination.totalIsCapped ? "result" : "results"}`;
 const pageTitle = `${query ? `Search results for "${query}"` : "All products"}${
@@ -176,7 +192,24 @@ const analyticsProductData = products.map((p) => ({
               </nav>
             )}
           </section>
-
+          {suggestions && (
+            <section aria-labelledby="search-suggestions" class="mt-8">
+              <div class="mb-4 flex items-baseline justify-between gap-4">
+                <h2 id="search-suggestions" class="text-lg font-semibold text-foreground">{recommendationTitle(suggestions.reason)}</h2>
+                <a href="/search" class="text-sm font-medium text-primary hover:underline">Browse all products</a>
+              </div>
+              <ProductGrid>
+                {suggestions.products.map((product) => (
+                  <ProductCard
+                    product={product}
+                    currencySymbol={currencySymbol}
+                    currencyCode={currencyCode}
+                    headingLevel="h3"
+                  />
+                ))}
+              </ProductGrid>
+            </section>
+          )}
         </div>
   </CatalogListingPage>
 </Layout>

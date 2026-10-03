@@ -93,9 +93,10 @@ export function themePreviewBridgeScript(dashboardOrigin: string): string {
     const current = find(id);
     const unit = current && current.closest("[data-home-render-unit]");
     if (!unit) return reload();
+    // A landing page (/pages/<slug>) swaps its own sections; anything else is the homepage.
     const segments = location.pathname.split("/").filter(Boolean);
-    const page = segments.length === 2 && segments[0] === "pages" ? segments[1] : segments.length === 1 ? segments[0] : null;
-    const response = await fetch(SECTION + "?id=" + encodeURIComponent(id) + (page && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(page) ? "&page=" + encodeURIComponent(page) : ""), {
+    const page = segments.length === 2 && segments[0] === "pages" && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(segments[1]) ? segments[1] : null;
+    const response = await fetch(SECTION + "?id=" + encodeURIComponent(id) + (page ? "&page=" + encodeURIComponent(page) : ""), {
       credentials: "same-origin",
       cache: "no-store",
       headers: { Accept: "text/html" },

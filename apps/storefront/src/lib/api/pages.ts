@@ -49,7 +49,6 @@ export async function getPageBySlug(slug: string): Promise<Page | null> {
 
 export interface PageRenderData {
   page: Page;
-  template?: LandingPageData;
 }
 
 export interface LandingPageData {
@@ -57,14 +56,20 @@ export interface LandingPageData {
   sections: HomepageSectionData;
 }
 
-/** Starts beside the layout read and joins its one public batch. */
-export async function getLandingPageData(slug: string): Promise<LandingPageData | null> {
-  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) return null;
-  return withEdgeCache(`landing_${slug}_${BUILD_ID}`, async () => {
-    const { data, error } = await getApiV1StorefrontLandingBySlug({
+/**
+ * A published landing page (`/pages/<slug>`) with its sections' data:
+ * `"missing"` when the live theme has no page at that handle (a 404), null
+ * when the read failed (the page answers 503 rather than a false 404).
+ * Starts beside the layout read and joins its one public batch.
+ */
+export async function getLandingPageData(slug: string): Promise<LandingPageData | "missing" | null> {
+  return withEdgeCache<LandingPageData | "missing">(`landing_${slug}_${BUILD_ID}`, async () => {
+    const { data, response } = await getApiV1StorefrontLandingBySlug({
       client: getConfiguredSdkClient(), path: { slug },
     });
-    return error ? null : unwrapEnvelope<LandingPageData>(data);
+    if (response?.status === 404) return "missing";
+    if (!response?.ok) return null;
+    return unwrapEnvelope<LandingPageData>(data);
   }, { ttlSeconds: CACHE_TTL.LONG });
 }
 

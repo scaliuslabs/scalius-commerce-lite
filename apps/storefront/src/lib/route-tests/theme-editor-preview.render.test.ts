@@ -40,7 +40,6 @@ let container: Container;
 let HomePage: unknown;
 let SectionPage: unknown;
 let LandingPage: unknown;
-let CmsPage: unknown;
 let runtimeModule: RuntimeModule;
 
 beforeAll(async () => {
@@ -74,7 +73,6 @@ beforeAll(async () => {
   HomePage = (await server.ssrLoadModule("/src/pages/index.astro")).default;
   SectionPage = (await server.ssrLoadModule("/src/pages/theme-preview/section.astro")).default;
   LandingPage = (await server.ssrLoadModule("/src/pages/pages/[slug].astro")).default;
-  CmsPage = (await server.ssrLoadModule("/src/pages/[slug].astro")).default;
   runtimeModule = (await server.ssrLoadModule("/src/lib/api/runtime.ts")) as RuntimeModule;
 }, 120_000);
 
@@ -199,12 +197,6 @@ function stubApi(api: Api) {
       const landing = api.document.pages.landing[slug];
       return landing ? { status: 200, body: envelope({ landing, sections: sectionData() }) } : { status: 404, body: "{}" };
     }
-    if (path.startsWith("/api/v1/storefront/pages/slug/")) {
-      const slug = path.split("/").at(-1)!;
-      const landing = api.document.pages.landing[slug];
-      return { status: 200, body: envelope({ page: { id: "cms_campaign", title: "CMS campaign", slug, content: "<p>Original CMS body</p>", noIndex: true,
-      }, ...(landing?.overrideCms ? { template: { landing, sections: sectionData() } } : {}) }) };
-    }
     if (path === "/api/v1/shipping-methods") return { status: 200, body: envelope({ shippingMethods: [] }) };
     if (path === "/api/v1/checkout/config") return { status: 200, body: envelope({ gateways: [] }) };
     if (api.preview && path === "/api/v1/storefront/theme-preview/resolve") {
@@ -269,9 +261,9 @@ describe("a buyer's homepage", () => {
 });
 
 describe("theme landing pages", () => {
-  const campaign = (overrideCms = false) => {
+  const campaign = () => {
     const document = fixedTheme();
-    document.pages.landing.eid = { title: "ঈদের উৎসব", overrideCms, sections: [
+    document.pages.landing.eid = { title: "ঈদের উৎসব", description: "Eid gifts, delivered.", sections: [
       section("editorial", "campaign", { heading: "ঈদের অফার", body: "Made in Bangladesh." }),
       { ...section("editorial", "hidden", { heading: "Hidden copy", body: "Should not render" }), hidden: true },
       section("faq", "campaign-faq", { heading: "Campaign questions", items: [{ question: "Delivery?", answer: "Across Bangladesh." }] }),
@@ -286,6 +278,8 @@ describe("theme landing pages", () => {
     expect(result.html).not.toContain("Hidden copy");
     expect(result.html.indexOf("ঈদের অফার")).toBeLessThan(result.html.indexOf("Campaign questions"));
     expect(result.html).toContain('href="https://shop.test/pages/eid"');
+    expect(result.html).toContain('<meta name="description" content="Eid gifts, delivered."');
+    expect(result.html).toContain("<title>ঈদের উৎসব");
     expect(result.calls).toHaveLength(1);
     expect(result.calls[0]).toContain("/api/v1/storefront/batch?");
     expect(result.html).not.toContain("data-theme-section-id");
@@ -303,22 +297,11 @@ describe("theme landing pages", () => {
     expect(partial.html).toContain("ঈদের অফার");
   });
 
-  it("overrides a published CMS body while retaining its title and noIndex rules", async () => {
-    const result = await renderPage(CmsPage, { document: campaign(true), platform: true }, { url: "https://shop.test/eid" });
-    expect(result.response.status).toBe(200);
-    expect(result.html).toContain("CMS campaign");
-    expect(result.html).toContain("ঈদের অফার");
-    expect(result.html).not.toContain("<p>Original CMS body</p>");
-    expect(result.html).toContain('content="noindex,follow"');
-    expect(result.calls).toHaveLength(1);
-    const plain = await renderPage(CmsPage, { document: campaign(false), platform: true }, { url: "https://shop.test/eid" });
-    expect(plain.html).toContain("Original CMS body");
-    expect(plain.html).not.toContain("ঈদের অফার");
-  });
-
-  it("returns 404 for absent landing pages", async () => {
+  it("returns 404 for absent landing pages and 503 when the landing read fails", async () => {
     const result = await renderPage(LandingPage, { document: fixedTheme() }, { url: "https://shop.test/pages/absent" });
     expect(result.response.status).toBe(404);
+    const reserved = await renderPage(LandingPage, { document: fixedTheme() }, { url: "https://shop.test/pages/products" });
+    expect(reserved.response.status).toBe(404);
   });
 });
 

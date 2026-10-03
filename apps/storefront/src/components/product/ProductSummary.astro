@@ -53,9 +53,6 @@ interface Props {
   details?: boolean;
   /** The key features show in the buy box or in "About this item": the tabs leave them out. */
   detailsFeatures?: boolean;
-  /** A composed page renders these existing buy-box parts independently. */
-  templateBlock?: "title-price" | "options" | "buy-buttons";
-  metadata?: boolean;
 }
 
 const {
@@ -74,13 +71,7 @@ const {
   essentials = false,
   details = true,
   detailsFeatures = true,
-  templateBlock,
-  metadata = true,
 } = Astro.props;
-
-const showTitle = !templateBlock || templateBlock === "title-price";
-const showOptions = !templateBlock || templateBlock === "options";
-const showActions = !templateBlock || templateBlock === "buy-buttons";
 
 // A template's buy box: its reference type scale and buttons as CSS custom
 // properties read by the scoped rules below (none on classic).
@@ -257,7 +248,7 @@ function optionAriaLabel(
 >
   <div class="buy-box-body flex h-full flex-col">
     <div
-      id={showActions ? "product-actions" : undefined}
+      id="product-actions"
       data-add-to-cart-text={actionCopy.addToCartText}
       data-buy-now-text={actionCopy.buyNowText}
       data-unavailable-text={actionCopy.unavailableText}
@@ -265,7 +256,7 @@ function optionAriaLabel(
       data-quantity-limit-text={actionCopy.quantityLimitText}
     >
     <div class="buy-box-main">
-    {showTitle && <div class="mb-2 border-b border-border pb-2">
+    <div class="mb-2 border-b border-border pb-2">
       <div class="buy-box-title">
         <h1 class="mb-1 text-lg font-semibold leading-tight text-foreground lg:mb-2 lg:text-3xl">{product.name}</h1>
         <slot name="after-title" />
@@ -331,17 +322,15 @@ function optionAriaLabel(
       )}
     </div>
 
-    }
-    {metadata && <script is:inline type="application/json" id="product-variants-data" set:html={variantsJson} />}
-    {metadata && <script is:inline type="application/json" id="product-options-data" set:html={optionsJson} />}
+    <script is:inline type="application/json" id="product-variants-data" set:html={variantsJson} />
+    <script is:inline type="application/json" id="product-options-data" set:html={optionsJson} />
 
     <div class="space-y-3 pt-1 lg:pt-2">
-      {showOptions && <div id="variant-unavailable-query-notice" class:list={["rounded-md border border-destructive/25 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive", { hidden: !initialUnavailableVariant }]} role="alert">
+      <div id="variant-unavailable-query-notice" class:list={["rounded-md border border-destructive/25 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive", { hidden: !initialUnavailableVariant }]} role="alert">
         {initialUnavailableVariant ? `${unavailableLabel}: ${buyerStockSummary.text}` : ""}
       </div>
 
-      }
-      {showOptions && options.length > 0 && <div class="variant-option-panels">
+      {options.length > 0 && <div class="variant-option-panels">
         {options.map((option) => {
           const availability = getVariantOptionAvailabilityMap(variants, option.id, option.values.map((value) => value.id), initialSelection);
           const optionPrices = new Map(option.values.flatMap((value) => {
@@ -406,7 +395,7 @@ function optionAriaLabel(
         })}
       </div>}
 
-      {showOptions && compactFacts.length > 0 && (
+      {compactFacts.length > 0 && (
         <dl class="hidden space-y-1 pt-1 text-sm leading-5 lg:block" data-product-compact-facts>
           {compactFacts.map((row) => (
             <div class="grid grid-cols-[minmax(0,10rem)_minmax(0,1fr)] gap-x-3">
@@ -417,7 +406,6 @@ function optionAriaLabel(
         </dl>
       )}
 
-      {showActions && <Fragment>
       {customizationUnavailable ? (
         <p id="product-customization-unavailable" class="rounded-md border border-destructive/25 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive" role="alert">{pageCopy.customizationUnavailableText}</p>
       ) : null}
@@ -450,10 +438,9 @@ function optionAriaLabel(
         </noscript>
       ) : null}
 
-      </Fragment>}
     </div>
     </div>
-      {showActions && <div class="buy-box-purchase">
+      <div class="buy-box-purchase">
       {factsColumn && (
         <p class="purchase-price product-price text-2xl text-foreground" aria-live="polite" data-from-template={actionCopy.fromPriceText}>
           {showsStartingPrice
@@ -495,9 +482,9 @@ function optionAriaLabel(
           <slot name="after-actions" />
         </aside>
       )}
-      </div>}
+      </div>
     </div>
-    {showActions && !factsColumn && (
+    {!factsColumn && (
       <slot name="after-actions" />
     )}
     {details && !plainDetails && <ProductDetails product={product} copy={pageCopy} features={detailsFeatures} />}

@@ -265,17 +265,12 @@ describe("DVC directed scenarios", () => {
     expect(verdict).toEqual({ cached: true, valid: false, equal: false });
   }, 120_000);
 
-  it("CMS override: disabling its section template restores the CMS body on the next read", async () => {
-    const verdict = await staleAfter("scenario-cms-override", "/api/v1/storefront/pages/slug/about", (sqlite) => {
-      sqlite.exec("UPDATE theme_settings SET colors = json_set(colors, '$.pages.landing.about.overrideCms', json('false')) WHERE id = 'default'");
-    });
-    expect(verdict).toEqual({ cached: true, valid: false, equal: false });
-  }, 120_000);
-
-  it.each(["product", "collection", "search"])("%s template: block visibility invalidates the layout's theme", async (page) => {
-    const verdict = await staleAfter(`scenario-template-${page}`, "/api/v1/storefront/layout", (sqlite) => {
-      sqlite.prepare("UPDATE theme_settings SET colors = json_set(colors, ?, json('true')) WHERE id = 'default'")
-        .run(`$.pages.${page}.blocks[0].hidden`);
+  it.each([
+    ["product modules", "$.blocks.product.below[0]", "'policies'"],
+    ["listing toolbar", "$.blocks.listing.toolbar[0]", "'per-page'"],
+  ])("%s: the theme editor's product and listing blocks invalidate the layout's theme", async (name, path, value) => {
+    const verdict = await staleAfter(`scenario-blocks-${name}`, "/api/v1/storefront/layout", (sqlite) => {
+      sqlite.prepare(`UPDATE theme_settings SET colors = json_set(colors, ?, ${value}) WHERE id = 'default'`).run(path);
     });
     expect(verdict).toEqual({ cached: true, valid: false, equal: false });
   }, 120_000);

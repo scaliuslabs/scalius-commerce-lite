@@ -35,7 +35,7 @@ export const DVC_IDS = {
   brandSlugs: ["aarong", "yellow", "draft-brand"],
   collections: ["col_manual", "col_dynamic", "col_hidden"],
   pageSlugs: ["about", "shipping-policy", "eid-lookbook"],
-  landingSlugs: ["eid", "about"],
+  landingSlugs: ["eid"],
   menus: ["menu_main", "menu_footer"],
   promotionBoundaries: [DVC_SEED_EPOCH + 3 * DAY, DVC_SEED_EPOCH + 5 * DAY, DVC_SEED_EPOCH + 9 * DAY, DVC_SEED_EPOCH + 12 * DAY],
 } as const;
@@ -70,8 +70,7 @@ export function everySectionTheme() {
   set("product-rail", { title: "", source: { kind: "newest" }, limit: 8 }, "rail-newest");
   theme.pages.home = sections;
   theme.pages.landing = {
-    eid: { title: "ঈদের বাছাই", sections: structuredClone(sections), overrideCms: false },
-    about: { title: "Our story", sections: structuredClone(sections), overrideCms: true },
+    eid: { title: "ঈদের বাছাই", description: "", sections: structuredClone(sections) },
   };
   // A product homepage: the homepage read follows the product's buyer state.
   theme.pages.homeMode = { kind: "product", productId: "p_linen" };

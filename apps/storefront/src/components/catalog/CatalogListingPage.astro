@@ -9,12 +9,11 @@
 // The default keeps products near the title band; a merchant can put a
 // clamped short description above them when that helps explain the category.
 import type { ComponentProps } from "astro/types";
-import PageTemplateBlocks from "@/components/PageTemplateBlocks.astro";
-import { STOREFRONT_LISTING_PAGE_BLOCKS } from "@scalius/shared/storefront-theme";
 import RichContent from "@/components/RichContent.astro";
 import CatalogDescription from "./CatalogDescription.astro";
 import CatalogListing from "./CatalogListing.astro";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import { THEME_EDITOR_MARKS } from "@scalius/shared/theme-editor-bridge";
 import { catalogCountText } from "@/lib/catalog-paging";
 import { hasRenderableHtmlContent } from "@scalius/shared/html-sanitize";
 
@@ -47,13 +46,9 @@ interface Props {
 }
 
 const { kind, listing, hero, content, data = {} } = Astro.props;
-const { resolved } = await currentRequestTheme(Astro.locals);
+const { resolved, preview } = await currentRequestTheme(Astro.locals);
 const toolbar = new Set(resolved.blocks.listing.toolbar);
-const templateBlocks = resolved.pages[kind === "search" ? "search" : "collection"].blocks;
-const originalOrder = templateBlocks.every((block, index) => !block.hidden && block.id === STOREFRONT_LISTING_PAGE_BLOCKS[index]);
-const showFilters = templateBlocks.some((block) => block.id === "filters" && !block.hidden);
-const showGrid = templateBlocks.some((block) => block.id === "grid" && !block.hidden);
-const banner = !originalOrder || toolbar.has("category-banner") ? hero.banner : null;
+const banner = toolbar.has("category-banner") ? hero.banner : null;
 const countLabel = hero.countLabel === undefined
   ? `${catalogCountText(hero.count, hero.countCapped)} ${hero.count === 1 && !hero.countCapped ? "product" : "products"}`
   : hero.countLabel;
@@ -68,11 +63,8 @@ const SURFACE_CLASS: Record<typeof surface, string> = { page: "bg-background", m
 const GUTTER_CLASS: Record<typeof gutter, string> = { inset: "px-4 lg:px-8", flush: "px-2 lg:px-0" };
 ---
 
-<div class:list={["min-h-screen", SURFACE_CLASS[surface]]} {...data}>
+<div class:list={["min-h-screen", SURFACE_CLASS[surface]]} {...data} data-theme-section-id={preview ? THEME_EDITOR_MARKS.listing : undefined}>
   <div class:list={["mx-auto max-w-7xl pb-8 pt-1 sm:px-6", GUTTER_CLASS[gutter]]}>
-    {!showGrid && <h1 class="sr-only">{hero.title}</h1>}
-    <PageTemplateBlocks blocks={templateBlocks} defaults={STOREFRONT_LISTING_PAGE_BLOCKS}>
-      <Fragment slot="original">
     {banner && (
       <img
         src={banner.src}
@@ -102,60 +94,8 @@ const GUTTER_CLASS: Record<typeof gutter, string> = { inset: "px-4 lg:px-8", flu
       )}
       <slot name="empty" slot="empty" />
     </CatalogListing>
-      </Fragment>
-      <Fragment slot="banner">
-    {banner && (
-      <img
-        src={banner.src}
-        srcset={banner.srcset}
-        sizes="(max-width: 1279px) 100vw, 1216px"
-        alt={banner.alt}
-        width="1344"
-        height="296"
-        loading="eager"
-        fetchpriority="high"
-        decoding="async"
-        data-catalog-banner
-        class:list={["mt-3 aspect-[3/1] w-full rounded-2xl bg-muted object-cover sm:aspect-[1344/296]", !phoneBanner && "hidden sm:block"]}
-      />
-    )}
 
-      </Fragment>
-      <Fragment slot="breadcrumbs">
-      <CatalogListing
-        {...listing}
-        kind={kind}
-        band={{ title: hero.title, breadcrumb, countLabel }}
-        pills={(hero.links ?? []).map((link) => ({ id: link.href, label: link.label, href: link.href }))}
-        templateBlock="breadcrumbs"
-      />
-      </Fragment>
-      <Fragment slot="filters">
-      <CatalogListing
-        {...listing}
-        kind={kind}
-        band={{ title: hero.title, breadcrumb, countLabel }}
-        pills={(hero.links ?? []).map((link) => ({ id: link.href, label: link.label, href: link.href }))}
-        templateBlock="filters"
-      />
-      </Fragment>
-      <Fragment slot="grid">
-        <slot name="intro" />
-      <CatalogListing
-        {...listing}
-        kind={kind}
-        band={{ title: hero.title, breadcrumb, countLabel }}
-        pills={(hero.links ?? []).map((link) => ({ id: link.href, label: link.label, href: link.href }))}
-        templateBlock="grid"
-        templateFilters={showFilters}
-      >
-        {description && descriptionAbove && <section slot="description" class="mb-4" aria-label={`About ${hero.title}`} data-catalog-content="above"><CatalogDescription content={description} /></section>}
-        <slot name="empty" slot="empty" />
-      </CatalogListing>
-      </Fragment>
-    </PageTemplateBlocks>
-
-    {showGrid && ((description && !descriptionAbove) || guide) && (
+    {((description && !descriptionAbove) || guide) && (
       <section
         class="mx-auto mt-10 max-w-4xl space-y-6 border-t border-border pt-8 sm:mt-12 sm:pt-10"
         aria-label={guide?.label ?? `About ${hero.title}`}

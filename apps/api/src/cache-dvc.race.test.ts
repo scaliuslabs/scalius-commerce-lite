@@ -83,7 +83,6 @@ const CASES: ReadonlyArray<{ path: string; write: (sqlite: DatabaseSync) => void
   { path: "/api/v1/checkout/config", write: (sqlite) => sqlite.exec("UPDATE shipping_methods SET fee_minor = fee_minor + 1000 WHERE id = 'ship_dhaka'") },
   { path: "/api/v1/collections/col_dynamic", write: (sqlite) => sqlite.exec("UPDATE categories SET parent_id = 'cat_women' WHERE id = 'cat_festive'") },
   { path: "/api/v1/storefront/landing/eid", write: (sqlite) => sqlite.exec("UPDATE theme_settings SET colors = json_set(colors, '$.pages.landing.eid.title', 'Eid campaign II') WHERE id = 'default'") },
-  { path: "/api/v1/storefront/pages/slug/about", write: (sqlite) => sqlite.exec("UPDATE theme_settings SET colors = json_set(colors, '$.pages.landing.about.overrideCms', json('false')) WHERE id = 'default'") },
 ];
 
 describe("DVC render/commit races", () => {
