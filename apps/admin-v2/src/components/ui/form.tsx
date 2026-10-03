@@ -2,12 +2,23 @@ import * as React from "react";
 import * as LabelPrimitive from "@radix-ui/react-label";
 import { Slot } from "@radix-ui/react-slot";
 import { Controller, FormProvider, useFormContext } from "react-hook-form";
-import type { ControllerProps, FieldPath, FieldValues } from "react-hook-form";
+import type { ControllerProps, FieldPath, FieldValues, FormProviderProps } from "react-hook-form";
 
 import { cn } from "@scalius/shared/utils";
+import { InputRefusalsContext } from "~/lib/input-refusal-reporter";
+import { formRefusals } from "~/lib/input-refusals";
 import { Label } from "./label";
 
-const Form = FormProvider;
+/** `FormProvider`, plus the form's input refusals for a form made with `useFormWithRefusals`. */
+function Form<TFieldValues extends FieldValues, TContext = unknown, TTransformedValues = TFieldValues>(
+  props: FormProviderProps<TFieldValues, TContext, TTransformedValues>,
+) {
+  return (
+    <FormProvider {...props}>
+      <InputRefusalsContext.Provider value={formRefusals(props.control)}>{props.children}</InputRefusalsContext.Provider>
+    </FormProvider>
+  );
+}
 
 type FormFieldContextValue<
   TFieldValues extends FieldValues = FieldValues,

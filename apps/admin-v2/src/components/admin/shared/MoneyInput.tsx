@@ -10,7 +10,7 @@ import { NumberInput } from "~/components/ui/number-input";
 import { useCurrency } from "~/hooks/use-currency";
 import { useMessages } from "~/i18n";
 import { formMessages } from "~/i18n/forms";
-import { useRefusalReporter } from "~/lib/input-refusals";
+import { useRefusalReporter } from "~/lib/input-refusal-reporter";
 
 type MoneyInputProps = Omit<React.ComponentProps<typeof NumberInput>, "integer" | "wholeUnitsMessage" | "onRefusal"> & {
   /** The amount's currency: the store's for catalog prices, the order's for refunds and charges. */

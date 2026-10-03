@@ -2,24 +2,23 @@ import * as React from "react";
 import {
   get,
   useForm,
-  useFormContext,
   type FieldErrors,
   type FieldValues,
   type Resolver,
   type UseFormProps,
   type UseFormReturn,
 } from "react-hook-form";
+import type { RefusalSink } from "./input-refusal-reporter";
 
 /**
  * A text input knows why it refused what was typed ("1234.50" in a whole-taka
  * amount); the form only sees `NaN`, so its schema can say no more than "not a
  * number". The input tells its form here, and the form's resolver puts the
  * reason on that field's error, so the message under the field, the save
- * banner and every other reader of `formState.errors` agree.
+ * banner and every other reader of `formState.errors` agree. `<Form>` hands
+ * the form's refusals to its inputs (`input-refusal-reporter.ts`).
  */
-interface InputRefusals {
-  /** Why `name` refuses what was typed; `null` once it no longer does. */
-  report(name: string, reason: string | null): void;
+interface InputRefusals extends RefusalSink {
   /** Gives each refused field's error its reason. */
   explain(values: FieldValues, errors: FieldErrors): void;
 }
@@ -42,7 +41,7 @@ function createRefusals(): InputRefusals {
   };
 }
 
-/** One per form, found from the form's `control` by the inputs inside it. */
+/** One per form, found from the form's `control` by `<Form>`. */
 const refusalsByForm = new WeakMap<object, InputRefusals>();
 
 /**
@@ -69,20 +68,7 @@ export function useFormWithRefusals<
   return form;
 }
 
-/**
- * For an input inside a `useFormWithRefusals` form: reports why `name` (the
- * form's field name) refuses what was typed. Undefined anywhere else, so the
- * input can be used with or without a form.
- */
-export function useRefusalReporter(name: string | undefined): ((reason: string | null) => void) | undefined {
-  // Null outside a <Form>, whatever the type says.
-  const form = useFormContext() as UseFormReturn | null;
-  const refusals = form ? refusalsByForm.get(form.control) : undefined;
-  React.useEffect(() => () => {
-    if (name) refusals?.report(name, null);
-  }, [refusals, name]);
-  return React.useMemo(
-    () => (refusals && name ? (reason: string | null) => refusals.report(name, reason) : undefined),
-    [refusals, name],
-  );
+/** The refusals of the form that owns `control`, when it was made with `useFormWithRefusals`. */
+export function formRefusals(control: object): RefusalSink | null {
+  return refusalsByForm.get(control) ?? null;
 }
