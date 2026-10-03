@@ -1,9 +1,10 @@
 // src/modules/settings/settings.service.ts
-// Currency configuration. Storage lives in ./documents.
+// Currency configuration: the shop currency, a store fact. Storage lives in
+// ./documents; the price increment is the backup market's (markets domain).
 
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import type { Database } from "@scalius/database/client";
-import { currencyDocument, priceIncrementOf } from "./documents";
+import { currencyDocument } from "./documents";
 
 // ─────────────────────────────────────────
 // Currency
@@ -13,8 +14,6 @@ export interface CurrencyConfig {
     code: string;
     symbol: string;
     decimalPlaces: number;
-    /** The default market's price increment (`priceIncrementOf`). */
-    priceIncrementMinor: number;
 }
 
 export async function getCurrencyConfig(db: Database): Promise<CurrencyConfig> {
@@ -23,6 +22,5 @@ export async function getCurrencyConfig(db: Database): Promise<CurrencyConfig> {
         code: currency.currencyCode,
         symbol: currency.currencySymbol,
         decimalPlaces: getDecimalPlaces(currency.currencyCode),
-        priceIncrementMinor: priceIncrementOf(currency),
     };
 }

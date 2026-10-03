@@ -41,6 +41,7 @@
     "./modules/gift-cards/browser": "./src/modules/gift-cards/browser.ts",
     "./modules/inventory": "./src/modules/inventory/index.ts",
     "./modules/media": "./src/modules/media/index.ts",
+    "./modules/markets": "./src/modules/markets/index.ts",
     "./modules/media-references": "./src/modules/media-references/index.ts",
     "./modules/navigation": "./src/modules/navigation/index.ts",
     "./modules/notifications": "./src/modules/notifications/index.ts",

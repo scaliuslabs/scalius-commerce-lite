@@ -2,6 +2,7 @@
 // eligible products. Informational only; checkout offers no EMI.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { getEmiSettings, saveEmiSettings } from "@scalius/core/modules/settings";
+import { readStoreCurrency } from "@scalius/core/modules/markets";
 import { EMI_MAX_FEE_BPS, EMI_MAX_MONTHS, EMI_MAX_PLANS, EMI_MIN_MONTHS } from "@scalius/shared/emi";
 
 import { ok } from "../../../utils/api-response";
@@ -67,7 +68,8 @@ const saveEmiRoute = createRoute({
 
 app.openapi(saveEmiRoute, async (c) => {
   const { expectedRevision, ...input } = c.req.valid("json");
-  const saved = await saveEmiSettings(c.get("db"), input, expectedRevision);
+  const db = c.get("db");
+  const saved = await saveEmiSettings(db, input, expectedRevision, await readStoreCurrency(db));
   // Product pages show the EMI line.
 
   return ok(c, saved);

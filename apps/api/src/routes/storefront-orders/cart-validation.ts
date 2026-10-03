@@ -1,8 +1,7 @@
 // Authoritative cart validation preflight.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { InventoryPool } from "@scalius/database/schema";
-import { getDecimalPlaces } from "@scalius/shared/currency";
-import { getCurrencySettings, priceIncrementOf } from "@scalius/core/modules/settings";
+import { readStoreCurrency } from "@scalius/core/modules/markets";
 import { getActivePaymentMethods } from "@scalius/core/modules/payments";
 import {
   checkStorefrontCartRules,
@@ -224,7 +223,7 @@ app.openapi(cartValidationRoute, async (c) => {
   // The apps' checkout functions ride the first read wave: none, no app work.
   const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
   const [currency, builtInPaymentMethods, registrations] = await Promise.all([
-    getCurrencySettings(db),
+    readStoreCurrency(db),
     getActivePaymentMethods(db, encryptionKey),
     listActiveCheckoutRegistrations(db),
   ]);
@@ -250,7 +249,7 @@ app.openapi(cartValidationRoute, async (c) => {
       cartValidation: result,
       delivery,
       apps,
-      currency: { code: currency.currencyCode, decimalPlaces: getDecimalPlaces(currency.currencyCode) },
+      currency: { code: currency.code, decimalPlaces: currency.decimalPlaces },
       customerId: session?.customerId ?? null,
       channel: "online_store",
     });
@@ -259,13 +258,13 @@ app.openapi(cartValidationRoute, async (c) => {
     db,
     (data.giftCards ?? []).map((card) => card.handle),
     readMasterSecret(c.env),
-    currency.currencyCode,
+    currency.code,
   );
-  const decimalPlaces = getDecimalPlaces(currency.currencyCode);
+  const decimalPlaces = currency.decimalPlaces;
   const result = await validateStorefrontCartItems(db, data.items, {
     inventoryPool: data.inventoryPool,
-    currencyCode: currency.currencyCode,
-    priceIncrementMinor: priceIncrementOf(currency),
+    currencyCode: currency.code,
+    priceIncrementMinor: currency.priceIncrementMinor,
   });
   const propertiesHashes = await storefrontLinePropertiesHashes(result);
   const cartOnly = summarizeStorefrontCartFulfilment(result, null);

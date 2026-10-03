@@ -17,7 +17,6 @@ import {
   customerCountriesDocument,
   metaConversionsDocument,
   paymentMethodsDocument,
-  priceIncrementOf,
   sslcommerzDocument,
   stripeDocument,
 } from "../settings";
@@ -51,6 +50,7 @@ import {
   selectDeliveryRateRowsByIds,
 } from "../delivery";
 import { createStorefrontTaxAuthorityReadPlan, type StorefrontTaxAuthoritySnapshot } from "../tax";
+import { orderMarketId, planMarketMatrix, selectBackupPriceIncrement, storeCurrencyOf } from "../markets";
 
 /** Settings documents every checkout snapshot reads in its first statement. */
 const CHECKOUT_SETTINGS_DOCUMENTS = [
@@ -83,9 +83,18 @@ export interface StorefrontCheckoutSettingsAuthority {
     partialPaymentAmount: number;
 }
 
+/** The shop currency document and the backup market's price increment every checkout prices at. */
+export type CheckoutCurrency = CurrencySettings & { priceIncrementMinor: number };
+
 export interface StorefrontCheckoutAuthoritySnapshot {
     authorityRevision: number;
-    currency: CurrencySettings;
+    currency: CheckoutCurrency;
+    /**
+     * The market the order is placed in: the market of its shipping country,
+     * else the backup market (MARKETS-DESIGN D4). Payment and delivery
+     * methods are store-wide until markets link them (steps 3 and 6).
+     */
+    marketId: string;
     cartValidation: StorefrontCartValidationResult;
     deliveryPreflight: StorefrontDeliveryPreflightResult;
     checkoutSettings: StorefrontCheckoutSettingsAuthority;
@@ -196,6 +205,7 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
         inputs.map((input) => input.shippingMethodId),
     );
     const taxPlan = createStorefrontTaxAuthorityReadPlan(db);
+    const marketPlan = planMarketMatrix(db);
     const statements = [
         selectSettingsDocuments(db, CHECKOUT_SETTINGS_DOCUMENTS),
         selectSettingsDocuments(db, [checkoutDocument]),
@@ -216,7 +226,11 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
             .where(inArray(checkoutAuthority.id, ["default"]))
             .limit(1),
         ...taxPlan.statements,
+        // The backup market's price increment, then the presence matrix (the order's market).
+        selectBackupPriceIncrement(db),
+        ...marketPlan.statements,
     ];
+    const marketOffset = 9 + taxPlan.statements.length;
 
     return {
         statements,
@@ -239,7 +253,17 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
                 ),
                 customerAuthDocument.fromRows(genericRows, documentContext),
             ]);
-            const currency = currencyDocumentRead.value;
+            const backupRows = Array.isArray(results[marketOffset])
+                ? results[marketOffset] as Array<{ priceIncrementMinor: number | null }>
+                : [];
+            const currency: CheckoutCurrency = {
+                ...currencyDocumentRead.value,
+                priceIncrementMinor: storeCurrencyOf(currencyDocumentRead.value, backupRows[0]?.priceIncrementMinor).priceIncrementMinor,
+            };
+            const marketId = orderMarketId(resolveCheckoutAuthorityStage(
+                "CHECKOUT_MARKETS",
+                () => marketPlan.resolve(results, marketOffset + 1),
+            ));
             const site = checkoutRead.value;
             const meta = metaRead.value;
             // A stored token counts even when this isolate cannot decrypt it;
@@ -320,7 +344,7 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
                         {
                             inventoryPool: input.inventoryPool,
                             currencyCode: currency.currencyCode,
-                            priceIncrementMinor: priceIncrementOf(currency),
+                            priceIncrementMinor: currency.priceIncrementMinor,
                         },
                         productRows,
                         variantRows,
@@ -349,6 +373,7 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
                         snapshot: {
                             authorityRevision,
                             currency,
+                            marketId,
                             cartValidation,
                             deliveryPreflight,
                             checkoutSettings: {

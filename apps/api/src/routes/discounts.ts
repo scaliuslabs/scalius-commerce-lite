@@ -1,6 +1,6 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { ValidationError } from "@scalius/core/errors";
-import { getCurrencyConfig } from "@scalius/core/modules/settings";
+import { readStoreCurrency } from "@scalius/core/modules/markets";
 import { MAX_PRODUCT_PRICE } from "@scalius/core/modules/products";
 import { quoteStorefrontDiscount } from "@scalius/core/modules/promotions";
 import { getCustomerBySession } from "@scalius/core/modules/customers";
@@ -106,7 +106,7 @@ app.openapi(validateDiscountRoute, async (c) => {
   // discounts and per-customer limits); a missing or stale session is a guest.
   const sessionToken = getCustomerSessionTokenFromRequest(c);
   const [currency, giftCardProductIds, registrations, sessionCustomer] = await Promise.all([
-    getCurrencyConfig(db),
+    readStoreCurrency(db),
     selectGiftCardProductIds(db, lines.map(({ item }) => item.id)),
     listActiveFunctionRegistrations(db),
     sessionToken

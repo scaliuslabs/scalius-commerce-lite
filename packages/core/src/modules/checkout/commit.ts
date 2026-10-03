@@ -5,6 +5,7 @@ import {
     agentStorefrontContexts,
     agentStorefrontContinuations,
     agentStorefrontOrderGrants,
+    BACKUP_MARKET_ID,
     checkoutAuthority,
     customers,
     customerHistory,
@@ -451,6 +452,8 @@ function buildOrderWriteBatch(
             // Set once here; the orders trigger keeps it immutable.
             channel,
             channelSource: null,
+            // The market of the shipping country (the checkout authority), else the backup market.
+            marketId: od.marketId ?? BACKUP_MARKET_ID,
             createdAt: sql`unixepoch()`,
             updatedAt: sql`unixepoch()`,
         }),

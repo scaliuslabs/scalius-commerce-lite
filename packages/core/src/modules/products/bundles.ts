@@ -22,7 +22,8 @@ import {
     productBundleTierSchema,
     type ProductBundleTier,
 } from "@scalius/shared/product-bundles";
-import { readStoreCurrency, toStoreMinor } from "../settings";
+import { toStoreMinor } from "../settings";
+import { readStoreCurrency } from "../markets";
 import { MAX_PRODUCT_PRICE } from "./types";
 
 export const PRODUCT_BUNDLE_ID_PREFIX = "pbd_";

@@ -23,13 +23,8 @@ import {
   enqueueNotificationOutboxById,
   recordAndEnqueueNotification,
 } from "@scalius/core/modules/notifications";
-import {
-  getCurrencySettings,
-  priceIncrementForCurrency,
-  priceIncrementOf,
-  readGiftCardSettings,
-  readStoreCurrency,
-} from "@scalius/core/modules/settings";
+import { priceIncrementForCurrency, readGiftCardSettings } from "@scalius/core/modules/settings";
+import { readStoreCurrency } from "@scalius/core/modules/markets";
 import { customers } from "@scalius/database/schema";
 import { and, eq, isNull } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
@@ -325,9 +320,9 @@ app.openapi(createRoute({
   const db = c.get("db");
   const body = c.req.valid("json");
   const actorUserId = staffId(c);
-  const [currency, settings] = await Promise.all([getCurrencySettings(db), readGiftCardSettings(db)]);
+  const [currency, settings] = await Promise.all([readStoreCurrency(db), readGiftCardSettings(db)]);
   if (!settings.ok) throw new ServiceUnavailableError("Gift-card settings can't be read right now. Try again.");
-  const amountMinor = amountToMinor(body.amount, currency.currencyCode, priceIncrementOf(currency), "The amount");
+  const amountMinor = amountToMinor(body.amount, currency.code, currency.priceIncrementMinor, "The amount");
   if (amountMinor <= 0) throw new ValidationError("The amount must be more than zero.");
   const expiresAt = body.expiresAt === undefined
     ? giftCardExpiryFromMonths(settings.value.defaultExpiryMonths)
@@ -343,7 +338,7 @@ app.openapi(createRoute({
   const result = await issueManualGiftCard(db, getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>), {
     requestKey: body.requestKey,
     amountMinor,
-    currencyCode: currency.currencyCode,
+    currencyCode: currency.code,
     expiresAt,
     customerId: body.customerId ?? null,
     recipient,

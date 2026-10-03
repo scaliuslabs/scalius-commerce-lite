@@ -11,11 +11,10 @@ import {
   validateProductFeedRowPreviewCursor,
 } from "@scalius/core/modules/catalog";
 import {
-  getCurrencySettings,
   getMediaOptimizationSettings,
   getSeoSettings,
-  priceIncrementOf,
 } from "@scalius/core/modules/settings";
+import { readStoreCurrency } from "@scalius/core/modules/markets";
 import { ok } from "../../../utils/api-response";
 import {
   errorResponses,
@@ -226,8 +225,8 @@ app.openapi(
     // core executor stop before any product/enrichment query.
     const seo = await getSeoSettings(db);
     const currency = seo.discovery.feeds.productCatalogEnabled
-      ? await getCurrencySettings(db)
-      : { currencyCode: "BDT" as const };
+      ? await readStoreCurrency(db)
+      : { code: "BDT", priceIncrementMinor: 100 };
     const media = seo.discovery.feeds.productCatalogEnabled
       ? await getMediaOptimizationSettings(db)
       : { canonicalCdnUrl: "", canonicalHostAliases: [] };
@@ -239,8 +238,8 @@ app.openapi(
       cursor: query.cursor,
       limit: query.limit,
       storefrontBaseUrl: c.env.STOREFRONT_URL,
-      currencyCode: currency.currencyCode,
-      priceIncrementMinor: priceIncrementOf(currency),
+      currencyCode: currency.code,
+      priceIncrementMinor: currency.priceIncrementMinor,
       feedsPolicy: seo.discovery.feeds,
       mediaPolicy: media,
       environmentCdnUrl: c.env.CDN_DOMAIN_URL,

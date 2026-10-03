@@ -23,7 +23,7 @@ import {
   purchaseOrders,
 } from "@scalius/database/schema";
 import { fromMinor } from "@scalius/shared/money";
-import { readStoreCurrency } from "../settings";
+import { readStoreCurrency } from "../markets";
 
 /**
  * Incoming units of the SKU in `variantId` (a column or value) as a scalar

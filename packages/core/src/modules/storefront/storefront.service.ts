@@ -39,7 +39,6 @@ import {
   mediaDocument,
   metaConversionsDocument,
   policiesDocument,
-  priceIncrementOf,
   securityDocument,
   seoDocument,
 } from "../settings";
@@ -74,6 +73,7 @@ import {
 import type { PluginInstallationRow } from "@scalius/database/schema";
 import { PLUGIN_RENDER_RETRY_SECONDS } from "@scalius/shared/plugins";
 import { deps } from "../../cache-deps";
+import { planMarketMatrix, selectBackupPriceIncrement, storeCurrencyOf } from "../markets";
 
 // ── Local helpers & interfaces ────────────────────────────────────────────────
 
@@ -445,6 +445,7 @@ export async function getLayoutData(
 ) {
   const brandMedia = planPublishedThemeBrandMedia(db);
   const navigationPlan = planPublishedNavigationPlacements(db);
+  const marketPlan = planMarketMatrix(db);
   const batchResults = await db.batch([
     // 0. Analytics configurations
     db.select({
@@ -496,7 +497,11 @@ export async function getLayoutData(
 
     // 8-9. The placement manifest and the placed menus' published items
     ...navigationPlan.statements,
+
+    // Then the backup market's price increment and the active presence matrix
+    ...[selectBackupPriceIncrement(db), ...marketPlan.statements],
   ]);
+  const marketOffset = LAYOUT_NAVIGATION_OFFSET + navigationPlan.statements.length;
 
   deps.analytics();
   deps.theme();
@@ -588,13 +593,17 @@ export async function getLayoutData(
 
   // The ISO 4217 places the storefront formats prices and UCP amounts with
   // (0 for JPY, 3 for KWD), from the same helper checkout prices with.
+  const backupRows = batchResults[marketOffset] as Array<{ priceIncrementMinor: number | null }>;
   const currencyData = {
     code: currency.value.currencyCode,
     symbol: currency.value.currencySymbol,
     decimalPlaces: getDecimalPlaces(currency.value.currencyCode),
-    // Product pages price SKUs with the rule checkout charges, at this increment.
-    priceIncrementMinor: priceIncrementOf(currency.value),
+    // Product pages price SKUs with the rule checkout charges, at the backup market's increment.
+    priceIncrementMinor: storeCurrencyOf(currency.value, backupRows[0]?.priceIncrementMinor).priceIncrementMinor,
   };
+  // Every active market's countries and presences: hreflang, the market
+  // selector and the presence a page renders (MARKETS-DESIGN D4).
+  const marketMatrix = marketPlan.resolve(batchResults, marketOffset + 1);
   // The storefront renders a stored theme whole or the default whole, never a mix.
   const themeRow = (themeResults as { value?: string }[])[0];
   const publishedTheme = parseStoredStorefrontThemeDocument(themeRow?.value);
@@ -632,6 +641,7 @@ export async function getLayoutData(
     categoryTree: trimCategoryNavigation(categoryNavigationFromRows(categoryNavigationRows)),
     footerMenus,
     currency: currencyData,
+    markets: marketMatrix,
     theme: storefrontTheme,
     /** The published theme's brand images; a preview resolves its draft's own. */
     brand,

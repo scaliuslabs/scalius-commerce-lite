@@ -1,7 +1,7 @@
 import type { Database } from "@scalius/database/client";
 import { taxClasses, taxRates, taxSettings } from "@scalius/database/schema";
 import { and, asc, eq, isNull } from "drizzle-orm";
-import { getCurrencyConfig } from "../settings";
+import { readStoreCurrency } from "../markets";
 import { calculateTaxQuote } from "./calculator";
 import { buildStorefrontDiscountAllocation } from "./discount-allocation";
 import type {
@@ -175,7 +175,7 @@ export async function calculateStorefrontTaxQuote(
             priceIncrementMinor: input.currency.priceIncrementMinor,
             symbol: suppliedCurrencyCode,
         })
-        : getCurrencyConfig(db);
+        : readStoreCurrency(db);
     if (authoritySnapshot && !isTrustedStorefrontTaxAuthority(authoritySnapshot)) {
         throw new ValidationError("Checkout tax authority could not be trusted. Please retry checkout.");
     }

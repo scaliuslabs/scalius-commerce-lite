@@ -36,7 +36,6 @@ import {
 } from "../payments";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { fromMinor } from "@scalius/shared/money";
-import { priceIncrementOf } from "../settings";
 import { and, eq, gt, isNull, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import {
@@ -453,7 +452,7 @@ export async function submitAgentStorefrontCheckout(
     {
       code: authority.currency.currencyCode,
       decimalPlaces: getDecimalPlaces(authority.currency.currencyCode),
-      priceIncrementMinor: priceIncrementOf(authority.currency),
+      priceIncrementMinor: authority.currency.priceIncrementMinor,
     },
     createTrustedStorefrontCheckoutPolicySnapshot({
       partialPaymentEnabled: checkoutSettings.partialPaymentEnabled,
@@ -461,6 +460,7 @@ export async function submitAgentStorefrontCheckout(
       orderCreatedNotificationEnabled: authority.sideEffects.orderCreatedNotification,
       metaPurchaseEnabled: authority.sideEffects.metaPurchase,
       contactFields: authority.contactFields,
+      marketId: authority.marketId,
     }),
     authority.taxAuthority,
     {},

@@ -1,5 +1,6 @@
 import type { BatchItem } from "drizzle-orm/batch";
-import { readStoreCurrency, storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../settings";
+import { storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../settings";
+import { readStoreCurrency } from "../markets";
 import { nanoid } from "nanoid";
 import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { isBatchGuardError, type Database } from "@scalius/database/client";

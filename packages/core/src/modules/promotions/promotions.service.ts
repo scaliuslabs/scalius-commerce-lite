@@ -14,7 +14,8 @@ import type { BatchItem } from "drizzle-orm/batch";
 import { nanoid } from "nanoid";
 
 import { customerSegmentMembership, readSegmentDefinitions } from "../customers";
-import { priceIncrementForCurrency, readStoreCurrency } from "../settings";
+import { priceIncrementForCurrency } from "../settings";
+import { readStoreCurrency } from "../markets";
 import {
     evaluatePromotionCandidates,
     promotionCandidateSchema,

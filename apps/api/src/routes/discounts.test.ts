@@ -29,6 +29,17 @@ vi.mock("@scalius/core/modules/checkout", async (importOriginal) => ({
   selectStorefrontCartProductRows: mocks.selectStorefrontCartProductRows,
 }));
 
+// The store's pricing currency: the shop currency at the backup market's increment.
+vi.mock("@scalius/core/modules/markets", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@scalius/core/modules/markets")>();
+  return {
+    ...actual,
+    readStoreCurrency: async (db: unknown) => {
+      return mocks.getCurrencyConfig(db);
+    },
+  };
+});
+
 vi.mock("@scalius/core/modules/settings", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@scalius/core/modules/settings")>()),
   getCurrencyConfig: mocks.getCurrencyConfig,

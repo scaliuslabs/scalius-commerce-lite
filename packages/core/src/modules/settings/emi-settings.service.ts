@@ -6,7 +6,8 @@ import { ValidationError } from "@scalius/core/errors";
 import { bpsToPercent, fromMinor, percentToBps } from "@scalius/shared/money";
 import { emiSettingsSchema, type EmiSettings } from "@scalius/shared/emi";
 import { emiDocument } from "./documents";
-import { readStoreCurrency, toStoreMinor } from "./store-money";
+import { getCurrencyConfig } from "./settings.service";
+import { toStoreMinor, type StoreCurrency } from "./store-money";
 
 export interface EmiPlanInput {
   id: string;
@@ -37,17 +38,21 @@ function presentEmiSettings(value: EmiSettings, decimalPlaces: number): EmiSetti
 }
 
 export async function getEmiSettings(db: Database): Promise<EmiSettingsInput & { revision: number }> {
-  const [{ value, revision }, currency] = await Promise.all([emiDocument.readDetailed(db), readStoreCurrency(db)]);
+  const [{ value, revision }, currency] = await Promise.all([emiDocument.readDetailed(db), getCurrencyConfig(db)]);
   return { ...presentEmiSettings(value, currency.decimalPlaces), revision };
 }
 
-/** Replaces the plans (compare-and-swap on the revision the editor loaded). */
+/**
+ * Replaces the plans (compare-and-swap on the revision the editor loaded).
+ * `currency` is the store's pricing currency (`readStoreCurrency`, markets
+ * domain): minimum amounts are multiples of its price increment.
+ */
 export async function saveEmiSettings(
   db: Database,
   input: EmiSettingsInput,
   expectedRevision: number,
+  currency: StoreCurrency,
 ): Promise<EmiSettingsInput & { revision: number }> {
-  const currency = await readStoreCurrency(db);
   const next = emiSettingsSchema.safeParse({
     enabled: input.enabled,
     plans: input.plans.map((plan) => ({

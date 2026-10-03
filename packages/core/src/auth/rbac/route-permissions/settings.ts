@@ -16,6 +16,16 @@ export const SETTINGS_ROUTE_PERMISSIONS: RoutePermissionMap = {
     GET: { anyOf: ANY_STAFF },
     POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
   },
+  // Settings → Markets: countries, web presences and the backup market's price increment.
+  "/api/v1/admin/settings/markets": {
+    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+    POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
+  },
+  "/api/v1/admin/settings/markets/*": {
+    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+    PATCH: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
+    DELETE: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
+  },
   "/api/v1/admin/taxes": {
     GET: { permission: PERMISSIONS.TAXES_VIEW },
   },

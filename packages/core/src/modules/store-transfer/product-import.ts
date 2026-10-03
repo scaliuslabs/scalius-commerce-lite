@@ -48,7 +48,8 @@ import {
   updateVariant,
 } from "../product-admin";
 import type { ProductWithDetails } from "../products";
-import { readStoreCurrency, type StoreCurrency } from "../settings";
+import { type StoreCurrency } from "../settings";
+import { readStoreCurrency } from "../markets";
 import { ImportReferenceResolver, type ReferenceCreationRights, type ReferencePlan } from "./references";
 import { ImportBudget, isWorkerLimitError } from "./budget";
 import { effectivePrice, type StoredPricing } from "./pricing";

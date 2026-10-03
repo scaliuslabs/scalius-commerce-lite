@@ -17,7 +17,7 @@ import {
 } from "@scalius/core/modules/tax";
 import { listTaxClassifications, updateTaxClassification } from "@scalius/core/modules/product-admin";
 import { type TaxJurisdictionType } from "@scalius/core/modules/tax/browser";
-import { getCurrencyConfig } from "@scalius/core/modules/settings";
+import { readStoreCurrency } from "@scalius/core/modules/markets";
 import { resolveActiveDeliveryLocationNames } from "@scalius/core/modules/delivery";
 import { created, ok } from "../../utils/api-response";
 import {
@@ -588,7 +588,7 @@ app.openapi(previewRoute, async (c) => {
   const body = c.req.valid("json");
   const [configuration, currency, locationNames] = await Promise.all([
     getTaxConfiguration(db),
-    getCurrencyConfig(db),
+    readStoreCurrency(db),
     resolveActiveDeliveryLocationNames(db, {
       city: body.city,
       zone: body.zone,

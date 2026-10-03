@@ -43,12 +43,8 @@ import { fromMinor } from "@scalius/shared/money";
 import { listProductBuyGetOffers } from "../promotions";
 import { maskPublicBuyerAvailability } from "@scalius/shared/buyer-availability";
 import type { Database } from "@scalius/database/client";
-import {
-    storeCurrencyCodeSql,
-    storeCurrencyFromSql,
-    storeDecimalPlacesFromCode,
-    storePriceIncrementSql,
-} from "../settings";
+import { storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../settings";
+import { storeCurrencyFromSql, storePriceIncrementSql } from "../markets";
 import { publicCategoryConditions } from "../categories";
 import { publicBrandJoinCondition } from "../brands";
 import { productPageReviews, reviewStatsSelection } from "./product-reviews";

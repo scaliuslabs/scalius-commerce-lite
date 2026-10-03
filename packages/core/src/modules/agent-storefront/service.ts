@@ -25,16 +25,11 @@ import {
   type CheckoutAppFunctions,
   type StorefrontCartItemIssue,
 } from "@scalius/core/modules/checkout";
-import {
-  getCurrencySettings,
-  priceIncrementForCurrency,
-  priceIncrementOf,
-  readStoreCurrency,
-} from "@scalius/core/modules/settings";
+import { priceIncrementForCurrency } from "@scalius/core/modules/settings";
+import { readStoreCurrency } from "@scalius/core/modules/markets";
 import { assertDiscountCodesApplied, quoteStorefrontDiscount } from "@scalius/core/modules/promotions";
 import { buildStorefrontTaxAllocationLineId } from "@scalius/core/modules/tax";
 import { BUILT_IN_PAYMENT_PROVIDERS, getActivePaymentMethods, type PaymentProviders } from "../payments";
-import { getDecimalPlaces } from "@scalius/shared/currency";
 import { fromMinor } from "@scalius/shared/money";
 import { and, eq, gt, isNull, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
@@ -442,10 +437,10 @@ export async function mutateAgentStorefrontCart(
         : [];
   if (mutation.kind === "add" || mutation.kind === "set") {
     const proposedIdentity = await resolveProductIdsForCart(db, nextLines);
-    const currency = await getCurrencySettings(db);
+    const currency = await readStoreCurrency(db);
     const proposedValidation = await validateStorefrontCartItems(db, proposedIdentity, {
-      currencyCode: currency.currencyCode,
-      priceIncrementMinor: priceIncrementOf(currency),
+      currencyCode: currency.code,
+      priceIncrementMinor: currency.priceIncrementMinor,
     });
     if (!proposedValidation.valid) {
       throw new ValidationError("The proposed storefront cart is not currently valid.", {
@@ -580,10 +575,10 @@ async function loadAgentStorefrontCart(
 ): Promise<AgentStorefrontCartState> {
   const cart = parseAgentStorefrontCartJson(row.cartJson);
   const identityLines = await resolveProductIdsForCart(db, cart);
-  const currency = await getCurrencySettings(db);
+  const currency = await readStoreCurrency(db);
   const validation = await validateStorefrontCartItems(db, identityLines, {
-    currencyCode: currency.currencyCode,
-    priceIncrementMinor: priceIncrementOf(currency),
+    currencyCode: currency.code,
+    priceIncrementMinor: currency.priceIncrementMinor,
   });
 
   // Same rule as storefront checkout: a physical line needs one method (a
@@ -617,8 +612,8 @@ async function loadAgentStorefrontCart(
     subtotalMinor: validation.subtotalMinor,
     hasFreeDeliveryProduct: validation.hasFreeDeliveryProduct,
     ...(delivery ? { delivery } : {}),
-    currencyCode: currency.currencyCode,
-    decimalPlaces: getDecimalPlaces(currency.currencyCode),
+    currencyCode: currency.code,
+    decimalPlaces: currency.decimalPlaces,
   };
 }
 
@@ -683,7 +678,7 @@ async function quoteAgentStorefrontDiscount(
   customerPhone?: string | null,
   apps: CheckoutAppFunctions = NO_CHECKOUT_APP_FUNCTIONS,
 ) {
-  const currency = await getCurrencySettings(db);
+  const currency = await readStoreCurrency(db);
   const lines = projection.items.map((item) => ({
     id: buildStorefrontTaxAllocationLineId(item.index, item.variantId),
     productId: item.productId,
@@ -701,7 +696,7 @@ async function quoteAgentStorefrontDiscount(
     customerId: signedInCustomerId,
     segmentCustomerId: signedInCustomerId,
     customerPhone: customerPhone?.trim() || await getLiveContextCustomerPhone(db, row),
-    cart: { currencyCode: currency.currencyCode, priceIncrementMinor: priceIncrementOf(currency), lines, shippingAmountMinor: shippingMinor },
+    cart: { currencyCode: currency.code, priceIncrementMinor: currency.priceIncrementMinor, lines, shippingAmountMinor: shippingMinor },
   });
   const unknownCode = quote.rejectedCodes.some((rejection) => rejection.reason === "not_found");
   if (!code || !unknownCode || !apps.points.has("checkout.discounts")) {
@@ -720,9 +715,9 @@ async function quoteAgentStorefrontDiscount(
   const preview = await previewStorefrontAppDiscounts(db, {
     apps,
     currency: {
-      code: currency.currencyCode,
-      decimalPlaces: getDecimalPlaces(currency.currencyCode),
-      priceIncrementMinor: priceIncrementOf(currency),
+      code: currency.code,
+      decimalPlaces: currency.decimalPlaces,
+      priceIncrementMinor: currency.priceIncrementMinor,
     },
     lines: lines.map((line) => ({
       lineId: line.id,

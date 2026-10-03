@@ -31,12 +31,8 @@ import { unixToDate } from "@scalius/shared/utils";
 import { maskPublicBuyerAvailability } from "@scalius/shared/buyer-availability";
 import type { Database } from "@scalius/database/client";
 import { ValidationError } from "@scalius/core/errors";
-import {
-  storeCurrencyCodeSql,
-  storeCurrencyFromSql,
-  storeDecimalPlacesFromCode,
-  storePriceIncrementSql,
-} from "../settings";
+import { storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../settings";
+import { storeCurrencyFromSql, storePriceIncrementSql } from "../markets";
 import { publicCategoryConditions } from "../categories";
 import { publicBrandJoinCondition } from "../brands";
 import { hasRequiredCustomization, parseStoredCustomizationSchema } from "@scalius/shared/line-properties";

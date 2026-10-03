@@ -1,3 +1,4 @@
+import { resolvePriceIncrementMinor } from "@scalius/shared/currency-policy";
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { checkoutAttempts, orders } from "@scalius/database/schema";
@@ -192,6 +193,18 @@ vi.mock("@scalius/core/modules/payments", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@scalius/core/modules/payments")>()),
   getActivePaymentMethods: mocks.getActivePaymentMethods,
 }));
+
+// The store's pricing currency: the shop currency at the backup market's increment.
+vi.mock("@scalius/core/modules/markets", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@scalius/core/modules/markets")>();
+  return {
+    ...actual,
+    readStoreCurrency: async (db: unknown) => {
+      const currency = await mocks.getCurrencySettings(db);
+      return { ...actual.storeCurrencyOf(currency, currency.priceIncrementMinor), symbol: currency.currencySymbol };
+    },
+  };
+});
 
 vi.mock("@scalius/core/modules/settings", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@scalius/core/modules/settings")>()),
@@ -400,7 +413,8 @@ function createTestApp(options: {
     );
     return {
       authorityRevision: 1,
-      currency,
+      currency: { ...currency, priceIncrementMinor: resolvePriceIncrementMinor(currency.currencyCode, currency.priceIncrementMinor) },
+      marketId: "mkt_backup",
       cartValidation,
       deliveryPreflight,
       checkoutSettings: {

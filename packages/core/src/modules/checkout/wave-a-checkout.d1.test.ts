@@ -310,8 +310,7 @@ describe("Wave A checkout", () => {
 
     it("refuses cash on delivery for an amount it cannot collect (a paisa total) before anything commits", async () => {
         sqlite.exec(`
-            INSERT INTO settings (id, key, value, type, category)
-            VALUES ('currency_doc', 'document', '{"currencyCode":"BDT","currencySymbol":"৳","priceIncrementMinor":1}', 'json', 'currency');
+            UPDATE markets SET price_increment_minor = 1 WHERE is_backup = 1;
             INSERT INTO products (id, name, slug, price_minor, is_active) VALUES ('p_pin', 'Pin', 'pin', 30050, 1);
             INSERT INTO product_variants
               (id, product_id, sku, price_minor, stock, reserved_stock, stock_version, is_default, track_inventory, fulfillment_kind)

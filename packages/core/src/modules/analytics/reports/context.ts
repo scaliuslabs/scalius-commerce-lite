@@ -1,7 +1,8 @@
 // One analytics request's context: the store currency, read once per request. Nothing here outlives the
 // request (no module state): a Worker isolate serves many stores' requests.
 import type { Database } from "@scalius/database/client";
-import { readStoreCurrency, type StoreCurrency } from "../../settings";
+import { type StoreCurrency } from "../../settings";
+import { readStoreCurrency } from "../../markets";
 import { retryTransientD1 } from "../../../utils/transient-d1";
 
 export interface AnalyticsContext {

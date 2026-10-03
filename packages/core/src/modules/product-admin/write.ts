@@ -50,13 +50,8 @@ import {
   STOCK_CHANGED_MESSAGE,
   toStoredCustomizationSchema,
 } from "../products";
-import {
-  readStoreCurrency,
-  storeCurrencyCodeSql,
-  storeCurrencyFromSql,
-  storePriceIncrementSql,
-  toStoreMinor,
-} from "../settings";
+import { storeCurrencyCodeSql, toStoreMinor } from "../settings";
+import { readStoreCurrency, storeCurrencyFromSql, storePriceIncrementSql } from "../markets";
 import { percentToBps } from "@scalius/shared/money";
 import {
     buildProductAggregateRevisionBump,

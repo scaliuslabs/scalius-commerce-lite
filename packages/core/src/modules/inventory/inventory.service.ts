@@ -4,7 +4,8 @@ import type { Database } from "@scalius/database/client";
 import type { SQL } from "drizzle-orm";
 import { ValidationError } from "@scalius/core/errors";
 import { discountedPriceMinor, fromMinor } from "@scalius/shared/money";
-import { getCurrencyConfig, storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../settings";
+import { storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../settings";
+import { readStoreCurrency } from "../markets";
 import {
   buildInventoryLowStockCondition,
   buildNeedsRestockCondition,
@@ -319,7 +320,7 @@ export async function getInventoryLabelVariants(
     }
 
     const variantIdSet = JSON.stringify(variantIds);
-    const currencyRead = getCurrencyConfig(db);
+    const currencyRead = readStoreCurrency(db);
     const rows = await db
         .select({
             id: productVariants.id,

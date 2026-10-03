@@ -59,7 +59,7 @@ import {
     type CustomFieldWriter,
 } from "@scalius/shared/custom-fields";
 import { AppError, ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
-import { readStoreCurrency } from "../settings";
+import { readStoreCurrency } from "../markets";
 import type {
     CreateCustomFieldDefinitionInput,
     ReorderCustomFieldDefinitionsInput,

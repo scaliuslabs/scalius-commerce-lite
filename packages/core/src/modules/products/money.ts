@@ -10,16 +10,8 @@ import {
     normalizeSupportedCurrencyCode,
     SUPPORTED_CURRENCY_CODES,
 } from "@scalius/shared/currency";
-import {
-  getCurrencyConfig,
-  STORE_PRICE_INCREMENTS,
-  type StoreCurrency,
-  storeCurrencyCodeSql,
-  storeCurrencyFromCode,
-  storeDecimalPlacesFromCode,
-  storePriceIncrementSql,
-  toStoreMinor,
-} from "../settings";
+import { getCurrencyConfig, type StoreCurrency, storeCurrencyCodeSql, storeCurrencyFromCode, storeDecimalPlacesFromCode, toStoreMinor } from "../settings";
+import { STORE_PRICE_INCREMENTS, storePriceIncrementSql } from "../markets";
 import type { BuyerCatalogPricingProjection } from "./buyer-projection";
 
 export interface CatalogPriceMinor {

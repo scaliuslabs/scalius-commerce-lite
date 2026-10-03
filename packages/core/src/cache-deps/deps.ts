@@ -117,6 +117,14 @@ export const deps = {
     for (const collection of collections) scope.declare(cacheDep.pluginCollection(pluginId, collection));
   },
 
+  // --- Markets ----------------------------------------------------------------------
+  /** `mk:<id>`: one market (status, identity, countries, presences): a market-keyed read declares its market. */
+  market: (marketId: Id): void => declareOne(cacheDep.market, marketId),
+  /** `mk:*`: the active presence matrix (every market, its countries and presences). */
+  anyMarket: (): void => declare(cacheDep.anyMarket()),
+  /** `mk:backup`: the backup market's price increment, which every shop-currency price rounds to. */
+  backupMarketPricing: (): void => declare(cacheDep.backupMarketPricing()),
+
   // --- Coarse, time and soft ------------------------------------------------------
   /** `t:<table>`: any change of the table. Correct but coarse; prefer a precise key. */
   table: (table: string): void => declare(cacheDep.table(table)),

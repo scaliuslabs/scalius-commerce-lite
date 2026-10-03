@@ -31,7 +31,7 @@ import { bpsToPercent, fromMinor } from "@scalius/shared/money";
 import { csvCell, spreadsheetSafeText } from "@scalius/shared/store-transfer/csv";
 import { SHOPIFY_PRODUCT_COLUMNS } from "@scalius/shared/store-transfer/shopify-products";
 import { getCurrentPublicMediaUrl } from "../../integrations/storage";
-import { readStoreCurrency } from "../settings";
+import { readStoreCurrency } from "../markets";
 import { exportPricing } from "./pricing";
 import { unitCostFromMinor } from "../inventory";
 

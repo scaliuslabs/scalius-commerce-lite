@@ -34,7 +34,8 @@ import {
   STOCK_CHANGED_MESSAGE,
   updateVariantSchema,
 } from "../products";
-import { readStoreCurrency, toStoreMinor } from "../settings";
+import { toStoreMinor } from "../settings";
+import { readStoreCurrency } from "../markets";
 import {
     generateInternalCode128Barcode,
     getBarcodeIdentityKey,

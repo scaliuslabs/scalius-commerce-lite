@@ -10,7 +10,8 @@ import {
     updateDeliveryZone,
     updateEverywhereElseRates,
 } from "@scalius/core/modules/delivery";
-import { getCurrencyConfig, readStoreCurrency } from "@scalius/core/modules/settings";
+import { getCurrencyConfig } from "@scalius/core/modules/settings";
+import { readStoreCurrency } from "@scalius/core/modules/markets";
 
 import { ok, created, noContent } from "../../../utils/api-response";
 import { successEnvelope, noContentResponse, errorResponses, conflictResponse } from "../../../schemas/responses";

@@ -261,8 +261,7 @@ describe.each(["d1", "turso"] as const)("integer money (%s)", (provider) => {
       VALUES ('pmed_tee_primary', 'tee', 'img', 'Tee', 1, 0);
       INSERT INTO product_variants (id, product_id, sku, price_minor, stock, is_default, track_inventory)
       VALUES ('tee_sku', 'tee', 'TEE-1', 999, 5, 1, 1);
-      INSERT INTO settings (id, key, value, type, category)
-      VALUES ('currency_doc', 'document', '{"currencyCode":"BDT","currencySymbol":"৳","priceIncrementMinor":1}', 'json', 'currency');
+      UPDATE markets SET price_increment_minor = 1 WHERE is_backup = 1;
     `);
     await rebuildCatalogProjections(db);
 
@@ -288,8 +287,8 @@ describe.each(["d1", "turso"] as const)("integer money (%s)", (provider) => {
     await expect(quoteManualOrder(db, manualOrder({ items: [{ productId: "tee", variantId: "tee_sku", quantity: 1 }], discountAmount: 0.74 })))
       .resolves.toMatchObject({ totalAmount: 68 });
 
-    // Back to whole taka: the rebuild (queued by the settings save) restores ৳9.
-    sqlite!.exec(`UPDATE settings SET value = '{"currencyCode":"BDT","currencySymbol":"৳","priceIncrementMinor":100}' WHERE id = 'currency_doc'`);
+    // Back to whole taka: the rebuild (queued by the markets save) restores ৳9.
+    sqlite!.exec("UPDATE markets SET price_increment_minor = 100 WHERE is_backup = 1");
     await rebuildCatalogProjections(db);
     await expect(getStorefrontProducts(db, { minPrice: 9, maxPrice: 9 }))
       .resolves.toMatchObject({ products: [{ id: "tee", discountedPrice: 9 }] });

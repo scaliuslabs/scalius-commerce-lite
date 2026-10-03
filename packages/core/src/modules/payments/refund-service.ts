@@ -3,7 +3,8 @@
 // Allocates a refund across the order's captured payments, claims it locally,
 // then dispatches each allocation through its gateway adapter (gateways/port.ts).
 
-import { orderPricePolicy, readGiftCardSettings, readStoreCurrency, toStoreMinor } from "../settings";
+import { orderPricePolicy, readGiftCardSettings, toStoreMinor } from "../settings";
+import { readStoreCurrency } from "../markets";
 import { eq, sql, desc, and, inArray } from "drizzle-orm";
 import {
     orders,

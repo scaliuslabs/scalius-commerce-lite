@@ -2,12 +2,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Database } from "@scalius/database/client";
 
 const mocks = vi.hoisted(() => ({
-  getCurrencyConfig: vi.fn(),
+  readStoreCurrency: vi.fn(),
 }));
 
-vi.mock("../settings", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../settings")>();
-  return { ...actual, getCurrencyConfig: mocks.getCurrencyConfig };
+vi.mock("../markets", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../markets")>();
+  return { ...actual, readStoreCurrency: mocks.readStoreCurrency };
 });
 
 import { calculateStorefrontTaxQuote } from "./tax.service";
@@ -30,7 +30,7 @@ function createTaxDb(): Database {
 describe("calculateStorefrontTaxQuote request currency authority", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.getCurrencyConfig.mockResolvedValue({ code: "JPY", decimalPlaces: 0, priceIncrementMinor: 1 });
+    mocks.readStoreCurrency.mockResolvedValue({ code: "JPY", decimalPlaces: 0, priceIncrementMinor: 1 });
   });
 
   it("uses the supplied KWD authority without re-reading mutable currency settings", async () => {
@@ -49,7 +49,7 @@ describe("calculateStorefrontTaxQuote request currency authority", () => {
       currency: { code: "KWD", decimalPlaces: 3, priceIncrementMinor: 1 },
     });
 
-    expect(mocks.getCurrencyConfig).not.toHaveBeenCalled();
+    expect(mocks.readStoreCurrency).not.toHaveBeenCalled();
     expect(quote).toMatchObject({
       currencyCode: "KWD",
       decimalPlaces: 3,
@@ -67,6 +67,6 @@ describe("calculateStorefrontTaxQuote request currency authority", () => {
       discountMinor: 0,
     });
 
-    expect(mocks.getCurrencyConfig).toHaveBeenCalledOnce();
+    expect(mocks.readStoreCurrency).toHaveBeenCalledOnce();
   });
 });

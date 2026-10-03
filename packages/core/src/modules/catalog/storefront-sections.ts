@@ -26,12 +26,8 @@ import {
     productVariants,
     products,
 } from "@scalius/database/schema";
-import {
-    storeCurrencyCodeSql,
-    storeCurrencyFromSql,
-    storeDecimalPlacesFromCode,
-    storePriceIncrementSql,
-} from "../settings";
+import { storeCurrencyCodeSql, storeDecimalPlacesFromCode } from "../settings";
+import { storeCurrencyFromSql, storePriceIncrementSql } from "../markets";
 import { maskPublicBuyerAvailability } from "@scalius/shared/buyer-availability";
 import { and, asc, count, eq, isNull, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";

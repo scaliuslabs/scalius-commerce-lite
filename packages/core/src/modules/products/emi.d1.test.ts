@@ -6,7 +6,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Database } from "@scalius/database/client";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { getStorefrontProductBySlug } from "../catalog/product-page";
-import { getEmiSettings, saveEmiSettings } from "../settings/emi-settings.service";
+import { getEmiSettings, saveEmiSettings as saveEmiPlans, type EmiSettingsInput } from "../settings/emi-settings.service";
+import { readStoreCurrency } from "../markets";
 import { rebuildCatalogProjections } from "./catalog-projections";
 import { productSemanticSectionPatchSchema, updateProductSemanticSection } from "../product-admin/semantic-sections";
 
@@ -28,19 +29,22 @@ describe("EMI line", () => {
 
     afterEach(() => sqlite.close());
 
+    // The route passes the store's pricing currency (the backup market's increment).
+    const saveEmiSettings = async (input: EmiSettingsInput, revision: number) =>
+        saveEmiPlans(db, input, revision, await readStoreCurrency(db));
     const emiLine = async () => (await getStorefrontProductBySlug(db, "phone"))!.product.emi;
 
     it("is off by default and stays off without plans", async () => {
         await expect(getEmiSettings(db)).resolves.toEqual({ enabled: false, plans: [], revision: 0 });
         expect(await emiLine()).toBeNull();
-        await saveEmiSettings(db, { enabled: true, plans: [] }, 0);
+        await saveEmiSettings({ enabled: true, plans: [] }, 0);
         expect(await emiLine()).toBeNull();
-        await saveEmiSettings(db, { enabled: false, plans: [cityBank] }, 1);
+        await saveEmiSettings({ enabled: false, plans: [cityBank] }, 1);
         expect(await emiLine()).toBeNull();
     });
 
     it("shows the lowest monthly amount, rounded up to whole taka", async () => {
-        await saveEmiSettings(db, {
+        await saveEmiSettings({
             enabled: true,
             plans: [cityBank, { id: "ebl-12", provider: "EBL", months: 12, feePercentage: 6.5, minAmount: 100_000 }],
         }, 0);
@@ -55,7 +59,7 @@ describe("EMI line", () => {
     });
 
     it("hides the line on a product that is not EMI-eligible", async () => {
-        await saveEmiSettings(db, { enabled: true, plans: [cityBank] }, 0);
+        await saveEmiSettings({ enabled: true, plans: [cityBank] }, 0);
         const revision = Number((sqlite.prepare("SELECT aggregate_revision AS r FROM products WHERE id = 'p_phone'").get() as { r: number }).r);
         await updateProductSemanticSection(db, "p_phone", productSemanticSectionPatchSchema.parse({
             section: "base", expectedAggregateRevision: revision, patch: { emiEligible: false },
@@ -64,12 +68,12 @@ describe("EMI line", () => {
     });
 
     it("refuses paisa, impossible plans and stale saves", async () => {
-        await expect(saveEmiSettings(db, { enabled: true, plans: [{ ...cityBank, minAmount: 4_999.5 }] }, 0))
+        await expect(saveEmiSettings({ enabled: true, plans: [{ ...cityBank, minAmount: 4_999.5 }] }, 0))
             .rejects.toMatchObject({ status: 400, message: "Taka amounts are whole numbers." });
-        await expect(saveEmiSettings(db, { enabled: true, plans: [{ ...cityBank, months: 1 }] }, 0)).rejects.toMatchObject({ status: 400 });
-        await expect(saveEmiSettings(db, { enabled: true, plans: [cityBank, cityBank] }, 0)).rejects.toMatchObject({ status: 400 });
-        await saveEmiSettings(db, { enabled: true, plans: [cityBank] }, 0);
-        await expect(saveEmiSettings(db, { enabled: false, plans: [] }, 0)).rejects.toMatchObject({ status: 409 });
+        await expect(saveEmiSettings({ enabled: true, plans: [{ ...cityBank, months: 1 }] }, 0)).rejects.toMatchObject({ status: 400 });
+        await expect(saveEmiSettings({ enabled: true, plans: [cityBank, cityBank] }, 0)).rejects.toMatchObject({ status: 400 });
+        await saveEmiSettings({ enabled: true, plans: [cityBank] }, 0);
+        await expect(saveEmiSettings({ enabled: false, plans: [] }, 0)).rejects.toMatchObject({ status: 409 });
     });
 
     it("reads an unreadable stored document as off", async () => {

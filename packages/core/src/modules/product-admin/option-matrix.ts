@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { percentToBps, toMinor } from "@scalius/shared/money";
-import { readStoreCurrency, toStoreMinor } from "../settings";
+import { toStoreMinor } from "../settings";
+import { readStoreCurrency } from "../markets";
 import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
 import {
     buildBatchGuard,

@@ -55,6 +55,22 @@ vi.mock("../../settings/site-settings.service", () => ({
     getAllowedCountries: settingsMocks.getAllowedCountries,
 }));
 
+// The store's pricing currency is the shop currency at the backup market's increment.
+vi.mock("../../markets", async (importOriginal) => {
+    const actual = await importOriginal<typeof import("../../markets")>();
+    return {
+        ...actual,
+        readStoreCurrency: async () => {
+            const currency = await settingsMocks.getCurrencySettings();
+            return { ...actual.storeCurrencyOf(currency, undefined), symbol: currency.currencySymbol };
+        },
+        readMarketMatrix: async () => ({ markets: [{
+            id: "mkt_backup", handle: "bangladesh", name: "Bangladesh", isBackup: true,
+            countries: ["BD"], presences: [{ value: "", locale: "en" }],
+        }] }),
+    };
+});
+
 vi.mock("../../tax", async (importOriginal) => ({
     ...(await importOriginal<typeof import("../../tax")>()),
     calculateStorefrontTaxQuote: taxMocks.calculateStorefrontTaxQuote,

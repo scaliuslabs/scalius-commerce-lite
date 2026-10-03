@@ -21,7 +21,7 @@ import {
   type PluginLogInput,
 } from "@scalius/core/modules/plugins";
 import { readStoreIdentity } from "@scalius/core/modules/notifications";
-import { readStoreCurrency } from "@scalius/core/modules/settings";
+import { readStoreCurrency } from "@scalius/core/modules/markets";
 import { COMMERCE_TIME_ZONE } from "@scalius/shared/commerce-time";
 import {
   PLUGIN_FUNCTION_SCHEMAS,

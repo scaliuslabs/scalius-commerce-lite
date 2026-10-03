@@ -172,6 +172,21 @@ describe.each(["d1", "turso"] as const)("storefront checkout commit (%s)", (prov
     }]);
   });
 
+  it("records the market the checkout authority resolved, and the backup market for a payload without one", async () => {
+    const db = openStore(provider);
+    sqlite!.exec("INSERT INTO markets (id, handle, name, status) VALUES ('mkt_bd', 'dhaka', 'Dhaka', 'active')");
+    const resolved = prepare("m1");
+    resolved.payload.orderData.marketId = "mkt_bd";
+    await commitStorefrontOrderPayload(db, resolved.payload, resolved.commit);
+    const legacy = prepare("m2");
+    delete legacy.payload.orderData.marketId;
+    await commitStorefrontOrderPayload(db, legacy.payload, legacy.commit);
+    expect(sqlite!.prepare("SELECT id, market_id FROM orders ORDER BY market_id").all()).toEqual([
+      { id: legacy.payload.orderData.id, market_id: "mkt_backup" },
+      { id: resolved.payload.orderData.id, market_id: "mkt_bd" },
+    ]);
+  });
+
   it("records the SKU's unit cost on the committed line, frozen against later cost changes", async () => {
     const db = openStore(provider);
     sqlite!.exec("UPDATE product_variants SET cost_minor = 6500 WHERE id = 'var_1'");

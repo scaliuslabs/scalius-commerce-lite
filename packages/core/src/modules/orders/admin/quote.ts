@@ -1,15 +1,8 @@
 // Manual order quotes: SKU resolution, inventory facts and money for staff-created orders.
 import type { Database } from "@scalius/database/client";
 import { products, productVariants, shippingMethods } from "@scalius/database/schema";
-import {
-  getCurrencySettings,
-  orderPricePolicy,
-  priceIncrementOf,
-  storeCurrencyCodeSql,
-  storeCurrencyFromSql,
-  storePriceIncrementSql,
-  toStoreMinor,
-} from "../../settings";
+import { orderPricePolicy, storeCurrencyCodeSql, toStoreMinor } from "../../settings";
+import { readStoreCurrency, storeCurrencyFromSql, storePriceIncrementSql } from "../../markets";
 import { and, sql, eq, inArray, isNull } from "drizzle-orm";
 import {
     isAutoFulfillmentType,
@@ -363,9 +356,8 @@ export async function prepareManualOrderQuote(
 ): Promise<PreparedManualOrderQuote> {
     // Amounts staff enter are on the store's price increment (a BDT store's
     // default: whole taka); an amended order keeps its own currency.
-    const settings = await getCurrencySettings(db);
-    const store = { code: settings.currencyCode, priceIncrementMinor: priceIncrementOf(settings) };
-    const currency = orderPricePolicy(currencyOverride ?? createOrderCurrencySnapshot(settings.currencyCode), store);
+    const store = await readStoreCurrency(db);
+    const currency = orderPricePolicy(currencyOverride ?? createOrderCurrencySnapshot(store.code), store);
     // Keep location validation first so a stale/cross-parent destination fails
     // before catalog or tax reads do unnecessary work. A pickup or
     // service-only order sends no address and skips it.

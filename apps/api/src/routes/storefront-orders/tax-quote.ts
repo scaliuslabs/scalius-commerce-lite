@@ -9,10 +9,9 @@ import {
     rejectedDiscountCodeSchema,
 } from "../../schemas/storefront-discounts";
 import { phoneNumberSchema } from "@scalius/shared/customer-utils";
-import { getDecimalPlaces } from "@scalius/shared/currency";
 import { getCustomerBySession } from "@scalius/core/modules/customers";
 import { fromMinor } from "@scalius/shared/money";
-import { getCurrencySettings, priceIncrementOf } from "@scalius/core/modules/settings";
+import { readStoreCurrency } from "@scalius/core/modules/markets";
 import { buildStorefrontCheckoutQuoteFingerprint } from "@scalius/core/modules/checkout/browser";
 import {
     assertNoCheckoutRuleErrors,
@@ -210,7 +209,7 @@ app.openapi(taxQuoteRoute, async (c) => {
   // segment-limited promotions (automatic ones need no code) and apps' facts.
   const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
   const [currency, builtInPaymentMethods, registrations, sessionCustomer] = await Promise.all([
-    getCurrencySettings(db),
+    readStoreCurrency(db),
     getActivePaymentMethods(db, encryptionKey),
     listActiveCheckoutRegistrations(db),
     customerSessionToken
@@ -227,8 +226,8 @@ app.openapi(taxQuoteRoute, async (c) => {
   const { providers: paymentProviders, paymentMethods } = await checkoutPaymentMethods(c, registrations, builtInPaymentMethods, encryptionKey);
   const cartValidation = await validateStorefrontCartItems(db, data.items, {
     inventoryPool: data.inventoryPool,
-    currencyCode: currency.currencyCode,
-    priceIncrementMinor: priceIncrementOf(currency),
+    currencyCode: currency.code,
+    priceIncrementMinor: currency.priceIncrementMinor,
   });
   if (!cartValidation.valid) {
     throw new ValidationError("Some items in your cart need attention.", {
@@ -252,9 +251,9 @@ app.openapi(taxQuoteRoute, async (c) => {
     segmentCustomerId: sessionCustomer?.customerId ?? null,
     customerPhone: data.customerPhone,
     currency: {
-      code: currency.currencyCode,
-      decimalPlaces: getDecimalPlaces(currency.currencyCode),
-      priceIncrementMinor: priceIncrementOf(currency),
+      code: currency.code,
+      decimalPlaces: currency.decimalPlaces,
+      priceIncrementMinor: currency.priceIncrementMinor,
     },
     apps,
     channel: "online_store",
