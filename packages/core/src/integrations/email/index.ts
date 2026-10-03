@@ -1,51 +1,52 @@
 // src/integrations/email/index.ts
-// Barrel file for email provider abstraction.
+// `sendEmail`: one message through the email port. The sender is the
+// merchant's choice (the `email` document), read per send: a built-in one
+// with the store's settings, or an app provider through the context's
+// AppProviders, asked only when the choice names an app. While the chosen
+// sender cannot send (not configured, the app not ready), the other built-in
+// one takes the message when it can; with none, nothing is delivered and the
+// result says so. Local development captures everything in Mailpit.
+
+import { bindProvider, isAppProviderId, resolveAppProvider } from "../provider-port";
+import { cloudflareEmail } from "./cloudflare";
+import { mailpitEmail } from "./mailpit";
+import {
+  maskEmailForLog,
+  resolveSender,
+  safeEmailHeaders,
+  type BuiltInEmailProviderId,
+  type EmailAdapter,
+  type EmailProvider,
+  type EmailRuntimeContext,
+  type EmailRuntimeSettings,
+  type SendEmailOptions,
+  type SendEmailResult,
+} from "./provider";
+import { resendEmail } from "./resend";
+import { getEmailRuntimeSettings } from "./settings";
 
 export type {
-  SendEmailOptions,
-  SendEmailResult,
+  BuiltInEmailProviderId,
+  CloudflareEmailBinding,
+  EmailAdapter,
+  EmailAdapterSettings,
   EmailProvider,
   EmailRuntimeContext,
   EmailRuntimeSettings,
-  CloudflareEmailBinding,
+  SendEmailOptions,
+  SendEmailResult,
 } from "./provider";
-export {
-  registerEmailProvider,
-  getEmailProvider,
-} from "./provider";
-
-export { CloudflareEmailProvider } from "./cloudflare";
-export { MailpitEmailProvider } from "./mailpit";
-export { ResendEmailProvider } from "./resend";
-export { getEmailProviderReadiness, getEmailRuntimeSettings } from "./settings";
+export { BUILT_IN_EMAIL_PROVIDER_IDS } from "./provider";
+export { cloudflareEmail } from "./cloudflare";
+export { mailpitEmail } from "./mailpit";
+export { resendEmail } from "./resend";
+export { getEmailProviderReadiness, getEmailRuntimeSettings, isEmailProviderChoice } from "./settings";
 export type { EmailProviderReadiness } from "./settings";
 
-// ── Register built-in providers ─────────────────────────────────────
-
-import { registerEmailProvider } from "./provider";
-import { CloudflareEmailProvider } from "./cloudflare";
-import { MailpitEmailProvider } from "./mailpit";
-import { ResendEmailProvider } from "./resend";
-
-registerEmailProvider("cloudflare", new CloudflareEmailProvider());
-registerEmailProvider("mailpit", new MailpitEmailProvider());
-registerEmailProvider("resend", new ResendEmailProvider());
-
-// ── Convenience functions (preserve existing public API) ────────────
-
-import type { EmailRuntimeContext, EmailRuntimeSettings, SendEmailOptions, SendEmailResult } from "./provider";
-import { getEmailProvider } from "./provider";
-import { getEmailRuntimeSettings } from "./settings";
-
-function maskEmailForLog(value: string | undefined): string {
-  if (!value) return "unset";
-  const [localPart, domain] = value.split("@");
-  if (!localPart || !domain) return "redacted";
-  const visible = localPart.length <= 2
-    ? localPart[0] ?? "*"
-    : `${localPart[0]}${localPart[localPart.length - 1]}`;
-  return `${visible}***@${domain}`;
-}
+const BUILT_IN_EMAIL_ADAPTERS: Record<BuiltInEmailProviderId, EmailAdapter> = {
+  cloudflare: cloudflareEmail,
+  resend: resendEmail,
+};
 
 function logEmailFallback(
   { to, subject, html, from, text }: SendEmailOptions,
@@ -68,42 +69,57 @@ function logEmailFallback(
   };
 }
 
-function providerOrder(settings: EmailRuntimeSettings): Array<EmailRuntimeSettings["provider"]> {
+/** The senders a message may go through, in order: the merchant's choice, then the other built-in one. */
+function providerOrder(settings: EmailRuntimeSettings): string[] {
+  if (isAppProviderId(settings.provider)) return [settings.provider, "cloudflare", "resend"];
   return settings.provider === "resend"
     ? ["resend", "cloudflare"]
     : ["cloudflare", "resend"];
 }
 
-function isProviderConfigured(
-  providerName: EmailRuntimeSettings["provider"],
+/** The first sender in order that can send now, or null. */
+async function resolveEmailProvider(
   settings: EmailRuntimeSettings,
-  context?: EmailRuntimeContext,
-): boolean {
-  if (providerName === "cloudflare") return Boolean(context?.env?.EMAIL);
-  return Boolean(settings.resendApiKey);
+  context: EmailRuntimeContext | undefined,
+): Promise<EmailProvider | null> {
+  const adapterSettings = { runtime: settings, binding: context?.env?.EMAIL };
+  if (settings.localMailpitUrl) return bindProvider("email", mailpitEmail, adapterSettings);
+  for (const id of providerOrder(settings)) {
+    if (isAppProviderId(id)) {
+      const choice = await resolveAppProvider(context?.appProviders, "email", id);
+      if (choice.provider) return choice.provider;
+      continue;
+    }
+    const adapter = BUILT_IN_EMAIL_ADAPTERS[id as BuiltInEmailProviderId];
+    if (adapter?.configured(adapterSettings)) return bindProvider("email", adapter, adapterSettings);
+  }
+  return null;
 }
 
 /**
- * Send an email using the configured provider.
- * Falls back to the secondary provider, then console logging, when unavailable.
+ * Send an email through the merchant's sender (see the file comment). A
+ * sender that cannot take the message throws or answers `success: false`.
  */
 export async function sendEmail(
   options: SendEmailOptions,
   context?: EmailRuntimeContext,
 ): Promise<SendEmailResult> {
   const settings = await getEmailRuntimeSettings(context);
-  const runtimeContext: EmailRuntimeContext = { ...context, settings };
+  const provider = await resolveEmailProvider(settings, context);
+  if (!provider) return logEmailFallback(options, settings);
 
-  if (settings.localMailpitUrl) {
-    return getEmailProvider("mailpit")!.sendEmail(options, runtimeContext);
-  }
-
-  for (const providerName of providerOrder(settings)) {
-    if (!isProviderConfigured(providerName, settings, runtimeContext)) continue;
-    const provider = getEmailProvider(providerName);
-    if (!provider) continue;
-    return await provider.sendEmail(options, runtimeContext);
-  }
-
-  return logEmailFallback(options, settings);
+  // Every sender gets the store's sender address and name, resolved once.
+  const sender = resolveSender(options, settings);
+  const headers = safeEmailHeaders(options.headers);
+  const result = await provider.send({
+    to: options.to,
+    subject: options.subject,
+    html: options.html,
+    ...(options.text !== undefined ? { text: options.text } : {}),
+    from: sender.email,
+    ...(sender.name ? { fromName: sender.name } : {}),
+    ...(headers ? { headers } : {}),
+    ...(options.idempotencyKey ? { idempotencyKey: options.idempotencyKey } : {}),
+  }, {});
+  return { ...result, provider: provider.id };
 }

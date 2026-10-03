@@ -1,45 +1,50 @@
-// src/integrations/sms/providers/mimsms.ts
-// MIM SMS provider implementation.
+// MIM SMS behind the SMS port.
 // API docs: https://api.mimsms.com — username + API key auth, JSON POST.
 
-import type { SmsProvider, SendSmsOptions, SendSmsResult } from "../provider";
+import { smsCredentialIssue } from "../credentials";
+import type { SmsAdapter } from "../port";
 import { classifySmsProviderFailure, sanitizeSmsProviderDiagnostic } from "../retryability";
 
-export interface MimSmsConfig {
-  userName: string; // Email address
+export interface MimSmsSettings {
+  /** Email address. */
+  userName: string;
   apiKey: string;
-  senderName: string; // Registered sender ID — mandatory
+  /** Registered sender ID — mandatory. */
+  senderName: string;
 }
 
-export class MimSmsProvider implements SmsProvider {
-  readonly name = "mimsms";
+export const mimSms: SmsAdapter<MimSmsSettings> = {
+  id: "mimsms",
+  label: "MIM SMS",
 
-  constructor(private config: MimSmsConfig) {}
+  configure(stored) {
+    const { mimsmsUsername: userName, mimsmsApiKey: apiKey, mimsmsSenderName: senderName } = stored.value;
+    const error = smsCredentialIssue(stored, "mimsmsApiKey", [
+      ["MIM SMS username", userName],
+      ["MIM SMS API key", apiKey],
+      ["MIM SMS sender name", senderName],
+    ])
+      ?? (!userName ? "MIM SMS username (email) is required" : null)
+      ?? (!apiKey ? "MIM SMS API key is required" : null)
+      ?? (!senderName ? "MIM SMS sender name is required (must be registered with MIM SMS)" : null);
+    return error ? { error } : { settings: { userName, apiKey, senderName } };
+  },
 
-  validateConfig(): string | null {
-    if (!this.config.userName)
-      return "MIM SMS username (email) is required";
-    if (!this.config.apiKey) return "MIM SMS API key is required";
-    if (!this.config.senderName)
-      return "MIM SMS sender name is required (must be registered with MIM SMS)";
-    return null;
-  }
-
-  async sendSms(options: SendSmsOptions): Promise<SendSmsResult> {
+  async send(input, { settings }) {
     // Strip + prefix: +8801XXXXXXXXX -> 8801XXXXXXXXX
-    const to = options.to.replace(/^\+/, "");
+    const to = input.to.replace(/^\+/, "");
 
     const res = await fetch("https://api.mimsms.com/api/SmsSending/SMS", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        UserName: this.config.userName,
-        Apikey: this.config.apiKey,
+        UserName: settings.userName,
+        Apikey: settings.apiKey,
         MobileNumber: to,
         CampaignId: "null",
-        SenderName: this.config.senderName,
+        SenderName: settings.senderName,
         TransactionType: "T", // Transactional — required for OTP
-        Message: options.message,
+        Message: input.message,
       }),
     });
 
@@ -68,5 +73,5 @@ export class MimSmsProvider implements SmsProvider {
       rawStatus: sanitizeSmsProviderDiagnostic(rawStatus),
       retryable: classifySmsProviderFailure(rawStatus, res.ok ? undefined : res.status),
     };
-  }
-}
+  },
+};

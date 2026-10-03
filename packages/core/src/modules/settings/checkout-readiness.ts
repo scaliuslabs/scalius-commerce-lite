@@ -19,6 +19,7 @@ import {
 } from "@scalius/shared/customer-auth-policy";
 import { getEmailProviderReadiness } from "../../integrations/email";
 import { getSmsProviderReadiness } from "../../integrations/sms";
+import type { AppProviders } from "../../integrations/provider-port";
 import { getWhatsAppCloudApiSettings } from "../../integrations/whatsapp";
 import { checkoutDocument, customerAuthDocument } from "./documents";
 import { selectSettingsDocuments } from "./settings-store";
@@ -48,6 +49,8 @@ export interface CheckoutReadinessOptions {
     excludeDeliveryLocationIds?: readonly string[];
     encryptionKey?: string;
     runtimeEnv?: Record<string, unknown>;
+    /** The app providers a saved SMS or email choice may name. */
+    appProviders?: AppProviders;
     inspectOptionalCustomerSignIn?: boolean;
     customerSignInRequiredOverride?: boolean;
 }
@@ -201,14 +204,14 @@ export async function getCustomerSignInReadiness(
 export async function isCustomerAuthChannelReady(
     db: Database,
     channel: CustomerAuthOtpChannel,
-    options: Pick<CheckoutReadinessOptions, "encryptionKey" | "runtimeEnv">,
+    options: Pick<CheckoutReadinessOptions, "encryptionKey" | "runtimeEnv" | "appProviders">,
 ): Promise<boolean> {
     if (!options.encryptionKey?.trim()) return false;
     try {
         if (channel === "email") {
-            return isReady(await getEmailProviderReadiness({ db, encryptionKey: options.encryptionKey, env: options.runtimeEnv }));
+            return isReady(await getEmailProviderReadiness({ db, encryptionKey: options.encryptionKey, env: options.runtimeEnv, appProviders: options.appProviders }));
         }
-        if (channel === "sms") return isReady(await getSmsProviderReadiness(db, options.encryptionKey));
+        if (channel === "sms") return isReady(await getSmsProviderReadiness(db, options.encryptionKey, options.appProviders));
         const whatsapp = await getWhatsAppCloudApiSettings(db, options.encryptionKey);
         return Boolean(whatsapp.accessToken && whatsapp.phoneNumberId);
     } catch {
@@ -219,7 +222,7 @@ export async function isCustomerAuthChannelReady(
 /** Readiness of each listed channel (all three by default). */
 export async function getCustomerChannelReadiness(
     db: Database,
-    options: Pick<CheckoutReadinessOptions, "encryptionKey" | "runtimeEnv">,
+    options: Pick<CheckoutReadinessOptions, "encryptionKey" | "runtimeEnv" | "appProviders">,
     channels: readonly CustomerAuthOtpChannel[] = CUSTOMER_AUTH_OTP_CHANNELS,
 ): Promise<ChannelReadiness> {
     const ready = await Promise.all(channels.map((channel) => isCustomerAuthChannelReady(db, channel, options)));
@@ -236,7 +239,7 @@ export async function getCustomerChannelReadiness(
 export async function getOfferedCustomerIdentity(
     db: Database,
     settings: CustomerIdentitySettings,
-    options: Pick<CheckoutReadinessOptions, "encryptionKey" | "runtimeEnv">,
+    options: Pick<CheckoutReadinessOptions, "encryptionKey" | "runtimeEnv" | "appProviders">,
 ): Promise<CustomerIdentitySettings> {
     const ready = await getCustomerChannelReadiness(db, options, settings.channels);
     return { ...settings, channels: offeredChannels(settings, ready) };

@@ -7,25 +7,14 @@ export {
   testFraudProvider,
   fraudLookup,
   fraudLookupWithActiveProvider,
+  getFraudProviderUrlIssue,
 } from "./fraud-checker.service";
-export type { FraudCheckerProvider, FraudCheckResult } from "./fraud-checker.service";
-export type {
-  FraudCheckProvider,
-  FraudCheckProviderConfig,
-  FraudCheckResult as ProviderFraudCheckResult,
-} from "./provider";
-export type { FraudCheckProviderDefinition, FraudCheckProviderType } from "./provider-definitions";
+export type { FraudCheckerProvider } from "./fraud-checker.service";
+export type { FraudAdapter, FraudCheckProviderConfig, FraudProvider } from "./provider";
 export {
-  ECourierFraudCheckProvider,
-  DefaultFraudCheckProvider,
-  FraudBdCheckProvider,
-  FraudGuardCheckProvider,
-  getFraudCheckProvider,
-  registerFraudCheckProvider,
+  builtInFraudChecker,
+  defaultFraudChecker,
+  eCourierFraudChecker,
+  fraudBdChecker,
+  fraudGuardChecker,
 } from "./provider";
-export {
-  FRAUD_CHECK_PROVIDER_DEFINITIONS,
-  getFraudCheckProviderDefinition,
-  isFraudCheckProviderType,
-} from "./provider-definitions";
-export { getFraudProviderUrlIssue } from "./fraud-checker.service";

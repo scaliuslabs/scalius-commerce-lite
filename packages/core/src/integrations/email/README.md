@@ -1,6 +1,6 @@
 # Email
 
-Transactional email abstraction with a small provider registry and runtime settings from the `settings` table.
+Transactional email through the email port (`@scalius/shared/plugins/providers/messaging`): every sender, built in or an installed app's, implements the same `send`, and `sendEmail` never asks which kind it got. The merchant's choice is the `email` settings document, read per send.
 
 ## Providers
 
@@ -10,11 +10,13 @@ Built-in providers:
 - `resend` -- optional HTTP fallback using a dashboard-saved Resend API key.
 - `mailpit` -- loopback-only local capture through Mailpit's HTTP API.
 - Local development uses the loopback-only `LOCAL_MAILPIT_URL` from `apps/api/wrangler.local.jsonc` before either production provider. `pnpm dev` starts or reuses Mailpit at `http://127.0.0.1:8025`; production config does not expose this binding.
+- An installed app's email provider, saved as `<plugin id>:<provider id>`. Core reaches it only through the `appProviders` lookup the API passes in the context (`apps/api/src/plugins/providers/app-providers.ts`), asked only when the saved choice is an app id; without the lookup, or while the app is not active, approved, runnable or set up, it cannot send. Its keys live in the app's own settings (encrypted).
 
 Every email path calls `sendEmail(options, context?)`. The selector reads `email_provider` from DB settings and tries providers in this order:
 
 - Saved provider is `cloudflare`: Cloudflare binding first, then Resend if a key exists.
 - Saved provider is `resend`: Resend first, then Cloudflare if the binding exists.
+- Saved provider is an app: the app first while it is ready, then Cloudflare, then Resend, as a missing Resend key falls back today. A ready app's answer is final (`retryable: false` is honoured by the notification queue); an uncertain failure is retried only when the message carries an idempotency key.
 - No saved provider: existing Resend keys preserve legacy behavior; otherwise Cloudflare is preferred.
 - No configured provider: logs masked metadata only, returns a non-delivered result, and does not leak OTPs, reset links, or invite secrets to logs.
 
@@ -26,7 +28,7 @@ Cloudflare Email Service is the native/default option. Do not add another paid/e
 
 Category `email` keys:
 
-- `email_provider` -- `cloudflare` or `resend`.
+- `email_provider` -- `cloudflare`, `resend` or an app provider id (the save refuses an id no installed app declares).
 - `email_sender` -- default From address, falling back to `noreply@example.com` at runtime. Buyer emails pass `fromName` (the store name); Cloudflare and Mailpit receive it as a separate name field and Resend as a quoted `"Name" <address>`.
 - `resend_api_key` -- encrypted Resend key. Runtime reads use strict credential resolution with the dedicated `CREDENTIAL_ENCRYPTION_KEY`; unreadable ciphertext returns `hasResendApiKey=false` instead of falling through to Resend with ciphertext. Writes of real keys must require `CREDENTIAL_ENCRYPTION_KEY`.
 
@@ -44,6 +46,7 @@ await sendEmail(message, {
   db,
   env,
   encryptionKey,
+  appProviders, // requestAppProviders(c), or detachedAppProviders(env, db, key) in queues
 });
 ```
 
@@ -61,17 +64,17 @@ Cloudflare Email Service requires domain onboarding in the Cloudflare dashboard 
 
 ## Key Files
 
-- `provider.ts` -- provider interfaces, runtime context types, and registry.
+- `provider.ts` -- the port types as core calls them (`EmailProvider`, `EmailAdapter`), runtime context types, sender and header helpers.
 - `settings.ts` -- DB/runtime settings loader and Resend credential decryption.
 - `cloudflare.ts` -- Workers `EMAIL.send()` provider.
 - `mailpit.ts` -- loopback-only local Mailpit HTTP provider.
 - `resend.ts` -- Resend HTTP provider.
-- `index.ts` -- provider registration, selection/fallback logic, and convenience templates.
+- `index.ts` -- `sendEmail`: request-scoped selection and fallback over the built-in adapters and the app lookup.
 
 ## Adding a Provider
 
-1. Add a provider implementing `EmailProvider`.
-2. Register it in `index.ts`.
+1. Add an `EmailAdapter` (the email port with the store's settings per call).
+2. Add it to `BUILT_IN_EMAIL_ADAPTERS` in `index.ts` (or ship it as an app provider instead).
 3. Extend `EmailRuntimeSettings` and admin settings only if it needs runtime configuration.
 4. Keep Cloudflare Email Service as a first-class/default option.
 5. Add focused provider-selection tests before shipping.

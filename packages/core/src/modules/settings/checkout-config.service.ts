@@ -9,6 +9,7 @@ import {
 import type { CustomerIdentitySettings } from "@scalius/shared/customer-auth-policy";
 import { isReady } from "@scalius/shared/readiness";
 import { isQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
+import type { AppProviders } from "../../integrations/provider-port";
 import {
     BUILT_IN_PAYMENT_PROVIDERS,
     COD_LABEL,
@@ -78,6 +79,8 @@ export async function getCheckoutConfig(
      * only when the merchant enabled an app's method; built-in ones alone by default.
      */
     paymentProviders?: PaymentProvidersSource,
+    /** The app providers a saved SMS or email choice may name (customer sign-in channels). */
+    appProviders?: AppProviders,
 ): Promise<CheckoutConfig> {
     const rows = await selectSettingsDocuments(db, [
         checkoutDocument,
@@ -104,8 +107,8 @@ export async function getCheckoutConfig(
     const currencyDecimalPlaces = getDecimalPlaces(localCurrencyCode);
     const { checkoutMode, partialPaymentEnabled, partialPaymentAmount } = checkout;
     const [customerIdentity, checkoutReadiness] = await Promise.all([
-        getOfferedCustomerIdentity(db, customerAuth, { encryptionKey, runtimeEnv }),
-        getCheckoutReadiness(db, { encryptionKey, runtimeEnv }),
+        getOfferedCustomerIdentity(db, customerAuth, { encryptionKey, runtimeEnv, appProviders }),
+        getCheckoutReadiness(db, { encryptionKey, runtimeEnv, appProviders }),
     ]);
 
     if (!isReady(checkoutReadiness)) {

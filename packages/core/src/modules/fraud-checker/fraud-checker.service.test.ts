@@ -6,6 +6,8 @@ import {
   saveFraudProvider,
 } from "./fraud-checker.service";
 import { encryptCredentials } from "@scalius/core/utils/credential-encryption";
+import { ServiceUnavailableError } from "@scalius/core/errors";
+import { ProviderError } from "@scalius/shared/plugins/providers";
 
 function selectableRows(rows: Array<Record<string, unknown>>) {
   const selection = {
@@ -173,5 +175,46 @@ describe("fraud checker provider credential storage", () => {
     }, "+8801700000000")).rejects.toThrow("public HTTPS hostname");
     expect(fetchMock).not.toHaveBeenCalled();
     fetchMock.mockRestore();
+  });
+});
+
+describe("app fraud checkers", () => {
+  const APP_ID = "acme.radar:radar";
+  const appRow = { id: "row_app", name: "Acme Radar", apiUrl: "", apiKey: "", isActive: true, providerType: APP_ID };
+  const answer = { riskLevel: "low" as const, phone: "+8801700000000", totalParcels: 3, delivered: 3, cancelled: 0 };
+
+  it("saves a row that names the app and no credentials", async () => {
+    const { db, writes } = createFraudDb();
+    const saved = await saveFraudProvider(db as never, {
+      name: "Acme Radar",
+      apiUrl: "https://ignored.example/api",
+      apiKey: "ignored-key",
+      isActive: true,
+      providerType: APP_ID,
+    }, credentialKey());
+
+    expect(saved).toMatchObject({ name: "Acme Radar", apiUrl: "", apiKey: "", providerType: APP_ID, isActive: true });
+    expect(String(writes[0]?.value)).not.toContain("ignored-key");
+    await expect(saveFraudProvider(db as never, { ...appRow, providerType: "acme.radar" }, credentialKey()))
+      .rejects.toThrow("public HTTPS");
+  });
+
+  it("looks up through the app the active row names", async () => {
+    const check = vi.fn(async () => answer);
+    const resolve = vi.fn(async () => ({ provider: { id: APP_ID, label: "Acme Radar", check }, issue: null }));
+
+    await expect(fraudLookup(appRow, "+8801700000000", { resolve } as never)).resolves.toEqual(answer);
+    expect(resolve).toHaveBeenCalledWith("fraud", APP_ID);
+    expect(check).toHaveBeenCalledWith({ phone: "+8801700000000" }, {});
+  });
+
+  it("fails closed when the app is not ready or cannot run here, and keeps the app's own error", async () => {
+    const notReady = { resolve: async () => ({ provider: null, issue: "Activate Acme Radar in Apps to use it." }) };
+    await expect(fraudLookup(appRow, "+8801700000000", notReady as never)).rejects.toThrow("Activate Acme Radar in Apps to use it.");
+    await expect(fraudLookup(appRow, "+8801700000000")).rejects.toBeInstanceOf(ServiceUnavailableError);
+
+    const declined = new ProviderError("declined", "Acme Radar has no history for this number.");
+    const failing = { resolve: async () => ({ provider: { id: APP_ID, label: "Acme Radar", check: async () => { throw declined; } }, issue: null }) };
+    await expect(fraudLookup(appRow, "+8801700000000", failing as never)).rejects.toThrow("Acme Radar has no history for this number.");
   });
 });

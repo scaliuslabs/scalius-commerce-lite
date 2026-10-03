@@ -29,6 +29,7 @@ import {
   type SeoReturnPolicySettings,
 } from "@scalius/shared/seo-return-policy";
 import { emiSettingsSchema, type EmiSettings } from "@scalius/shared/emi";
+import { isQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
 import {
   DEFAULT_MARKETING_CONSENT_SETTINGS,
   marketingConsentSettingsSchema,
@@ -676,8 +677,11 @@ export const notificationTemplatesDocument = defineSettingsDocument<Notification
 });
 
 export interface EmailSettings {
-  /** Empty means "not explicitly chosen"; the provider is then inferred. */
-  provider: "" | "cloudflare" | "resend";
+  /**
+   * "cloudflare", "resend" or an app provider's `<plugin id>:<provider id>`.
+   * Empty means "not explicitly chosen"; the provider is then inferred.
+   */
+  provider: string;
   sender: string;
   resendApiKey: string;
 }
@@ -685,7 +689,7 @@ export interface EmailSettings {
 export const emailDocument = defineSettingsDocument<EmailSettings>({
   key: "email",
   schema: z.object({
-    provider: z.enum(["", "cloudflare", "resend"]),
+    provider: z.union([z.enum(["", "cloudflare", "resend"]), z.string().refine(isQualifiedProviderId)]),
     sender: z.string().max(320),
     resendApiKey: z.string().max(512),
   }),

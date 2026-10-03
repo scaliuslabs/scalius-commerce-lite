@@ -44,6 +44,7 @@ import {
     type CustomerIdentitySettings,
 } from "@scalius/shared/customer-auth-policy";
 import type { EmailRuntimeContext } from "../../integrations/email";
+import type { AppProviders } from "../../integrations/provider-port";
 import { assertCustomerChannelReady, phoneCodeChannel } from "./customer-code-channels";
 import { getAllowedCountries } from "../settings/site-settings.service";
 import {
@@ -98,6 +99,8 @@ export interface SendOtpInput {
     emailEnv?: EmailRuntimeContext["env"];
     encryptionKey?: string;
     credentialEncryptionKey?: string;
+    /** The app providers a saved SMS or email choice may name. */
+    appProviders?: AppProviders;
 }
 
 export interface SendOtpResult {
@@ -658,11 +661,12 @@ export async function getAccountPhoneVerificationPrompt(
     db: Database,
     accountId: string,
     credentialEncryptionKey: string | undefined,
+    appProviders?: AppProviders,
 ): Promise<{ phone: string } | null> {
     const account = await getActiveCustomerById(db, accountId);
     if (!account?.accountClaimedAt || account.phoneVerifiedAt || !account.phone) return null;
     const { identity } = await getCustomerAuthRuntimePolicy(db);
-    return await phoneCodeChannel(db, identity, credentialEncryptionKey) ? { phone: account.phone } : null;
+    return await phoneCodeChannel(db, identity, credentialEncryptionKey, appProviders) ? { phone: account.phone } : null;
 }
 
 /** Sends a code to the signed-in account's own (unproven) phone. */
@@ -674,7 +678,7 @@ export async function sendAccountPhoneCode(
     if (!account?.accountClaimedAt) throw new UnauthorizedError("Please sign in again.");
     if (account.phoneVerifiedAt) throw new ConflictError("Your phone number is already verified.");
     const { identity } = await getCustomerAuthRuntimePolicy(db);
-    const channel = await phoneCodeChannel(db, identity, input.credentialEncryptionKey);
+    const channel = await phoneCodeChannel(db, identity, input.credentialEncryptionKey, input.appProviders);
     if (!channel) throw new ServiceUnavailableError("Text message codes aren't available right now.");
     const sent = await sendOtp(db, { ...input, method: "phone", identifier: account.phone, channel });
     return { ...sent, message: `We sent a code to ${formatAccountPhone(account.phone)}.` };
