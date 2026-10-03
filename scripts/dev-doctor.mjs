@@ -177,7 +177,8 @@ function checkTooling(checks) {
     fail(checks, "pnpm", "pnpm could not be resolved.", "Install pnpm or enable Corepack, then run pnpm dev:setup.");
   }
 
-  const mailpitVersion = getCommandVersion("mailpit", ["version"]);
+  // Offline: the release check fails (and exits 1) without network access.
+  const mailpitVersion = getCommandVersion("mailpit", ["version", "--no-release-check"]);
   if (mailpitVersion) {
     pass(checks, "Local mailbox tooling", `${mailpitVersion} is available.`);
   } else {
