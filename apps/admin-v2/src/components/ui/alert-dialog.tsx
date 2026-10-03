@@ -4,19 +4,29 @@ import type { VariantProps } from "class-variance-authority";
 
 import { cn } from "@scalius/shared/utils";
 import { buttonVariants } from "./button";
-import { dialogFooterClassName, modalClassName, overlayClassName } from "./dialog";
+import { dialogFooterClassName, modalClassName, overlayClassName, useModalTopAnchor } from "./dialog";
 
 const AlertDialog = AlertDialogPrimitive.Root;
 
 const AlertDialogTrigger = AlertDialogPrimitive.Trigger;
 
+/** Mounted by Radix for each open, so it anchors its top edge once per open (see `useModalTopAnchor`). */
+const AlertDialogPanel = React.forwardRef<
+  React.ComponentRef<typeof AlertDialogPrimitive.Content>,
+  React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Content>
+>(({ className, ...props }, ref) => {
+  const panelRef = useModalTopAnchor(ref);
+  return <AlertDialogPrimitive.Content ref={panelRef} className={cn(modalClassName, className)} {...props} />;
+});
+AlertDialogPanel.displayName = "AlertDialogPanel";
+
 const AlertDialogContent = React.forwardRef<
   React.ComponentRef<typeof AlertDialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Content>
->(({ className, ...props }, ref) => (
+>((props, ref) => (
   <AlertDialogPrimitive.Portal>
     <AlertDialogPrimitive.Overlay className={overlayClassName} />
-    <AlertDialogPrimitive.Content ref={ref} className={cn(modalClassName, className)} {...props} />
+    <AlertDialogPanel ref={ref} {...props} />
   </AlertDialogPrimitive.Portal>
 ));
 AlertDialogContent.displayName = AlertDialogPrimitive.Content.displayName;

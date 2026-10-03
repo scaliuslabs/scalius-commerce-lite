@@ -98,6 +98,7 @@ Font: Inter at weights 450 (normal), 550 (`font-medium`) and 650 (`font-semibold
 - Overlays never cover the top bar and never run off screen. Popovers, menus and tooltips default to `OVERLAY_COLLISION_PADDING` (`components/ui/overlay.ts`: 64px top, 12px elsewhere).
 - A popover with actions uses `flex max-h-(--radix-popover-content-available-height) flex-col overflow-hidden p-0`. Its body scrolls (`min-h-0 flex-1 overflow-y-auto`) and its actions sit in a bordered footer that does not scroll.
 - Keep at most two buttons in a `DialogFooter`, `AlertDialogFooter` or `SheetFooter`.
+- A centred `Dialog` or `AlertDialog` keeps its top edge while open (`useModalTopAnchor` in `components/ui/dialog.tsx`): it opens centred on its first content, then grows and shrinks downward and never re-centres, so a filtered list, a chip row or an error line cannot move its buttons. Never hand-position a dialog, and never put a `top-*`, `translate-y-*` or viewport `max-h` class on `DialogContent`. A list inside a dialog that filters keeps a box of fixed height (`h-64`), so filtering changes its rows, not its size.
 - When a popover cannot fit beside its trigger (phones, short windows), open a Dialog instead (`DateRangePickerWithPresets`).
 
 ### Choosing one option
