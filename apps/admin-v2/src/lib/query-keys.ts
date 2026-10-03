@@ -245,8 +245,6 @@ export const queryKeys = {
     theme: () => ["settings", "theme"] as const,
     media: () => ["settings", "media"] as const,
     sms: () => ["settings", "sms"] as const,
-    /** An installed app's providers of one port (sms, email, fraud, ...), with readiness. */
-    appProviders: (kind: string) => ["settings", "app-providers", kind] as const,
     metaConversions: () => ["settings", "meta-conversions"] as const,
     metaConversionsLogs: (params?: Record<string, unknown>) =>
       params !== undefined
@@ -256,14 +254,12 @@ export const queryKeys = {
     paymentMethods: () => ["settings", "payment-methods"] as const,
     paymentGateway: (gateway: string) =>
       ["settings", "payment-gateway", gateway] as const,
-    /** Installed apps' providers of one port (payment, courier, …). */
+    /** Installed apps' providers of one port (payment, courier, sms, email, fraud), with readiness. */
     appProviders: (kind: string) => ["settings", "app-providers", kind] as const,
     notificationChannels: () => ["settings", "notification-channels"] as const,
     adminNotificationChannels: () =>
       ["settings", "admin-notification-channels"] as const,
     deliveryProviders: () => ["settings", "delivery-providers"] as const,
-    /** Installed apps' providers of one port, with their readiness. */
-    appProviders: (kind: string) => ["settings", "app-providers", kind] as const,
     deliveryLocations: (params?: Record<string, unknown>) =>
       params !== undefined
         ? (["settings", "delivery-locations", params] as const)

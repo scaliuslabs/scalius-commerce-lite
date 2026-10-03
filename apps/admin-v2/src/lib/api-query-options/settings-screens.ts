@@ -144,13 +144,6 @@ export const areaCountsQuery = {
 };
 export const couriersQuery = deliveryProvidersQueryOptions();
 
-export type AppProvider = ApiResult<typeof getApiV1AdminSettingsProviders>["providers"][number];
-/** Installed courier apps with their readiness: offered beside Pathao and Steadfast. */
-export const appCouriersQuery = {
-  queryKey: queryKeys.settings.appProviders("courier"),
-  queryFn: async (): Promise<AppProvider[]> =>
-    (await apiData(getApiV1AdminSettingsProviders({ query: { kind: "courier" } }))).providers,
-};
 
 // TODO(sdk): the generated SDK predates delivery zones; switch these raw calls
 // to it after `pnpm generate:sdk`.
@@ -218,12 +211,16 @@ export const smsQuery = {
   queryKey: queryKeys.settings.sms(),
   queryFn: () => apiData(getApiV1AdminSettingsSms()),
 };
-/** The installed apps' providers of one port, with the readiness its callers check. */
-export type AppProviderKind = "sms" | "email" | "fraud";
+/**
+ * The installed apps' providers of one port, with the readiness its callers
+ * check: offered beside the built-in couriers, SMS and email senders and
+ * fraud checkers (payments: payment-providers.ts).
+ */
+export type AppProviderKind = "courier" | "sms" | "email" | "fraud";
 export type AppProvider = ApiResult<typeof getApiV1AdminSettingsProviders>["providers"][number];
 export const appProvidersQuery = (kind: AppProviderKind) => ({
   queryKey: queryKeys.settings.appProviders(kind),
-  queryFn: async () => (await apiData(getApiV1AdminSettingsProviders({ query: { kind } }))).providers,
+  queryFn: async (): Promise<AppProvider[]> => (await apiData(getApiV1AdminSettingsProviders({ query: { kind } }))).providers,
 });
 export const authQuery = {
   queryKey: queryKeys.settings.auth(),

@@ -19,7 +19,7 @@ import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { apiData, type ApiBody } from "~/lib/api";
 import type { DeliveryProviderRecord } from "~/lib/api-query-options/delivery";
 import {
-  appCouriersQuery,
+  appProvidersQuery,
   areaCountsQuery,
   couriersQuery,
   platformQuery,
@@ -172,7 +172,7 @@ function CourierForm({ courier }: { courier: DeliveryProviderRecord | null }) {
   const apiUrl = useQuery(platformQuery).data?.apiUrl ?? "";
   const canReadApps = useHasPermission(ADMIN_PERMISSIONS.SETTINGS_GENERAL_VIEW);
   const canTestApps = useHasPermission(ADMIN_PERMISSIONS.SETTINGS_GENERAL_EDIT);
-  const appCouriers = useQuery({ ...appCouriersQuery, enabled: canReadApps }).data ?? [];
+  const appCouriers = useQuery({ ...appProvidersQuery("courier"), enabled: canReadApps }).data ?? [];
   const [saved] = useState<CourierDraft & { id: string; name: string; type: string; isActive: boolean }>(() => {
     const type = courier?.type ?? "pathao";
     return {
