@@ -11,6 +11,7 @@ import type { Product } from "@/lib/api/types";
 import { getLayoutData, getSeoSettings, getShippingMethods } from "@/lib/api";
 import type { ShippingMethod } from "@/lib/api/types";
 import { splitDeliveryRates } from "@/lib/delivery-facts";
+import { presenceMarketCountries } from "@/lib/checkout/shipping-country";
 import { formatCatalogFeedAmount } from "@scalius/shared/catalog-feed-money";
 import { resolvePriceIncrementMinor } from "@scalius/shared/currency-policy";
 import { getRuntimePresence, setRuntimeImageCdnPolicy } from "@/lib/api/runtime";
@@ -110,26 +111,44 @@ function toCatalogFeedRows(
 }
 
 interface FeedShipping {
+  country: string;
   service: string;
   price: string;
 }
 
+interface FeedShippingPolicy {
+  /** The charges every item carries, per country. */
+  rates: FeedShipping[];
+  /** The countries a free-delivery item ships free to: those a shipping zone serves. */
+  freeCountries: string[];
+}
+
 /**
- * Store-wide delivery charges, the same ones Product JSON-LD states: every
- * active delivery rate when rates don't vary by delivery zone. With zones the
- * charge depends on the address, so none is claimed (use Merchant Center
+ * The delivery charges the presence's feed states, per country its market
+ * sells to (MARKETS-DESIGN step 3b), the same ones Product JSON-LD states:
+ * a country's delivery rates when its shipping zone serves every address
+ * there. Where the charge depends on the address (a region, postal codes or
+ * Bangladesh delivery areas price it), none is claimed (use Merchant Center
  * account-level shipping), exactly like the product page.
  */
 function storeFeedShipping(
   shippingMethods: ShippingMethod[] | null,
   currencyCode: string,
-): FeedShipping[] {
-  const { delivery, zoned } = splitDeliveryRates(shippingMethods);
-  if (zoned) return [];
-  return delivery.flatMap((method) => {
-    const amount = formatCatalogFeedAmount(method.fee, currencyCode);
-    return amount ? [{ service: method.name, price: `${amount} ${currencyCode}` }] : [];
-  });
+  countries: readonly string[],
+): FeedShippingPolicy {
+  const rates: FeedShipping[] = [];
+  const freeCountries: string[] = [];
+  for (const country of countries) {
+    const { delivery, zoned } = splitDeliveryRates(shippingMethods, [country]);
+    if (delivery.length === 0) continue;
+    freeCountries.push(country);
+    if (zoned) continue;
+    for (const method of delivery) {
+      const amount = formatCatalogFeedAmount(method.fee, currencyCode);
+      if (amount) rates.push({ country, service: method.name, price: `${amount} ${currencyCode}` });
+    }
+  }
+  return { rates, freeCountries };
 }
 
 /**
@@ -138,7 +157,7 @@ function storeFeedShipping(
 function generateProductItem(
   row: CatalogFeedRow,
   format: CatalogFeedFormat,
-  storeShipping: FeedShipping[],
+  storeShipping: FeedShippingPolicy,
 ): string {
   // Build the item XML
   let item = "  <item>\n";
@@ -203,12 +222,15 @@ function generateProductItem(
     item += `    <g:${attribute.name}>${escapeXml(attribute.value)}</g:${attribute.name}>\n`;
   }
 
-  // A free-delivery product ships free everywhere; other items carry the
-  // store-wide delivery charges.
-  const shipping = row.shipping ? [row.shipping] : storeShipping;
+  // A free-delivery product ships free wherever a shipping zone serves the
+  // market's countries; other items carry the charges stated per country.
+  const freeShipping = row.shipping;
+  const shipping = freeShipping
+    ? storeShipping.freeCountries.map((country) => ({ country, ...freeShipping }))
+    : storeShipping.rates;
   for (const rate of shipping) {
     item += `    <g:shipping>\n`;
-    item += `      <g:country>BD</g:country>\n`;
+    item += `      <g:country>${escapeXml(rate.country)}</g:country>\n`;
     item += `      <g:service>${escapeXml(rate.service)}</g:service>\n`;
     item += `      <g:price>${rate.price}</g:price>\n`;
     item += `    </g:shipping>\n`;
@@ -227,7 +249,7 @@ function generateCatalogFeed(
   feedsPolicy: SeoDiscoverySettings["feeds"],
   format: CatalogFeedFormat,
   storeName: string | null,
-  storeShipping: FeedShipping[],
+  storeShipping: FeedShippingPolicy,
 ): string {
   const title = feedsPolicy.title || storeName || "Product catalog";
   const description =
@@ -395,7 +417,8 @@ export function createCatalogFeedGet(format: CatalogFeedFormat): APIRoute {
         feedsPolicy,
         format,
         resolveStoreName(layoutData.business),
-        storeFeedShipping(shippingMethods, currencyCode),
+        // Each presence's feed states shipping to its market's countries.
+        storeFeedShipping(shippingMethods, currencyCode, presenceMarketCountries(layoutData.markets, getRuntimePresence())),
       );
 
       const headers: Record<string, string> = { ...FEED_XML_HEADERS };

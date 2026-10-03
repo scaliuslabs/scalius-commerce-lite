@@ -159,7 +159,6 @@ describe("catalog feed row projector", () => {
         { name: "pattern", value: "Oxford weave" },
       ],
       shipping: {
-        country: "BD",
         service: "Standard",
         price: "0.00 BDT",
       },

@@ -16,6 +16,8 @@ export interface GatewayConfig {
   flow?: "card" | "hosted" | "cod";
   publishableKey?: string;   // Stripe only
   currencies?: string[];
+  /** The delivery countries it serves, when not every country (cash on delivery: ["BD"]). */
+  countries?: string[];
   testMode?: boolean;
   amountLimits?: {
     currency: string;

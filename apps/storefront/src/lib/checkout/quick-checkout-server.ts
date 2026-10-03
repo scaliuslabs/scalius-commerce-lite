@@ -17,12 +17,23 @@ import type { CheckoutTaxQuote, QuotedShippingRate } from "./tax-quote-contract"
 
 const QUOTE_TIMEOUT_MS = 8_000;
 
-/** The delivery rates for a city and thana; null when they could not be read. */
+/**
+ * The delivery rates of a destination's shipping zone: Bangladesh's city and
+ * thana, or another country with its region and postal code (MARKETS-DESIGN
+ * step 3b); null when they could not be read.
+ */
 export async function fetchQuickCheckoutRates(
-  cityId: string,
-  zoneId: string,
+  destination: { cityId: string; zoneId: string } | { countryCode: string; adminArea?: string; postalCode?: string },
 ): Promise<ShippingMethod[] | null> {
-  const query = new URLSearchParams({ cityId, zoneId });
+  const query = new URLSearchParams();
+  if ("countryCode" in destination) {
+    query.set("countryCode", destination.countryCode);
+    if (destination.adminArea) query.set("adminArea", destination.adminArea);
+    if (destination.postalCode) query.set("postalCode", destination.postalCode);
+  } else {
+    query.set("cityId", destination.cityId);
+    query.set("zoneId", destination.zoneId);
+  }
   try {
     const response = await apiFetch(`/shipping-methods?${query}`, {}, { auth: false, retries: 1 });
     if (!response.ok) return null;

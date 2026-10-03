@@ -14,7 +14,7 @@ import {
   type CheckoutDeliveryMode,
   type CheckoutRequiredField,
 } from "./delivery-mode";
-import { LOCATION_COUNTRY, isLocationCountry, shippingCountryName } from "./shipping-country";
+import { LOCATION_COUNTRY, isLocationCountry } from "./shipping-country";
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
@@ -109,11 +109,11 @@ export function checkoutInformationFields(
         if (!required("shippingMethod")) return "";
         if (root.querySelector<HTMLInputElement>('[name="shippingLocation"]:checked')?.value) return "";
         if (mode === "pickup") return copy.pickupLocationRequiredText;
-        // No delivery rates outside Bangladesh until shipping zones by country.
+        // Another country: its shipping zone's options, or none (the options say why).
         if (!isLocationCountry(country())) {
-          return formatCheckoutLanguageText(copy.deliveryCountryUnavailableText, {
-            country: shippingCountryName(country(), document.documentElement.lang || "en"),
-          });
+          return methods.querySelector('[name="shippingLocation"]')
+            ? copy.deliveryRequiredText
+            : copy.noDeliveryToAddressText;
         }
         // Without a city and thana the location message already says what to do.
         return !value(root, "city") || !value(root, "zone") ? "" : copy.deliveryRequiredText;

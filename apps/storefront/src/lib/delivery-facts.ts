@@ -29,6 +29,11 @@ export interface DeliveryFactsInput {
   fulfilment?: ProductFulfilment;
   /** Cash-on-delivery wording for a service ("Pay when the service is done"). */
   payAtServiceText?: string;
+  /**
+   * The countries the page's market sells to (`presenceMarketCountries`):
+   * only delivery to them is stated. All rates when absent.
+   */
+  countries?: readonly string[];
   /** The pickup fact's title ("Pickup available"), from the checkout language. */
   pickupAvailableText?: string;
 }
@@ -54,26 +59,43 @@ export function productFulfilment(
 const MAX_LISTED_METHODS = 3;
 
 export interface DeliveryRateSplit {
-  /** Rates that deliver to an address, in merchant order. */
+  /** Rates that deliver to an address in the countries asked about, in merchant order. */
   delivery: ShippingMethod[];
   /** Local pickup rates, offered to every buyer. */
   pickup: ShippingMethod[];
-  /** Some delivery rate belongs to one delivery zone, so fees vary by address. */
+  /**
+   * The fee depends on the address: some delivery rate serves only part of
+   * a country (a region, postal codes, Bangladesh delivery areas, or another
+   * zone holds part of it), or the rates serve more than one country.
+   */
   zoned: boolean;
 }
 
-/** Active, well-formed rates split by kind; shared with Product JSON-LD. */
+function coverageIn(method: ShippingMethod, country: string) {
+  return method.countries?.find((entry) => entry.code === country) ?? null;
+}
+
+/**
+ * Active, well-formed rates split by kind; shared with Product JSON-LD and
+ * the catalog feeds. With `countries`, only delivery rates whose shipping
+ * zone serves one of them (MARKETS-DESIGN step 3b).
+ */
 export function splitDeliveryRates(
   shippingMethods: ShippingMethod[] | null | undefined,
+  countries?: readonly string[],
 ): DeliveryRateSplit {
   const methods = (shippingMethods ?? [])
     .filter((method) => method.isActive !== false && Number.isFinite(method.fee) && method.fee >= 0)
     .sort((a, b) => a.sortOrder - b.sortOrder);
-  const delivery = methods.filter((method) => (method.kind ?? "delivery") === "delivery");
+  const asked = countries ?? [...new Set(methods.flatMap((method) => (method.countries ?? []).map((entry) => entry.code)))];
+  const delivery = methods.filter((method) =>
+    (method.kind ?? "delivery") === "delivery" && (!countries || countries.some((country) => coverageIn(method, country))));
+  const served = asked.filter((country) => delivery.some((method) => coverageIn(method, country)));
   return {
     delivery,
     pickup: methods.filter((method) => method.kind === "pickup"),
-    zoned: delivery.some((method) => method.everywhereElse === false),
+    zoned: served.length > 1 || delivery.some((method) =>
+      (method.countries ?? []).length === 0 || served.some((country) => coverageIn(method, country)?.entire === false)),
   };
 }
 
@@ -161,10 +183,15 @@ function pickupFact(
 function codFact(
   config: CheckoutConfig | null | undefined,
   serviceDetail: string | null,
+  countries: readonly string[] | undefined,
 ): DeliveryFact | null {
   if (!config || config.unavailable) return null;
-  const cod = config.gateways.some((gateway) => gateway.flow === "cod" || gateway.id === "cod");
+  const cod = config.gateways.find((gateway) => gateway.flow === "cod" || gateway.id === "cod");
   if (!cod) return null;
+  // Cash on delivery serves some delivery countries (Bangladesh): claimed
+  // only on a page whose market sells to one of them.
+  const served = cod.countries;
+  if (!serviceDetail && served && countries && !countries.some((country) => served.includes(country))) return null;
   return {
     kind: "cod",
     // A service has no delivery: the buyer pays when it is done.
@@ -198,7 +225,7 @@ function returnsFact(policy: StorefrontReturnPolicySettings | null | undefined):
 }
 
 export function buildDeliveryFacts(input: DeliveryFactsInput): DeliveryFact[] {
-  const rates = splitDeliveryRates(input.shippingMethods);
+  const rates = splitDeliveryRates(input.shippingMethods, input.countries);
   const freeDelivery = input.freeDelivery === true;
   const fulfilment = input.fulfilment ?? "physical";
   const physical = fulfilment === "physical";
@@ -210,7 +237,11 @@ export function buildDeliveryFacts(input: DeliveryFactsInput): DeliveryFact[] {
     // Nothing is handed over for a digital item, so there is no cash on delivery.
     fulfilment === "digital"
       ? null
-      : codFact(input.checkoutConfig, fulfilment === "service" ? (input.payAtServiceText?.trim() || "Pay when the service is done.") : null),
+      : codFact(
+        input.checkoutConfig,
+        fulfilment === "service" ? (input.payAtServiceText?.trim() || "Pay when the service is done.") : null,
+        input.countries,
+      ),
     returnsFact(input.returnPolicy),
   ].filter((fact): fact is DeliveryFact => fact !== null);
 }

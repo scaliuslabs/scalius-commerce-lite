@@ -58,6 +58,23 @@ export function storeShippingCountries(matrix: MarketMatrix | null | undefined):
 }
 
 /**
+ * The countries a page's market sells to (the root page: the backup
+ * market's), sorted: what its delivery facts, Product JSON-LD and catalog
+ * feeds may claim shipping to. Bangladesh alone without a matrix.
+ */
+export function presenceMarketCountries(
+  matrix: MarketMatrix | null | undefined,
+  presence: string | null | undefined,
+): string[] {
+  const markets = matrix?.markets ?? [];
+  const market = presence
+    ? markets.find((candidate) => candidate.presences.some((entry) => entry.value === presence))
+    : markets.find((candidate) => candidate.isBackup);
+  const countries = (market?.countries ?? []).filter((country) => COUNTRY_PATTERN.test(country));
+  return countries.length > 0 ? [...new Set(countries)].sort() : [LOCATION_COUNTRY];
+}
+
+/**
  * The country a form starts on: the page's market's first country (a
  * presence page sells to its market), else Bangladesh when the store sells
  * there, else the first country it sells to.

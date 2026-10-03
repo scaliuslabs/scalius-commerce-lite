@@ -8,6 +8,14 @@ import Layout from "@/layouts/Layout.astro";
 import CheckoutHeader from "@/components/CheckoutHeader.astro";
 import CheckoutProgress from "@/components/CheckoutProgress.astro";
 import LocationFields from "@/components/checkout/LocationFields.astro";
+import ShippingCountryField from "@/components/checkout/ShippingCountryField.astro";
+import ForeignAddressFields from "@/components/checkout/ForeignAddressFields.astro";
+import {
+  defaultShippingCountry,
+  shippingCountryName,
+  storeShippingCountries,
+} from "@/lib/checkout/shipping-country";
+import { getRuntimePresence } from "@/lib/api/runtime";
 import MarketingConsentField from "@/components/checkout/MarketingConsentField.astro";
 import { marketingConsentCheckbox } from "@/lib/checkout/marketing-consent";
 import {
@@ -29,6 +37,8 @@ import { createOrderReceiptCookieHeader } from "@/lib/order-receipt-cookie";
 import { MIN_SHIPPING_ADDRESS_LENGTH } from "@/lib/checkout/shipping-address";
 import {
   chooseQuickCheckoutRate,
+  hasQuickCheckoutDestination,
+  isQuickCheckoutAbroad,
   QUICK_CHECKOUT_MAX_BODY_BYTES,
   quickCheckoutFieldErrors,
   quickCheckoutMode,
@@ -102,16 +112,27 @@ const lang: CheckoutLanguageData = languageResponse ?? {
 const copy = lang.languageData;
 const allRates: ShippingMethod[] = allRatesResponse ?? [];
 const cities: LocationData[] = citiesResponse ?? [];
-const codAvailable =
-  checkoutConfig.unavailable !== true &&
-  checkoutConfig.gateways.some((gateway) => gateway.flow === "cod" || gateway.id === "cod");
+const codGateway = checkoutConfig.unavailable === true
+  ? undefined
+  : checkoutConfig.gateways.find((gateway) => gateway.flow === "cod" || gateway.id === "cod");
+const codAvailable = Boolean(codGateway);
+// The countries the store sells to (its active markets): a store that sells
+// only to Bangladesh shows no country field, as before.
+const shippingCountries = storeShippingCountries(layoutData?.markets);
+if (!shippingCountries.includes(form.shippingCountryCode)) {
+  form.shippingCountryCode = defaultShippingCountry(layoutData?.markets, getRuntimePresence(), shippingCountries);
+}
+const abroad = isQuickCheckoutAbroad(form);
 const offersPickup = allRates.some((rate) => rate.kind === "pickup");
-const offersDelivery = allRates.some((rate) => rate.kind !== "pickup") && cities.length > 0;
+// Another country gets delivery when some shipping zone serves it (MARKETS-DESIGN step 3b).
+const offersDelivery = abroad
+  ? allRates.some((rate) => rate.kind !== "pickup" && (rate.countries ?? []).some((entry) => entry.code === form.shippingCountryCode))
+  : allRates.some((rate) => rate.kind !== "pickup") && cities.length > 0;
 const mode = quickCheckoutMode(lines, form, offersPickup, offersDelivery);
 
 // The address as far as it is still valid: a city that is gone clears it, a
 // thana from another city (the buyer changed city) is asked for again.
-if (!cities.some((city) => city.id === form.city)) form.city = "";
+if (abroad || !cities.some((city) => city.id === form.city)) form.city = "";
 const zones: LocationData[] = mode === "delivery" && form.city ? (await getZones(form.city)) ?? [] : [];
 if (!zones.some((zone) => zone.id === form.zone)) form.zone = "";
 
@@ -119,11 +140,23 @@ let rates: ShippingMethod[] = [];
 let ratesFailed = false;
 if (mode === "pickup") {
   rates = allRates.filter((rate) => rate.kind === "pickup");
-} else if (mode === "delivery" && form.city && form.zone) {
-  const addressRates = await fetchQuickCheckoutRates(form.city, form.zone);
+} else if (mode === "delivery" && hasQuickCheckoutDestination(form)) {
+  const addressRates = await fetchQuickCheckoutRates(abroad
+    ? {
+      countryCode: form.shippingCountryCode,
+      adminArea: form.foreign.shippingAdminArea,
+      postalCode: form.foreign.shippingPostalCode,
+    }
+    : { cityId: form.city, zoneId: form.zone });
   ratesFailed = addressRates === null;
   rates = (addressRates ?? []).filter((rate) => rate.kind !== "pickup");
 }
+// This page places cash-on-delivery orders: cash on delivery serves some
+// delivery countries (Bangladesh), so a delivery elsewhere goes to the cart.
+const codServesDestination = mode !== "delivery"
+  || !codGateway?.countries
+  || codGateway.countries.includes(form.shippingCountryCode);
+const countryName = shippingCountryName(form.shippingCountryCode, checkoutLanguageBaseCode(lang.code));
 let rateId = mode === "none" ? "" : chooseQuickCheckoutRate(rates, form.shippingLocation);
 
 const customerSessionToken = getCustomerSessionTokenFromCookie(Astro.request.headers.get("cookie"));
@@ -167,6 +200,9 @@ if (quoteResult && !quoteResult.ok) {
 }
 if (!codAvailable) {
   errorMessage = checkoutConfig.unavailableMessage || copy.checkoutUnavailableMessage;
+  ruleMessages = [];
+} else if (!codServesDestination) {
+  errorMessage = formatCheckoutLanguageText(copy.cashOnDeliveryCountryUnavailableText, { country: countryName });
   ruleMessages = [];
 } else if (form.intent === "place" && !errorMessage) {
   fieldErrors = quickCheckoutFieldErrors(form, mode, MIN_SHIPPING_ADDRESS_LENGTH, contactFields.email);
@@ -336,34 +372,66 @@ const secondaryButtonClass =
 
             {mode === "delivery" && (
               <div class="space-y-3">
+                <ShippingCountryField
+                  id="quick-country"
+                  countries={shippingCountries}
+                  selected={form.shippingCountryCode}
+                  label={copy.shippingCountryLabel}
+                  language={checkoutLanguageBaseCode(lang.code)}
+                  labelClass={labelClass}
+                  fieldClass={fieldClass}
+                />
                 <div>
                   <label for="shippingAddress" class={labelClass}>{copy.shippingAddressLabel}<span aria-hidden="true" class="ml-0.5 text-destructive">*</span></label>
                   <textarea id="shippingAddress" name="shippingAddress" rows={2} maxlength="500" autocomplete="street-address" required placeholder={copy.shippingAddressPlaceholder} aria-invalid={errorFor("shippingAddress") ? "true" : undefined} class={`${fieldClass} h-auto min-h-16 resize-none py-2`}>{form.shippingAddress}</textarea>
                   {errorFor("shippingAddress") && <p class={errorClass}>{errorFor("shippingAddress")}</p>}
                 </div>
-                <LocationFields
-                  idPrefix="quick"
-                  cities={cities}
-                  zones={zones}
-                  city={form.city}
-                  zone={form.zone}
-                  copy={copy}
-                  showAreaField={false}
-                  nativeRequired
-                  errorId="quickLocationError"
-                  invalid={Boolean(errorFor("city") || errorFor("zone"))}
-                />
-                {(errorFor("city") || errorFor("zone")) && <p id="quickLocationError" class={errorClass}>{errorFor("city") || errorFor("zone")}</p>}
-                {!(form.city && form.zone) && (
-                  <div class="flex flex-wrap items-center gap-3">
+                {abroad ? (
+                  <>
+                    <ForeignAddressFields
+                      idPrefix="quick"
+                      labels={{
+                        shippingAddressLine2: copy.shippingAddressLine2Label,
+                        shippingDependentLocality: copy.shippingDependentLocalityLabel,
+                        shippingLocality: copy.shippingLocalityLabel,
+                        shippingAdminArea: copy.shippingAdminAreaLabel,
+                        shippingPostalCode: copy.shippingPostalCodeLabel,
+                      }}
+                      values={form.foreign}
+                      labelClass={labelClass}
+                      fieldClass={fieldClass}
+                      errorClass="hidden"
+                    />
+                    {/* The region and postal code pick the shipping zone: its options come with the next step. */}
                     <button type="submit" name="intent" value="review" class={secondaryButtonClass}>{copy.continueText}</button>
-                    <p class="text-sm text-muted-foreground">{form.city ? copy.zoneRequiredText : copy.chooseAddressForDeliveryText}</p>
-                  </div>
+                  </>
+                ) : (
+                  <>
+                    <LocationFields
+                      idPrefix="quick"
+                      cities={cities}
+                      zones={zones}
+                      city={form.city}
+                      zone={form.zone}
+                      copy={copy}
+                      showAreaField={false}
+                      nativeRequired
+                      errorId="quickLocationError"
+                      invalid={Boolean(errorFor("city") || errorFor("zone"))}
+                    />
+                    {(errorFor("city") || errorFor("zone")) && <p id="quickLocationError" class={errorClass}>{errorFor("city") || errorFor("zone")}</p>}
+                    {!(form.city && form.zone) && (
+                      <div class="flex flex-wrap items-center gap-3">
+                        <button type="submit" name="intent" value="review" class={secondaryButtonClass}>{copy.continueText}</button>
+                        <p class="text-sm text-muted-foreground">{form.city ? copy.zoneRequiredText : copy.chooseAddressForDeliveryText}</p>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             )}
 
-            {(mode === "pickup" || (form.city && form.zone)) && (
+            {(mode === "pickup" || (mode === "delivery" && hasQuickCheckoutDestination(form))) && (
               <fieldset class="space-y-2">
                 <legend class="mb-2 block text-sm font-medium text-foreground">
                   {mode === "pickup" ? copy.pickupLocationLabel : copy.shippingMethodLabel}
@@ -371,7 +439,9 @@ const secondaryButtonClass =
                 {ratesFailed ? (
                   <p class="text-sm font-medium text-destructive" role="alert">{copy.deliveryOptionsFailedText}</p>
                 ) : rates.length === 0 ? (
-                  <p class="text-sm text-muted-foreground" role="status">{copy.noDeliveryToAddressText}</p>
+                  <p class="text-sm text-muted-foreground" role="status">{abroad && !offersDelivery
+                    ? formatCheckoutLanguageText(copy.deliveryCountryUnavailableText, { country: countryName })
+                    : copy.noDeliveryToAddressText}</p>
                 ) : (
                   <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
                     {rates.map((rate) => (
@@ -408,7 +478,7 @@ const secondaryButtonClass =
 
         <MarketingConsentField consent={marketingConsent} checked={form.marketingConsent !== ""} idPrefix="quick" />
 
-        {quote && codAvailable ? (
+        {quote && codAvailable && codServesDestination ? (
           <div class="space-y-2">
             <button type="submit" name="intent" value="place" class="flex h-12 w-full items-center justify-center rounded-lg bg-primary px-4 text-base font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
               {copy.placeOrderText} · {formatMoney(quote.totalAmount)}

@@ -881,8 +881,11 @@ export interface ShippingMethod {
   description: string | null;
   /** Pickup rates name the place the buyer collects from. */
   kind?: "delivery" | "pickup";
-  /** True for a default rate that applies outside every delivery zone. */
-  everywhereElse?: boolean;
+  /**
+   * The countries the rate's shipping zone serves, `entire` when every
+   * address there gets this zone (none for local pickup).
+   */
+  countries?: Array<{ code: string; entire: boolean }>;
   pickupAddress?: string | null;
   pickupHours?: string | null;
   isActive: boolean;

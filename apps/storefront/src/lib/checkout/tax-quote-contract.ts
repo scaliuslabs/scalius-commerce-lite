@@ -53,6 +53,14 @@ export interface TaxQuoteRequest {
   city?: string;
   zone?: string;
   area?: string;
+  /**
+   * Delivery outside Bangladesh: the country and, when known, its admin
+   * area and postal code (its shipping zone matches on them). A Bangladesh
+   * address sends none of them, as before.
+   */
+  shippingCountryCode?: string;
+  shippingAdminArea?: string;
+  shippingPostalCode?: string;
   /** A delivery or pickup rate; absent when nothing is physical. */
   shippingMethodId?: string;
   discountCodes: string[];
@@ -418,11 +426,18 @@ export function normalizeTaxQuoteRequest(value: unknown): TaxQuoteRequest {
 
   const city = optionalString(value.city, MAX_LOCATION_LENGTH);
   const zone = optionalString(value.zone, MAX_LOCATION_LENGTH);
-  // A delivery quote names both; pickup and service quotes name neither.
+  // A Bangladesh delivery quote names both; pickup and service quotes name neither.
   if (Boolean(city) !== Boolean(zone)) fail();
   const area = city ? optionalString(value.area, MAX_LOCATION_LENGTH) : undefined;
   const shippingMethodId = optionalString(value.shippingMethodId, MAX_ID_LENGTH);
   if (city && !shippingMethodId) fail();
+  // Another country's delivery: its country, admin area and postal code, never Bangladesh's ids.
+  const country = optionalString(value.shippingCountryCode, 2)?.toUpperCase();
+  if (country !== undefined && !/^[A-Z]{2}$/.test(country)) fail();
+  const foreign = country !== undefined && country !== "BD";
+  if (foreign && city) fail();
+  const shippingAdminArea = foreign ? optionalString(value.shippingAdminArea, 120) : undefined;
+  const shippingPostalCode = foreign ? optionalString(value.shippingPostalCode, 20) : undefined;
   const codes = value.discountCodes ?? [];
   if (!Array.isArray(codes) || codes.length > MAX_DISCOUNT_CODES) fail();
   const discountCodes = codes.map((code) => requiredString(code, MAX_CODE_LENGTH).toUpperCase());
@@ -435,6 +450,9 @@ export function normalizeTaxQuoteRequest(value: unknown): TaxQuoteRequest {
     ...(inventoryPool ? { inventoryPool } : {}),
     ...(city && zone ? { city, zone } : {}),
     ...(area ? { area } : {}),
+    ...(foreign ? { shippingCountryCode: country } : {}),
+    ...(shippingAdminArea ? { shippingAdminArea } : {}),
+    ...(shippingPostalCode ? { shippingPostalCode } : {}),
     ...(shippingMethodId ? { shippingMethodId } : {}),
     discountCodes: [...new Set(discountCodes)],
     ...(customerPhone ? { customerPhone } : {}),

@@ -21,12 +21,12 @@ const RICH_DESCRIPTION = `<h2>College bag</h2>${"<p>Water resistant &amp; roomy.
 
 const shipping = buildOfferShippingDetails({
   shippingMethods: [
-    { id: "in", name: "Inside Dhaka", fee: 60, isActive: true },
-    { id: "out", name: "Outside Dhaka", fee: 120, isActive: true },
+    { id: "in", name: "Inside Dhaka", fee: 60, isActive: true, countries: [{ code: "BD", entire: true }] },
+    { id: "out", name: "Outside Dhaka", fee: 120, isActive: true, countries: [{ code: "BD", entire: true }] },
   ] as never,
   currencyCode: "BDT",
   freeDelivery: false,
-  country: "BD",
+  countries: ["BD"],
 });
 
 function variants(count: number): ProductGroupVariantSchema[] {

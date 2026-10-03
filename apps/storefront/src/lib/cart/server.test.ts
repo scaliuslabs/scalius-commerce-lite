@@ -620,7 +620,13 @@ describe("cart server order processing: delivery, pickup and nothing to deliver"
     }));
 
     expect(result).toMatchObject({ success: true });
-    expect(mocks.validateCartItems).toHaveBeenCalledWith(expect.any(Array), { shippingMethodId: "ship_1", shippingCountryCode: "US" });
+    // Its shipping zone matches on the region and postal code (MARKETS-DESIGN step 3b).
+    expect(mocks.validateCartItems).toHaveBeenCalledWith(expect.any(Array), {
+      shippingMethodId: "ship_1",
+      shippingCountryCode: "US",
+      shippingAdminArea: "CA",
+      shippingPostalCode: "95014",
+    });
     const payload = mocks.createOrder.mock.calls[0]![0];
     // A national number is read in the address country.
     expect(payload).toMatchObject({
@@ -634,6 +640,34 @@ describe("cart server order processing: delivery, pickup and nothing to deliver"
       zone: null,
       area: null,
     });
+  });
+
+  it("refuses cash on delivery for another country, by its country rule", async () => {
+    mocks.validateCartItems.mockResolvedValue({
+      success: true,
+      data: {
+        valid: true, issues: [], items: [validatedLine], subtotal: 300, hasFreeDeliveryProduct: false,
+        requiresDeliveryMethod: true, deliveryMethodKind: "delivery", requiresShipping: true,
+        // The API offers no cash on delivery for a delivery to the United States.
+        allowedPaymentMethods: [],
+        delivery: {
+          kind: "delivery", shippingCharge: 1500, cityName: null, zoneName: null, areaName: null,
+          shippingMethod: { id: "ship_1", name: "International", description: null, baseAmountMinor: 150_000, feeWaived: false },
+          pickup: null,
+        },
+      },
+    });
+    const result = await processOrder(formWith({
+      shippingCountryCode: "US",
+      customerPhone: "(415) 555-2671",
+      shippingAddress: "1 Infinite Loop",
+      shippingLocality: "Cupertino",
+      shippingAdminArea: "CA",
+      shippingPostalCode: "95014",
+    }));
+    expect(result).toMatchObject({ success: false });
+    expect(JSON.stringify(result)).toContain("Cash on delivery isn't available for this delivery country.");
+    expect(mocks.createOrder).not.toHaveBeenCalled();
   });
 
   it("keeps a Bangladesh order's payload as before: no country, City/Thana/Area ids", async () => {

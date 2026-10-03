@@ -98,11 +98,11 @@ const catalogFeedRowSchema = z.object({
     .max(260),
   shipping: z
     .object({
-      country: z.literal("BD"),
       service: z.literal("Standard"),
       price: boundedResponseString,
     })
-    .nullable(),
+    .nullable()
+    .openapi({ description: "A free-delivery product: it ships free to every country a shipping zone serves (the feed states each); null otherwise." }),
 });
 
 const emittedEntrySchema = productIdentitySchema.extend({

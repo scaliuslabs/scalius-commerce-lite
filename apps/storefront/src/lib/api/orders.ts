@@ -155,6 +155,9 @@ export type CartValidationOptions = {
   city?: string | null;
   zone?: string | null;
   area?: string | null;
+  /** Another country's region and postal code: its shipping zone matches on them. */
+  shippingAdminArea?: string | null;
+  shippingPostalCode?: string | null;
   shippingMethodId?: string | null;
 };
 

@@ -531,6 +531,19 @@ function cartTaxQuoteInput(): Record<string, unknown> | null {
   if (mode === "pickup") {
     return method?.kind === "pickup" ? { ...common, shippingMethodId: method.id } : null;
   }
+  // Another country's delivery: its shipping zone matches on its region and
+  // postal code (MARKETS-DESIGN step 3b); Bangladesh's form sends neither.
+  const country = formStringValue("shippingCountryCode")?.toUpperCase() ?? "";
+  if (country && country !== "BD") {
+    if (!method || method.kind !== "delivery") return null;
+    return {
+      ...common,
+      shippingCountryCode: country,
+      shippingAdminArea: formStringValue("shippingAdminArea") || undefined,
+      shippingPostalCode: formStringValue("shippingPostalCode") || undefined,
+      shippingMethodId: method.id,
+    };
+  }
   if (!city || !zone || !method || method.kind !== "delivery") return null;
   return {
     ...common,

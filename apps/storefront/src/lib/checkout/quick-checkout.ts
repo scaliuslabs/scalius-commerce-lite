@@ -14,6 +14,13 @@ import { validateAndFormatPhone } from "@scalius/shared/customer-utils";
 import { escapeHtml } from "@scalius/shared/html-escape";
 import type { ShippingMethod } from "@/lib/api/types";
 import type { CheckoutTaxQuote } from "./tax-quote-contract";
+import {
+  FOREIGN_ADDRESS_FIELDS,
+  LOCATION_COUNTRY,
+  readForeignAddressFields,
+  shippingCountryOf,
+  type ForeignAddressField,
+} from "./shipping-country";
 
 export const QUICK_CHECKOUT_PATH = "/checkout/quick";
 /** The form is small; anything larger is not it. */
@@ -35,9 +42,13 @@ export interface QuickCheckoutForm {
   customerWhatsapp: string;
   /** What the buyer chose; `none` is decided from the lines, never posted. */
   deliveryMode: "delivery" | "pickup";
+  /** The address country (Bangladesh unless the store sells abroad and the buyer chose another). */
+  shippingCountryCode: string;
   shippingAddress: string;
   city: string;
   zone: string;
+  /** Another country's address fields (empty for Bangladesh). */
+  foreign: Record<ForeignAddressField, string>;
   shippingLocation: string;
   notes: string;
   discountCode: string;
@@ -88,9 +99,12 @@ export function readQuickCheckoutForm(form: FormData): QuickCheckoutForm {
     customerEmail: text(form, "customerEmail", 254),
     customerWhatsapp: text(form, "customerWhatsapp", 20),
     deliveryMode: form.get("deliveryMode") === "pickup" ? "pickup" : "delivery",
+    shippingCountryCode: shippingCountryOf(form.get("shippingCountryCode")),
     shippingAddress: text(form, "shippingAddress", 500),
     city: id(form, "city"),
     zone: id(form, "zone"),
+    foreign: Object.fromEntries(Object.entries(readForeignAddressFields((field) => form.get(field)))
+      .map(([field, value]) => [field, value ?? ""])) as Record<ForeignAddressField, string>,
     shippingLocation: id(form, "shippingLocation"),
     notes: text(form, "notes", 500),
     discountCode: text(form, "discountCode", 50).toUpperCase(),
@@ -159,6 +173,16 @@ export function chooseQuickCheckoutRate(
   return rates.find((rate) => rate.id === chosen)?.id ?? rates[0]?.id ?? "";
 }
 
+/** Another country than Bangladesh: its shipping zone matches on the region and postal code. */
+export function isQuickCheckoutAbroad(form: Pick<QuickCheckoutForm, "shippingCountryCode">): boolean {
+  return form.shippingCountryCode !== LOCATION_COUNTRY;
+}
+
+/** Enough to read and quote a delivery rate: Bangladesh's city and thana, or another country. */
+export function hasQuickCheckoutDestination(form: Pick<QuickCheckoutForm, "shippingCountryCode" | "city" | "zone">): boolean {
+  return isQuickCheckoutAbroad(form) || Boolean(form.city && form.zone);
+}
+
 export type QuickCheckoutFieldError =
   | "customerName"
   | "customerPhone"
@@ -191,6 +215,11 @@ export function quickCheckoutFieldErrors(
   const whatsappDigits = form.customerWhatsapp.replace(/\D/g, "");
   if (whatsappDigits && (whatsappDigits.length < 10 || whatsappDigits.length > 15)) errors.push("customerWhatsapp");
   if (mode === "delivery") {
+    // Another country's address is checked against its rules by the API.
+    if (isQuickCheckoutAbroad(form)) {
+      if (!form.shippingAddress) errors.push("shippingAddress");
+      return errors;
+    }
     if (form.shippingAddress.length < minAddressLength) errors.push("shippingAddress");
     if (!form.city) errors.push("city");
     else if (!form.zone) errors.push("zone");
@@ -208,7 +237,7 @@ export function quickCheckoutQuoteInput(
   rateId: string,
 ): Record<string, unknown> | null {
   if (mode !== "none" && !rateId) return null;
-  if (mode === "delivery" && (!form.city || !form.zone)) return null;
+  if (mode === "delivery" && !hasQuickCheckoutDestination(form)) return null;
   let customerPhone: string | undefined;
   try {
     customerPhone = validateAndFormatPhone(form.customerPhone);
@@ -218,7 +247,15 @@ export function quickCheckoutQuoteInput(
   return {
     cartItems: form.cartItems,
     deliveryMode: mode,
-    ...(mode === "delivery" ? { city: form.city, zone: form.zone } : {}),
+    ...(mode === "delivery"
+      ? isQuickCheckoutAbroad(form)
+        ? {
+          shippingCountryCode: form.shippingCountryCode,
+          shippingAdminArea: form.foreign.shippingAdminArea,
+          shippingPostalCode: form.foreign.shippingPostalCode,
+        }
+        : { city: form.city, zone: form.zone }
+      : {}),
     ...(mode === "none" ? {} : { shippingMethodId: rateId }),
     discountCodes: form.discountCode ? JSON.stringify([form.discountCode]) : "[]",
     ...(customerPhone ? { customerPhone } : {}),
@@ -269,7 +306,13 @@ export function quickCheckoutOrderForm(
     deliveryMode: mode === "pickup" ? "pickup" : "delivery",
     ...(mode === "none" ? {} : { shippingLocation: rateId }),
     ...(mode === "delivery"
-      ? { shippingAddress: form.shippingAddress, city: form.city, zone: form.zone }
+      ? isQuickCheckoutAbroad(form)
+        ? {
+          shippingAddress: form.shippingAddress,
+          shippingCountryCode: form.shippingCountryCode,
+          ...Object.fromEntries(FOREIGN_ADDRESS_FIELDS.flatMap((field) => (form.foreign[field] ? [[field, form.foreign[field]]] : []))),
+        }
+        : { shippingAddress: form.shippingAddress, city: form.city, zone: form.zone }
       : {}),
   };
   for (const [name, value] of Object.entries(values)) data.set(name, value);

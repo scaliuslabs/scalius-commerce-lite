@@ -1,4 +1,6 @@
 ---
+import { presenceMarketCountries } from "@/lib/checkout/shipping-country";
+import { getRuntimePresence } from "@/lib/api/runtime";
 import Layout from "../layouts/Layout.astro";
 import "../styles/global.css";
 import HomepageSections from "@/components/homepage/HomepageSections.astro";
@@ -101,6 +103,8 @@ const deliveryFacts = showsDeliveryFacts
       checkoutConfig,
       returnPolicy: layoutData.seo?.returnPolicy,
       formatMoney: (amount) => formatMoney(amount, { code: currencyCode, symbol: currencySymbol }),
+      // Only delivery to the page's market's countries is stated.
+      countries: presenceMarketCountries(layoutData.markets, getRuntimePresence()),
     })
   : [];
 

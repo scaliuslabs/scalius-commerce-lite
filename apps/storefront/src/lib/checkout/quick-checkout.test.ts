@@ -80,6 +80,33 @@ describe("checkout without JavaScript", () => {
     expect(quickCheckoutQuoteInput(form, "none", "")).not.toHaveProperty("shippingMethodId");
   });
 
+  it("quotes and orders another country's address by its fields, never Bangladesh's ids (MARKETS-DESIGN step 3b)", () => {
+    const form = readQuickCheckoutForm(posted({
+      cartItems: line(), customerName: "Abroad Buyer", customerPhone: "+14155552671", shippingCountryCode: "us",
+      shippingAddress: "1 Market St", shippingLocality: "San Francisco", shippingAdminArea: "CA", shippingPostalCode: "94103",
+      city: "dhaka", zone: "mirpur", expectedQuoteFingerprint: "taxq_abcdefghijklmnopqrstuv",
+    }));
+    expect(form.shippingCountryCode).toBe("US");
+    expect(quickCheckoutQuoteInput(form, "delivery", "us_standard")).toMatchObject({
+      deliveryMode: "delivery",
+      shippingCountryCode: "US",
+      shippingAdminArea: "CA",
+      shippingPostalCode: "94103",
+      shippingMethodId: "us_standard",
+    });
+    expect(quickCheckoutQuoteInput(form, "delivery", "us_standard")).not.toHaveProperty("city");
+    expect(quickCheckoutFieldErrors(form, "delivery", 10)).toEqual([]);
+    const order = quickCheckoutOrderForm(form, "delivery", "us_standard", { discounts: [], items: [] });
+    expect(Object.fromEntries(order.entries())).toMatchObject({
+      shippingCountryCode: "US",
+      shippingAddress: "1 Market St",
+      shippingLocality: "San Francisco",
+      shippingAdminArea: "CA",
+      shippingPostalCode: "94103",
+    });
+    expect(order.has("city")).toBe(false);
+  });
+
   it("names every missing contact or address field before placing", () => {
     const form = readQuickCheckoutForm(posted({ cartItems: line(), customerName: "Al", customerPhone: "123", customerEmail: "x@" }));
     expect(quickCheckoutFieldErrors(form, "delivery", 10)).toEqual(["customerName", "customerPhone", "customerEmail", "shippingAddress", "city"]);

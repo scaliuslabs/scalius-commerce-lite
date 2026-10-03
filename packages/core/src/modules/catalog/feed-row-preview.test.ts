@@ -219,7 +219,6 @@ describe("product feed row preview", () => {
       facebookProductCategory: "Electronics & Accessories",
       productType: "Electronics",
       shipping: {
-        country: "BD",
         service: "Standard",
         price: "0.00 BDT",
       },

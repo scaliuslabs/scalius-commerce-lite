@@ -223,6 +223,7 @@ describe("commerce structured data helpers", () => {
             isActive: true,
             sortOrder: 1,
             createdAt: null,
+            countries: [{ code: "BD", entire: true }],
           },
           {
             id: "disabled",
@@ -232,11 +233,12 @@ describe("commerce structured data helpers", () => {
             isActive: false,
             sortOrder: 2,
             createdAt: null,
+            countries: [{ code: "BD", entire: true }],
           },
         ],
         currencyCode: "BDT",
         freeDelivery: false,
-        country: "Bangladesh",
+        countries: ["BD"],
       }),
     ).toEqual([
       {
@@ -267,10 +269,12 @@ describe("commerce structured data helpers", () => {
             isActive: true,
             sortOrder: 1,
             createdAt: null,
+            countries: [{ code: "BD", entire: true }],
           },
         ],
         currencyCode: "BDT",
         freeDelivery: true,
+        countries: ["BD"],
       })[0]?.shippingRate,
     ).toEqual({
       "@type": "MonetaryAmount",
@@ -282,17 +286,18 @@ describe("commerce structured data helpers", () => {
   it("claims no country-wide rate when delivery fees vary by zone or for pickup", () => {
     const rate = (id: string, fee: number, extra: Record<string, unknown> = {}) => ({
       id, name: id, fee, description: null, isActive: true, sortOrder: 0, createdAt: null,
-      kind: "delivery" as const, everywhereElse: true, ...extra,
+      kind: "delivery" as const, countries: [{ code: "BD", entire: true }], ...extra,
     });
-    const zoned = [rate("Inside Dhaka", 60, { everywhereElse: false }), rate("Outside Dhaka", 120)];
-    expect(buildOfferShippingDetails({ shippingMethods: zoned, currencyCode: "BDT", freeDelivery: false })).toEqual([]);
+    const zoned = [rate("Inside Dhaka", 60, { countries: [{ code: "BD", entire: false }] }), rate("Outside Dhaka", 120)];
+    expect(buildOfferShippingDetails({ shippingMethods: zoned, currencyCode: "BDT", freeDelivery: false, countries: ["BD"] })).toEqual([]);
     // A free-delivery product costs nothing to ship anywhere, zones or not.
-    expect(buildOfferShippingDetails({ shippingMethods: zoned, currencyCode: "BDT", freeDelivery: true })
+    expect(buildOfferShippingDetails({ shippingMethods: zoned, currencyCode: "BDT", freeDelivery: true, countries: ["BD"] })
       .map((detail) => detail.shippingRate.value)).toEqual(["0.00"]);
     expect(buildOfferShippingDetails({
       shippingMethods: [rate("Standard", 80), rate("Pickup", 0, { kind: "pickup" })],
       currencyCode: "BDT",
       freeDelivery: false,
+      countries: ["BD"],
     }).map((detail) => detail.name)).toEqual(["Standard"]);
     // A paid pickup point is never stated as a shipping rate (R3-MOB-06).
     expect(buildOfferShippingDetails({
@@ -303,6 +308,7 @@ describe("commerce structured data helpers", () => {
       ],
       currencyCode: "BDT",
       freeDelivery: false,
+      countries: ["BD"],
     }).map((detail) => [detail.name, detail.shippingRate.value])).toEqual([
       ["Standard Delivery", "110.00"],
       ["Express Delivery", "200.00"],
@@ -312,7 +318,29 @@ describe("commerce structured data helpers", () => {
       shippingMethods: [rate("Collection Point", 50, { kind: "pickup", pickupAddress: "Gulshan 1 kiosk" })],
       currencyCode: "BDT",
       freeDelivery: true,
+      countries: ["BD"],
     })).toEqual([]);
+  });
+
+  it("states a shippingDestination per served country of the page's market (MARKETS-DESIGN step 3b)", () => {
+    const rate = (id: string, fee: number, countries: Array<{ code: string; entire: boolean }>) => ({
+      id, name: id, fee, description: null, isActive: true, sortOrder: 0, createdAt: null, kind: "delivery" as const, countries,
+    });
+    const methods = [
+      rate("Inside Dhaka", 60, [{ code: "BD", entire: false }]),
+      rate("Bangladesh", 120, [{ code: "BD", entire: false }]),
+      rate("Europe", 900, [{ code: "DE", entire: true }, { code: "FR", entire: true }]),
+      rate("West coast", 1500, [{ code: "US", entire: false }]),
+    ];
+    const destinations = (countries: string[], freeDelivery = false) =>
+      buildOfferShippingDetails({ shippingMethods: methods, currencyCode: "BDT", freeDelivery, countries })
+        .map((detail) => [detail.shippingDestination.addressCountry, detail.name ?? null, detail.shippingRate.value]);
+    // Only countries priced the same at every address; Bangladesh and the US vary by place.
+    expect(destinations(["BD", "DE", "FR", "US"])).toEqual([["DE", "Europe", "900.00"], ["FR", "Europe", "900.00"]]);
+    // A free-delivery product ships free to every country a zone serves, and never to one none does.
+    expect(destinations(["BD", "IN", "US"], true)).toEqual([["BD", null, "0.00"], ["US", null, "0.00"]]);
+    // A market that sells only to India claims nothing.
+    expect(destinations(["IN"])).toEqual([]);
   });
 
   it("maps only schema-safe barcode types to GTIN fields", () => {
@@ -345,10 +373,11 @@ describe("commerce structured data helpers", () => {
         isActive: true,
         sortOrder: 1,
         createdAt: null,
+        countries: [{ code: "BD", entire: true }],
       }],
       currencyCode: "BDT",
       freeDelivery: false,
-      country: "Bangladesh",
+      countries: ["BD"],
     });
     expect(shippingDetails).toHaveLength(1);
 

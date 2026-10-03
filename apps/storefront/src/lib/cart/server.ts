@@ -178,6 +178,20 @@ function failedOrder(
   };
 }
 
+/** Another country's region and postal code as posted, trimmed (empty ones left out). */
+function readForeignDestination(formData: FormData): { shippingAdminArea?: string; shippingPostalCode?: string } {
+  const text = (name: string) => {
+    const value = formData.get(name);
+    return typeof value === "string" && value.trim() ? value.trim() : undefined;
+  };
+  const shippingAdminArea = text("shippingAdminArea");
+  const shippingPostalCode = text("shippingPostalCode");
+  return {
+    ...(shippingAdminArea ? { shippingAdminArea } : {}),
+    ...(shippingPostalCode ? { shippingPostalCode } : {}),
+  };
+}
+
 export async function processOrder(
   formData: FormData,
   options: ProcessOrderOptions = {},
@@ -251,7 +265,11 @@ export async function processOrder(
       {
         ...(shippingLocationId ? { shippingMethodId: shippingLocationId } : {}),
         ...(chosenPath === "delivery" && foreignAddress
-          ? { shippingCountryCode }
+          ? {
+            shippingCountryCode,
+            // Its shipping zone matches on the region and postal code (MARKETS-DESIGN step 3b).
+            ...readForeignDestination(formData),
+          }
           : chosenPath === "delivery" && cityId && zoneId
             ? { city: cityId, zone: zoneId, area: areaId }
             : {}),
@@ -298,9 +316,12 @@ export async function processOrder(
       throw new Error("Delivery information is no longer available. Please refresh checkout and try again.");
     }
     // This form places cash-on-delivery orders only; a cart that can't be
-    // paid in cash (nothing handed over in person) is refused before commit.
+    // paid in cash (nothing handed over in person, or a delivery to a
+    // country cash on delivery doesn't serve) is refused before commit.
     if (Array.isArray(validated.allowedPaymentMethods) && !validated.allowedPaymentMethods.includes("cod")) {
-      throw new Error("This order can't be paid with cash on delivery.");
+      throw new Error(mode === "delivery" && foreignAddress
+        ? "Cash on delivery isn't available for this delivery country."
+        : "This order can't be paid with cash on delivery.");
     }
 
     const inputsByCartKey = new Map(cartItemsArray.map((item) => [item.cartKey, item.properties]));

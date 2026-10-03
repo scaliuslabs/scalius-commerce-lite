@@ -1,4 +1,6 @@
 ---
+import { presenceMarketCountries } from "@/lib/checkout/shipping-country";
+import { getRuntimePresence } from "@/lib/api/runtime";
 import { lowercaseHandleRedirect } from "@/lib/lowercase-route";
 import {
   getCheckoutConfig,
@@ -485,11 +487,14 @@ const shouldEmitProductGroupJsonLd =
   buyerVariantResolution.mode === "optioned" &&
   buyerVariants.length > 0;
 
+// The countries the page's market sells to: delivery facts and Offer
+// shippingDetails claim only those a shipping zone serves (MARKETS-DESIGN step 3b).
+const pageCountries = presenceMarketCountries(layoutData.markets, getRuntimePresence());
 const offerShippingDetails = buildOfferShippingDetails({
   shippingMethods,
   currencyCode,
   freeDelivery: product.freeDelivery,
-  country: layoutData.business?.country,
+  countries: pageCountries,
 });
 // What the page sells decides what it may say about delivery: services and
 // digital items claim no delivery rates and no Offer shippingDetails.
@@ -507,6 +512,7 @@ const deliveryFacts = buildDeliveryFacts({
   payAtServiceText: productPageCopy.payAtServiceText,
   pickupAvailableText: productPageCopy.pickupAvailableText,
   formatMoney: (amount) => formatMoney(amount, { code: currencyCode, symbol: currencySymbol }),
+  countries: pageCountries,
 });
 const fulfilmentBadge =
   pageFulfilment === "service" ? productPageCopy.noDeliveryNeededBadgeText : null;

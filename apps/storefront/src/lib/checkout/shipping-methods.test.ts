@@ -151,6 +151,32 @@ describe("delivery options follow the address", () => {
     expect(events.at(-1)).toBeNull();
   });
 
+  it("reads another country's rates by its region and postal code, never Bangladesh's ids (MARKETS-DESIGN step 3b)", async () => {
+    const us = rate("us", 2500);
+    const loadRates = vi.fn(async (address: DeliveryAddress) => (address.countryCode === "US" && address.postalCode === "94103" ? [us, pickup] : [pickup]));
+    const { methods, options, note } = setup({ loadRates });
+    await methods.setAddress({ countryCode: "US", cityId: "", zoneId: "", areaId: "", adminArea: "CA", postalCode: "94103" });
+    expect(options()).toEqual([
+      { id: "us", checked: true, fee: "৳2,500", note: "" },
+      { id: "pickup", checked: false, fee: "Free", note: "" },
+    ]);
+    // A postal code no zone serves: no delivery, and the note says so.
+    await methods.setAddress({ countryCode: "US", cityId: "", zoneId: "", areaId: "", adminArea: "NY", postalCode: "10001" });
+    expect(note()).toBe("We don't deliver here yet.");
+    expect(loadRates).toHaveBeenCalledTimes(2);
+  });
+
+  it("asks the API for a destination's zone in its own query", async () => {
+    const fetchImpl = vi.fn(async (_url: string) => new Response(JSON.stringify({ success: true, data: { shippingMethods: [] } }), { status: 200 }));
+    await fetchDeliveryRates("https://api.example.test/api/v1", { countryCode: "GB", cityId: "", zoneId: "", areaId: "", postalCode: "SW1A 1AA" }, fetchImpl as never);
+    await fetchDeliveryRates("https://api.example.test/api/v1", DHAKA, fetchImpl as never);
+    expect(fetchImpl.mock.calls.map(([url]) => String(url))).toEqual([
+      "https://api.example.test/api/v1/shipping-methods?countryCode=GB&postalCode=SW1A+1AA",
+      // Bangladesh's query is as before.
+      "https://api.example.test/api/v1/shipping-methods?cityId=dhaka&zoneId=mirpur",
+    ]);
+  });
+
   it("offers a retry when the rates can't be read", async () => {
     let fail = true;
     const { methods, options } = setup({

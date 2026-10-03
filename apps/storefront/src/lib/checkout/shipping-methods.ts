@@ -2,8 +2,10 @@
  * Delivery options on /cart (components/checkout/CheckoutShippingMethods.astro).
  *
  * The list follows the checkout path (`lib/checkout/delivery-mode.ts`):
- * - delivery: the options follow the address; every city/zone/area change
- *   re-reads the rates offered there (`GET /shipping-methods?cityId&zoneId&areaId`),
+ * - delivery: the options follow the address; every change of its
+ *   destination re-reads the rates of its shipping zone
+ *   (`GET /shipping-methods?cityId&zoneId&areaId` in Bangladesh,
+ *   `?countryCode&adminArea&postalCode` elsewhere; MARKETS-DESIGN step 3b),
  *   keeps the buyer's choice while it still applies and otherwise selects the
  *   first delivery rate. Pickup rates are listed here only when the store has
  *   no Delivery/Pickup switch (then pickup is always listed, and alone before
@@ -65,9 +67,24 @@ export function overlayQuotedRates<Rate extends { id: string; name: string; fee:
 }
 
 export interface DeliveryAddress {
+  /** ISO country; empty or BD: Bangladesh, whose City/Thana/Area ids follow. */
+  countryCode?: string;
   cityId: string;
   zoneId: string;
   areaId: string;
+  /** Another country's region and postal code: its shipping zone matches on them. */
+  adminArea?: string;
+  postalCode?: string;
+}
+
+/** Another country than Bangladesh. */
+function isForeign(address: DeliveryAddress): boolean {
+  return Boolean(address.countryCode) && address.countryCode !== "BD";
+}
+
+/** Enough to read a zone's rates: Bangladesh's city and thana, or another country. */
+export function hasDeliveryDestination(address: DeliveryAddress): boolean {
+  return isForeign(address) || Boolean(address.cityId && address.zoneId);
 }
 
 export interface ShippingMethodsCopy {
@@ -109,8 +126,16 @@ export async function fetchDeliveryRates(
   address: DeliveryAddress,
   fetchImpl: typeof fetch = fetch,
 ): Promise<DeliveryRate[] | null> {
-  const query = new URLSearchParams({ cityId: address.cityId, zoneId: address.zoneId });
-  if (address.areaId) query.set("areaId", address.areaId);
+  const query = new URLSearchParams();
+  if (isForeign(address)) {
+    query.set("countryCode", address.countryCode!);
+    if (address.adminArea) query.set("adminArea", address.adminArea);
+    if (address.postalCode) query.set("postalCode", address.postalCode);
+  } else {
+    query.set("cityId", address.cityId);
+    query.set("zoneId", address.zoneId);
+    if (address.areaId) query.set("areaId", address.areaId);
+  }
   try {
     const response = await fetchImpl(`${apiBaseUrl}/shipping-methods?${query}`, {
       headers: { Accept: "application/json" },
@@ -135,8 +160,9 @@ export async function fetchDeliveryRates(
 /** One delivery option's height; its loading and empty stand-ins match it. */
 const OPTION_HEIGHT = "min-h-[4.25rem]";
 
-const addressKey = (address: DeliveryAddress) =>
-  `${address.cityId}|${address.zoneId}|${address.areaId}`;
+const addressKey = (address: DeliveryAddress) => isForeign(address)
+  ? `${address.countryCode}|${address.adminArea ?? ""}|${address.postalCode ?? ""}`
+  : `${address.cityId}|${address.zoneId}|${address.areaId}`;
 
 export function enhanceShippingMethods(
   root: ParentNode,
@@ -150,8 +176,9 @@ export function enhanceShippingMethods(
     /** The checkout path; delivery when not given. */
     readMode?: () => CheckoutDeliveryMode;
     /**
-     * Why the address can have no delivery rate (a country without shipping
-     * zones yet), said in place of "choose an address"; null when it can.
+     * Why the address can have no delivery rate (a country no shipping zone
+     * serves), said in place of "choose an address" and of "we don't deliver
+     * there"; null when it can.
      */
     readNoDeliveryReason?: () => string | null;
     signal?: AbortSignal;
@@ -437,11 +464,11 @@ export function enhanceShippingMethods(
       !rejected.has(rate.id) && (!hasModeSwitch || rate.kind === "delivery"));
     choose();
     render();
-    setNote(shown().some((rate) => rate.kind === "delivery") ? "" : copy.noDeliveryText);
+    setNote(shown().some((rate) => rate.kind === "delivery") ? "" : options.readNoDeliveryReason?.() ?? copy.noDeliveryText);
   };
 
   const load = async (force = false) => {
-    const hasAddress = Boolean(address.cityId && address.zoneId);
+    const hasAddress = hasDeliveryDestination(address);
     const current = ++sequence;
     renderLegend();
     if (mode === "none") {
@@ -515,12 +542,21 @@ export function enhanceShippingMethods(
       return load(true);
     },
     setAddress(next) {
-      const nextAddress = {
+      const nextAddress: DeliveryAddress = {
         cityId: next.cityId ?? "",
         zoneId: next.zoneId ?? "",
         areaId: next.areaId ?? "",
+        ...(next.countryCode ? { countryCode: next.countryCode } : {}),
+        ...(next.adminArea ? { adminArea: next.adminArea } : {}),
+        ...(next.postalCode ? { postalCode: next.postalCode } : {}),
       };
-      if (nextAddress.cityId !== address.cityId || nextAddress.zoneId !== address.zoneId) rejected.clear();
+      if (
+        nextAddress.cityId !== address.cityId
+        || nextAddress.zoneId !== address.zoneId
+        || (nextAddress.countryCode ?? "") !== (address.countryCode ?? "")
+        || (nextAddress.adminArea ?? "") !== (address.adminArea ?? "")
+        || (nextAddress.postalCode ?? "") !== (address.postalCode ?? "")
+      ) rejected.clear();
       // A quote's options belong to the address it priced.
       if (addressKey(nextAddress) !== addressKey(address)) overlay = null;
       address = nextAddress;
@@ -549,8 +585,8 @@ export function enhanceShippingMethods(
       choose();
       render();
       if (mode === "delivery") {
-        if (address.cityId && address.zoneId) {
-          setNote(shown().some((rate) => rate.kind === "delivery") ? "" : copy.noDeliveryText);
+        if (hasDeliveryDestination(address)) {
+          setNote(shown().some((rate) => rate.kind === "delivery") ? "" : options.readNoDeliveryReason?.() ?? copy.noDeliveryText);
         } else {
           list.append(placeholder(copy.chooseAddressText));
         }
@@ -563,7 +599,7 @@ export function enhanceShippingMethods(
       if (overlay) return false;
       const previous = selectedRate();
       // Pickup rates need no address; the checkout verifies them itself.
-      if (mode !== "delivery" || !previous || !address.cityId || !address.zoneId) return false;
+      if (mode !== "delivery" || !previous || !hasDeliveryDestination(address)) return false;
       const current = ++sequence;
       const loaded = await options.loadRates(address);
       // Unreadable rates don't block the order: the checkout verifies the rate itself.

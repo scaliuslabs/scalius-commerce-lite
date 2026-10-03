@@ -1034,6 +1034,29 @@ const marketingConsent = marketingConsentCheckbox(checkoutConfig, lang.code);
 
   /** The country select (only on a store that sells to several countries). */
   const countrySelect = () => document.querySelector<HTMLSelectElement>("select[data-shipping-country]");
+  /** The countries some shipping zone serves, from the store's rates on the page. */
+  const zoneCountries = (() => {
+    let countries: Set<string> | undefined;
+    return (): Set<string> | null => {
+      if (countries) return countries;
+      try {
+        const rates = JSON.parse(document.querySelector("script[data-shipping-rates]")?.textContent || "[]") as Array<{
+          kind?: string;
+          countries?: Array<{ code?: unknown }>;
+        }>;
+        const read = new Set<string>();
+        for (const rate of Array.isArray(rates) ? rates : []) {
+          if (rate.kind === "pickup") continue;
+          for (const entry of rate.countries ?? []) if (typeof entry.code === "string") read.add(entry.code);
+        }
+        countries = read;
+        return countries;
+      } catch {
+        // Unreadable: no country is named as unserved.
+        return null;
+      }
+    };
+  })();
   /** The country the form posts: Bangladesh unless the store sells elsewhere and the buyer chose it. */
   const chosenShippingCountry = () =>
     findNamedCheckoutControl(document, "shippingCountryCode")?.value || "BD";
@@ -1101,10 +1124,11 @@ const marketingConsent = marketingConsentCheckbox(checkoutConfig, lang.code);
     isFeeWaived: () => cartHasFreeDeliveryItem(cartStore.get().items),
     formatMoney,
     readMode: () => readCheckoutDeliveryMode(),
-    // No delivery rates outside Bangladesh until shipping zones by country (step 3b).
+    // A country no shipping zone serves says so by name (MARKETS-DESIGN step 3b).
     readNoDeliveryReason: () => {
       const countryCode = chosenShippingCountry();
-      return countryCode === "BD"
+      const served = zoneCountries();
+      return countryCode === "BD" || !served || served.has(countryCode)
         ? null
         : formatCheckoutLanguageText(checkoutCopy.deliveryCountryUnavailableText, {
             country: shippingCountryName(countryCode, document.documentElement.lang || "en"),
@@ -1172,16 +1196,31 @@ const marketingConsent = marketingConsentCheckbox(checkoutConfig, lang.code);
     : null;
   // An address already in the form (restored by the browser) gets its rates too.
   const formLocation = (name: string) => findNamedCheckoutControl(document, name)?.value ?? "";
-  // Another country has no City/Thana/Area: its delivery options say why there are none.
+  // Another country's shipping zone matches on its region and postal code.
   const formAddress = () => chosenShippingCountry() === "BD"
     ? { cityId: formLocation("city"), zoneId: formLocation("zone"), areaId: formLocation("area") }
-    : { cityId: "", zoneId: "", areaId: "" };
+    : {
+        countryCode: chosenShippingCountry(),
+        cityId: "",
+        zoneId: "",
+        areaId: "",
+        adminArea: formLocation("shippingAdminArea").trim(),
+        postalCode: formLocation("shippingPostalCode").trim(),
+      };
   void shippingMethods?.setAddress(formAddress());
   countrySelect()?.addEventListener(
     "change",
     () => void shippingMethods?.setAddress(formAddress()),
     { signal: cartPageSignal },
   );
+  // A region or postal code entered: re-read the zone's options once the field is left.
+  for (const name of ["shippingAdminArea", "shippingPostalCode"]) {
+    findNamedCheckoutControl(document, name)?.addEventListener(
+      "change",
+      () => void shippingMethods?.setAddress(formAddress()),
+      { signal: cartPageSignal },
+    );
+  }
   window.addEventListener(
     "location-prefill",
     (event) =>

@@ -124,7 +124,12 @@ describe("Facebook product feed route", () => {
     mocks.resolveMediaUrl.mockImplementation((url: string) => url);
     mocks.getSeoSettings.mockResolvedValue({ discovery: undefined });
     mocks.getShippingMethods.mockReset();
-    mocks.getShippingMethods.mockResolvedValue([]);
+    // A Bangladesh store whose fees vary by delivery area: no store-wide
+    // charge is claimed, and a free-delivery item ships free to Bangladesh.
+    mocks.getShippingMethods.mockResolvedValue([{
+      id: "inside", name: "Inside Dhaka", fee: 60, description: null, isActive: true, sortOrder: 0,
+      createdAt: null, kind: "delivery", countries: [{ code: "BD", entire: false }],
+    }]);
     mocks.getRuntimeStorefrontUrl.mockReturnValue("https://storefront.example.test");
     mocks.getLayoutData.mockResolvedValue({
       currency: { code: "BDT" },
@@ -1108,7 +1113,7 @@ describe("Facebook product feed route", () => {
   it("gives every other item the store-wide delivery charges, and none when fees vary by zone", async () => {
     const rate = (name: string, fee: number, extra: Record<string, unknown> = {}) => ({
       id: name, name, fee, description: null, isActive: true, sortOrder: 0,
-      createdAt: null, updatedAt: null, kind: "delivery", everywhereElse: true, ...extra,
+      createdAt: null, updatedAt: null, kind: "delivery", countries: [{ code: "BD", entire: true }], ...extra,
     });
     const products = {
       data: [{
@@ -1142,9 +1147,41 @@ describe("Facebook product feed route", () => {
     expect(item).toContain("<g:service>Standard</g:service>");
     expect(item).toContain("<g:price>110.00 BDT</g:price>");
 
-    mocks.getShippingMethods.mockResolvedValue([rate("Inside Dhaka", 60, { everywhereElse: false }), rate("Outside Dhaka", 120)]);
+    mocks.getShippingMethods.mockResolvedValue([rate("Inside Dhaka", 60, { countries: [{ code: "BD", entire: false }] }), rate("Outside Dhaka", 120)]);
     item = feedItemById(await (await GET(context())).text(), "prod_paid");
     expect(item).not.toContain("<g:shipping>");
+  });
+
+  it("states each presence's shipping per country its market sells to and a zone serves (MARKETS-DESIGN step 3b)", async () => {
+    runtimePresence.value = "en-us";
+    mocks.getLayoutData.mockResolvedValue({
+      currency: { code: "BDT" },
+      media: undefined,
+      markets: { markets: [
+        { id: "mkt_backup", handle: "bangladesh", name: "Bangladesh", isBackup: true, countries: ["BD"], presences: [{ value: "", locale: "en" }] },
+        { id: "mkt_na", handle: "north-america", name: "North America", isBackup: false, countries: ["CA", "US"], presences: [{ value: "en-us", locale: "en" }] },
+      ] },
+    });
+    const rate = (name: string, fee: number, countries: Array<{ code: string; entire: boolean }>) => ({
+      id: name, name, fee, description: null, isActive: true, sortOrder: 0, createdAt: null, kind: "delivery", countries,
+    });
+    mocks.getShippingMethods.mockResolvedValue([
+      rate("Outside Dhaka", 120, [{ code: "BD", entire: true }]),
+      rate("US standard", 2500, [{ code: "US", entire: true }]),
+    ]);
+    mocks.getFeedProducts.mockResolvedValue({
+      data: [
+        { id: "prod_paid", slug: "paid", name: "Paid", description: "x", price: 500, discountedPrice: 500, isActive: true, availableForSale: true, freeDelivery: false, imageUrl: "https://cdn.example.test/p.jpg" },
+        { id: "prod_free", slug: "free", name: "Free", description: "x", price: 700, discountedPrice: 700, isActive: true, availableForSale: true, freeDelivery: true, imageUrl: "https://cdn.example.test/f.jpg" },
+      ],
+      pagination: { page: 1, limit: 100, total: 2, totalPages: 1 },
+    });
+    const body = await (await GOOGLE_FEED_GET(context("https://storefront.example.test/en-us/api/product-feed.xml"))).text();
+    const shipping = (id: string) => [...feedItemById(body, id).matchAll(/<g:shipping>\s*<g:country>(\w+)<\/g:country>\s*<g:service>([^<]+)<\/g:service>\s*<g:price>([^<]+)<\/g:price>/g)]
+      .map((match) => [match[1], match[2], match[3]]);
+    // Canada has no zone; Bangladesh is not this market's.
+    expect(shipping("prod_paid")).toEqual([["US", "US standard", "2500.00 BDT"]]);
+    expect(shipping("prod_free")).toEqual([["US", "Standard", "0.00 BDT"]]);
   });
 
   it("omits zero-current-price products from both catalog feeds", async () => {

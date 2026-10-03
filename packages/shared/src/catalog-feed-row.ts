@@ -161,8 +161,11 @@ export interface CatalogFeedRow {
     name: CatalogFeedStandardAttributeName;
     value: string;
   }>;
+  /**
+   * A free-delivery product: it ships free wherever the store delivers (the
+   * feed states each country a shipping zone serves); null otherwise.
+   */
   shipping: {
-    country: "BD";
     service: "Standard";
     price: string;
   } | null;
@@ -570,7 +573,6 @@ function buildRow(
     standardAttributes: standardAttributesForRow(product, variant),
     shipping: product.freeDelivery && zeroShippingAmount !== null
       ? {
-        country: "BD",
         service: "Standard",
         price: `${zeroShippingAmount} ${input.currencyCode}`,
       }

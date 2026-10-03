@@ -159,6 +159,14 @@ export function buildTaxQuoteRequest(
       items,
       inventoryPool: data.inventoryPool,
       ...(mode === "delivery" ? { city: data.city, zone: data.zone, area: data.area } : {}),
+      // Another country's delivery: its shipping zone matches on these (a Bangladesh address sends none).
+      ...(mode === "delivery" && typeof data.shippingCountryCode === "string" && data.shippingCountryCode.trim().toUpperCase() !== "BD"
+        ? {
+          shippingCountryCode: data.shippingCountryCode,
+          shippingAdminArea: data.shippingAdminArea,
+          shippingPostalCode: data.shippingPostalCode,
+        }
+        : {}),
       ...(mode === "none" ? {} : { shippingMethodId: data.shippingMethodId }),
       discountCodes: readDiscountCodes(data),
       customerPhone: data.customerPhone,

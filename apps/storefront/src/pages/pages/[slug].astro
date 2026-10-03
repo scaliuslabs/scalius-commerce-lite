@@ -3,6 +3,8 @@
 // homepage's sections and rendered from the same single batch (layout plus
 // one landing read, and the delivery reads its sections may show). A theme
 // preview renders the previewed draft's (or version's) page instead.
+import { presenceMarketCountries } from "@/lib/checkout/shipping-country";
+import { getRuntimePresence } from "@/lib/api/runtime";
 import Layout from "../../layouts/Layout.astro";
 import LandingSections from "@/components/homepage/LandingSections.astro";
 import AppHeadTags from "@/components/apps/AppHeadTags.astro";
@@ -43,6 +45,8 @@ const deliveryFacts = homeSectionsShowDeliveryFacts(sections)
     checkoutConfig,
     returnPolicy: layoutData.seo?.returnPolicy,
     formatMoney: (amount) => formatMoney(amount, { code: currency.code, symbol: currency.symbol }),
+    // Only delivery to the page's market's countries is stated.
+    countries: presenceMarketCountries(layoutData.markets, getRuntimePresence()),
   })
   : [];
 ---

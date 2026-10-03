@@ -398,31 +398,32 @@ export function buildMerchantReturnPolicyJsonLd({
 }
 
 /**
- * OfferShippingDetails claim a rate for the whole country, so they are
- * emitted only when that is true for every buyer: a free-delivery product
- * (one zero rate), or store-wide delivery rates with no delivery zones.
- * Zone-priced stores and local pickup emit nothing rather than a rate that
- * does not apply to every address.
+ * One `shippingDestination` per country the page's market sells to and a
+ * shipping zone serves (MARKETS-DESIGN step 3b). An OfferShippingDetails
+ * claims a rate for the whole country, so it is emitted only when that is
+ * true for every buyer there: a free-delivery product (one zero rate), or
+ * delivery rates whose zone serves every address of the country. A country
+ * with zone-priced parts, and local pickup, get nothing rather than a rate
+ * that does not apply to every address.
  */
 export function buildOfferShippingDetails({
   shippingMethods,
   currencyCode,
   freeDelivery,
-  country,
+  countries,
 }: {
   shippingMethods: ShippingMethod[] | null | undefined;
   currencyCode: string;
   freeDelivery: boolean;
-  country?: string | null;
+  /** The countries the page's market sells to (`presenceMarketCountries`). */
+  countries: readonly string[];
 }) {
-  const { delivery, zoned } = splitDeliveryRates(shippingMethods);
-  if (delivery.length === 0 || (zoned && !freeDelivery)) return [];
-  const detail = (value: number, name?: string | null) => ({
+  const detail = (country: string, value: number, name?: string | null) => ({
     "@type": "OfferShippingDetails",
     ...(cleanString(name) ? { name: cleanString(name) } : {}),
     shippingDestination: {
       "@type": "DefinedRegion",
-      addressCountry: normalizeSchemaCountryCode(country),
+      addressCountry: country,
     },
     shippingRate: {
       "@type": "MonetaryAmount",
@@ -430,9 +431,13 @@ export function buildOfferShippingDetails({
       currency: currencyCode,
     },
   });
-  return freeDelivery
-    ? [detail(0)]
-    : delivery.map((method) => detail(method.fee, method.name));
+  return [...new Set(countries)].flatMap((country) => {
+    const { delivery, zoned } = splitDeliveryRates(shippingMethods, [country]);
+    if (delivery.length === 0 || (zoned && !freeDelivery)) return [];
+    return freeDelivery
+      ? [detail(country, 0)]
+      : delivery.map((method) => detail(country, method.fee, method.name));
+  });
 }
 
 /**

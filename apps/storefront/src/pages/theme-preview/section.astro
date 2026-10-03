@@ -8,6 +8,8 @@
 export const partial = true;
 export const prerender = false;
 
+import { presenceMarketCountries } from "@/lib/checkout/shipping-country";
+import { getRuntimePresence } from "@/lib/api/runtime";
 import HomepageSections from "@/components/homepage/HomepageSections.astro";
 import { getCheckoutConfig, getLayoutData, getShippingMethods, getThemePreviewHomepageSections } from "@/lib/api";
 import { buildDeliveryFacts } from "@/lib/delivery-facts";
@@ -58,6 +60,7 @@ const deliveryFacts = showsDeliveryFacts
       checkoutConfig,
       returnPolicy: layoutData.seo?.returnPolicy,
       formatMoney: (amount) => formatMoney(amount, { code: currencyCode, symbol: currencySymbol }),
+      countries: presenceMarketCountries(layoutData.markets, getRuntimePresence()),
     })
   : [];
 const content = homepageContent(sectionData, deliveryFacts);

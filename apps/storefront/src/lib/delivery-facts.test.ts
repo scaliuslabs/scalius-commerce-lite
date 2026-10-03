@@ -12,15 +12,33 @@ function method(
   isActive = true,
   extra: Partial<ShippingMethod> = {},
 ): ShippingMethod {
-  return { id: name, name, fee, description: null, isActive, sortOrder, createdAt: null, kind: "delivery", everywhereElse: true, ...extra };
+  return { id: name, name, fee, description: null, isActive, sortOrder, createdAt: null, kind: "delivery", countries: [{ code: "BD", entire: true }], ...extra };
 }
 const zoneRate = (name: string, fee: number, sortOrder: number, extra: Partial<ShippingMethod> = {}) =>
-  method(name, fee, sortOrder, true, { everywhereElse: false, ...extra });
+  method(name, fee, sortOrder, true, { countries: [{ code: "BD", entire: false }], ...extra });
 const pickupRate = method("Pick up at our shop", 0, 9, true, { kind: "pickup", pickupAddress: "House 1, Banani" });
 
 const codConfig: CheckoutConfig = { gateways: [{ id: "cod", name: "Cash on delivery", flow: "cod" }] };
 
 describe("buildDeliveryFacts", () => {
+  it("states only delivery to the page's market's countries, and cash on delivery only where it serves (MARKETS-DESIGN step 3b)", () => {
+    const methods = [
+      method("Bangladesh", 120, 0),
+      method("Europe", 900, 1, true, { countries: [{ code: "FR", entire: true }, { code: "DE", entire: true }] }),
+      pickupRate,
+    ];
+    const cod: CheckoutConfig = { gateways: [{ id: "cod", name: "Cash on delivery", flow: "cod", countries: ["BD"] }] };
+    const facts = (countries: string[]) =>
+      buildDeliveryFacts({ shippingMethods: methods, checkoutConfig: cod, returnPolicy: null, formatMoney, countries })
+        .map((fact) => [fact.kind, fact.title]);
+    expect(facts(["BD"])).toEqual([["delivery", "Delivery ৳120"], ["pickup", "Pickup available"], ["cod", "Cash on delivery"]]);
+    expect(facts(["FR"])).toEqual([["delivery", "Delivery ৳900"], ["pickup", "Pickup available"]]);
+    // Fees differ by country: the line says the lowest and that the price depends on the address.
+    expect(facts(["BD", "FR"])[0]).toEqual(["delivery", "Delivery from ৳120"]);
+    // No zone serves India: no delivery claim at all.
+    expect(facts(["IN"])).toEqual([["pickup", "Pickup available"]]);
+  });
+
   it("states the fee range, each method, cash on delivery and the return window", () => {
     const facts = buildDeliveryFacts({
       shippingMethods: [method("Outside Dhaka", 120, 2), method("Inside Dhaka", 60, 1), method("Old", 10, 0, false)],
