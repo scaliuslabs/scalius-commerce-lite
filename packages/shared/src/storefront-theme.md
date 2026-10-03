@@ -32,7 +32,7 @@ numbers come from the storefront study
 | `sections.ts` | the section registry (20 types, strict settings) and the types the storefront renders |
 | `home-data.ts` | what homepage sections read (product lists by source, images), shared by the API and the storefront |
 | `document.ts` | the current document schema, contrast pairs, stored-read upgrades and token CSS |
-| `pages.ts` | bounded landing pages and fixed reorderable/hideable commerce page blocks |
+| `pages.ts` | landing pages: bounded section pages at `/pages/<slug>` |
 | `upgrade.ts` | one pure step per historical version; golden inputs and provenance in `upgrade.md` |
 | `templates.ts` | the 10 templates as frozen data, `DEFAULT_STOREFRONT_THEME` |
 | `resolve.ts` | `resolveStorefrontTheme(document, storeShape)` |
@@ -66,10 +66,7 @@ numbers come from the storefront study
   "pages": {
     "home": [{ "id", "type", "version", "settings", "hidden"? }],
     "homeMode": { "kind": "sections" }, // or { "kind": "product", "productId" }
-    "landing": { "<slug>": { "title", "sections": [], "overrideCms": false } },
-    "product": { "blocks": [{ "id", "hidden": false }] },
-    "collection": { "blocks": [{ "id", "hidden": false }] },
-    "search": { "blocks": [{ "id", "hidden": false }] }
+    "landing": { "<slug>": { "title", "description", "sections": [] } }
   }
 }
 ```
@@ -395,14 +392,14 @@ Where the data departs from SYNTHESIS.md, and why:
   `dense` shares compact's type scale (the 14px phone floor) and uses a 12px
   desktop gap so columns never drop when the page gutter grows at 1024px.
 - **Containers** add `1440` (the v3 width, Mass retail's) to the measured 1200/1290/1360/full.
-- **Page templates.** `pages.landing` holds at most 20 pages with the same
-  section registry and 24-section cap as home; `/pages/<slug>` renders one,
-  and `overrideCms` opts a same-slug CMS page body into sections. Product
-  templates retain gallery, title/price, options, buy buttons, description,
-  specs, reviews, related products and app blocks exactly once. Collection
-  and search retain breadcrumbs, banner, filters and grid exactly once.
-  Fixed blocks can be reordered or hidden; grid density uses `tokens.density`.
-  Hidden sections stay saved and media-validated but make no public data reads.
+- **Pages.** `pages.landing` holds at most 20 landing pages with the same
+  section registry and 24-section cap as home; `/pages/<slug>` renders one
+  from the same single batch as home. Product, collection, category, brand
+  and search pages have no page entry: their structure is `blocks.product`
+  (gallery, buy box, the ordered `below` modules, app blocks, sticky bars)
+  and `blocks.listing` (layout, toolbar pieces, filters and their order),
+  which the theme editor shows as those pages' blocks. Hidden sections
+  (`hidden: true`) stay saved and media-validated but make no public reads.
   A single-product store uses `pages.homeMode`. The document schema is one named OpenAPI
   component (`StorefrontThemeDocument`) that every theme operation
   references, so a page adds its sections once to the generated contract.

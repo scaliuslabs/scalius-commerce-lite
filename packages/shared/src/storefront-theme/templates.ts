@@ -14,7 +14,6 @@ import {
   type StorefrontThemeBlocks,
 } from "./blocks";
 import { DEFAULT_STOREFRONT_THEME_BRAND } from "./brand";
-import { storefrontListingPageTemplateDefault, storefrontProductPageTemplateDefault } from "./pages";
 import {
   STOREFRONT_THEME_DOCUMENT_VERSION,
   STOREFRONT_TEMPLATE_IDS,
@@ -538,10 +537,7 @@ export function storefrontTemplateTheme(
     tokens: { ...structuredClone(template.tokens), colors: { ...STOREFRONT_THEME_PALETTES[palette] } } as StorefrontThemeTokens,
     brand: { ...DEFAULT_STOREFRONT_THEME_BRAND },
     blocks: structuredClone(template.blocks) as StorefrontThemeBlocks,
-    pages: {
-      home: structuredClone(template.home) as StorefrontSection[], homeMode: { kind: "sections" }, landing: {},
-      product: storefrontProductPageTemplateDefault(), collection: storefrontListingPageTemplateDefault(), search: storefrontListingPageTemplateDefault(),
-    },
+    pages: { home: structuredClone(template.home) as StorefrontSection[], homeMode: { kind: "sections" }, landing: {} },
   };
 }
 

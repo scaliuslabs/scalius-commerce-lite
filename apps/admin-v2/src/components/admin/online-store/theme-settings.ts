@@ -332,14 +332,12 @@ export function templateTypeTokens(theme: StorefrontThemeDocument): TypeTokens {
 /** True while the theme's type tokens are its template's. */
 export function typeTokensAreTemplateDefault(theme: StorefrontThemeDocument): boolean {
   const defaults = templateTypeTokens(theme);
-  return !theme.tokens.legacyTypography && TYPE_TOKEN_KEYS.every((key) => theme.tokens[key] === defaults[key]);
+  return TYPE_TOKEN_KEYS.every((key) => theme.tokens[key] === defaults[key]);
 }
 
 /** The document with some type tokens set. */
 export function setTypeTokens(theme: StorefrontThemeDocument, next: Partial<TypeTokens>): StorefrontThemeDocument {
-  const tokens = { ...theme.tokens, ...next };
-  if (next.typography !== undefined) delete tokens.legacyTypography;
-  return { ...theme, tokens };
+  return { ...theme, tokens: { ...theme.tokens, ...next } };
 }
 
 /** The document with its template's type tokens back. */

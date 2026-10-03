@@ -1,12 +1,41 @@
+// What changed between two theme documents, as short structured entries the
+// dashboard translates ("Hero added to Home", "Colours changed"). Publishing
+// stores the list with each version; the editor also compares a version with
+// the current draft. Entries carry ids and area names only, never content.
+import { z } from "zod";
 import type { StorefrontThemeDocument } from "./document";
 
-/** Stable descriptors let the editor translate the same changes saved in history. */
-export interface ThemeDocumentChange {
-  kind: "added" | "removed" | "reordered" | "settings";
-  page: string;
-  sectionId?: string;
-  path?: string;
-}
+/** Theme-wide settings, grouped the way the editor shows them. */
+export const THEME_CHANGE_AREAS = [
+  "template", "colors", "typography", "style", "brand", "header", "navigation", "footer",
+  "productCard", "listing", "productPage", "homeMode",
+] as const;
+export type ThemeChangeArea = (typeof THEME_CHANGE_AREAS)[number];
+
+/** `home`, or `landing/<slug>`. */
+const pageKey = z.string().max(120);
+const sectionRef = { page: pageKey, sectionId: z.string().max(64), sectionType: z.string().max(64) };
+
+export const themeDocumentChangeSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("section-added"), ...sectionRef }).strict(),
+  z.object({ kind: z.literal("section-removed"), ...sectionRef }).strict(),
+  z.object({ kind: z.literal("section-changed"), ...sectionRef }).strict(),
+  z.object({ kind: z.literal("sections-reordered"), page: pageKey }).strict(),
+  z.object({ kind: z.literal("page-added"), page: pageKey }).strict(),
+  z.object({ kind: z.literal("page-removed"), page: pageKey }).strict(),
+  z.object({ kind: z.literal("page-changed"), page: pageKey }).strict(),
+  z.object({ kind: z.literal("settings-changed"), area: z.enum(THEME_CHANGE_AREAS) }).strict(),
+]);
+export type ThemeDocumentChange = z.infer<typeof themeDocumentChangeSchema>;
+
+/** Most changes a version keeps; the rest are counted. */
+export const THEME_VERSION_CHANGES_MAX = 30;
+
+const TOKEN_AREA: Record<string, ThemeChangeArea> = { colors: "colors", typography: "typography", typeScale: "typography", headingCase: "typography" };
+const BLOCK_AREA: Record<string, ThemeChangeArea> = {
+  topBar: "header", header: "header", navigation: "navigation", desktopNav: "navigation", mobileNav: "navigation",
+  card: "productCard", listing: "listing", product: "productPage", footer: "footer",
+};
 
 function equal(left: unknown, right: unknown): boolean {
   if (Object.is(left, right)) return true;
@@ -16,60 +45,57 @@ function equal(left: unknown, right: unknown): boolean {
   if (left && right && typeof left === "object" && typeof right === "object") {
     const a = left as Record<string, unknown>;
     const b = right as Record<string, unknown>;
-    return Object.keys(a).length === Object.keys(b).length && Object.keys(a).every((key) => Object.hasOwn(b, key) && equal(a[key], b[key]));
+    const keys = Object.keys(a);
+    return keys.length === Object.keys(b).length && keys.every((key) => Object.hasOwn(b, key) && equal(a[key], b[key]));
   }
   return false;
 }
 
-function compareSections(page: string, before: readonly { id: string }[], after: readonly { id: string }[]): ThemeDocumentChange[] {
+type SectionLike = { id: string; type: string };
+
+function compareSections(page: string, before: readonly SectionLike[], after: readonly SectionLike[]): ThemeDocumentChange[] {
   const previous = new Map(before.map((section) => [section.id, section]));
   const current = new Map(after.map((section) => [section.id, section]));
   const changes: ThemeDocumentChange[] = [];
-  for (const section of before) if (!current.has(section.id)) changes.push({ kind: "removed", page, sectionId: section.id });
+  const ref = (section: SectionLike) => ({ page, sectionId: section.id, sectionType: section.type });
+  for (const section of before) if (!current.has(section.id)) changes.push({ kind: "section-removed", ...ref(section) });
   for (const section of after) {
-    if (!previous.has(section.id)) changes.push({ kind: "added", page, sectionId: section.id });
-    else if (!equal(previous.get(section.id), section)) changes.push({ kind: "settings", page, sectionId: section.id });
+    const old = previous.get(section.id);
+    if (!old) changes.push({ kind: "section-added", ...ref(section) });
+    else if (!equal(old, section)) changes.push({ kind: "section-changed", ...ref(section) });
   }
-  if (!equal(before.filter((section) => current.has(section.id)).map((section) => section.id), after.filter((section) => previous.has(section.id)).map((section) => section.id))) {
-    changes.push({ kind: "reordered", page });
-  }
+  const kept = (list: readonly SectionLike[], other: Map<string, SectionLike>) => list.filter((section) => other.has(section.id)).map((section) => section.id);
+  if (!equal(kept(before, current), kept(after, previous))) changes.push({ kind: "sections-reordered", page });
   return changes;
 }
 
+function areas(before: Record<string, unknown>, after: Record<string, unknown>, map: Record<string, ThemeChangeArea>, fallback: ThemeChangeArea): ThemeChangeArea[] {
+  const keys = new Set([...Object.keys(before), ...Object.keys(after)]);
+  return [...keys].filter((key) => !equal(before[key], after[key])).map((key) => map[key] ?? fallback);
+}
+
+/** The changes from `before` to `after`, in a stable order: pages first, then theme settings. */
 export function compareThemeDocuments(before: StorefrontThemeDocument, after: StorefrontThemeDocument): ThemeDocumentChange[] {
   const changes = compareSections("home", before.pages.home, after.pages.home);
-  for (const key of Object.keys(after) as Array<keyof StorefrontThemeDocument>) {
-    if (key !== "pages" && key !== "version" && !equal(before[key], after[key])) changes.push({ kind: "settings", page: "theme", path: key });
+  const slugs = new Set([...Object.keys(before.pages.landing), ...Object.keys(after.pages.landing)]);
+  for (const slug of slugs) {
+    const page = `landing/${slug}`;
+    const old = before.pages.landing[slug];
+    const next = after.pages.landing[slug];
+    if (!old) changes.push({ kind: "page-added", page });
+    else if (!next) changes.push({ kind: "page-removed", page });
+    else {
+      if (old.title !== next.title || old.description !== next.description) changes.push({ kind: "page-changed", page });
+      changes.push(...compareSections(page, old.sections, next.sections));
+    }
   }
-  const previous = before.pages as unknown as Record<string, unknown>;
-  const current = after.pages as unknown as Record<string, unknown>;
-  for (const key of new Set([...Object.keys(previous), ...Object.keys(current)])) {
-    if (key === "home") continue;
-    if (key === "landing") {
-      const a = (previous[key] ?? {}) as Record<string, { title: string; sections: { id: string }[]; overrideCms: boolean }>;
-      const b = (current[key] ?? {}) as typeof a;
-      for (const slug of new Set([...Object.keys(a), ...Object.keys(b)])) {
-        const page = `landing/${slug}`;
-        if (!a[slug] || !b[slug]) changes.push({ kind: b[slug] ? "added" : "removed", page });
-        else {
-          changes.push(...compareSections(page, a[slug].sections, b[slug].sections));
-          if (a[slug].title !== b[slug].title || a[slug].overrideCms !== b[slug].overrideCms) changes.push({ kind: "settings", page });
-        }
-      }
-    } else if (current[key] && typeof current[key] === "object" && "blocks" in current[key]) {
-      const a = previous[key] as { blocks: { id: string }[] } | undefined;
-      const b = current[key] as { blocks: { id: string }[] };
-      changes.push(...compareSections(key, a?.blocks ?? [], b.blocks));
-    } else if (!equal(previous[key], current[key])) changes.push({ kind: "settings", page: key });
-  }
+  const changed = new Set<ThemeChangeArea>([
+    ...(before.template === after.template ? [] : ["template" as const]),
+    ...areas(before.tokens, after.tokens, TOKEN_AREA, "style"),
+    ...(equal(before.brand, after.brand) ? [] : ["brand" as const]),
+    ...areas(before.blocks, after.blocks, BLOCK_AREA, "style"),
+    ...(equal(before.pages.homeMode, after.pages.homeMode) ? [] : ["homeMode" as const]),
+  ]);
+  for (const area of THEME_CHANGE_AREAS) if (changed.has(area)) changes.push({ kind: "settings-changed", area });
   return changes;
-}
-
-export function formatThemeDocumentChanges(changes: readonly ThemeDocumentChange[]): string[] {
-  return changes.map((change) => {
-    const subject = `${change.page}${change.sectionId ? `: ${change.sectionId}` : ""}`;
-    if (change.kind === "settings") return `${subject}: ${change.path ? `${change.path} settings` : "settings"} changed`;
-    if (change.kind === "reordered") return `${subject}: sections reordered`;
-    return `${subject}: ${change.sectionId ? "section" : "page"} ${change.kind}`;
-  });
 }

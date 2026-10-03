@@ -5,47 +5,63 @@ import v3 from "./fixtures/v3.json";
 import v4 from "./fixtures/v4.json";
 import v5 from "./fixtures/v5.json";
 import v6 from "./fixtures/v6.json";
+import v7 from "./fixtures/v7.json";
 import partialV1 from "./fixtures/v1-partial.json";
 import colorsV1 from "./fixtures/v1-colors.json";
 import {
-  DEFAULT_STOREFRONT_THEME, EMPTY_STORE_SHAPE, homeSectionRequests, homeSectionsShowDeliveryFacts,
+  DEFAULT_STOREFRONT_THEME, EMPTY_STORE_SHAPE, STOREFRONT_THEME_DOCUMENT_VERSION, homeSectionRequests, homeSectionsShowDeliveryFacts,
   parseStoredStorefrontThemeDocument, resolveStorefrontTheme, storefrontSectionDefault,
-  storefrontThemeDocumentSchema, upgradeThemeDocument, buildStorefrontTokenCss,
+  storefrontThemeDocumentSchema, upgradeThemeDocument,
 } from "../storefront-theme";
 
-const historicalFixtures = [v1, v2, v3, v4, v5, v6];
-const fixture = (version: number) => JSON.parse(JSON.stringify(historicalFixtures[version - 1]));
+const goldenFixtures = [v1, v2, v3, v4, v5, v6, v7];
+const fixture = (version: number) => JSON.parse(JSON.stringify(goldenFixtures[version - 1]));
+type Section = { id: string; settings: Record<string, unknown> };
 
 describe("step-wise stored theme upgrades", () => {
-  for (const version of [1, 2, 3, 4, 5, 6]) {
-    it(`upgrades the historical v${version} fixture without changing merchant content or input`, () => {
+  it("has a golden fixture for every version, the current one included", () => {
+    expect(goldenFixtures).toHaveLength(STOREFRONT_THEME_DOCUMENT_VERSION);
+    goldenFixtures.forEach((each, index) => expect((each as { version: number }).version).toBe(index + 1));
+    // The current fixture is a valid document as stored; a future step reads it.
+    expect(storefrontThemeDocumentSchema.safeParse(fixture(STOREFRONT_THEME_DOCUMENT_VERSION)).success).toBe(true);
+  });
+
+  for (const version of [1, 2, 3, 4, 5, 6, 7]) {
+    it(`upgrades the golden v${version} fixture to a valid current document, keeping merchant content and the input`, () => {
       const stored = fixture(version);
       const before = structuredClone(stored);
       const upgraded = upgradeThemeDocument(stored);
       expect(stored).toEqual(before);
       expect(storefrontThemeDocumentSchema.safeParse(upgraded).success).toBe(true);
-      expect(upgraded.version).toBe(7);
+      expect(upgraded.version).toBe(STOREFRONT_THEME_DOCUMENT_VERSION);
       expect(upgradeThemeDocument(upgraded)).toEqual(upgraded);
       expect(parseStoredStorefrontThemeDocument(JSON.stringify(stored))).toEqual(upgraded);
+      // Colours: the merchant's primary survives every step.
       expect(upgraded.tokens.colors.primary).toBe("#123456");
+      // Fonts: independent v1/v2 fonts map to the pairing that matches them.
       expect(upgraded.tokens.typography).toBe(version === 1 ? "retail" : "heritage");
-      if (version <= 2) {
-        const fonts = version === 1 ? stored.typography : stored.tokens.typography;
-        expect(upgraded.tokens.legacyTypography).toEqual({ heading: fonts.heading, body: fonts.body });
-      }
       if (version >= 4) {
         expect(upgraded.tokens).toEqual(stored.tokens);
-        expect(upgraded.pages.home.map((section) => section.id)).toEqual(stored.pages.home.map((section: { id: string }) => section.id));
-        expect(upgraded.pages.home.find((section) => section.id === "merchant-banner")?.settings).toEqual(stored.pages.home.find((section: { id: string }) => section.id === "merchant-banner").settings);
+        expect(upgraded.pages.home.map((section) => section.id)).toEqual(stored.pages.home.map((section: Section) => section.id));
+        // Copy and images: a stored banner's settings come through exactly.
+        const banner = (sections: readonly Section[]) => sections.find((section) => section.id === "merchant-banner")?.settings;
+        expect(banner(upgraded.pages.home as Section[])).toEqual(banner(stored.pages.home));
+      }
+      if (version >= 6) {
+        // Stored block settings win over today's defaults (v6 retired a few never-rendered ones).
+        for (const slot of ["header", "footer"] as const) {
+          expect(upgraded.blocks[slot].settings).toMatchObject(stored.blocks[slot].settings);
+        }
       }
       if (version >= 2) expect(upgraded.pages.home.find((section) => section.id === "merchant-story")).toMatchObject({
         type: "editorial", settings: { layout: "rich-text", heading: "আমাদের গল্প", body: "Made in Rajshahi. নিজের হাতে তৈরি।" },
       });
-      if (version === 6) {
+      if (version >= 6) {
         expect(upgraded.brand).toEqual(stored.brand);
         expect(upgraded.pages.home[0]).toEqual(stored.pages.home[0]);
       }
-      expect(storefrontThemeDocumentSchema.safeParse(stored).success).toBe(false);
+      if (version === 7) expect(upgraded).toEqual(stored);
+      else expect(storefrontThemeDocumentSchema.safeParse(stored).success).toBe(false);
     });
   }
 
@@ -99,37 +115,44 @@ describe("step-wise stored theme upgrades", () => {
     }
   });
 
-  it("keeps the original independent font stacks instead of substituting a new pairing", () => {
-    const theme = upgradeThemeDocument(fixture(2));
-    expect(buildStorefrontTokenCss(theme.tokens)).toMatchObject({
-      "theme-font-heading": 'Georgia, "Times New Roman", ui-serif, serif',
-      "theme-font-body": 'Optima, Candara, "Noto Sans", ui-sans-serif, sans-serif',
-    });
+  it("maps every pre-v3 font choice to the pairing with the same faces", () => {
+    const pairing = (heading: string, body: string) => {
+      const legacy = fixture(2);
+      legacy.tokens.typography = { heading, body };
+      return upgradeThemeDocument(legacy).tokens.typography;
+    };
+    expect(pairing("editorial", "humanist")).toBe("heritage");
+    expect(pairing("editorial", "system")).toBe("editorial");
+    expect(pairing("modern", "humanist")).toBe("fresh");
+    expect(pairing("system", "modern")).toBe("retail");
   });
 
-  it("rejects malformed and future documents and requires v7 on writes", () => {
-    for (const invalid of [null, [], {}, { version: 0 }, { version: 8 }, { ...DEFAULT_STOREFRONT_THEME, extra: true }]) {
+  it("leaves a variant today's registry no longer knows for the strict parse to reject", () => {
+    const legacy = fixture(6);
+    legacy.blocks.header.variant = "retired-header";
+    expect(() => upgradeThemeDocument(legacy)).toThrow();
+    expect(parseStoredStorefrontThemeDocument(JSON.stringify(legacy))).toBeNull();
+  });
+
+  it("rejects malformed and future documents", () => {
+    for (const invalid of [null, [], {}, { version: 0 }, { version: STOREFRONT_THEME_DOCUMENT_VERSION + 1 }, { ...DEFAULT_STOREFRONT_THEME, extra: true }]) {
       expect(() => upgradeThemeDocument(invalid)).toThrow();
     }
     expect(parseStoredStorefrontThemeDocument(JSON.stringify({ version: 3, tokens: {} }))).toBeNull();
-    expect(storefrontThemeDocumentSchema.safeParse(fixture(6)).success).toBe(false);
   });
 });
 
-describe("theme page templates", () => {
-  it("accepts bounded landing pages and reordered/hidden fixed commerce blocks", () => {
+describe("landing pages", () => {
+  it("accepts bounded landing pages under non-reserved handles", () => {
     const theme = structuredClone(DEFAULT_STOREFRONT_THEME);
-    theme.pages.landing["eid-offer"] = { title: "ঈদ অফার", sections: [storefrontSectionDefault("editorial", "story")], overrideCms: true };
-    theme.pages.product.blocks.reverse();
-    theme.pages.product.blocks[0]!.hidden = true;
+    const page = { title: "ঈদ অফার", description: "", sections: [storefrontSectionDefault("editorial", "story")] };
+    theme.pages.landing["eid-offer"] = page;
     expect(storefrontThemeDocumentSchema.safeParse(theme).success).toBe(true);
-    const duplicate = structuredClone(theme);
-    duplicate.pages.product.blocks[0] = duplicate.pages.product.blocks[1]!;
-    expect(storefrontThemeDocumentSchema.safeParse(duplicate).success).toBe(false);
     for (const slug of ["products", "pages", "bad/slug", "../escape", "New-Page"]) {
-      expect(storefrontThemeDocumentSchema.safeParse({ ...theme, pages: { ...theme.pages, landing: { [slug]: theme.pages.landing["eid-offer"] } } }).success, slug).toBe(false);
+      expect(storefrontThemeDocumentSchema.safeParse({ ...theme, pages: { ...theme.pages, landing: { [slug]: page } } }).success, slug).toBe(false);
     }
-    theme.pages.landing = Object.fromEntries(Array.from({ length: 21 }, (_, index) => [`page-${index}`, theme.pages.landing["eid-offer"]!]));
+    expect(storefrontThemeDocumentSchema.safeParse({ ...theme, pages: { ...theme.pages, landing: { eid: { ...page, title: " " } } } }).success).toBe(false);
+    theme.pages.landing = Object.fromEntries(Array.from({ length: 21 }, (_, index) => [`page-${index}`, page]));
     expect(storefrontThemeDocumentSchema.safeParse(theme).success).toBe(false);
   });
 
@@ -138,13 +161,12 @@ describe("theme page templates", () => {
     const delivery = { ...storefrontSectionDefault("usp-strip", "delivery"), hidden: true };
     const rail = { ...storefrontSectionDefault("product-rail", "products"), hidden: true };
     theme.pages.home = [delivery, rail];
-    theme.pages.landing["offer"] = { title: "Offer", sections: [delivery, rail], overrideCms: false };
+    theme.pages.landing.offer = { title: "Offer", description: "", sections: [delivery, rail] };
     expect(homeSectionRequests(theme.pages.home).lists).toEqual([]);
     expect(homeSectionsShowDeliveryFacts(theme.pages.home)).toBe(false);
     const resolved = resolveStorefrontTheme(theme, EMPTY_STORE_SHAPE);
     expect(resolved.pages.home).toEqual([]);
     expect(resolved.pages.landing.offer!.sections).toEqual([]);
-    expect(resolved.pages.product).toEqual(theme.pages.product);
     expect(theme.pages.home).toHaveLength(2);
   });
 });

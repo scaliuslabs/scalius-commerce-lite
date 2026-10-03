@@ -25,7 +25,7 @@ import {
 } from "./blocks";
 import { storefrontThemeBrandSchema } from "./brand";
 import { storefrontSectionListSchema } from "./sections";
-import { storefrontLandingPagesSchema, storefrontListingPageTemplateSchema, storefrontProductPageTemplateSchema } from "./pages";
+import { storefrontLandingPagesSchema } from "./pages";
 import { upgradeThemeDocumentSteps } from "./upgrade";
 import { buildStorefrontTokenCss, storefrontThemeTokensSchema, type StorefrontThemeTokens } from "./tokens";
 
@@ -118,15 +118,15 @@ export const storefrontThemeDocumentSchema = z.object({
   /** The logo, its width, the footer logo and the tab icon (media ids). */
   brand: storefrontThemeBrandSchema,
   blocks: storefrontThemeBlocksSchema,
-  /** Section pages and fixed commerce page blocks share one draft and publish. */
+  /**
+   * Section pages: the homepage and landing pages (`/pages/<slug>`). Product,
+   * collection and search pages take their structure from `blocks`.
+   */
   pages: z.object({
     home: storefrontSectionListSchema,
     /** What `/` shows: the sections, or one product's page. */
     homeMode: storefrontHomeModeSchema,
     landing: storefrontLandingPagesSchema,
-    product: storefrontProductPageTemplateSchema,
-    collection: storefrontListingPageTemplateSchema,
-    search: storefrontListingPageTemplateSchema,
   }).strict(),
 }).strict().superRefine((document, context) => {
   for (const { text, surface, ratio } of listStorefrontThemeDocumentContrastProblems(document)) {

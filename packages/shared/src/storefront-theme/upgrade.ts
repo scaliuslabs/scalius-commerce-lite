@@ -1,10 +1,11 @@
-// Historical read conversions only. A new document version adds one entry
-// to THEME_UPGRADES; current writes never pass through these conversions.
+// Historical read conversions only (upgrade.md). Each step is structural and
+// uses only literals frozen with the version it reads, never today's
+// registries, so a later version never changes what an older step produces.
+// Today's defaults enter once, after the last step (`withCurrentDefaults`).
+// A new document version adds one entry to THEME_UPGRADES.
 import { z } from "zod";
-import { STOREFRONT_BLOCK_SLOTS, STOREFRONT_NAVIGATION_LINK_BUDGET, storefrontBlockDefault, storefrontVariantSpec } from "./blocks";
-import { DEFAULT_STOREFRONT_THEME_BRAND } from "./brand";
-import { storefrontListingPageTemplateDefault, storefrontProductPageTemplateDefault } from "./pages";
-import { STOREFRONT_SECTION_REGISTRY, storefrontSectionDefault, type StorefrontSectionType } from "./sections";
+import { STOREFRONT_BLOCK_REGISTRY } from "./blocks";
+import { STOREFRONT_SECTION_REGISTRY } from "./sections";
 
 type RecordValue = Record<string, unknown>;
 // Pre-v2 defaults were CSS colours, not the later retail palette.
@@ -100,56 +101,58 @@ function v1to2(doc: RecordValue): RecordValue {
   };
 }
 
+/** v3 replaced independent heading and body fonts with curated pairings. */
 function v2to3(doc: RecordValue): RecordValue {
   const tokens = object(doc.tokens);
   const font = object(tokens.typography);
   const pairing = font.heading === "editorial" ? (font.body === "humanist" ? "heritage" : "editorial")
     : font.body === "humanist" ? "fresh" : "retail";
-  return { ...doc, version: 3, tokens: { ...tokens, typography: pairing, legacyTypography: font, buttonShape: "radius" },
+  return { ...doc, version: 3, tokens: { ...tokens, typography: pairing, buttonShape: "radius" },
     layout: { ...object(doc.layout), navigation: "menu", mobileNavigation: "drawer" } };
 }
 
+const variant = (id: string) => ({ variant: id, settings: {} });
+
 function legacySection(value: unknown): RecordValue {
   const section = object(value);
-  const type = choice(section.type, { hero: "hero", collections: "collections", categories: "category-tiles", delivery: "usp-strip", rich_text: "editorial" }) as StorefrontSectionType;
-  const defaults = storefrontSectionDefault(type, String(section.id));
-  return { ...section, type, settings: type === "editorial"
-    ? { layout: "rich-text", ...object(section.settings) }
-    : { ...defaults.settings, ...object(section.settings) } };
+  const type = choice(section.type, { hero: "hero", collections: "collections", categories: "category-tiles", delivery: "usp-strip", rich_text: "editorial" });
+  const settings = object(section.settings);
+  return { ...section, type, settings: type === "editorial" ? { layout: "rich-text", ...settings } : settings };
 }
 
+/** v4 turned the layout choices into block variants of a named template. */
 function v3to4(doc: RecordValue): RecordValue {
   const tokens = object(doc.tokens);
   const layout = object(doc.layout);
   const components = object(tokens.components);
-  const pick = storefrontBlockDefault;
   return {
     version: 4, template: "department-mall",
     tokens: {
-      colors: tokens.colors, typography: tokens.typography, ...(tokens.legacyTypography ? { legacyTypography: tokens.legacyTypography } : {}), radius: tokens.radius, buttonShape: tokens.buttonShape,
+      colors: tokens.colors, typography: tokens.typography, radius: tokens.radius, buttonShape: tokens.buttonShape,
       typeScale: doc.legacyTypeScale ?? "retail", headingCase: "sentence", density: doc.legacyDensity ?? layout.density,
       surface: choice(components.cards, { bordered: "hairline", elevated: "raised", flat: "flat" }),
       imageRatio: layout.card === "portrait" ? "portrait" : "square", imageFit: "cover", headerTone: "light",
       container: tokens.containerWidth === "standard" ? "1200" : "1440",
     },
     blocks: {
-      topBar: pick("topBar", "utility"),
-      header: pick("header", choice(layout.header, { classic: "mall-search", centered: "heritage-nav", marketplace: "marketplace-search" })),
-      desktopNav: pick("desktopNav", choice(layout.navigation, { menu: "dropdown", mega: "mega-panel", pills: "sticky-category-bar", sidebar: "departments-rail" })),
-      mobileNav: pick("mobileNav", choice(layout.mobileNavigation, { drawer: "accordion-drawer", tabs: "bottom-tabs" })),
-      card: pick("card", choice(layout.card, { standard: "standard", portrait: "portrait", quick: "quick-add" })),
-      listing: { layout: pick("listing", "grid"), toolbar: ["breadcrumb", "result-count", "sort", "applied-chips"], phoneLayout: "grid", paging: "numbered" },
+      topBar: variant("utility"),
+      header: variant(choice(layout.header, { classic: "mall-search", centered: "heritage-nav", marketplace: "marketplace-search" })),
+      desktopNav: variant(choice(layout.navigation, { menu: "dropdown", mega: "mega-panel", pills: "sticky-category-bar", sidebar: "departments-rail" })),
+      mobileNav: variant(choice(layout.mobileNavigation, { drawer: "accordion-drawer", tabs: "bottom-tabs" })),
+      card: variant(choice(layout.card, { standard: "standard", portrait: "portrait", quick: "quick-add" })),
+      listing: { layout: variant("grid"), toolbar: ["breadcrumb", "result-count", "sort", "applied-chips"], phoneLayout: "grid", paging: "numbered" },
       product: {
-        gallery: pick("gallery", choice(layout.productPage, { gallery: "classic", filmstrip: "thumbs-below", stacked: "stacked" })),
-        buyBox: pick("buyBox", "mall"), below: ["description", "reviews", "related"],
+        gallery: variant(choice(layout.productPage, { gallery: "classic", filmstrip: "thumbs-below", stacked: "stacked" })),
+        buyBox: variant("mall"), below: ["description", "reviews", "related"],
         sticky: { phoneTop: "none", phoneBottom: "buy-bar", desktop: "none" },
       },
-      footer: pick("footer", choice(layout.footer, { columns: "minimal-columns", compact: "newsletter-grey", contact: "support-dark" })),
+      footer: variant(choice(layout.footer, { columns: "minimal-columns", compact: "newsletter-grey", contact: "support-dark" })),
     },
     pages: { home: array(doc.sections).map(legacySection) },
   };
 }
 
+/** v5 separated a listing's arrangement from its facets and made the navigation source explicit. */
 function v4to5(doc: RecordValue): RecordValue {
   const blocks = object(doc.blocks);
   const listing = object(blocks.listing);
@@ -157,18 +160,15 @@ function v4to5(doc: RecordValue): RecordValue {
   const layoutSettings = object(layout.settings);
   // v4's sidebar/bar layouts combined arrangement and facets; v5 separated them.
   const filterStyle = layout.variant === "shelves" ? "bar-dropdowns" : layout.variant === "bar-drawer" ? "drawer" : "sidebar-dense";
-  const filters = listing.filters ?? {
-    style: filterStyle,
-    openByDefault: filterStyle.startsWith("sidebar"),
-  };
+  const filters = listing.filters ?? { style: filterStyle, openByDefault: filterStyle.startsWith("sidebar") };
   const { facets: _facets, facetsOpen: _facetsOpen, ...settings } = layoutSettings;
   return { ...doc, version: 5, blocks: {
-    ...blocks, navigation: blocks.navigation ?? { source: "tree+menu", maxTopItems: 8, linkBudget: STOREFRONT_NAVIGATION_LINK_BUDGET },
+    ...blocks, navigation: blocks.navigation ?? { source: "tree+menu", maxTopItems: 8, linkBudget: 150 },
     listing: { ...listing, layout: { ...layout, variant: layout.variant === "sidebar-grid" || layout.variant === "bar-drawer" ? "grid" : layout.variant, settings }, filters },
   } };
 }
 
-/** v6 materialized template-only page chrome, retired unrendered options and added one-draft content. */
+/** v6 materialized template-only page chrome, retired options that never rendered, and added brand and home mode. */
 function v5to6(doc: RecordValue): RecordValue {
   const blocks = object(doc.blocks);
   const listing = object(blocks.listing);
@@ -186,52 +186,96 @@ function v5to6(doc: RecordValue): RecordValue {
     "mass-retail": { searchLayout: "list", phoneBar: "pill-row", maxColumns: 4 },
     "showcase-landing": { links: "tabs" },
   };
-  const upgradedBlocks: RecordValue = {
-    ...blocks,
-    listing: {
-      searchLayout: "same", descriptionPlacement: "below", surface: "muted", gutter: "inset", band: "standard",
-      phoneBar: "standard", links: "chips", phoneBanner: true, maxColumns: null, ...chrome[template], ...listing,
-      filters: { searchPlacement: template === "spec-catalogue" ? "drawer" : "same", ruled: template === "fashion-value", ...filters },
-    },
-    product: { ...product, below: array(product.below).filter((id) => id !== "questions"),
-      sticky: { ...sticky, desktop: sticky.desktop === "info-column" || sticky.desktop === "side-rail" ? "none" : sticky.desktop } },
+  const retire = (block: unknown): RecordValue => {
+    const { subBrandRow: _subBrandRow, trendingQueries: _trendingQueries, ...settings } = object(object(block).settings);
+    return { ...object(block), settings };
   };
-  for (const slot of STOREFRONT_BLOCK_SLOTS) {
-    const block = slot === "listing" ? object(object(upgradedBlocks.listing).layout)
-      : slot === "gallery" || slot === "buyBox" ? object(object(upgradedBlocks.product)[slot]) : object(upgradedBlocks[slot]);
-    const spec = storefrontVariantSpec(slot, String(block.variant));
-    if (!spec) throw new Error(`Unknown historical theme block: ${String(block.variant)}.`);
-    const settings = object(block.settings);
-    delete settings.subBrandRow;
-    delete settings.trendingQueries;
-    block.settings = { ...structuredClone(spec.defaults) as RecordValue, ...settings };
-  }
   const pages = object(doc.pages);
   const home = array(pages.home).map((value) => {
     const section = object(value);
-    if (section.type === "app") return section;
-    const type = String(section.type) as StorefrontSectionType;
-    const spec = STOREFRONT_SECTION_REGISTRY[type];
-    if (!spec) throw new Error(`Unknown historical section: ${type}.`);
-    const settings = object(section.settings);
-    if (type === "deal-block") delete settings.endsAt;
-    return { ...section, settings: type === "editorial" ? settings : { ...structuredClone(spec.defaults), ...settings } };
+    if (section.type !== "deal-block") return section;
+    const { endsAt: _endsAt, ...settings } = object(section.settings);
+    return { ...section, settings };
   });
-  return { ...doc, version: 6, brand: doc.brand ?? { ...DEFAULT_STOREFRONT_THEME_BRAND },
-    blocks: upgradedBlocks, pages: { ...pages, home, homeMode: pages.homeMode ?? { kind: "sections" } } };
+  return {
+    ...doc,
+    version: 6,
+    brand: doc.brand ?? { logo: null, logoWidth: 180, footerLogo: null, favicon: null },
+    blocks: {
+      ...blocks,
+      ...Object.fromEntries(["topBar", "header", "desktopNav", "mobileNav", "card", "footer"].map((slot) => [slot, retire(blocks[slot])])),
+      listing: {
+        searchLayout: "same", descriptionPlacement: "below", surface: "muted", gutter: "inset", band: "standard",
+        phoneBar: "standard", links: "chips", phoneBanner: true, maxColumns: null, ...chrome[template], ...listing,
+        layout: retire(listing.layout),
+        filters: { searchPlacement: template === "spec-catalogue" ? "drawer" : "same", ruled: template === "fashion-value", ...filters },
+      },
+      product: {
+        ...product, gallery: retire(product.gallery), buyBox: retire(product.buyBox),
+        below: array(product.below).filter((id) => id !== "questions"),
+        sticky: { ...sticky, desktop: sticky.desktop === "info-column" || sticky.desktop === "side-rail" ? "none" : sticky.desktop },
+      },
+    },
+    pages: { ...pages, home, homeMode: pages.homeMode ?? { kind: "sections" } },
+  };
 }
 
+/** v7 added landing pages. */
 function v6to7(doc: RecordValue): RecordValue {
-  return { ...doc, version: 7, pages: {
-    ...object(doc.pages), landing: {}, product: storefrontProductPageTemplateDefault(),
-    collection: storefrontListingPageTemplateDefault(), search: storefrontListingPageTemplateDefault(),
-  } };
+  return { ...doc, version: 7, pages: { ...object(doc.pages), landing: {} } };
 }
 
 const THEME_UPGRADES: Record<number, (document: RecordValue) => RecordValue> = {
   1: v1to2, 2: v2to3, 3: v3to4, 4: v4to5, 5: v5to6, 6: v6to7,
 };
 
+const BLOCK_SLOTS = ["topBar", "header", "desktopNav", "mobileNav", "card", "footer"] as const;
+
+/**
+ * Settings an upgraded document never stored take today's defaults; stored
+ * values win. Variants and section types the registries no longer know stay
+ * as stored, so the strict parse rejects them rather than guessing.
+ */
+function withCurrentDefaults(doc: RecordValue): RecordValue {
+  const fill = (block: unknown, defaults: unknown): RecordValue => {
+    const value = object(block);
+    return defaults === undefined ? value : { ...value, settings: { ...structuredClone(defaults) as RecordValue, ...object(value.settings) } };
+  };
+  const blockDefaults = (slot: keyof typeof STOREFRONT_BLOCK_REGISTRY, block: unknown) =>
+    (STOREFRONT_BLOCK_REGISTRY[slot] as Record<string, { defaults: unknown } | undefined>)[String(object(block).variant)]?.defaults;
+  const section = (value: unknown): RecordValue => {
+    const each = object(value);
+    // Editorial settings are one of several layouts: only the stored layout's own fields apply.
+    if (each.type === "editorial") return each;
+    return fill(each, (STOREFRONT_SECTION_REGISTRY as Record<string, { defaults: unknown } | undefined>)[String(each.type)]?.defaults);
+  };
+  const blocks = object(doc.blocks);
+  const listing = object(blocks.listing);
+  const product = object(blocks.product);
+  const pages = object(doc.pages);
+  return {
+    ...doc,
+    blocks: {
+      ...blocks,
+      ...Object.fromEntries(BLOCK_SLOTS.map((slot) => [slot, fill(blocks[slot], blockDefaults(slot, blocks[slot]))])),
+      listing: { ...listing, layout: fill(listing.layout, blockDefaults("listing", listing.layout)) },
+      product: {
+        ...product,
+        gallery: fill(product.gallery, blockDefaults("gallery", product.gallery)),
+        buyBox: fill(product.buyBox, blockDefaults("buyBox", product.buyBox)),
+      },
+    },
+    pages: {
+      ...pages,
+      home: array(pages.home).map(section),
+      landing: Object.fromEntries(Object.entries(object(pages.landing)).map(([slug, page]) => [
+        slug, { ...object(page), sections: array(object(page).sections).map(section) },
+      ])),
+    },
+  };
+}
+
+/** The stored document converted to `currentVersion` (a copy; the input is never changed). */
 export function upgradeThemeDocumentSteps(value: unknown, currentVersion: number): unknown {
   let doc = object(structuredClone(value));
   if (doc.version === undefined) {
@@ -239,12 +283,13 @@ export function upgradeThemeDocumentSteps(value: unknown, currentVersion: number
     else if (Object.keys(doc).length > 0 && Object.keys(doc).every((key) => Object.hasOwn(V1_COLORS, key))) doc = { version: 1, colors: doc };
   }
   if (!Number.isInteger(doc.version) || Number(doc.version) < 1 || Number(doc.version) > currentVersion) throw new Error("Unsupported theme document version.");
+  if (doc.version === currentVersion) return doc;
   while (doc.version !== currentVersion) {
     const step = THEME_UPGRADES[Number(doc.version)];
     if (!step) throw new Error("Missing theme document upgrade step.");
     doc = step(doc);
   }
-  return doc;
+  return withCurrentDefaults(doc);
 }
 
 /** CSS Color 4 conversions: https://www.w3.org/TR/css-color-4/#color-conversion-code */

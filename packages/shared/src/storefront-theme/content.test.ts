@@ -57,7 +57,7 @@ describe("theme content", () => {
 
   it("carries the merchant's content into another template", () => {
     const source = withContent();
-    source.pages.landing.offer = { title: "ঈদ অফার", sections: [source.pages.home[0]!], overrideCms: true };
+    source.pages.landing.offer = { title: "ঈদ অফার", description: "", sections: [source.pages.home[0]!] };
     const next = storefrontThemeWithContent(storefrontTemplateTheme("heritage-editorial"), source);
     expect(storefrontThemeDocumentSchema.safeParse(next).success).toBe(true);
     expect(next.template).toBe("heritage-editorial");
@@ -104,7 +104,7 @@ describe("theme media references", () => {
     const { storefrontThemeMediaReferences } = await import("./content");
     const theme = withContent();
     const hero = { ...theme.pages.home[0]!, hidden: true };
-    theme.pages.landing.offer = { title: "Offer", sections: [hero], overrideCms: false };
+    theme.pages.landing.offer = { title: "Offer", description: "", sections: [hero] };
     expect(storefrontThemeMediaReferences(theme)).toContainEqual({ path: "pages.landing.offer.sections.0.settings.slides.0.image", mediaId: "media_hero" });
   });
 });
