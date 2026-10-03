@@ -6,10 +6,10 @@ No checkout, order or payment code calls this domain. An installed app that must
 
 ## Entries and layer
 
-- `index.ts`: the service functions, `FraudCheckerProvider`, the port types (`FraudAdapter`, `FraudCheckProviderConfig`, `FraudProvider`), `builtInFraudChecker()` and the four built-in checkers. It re-exports `browser.ts`.
-- `browser.ts`: `provider-definitions.ts` (`FRAUD_CHECK_PROVIDER_TYPES`, `FRAUD_CHECK_PROVIDER_DEFINITIONS`, `getFraudCheckProviderDefinition()`, `isFraudCheckProviderType()`). The dashboard uses it to show the right credential fields.
+- `index.ts` exports the service functions, the port types, `builtInFraudChecker()` and the four built-in checkers. It re-exports `browser.ts`.
+- `browser.ts` holds `provider-definitions.ts` (`FRAUD_CHECK_PROVIDER_DEFINITIONS`). The dashboard uses it to show the right credential fields.
 
-Layer L0: the domain imports no other domain (`scripts/core-domain-graph.allow.json` has no `fraud-checker` edge). It uses `packages/core/src/integrations/provider-port.ts` for the port binding.
+Layer L0: the domain imports no other domain (`scripts/core-domain-graph.allow.json`). It uses `packages/core/src/integrations/provider-port.ts` for the port binding.
 
 ## Owns
 
@@ -45,22 +45,16 @@ With no matching status: 0 parcels gives `unknown`; a cancel rate of 50% or more
 
 A row whose `providerType` is `<plugin id>:<provider id>` names an installed app's fraud provider. The row stores only `name`, `isActive` and `providerType`; the app's own settings hold the credentials.
 
-The lookup reaches the app through the `AppProviders` lookup that the API passes in (`apps/api/src/plugins/providers/app-providers.ts`). It fails closed with `ServiceUnavailableError` when the app is not installed, active, approved for the port or runnable, or when its settings are incomplete. A built-in checker's error is masked as "Fraud check lookup failed"; an app's `ProviderError` message is kept.
+The API passes the app lookup in (`apps/api/src/plugins/providers/app-providers.ts`). The lookup fails closed with `ServiceUnavailableError` when the app is not installed, active, approved for the port or runnable, or when its settings are incomplete. A built-in checker's error is masked as "Fraud check lookup failed"; an app's `ProviderError` message is kept.
 
 ## Service functions
 
-| Function | Behavior |
-|----------|----------|
-| `getFraudProviders(db, key?, { limit, offset }?)` | Lists saved checkers, newest first. Skips rows that fail to decrypt or parse. |
-| `getFraudProvider(db, id, key?)` | One checker, or `null` when missing or unreadable. |
-| `saveFraudProvider(db, provider, key)` | Creates or updates. A built-in checker needs `name`, a public HTTPS `apiUrl` and its preset's credentials. |
-| `deleteFraudProvider(db, id)` | Hard delete. Throws `NotFoundError` when missing. |
-| `testFraudProvider(db, id, key?, apps?)` | The checker's `testConnection`, else a lookup of the test number. |
-| `fraudLookup(row, phone, apps?)` | One checker's lookup. |
-| `fraudLookupWithActiveProvider(db, phone, key?, apps?)` | The first active checker's lookup. Throws `NotFoundError` when none is active. |
-| `getFraudProviderUrlIssue(url)` | The reason a URL is not allowed, or `null`. |
+The service functions (list, get, save, delete, test, lookup) are in `index.ts`.
 
-`getFraudProviderUrlIssue()` allows only an absolute public HTTPS URL: no credentials, port other than 443, query, fragment, `localhost`, `.local`, `.internal`, IP address or hostname without a dot.
+- A list skips rows that fail to decrypt or parse. `getFraudProvider` returns `null` for a missing or unreadable row.
+- `saveFraudProvider` needs `name`, a public HTTPS `apiUrl` and the preset's credentials for a built-in checker.
+- `fraudLookupWithActiveProvider` uses the first active checker and throws `NotFoundError` when none is active.
+- `getFraudProviderUrlIssue()` allows only an absolute public HTTPS URL: no credentials, port other than 443, query, fragment, `localhost`, `.local`, `.internal`, IP address or hostname without a dot.
 
 ## Routes
 
@@ -87,5 +81,3 @@ A write calls `requireEncryptionKey()` first. A row that the key cannot read cou
 
 - An app: declare `providers.fraud` in the app manifest and implement it with `defineFraudProvider` in `packages/plugin-sdk`.
 - A built-in one: add a `FraudAdapter` in `provider.ts`, an entry in `BUILT_IN_FRAUD_CHECKERS` and a preset in `FRAUD_CHECK_PROVIDER_DEFINITIONS`.
-
-Tests: `fraud-checker.service.test.ts`, `provider.test.ts`.
