@@ -12,12 +12,13 @@ const EVERYTHING = [...HOME_AND_ORDERS, PERMISSIONS.DASHBOARD_ANALYTICS];
 
 let database: SqliteTestDatabase;
 
+/** A same-currency order: revenue sums its shop total, which equals its total. */
 function insertOrder(id: string, customerName: string, totalMinor: number, createdAt: Date) {
     database.sqlite.prepare(`
       INSERT INTO orders (id, customer_name, customer_phone, shipping_address, city, zone,
-        shipping_amount_minor, total_amount_minor, status, created_at)
-      VALUES (?, ?, '+8801711111111', 'Dhaka', 'dhaka', 'zone_1', 0, ?, 'processing', ?)
-    `).run(id, customerName, totalMinor, Math.floor(createdAt.getTime() / 1000));
+        shipping_amount_minor, total_amount_minor, total_shop_minor, status, created_at)
+      VALUES (?, ?, '+8801711111111', 'Dhaka', 'dhaka', 'zone_1', 0, ?, ?, 'processing', ?)
+    `).run(id, customerName, totalMinor, totalMinor, Math.floor(createdAt.getTime() / 1000));
 }
 
 /** The dashboard routes behind the permission set the admin middleware resolved. */

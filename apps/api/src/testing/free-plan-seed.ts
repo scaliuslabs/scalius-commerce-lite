@@ -35,14 +35,15 @@ export function seedCatalog(sqlite: DatabaseSync): void {
     INSERT INTO settings (id, key, value, type, category)
       VALUES ('auth', 'document', '{"email":"optional","whatsapp":"off","channels":["email"]}', 'json', 'customer_auth');
   `);
-  // 100 single-SKU products for the 20- and 99-line carts.
+  // 100 single-SKU products for the 20- and 99-line carts, at whole-taka
+  // prices: cash on delivery collects whole taka, so a paisa total is refused.
   const insertProduct = sqlite.prepare("INSERT INTO products (id, name, price_minor, slug, category_id, is_active) VALUES (?, ?, ?, ?, 'cat_panjabi', 1)");
   const insertVariant = sqlite.prepare(`INSERT INTO product_variants
     (id, product_id, sku, price_minor, stock, reserved_stock, stock_version, is_default, track_inventory, fulfillment_kind)
     VALUES (?, ?, ?, ?, 100000, 0, 0, 1, 1, 'physical')`);
   for (let index = 1; index <= CATALOG_LINES; index += 1) {
-    insertProduct.run(`p_bulk_${index}`, `Bulk item ${index}`, 10000 + index, `bulk-item-${index}`);
-    insertVariant.run(`v_bulk_${index}`, `p_bulk_${index}`, `BULK-${index}`, 10000 + index);
+    insertProduct.run(`p_bulk_${index}`, `Bulk item ${index}`, 10000 + index * 100, `bulk-item-${index}`);
+    insertVariant.run(`v_bulk_${index}`, `p_bulk_${index}`, `BULK-${index}`, 10000 + index * 100);
   }
 }
 
@@ -50,9 +51,9 @@ export function seedOrders(sqlite: DatabaseSync, count: number): void {
   sqlite.exec(`
     WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < ${count})
     INSERT INTO orders (id, customer_name, customer_phone, shipping_address, city, zone,
-      subtotal_amount_minor, total_amount_minor, status, created_at, updated_at)
+      subtotal_amount_minor, total_amount_minor, subtotal_shop_minor, total_shop_minor, status, created_at, updated_at)
     SELECT 'ord_seed_' || i, 'Buyer ' || i, '+88017' || printf('%08d', i), 'House 1, Road 2, Gulshan', 'city_1', 'zone_1',
-      10000, 10000, 'confirmed', 1790000000 + i * 60, 1790000000 + i * 60
+      10000, 10000, 10000, 10000, 'confirmed', 1790000000 + i * 60, 1790000000 + i * 60
     FROM n;
   `);
 }
@@ -73,6 +74,6 @@ export function cartItems(lines: number) {
     productId: `p_bulk_${index + 1}`,
     variantId: `v_bulk_${index + 1}`,
     quantity: 1,
-    price: (10000 + index + 1) / 100,
+    price: 100 + index + 1,
   }));
 }
