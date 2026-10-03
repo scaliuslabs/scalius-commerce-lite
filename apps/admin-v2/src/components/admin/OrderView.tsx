@@ -22,6 +22,7 @@ import { orderSkipReason } from "./order-list/order-bulk-actions";
 import { useArchiveOrdersWithUndo } from "./order-list/use-order-list-mutations";
 import { clearOrderNotice, useOrderNotice } from "~/lib/order-notice";
 import { useOrderListReturnHref } from "~/lib/order-list-return";
+import { useToastsAboveBar } from "~/lib/toast";
 import { editLockMessageKey } from "~/routes/admin/orders/-order-form-route-state";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { OrderCustomerCard } from "./orderview/OrderCustomerCard";
@@ -281,21 +282,11 @@ export function OrderView({ order }: { order: Order }) {
 
 /**
  * Phones: Call and WhatsApp stay in thumb reach, next to the one next step.
- * While the bar shows, toasts sit above it (`--toast-lift`, read by the Toaster).
+ * While the bar shows, toasts sit above it.
  */
 function PhoneActionBar({ children }: { children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const bar = ref.current;
-    const root = document.documentElement;
-    if (!bar || typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(() => root.style.setProperty("--toast-lift", `${bar.offsetHeight}px`));
-    observer.observe(bar);
-    return () => {
-      observer.disconnect();
-      root.style.removeProperty("--toast-lift");
-    };
-  }, []);
+  useToastsAboveBar(ref);
   return (
     <div ref={ref} className="fixed inset-x-0 bottom-0 z-40 flex gap-2 border-t bg-background p-3 lg:hidden">
       {children}
