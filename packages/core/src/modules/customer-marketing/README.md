@@ -1,76 +1,61 @@
 # Customer marketing
 
-Marketing consent per customer and channel (`email`, `sms`, `whatsapp`), the
-surfaces that change it, the e-mail double opt-in and the links in marketing
-messages. Tags and segments live in the customers module
-(`customer-tags.ts`, `customer-segments.ts`, `customer-export.ts`).
+Marketing consent per customer and channel (`email`, `sms`, `whatsapp`), the surfaces that change it, the e-mail double opt-in and the signed links in marketing messages. For contributors and plugin authors.
 
-## Model (migration 0108)
+- Layer L6. The domain imports `customers`, `notifications` and `settings` (`scripts/core-domain-graph.allow.json`). `store-transfer` imports it for the customer import.
+- One entry, `index.ts`. Shared vocabulary (channels, states, sources, settings schema, text versions) is in `packages/shared/src/customer-marketing.ts`.
+- Tags, segments and the CSV export belong to [`customers`](../customers/README.md).
 
-- `customer_marketing_consents`: one row per (customer, channel): `state`
-  (`subscribed`, `unsubscribed`, `pending` — e-mail double opt-in only),
-  `contact` (the normalised address the consent covers: lower-case e-mail or
-  E.164 phone), `source` (`checkout`, `account`, `newsletter`, `admin`,
-  `import`, `plugin`, `link`), the author (`actor`, `actor_id`, `note`), the
-  consent text and its version (`<surface>:<12 hex of SHA-256>`), timestamps,
-  and for pending rows the SHA-256 of the confirmation token.
-- Triggers copy every state or address change into
-  `customer_marketing_consent_events` (the audit log) and emit
-  `customer.consent_changed` (event catalog, webhooks, plugins) in the same
-  transaction. No write path can skip them.
-- A consent covers one address. Readers show `not_subscribed` when the
-  customer's current e-mail/phone is not the one the row covers
-  (`marketingConsentStatus`), so changing an address never carries consent
-  to it. WhatsApp uses the customer's phone.
+## Model
+
+`customer_marketing_consents` holds one row per (`customer_id`, `channel`). `customer_marketing_consent_events` is the audit log.
+
+- `state` is `subscribed`, `unsubscribed` or `pending` (`pending` is e-mail double opt-in only).
+- `contact` is the normalised address the consent covers: lower-case e-mail, or the stored phone.
+- `source` is `checkout`, `account`, `newsletter`, `admin`, `import`, `plugin` or `link`. `actor` is `buyer`, `staff`, `plugin` or `system`.
+- `consent_text` is the wording shown, at most 500 characters (`consent_text_version`: `<surface>:<first 12 hex of SHA-256>`). `note` holds at most 500 characters. `confirmation_hash` is the unique SHA-256 of the pending confirmation token.
+- Triggers `customer_marketing_consents_audit_ins` and `_audit_upd` copy every state or address change into the audit log. Triggers `evt_customer_marketing_consents_created` and `_changed` emit `customer.consent_changed` (`event_outbox`) on a new row or a state change. No write path skips them.
+- A consent covers one address. `marketingConsentStatus` returns `not_subscribed` when the customer's current e-mail or phone is not the address on the row, so a changed address never inherits consent. WhatsApp uses the customer's phone.
 
 ## State machine (`consent.ts`)
 
-Every write is one `INSERT … SELECT … ON CONFLICT DO UPDATE … WHERE`
-(race-free; a no-op when nothing changes):
+Every write is one `INSERT ... SELECT ... ON CONFLICT DO UPDATE ... WHERE`. It is race-free and does nothing when nothing changes.
 
-- subscribe: → `subscribed` unless already subscribed for that address.
-- request (e-mail, double opt-in): → `pending` with a new token hash and an
-  outbox row, unless subscribed for that address or a request for it is less
-  than 10 minutes old (no mail flood). A newer request voids older links.
-- confirm (link, 7 days, single use): `pending` → `subscribed`.
-- unsubscribe: → `unsubscribed`.
+| Action | Result |
+| --- | --- |
+| subscribe | `subscribed`, unless already subscribed for that address. |
+| request (e-mail, double opt-in) | `pending` with a new token hash and an outbox row. Skipped when already subscribed for that address, or when a request for it is under 10 minutes old. A newer request voids the older link. |
+| confirm (link) | `pending` to `subscribed`. The link works 7 days, once. |
+| unsubscribe | `unsubscribed`. |
 
-A buyer may subscribe a channel only for the address the customer record
-already has; a guest record without e-mail takes the e-mail given (at once,
-or when it is confirmed). Buyer surfaces only subscribe; unsubscribing needs a
-signed link, the account or staff.
+A buyer may subscribe a channel only for the address the customer record already has. A guest record without e-mail takes the e-mail given, at once or when the link is confirmed. Buyer surfaces only subscribe. Unsubscribing needs a signed link, the account or staff.
 
 ## Surfaces (`flows.ts`)
 
-- Newsletter (`subscribeToNewsletter`): phone is mandatory (customer
-  identity); the contact resolves by the identity rules
-  (`customers/customer-identity.ts`: verified phone owner, verified e-mail
-  owner, the phone's guest record, else a new guest record). SMS always,
-  WhatsApp when asked, e-mail pending when double opt-in is on. The answer
-  depends only on the input and the settings, never on whether the contact
-  was known. Rate limited per address and per contact
-  (`enforceNewsletterSignupRateLimits`, hashed D1 buckets) and natively at
-  the API route.
-- Account (`updateAccountMarketingPreferences`): a verified e-mail subscribes
-  at once; an unverified one waits for its link.
-- Staff and plugins (`setCustomerMarketingConsent`): a staff subscribe needs a
-  note saying how the customer agreed.
-- Checkout (`recordCheckoutMarketingConsent`): after the order commits, never
-  inside it (consent must not fail an order); idempotent, best effort.
-  Settings document `marketing_consent` (label per language, channels,
-  double opt-in), exposed to the storefront through `GET /checkout/config`.
+| Surface | Function | Behaviour |
+| --- | --- | --- |
+| Newsletter form | `subscribeToNewsletter` | Phone is mandatory (customer identity). The contact resolves by the identity rules in `customers/customer-identity.ts`. SMS always, WhatsApp when asked, e-mail `pending` when double opt-in is on. The answer never reveals whether the contact was known. |
+| Account | `updateAccountMarketingPreferences` | A verified e-mail subscribes at once. An unverified one waits for its link. |
+| Staff and plugins | `setCustomerMarketingConsent` | A staff subscribe needs a note saying how the customer agreed. |
+| Checkout | `recordCheckoutMarketingConsent` | Runs after the order commits, never inside it. Idempotent, best effort: an error is logged without contact details and the order stands. |
+| Customer import | `store-transfer/customer-import.ts` | Source `import`, actor `staff`. |
+
+- Newsletter limits: `enforceNewsletterSignupRateLimits` (hashed D1 buckets) and the native `RL_STRICT` limiter on the route.
+- Settings document `marketing_consent` (`marketingConsentDocument`): checkout checkbox (`enabled`, `channels`, `label` in `en` and `bn`; unchecked by default, never required) and `emailDoubleOptIn`. The storefront reads it from `GET /api/v1/checkout/config`.
 
 ## Messages (`messages.ts`, `links.ts`)
 
-- Double opt-in: the outbox row (subject `customer`, type `marketing_opt_in`)
-  carries a random nonce only. The API queue consumer derives the token
-  (HMAC, key from `SCALIUS_SECRET` purpose `marketing-opt-in-link`), checks
-  its hash is still the pending one, and sends the confirmation to
-  `<store>/newsletter/confirm?token=…`; the token is scrubbed from receipts.
-- Unsubscribe links: `u1.<customer id>.<channel>.<HMAC>` (purpose
-  `marketing-unsubscribe-link`), stateless and long-lived; they can only
-  unsubscribe. Rotating `SCALIUS_SECRET` voids them.
-- `marketingSendPermission`: what a marketing sender (plugins today) must
-  check: consent for the current address, plus the unsubscribe URL,
-  `List-Unsubscribe` and `List-Unsubscribe-Post: List-Unsubscribe=One-Click`
-  headers and the footer copy. Without a store URL nothing may be sent.
+- Double opt-in: the outbox row (subject `customer`, type `marketing_opt_in`) carries a random nonce only. The API queue consumer (`apps/api/src/queue-notifications.ts`) calls `sendMarketingOptInEmail`. It derives the token with HMAC (key from `SCALIUS_SECRET`, purpose `marketing-opt-in-link`), checks the token hash is still the pending one, and sends `<store URL>/newsletter/confirm?token=...`. It redacts the token from receipts. Without a store URL it sends nothing.
+- Unsubscribe link: `u1.<customer id>.<channel>.<HMAC>` (purpose `marketing-unsubscribe-link`). Stateless and long-lived. It can only unsubscribe. Rotating `SCALIUS_SECRET` voids every link. Page: `<store URL>/newsletter/unsubscribe`.
+- `marketingSendPermission`: every marketing sender (plugins) must call it. It allows a send only for a `subscribed` row that covers the current address. It returns the unsubscribe URL, the `List-Unsubscribe` and `List-Unsubscribe-Post: List-Unsubscribe=One-Click` headers (e-mail) and the footer copy. Without a store URL nothing may be sent. Transactional messages skip it.
+
+## Routes
+
+| Route | Caller |
+| --- | --- |
+| `POST /api/v1/marketing/subscribe`, `/confirm`, `/unsubscribe/preview`, `/unsubscribe` | Storefront Worker. Tokens travel in the body. |
+| `GET`, `PUT /api/v1/customer-auth/marketing` | Signed-in buyer. |
+| `GET`, `PUT /api/v1/admin/customers/{id}/marketing` | Staff and plugins. `customers.view` reads (consent, audit log newest 50, tags), `customers.edit` writes. |
+| `GET`, `PUT /api/v1/admin/settings/marketing-consent` | Staff. `settings.general.view` reads, `settings.general.edit` writes. A stale `expectedRevision` returns 409. |
+
+An unknown, used, replaced or expired token always returns `invalid`. No response says whether a contact or customer exists.

@@ -1,147 +1,68 @@
-<p align="center">
-  <a href="https://scalius.com">
-    <img alt="Scalius Commerce Lite" src="apps/admin-v2/public/logo-dark.png" width="200" />
-  </a>
-</p>
+# Scalius Commerce Lite
 
-<h1 align="center">
-  Scalius Commerce Lite
-</h1>
+Scalius Commerce Lite is a self-hosted commerce platform: a merchant dashboard, a storefront, and an API. It runs as two Cloudflare Workers on D1, TursoDB, or PostgreSQL. This page is for operators who deploy a store and contributors who work on the code.
 
-<h4 align="center">
-  <a href="https://docs.scalius.com">Documentation</a> |
-  <a href="https://scalius.com">Website</a>
-</h4>
+- Website: <https://scalius.com>
+- Help and questions: [Discord](https://scalius.com/discord)
+- Bugs and proposals: [GitHub issues](https://github.com/scaliuslabs/scalius-commerce-lite/issues)
+- License: [AGPL v3](LICENSE). The storefront in `apps/storefront/` is MIT-licensed.
 
-<p align="center">
-  Self-hosted e-commerce platform — admin dashboard, storefront, and API — deployed as two Cloudflare Workers. Turborepo monorepo with TanStack Router, Astro, Hono, and portable D1, TursoDB, or PostgreSQL storage.
-</p>
+## Stack
 
-<p align="center">
-  <a href="LICENSE">
-    <img src="https://img.shields.io/badge/license-AGPL%20v3-blue.svg" alt="Scalius Commerce Lite is released under the AGPL v3 license." />
-  </a>
-  <a href="https://github.com/scaliuslabs/scalius-commerce-lite/issues">
-    <img src="https://img.shields.io/badge/Issues-welcome-brightgreen.svg?style=flat" alt="Issues welcome!" />
-  </a>
-  <a href="SECURITY.md">
-    <img src="https://img.shields.io/badge/Security-Policy-red.svg" alt="Security Policy" />
-  </a>
-</p>
-
-<p align="center">
-  <a href="https://scalius.com/x">
-    <img src="https://img.shields.io/twitter/follow/scaliuslabs.svg?label=Follow%20@scaliuslabs" alt="Follow @scaliuslabs" />
-  </a>
-  <a href="https://scalius.com/discord">
-    <img src="https://img.shields.io/badge/chat-on%20discord-7289DA.svg" alt="Discord Chat" />
-  </a>
-  <a href="https://scalius.com/facebook">
-    <img src="https://img.shields.io/badge/Facebook-Follow-1877F2?logo=facebook" alt="Follow on Facebook" />
-  </a>
-</p>
-
----
+A Turborepo monorepo. The dashboard is a React 19 SPA, the storefront is Astro 7 SSR, and the API is Hono with `@hono/zod-openapi` and Better Auth (optional TOTP and email OTP 2FA). Drizzle ORM runs on D1 (default), TursoDB or PostgreSQL/Neon. Built-in providers: Stripe, SSLCommerz, cash on delivery, Pathao, Steadfast, Cloudflare Email, Resend, four SMS providers, WhatsApp and FCM push. `@scalius/plugin-sdk` builds plugins.
 
 ## Repository layout
 
 ```text
 apps/
-  admin-v2/     @scalius/admin-v2    Dashboard SPA, served by the API Worker (dev :4323)
-  api/          @scalius/api         Hono API + queue consumer (Worker, dev :8787)
-  storefront/   @scalius/storefront  Astro SSR store           (Worker, dev :4322)
+  admin-v2/     @scalius/admin-v2    Dashboard SPA; no Worker of its own (dev :4323)
+  api/          @scalius/api         API Worker: Hono routes, queue consumer, cron, serves the dashboard (dev :8787)
+  storefront/   @scalius/storefront  Storefront Worker: Astro SSR (dev :4322)
 packages/
   api-client/   Generated SDK from the API's OpenAPI spec
-  cli/          `scalius` CLI — operates a deployed store over its OpenAPI contract
-  core/         Domain services, auth/RBAC, provider integrations
+  cli/          `scalius` CLI: operates a deployed store through its OpenAPI contract
+  core/         Domain services (src/modules/<domain>), auth, provider integrations
   database/     Drizzle schema, migrations, provider adapters
-  shared/       Pure utilities (runtime secrets, platform config, formatting)
+  plugin-sdk/   Plugin authoring kit (bundled and sandboxed installs)
+  shared/       Pure utilities shared by the Workers and the dashboard
   tsconfig/     Shared TypeScript configs
-docs/           Architecture, database portability, performance, delivery providers
-scripts/        Dev setup, dev server wrapper, deploy pipeline, checks
+plugins/        Reference plugins: bkash, bulk-discount, hello, loyalty, nagad, order-tagger, wishlist
+scripts/        Dev tooling, deploy pipeline, release and ops checks
+docs/           Architecture, plan profile, database portability, performance, providers
+tests/          Cross-package unit tests (tests/README.md)
+scalius.plugins.json   Lockfile of the plugins compiled into the API Worker (`pnpm plugin`)
 ```
-
-| Layer | Technology |
-|-------|------------|
-| Monorepo | Turborepo + pnpm workspaces |
-| Dashboard | Static SPA: TanStack Router / Query, React 19, Vite 8 |
-| Storefront | Astro 7 SSR + React 19 islands |
-| API | Hono + `@hono/zod-openapi` (generated OpenAPI + Swagger UI) |
-| Database | Drizzle ORM on Cloudflare D1 (default), TursoDB, or PostgreSQL/Neon |
-| UI | Tailwind CSS v4 + shadcn/ui + Radix |
-| Auth | Better Auth (email/password, optional TOTP + email OTP 2FA) |
-| Storage | R2 for media and pre-generated WebP renditions |
-| Async | Cloudflare Queues (payments, notifications, OTP + DLQs), 15-minute cron |
-| Payments | Stripe, SSLCommerz, Cash on Delivery |
-| Delivery | Pathao, Steadfast (webhook tracking) |
-| Notifications | Email (Cloudflare Email, Resend fallback), SMS (4 providers), WhatsApp, FCM push |
-| Deploy | Wrangler |
 
 ## Architecture
 
 ```mermaid
-flowchart TB
-    Buyer["Buyer browser"] --> SF["Storefront Worker<br/>Astro 7 SSR · :4322<br/>secret: SCALIUS_SECRET"]
-    Merchant["Merchant browser"] -->|"dashboard host:<br/>SPA shell · /api/auth · /api/v1"| API
-
-    SF -->|"Service binding env.BACKEND_API<br/>https://api.internal"| API
-
-    API["API Worker — Hono · :8787<br/>+ dashboard SPA (ASSETS, Vite dev :4323)<br/>secrets: SCALIUS_SECRET<br/>+ CREDENTIAL_ENCRYPTION_KEY"]
-
-    API -->|"GET /api/v1/platform"| PLAT["Platform settings<br/>storefront · API · dashboard · media URLs<br/>edited in Settings → System → Platform"]
-    PLAT -. "origins read per request" .-> SF
-
-    API --> DB[("DB (D1) — or TursoDB / PostgreSQL")]
-    API --> KV[("KV — CACHE")]
-    API --> R2[("R2 — BUCKET<br/>media + private agent artifacts")]
-    API --> Q["Queue — jobs + jobs-dlq"]
+flowchart LR
+    Buyer["Buyer browser"] --> SF["Storefront Worker<br/>Astro SSR"]
+    Merchant["Merchant browser"] --> API
+    SF -->|"service binding BACKEND_API"| API["API Worker<br/>Hono + dashboard SPA (ASSETS)"]
+    API --> DB[("D1, TursoDB, or PostgreSQL")]
+    API --> KV[("KV: CACHE")]
+    API --> R2[("R2: BUCKET")]
+    API --> Q["Queue: jobs + jobs-dlq"]
     Q -->|"queue consumer"| API
-    CRON["Cron — every 15 min"] --> API
-
-    API -.->|"webhooks"| EXT["Stripe · SSLCommerz<br/>Pathao · Steadfast"]
-    API -.->|"notifications"| NOTIF["Email · SMS · WhatsApp · FCM"]
+    CRON["Cron every 15 min"] --> API
+    API -.-> EXT["Stripe, SSLCommerz, couriers, email, SMS, WhatsApp, FCM"]
 ```
 
-The dashboard is a static single-page app (`apps/admin-v2/dist`) that the API
-Worker serves from its `ASSETS` binding on the dashboard hostname, together with
-Better Auth (`/api/auth/*`) and the API itself; in local development Vite serves
-it on :4323 and proxies those paths to `http://localhost:8787` (ports:
-[Parallel local stacks](#parallel-local-stacks)). Every per-purpose
-secret is HKDF derived from `SCALIUS_SECRET` at Worker entry. The storefront
-holds no database, provider, or URL configuration of its own: it calls the API
-through a Cloudflare Service Binding in production (over HTTP to
-`http://localhost:8787` in local development) and reads the deployment's public
-origins from the `platform` block of the layout payload it already loads.
+- The API Worker serves `/api/v1/*`, Better Auth (`/api/auth/*`), and the built dashboard (`apps/admin-v2/dist`) on the dashboard host.
+- The storefront Worker has no database, provider, or URL configuration. It calls the API Worker through `BACKEND_API`, and each page renders from one `GET /api/v1/storefront/batch` call.
+- Public reads use dependency validation (DVC), not purges: [packages/core/src/cache-deps/README.md](packages/core/src/cache-deps/README.md).
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for module boundaries, the
-order lifecycle, and invariants.
-
-## Features
-
-**Catalog** — products with merchant-defined variant axes, SKUs, barcodes, images, attributes; categories; manual and dynamic collections; inventory with compare-and-swap stock versioning, reservations, and low-stock alerts; provider-aware search (FTS5 with a Bengali tokenizer on D1, bounded indexed fallback elsewhere).
-
-**Sales** — 11-status order state machine with validated transitions; Stripe, SSLCommerz, and Cash on Delivery; atomic payment commits with four idempotency layers; refunds and returns; discounts and promotions; abandoned checkout tracking; customer accounts with OTP sign-in and order history.
-
-**Content** — header/footer and navigation builders, CMS pages and blog articles with a Tiptap editor, hero sliders, theme tokens.
-
-**Operations** — Pathao and Steadfast shipments plus manual fulfillment; flat-rate, weight-based, and zone-based shipping; taxes; invoice PDFs; a manual per-order fraud checker; cache management; a QR scanner app.
-
-**Notifications** — 15 order and refund notification types over four independently configured channels (email, SMS, WhatsApp, FCM push), delivered through a queue with a durable outbox and per-channel receipts.
-
-**Security** — Better Auth with optional 2FA, RBAC (81 permissions in 13 categories), per-endpoint rate limiting, AES-256-GCM encryption of merchant provider credentials, per-provider webhook signature verification.
-
-**Discovery** — canonical URLs, robots, sitemap index and children, JSON-LD, Google and Meta product feeds, `/llms.txt`, and read-only UCP catalog discovery at `/.well-known/ucp`.
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) covers domains, layers, the order lifecycle, and invariants.
 
 ## Local development
 
 ### Prerequisites
 
-| Requirement | Notes |
-|-------------|-------|
-| Node.js 24 | Version pinned in `.nvmrc`; run `nvm use` |
-| pnpm 11.20 | Pinned in `package.json` `packageManager`; `corepack enable` |
-| Cloudflare account | Only needed to deploy, not for local development |
-| Mailpit (optional) | Local inbox for dev email/OTP — `brew install mailpit` |
+- Node.js 24 (pinned in `.nvmrc`; run `nvm use`).
+- pnpm 11.20 (pinned in `package.json` `packageManager`; run `corepack enable`).
+- Mailpit, the local inbox for email and OTP (`brew install mailpit`). `pnpm dev` starts it and fails when it is missing.
+- A Cloudflare account, only to deploy.
 
 ### Setup
 
@@ -152,334 +73,221 @@ pnpm dev:setup
 pnpm dev
 ```
 
-`pnpm dev:setup` generates the two secrets into the API and storefront `.dev.vars`
-(gitignored), applies local D1 migrations, and creates a default local admin
-through `/api/v1/setup`. It writes no URLs. `pnpm dev` points the local
-Platform settings at the local ports (see [Parallel local stacks](#parallel-local-stacks)).
+`pnpm dev:setup` writes the two secrets to `apps/api/.dev.vars` and `apps/storefront/.dev.vars` (git-ignored), applies local D1 migrations, and creates a local admin through `/api/v1/setup`. It writes no URLs. The default admin is `admin@local.scalius.test` with password `ScaliusLocal123!`. Override it with `--admin-email`, `--admin-password`, `--admin-name`, or `LOCAL_ADMIN_EMAIL`, `LOCAL_ADMIN_PASSWORD`, `LOCAL_ADMIN_NAME`.
 
-Default local admin: `admin@local.scalius.test` / `ScaliusLocal123!`. Override
-with `--admin-email`, `--admin-password`, `--admin-name`, or the matching
-`LOCAL_ADMIN_*` environment variables.
-
-`pnpm dev` starts or reuses a loopback Mailpit inbox, applies pending local D1
-migrations, points the local Platform settings at the local ports, refuses to
-start when an app port is already taken, waits for
-`/api/v1/setup` before starting the dashboard and storefront, and cleans up only
-the processes it started. Set `SCALIUS_SKIP_DEV_MIGRATIONS=1` to skip the
-migration check.
+`pnpm dev` runs a doctor preflight, starts or reuses Mailpit, applies local D1 migrations (skip with `SCALIUS_SKIP_DEV_MIGRATIONS=1`), points the local Platform settings at the local ports, then starts the API, the dashboard and the storefront. It refuses to start when a port is in use.
 
 | URL | Service |
 |-----|---------|
-| `http://localhost:4323/admin` | Admin dashboard |
+| `http://localhost:4323/admin` | Dashboard |
 | `http://localhost:4322` | Storefront |
-| `http://localhost:8787/api/v1/docs` | Swagger UI |
-| `http://localhost:8787/api/v1/openapi.json` | OpenAPI spec |
-| `http://localhost:8787/api/v1/health` | Health check |
+| `http://localhost:8787/api/v1/docs` | Swagger UI (spec at `/api/v1/openapi.json`, health at `/api/v1/health`) |
 | `http://127.0.0.1:8025` | Mailpit inbox |
 
-Run `pnpm dev:doctor` at any time for a non-mutating report on Node version,
-local secrets, database state, and ports. After starting servers, use the
-profile that matches what you started: `dev:doctor:api`, `dev:doctor:admin`,
-`dev:doctor:storefront`, or `dev:doctor:all`.
-
-To run against a disposable state directory:
-
-```bash
-pnpm dev:reset --state /tmp/scalius-state
-SCALIUS_WRANGLER_STATE=/tmp/scalius-state pnpm dev:admin
-```
+`pnpm dev:doctor` reports on Node, secrets, database state, and ports without changing anything. Add a profile after you start servers: `dev:doctor:api`, `dev:doctor:admin`, `dev:doctor:storefront`, or `dev:doctor:all`.
 
 ### Parallel local stacks
 
-The three ports are one dev-only setting, `scripts/dev-ports.mjs`, read from
-`SCALIUS_DEV_API_PORT`, `SCALIUS_DEV_STOREFRONT_PORT` and
-`SCALIUS_DEV_ADMIN_PORT` (default 8787, 4322, 4323). To run a second stack
-beside the first, give it its own ports and state:
+`scripts/dev-ports.mjs` is the one source of the dev ports: `SCALIUS_DEV_API_PORT`, `SCALIUS_DEV_STOREFRONT_PORT`, and `SCALIUS_DEV_ADMIN_PORT` (defaults 8787, 4322, 4323). Never set them as Wrangler `vars`. To run a second stack, give it its own ports and state directory:
 
 ```bash
 pnpm dev --api-port 8931 --storefront-port 4531 --admin-port 4532 --state /tmp/slot/state
-pnpm dev:storefront --api-port 8931 --storefront-port 4531 --state /tmp/slot/state
 ```
 
-`scripts/dev.sh` exports the variables for every app it starts: the API's
-`wrangler dev --port`, the storefront's `astro dev` port and the API origin it
-calls, and the dashboard's Vite port and API proxy target. Before the API
-starts it runs `node scripts/dev-ports.mjs sync-platform`. That points the
-local Platform settings document (Settings -> System -> Platform) at the same
-origins and drops its KV mirror. Only unset or loopback origins are replaced,
-so a tunnel or real URL saved in the dashboard stays. `pnpm dev:doctor` reads
-the same flags and variables (`--api-port` and so on), and warns when the local
-Platform origins point at another stack.
+`scripts/dev.sh` runs `node scripts/dev-ports.mjs sync-platform` before the API starts. It replaces only unset or loopback Platform origins, so an origin you saved in the dashboard stays. Wrangler's dev registry is machine-wide, so an API on a non-default port runs as `scalius-api-local-<api port>`. The header of `scripts/dev-ports.mjs` lists the other subcommands (`api-worker-name`, `storefront-config`, `verify-binding`).
 
-To run an app on its own, export the variables, sync once while the API is
-stopped, then start each app:
-
-```bash
-export SCALIUS_DEV_API_PORT=8931 SCALIUS_DEV_STOREFRONT_PORT=4531 SCALIUS_DEV_ADMIN_PORT=4532
-export SCALIUS_WRANGLER_STATE=/tmp/slot/state
-node scripts/dev-ports.mjs sync-platform
-pnpm --dir apps/api dev        # :8931
-pnpm --dir apps/storefront dev # :4531, calls the API on :8931
-pnpm --dir apps/admin-v2 dev   # :4532, proxies to :8931
-```
-
-The ports are never Worker vars or Wrangler `vars` (`pnpm check:env` forbids
-both). Mailpit stays one shared inbox on `127.0.0.1:8025`.
-
-Wrangler's dev registry is machine-wide, so the API on a non-default port runs
-as `scalius-api-local-<api port>` (`node scripts/dev-ports.mjs
-api-worker-name`; apps/api `pnpm dev` passes it as `--name`). To serve a
-built storefront beside it, `node scripts/dev-ports.mjs storefront-config`
-writes a config whose `BACKEND_API` binding targets that name, and
-`node scripts/dev-ports.mjs verify-binding` fails unless the storefront renders
-this stack's canonical origin.
+To start one app alone, export the three port variables and `SCALIUS_WRANGLER_STATE`, run `sync-platform` while the API is stopped, then run `pnpm --dir <app> dev`.
 
 ## Commands
 
-```bash
-# Development
-pnpm dev                  # API :8787 + dashboard :4323 + storefront :4322
-                          # (--api-port/--storefront-port/--admin-port/--state for a parallel stack)
-pnpm dev:api              # API only
-pnpm dev:admin            # API + dashboard
-pnpm dev:storefront       # API + storefront
-pnpm dev:doctor[:api|:admin|:storefront|:all]
+Run every command from the repository root.
 
-# Local state
-pnpm dev:setup            # Install, write .dev.vars, migrate D1, create admin
-pnpm dev:setup --env-only # Repair missing .dev.vars keys only
-pnpm dev:reset            # Wipe local D1/KV/R2/cache state and recreate the admin
-pnpm dev:admin:create | dev:admin:reset | dev:admin:status
-node scripts/catalog-scale-seed.mjs --state <dir>  # 30k-product load catalogue (docs/STOREFRONT-PERFORMANCE.md)
+| Command | Purpose |
+|---------|---------|
+| `pnpm dev`, `dev:api`, `dev:admin`, `dev:storefront` | Start the full stack, or the API with one app |
+| `pnpm dev:setup [--env-only] [--force]` | Create or repair local secrets, migrate, create the admin |
+| `pnpm dev:reset [--state <dir>]` | Delete local D1, KV, and R2 state, migrate, recreate the admin |
+| `pnpm dev:admin:create`, `dev:admin:reset`, `dev:admin:status` | Manage the local admin |
+| `pnpm db:generate` | Generate Drizzle migrations after a schema change |
+| `pnpm db:migrate:local`, `db:migrate:remote` | Apply pending migrations to local or remote D1 |
+| `pnpm typecheck` | `tsc` for every workspace, one at a time |
+| `pnpm lint` | ESLint for every workspace; the dashboard also enforces its design rules |
+| `pnpm test` | Vitest for the whole repository ([tests/README.md](tests/README.md)) |
+| `pnpm check:env` | Fail on Wrangler `vars`, bindings outside the allowed set, and a missing `CF_VERSION_METADATA` |
+| `pnpm generate:sdk` | Regenerate the agent operation manifest and `@scalius/api-client`; commit the output |
+| `pnpm build` | Build every workspace |
+| `pnpm plugin <command>` | Create, add, remove, list, and build bundled plugins; `pnpm plugin sandbox on\|off` |
+| `pnpm run deploy` | Deploy the API Worker (with the dashboard) and the storefront Worker |
+| `pnpm ops:check` | Read-only production API smoke check |
+| `pnpm release:check` | Read-only release smoke check: API, dashboard, storefront, discovery files, UCP |
 
-# Database
-pnpm db:generate          # Generate Drizzle migrations from schema changes
-pnpm db:migrate:local     # Apply pending migrations locally
-pnpm db:migrate:remote    # Apply pending migrations to remote D1
-pnpm db:studio            # Drizzle Studio
+Use `pnpm run deploy`, not `pnpm deploy`, which is a different pnpm command. `pnpm ops:check` and `pnpm release:check` default to the maintainers' hosts. Pass your own URLs ([Verify](#5-verify)).
 
-# Quality
-pnpm lint                 # ESLint across the eight code workspaces
-pnpm typecheck            # tsc (not esbuild)
-pnpm test                 # Vitest
-pnpm check:env            # Fail on any Wrangler `vars` entry
-pnpm generate:sdk         # Regenerate @scalius/api-client from the OpenAPI spec
-
-# Automated deployments (opt-in, see docs/AUTOMATED-DEPLOYMENTS.md)
-pnpm secret:derive --purpose admin-setup --stdin   # Derive one automation key
-pnpm auth:handoff-token --help                     # Mint a dashboard handoff token
-
-# Build & deploy
-pnpm build
-pnpm run deploy                        # API (with the dashboard SPA) + storefront
-pnpm run deploy:api | :storefront
-pnpm ops:check                         # Read-only production API smoke
-pnpm release:check                     # Read-only release smoke across all surfaces
-```
-
-Root Turbo commands run through `scripts/turbo-run.mjs`, which resolves the
-active Corepack/pnpm executable first so they work in shells where `pnpm` is not
-on `PATH`.
+The root `package.json` lists the other scripts. Their docs: `perf:storefront` and `catalog-scale-seed.mjs` in [docs/STOREFRONT-PERFORMANCE.md](docs/STOREFRONT-PERFORMANCE.md); `free-plan:budget` in [docs/FREE-PLAN.md](docs/FREE-PLAN.md); `secret:derive`, `auth:handoff-token`, and `demo:store` in [docs/AUTOMATED-DEPLOYMENTS.md](docs/AUTOMATED-DEPLOYMENTS.md).
 
 ## Configuration
 
-Runtime configuration is deliberately small: **two installed secrets, zero
-Wrangler `vars`, everything else in the dashboard.**
+A deployment has two installed secrets, no Wrangler `vars`, and every other setting in the dashboard.
 
 ### Installed secrets
 
-| Secret | Workers | Purpose | Generate with |
-|--------|---------|---------|---------------|
-| `SCALIUS_SECRET` | API, storefront | Master secret; identical on both, at least 32 characters | `openssl rand -base64 48` |
-| `CREDENTIAL_ENCRYPTION_KEY` | API | AES-256-GCM key for merchant provider credentials at rest; base64 of exactly 32 bytes | `openssl rand -base64 32` |
+| Secret | Worker | Purpose | Generate with |
+|--------|--------|---------|---------------|
+| `SCALIUS_SECRET` | API, storefront | Master secret, identical on both; at least 32 characters | `openssl rand -base64 48` |
+| `CREDENTIAL_ENCRYPTION_KEY` | API | AES-256-GCM key for stored provider credentials, plugin secret settings, gift-card codes, licence keys, and webhook secrets; base64 of 32 bytes | `openssl rand -base64 32` |
 
-Every per-purpose secret — Better Auth session signing, JWT signing, the
-internal service token, the agent token pepper, the
-customer session hash key, and the three opt-in automation keys (first-admin
-setup token, front-proxy signing key, identity-handoff signing key) — is
-HKDF-SHA256 derived from `SCALIUS_SECRET` at Worker entry
-(`packages/shared/src/runtime-secrets.ts`). Derived values are never installed,
-stored, or logged.
+At entry, each Worker derives every per-purpose secret (session, JWT, service token, agent token pepper, customer session hash key and three opt-in automation keys) from `SCALIUS_SECRET` with HKDF-SHA256 (`packages/shared/src/runtime-secrets.ts`). Derived values are never installed, stored, or logged.
 
-Without `SCALIUS_SECRET` the API fails closed: every request except
-`/api/v1/health` and `/api/v1/readyz` returns `503 RUNTIME_SECRET_MISSING`.
+Without `SCALIUS_SECRET`, the API answers every request with `503 RUNTIME_SECRET_MISSING`, except `/api/v1/health`, `/api/v1/readyz`, and `/api/v1/meta`.
 
-**Rotation.** Rotating `SCALIUS_SECRET` rotates every derived secret at once:
-admins are signed out, service tokens stop verifying, and agent
-credentials must be reissued. Encrypted provider credentials survive, because
-they use `CREDENTIAL_ENCRYPTION_KEY`. Rotating `CREDENTIAL_ENCRYPTION_KEY` makes
-stored provider credentials undecryptable — every payment, delivery, SMS, and
-email credential must be re-entered in the dashboard.
+- Rotating `SCALIUS_SECRET` rotates every derived secret. Admins sign out, service tokens stop verifying, and agent credentials need reissue. Data encrypted with `CREDENTIAL_ENCRYPTION_KEY` survives.
+- Rotating `CREDENTIAL_ENCRYPTION_KEY` makes everything encrypted with it unreadable. Re-enter every provider credential in the dashboard.
 
-### Platform settings (Settings → System → Platform)
+### Platform settings
 
-Public origins are database-backed merchant settings, not environment variables.
+Public origins are database-backed settings, not environment variables. The API Worker composes `env.STOREFRONT_URL`, `env.PUBLIC_API_BASE_URL`, `env.BETTER_AUTH_URL`, `env.R2_PUBLIC_URL`, `env.CDN_DOMAIN_URL`, and `env.CORS_ALLOWED_ORIGINS` from them at entry (`apps/api/src/runtime/runtime-env.ts`). Never configure those names in Wrangler or `.dev.vars`.
 
-| Setting | Required | Purpose |
-|---------|----------|---------|
-| Storefront URL | yes | Canonical storefront origin (canonical links, sitemaps, feeds) |
-| API URL | yes | Public API origin browsers call |
-| Dashboard URL | yes | Dashboard origin, optionally with a path prefix such as `/dashboard` (Better Auth base URL) |
-| Media URL | yes | Public media base URL (R2 custom domain) |
-| Customer cookie domain | no | `Domain` attribute for customer session cookies across subdomains |
-| Extra CORS origins | no | Additional origins allowed to make credentialed API requests |
-| Require a setup token | no | Gates `POST /api/v1/setup` behind a derived token |
-| Identity handoff | no | Issuer, audience, and JWKS URL for external operator sign-in |
-| Disable password sign-in | no | Dashboard accepts only identity handoff (requires it to be enabled) |
+| Setting | Dashboard location | Purpose |
+|---------|--------------------|---------|
+| Store address (`storefrontUrl`) | Settings > Store details > Web addresses | Canonical storefront origin (links, sitemaps, feeds) |
+| Server address (`apiUrl`) | Same | Public API origin for browsers and payment providers |
+| Dashboard address (`dashboardUrl`) | Same | Dashboard origin; may carry a path prefix such as `/dashboard` |
+| Image address (`mediaUrl`) | Same | Public base URL of the media bucket's custom domain |
+| Shared sign-in domain | Settings > Advanced > Sign-in and access | `Domain` of customer session cookies across subdomains |
+| Sites allowed to call your store | Same | Extra CORS origins for credentialed API requests |
+| Setup key for the first admin | Same | Gates `POST /api/v1/setup` behind a derived token |
+| Single sign-on | Same | Identity handoff (issuer, audience, JWKS URL, password sign-in lock) |
 
-The last three belong to the opt-in automation contracts in
-[docs/AUTOMATED-DEPLOYMENTS.md](docs/AUTOMATED-DEPLOYMENTS.md); leave them off
-for a hand-installed store.
+The setup key and single sign-on are opt-in contracts ([docs/AUTOMATED-DEPLOYMENTS.md](docs/AUTOMATED-DEPLOYMENTS.md)). Leave them off for a hand-installed store. `GET /api/v1/platform` returns the four origins and the two opt-in flags (`Cache-Control: no-store`). `GET /api/v1/readyz` reports a `platform_config` problem until all four origins are set.
 
-The API serves the four origins publicly at `GET /api/v1/platform`
-(`Cache-Control: public, max-age=60`), and the storefront receives the same
-origins inside
-`GET /api/v1/storefront/layout`. `GET /api/v1/readyz` reports a required
-`platform_config` check listing any missing origin.
-
-Names such as `env.STOREFRONT_URL`, `env.PUBLIC_API_BASE_URL`,
-`env.BETTER_AUTH_URL`, `env.R2_PUBLIC_URL`, `env.CDN_DOMAIN_URL`, and
-`env.CORS_ALLOWED_ORIGINS` still appear in code. They are
-composed from these settings at Worker entry
-(`apps/api/src/runtime/runtime-env.ts`) and are never configured in Wrangler or
-`.dev.vars`.
-
-### Everything else in the dashboard
-
-| Integration | Location |
-|-------------|----------|
-| Email (Cloudflare Email / Resend) | Settings → Email |
-| Stripe / SSLCommerz | Settings → Checkout → Payment gateways |
-| Pathao / Steadfast | Settings → Delivery providers |
-| SMS, WhatsApp, Firebase (FCM) | Settings → Notifications |
-| Analytics and tracking scripts | Analytics |
+Provider and integration settings live in the dashboard under Settings > Payments, Shipping and delivery, Notifications and Integrations.
 
 ### Database provider
 
-D1 is the zero-configuration default and is already bound in the Wrangler
-configs. TursoDB deployments install `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN`
-as secrets on the API; PostgreSQL deployments install
-`POSTGRES_DATABASE_URL` or bind `HYPERDRIVE`. Complete credentials select the
-provider on their own; `DATABASE_PROVIDER` (`d1` | `turso` | `postgres`) is an
-optional explicit pin, required only when both Turso and PostgreSQL credentials
-are installed. `DATABASE_MIGRATION_FREEZE` is an operations-only cutover switch.
-None of these appear in the checked-in configs — installing one is a deliberate
-operator action.
+D1 is the default and is bound in the committed Wrangler config. For another provider, install these secrets on the API Worker:
 
-Switching providers is not a credential swap. See
-[docs/DATABASE-PORTABILITY.md](docs/DATABASE-PORTABILITY.md) for the freeze,
-snapshot, import, and fingerprint protocol.
+- TursoDB: `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN`.
+- PostgreSQL: `POSTGRES_DATABASE_URL`, or bind `HYPERDRIVE`.
+- `DATABASE_PROVIDER` (`d1`, `turso`, or `postgres`) pins the provider. It is required when both Turso and PostgreSQL credentials are installed.
+
+Changing the provider of a live store is a freeze, snapshot, import, and verify procedure, not a credential swap: [docs/DATABASE-PORTABILITY.md](docs/DATABASE-PORTABILITY.md).
 
 ## Deployment
 
 ### 1. Create the Cloudflare resources
 
-The two `wrangler.jsonc` files (API, storefront) are the source of truth. Create each resource
-in your own account and replace the checked-in names and IDs:
+The committed `apps/api/wrangler.jsonc` and `apps/storefront/wrangler.jsonc` hold the names and IDs of the maintainers' account. Create each resource in your account and replace them.
 
-| Resource | Where | Binding |
-|----------|-------|---------|
-| D1 database | API | `DB` |
-| KV namespace | API, storefront (one namespace; OAuth keys use the `oauth:` prefix) | `CACHE` |
-| R2 bucket | API (media under `media/`, sealed agent artifacts under `private/agent-artifacts/`) | `BUCKET` |
-| Queues | `jobs` and its DLQ `jobs-dlq` | producer `JOBS_QUEUE` + both consumers on the API |
-| Rate limiters | API: strict 5/60 s, standard 60/60 s (keys are store-scoped) | `RL_STRICT`, `RL_STANDARD` |
-| Email routing | API | `send_email` binding `EMAIL` |
-| Service binding | Storefront → API | `BACKEND_API` |
-| Static assets | API (the built dashboard SPA, `apps/admin-v2/dist`) | `ASSETS` |
+| Resource | Worker | Binding |
+|----------|--------|---------|
+| D1 database (`migrations_dir` is `packages/database/migrations`) | API | `DB` |
+| KV namespace (the only one; OAuth keys use the `oauth:` prefix) | API | `CACHE` |
+| R2 bucket (media under `media/`, sealed agent artifacts under `private/agent-artifacts/`) | API | `BUCKET` |
+| Queues `jobs` and `jobs-dlq` | API (producer, both consumers) | `JOBS_QUEUE` |
+| Rate limiters: strict 5 per 60 s, standard 60 per 60 s (counters are account-wide per `namespace_id`: use your own IDs) | API | `RL_STRICT`, `RL_STANDARD` |
+| Email sending | API | `EMAIL` |
+| Images | API | `IMAGES` |
+| Service binding to `scalius-api` | Storefront | `BACKEND_API` |
+| Static assets (`apps/admin-v2/dist`) | API | `ASSETS` |
 
-The API Wrangler config keeps a `deleted_classes` migration for the retired
-`CheckoutCoordinator` Durable Object; there is no Durable Object binding.
-Both Workers set `workers_dev: false`, so each needs a custom domain. The
-storefront's is declared in `apps/storefront/wrangler.jsonc` (`routes`); point
-both the API and the dashboard custom domains at the API Worker (`scalius-api`)
-in the Cloudflare dashboard, and
-attach a public custom domain to the media R2 bucket. Add a WAF custom rule on
-that media hostname that blocks paths starting with `/private/` (agent
-artifacts are also AES-GCM sealed at rest, so this is defence in depth), and an
-R2 lifecycle rule that deletes `private/agent-artifacts/` objects after one day
-as a backstop for the cron cleanup.
-
-`pnpm check:env` fails on any Wrangler `vars` entry — keep the configs to
-bindings only.
+- The API config sets `placement.region` beside the D1 primary. Change it when your database lives elsewhere.
+- Both Workers set `workers_dev: false`, so each needs a custom domain. The storefront declares its domain in `routes`. Point the API host and the dashboard host at `scalius-api` in the Cloudflare dashboard.
+- Attach a public custom domain to the media bucket. On that hostname, add a WAF rule that blocks paths starting with `/private/`. Add an R2 lifecycle rule that deletes `private/agent-artifacts/` objects after one day, as a backstop for the cron cleanup.
+- Keep the Wrangler configs to bindings only.
 
 ### 2. Install the secrets
 
-Wrangler prompts for each value; it is never written to a file or committed.
+Wrangler prompts for each value and writes nothing to disk.
 
 ```bash
-pnpm --dir apps/api        exec wrangler secret put SCALIUS_SECRET
-pnpm --dir apps/api        exec wrangler secret put CREDENTIAL_ENCRYPTION_KEY
+pnpm --dir apps/api exec wrangler secret put SCALIUS_SECRET
+pnpm --dir apps/api exec wrangler secret put CREDENTIAL_ENCRYPTION_KEY
 pnpm --dir apps/storefront exec wrangler secret put SCALIUS_SECRET
 ```
 
 ### 3. Deploy
 
 ```bash
-pnpm run deploy -- --api-url https://api.example.com --storefront-url https://shop.example.com
+pnpm run deploy --api-url https://api.example.com --storefront-url https://shop.example.com
 ```
 
-The pipeline runs `typecheck → build → D1 migrations → deploy each Worker →
-post-deploy verification`. The API build builds the dashboard SPA first, because
-it is the API Worker's static assets. Targeted deploys (`deploy:api`,
-`deploy:storefront`) use the same wrapper.
+The pipeline runs these steps in order:
 
-Because the Wrangler configs carry no `vars`, the script has no built-in
-knowledge of your public origins:
+1. Typecheck all workspaces, one at a time.
+2. Build all workspaces (the dashboard first, because it is the API Worker's static assets), then run the dist secret and build canary checks.
+3. Apply D1 migrations. For TursoDB or PostgreSQL, run a read-only schema check instead (pass `--database-target-host`).
+4. Deploy the API Worker, then the storefront Worker, and verify each one live.
+
+| Option | Effect |
+|--------|--------|
+| `--only api` or `--only storefront` | Deploy one Worker (`pnpm run deploy:api`, `deploy:storefront`) |
+| `--plan paid` | Workers Paid profile: CPU limit, larger queue batches. The default is Free ([docs/FREE-PLAN.md](docs/FREE-PLAN.md)) |
+| `--plugin-sandbox` | Bind the Worker Loader for sandboxed plugins (Workers Paid; implies `--plan paid`) |
+| `--dry-run` | Typecheck, build, and run the dist checks only |
+
+The Wrangler configs carry no `vars`, so the script learns your origins from its arguments:
 
 | Origin | Resolution order |
 |--------|------------------|
-| API | `--api-url` or `SCALIUS_API_URL` only |
-| Storefront | `--storefront-url` or `SCALIUS_STOREFRONT_URL`, else the `custom_domain` route pattern in `apps/storefront/wrangler.jsonc`, else the Platform `storefrontUrl` read from the API |
+| API | `--api-url` or `SCALIUS_API_URL` |
+| Storefront | `--storefront-url` or `SCALIUS_STOREFRONT_URL`, then the `custom_domain` route in `apps/storefront/wrangler.jsonc`, then the Platform `storefrontUrl` read from the API |
 
-If the API origin is unknown the deploy still succeeds; live `/health` and
-`/readyz` verification and API-driven storefront cache warming are skipped with
-a notice. If the deploy target and the Platform `storefrontUrl` disagree, the
-script warns, because canonical and sitemap URLs come from the setting.
+Without an API origin, the deploy succeeds but skips live `/health` and `/readyz` verification and cache warming. The script warns when the deploy target and the Platform `storefrontUrl` differ.
 
 ### 4. Complete Platform settings
 
-Sign in to the dashboard (first run offers the first-admin setup flow at
-`/auth/setup`), then fill **Settings → System → Platform** with the storefront,
-API, dashboard, and media URLs.
+1. Open the dashboard and create the first admin at `/auth/setup`.
+2. Fill the four web addresses in Settings > Store details.
 
-This step is not optional. Until it is done, `/api/v1/readyz` reports
-`platform_config: missing` and the storefront's credentialed browser features —
-cart, customer sign-in — fail, because CORS allowlists and cookie domains are
-derived from those origins.
+Until you do, `/api/v1/readyz` reports a `platform_config` problem. The storefront's credentialed features (cart, customer sign-in) fail, because CORS and cookie settings derive from these origins.
 
 ### 5. Verify
 
 ```bash
 curl https://api.example.com/api/v1/readyz
 curl https://api.example.com/api/v1/meta
-pnpm ops:check
-pnpm release:check
+pnpm ops:check --api-base-url https://api.example.com
+pnpm release:check --api-base-url https://api.example.com --storefront-url https://shop.example.com --dashboard-url https://dashboard.example.com
 ```
 
-`GET /api/v1/meta` reports the release, the supported API majors, the database
-provider, and whether the applied schema revision matches this build.
+`GET /api/v1/meta` reports the release, the supported API majors, the database provider, and whether the applied schema matches this build. Add `--queues` to `ops:check` to verify the queue wiring. Add `--skip-wrangler` to either check to skip the Wrangler deployment proof.
 
 ## Troubleshooting
 
 | Problem | Fix |
 |---------|-----|
-| Port already in use on `pnpm dev` | The wrapper prints the occupied port, PID, and command; stop that process and rerun |
+| Port in use on `pnpm dev` | The wrapper prints the port, PID, and command. Stop that process and rerun |
 | Forgot the local admin password | `pnpm dev:admin:reset` |
-| Local sign-in loops | `pnpm dev:admin:reset`, then `pnpm dev:setup --env-only` for missing keys, or `--force --env-only` when the shared local secrets are out of sync |
+| Local sign-in loops | `pnpm dev:admin:reset`, then `pnpm dev:setup --env-only` (add `--force` when the shared local secrets differ) |
 | Local D1 errors | `pnpm dev:reset` |
-| `503 RUNTIME_SECRET_MISSING` | `SCALIUS_SECRET` is missing or shorter than 32 characters — `wrangler secret put SCALIUS_SECRET`, or `pnpm dev:setup --env-only` locally |
-| `/api/v1/readyz` reports `platform_config: missing` | Fill the listed origins in Settings → System → Platform |
-| Storefront cart or sign-in fails with CORS/cookie errors | The Platform origins are wrong or unset |
-| Provider credentials fail to decrypt | `CREDENTIAL_ENCRYPTION_KEY` differs between the API and dashboard, or was rotated — re-enter the credentials in the dashboard |
-| `pnpm check:env` fails on Wrangler vars | Delete the `vars` block; URLs belong in Platform settings, secrets in `wrangler secret put` |
-| Stale SDK types | `pnpm generate:sdk` with the API running |
+| `503 RUNTIME_SECRET_MISSING` | `SCALIUS_SECRET` is missing or shorter than 32 characters. Run `wrangler secret put SCALIUS_SECRET`, or `pnpm dev:setup --env-only` locally |
+| `/api/v1/readyz` reports `platform_config` | Set the missing origins in Settings > Store details |
+| Cart or sign-in fails with CORS or cookie errors | The Platform origins are wrong or unset |
+| Provider credentials do not decrypt | `CREDENTIAL_ENCRYPTION_KEY` changed. Re-enter the credentials in the dashboard |
+| `pnpm check:env` fails | Delete the Wrangler `vars` block or the extra binding. URLs belong in Platform settings; secrets use `wrangler secret put` |
+| Stale SDK types | Run `pnpm generate:sdk` |
 
-## Contributing, security, license
+## Documentation
 
-- [CONTRIBUTING.md](CONTRIBUTING.md) — issue forms and contribution policy
-- [SECURITY.md](SECURITY.md) — vulnerability reporting
+| Document | Covers |
+|----------|--------|
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Domains, layers, runtime configuration, order lifecycle, invariants |
+| [docs/FREE-PLAN.md](docs/FREE-PLAN.md) | Workers Free and Paid plan profile, limits, live checks |
+| [docs/AUTOMATED-DEPLOYMENTS.md](docs/AUTOMATED-DEPLOYMENTS.md) | Opt-in contracts for managed installs |
+| [docs/DATABASE-PORTABILITY.md](docs/DATABASE-PORTABILITY.md) | Database runtime contract and provider cutover |
+| [docs/STOREFRONT-PERFORMANCE.md](docs/STOREFRONT-PERFORMANCE.md) | Page render path, per-page budgets, `pnpm perf:storefront` |
+| [docs/PERFORMANCE-RELEASE.md](docs/PERFORMANCE-RELEASE.md) | Release performance baseline |
+| [packages/shared/src/storefront-theme.md](packages/shared/src/storefront-theme.md) | Storefront theme document and the online store builder |
+| [docs/delivery-providers/README.md](docs/delivery-providers/README.md) | Pathao and Steadfast contracts |
+| [docs/MARKETS-DESIGN.md](docs/MARKETS-DESIGN.md) | Markets design (not built) |
+| [apps/admin-v2/README.md](apps/admin-v2/README.md), [apps/admin-v2/DESIGN.md](apps/admin-v2/DESIGN.md) | Dashboard app and design rules |
+| [apps/storefront/README.md](apps/storefront/README.md) | Storefront app |
+| [packages/plugin-sdk/README.md](packages/plugin-sdk/README.md) | Plugin authoring |
+| [packages/cli/README.md](packages/cli/README.md) | The `scalius` CLI |
+| [packages/database/README.md](packages/database/README.md) | Schema, migrations, providers |
+
+## Contributing, security, conduct
+
+- [CONTRIBUTING.md](CONTRIBUTING.md): issue forms and contribution policy
+- [SECURITY.md](SECURITY.md): report a vulnerability
 - [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
-
-Except for the separately MIT-licensed storefront in `apps/storefront/`, this
-repository is licensed under [AGPL v3](LICENSE).

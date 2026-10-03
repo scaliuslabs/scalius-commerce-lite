@@ -1,88 +1,62 @@
-# Demo store asset staging
+# Demo-store asset staging
 
-This is an offline, fail-closed boundary between source acquisition and the
-demo-store Media importer. It does not download assets, generate images, log in,
-or call an API.
+This directory prepares the 237 demo-store media assets for contributors who source, review and stage them. Four tools live here:
+
+- `cli.mjs` stages assets. It is offline and fail-closed: it does not download, generate images, sign in or call an API.
+- `register-generated.mjs` records generated originals from local files, with no network request.
+- `commons/cli.mjs` and `openverse/cli.mjs` search public APIs for candidate metadata. They never download image bytes.
+
+The output of `cli.mjs --stage` feeds the [media upload bridge](../media-upload/README.md).
 
 ## Workflow
 
-1. Curate one source manually and verify its original rights page. Download the
-   file into a local source directory; never hotlink it at runtime.
-2. Add an `approved` record to `asset-sources.json`. SHA-256, MIME, byte size,
-   intrinsic dimensions, creator, license, acquisition/verification dates, and
-   every visual-rights review flag must match before the file can stage.
-3. Run a readiness pass:
+1. Pick one source by hand and verify its original rights page. Download the file into a local source directory. Never hotlink it at runtime.
+2. Add an `approved` record to the source manifest (`asset-sources.json`). SHA-256, MIME type, byte size, dimensions, creator, license, dates and every visual-rights flag must match before the file can stage.
+3. Run a readiness pass: `node scripts/demo-store/assets/cli.mjs --report-only --source-dir /absolute/private/source-directory`
+4. When the report is clean, normalize the files: `node scripts/demo-store/assets/cli.mjs --stage --source-dir /absolute/private/source-directory`
 
-   ```sh
-   node scripts/demo-store/assets/cli.mjs --report-only \
-     --source-dir /absolute/private/source-directory
-   ```
+| Option | Default |
+| --- | --- |
+| `--manifest <path>` | `scripts/demo-store/assets/asset-sources.json` (checked in, with no records) |
+| `--source-dir <path>` | `scripts/demo-store/assets/source` (not checked in) |
+| `--output-dir <path>` | `.wrangler/demo-store-assets/staged` |
+| `--report <path>` | `.wrangler/demo-store-assets/readiness.json` |
 
-4. After the report is clean, normalize sequentially:
+`--report-only` is the default mode. The output and the report are private artifacts under `.wrangler/` (git-ignored). The CLI exits with status 2 when the run is not ready and 1 on an error. A staged filename depends on the logical key, the profile and the source SHA-256, so new source bytes never reuse a filename.
 
-   ```sh
-   node scripts/demo-store/assets/cli.mjs --stage \
-     --source-dir /absolute/private/source-directory
-   ```
-
-The default output and report are private local artifacts under
-`.wrangler/demo-store-assets/`. A non-ready run exits with status 2. Staged
-filenames are deterministic from logical key, target profile, and source
-SHA-256. Replacing source bytes cannot silently reuse a filename.
-
-Every readiness report includes exact asset progress plus complete-owner
-progress for all 50 products, five category images, and three two-source hero
-stories. A product or hero counts as ready only when every one of its logical
-slots is ready; `remainingByOwner` retains the exact missing logical keys so a
-partial product cannot be mistaken for an uploadable one.
+Each report asset has one status: `missing-source-record`, `invalid-provenance`, `source-invalid`, `ready-to-stage` or `staged`. A product, category or hero counts as ready only when all its logical slots are ready. `progress.remainingByOwner` lists the missing keys of each unready owner.
 
 ## Rights policy
 
-- Accepted public-source policies are CC0 1.0, Public Domain Mark 1.0, CC BY
-  4.0, and the Pexels license. Merchant-owned and original generated work have
-  explicit local provenance types. Source kind and license are paired
-  semantically: merchant-owned uses `Proprietary-Merchant-Owned`, Pexels uses
-  `Pexels`, Commons/Openverse may use only CC0/PDM/CC BY 4.0, and generated
-  originals use `Generated-Original`.
-- CC BY requires saved attribution. CC BY-SA is rejected unless a later policy
-  deliberately implements derivative/share-alike compliance.
-- Acquisition and verification values must be real `YYYY-MM-DD` calendar
-  dates, ordered `acquiredAt <= verifiedAt <= today`. Date-shaped values such
-  as `2026-02-30`, reversed reviews, and future verification are rejected.
-- Wikimedia Commons records must identify the individual file page and original
-  download URL. Per-file license/extmetadata must be reviewed; search metadata
-  alone is not approval. A later downloader should query only a few candidates
-  with `generator=search`, `filetype:bitmap`, and `imageinfo` URL/size/MIME/SHA1/
-  filtered extmetadata, then download rather than hotlink. This command performs
-  no such network work.
-- Pexels records retain the source page, photographer, license URL, and download
-  date even when attribution is optional.
-- Watermarks, visible brands, trademarked characters, identifiable endorsers,
-  and unverified option appearance fail the record. Boolean review flags are
-  intentionally explicit; omitting one is not treated as consent.
+- Each source kind accepts only its licenses:
+
+  | Source kind | License code |
+  | --- | --- |
+  | `merchant-owned` | `Proprietary-Merchant-Owned` |
+  | `pexels` | `Pexels` |
+  | `wikimedia-commons`, `openverse-verified` | `CC0-1.0`, `PDM-1.0`, `CC-BY-4.0` |
+  | `generated-original` | `Generated-Original` |
+
+- CC BY needs saved attribution. CC BY-SA is rejected, because the tools implement no share-alike compliance.
+- `acquiredAt` and `verifiedAt` must be real `YYYY-MM-DD` dates with `acquiredAt <= verifiedAt <= today`.
+- Every record needs a creator and an HTTPS license URL. A Commons, Openverse or Pexels record also needs HTTPS `sourcePageUrl` and `originalFileUrl`. For Commons, review the license of the individual file page: search metadata is not approval.
+- A merchant-owned record needs `merchantOwnershipReference`. A generated record needs `generation.prompt` and `generation.model`.
+- A watermark, visible brand, trademarked character, identifiable endorser or unverified option appearance fails the record. Each review flag must be an explicit `true`: a missing flag is not consent.
 
 ## Output profiles
 
 | Profile | Master | Behavior |
 | --- | --- | --- |
-| Product primary, variant, poster | 1600×1600 WebP | sRGB; contiguous near-white exterior margins are trimmed, then the source is contained in a centered 80% safe-area canvas |
-| Product detail/lifestyle | 1600×1600 WebP | sRGB cover using the reviewed crop position |
-| Category | 1600×1000 WebP | sRGB cover |
-| Desktop hero | 2400×900 WebP | sRGB cover; source must already respect its copy-safe composition |
-| Mobile hero | 1080×1350 WebP | sRGB cover; separately composed source, never a blind desktop crop |
-| Video | Original MP4/WebM | SHA/MIME/size/dimensions verified; copied without transcoding |
+| Product primary, variant, poster | 1600×1600 WebP | sRGB. Trims near-white exterior margins, then fits the image in a centered 80% safe area. |
+| Product detail, lifestyle | 1600×1600 WebP | sRGB cover at the reviewed crop position. |
+| Category | 1600×1000 WebP | sRGB cover. |
+| Desktop hero | 2400×900 WebP | sRGB cover. The source must already respect its copy-safe composition. |
+| Mobile hero | 1080×1350 WebP | sRGB cover. Compose it separately; never crop the desktop image. |
+| Video | Original MP4 or WebM | The tool verifies SHA, MIME, size and dimensions, and copies the file without transcoding. |
 
-Images use the storefront workspace's pinned `sharp` dependency. Videos require
-`ffprobe` so dimensions are verified instead of trusted from the manifest.
-Sources are limited to the platform policy (20 MiB images, 100 MiB videos).
-Normalized images are rechecked as exact-size WebP files below 20 MiB.
+Images use the `sharp` version pinned in the storefront workspace. Videos need `ffprobe`, which verifies dimensions instead of trusting the manifest. Sources follow the platform media policy: 20 MiB for images and 100 MiB for videos. The tool rechecks each normalized image as an exact-size WebP file below 20 MiB.
 
-Contain-safe trimming is deliberately conservative: it removes only exterior
-pixels within a six-level tolerance of pure white before resizing. It does not
-detect subjects, replace backgrounds, trim opaque colored scenes, or run for
-detail/lifestyle cover profiles. Product edges and shadows must remain visibly
-different from near-white exterior space; ambiguous all-white inputs are left
-unchanged by the image pipeline.
+The trim removes only exterior pixels within 6 levels of pure white, before the resize. It does not detect subjects, replace backgrounds, trim colored scenes or run for cover profiles. Product edges and shadows must differ visibly from near-white exterior space.
 
 ## Source record shape
 
@@ -94,11 +68,7 @@ unchanged by the image pipeline.
   "sourceFile": "footwear/vale-primary.png",
   "merchantOwnershipReference": "signed release or internal shoot reference",
   "creator": "creator name",
-  "license": {
-    "code": "Proprietary-Merchant-Owned",
-    "url": "https://owned.example/rights",
-    "attribution": ""
-  },
+  "license": { "code": "Proprietary-Merchant-Owned", "url": "https://owned.example/rights", "attribution": "" },
   "acquiredAt": "2026-07-13",
   "verifiedAt": "2026-07-13",
   "sha256": "64 lowercase hexadecimal characters",
@@ -115,21 +85,11 @@ unchanged by the image pipeline.
 }
 ```
 
-Public-source records additionally require HTTPS `sourcePageUrl` and
-`originalFileUrl`. Generated-original records require `generation.prompt` and
-`generation.model`; this tooling does not generate any assets.
+`sourceFile` is relative to `--source-dir` and cannot leave it. `cropPosition` is a `sharp` position such as `centre`, `north`, `entropy` or `attention`. A record for retained-product media can also carry `remoteReuse` or `retainedReplacement` (defined in the [media upload bridge](../media-upload/README.md)).
 
-## Register a generated original privately
+## Register a generated original
 
-`register-generated.mjs` inspects one already-generated local image or video,
-computes its SHA-256, MIME, bytes, and intrinsic dimensions, and atomically
-upserts one or more exact demo-manifest logical keys. It performs no network
-request, model call, Media upload, or other API write.
-
-Both the source and manifest must be private. Paths outside the repository are
-accepted; paths inside the repository must be under the Git-ignored
-`.wrangler/` tree. The checked-in `asset-sources.json` and every other
-repository path are refused, and `--manifest` has no default.
+`register-generated.mjs` inspects one local image or video, computes its SHA-256, MIME type, size and dimensions, and upserts one or more exact logical keys into a private manifest. The source file and the manifest must be private: a path outside the repository is accepted, and a path inside it must be under `.wrangler/`. The tool refuses the checked-in `asset-sources.json`, and `--manifest` has no default.
 
 ```sh
 node scripts/demo-store/assets/register-generated.mjs \
@@ -138,126 +98,32 @@ node scripts/demo-store/assets/register-generated.mjs \
   --file .wrangler/demo-store-assets/source/vale-chalk.png \
   --logical-key vale-everyday-runners:variant-chalk \
   --prompt-file .wrangler/demo-store-assets/prompts/vale-chalk.txt \
-  --model gpt-image-2 \
-  --creator "Scalius demo studio" \
-  --rights-url https://www.scalius.com/asset-rights \
-  --reviewed-by demo-reviewer \
-  --acquired-at 2026-07-13 \
-  --verified-at 2026-07-13 \
-  --confirm-no-watermark \
-  --confirm-no-visible-branding \
-  --confirm-no-trademarked-character \
-  --confirm-no-identifiable-endorser \
+  --model gpt-image-2 --creator "Scalius demo studio" \
+  --rights-url https://www.scalius.com/asset-rights --reviewed-by demo-reviewer \
+  --acquired-at 2026-07-13 --verified-at 2026-07-13 \
+  --confirm-no-watermark --confirm-no-visible-branding \
+  --confirm-no-trademarked-character --confirm-no-identifiable-endorser \
   --confirm-option-appearance
 ```
 
-Repeat `--logical-key` only when the same source truthfully serves every named
-slot after its profile transformation. The helper verifies key existence and
-image/video kind, but visual suitability remains a human review decision. A
-single source normally must not back primary and variant gallery entries, or
-detail and lifestyle entries, because that creates duplicate or misleading
-buyer media.
+- Use `--prompt <text>` or `--prompt-file <file>`, not both. `--crop-position <position>` changes the default `centre`.
+- Repeat `--logical-key` only when one source truthfully serves every named slot after its profile transformation. The tool checks that each key exists and that its kind (image or video) matches. A person decides visual suitability. One source normally must not back both a primary and a variant entry, or both a detail and a lifestyle entry, because the buyer would see duplicate media.
+- To replace the media of a retained product, add `--retained-product-id <id> --replaces-media-id <current media id>` with exactly one `--logical-key`. The tool writes `retainedReplacement` on the record.
 
-Use the resulting private manifest explicitly for readiness and staging:
+Pass the private manifest to the readiness pass and to staging with `--manifest .wrangler/demo-store-assets/generated-sources.json --source-dir .wrangler/demo-store-assets/source`.
 
-```sh
-node scripts/demo-store/assets/cli.mjs --report-only \
-  --manifest .wrangler/demo-store-assets/generated-sources.json \
-  --source-dir .wrangler/demo-store-assets/source
-```
+## Candidate discovery
 
-## Wikimedia Commons candidate discovery
-
-`commons/cli.mjs` is a read-only research helper, not a downloader or approval
-tool. Put at most ten targeted searches in a private or reviewed plan:
-
-```json
-{
-  "schemaVersion": 1,
-  "queries": [
-    {
-      "logicalKey": "category:home-living:image",
-      "query": "calm neutral home interior objects no people",
-      "limit": 5
-    }
-  ]
-}
-```
-
-Then create a private review queue:
+The discovery tools build a manual-review queue. Their output never approves an asset: every candidate has `approval.eligible: false`. A record becomes `approved` only in a source manifest, after you download the file and compute its SHA-256. A Commons SHA-1 is provenance evidence, not the staging hash.
 
 ```sh
-node scripts/demo-store/assets/commons/cli.mjs \
-  --plan /absolute/path/to/commons-queries.json
+node scripts/demo-store/assets/commons/cli.mjs --plan /absolute/path/to/commons-queries.json
+node scripts/demo-store/assets/openverse/cli.mjs --plan /absolute/path/to/openverse-queries.json
 ```
 
-The tool issues sequential, identified requests to the Commons Action API with
-`generator=search`, namespace 6, `filetype:bitmap`, `maxlag=5`, and no more than
-eight candidates per query. It requests one current `imageinfo` record with
-URL, description page, size, MIME, SHA-1, and only the creator/license/
-attribution/description extended-metadata fields needed for review. Extended
-metadata is expensive, so continuation is deliberately ignored and requests
-are separated by one second. HTTP 429/503 receives one bounded retry only.
+A plan is `{ "schemaVersion": 1, "queries": [{ "logicalKey": "category:home-living:image", "query": "...", "limit": 5 }] }`. It has 1 to 10 queries with unique logical keys. `limit` is 1 to 8 (default 5). A query is one line of at most 120 characters for Commons and 200 for Openverse. The checked-in `queries.json` files hold no queries, so pass `--plan <path>`. `--output <path>` overrides the output file (`.wrangler/demo-store-assets/commons-review.json` or `openverse-review.json`).
 
-The output under `.wrangler/demo-store-assets/commons-review.json` is always a
-manual-review queue:
-
-- CC0, Public Domain Mark, and CC BY 4.0 candidates may enter manual review;
-- CC BY-SA, GFDL, unknown licenses, PDFs, and unsupported image MIME types are
-  rejected automatically;
-- watermark, visible-brand, trademarked-character, identifiable-endorser,
-  option-appearance, and source-page-license checks remain explicit `null`
-  fields until a person reviews the original file page and full-resolution
-  image. `applyCommonsManualReview()` converts any explicit failed flag into a
-  rejection reason; even an all-pass review becomes `manual-review-complete`,
-  never approved;
-- every candidate has `approval.eligible: false`. Discovery output cannot be
-  passed to staging as an approved record;
-- the original image URL is preserved for later manual download, but this tool
-  never fetches it. A later approved staging record must compute SHA-256 from
-  downloaded bytes; Commons SHA-1 is provenance evidence, not the staging hash.
-
-This follows the official [Imageinfo API](https://www.mediawiki.org/wiki/API:Imageinfo)
-warning to request expensive extended metadata for only a few results and the
-Commons requirement for an identifiable User-Agent and considerate request
-rates.
-
-## Openverse candidate discovery
-
-`openverse/cli.mjs` is the parallel metadata-only research path for Openverse's
-official anonymous image API. Its plan has the same shape and ten-query/eight-
-result limits as the Commons plan. It always requests page 1 with:
-
-- `mature=false` and `filter_dead=true`;
-- `extension=jpg,jpeg,png,webp`;
-- `license=cc0,pdm,by`;
-- `license_type=commercial,modification`.
-
-```sh
-node scripts/demo-store/assets/openverse/cli.mjs \
-  --plan /absolute/path/to/openverse-queries.json
-```
-
-The private `.wrangler/demo-store-assets/openverse-review.json` queue preserves
-`foreign_landing_url`, original URL, creator/creator URL, Openverse attribution,
-license code/version/URL, provider, source, file type/size, and dimensions. The
-client identifies itself, waits one second between queries, has a 15-second
-timeout and 1 MB response ceiling, and performs only one bounded retry for 429
-or transient 5xx responses. It never requests thumbnails, original image bytes,
-related results, or later pages.
-
-Search filters are not rights authority. Returned CC BY versions other than 4.0,
-unexpected licenses, unsupported extensions, mature results, missing creators,
-or missing HTTPS landing/original URLs are rejected locally. Every otherwise
-eligible record still starts at `manual-review-required`; the reviewer must
-open the foreign landing page, verify its exact license, inspect the original
-for watermarks/brands/trademarks/identifiable endorsers and option accuracy,
-and confirm the original URL remains reachable. Failed flags reject the
-candidate. All-pass review remains `manual-review-complete` with
-`approval.eligible: false`; only a separate downloaded-byte SHA-256 staging
-record can later become approved.
-
-The request and response fields follow the official
-[Openverse image API](https://api.openverse.org/), which explicitly describes
-anonymous access, pagination limits, search filters, and image provenance
-fields.
+- Each tool sends an identifying `User-Agent`, waits one second between queries, times out after 15 seconds, rejects a response over 1 MB and retries once on a throttle or transient error. It reads only page 1 and never requests thumbnails or original bytes.
+- Commons uses the Action API. It rejects CC BY-SA, GFDL, unknown licenses and unsupported MIME types.
+- Openverse uses the anonymous image API with commercial-use license filters. Search filters are not rights authority: the tool also rejects CC BY versions other than 4.0, unexpected licenses, unsupported extensions, mature results, missing creators or dimensions and missing HTTPS URLs.
+- A candidate is `manual-review-required` or `rejected`. A person checks the file or landing page, the exact license, and the full-resolution image (watermarks, brands, trademarks, endorsers, option accuracy), and, for Openverse, that the original URL still works. `applyCommonsManualReview()` and `applyOpenverseManualReview()` turn an explicit failed flag into a rejection reason. An all-pass review gives `manual-review-complete`, never `approved`.

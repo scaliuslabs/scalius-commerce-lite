@@ -1,40 +1,76 @@
-# Steadfast Courier
+# Steadfast
 
-Last verified: **2026-09-09**
+Steadfast is a built-in courier (`type = steadfast`). This page is for operators who set it up and contributors who change its adapter. Runtime rules are in the [delivery domain README](../../packages/core/src/modules/delivery/README.md). Webhook verification is in the [folder README](README.md). Provider documentation: [Steadfast API documentation](https://docs.google.com/document/d/e/2PACX-1vTi0sTyR353xu1AK0nR8E_WKe5onCkUXGEf8ch8uoJy9qxGfgGnboSIkNosjQ0OOdXkJhgGuAsWxnIh/pub), [webhook settings](https://steadfast.com.bd/user/webhook/add) and the [official WordPress plugin](https://wordpress.org/plugins/steadfast-api/).
 
-## Sources, environment, and authentication
+## Environment and credentials
 
-Primary sources: [Steadfast API documentation](https://docs.google.com/document/d/e/2PACX-1vTi0sTyR353xu1AK0nR8E_WKe5onCkUXGEf8ch8uoJy9qxGfgGnboSIkNosjQ0OOdXkJhgGuAsWxnIh/pub), [Steadfast webhook settings](https://steadfast.com.bd/user/webhook/add), and the [official Steadfast API WordPress plugin listing](https://wordpress.org/plugins/steadfast-api/).
+The dashboard preset is the production base URL `https://portal.packzy.com/api/v1`. There is no sandbox preset, and a courier name such as "Steadfast Demo" gives no test isolation.
 
-The documented API base is production-only: `https://portal.packzy.com/api/v1`. No official sandbox endpoint was verified. API calls use `Api-Key`, `Secret-Key`, and `Content-Type: application/json`. `GET /get_balance` is the Scalius live credential test; a provider becomes action-ready only after the current saved setup passes and is active.
+| Field | Where | Notes |
+|-------|-------|-------|
+| `baseUrl`, `apiKey`, `secretKey` | credentials | Required to activate. |
+| `webhookSecret` | credentials | The bearer token Steadfast sends to the callback. Keep it separate from `apiKey` and `secretKey`. |
 
-A saved provider named “Steadfast Demo” is still connected to whichever base URL and account it contains; the name does not create test isolation. On 2026-09-09 the callback URL and generated bearer token were saved in both Scalius and the portal; absent or invalid bearer requests returned HTTP 401, while the configured bearer received the documented HTTP 200 success response for a synthetic unmatched tracking update. Saving the token correctly reset the saved live-test/active proof, and a fresh credential test restored the provider to Active at 09:59 UTC. The portal account remained on an ownership hold with email unverified. A callback sent by Steadfast and a real courier booking were not verified. Do not claim end-to-end production verification from this configuration. Account/KYC/ownership approval remains provider-controlled.
+## Calls
 
-## Booking and lookup contract
+Source: `packages/core/src/modules/delivery/couriers/steadfast.ts`. Every request sends `Api-Key`, `Secret-Key` (both trimmed) and `Content-Type: application/json`.
 
-Scalius uses `POST /create_order` with the exact internal order ID as `invoice`, national-format phone, saved recipient identity, a full address composed from saved address/area/zone/city names, and authoritative saved COD balance. The adapter accepts success only when status `200` includes a positive integer consignment ID and status. Explicit 400/401/403/404/422 rejection permits a corrected attempt; network/read failure, server response, malformed JSON, or incomplete identity remains unknown and is not automatically retried.
+| Purpose | Request |
+|---------|---------|
+| Connection test | `GET /get_balance`. It passes when the JSON body has `status` 200. |
+| Book | `POST /create_order` |
+| Status | `GET /status_by_cid/{consignmentId}` |
+| Recovery lookup | `GET /status_by_invoice/{orderId}` (positive answers only) |
 
-Status reads are `GET /status_by_cid/{id}`, `/status_by_invoice/{invoice}`, and, where needed outside the current adapter, `/status_by_trackingcode/{trackingCode}`. The documented response is only status plus `delivery_status`; it does not return identity fields. A positive invoice lookup can establish presence for the original invoice and blocks a “not created” attestation. A failed/404/unknown lookup cannot establish absence. CID success cannot establish that an arbitrary supplied ID belongs to the order, so it must never be auto-attached on status alone.
+## Booking
 
-The documentation calls invoice values unique, but a published bulk example repeats invoice values. Scalius therefore does not treat `invoice` as provider idempotency and does not issue speculative duplicate creates.
+- The body carries `invoice` (the Scalius order id), recipient name, local-format phone, `recipient_address` (address, area, thana and city joined by commas), `cod_amount` (the balance due, in major units) and `note`. The saved order supplies all money and content.
+- Success needs HTTP success, body `status` 200, a positive integer `consignment.consignment_id` and a string `consignment.status`. `external_id` is the consignment id. `tracking_id` is the `tracking_code`.
+- Explicit rejection: body `status` 400, 401, 403, 404 or 422, with a matching or successful HTTP status. A corrected booking is then safe. Anything else is an unknown outcome. A booking is never retried automatically.
+- A status read returns the delivery status only, no identity. The invoice lookup answers "found" only for HTTP success, body `status` 200 and a non-empty `delivery_status`. A found booking blocks a "not created" attestation. A failed, empty or 404 lookup never proves that no booking exists.
+- Scalius never attaches a consignment id from a status read, and never treats `invoice` as courier-side idempotency.
 
-Owning code/tests: [`couriers/steadfast.ts`](../../packages/core/src/modules/delivery/couriers/steadfast.ts), [`delivery.create-outcome.d1.test.ts`](../../packages/core/src/modules/delivery/delivery.create-outcome.d1.test.ts), and [`orders.fulfillment.ts`](../../packages/core/src/modules/orders/orders.fulfillment.ts).
+## Status map
 
-## Status and recovery
+`mapProviderStatus("steadfast", status)` lowercases the value. An unmapped value becomes `unknown` with a logged warning.
 
-The documented delivery statuses include pending/review, hold, delivered, partial-delivered, cancelled, unknown, and approval-pending forms. Exact normalization lives in [`status-mapper.ts`](../../packages/core/src/modules/delivery/status-mapper.ts). `cancelled_approval_pending` maps to `on_hold`, because provider cancellation is not final and must not reopen booking. `unknown_approval_pending`, arbitrary strings, and other unrecognized values stay unknown and retain reconciliation locks. Delivered approval-pending statuses remain delivered because the delivery is physically complete while approval/payment settlement is pending.
+| Steadfast status | Canonical status |
+|------------------|------------------|
+| `pending`, `in_review` | `pending` |
+| `hold`, `cancelled_approval_pending` | `on_hold` |
+| `delivered`, `delivered_approval_pending` | `delivered` |
+| `partial_delivered`, `partial_delivered_approval_pending` | `partial_delivered` |
+| `cancelled` | `cancelled` |
+| `unknown`, `unknown_approval_pending` | `unknown` |
 
-Unknown creation follows the shared claim/version guard. Positive invoice presence blocks an absence claim. Portal/support confirmation of non-creation or final cancellation must bind to the exact order/provider and persist operation key, actor, source, time, note, and outcome before releasing the claim.
+`cancelled_approval_pending` maps to `on_hold` so that a cancellation that is not final cannot reopen the order for another booking.
 
-## Webhook contract
+## Webhook
 
-Configure the callback ending in `/webhooks/steadfast` in the portal. The portal webhook authentication token is a separate secret from `Api-Key` and `Secret-Key`. Steadfast sends it as `Authorization: Bearer <configured auth token>` with `Content-Type: application/json`; Scalius verifies it against the single active Steadfast provider.
+Callback URL: `<API origin>/api/v1/webhooks/steadfast`. Source: `apps/api/src/routes/webhooks/steadfast.ts`.
 
-Steadfast documents two POST JSON notification types:
+- Steadfast sends `Authorization: Bearer <token>`.
+- Two types are accepted. Another `notification_type` answers 400.
 
-- `delivery_status`: `notification_type`, integer `consignment_id`, string `invoice`, float `cod_amount`, `status` (`pending`, `delivered`, `partial_delivered`, `cancelled`, or `unknown`), float `delivery_charge`, `tracking_message`, and `updated_at` formatted `YYYY-MM-DD HH:mm:ss`.
-- `tracking_update`: `notification_type`, `consignment_id`, `invoice`, `tracking_message`, and `updated_at`.
+| `notification_type` | Fields used | Effect |
+|---------------------|-------------|--------|
+| `delivery_status` | `consignment_id`, `invoice`, `status`, `cod_amount`, `delivery_charge`, `tracking_message` | Maps `status`, updates the shipment, then runs the shared pipeline. |
+| `tracking_update` | `consignment_id`, `invoice`, `tracking_message`, `updated_at` | Stores the tracking text in `metadata`. The status does not change. |
 
-A successful receiver returns HTTP 200 with `{ "status": "success", "message": "Webhook received successfully." }`. Scalius deduplicates notifications, scopes shipment lookup by provider ID/type and consignment/invoice evidence, updates delivery status only for `delivery_status`, and stores tracking text without changing status for `tracking_update`.
+- Success answers HTTP 200 `{ "status": "success", "message": "Webhook received successfully." }`. Unmatched shipments, duplicates and ignored events answer the same. Failed verification answers 401. A processing failure answers 500.
+- A push is deduplicated by consignment id (or invoice), type and status (or update time and message).
+- The shipment is matched by consignment id, provider id and type. A match whose order differs from `invoice` is rejected. Without a match, a push with both ids can bind to the single shipment of that invoice that an unknown-outcome resolution (courier lookup or merchant attestation) confirmed as existing and that has no `external_id` yet.
 
-Do not log the bearer token, API keys, webhook body, raw provider response, or buyer data. Owning route/tests: [`webhooks/steadfast.ts`](../../apps/api/src/routes/webhooks/steadfast.ts), [`webhooks/steadfast.test.ts`](../../apps/api/src/routes/webhooks/steadfast.test.ts), and [`webhook-auth.ts`](../../apps/api/src/middleware/webhook-auth.ts).
+## Set up and test
+
+1. Settings, Shipping, Couriers: add a Steadfast courier, enter the base URL, API key and secret key, and save.
+2. Run Test connection. Any credential edit, including a new webhook key, clears the proof and needs a new test.
+3. Switch the courier on. Keep one active Steadfast row.
+4. In the courier form, generate the webhook key. Enter the callback URL and the key in the Steadfast portal (portal screens unverified).
+5. Book an order and check the consignment id and tracking code.
+
+## Provider-side facts (unverified)
+
+- The documented statuses are pending or in review, hold, delivered, partial delivered, cancelled, unknown, and approval-pending forms.
+- The documentation calls the invoice unique, but a published bulk example repeats invoice values.
+- No callback sent by Steadfast and no real booking has been observed. A test of this setup does not prove production readiness.

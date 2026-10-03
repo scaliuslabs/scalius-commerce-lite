@@ -1,197 +1,187 @@
-# Stable Release Performance Audit
+# Performance baselines and thresholds
 
-Last reviewed: 2026-08-09
+Last reviewed: 2026-10-03
 
-This note records the performance evidence and release decisions for the Commerce Lite stable-release audit. It is intentionally evidence-led: repeatable buyer and merchant behavior outranks a single synthetic score, and an unscored Lighthouse diagnostic is not treated as a release blocker by itself.
+This document holds the performance thresholds that release checks use and the dated measurements that serve as baselines. It is for contributors and operators. How the storefront renders and caches a page, and how to run the checks, are in [STOREFRONT-PERFORMANCE.md](./STOREFRONT-PERFORMANCE.md).
 
-## Architecture and performance boundary
+A baseline is one measurement at one date on one build. Measure again before you compare. Lab figures are not field data (no Chrome UX Report data exists).
 
-- The storefront is an Astro SSR multi-page application on Cloudflare Workers. Anonymous, canonical public reads use the native Worker cache; browser HTML remains `no-store`; checkout, account, recovery, and other buyer-state routes never enter the shared cache. The cart is a buyer-agnostic shell stored like a public page (lines paint from `localStorage`, buyer state comes from no-store APIs), see [STOREFRONT-PERFORMANCE.md](./STOREFRONT-PERFORMANCE.md#the-cart-shell).
-- The dashboard is a static TanStack Router single-page app served by the API Worker. TanStack Query owns remote-data freshness, route loaders warm the same keys rendered by components, and the shared data table uses server-side pagination, sorting, and filtering.
-- The API is a Hono Worker backed by D1. Request bindings are passed from `Env`, commerce writes stay authoritative in the relational provider, and independent reads use bounded D1 batches where that removes network round trips.
-- Hosted-service and multi-merchant control-plane concerns remain outside this repository.
+## Thresholds
 
-## Dependency and framework audit
-
-Every direct workspace dependency was compared with the public registry on
-2026-08-09 and advanced unless a newer line failed a verified compatibility
-gate. The resulting stack includes
-Astro 7.2.0, the Astro Cloudflare adapter 14.2.0, Vite 8.2.1, the Cloudflare
-Vite plugin 1.51.1, Wrangler 4.120.0, Hono 4.13.1, TanStack Start 1.168.35,
-TanStack Router 1.170.18, TanStack Table 9.1.0, React 19.2.8, pnpm 11.20.0,
-Turbo 2.10.9, and the latest compatible direct commerce, editor, form, schema,
-lint, test, and Cloudflare packages. `pnpm outdated -r` is empty except for four
-intentional compatibility lanes:
-
-- Node remains on the supported Node 24 LTS runtime, so `@types/node` stays on
-  its current 24.x line instead of advertising Node 26 Current APIs that do not
-  exist in CI or production tooling.
-- TypeScript 7.0.2 is the actual compiler for API, dashboard, core, database,
-  shared, and API-client checks. A side-by-side TypeScript 6.0.3 package remains
-  as the programmatic compiler API required by stable `typescript-eslint` and
-  `@astrojs/check`; this is the migration shape recommended by the TypeScript 7
-  release itself, not a stale compiler path.
-- TanStack Router stays pinned at 1.170.18. With TanStack Start 1.168.36
-  through 1.168.40, Router 1.170.19 through 1.170.23 produced a reproducible
-  document hydration mismatch while the dashboard was server-rendered; the
-  boundary coincides with TanStack's
-  [large lane-match loader rewrite](https://github.com/TanStack/router/commit/45c4ad8d629e291fab70c37900525449e415ffcd).
-  The dashboard is now a client-only SPA, so lift the pin only after the
-  dashboard browser gates pass on the newer Router.
-
-The complete peer-dependency check and both full and production-only package
-audits pass with zero findings. The storefront sets `session: false`: nothing
-reads `Astro.session` (cart state is client-side and customer auth uses API
-cookies), so the adapter no longer adds a KV session driver or `SESSION` binding.
-The Cloudflare adapter's new build-time image-binding path and Astro's
-incremental static build mode do not replace this storefront's dynamic SSR,
-custom CDN image policy, or semantic cache invalidation. They were therefore
-not enabled merely because the packages now expose them.
-
-## Storefront evidence
-
-### Before the release changes
-
-| Surface | PageSpeed report | Result |
+| Area | Threshold | Enforced by |
 | --- | --- | --- |
-| Homepage mobile | [run `e0nkv90xc1`](https://pagespeed.web.dev/analysis/https-storefront-scalius-com/e0nkv90xc1?form_factor=mobile) | Performance 94; FCP 1.8 s; LCP 2.9 s; TBT 0; CLS 0 |
-| Homepage mobile repeat | [run `biltl1x5vh`](https://pagespeed.web.dev/analysis/https-storefront-scalius-com/biltl1x5vh?form_factor=mobile) | Performance 98; FCP 1.8 s; LCP 2.2 s; TBT 0; CLS 0 |
-| Product mobile | [run `golsno32t0`](https://pagespeed.web.dev/analysis/https-storefront-scalius-com-products-rider-court-trainers/golsno32t0?form_factor=mobile) | Performance 98; FCP 1.8 s; LCP 2.0 s; TBT 0; CLS 0 |
-| Homepage/product desktop | Same reports, desktop tab | 100 performance, accessibility, best practices, and SEO |
+| Cache-hit TTFB, cache-miss TTFB, phone LCP, desktop LCP, CLS | 50 ms, 300 ms, 1500 ms, 1200 ms, 0.1 | `pnpm perf:storefront` (`DEFAULT_BUDGETS` in `scripts/storefront-perf.mjs`) |
+| Template fidelity and page weights | `tolerances` and `budgets` in `scripts/storefront-fidelity/reference-metrics.json` (CLS 0.05 there) | `pnpm fidelity:check` |
+| API calls, D1 round trips and waves per page render | 1 call; per-page limits in [STOREFRONT-PERFORMANCE.md](./STOREFRONT-PERFORMANCE.md#budgets-and-guardrails) | `render-batch.test.ts`, `storefront-render-budget.test.ts` |
+| Dashboard first-render JavaScript (Brotli) | `BUNDLE_BUDGETS` in `scripts/admin-perf-check.mjs` | `pnpm check:admin-perf` |
+| API Worker size | 90% of 64 MiB uncompressed | `pnpm check:api-bundle` |
+| Public pages report their cache lane | `X-Cache-Status` is `HIT` or `MISS`; checkout is `NO_CACHE` | `pnpm release:check` |
+| Every Worker declares `CF_VERSION_METADATA`; the API keeps Workers Cache off | n/a | `pnpm check:env` |
 
-### Deployed result
+Run the heavy gates one at a time on a 16 GB host. `pnpm typecheck` already runs with `--concurrency=1`.
 
-| Surface | PageSpeed report | Result |
+Policy (decided 2026-08; no script enforces it):
+
+- Dashboard: a warm navigation shows first feedback within 100 ms at p75, and Interaction to Next Paint (INP) stays at or below 200 ms. Reopen a dashboard architecture change only when a measured hot interaction misses one of these, with at least a 15% or 50 ms p75 gain and no p95 regression.
+- Storefront images: reopen image work only when a change that keeps visual fidelity gains at least 100 ms at p75.
+- Early Hints: keep the preconnect hint only while a test (at least 20 paired cold runs in three data centers) shows at least 100 ms median or 150 ms p75 LCP gain and unchanged hit latency. Never extend it to a hero, product, query or build-hashed URL.
+- Field data: treat 7 days of post-release real-user data as provisional and 28 days as final, with adequate cohort samples and Good LCP, INP and CLS. Label it Chromium-only.
+
+## Storefront baselines
+
+### Hosted PageSpeed Insights, mobile (August 2026, production demo store)
+
+Lighthouse lab runs on PageSpeed Insights, verified on 2026-08-09. Scores are Performance, Accessibility, Best Practices and SEO. TBT is 0 in every run. CSS and image delivery have changed since.
+
+| Page | Before | After |
 | --- | --- | --- |
-| Homepage mobile | [run `3quw0ddh0l`](https://pagespeed.web.dev/analysis/https-storefront-scalius-com/3quw0ddh0l?form_factor=mobile) | 98/100/100/100; FCP 1.866 s; LCP 2.102 s; TBT 0; CLS 0 |
-| Homepage mobile repeat | [run `shwlqeh8ip`](https://pagespeed.web.dev/analysis/https-storefront-scalius-com/shwlqeh8ip?form_factor=mobile) | 98/100/100/100; FCP 1.838 s; LCP 2.131 s; TBT 0; CLS 0 |
-| Homepage mobile second-pass | [run `hcqj0yu9dn`](https://pagespeed.web.dev/analysis/https-storefront-scalius-com/hcqj0yu9dn?form_factor=mobile) | 98/100/100/100; FCP 1.826 s; LCP 2.177 s; TBT 0; CLS 0 |
-| Homepage desktop | [run `shwlqeh8ip`](https://pagespeed.web.dev/analysis/https-storefront-scalius-com/shwlqeh8ip?form_factor=desktop) | 100/100/100/100; FCP 0.506 s; LCP 0.563 s; TBT 0; CLS 0.00026 |
-| Product mobile | [run `3wqcg6981u`](https://pagespeed.web.dev/analysis/https-storefront-scalius-com-products-rider-court-trainers/3wqcg6981u?form_factor=mobile) | 98/100/100/100; FCP 1.832 s; LCP 1.983 s; TBT 0; CLS 0 |
-| Final homepage mobile | [run `b28zxipsn7`](https://pagespeed.web.dev/analysis/https-storefront-scalius-com/b28zxipsn7?form_factor=mobile) | 98/100/100/100; FCP 1.8 s; LCP 2.2 s; TBT 0; CLS 0 |
-| Final homepage desktop | [run `b28zxipsn7`](https://pagespeed.web.dev/analysis/https-storefront-scalius-com/b28zxipsn7?form_factor=desktop) | 100/100/100/100; FCP 0.5 s; LCP 0.6 s; TBT 0; CLS 0.005 |
-| Final optioned product mobile | [run `esq7kzpb0q`](https://pagespeed.web.dev/analysis/https-storefront-scalius-com-products-echo-mini-bluetooth-speaker/esq7kzpb0q?form_factor=mobile) | 98/100/100/100; FCP 1.9 s; LCP 2.0 s; TBT 0; CLS 0 |
-| Final reference product desktop | [run `bkcaistikn`](https://pagespeed.web.dev/analysis/https-storefront-scalius-com-products-rider-court-trainers/bkcaistikn?form_factor=desktop) | 100/100/100/100; FCP 0.5 s; LCP 0.5 s; TBT 0; CLS 0 |
-| Early Hints production trial | [run `93ky6dhwf3`](https://pagespeed.web.dev/analysis/https-storefront-scalius-com/93ky6dhwf3?form_factor=mobile) | 98/100/100/100; FCP 1.8 s; LCP 2.0 s; TBT 0; CLS 0 |
-| Early Hints production repeat | [run `1k7ms6p9x2`](https://pagespeed.web.dev/analysis/https-storefront-scalius-com/1k7ms6p9x2?form_factor=mobile) | 98/100/100/100; FCP 1.8 s; LCP 2.1 s; TBT 0; CLS 0 |
-| Full CSS externalization trial (rejected) | [run `ywvpf3r7fz`](https://pagespeed.web.dev/analysis/https-storefront-scalius-com/ywvpf3r7fz?form_factor=mobile) | 97/100/100/100; FCP 1.7 s; LCP 2.1 s; SI 3.8 s; the second render-blocking layout stylesheet cost 470 ms |
-| Hybrid CSS delivery | [run `kyxhyyehck`](https://pagespeed.web.dev/analysis/https-storefront-scalius-com/kyxhyyehck?form_factor=mobile) | 98/100/100/100; FCP 1.7 s; LCP 2.0 s; SI 1.7 s; TBT 0; CLS 0 |
-| Final cache-safe homepage mobile | [run `4ng4chsvag`](https://pagespeed.web.dev/analysis/https-storefront-scalius-com/4ng4chsvag?form_factor=mobile) | 98/100/100/100; FCP 1.7 s; LCP 2.0 s; SI 1.7 s; TBT 0; CLS 0 |
-| Final cache-safe homepage desktop | [run `fjgkvoc5ni`](https://pagespeed.web.dev/analysis/https-storefront-scalius-com/fjgkvoc5ni?form_factor=desktop) | 100/100/100/100; FCP 0.5 s; LCP 0.5 s; SI 0.5 s; TBT 0; CLS 0.007 |
-| Final deployed homepage mobile | [run `7ty0yncvp0`](https://pagespeed.web.dev/analysis/https-storefront-scalius-com/7ty0yncvp0?form_factor=mobile) | 98/100/100/100; FCP 1.7 s; LCP 2.0 s; SI 1.7 s; TBT 0; CLS 0; Agentic Browsing 3/3 |
-| Phone-critical homepage mobile | [run `0n8727pz0r`](https://pagespeed.web.dev/analysis/https-storefront-scalius-com/0n8727pz0r?form_factor=mobile) | 99/100/100/100; FCP 1.7 s; LCP 2.0 s; SI 1.7 s; TBT 0; CLS 0 |
-| Phone-critical product mobile | [run `x9ujro18af`](https://pagespeed.web.dev/analysis/https-storefront-scalius-com-products-orbit-gan-charger-65w/x9ujro18af?form_factor=mobile) | 99/100/100/100; FCP 1.7 s; LCP 1.9 s; SI 1.7 s; TBT 0; CLS 0 |
-| Stabilized cart mobile | [run `aza5e3mdhr`](https://pagespeed.web.dev/analysis/https-storefront-scalius-com-cart/aza5e3mdhr?form_factor=mobile) | Performance 99; FCP 1.7 s; LCP 2.0 s; SI 1.7 s; TBT 0; CLS 0. The prior cart baseline was 94 with CLS 0.12. Accessibility remains 98 for heading order, while `noindex` intentionally prevents a private cart from receiving a public-page SEO score. |
-| Optimized CMS page mobile | [run `ibx0gy7agx`](https://pagespeed.web.dev/analysis/https-storefront-scalius-com-about/ibx0gy7agx?form_factor=mobile) | 98/100/100/100; FCP 1.7 s; LCP 2.1 s; SI 1.7 s; TBT 0; CLS 0; the prior 14 KiB image-delivery opportunity is gone |
-| Final upgraded reference product mobile | [run `bdzvdv5knm`](https://pagespeed.web.dev/analysis/https-storefront-scalius-com-products-orbit-gan-charger-65w/bdzvdv5knm?form_factor=mobile) | 99/100/100/100; FCP 1.7 s; LCP 1.8 s; SI 1.7 s; TBT 0; CLS 0 |
-| Final upgraded homepage mobile | [run `zprdvocjol`](https://pagespeed.web.dev/analysis/https-storefront-scalius-com/zprdvocjol?form_factor=mobile) | 98/100/100/100; FCP 1.7 s; LCP 2.1 s; SI 1.7 s; TBT 0; CLS 0 |
-| Final product target mobile | [run `mhyslx3d8t`](https://pagespeed.web.dev/analysis/https-storefront-scalius-com-products-orbit-gan-charger-65w/mhyslx3d8t?form_factor=mobile) | **100/100/100/100**; FCP 0.9 s; LCP 1.8 s; SI 0.9 s; TBT 0; CLS 0; Agentic Browsing 3/3 |
-| Optioned product mobile | [run `lrrvk40mkj`](https://pagespeed.web.dev/analysis/https-storefront-scalius-com-products-echo-mini-bluetooth-speaker/lrrvk40mkj?form_factor=mobile) | 99/100/100/100; FCP 0.9 s; LCP 2.2 s; SI 0.9 s; TBT 0; CLS 0 |
-| Optioned product immediate repeat | [run `wtty9edxpz`](https://pagespeed.web.dev/analysis/https-storefront-scalius-com-products-echo-mini-bluetooth-speaker/wtty9edxpz?form_factor=mobile) | 98/100/100/100; FCP 0.9 s; LCP 2.3 s; SI 0.9 s; TBT 0; CLS 0 |
-| Final console-clean product mobile | [run `xpbog0z7bg`](https://pagespeed.web.dev/analysis/https-storefront-scalius-com-products-orbit-gan-charger-65w/xpbog0z7bg?form_factor=mobile) | 99/100/100/100; FCP 1.1 s; LCP 2.0 s; SI 1.1 s; TBT 0; CLS 0; proves the optional Meta dispatch no longer fails Best Practices |
+| Home | 94-98 performance, FCP 1.8 s, LCP 2.2-2.9 s | 98-99 / 100 / 100 / 100, FCP 1.7-1.9 s, LCP 2.0-2.2 s, CLS 0 |
+| Home, desktop | 100 / 100 / 100 / 100 | 100 / 100 / 100 / 100, FCP 0.5 s, LCP 0.5-0.6 s, CLS at most 0.007 |
+| Product | 98, LCP 2.0 s | 99-100, FCP 0.9-1.7 s, LCP 1.8-2.0 s, CLS 0 |
+| Product with options | not measured | 98-99, FCP 0.9-1.9 s, LCP 2.0-2.3 s, CLS 0 |
+| Cart | 94, CLS 0.12 | 99, LCP 2.0 s, CLS 0. Accessibility is 98 (heading order). `noindex` removes the SEO score. |
+| CMS page | an image-delivery opportunity of 14 KiB | 98 / 100 / 100 / 100, LCP 2.1 s |
 
-These reports contained no CrUX field data; they are Lighthouse lab evidence, not a claim about real-user p75. The Cloudflare account now uses one explicit first-class Web Analytics integration and automatic zone injection is disabled, so storefront and dashboard documents each load exactly one canonical module beacon with `fetchpriority="low"`. No clean pre-release cohort snapshot was captured, so this release still makes no before/after field-vitals claim. Treat seven days of post-release data as provisional and 28 days as final, require adequate cohort samples plus Good LCP/INP/CLS, and label the evidence Chromium-only rather than Safari/Firefox or CrUX.
+An intermittent mobile SEO score of 92 was a PageSpeed `robots.txt` fetch timeout: ten cold requests with mobile and Googlebot user agents returned the same valid body in 158-428 ms.
 
-The requested reference product now has a permanent hosted PageSpeed 100/100/100/100 report. That result is the retained marketing evidence, but it is not presented as a deterministic all-product guarantee: the optioned Echo product repeated at 99 and 98 while its FCP, Speed Index, TBT, and CLS remained excellent. Its 10,376-byte hero transferred in 60 ms on one hosted run and 230 ms on the next, while Orbit's 2,612-byte hero is less sensitive to network variance. Lowering dimensions or image quality further could improve the synthetic tail but would violate the pixel-fidelity constraint, so this release keeps the visual asset contract intact.
+### Local built stack (2026-09-26)
 
-The retained product path makes the eager, high-priority, synchronous-decoding mobile hero discoverable 14,077 HTML bytes earlier by ordering it before the desktop thumbnail rail while preserving the exact responsive grid geometry. A deterministic phone-shell stylesheet paints that hero without waiting for the complete 167.7 KiB shared Tailwind sheet. One media-qualified immutable link stays render-blocking at desktop widths, fetches at `VeryLow` priority on phones, and activates after load plus two animation frames; a `noscript` copy preserves the complete page without JavaScript. Fully externalizing compact route CSS regressed Speed Index, a fully dormant shared-sheet link produced unstable paint scheduling, and inlining the hero bytes regressed FCP, so all three trials were rejected.
+Method: `pnpm perf:storefront` against built local Workers and local D1, three browser runs per profile, every forced first request a `MISS` and every timed hit a `HIT`.
 
-Remaining PageSpeed diagnostics have no direct score weight. They can still matter if changing an underlying cause improves a weighted metric, but these items expose no such measured opportunity here:
+| Page | Cold TTFB | Warm TTFB | Phone LCP | Desktop LCP | CLS |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Home | 122 ms | 6 ms | 980 ms | 108 ms | 0 |
+| Product with video | 118 ms | 9 ms | 988 ms | 128 ms | 0 |
+| Category | 68 ms | 6 ms | 912 ms | 100 ms | 0 |
+| Search | 58 ms | 5 ms | 920 ms | 96 ms | 0 |
+| Cart shell | 58 ms | 5 ms | 900 ms | 76 ms | 0 |
 
-- Cloudflare Web Analytics beacon cache lifetime: provider-owned one-day TTL, about 5 KiB estimated repeat-view savings.
-- Network dependency tree: small application modules and the RUM branch; no missing origin preconnect.
-- LCP phase breakdown and third-party attribution.
+### Cart shell (2026-09-25)
 
-The intermittent mobile SEO 92 is a PageSpeed `robots.txt` fetch timeout, not a mobile-only response branch. It reproduced in [run `sc6enabcnz`](https://pagespeed.web.dev/analysis/https-storefront-scalius-com/sc6enabcnz?form_factor=mobile), while ten deliberately cold unique requests split between mobile and Googlebot user agents all returned the same valid absolute-sitemap body with 200 responses in 158-428 ms. The immediate PageSpeed repeat `4ng4chsvag` reported SEO 100. The route remains merchant-controlled and generation-keyed; no unpurgeable zone Cache Rule or inaccurate fallback policy was added to suppress an external audit timeout. Deployment warming covers robots, all sitemap children, both feeds, homepage, and search, and storefront cache keys include the build ID, so a cached response never carries a superseded build.
+Method: local built stack, forced misses, 5 runs, plus 10 sequential `curl` requests. Before the shell, `/cart` rendered for every request (0.15-1 s of server time in production, against about 20 ms for cached pages).
 
-## Storefront changes retained
+| Metric | Rendered for every request | Cached shell |
+| --- | --- | --- |
+| First request after a dependency change | 30-33 ms | 31-41 ms (once per build and data center) |
+| Later requests | 14-16 ms (`curl` median 13.5 ms) | 5-6 ms (`curl` median 3.0 ms), `HIT` |
+| API calls per render | 2 | 1 |
+| Phone / desktop LCP, empty cart | 896 / 108 ms | 900 / 80 ms |
+| CLS | 0 | 0 |
 
-- Reduced the first mobile hero CDN quality from 85 to 75. The deployed PageSpeed runs below are the retained outcome evidence; no exact byte-reduction claim is made without a checked-in before/after artifact.
-- Reduced hidden mobile carousel image quality from 80 to 70 while keeping desktop hidden slides at 80, delayed warming hidden slides, and removed priority from the first below-fold product rail image.
-- Replaced the 281-line product-gallery React island with the SSR base interaction plus a desktop-only dynamic zoom controller. Mobile no longer downloads that island/runtime path, while desktop zoom is loaded only when the desktop media query matches and remains responsive to viewport changes.
-- Prevent private/no-store links from participating in broad Astro intent prefetch while retaining intent prefetch for public catalog discovery.
-- Scope Tailwind source detection to storefront source files and use Astro's hybrid CSS threshold: cache the large build-scoped shared stylesheet across pages while leaving compressed sub-8 KiB route/layout CSS in the first response.
-- Give product phones a build-generated first-viewport Tailwind sheet while loading the immutable complete shared sheet without blocking first paint; keep the complete sheet render-blocking at desktop widths and in a `noscript` fallback. The focused visual comparison found no first-viewport geometry or computed-style differences, and the live product retained zero CLS.
-- Parse the mobile product hero before the desktop thumbnail rail and explicitly place both desktop grid cells, moving hero discovery 14,077 HTML bytes earlier without changing mobile or desktop geometry.
-- Do not create desktop navigation resize observers, animation frames, or the one-second reveal timeout on phones. Hidden header social images retain no `src` until their matching desktop surface or the mobile drawer becomes visible.
-- Replace Astro's immediate Partytown bootstrap with a hashed post-load bootstrap. The bootstrap is rendered only on pages where an enabled analytics script runs in Partytown and forwards only those providers' globals; its stubs are available from parse time, an early buyer interaction starts the sandbox immediately, and the normal path starts after load plus two frames with a four-second ceiling. The current `@qwik.dev/partytown` package also fixes the previously broken Facebook queue stubs without putting provider work on the first-paint path.
-- Keep best-effort Meta browser-event dispatch console-silent on page teardown. The API-side circuit breaker owns actionable provider diagnostics; an aborted optional beacon is not a broken buyer interaction and must not fail Lighthouse Best Practices.
-- Reserve the empty-cart result height before its client controller resolves, removing the prior 0.12 cart CLS and raising its live mobile PageSpeed result from 94 to 99.
-- Add 384/768-pixel CMS image candidates with bounded mobile quality so the prior 14 KiB image-delivery diagnostic disappears without changing CMS-page CLS.
-- Preserve Partytown isolation, sparse priority hints, existing CDN preconnect, deferred below-fold regions, fail-closed checkout readiness, and MPA semantics.
+### Live store before one-batch renders and placement (2026-09-24)
 
-## Cloudflare zone and cache audit
+Method: live store from Bangladesh, round 4. Miss TTFB varies by Cloudflare data center (`cf-ray`).
 
-Wrangler 4.120.0 verified the deployed Worker cache configuration and active
-versions. Wrangler has no zone-settings, Cache Rules, Early Hints, Tiered Cache,
-or Cache Reserve command, so the authenticated Cloudflare dashboard supplied
-the read-only zone inventory. `scalius.com` is on the Free Website plan, with no
-visible Cache Rules. HTTP/2, HTTP/3, HTTP/2-to-origin, and TLS 1.3 are active;
-live responses negotiate Brotli, Zstandard, and gzip.
+| Page | Miss TTFB (data centers) | Hit TTFB at the edge | Phone LCP | Desktop LCP |
+| --- | --- | --- | --- | --- |
+| Home | 2.2-3.5 s (SIN, MXP); two 503s | 18 ms | 2.28 s | 0.66 s |
+| Category | 2.7-4.6 s (MAD, MXP) | 21 ms | 8.49 s (original 254 KB JPEG) | 0.97 s |
+| Product with options | 0.6-4.6 s (SIN, CDG, MRS, MXP) | 19 ms | 5.51 s (original 273 KB WebP) | 1.10 s |
+| Search | 0.4-1.9 s (MRS, SIN) | 22 ms | 8.05 s | 1.04 s |
+| Cart (always rendered) | 0.27-4.0 s | not applicable | 1.26 s | 0.45 s |
 
-The free plan permits no hostname/path-level Web Analytics exclusion rules.
-Automatic zone injection is disabled and the existing first-class Scalius Web
-Analytics integration is the single source of the official module beacon. Its
-token/snippet is canonicalized on save, obvious placeholders are rejected, it
-cannot be routed through Partytown, and delivery is explicitly low priority.
-This preserves one real-user telemetry stream without Cloudflare mutating the
-HTML response behind the application. The provider-owned one-day beacon cache
-lifetime remains an unscored diagnostic. A production `no-transform` trial
-removed automatic injection but also disabled Brotli, produced 138 KiB of
-missing-compression opportunity, and fell to 94-95; it remains rejected.
+`wrangler tail` showed four causes: the API ran in the visitor's data center (1.0-1.9 s of server time outside SIN, 0.5 s at SIN); two or three sequential API hops per page; 130-250 ms of cold-isolate CPU per hop; and a cold layout read at HKG that passed the 2 s service-binding deadline and returned a 503. One batch per page, API placement and the internal-origin deadline rule answer these.
 
-The storefront gateway caches anonymous public pages in the Cache API
-(`caches.default`) under keys that include the build ID and the store's cache
-generation; the API caches public JSON in its `PublicApi` Workers Cache
-entrypoint under the same generation. A buyer-visible write replaces the
-generation, so nothing is purged (see `apps/storefront/README.md`). Zone Cache
-Everything, Edge TTL, custom cache keys, Cache Reserve, and dashboard/zone
-purges do not apply to that SSR lane. Do not enable Cache Reserve: it is
-metered and provides no credible PageSpeed benefit here.
+### Live read smoke (2026-09-28)
 
-Current production build `src-51656c78805f6590` emits exactly one stable anonymous
-HTML response hint:
+Method: `pnpm perf:storefront --base https://storefront.scalius.com --no-browser --runs 2 --no-binding-check`. Cache-hit TTFB was 24-34 ms. The first category, product and search requests took 439, 312 and 303 ms, above the 300 ms miss threshold. The sample does not isolate a cause.
 
-```http
-Link: <https://cloud.scalius.com>; rel=preconnect; crossorigin
+### Large catalogue
+
+Category page (2026-09-28): a fresh built 30,000-product store, a category with 3,780 products and four child shelves, 36 cards. The shelf preview added no D1 statement. Miss TTFB was 1790, 273 and 250 ms (median 273 ms), hit TTFB 6, 6 and 5 ms, and the HTML 233 KB. The home page miss in the same run was 748 ms and breached its threshold.
+
+Route profile (September 2026, 30,000-product seed, in-process Miniflare D1; harness `scripts/catalog-scale-profile.test.ts`):
+
+| Read | p50 | Rows read |
+| --- | ---: | ---: |
+| Shop-all, newest | 35 ms | 31,000 |
+| Shop-all, price | 35 ms | not recorded |
+| Category with 3,300 products, newest | 139 ms | 180,000 |
+| Search "asus" | 49 ms | not recorded |
+| Product page | 54 ms | 2,700 |
+| Recommendations | 13 ms | not recorded |
+| Manual collection | 37 ms | not recorded |
+| Sitemap page | 56 ms | not recorded |
+
+A numbered page 500 of shop-all newest read 0 rows, and the same position by cursor read about 76 rows.
+
+### Images without renditions (2026-09-25)
+
+Method: local built stack with a copy of the demo state. One product had a 2400 px, 1,068 KB JPEG original and no renditions (a failed render). Two products (6 and 150 SKUs) had a 4 KB rich description with that original inlined. Bytes are what a 390 px DPR 3 phone fetched by load plus 2.5 s.
+
+| Page | Product JSON-LD | Image on load | Phone LCP |
+| --- | --- | --- | --- |
+| Product with no renditions | 4.6 KB to 3.8 KB | 1,081 KB to 370 KB | 6,848 ms to 3,342 ms |
+| Product with a description image (6 SKUs) | 31.3 KB to 6.2 KB | 1,080 KB to 12 KB | 748 ms to 740 ms |
+| Product with 150 SKUs | 662.4 KB to 19.8 KB (23 of 150 variants listed) | 1,076 KB to 8 KB | 854 ms to 786 ms |
+
+The first row's "after" is after the self-healing render job ran, 2 min 9 s after the first read queued it. The generated test photo is noise-heavy (960 px rendition 344 KB, against 60-100 KB for a real photo).
+
+## Cold-start experiments
+
+### API isolate start (2026-09-24)
+
+Method: the production API bundle (`wrangler deploy --dry-run`, 8.7 MB minified) imported into plain Node V8 with `cloudflare:*` imports stubbed and no database, so only module initialisation was timed. Median of three runs.
+
+| Step | Wall | CPU |
+| --- | --- | --- |
+| Isolate start: parse and compile the script and run top-level code | 150 ms | 170 ms |
+| First read into the `config` family (layout, storefront, shipping, checkout settings) | 52 ms | 74 ms |
+| First read into the `catalog` family | 9 ms | 12 ms |
+| First read into the `buyer` family (orders, customer auth, agent contexts) | 28 ms | 43 ms |
+| Any of these again | about 1 ms | about 1 ms |
+
+These match the 110-250 ms of CPU on cold production invocations. About 20 ms is zod and 5 ms the database drivers. The rest is V8 parsing, so it scales with bundle size. Moving `checkout/config` from the `buyer` family to `config` saved 36-50 ms wall on each cold render that reads checkout settings.
+
+### Module registry and code splitting (2026-09-25)
+
+Method: workerd 1.20260831, one fresh process per run, no database, timed until `/api/v1/health` answers and then the first read into each route family. Median of 9-11 runs.
+
+| Build | Uploaded JS | Ready | First config read |
+| --- | --- | --- | --- |
+| Trivial Worker | 0 MB | 21 ms | not measured |
+| Single bundle (as `wrangler deploy` builds it) | 8.5 MB | 152-160 ms | 31-36 ms |
+| esbuild `splitting`: 146 ESM modules, route families lazy | 8.5 MB | 148 ms | 19 ms |
+| Same split, lazy chunks left out of the upload | 1.2 MB | 67 ms | not measured |
+| Split with the `new_module_registry` flag | 8.5 MB | 92 ms | 41 ms |
+| Generated payloads as Text modules | 5.1 MB JS and 4.7 MB text | 139 ms | 29 ms |
+
+- Workerd's default (legacy) module registry compiles every uploaded module at isolate start, so a split upload starts as slowly as one bundle. Only code that is not uploaded is free.
+- The `new_module_registry` flag saved 73 ms on the cold public-read path, but workerd refused to start without `--experimental`. Test again when the flag is stable.
+- The two generated payloads are 40% of the script but about 18 ms of start-up. Text modules save 13 ms and need a `.txt` loader in every toolchain, which is not worth the cost.
+
+## Cloudflare zone notes (2026-08-09)
+
+Wrangler cannot read zone settings, so these facts came from the Cloudflare dashboard for the demo zone and were not re-checked:
+
+- The zone is on the Free Website plan with no Cache Rules. Zone Cache Everything, Edge TTL, custom cache keys and purges do not apply to the SSR page cache (Cache API with dependency validation). Do not enable Cache Reserve: it is metered and showed no PageSpeed benefit.
+- A production `no-transform` trial removed automatic Web Analytics injection but disabled Brotli and dropped the score to 94-95. It stays rejected. Automatic zone injection of Web Analytics is off.
+- Early Hints is on. 3 of 5 fresh HTTP/2 probes got a `103` with the preconnect. Two PageSpeed repeats scored 98 with LCP 2.0-2.1 s against 2.1-2.2 s before, which does not meet the retention test in [Thresholds](#thresholds).
+
+## Dashboard
+
+The dashboard is a static single-page app (Vite, React, TanStack Router and Query) that the API Worker serves through its `ASSETS` binding. Rules that keep it fast:
+
+- **Navigation.** Preloading, route-code warming and the pending bar are in [apps/admin-v2/README.md](../apps/admin-v2/README.md#navigation-performance). Never warm the adjacent page of Orders or Customers or bulk-sync protected data into the browser: it multiplies requests and keeps an extra page of buyer personal data in the client cache.
+- **Tables.** Lists use server-side pagination, sorting and filtering. Pages are small (the shared table defaults to 10 rows, and the product list API caps a page at 100), so tables need no virtualization.
+- **Bundles.** The initial group stays one chunk (`admin-shell` in `apps/admin-v2/vite.config.ts`) because the router runtime is strongly connected. `scripts/check-admin-client-boundaries.mjs` fails the build on a circular static chunk import. Tiptap, the QR engine, PDF code, drag and drop and phone metadata stay out of the everyday routes' first download (`LAZY_ONLY_MODULES`).
+- **Assets.** Generated JS, CSS and fonts live only under `/assets/immutable/` with content hashes and `public, max-age=31536000, immutable`. `scripts/admin-static-assets.mjs` fails the build when long-lived caching is set for anything else.
+- **Compiler.** A global React Compiler trial grew gzip size by 13.76% and Brotli by 12.74%. It is not adopted.
+- **Router pin.** `@tanstack/react-router` stays at `1.170.18` (`apps/admin-v2/package.json`): versions 1.170.19 to 1.170.23 caused a hydration mismatch under server rendering. Lift the pin only after the dashboard browser gates pass on the newer version.
+
+`pnpm check:admin-perf` builds the dashboard into a temporary directory and holds the entry chunk, the CSS and every route's first-render JavaScript to Brotli budgets (`BUNDLE_BUDGETS`). It fails when a library that must load on demand joins a route's first download. `--explain <route file>` lists what a route downloads. With a local stack running, it times first load, cold and warm route transitions and product-editor typing in headless Chrome:
+
+```sh
+pnpm check:admin-perf --runtime --admin http://localhost:4323 --cpu 4 --rtt 40 --mbps 25
 ```
 
-Cloudflare Early Hints is enabled on the zone at no additional feature charge.
-After one learning request, three of five fresh HTTP/2 probes received a real
-`103 Early Hints` response with that preconnect before the final `200`. The
-homepage subsequently returned a native HIT with the new build and header;
-checkout and option-selected product responses remained private/no-store with
-no final `Link`, while robots remained public revalidation content without the
-hint. No hero, product, query-specific, private, or build-hashed URL is eligible,
-so Cloudflare's separate URI-only hints cache cannot transfer stale commerce
-bytes. This is a cold-connection experiment, not yet a measured claim of a
-PageSpeed score increase.
+Other runtime flags: `--runs`, `--cdp-port`, `--typing-product <id>` and `--explorer <api origin>` (D1 calls per transition). `--admin` must be a local address.
 
-The two immediate PageSpeed website repeats preserved 98/100/100/100 and
-reported 2.0-2.1 s LCP versus 2.1-2.2 s in the preceding retained runs. The
-rounded samples are compatible with a small improvement but do not establish
-causality or meet the 20-run multi-colo retention threshold. The invariant
-preconnect remains safe and free while that evidence accumulates; it is not
-presented as the missing route to mobile 100.
+### Navigation timing (production, August 2026)
 
-The same audit found and closed a quantity-freshness defect before
-any broader caching was considered. Persistent public product, search, and feed
-projections now expose an explicit `availabilityBand` and replace exact stock and
-reservation counts with stable compatibility sentinels. A 10-to-9 change inside
-the same band is therefore byte-stable and leaves the cache generation alone;
-transitions between untracked, in-stock, low-stock, and out-of-stock replace it. UCP no longer advertises the sentinel as an exact
-quantity, and cart/checkout remain the live authority for requested quantity.
-Scheduled CMS publication boundaries have no write to bump the generation; the
-one-day edge lifetime bounds them. None of the zone settings above were allowed to mask or lengthen those
-application-owned gaps.
+Method: production dashboard, demo account. Figures are click to the route's heading in the DOM (not paint timing, not field INP). A repeat click comes after one visit.
 
-## Dashboard evidence and changes
-
-Production authentication, desktop and mobile shell navigation, data-heavy inventory/orders screens, and session cleanup were exercised with the demo account. The final fresh-profile smoke passed all authenticated routes with zero console errors and zero page exceptions. Mobile inventory rendered the bounded variant list and all inventory aggregates; mobile orders rendered the paginated order list without a console warning or error. The final compressed deployment also hydrated cleanly with Cloudflare's injected RUM node at 1280x720 and 390x844, with no horizontal overflow.
-
-The final production repeat-navigation measurements below record click-to-heading DOM response after the route had been visited. They are not background-tab paint or field INP measurements.
-
-| Route | Cold click-to-heading | Repeat click-to-heading |
+| Route | First click | Repeat click |
 | --- | ---: | ---: |
 | Products | 391 ms | 69 ms |
 | Orders | 352 ms | 87 ms |
@@ -201,132 +191,4 @@ The final production repeat-navigation measurements below record click-to-headin
 | Discounts | 320 ms | 62 ms |
 | Analytics | 330 ms | 63 ms |
 
-All seven repeat destinations meet the 100 ms responsiveness target. True cold navigation remains 320-627 ms while route code and data become resident; that distinction is retained instead of presenting warm navigation as cold-start performance.
-
-### 2026-08-23 instant-navigation follow-up
-
-This follow-up keeps the production measurements above as the before baseline; the changes below are local production-build evidence and must not be presented as post-deploy RUM. The router no longer replaces useful content with a pending screen. Navigations under 180 ms have no loading flash, slower transitions retain the current page with a thin non-blocking progress rail, and permission-visible route code warms during browser idle time without running loaders or API reads. Protected Orders and Customers data remains Query-owned and demand-driven rather than being bulk-synced into browser memory.
-
-The conservative Rolldown grouping reduced emitted JavaScript files from 522 to 324. The framework's strongly connected initial graph stays in one unsplit shell chunk, while the icon library retains entry-aware grouping. Direct-route preload closures changed as follows:
-
-| Route | Before files / Brotli | After files / Brotli |
-| --- | ---: | ---: |
-| Root shell | 61 / 147.9 KiB | 2 / 134.3 KiB |
-| Products | 123 / 208.0 KiB | 32 / 198.4 KiB |
-| Orders | 136 / 224.5 KiB | 34 / 213.0 KiB |
-| Customers | 123 / 204.7 KiB | 30 / 194.8 KiB |
-| Inventory | 129 / 206.4 KiB | 33 / 197.2 KiB |
-| Discounts | 122 / 198.6 KiB | 28 / 188.1 KiB |
-| Analytics | 131 / 206.8 KiB | 30 / 195.1 KiB |
-| Media | 102 / 174.9 KiB | 19 / 167.5 KiB |
-
-The grouping deliberately leaves html2pdf, Tiptap, html5-qrcode, and the heavy media-theme surface outside the root and principal-route closures. It rejects a generic route group because that experiment overfetched roughly 400-480 KiB and pulled PDF code across the boundary. The first production attempt size-split the initial group and exposed a reciprocal ESM chunk import that crashed login hydration. Production was rolled back immediately; the retained build keeps that graph together, adds a fail-closed static chunk-cycle gate, and passed a real production-build login hydration check.
-
-Provider calls were also collapsed without changing D1, TursoDB, or PostgreSQL authority: product and order lists now use two read waves rather than three (33% fewer provider round trips), while analytics-script lists and the normal theme workspace use one rather than two (50% fewer). The admin product list requests an explicit compact projection so rich descriptions do not cross the wire, while the default API request and response contract remain unchanged. These are deterministic round-trip reductions; production latency deltas still require a deployed comparison.
-
-Retained changes:
-
-- Intent-preload the seven safe principal list routes and load code-only boundaries for other sidebar destinations.
-- Keep pending UI out of fast transitions with a 180 ms delay and 160 ms minimum duration.
-- Memoize the shared table row boundary. A 100-row focused test proves a fetch overlay rerenders zero unchanged cells and selecting one row rerenders only that row.
-- Replace the shared table's unconditional mount refetch with a five-second intent-prefetch grace period. The immediate navigation does not duplicate the request, while invalidated data and ordinary route returns revalidate even inside longer domain stale windows.
-- Reject adjacent-page speculation for Orders and Customers. Warming only the committed list avoids abandoned-hover request amplification and retaining an extra page of buyer PII in the client cache.
-- Narrow persistent sidebar/header location subscriptions to pathname and isolate the orders countdown from the 1,342-line route so one-second ticks do not reconstruct the route and table.
-- Keep route-search discriminators independent from full editor models. Disposable before/after builds showed a material reduction in the root and login critical closures; the structural boundary tests, rather than untracked raw samples, are the durable regression guard.
-- Emit generated dashboard JS/CSS only beneath `/assets/immutable/` with content hashes and one-year immutable caching. HTML, source maps, and copied stable public assets are excluded by a fail-closed build gate, eliminating conditional revalidation for unchanged route chunks on repeat visits.
-
-TanStack Table 9.1.0 is now native rather than hidden behind the v8 compatibility
-adapter. One typed table configuration registers only pagination, selection,
-sorting, visibility, and sizing; server-owned filtering and client row-model
-features are absent. The 100-row rendering regression test still proves that a
-fetch overlay rerenders zero unchanged cells and one selection rerenders only
-the selected row. This is a maintainability and future reactivity foundation,
-not a fabricated bundle win: the representative table entry fell from 12.18 to
-8.53 KiB gzip, but its associated column-factory chunk grew enough that the two
-measured chunks together increased from 16.96 to 20.17 KiB gzip. Scalius's
-10-row default and 100-row cap also mean v9's large-table memory headline is not
-a meaningful current dashboard claim. Retention depends on the post-deployment
-interaction measurements and complete behavior gates, not the version number.
-The final live table smoke proved 50 products across five server-owned pages,
-selection, ascending name sort, URL search state, and the 11-20 pagination
-range with zero console errors.
-
-## API evidence and changes
-
-- Dashboard summary reads that were independent now use one five-statement D1 batch instead of two concurrent Worker-to-D1 calls/connections. This removes a provider round trip and gives the projection one read snapshot; it is not presented as a latency win until post-deployment comparison supports one.
-- Customer listing no longer reads all non-deleted delivery locations for each paginated result. Production evidence showed a 10-row customer page scanning 11,548 location rows, 31.47 ms SQL, and at least 424,859 bytes of raw location text. The equivalent joined resolution read 56 rows in 1.44 ms across all 18 non-deleted customers—a roughly 99.5% row-read reduction—and retains the stored-ID fallback when a referenced location is deleted or missing. Inactive but non-deleted location names remain resolvable, matching the former dictionary behavior.
-- Inventory overview previously awaited page, count, and stats in three waves: live median TTFB was 273.5 ms even though the three current SQL statements total roughly 1.6 ms. They now execute in one provider-portable three-statement batch with unchanged projections.
-- Checkout readiness previously made two waves: live median TTFB was 348.2 ms despite under 0.5 ms of current SQL. Delivery and sign-in readiness now start together in the common path, using three concurrent reads—within D1's six-connection invocation limit—while preserving provider and fail-closed branches.
-- Current production D1 is already served from SIN for the dashboard client; read replication or Smart Placement would not improve this baseline. Products, orders, analytics list, and theme workspace retain measured round-trip-collapse opportunities, but their SQL, response delivery, and payload sizes do not justify expanding this release patch further.
-
-## T3 Code and browser research decisions
-
-T3 Code was studied at public commit `4eaf5ef8bb47b870397d5c61cd216b1a6bdd1510`. Its transferable advantage is a persistent shell with fine-grained subscriptions, structural sharing, stable row identities, targeted virtualization for genuinely unbounded lists, and non-blocking route selection. It does not derive its speed from global scheduler calls or unusual router configuration. T3 Chat is closed source, so no code-level claims are based on it.
-
-Adopted or retained:
-
-- Narrow subscriptions and stable render identities.
-- Non-blocking list shells, intent code/data warming, and Query-owned freshness.
-- Server pagination for bounded commerce grids.
-- Retain the single native Cloudflare RUM mode as the Chromium field-vitals source, but do not claim a before/after field result without a captured baseline and adequate 7/28-day cohorts. Retain cross-browser interaction testing because Cloudflare does not currently cover Safari or Firefox vitals.
-
-Measured post-release spikes, not release rewrites:
-
-- React 19.2 `Activity` around already-visited settings panes, gated on preserved draft state, focus, effects, and lower p75 interaction cost.
-- Native cross-document `@view-transition` for public browse routes only; this targets continuity, not Lighthouse score, and that MPA opt-in remains limited availability/not Baseline.
-- Narrow TanStack Table v9 Store selectors/leaf subscriptions, but only after a
-  trace proves table-wide state notification is a remaining hot interaction.
-- Route-local virtualization only for a future workflow that truly renders hundreds of continuous rows.
-- Header-logo priority and hero decoding A/B only if a repeated trace attributes a stable, controllable FCP/LCP delay.
-- Cloudflare 103 Early Hints measurement across at least 20 paired cold runs and three colos. The production trial is limited to an invariant CDN preconnect that transfers no speculative asset bytes. Retain it only with at least 100 ms median or 150 ms p75 LCP improvement and unchanged hot-hit latency; never extend it to dynamic hero/build URLs without a separate invalidation proof.
-
-Rejected for this release:
-
-- Global React Compiler: the measured trial increased gzip by 13.76% and Brotli by 12.74%.
-- A duplicate atom/entity store, dashboard WebSocket rewrite, SPA conversion, site-wide Astro `ClientRouter`, broad speculation-rule prerendering, service-worker app shell, blanket `content-visibility`, `scheduler.yield()`, or `startTransition`.
-- Unscored PageSpeed-warning suppression presented as a performance gain.
-
-## Measured post-release simplification backlog
-
-These are ordered experiments, not authorization for a broad rewrite:
-
-1. Make React Hook Form the only order-form value authority. Delete the module-global calculation store, move subtotal/charge/discount reads into leaf `useWatch` subscribers, prune unused broad context fields, and stabilize the quote dependencies. Estimated net deletion is 70-110 lines. Require at least 20% p75 render-duration improvement, p75 <= 8 ms/p95 <= 16 ms updates, and unchanged quote/submit/focus behavior before considering the larger 250-400-line controller split.
-2. Simplify the product option matrix before virtualizing it. Desktop and mobile representations currently mount together, and a bulk apply can perform up to 150 full 150-variant maps (22,500 comparisons). Render one responsive representation and apply one set-based patch pass first.
-3. Debounce navigation workspace search and stop remounting rows on revision changes. An eight-character query can issue seven RPCs and up to 28 D1 reads; 100 rows can also own roughly 400 DnD hook instances. Split search presentation from DnD before measuring virtualization.
-4. Page media folders instead of loading up to 20 pages sequentially and mounting duplicate mobile/desktop trees. For the media gallery, add memoized selected-ID and media-ID maps before considering virtualization around 240 loaded cards.
-5. Stage barcode picker changes or fetch only newly added IDs. Selecting 150 SKUs one by one currently has a cumulative 11,325-row response ceiling even though the server lookup itself is correctly batched.
-6. Collapse the measured third query wave in product and order lists, then batch analytics count/page and published/draft theme reads. Keep authenticated admin GETs uncached and do not add indexes, replication, or streaming without new evidence.
-7. Before changing Cloudflare Web Analytics from its current automatic mode, match the official module snippet, enforce one active Cloudflare integration, and ensure automatic injection and manual snippet modes cannot coexist. Preserve Brotli and start a new 7/28-day observation window only after one successful production beacon POST is visible for the exact storefront hostname.
-
-## Release verification contract
-
-Run heavyweight gates sequentially on the 16 GB development host:
-
-```bash
-pnpm lint
-pnpm test
-pnpm typecheck
-pnpm build --concurrency=1
-pnpm check:env
-pnpm check:admin-perf
-pnpm check:dist-secrets
-pnpm check:build-canaries
-pnpm repo:check
-pnpm release:check
-pnpm ops:check --queues
-```
-
-`pnpm check:admin-perf` builds the dashboard to a temporary directory and holds the entry chunk and every route's first-render JavaScript to Brotli budgets (`BUNDLE_BUDGETS` in `scripts/admin-perf-check.mjs`), and fails when Tiptap, the QR engine, drag and drop or phone metadata join a route's first download; `--explain <route file>` lists what a route downloads. With a local stack running, `pnpm check:admin-perf --runtime --admin http://localhost:4323 --cpu 4 --rtt 40 --mbps 25` times first load, cold and warm route transitions and product-editor typing in headless Chrome (`--typing-product <id>`, `--explorer <api origin>` for D1 calls per transition).
-
-The authenticated admin read smoke additionally covers inventory, orders, order detail/form, all browser routes, and session cleanup. Browser verification covers sign-out/sign-in, desktop/mobile dashboard navigation, inventory and orders, storefront search, product option selection, add/remove cart restoration, checkout form readiness, and validation failure states without placing an order or charging a payment method.
-
-Final deployed versions verified on 2026-08-09:
-
-- API Worker `25e60e28-4eae-4924-a726-eeca61b0d8d1`.
-- Dashboard Worker `a687648b-fcad-439b-82dd-102405fe7734`.
-- Storefront Worker `e810ed39-f109-4e27-b2cd-c7e647e86ea9`, build `src-51656c78805f6590`.
-- Live public feed and product-detail variants expose `availabilityBand` and `lowStockThreshold` with stable `99/0` compatibility values instead of exact inventory; a repeated product request was a native HIT and emitted a real HTTP/2 103 before its 200 response.
-- The final authenticated browser smoke passed desktop and 390x844 mobile dashboard hydration/navigation, TanStack Table v9 behavior, product option selection, cart add/remove restoration, checkout validation failure, zero horizontal overflow/browser exceptions, and dashboard sign-out without placing an order.
-- `pnpm release:check` and `pnpm ops:check --queues` passed against the deployed surfaces; all local lint, test, typecheck, build, environment, dashboard-performance, secret, and repository gates passed before deployment.
-
-The product-page mobile 100 target is achieved on the reference marketing URL. Do not manufacture a deterministic all-SKU claim from one hosted run: retain the same architecture across products, watch the 7/28-day RUM cohorts, and reopen image work only when a visual-fidelity-preserving format or delivery change yields at least 100 ms p75. Reopen a dashboard architecture rewrite when a measured hot interaction misses p75 100 ms first-feedback/warm-heading or the INP 200 ms release ceiling, and require at least a 15% or 50 ms p75 win without a p95 regression.
+All seven repeat clicks meet the 100 ms target. A first click takes 320-627 ms while route code and data load. Do not present warm navigation as cold-start performance.

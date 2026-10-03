@@ -1,148 +1,146 @@
 # Notifications
 
-Multi-channel order lifecycle notifications: email, SMS (4 providers), WhatsApp, and admin FCM push. Channel preferences are per order event configurable.
+The notifications domain sends buyer and staff messages over email, SMS, WhatsApp and admin push. It owns the outbox, the delivery receipts, the channel rules, the message templates and the provider pause markers. This document is for contributors and operators.
 
-## Connection Status
+## Where it fits
 
-| Feature | Implemented | Connected End-to-End |
-|---------|-------------|---------------------|
-| FCM push to admin (new order) | Yes | Yes -- called from queue consumer via `sendOrderNotification()` |
-| Order email to customer | Yes | Yes -- via Cloudflare Queue with channel preference check |
-| SMS to customer | Yes | Yes -- 4 providers (smsnetbd, bdbulksms, mimsms, gennet) via `getActiveSmsProvider()` |
-| Order WhatsApp to customer | Yes | Yes -- Meta Cloud API template messages via Cloudflare Queue |
-| OTP email to customer | Yes | Yes -- via Cloudflare Queue |
-| OTP via WhatsApp | Yes | Yes -- via Cloudflare Queue |
-| OTP via SMS | Yes | Yes -- via same 4 SMS providers |
+- Layer L5. Imports from other domains: `delivery`, `order-kernel`, `platform`, `settings` (`scripts/core-domain-graph.allow.json`).
+- `index.ts` is the server API. `browser.ts` is the closed browser entry: `notification-types.ts`, `message-copy.ts` and `notification-templates.ts` (pure, no database).
+- Provider clients live in `packages/core/src/integrations/` (`email`, `sms`, `whatsapp.ts`, `firebase`, `provider-port.ts`).
+- The API resolves message content from the digital, gift-cards and reviews domains at send time (`apps/api/src/notification-content/*`).
+- OTP codes and challenges belong to the customers domain ([README](../customers/README.md)). This domain supplies only the message copy and the provider pause markers.
 
-### FCM Push: Connected
+## Channels and providers
 
-`sendOrderNotification()` is fully implemented and connected via the queue consumer. The order notification queue handler awaits customer notification dispatch, then checks admin push channel preferences and calls `sendOrderNotification()` when push is enabled. When the queue message carries an `outboxId`, each active FCM token is guarded by an `notification_delivery_receipts` row so retries skip tokens already accepted by FCM.
+| Channel | Audience | Provider | Credentials (settings document) | Readiness check |
+|---|---|---|---|---|
+| Email | buyer, staff | Cloudflare Email Service (default, `EMAIL` binding), Resend, or an app provider | `email` | `getEmailProviderReadiness` |
+| SMS | buyer | `smsnetbd`, `bdbulksms`, `mimsms`, `gennet`, or an app provider | `sms` | `getSmsProviderReadiness` |
+| WhatsApp | buyer | Meta Cloud API template message | `whatsapp` | `isWhatsAppCloudApiConfigured` |
+| Push | staff | Firebase Cloud Messaging | `firebase` | `getFirebaseServiceAccountReadiness` |
 
-- Reads Firebase service account from `settings` table (category `firebase`, key `service_account`) through the Firebase settings helper. New rows are encrypted `enc:` AES-GCM values, legacy plaintext rows remain read-compatible, and unreadable ciphertext resolves to `undefined` rather than being passed to FCM -- there is no environment-variable fallback.
-- Admin channel settings use `getFirebaseServiceAccountReadiness()` and reject enabling Push unless the encrypted settings row contains a usable service account.
-- `getFirebaseAdminMessaging(env, serviceAccountJson?)` always creates a fresh `FCMMessagingService` instance and throws if `serviceAccountJson` is missing; there is no env-var credential source or singleton.
-- Uses `escapeHtml()` from `@scalius/shared/html-escape` to sanitize customer names in notification payloads
-- Stores FCM REST message `name` values on accepted delivery receipts; invalid/stale tokens become skipped receipts before deactivation, including Firebase variants surfaced as `Device unregistered` or `NotRegistered`
+- Email and SMS are provider ports. A saved choice `<plugin id>:<provider id>` names an app provider. Core asks the API's `AppProviders` lookup only for that case (`provider-port.ts`, [Plugins](../plugins/README.md)). Without a lookup, an app choice is not ready and nothing is sent. WhatsApp and push are not ports.
+- An app answer `retryable: false` ends the receipt as skipped. An uncertain retryable failure is retried only when the message has an idempotency key (`apps/api/src/plugins/providers/messaging.ts`).
+- Credentials use strict reads with `CREDENTIAL_ENCRYPTION_KEY`. Never fall back to a JWT secret. Unreadable ciphertext counts as not configured. SMS and WhatsApp also treat placeholder values (`dummy`, `example`, `changeme`, `your-token-here`, repeated digits) as not configured.
+- Setup docs: [email](../../integrations/email/README.md), [Firebase](../../integrations/firebase/README.md), [WhatsApp and Meta](../../integrations/meta/README.md).
 
-### Order Emails: Connected
+## Notification types
 
-The order email flow is fully connected:
-1. Admin, storefront, payment, COD, or delivery webhook code commits an order lifecycle change
-2. `updateOrderStatus()` returns a `notification` object with email/name/type
-3. Route or queue producer enqueues `{ type: "order.notification", ... }` to `JOBS_QUEUE`
-4. Queue consumer (`queue-consumer.ts`) matches `order.notification` and calls `sendOrderNotificationEmail()`
-5. `sendOrderNotificationEmail()` checks notification channel preferences before sending via enabled customer providers. Cloudflare Email is the native default, with Resend available as the external fallback.
-6. When the queue message carries `outboxId`, customer email/SMS/WhatsApp targets create deterministic delivery receipts before provider work. Accepted/skipped receipts are terminal and are not resent on queue/outbox retry.
-7. Merchant-actionable provider setup failures, such as invalid API keys, unauthorized responses, undecryptable credentials, rejected senders/templates, disabled accounts, or invalid Firebase service accounts, also create a `notification_provider_health` settings marker for that channel/provider. Future order-notification sends skip external provider calls for the same active provider until the merchant saves the relevant provider settings.
-8. If a retryable receipt reaches the delivery-attempt cap with evidence that still looks like a setup failure, the same provider-health marker is written before the receipt is made terminal. This prevents dummy or wrong credentials from burning Queue/D1/provider work after the cap settles the historical receipt.
-9. If an explicit provider-health marker is missing, `notification-provider-health.ts` can recover a pause from terminal email/SMS/FCM delivery receipts whose setup-failure evidence is newer than the relevant provider settings. Runtime sends backfill the marker before recording the blocked skip, while settings saves still clear the pause because older receipt evidence is ignored after a newer settings `updated_at`.
+`notification-types.ts` is the source of truth for the lists, labels and channel rules.
 
-Admin order detail can read the durable outbox plus per-channel receipts for one order and can retry rows that are still `failed` or `pending`. The retry path resets the parent outbox through the existing durable enqueue helper, so accepted/skipped receipts remain terminal and already-sent notifications are not resent.
+| Group | Types | Buyer channels | Staff channels |
+|---|---|---|---|
+| Order (`ORDER_NOTIFICATION_TYPES`, 16) | `order_created` through `order_partially_refunded`, `payment_balance_paid`, `support_request_submitted`, `support_request_status_updated` | email, sms, whatsapp | push |
+| Conversation | `conversation_reply` (to the buyer), `conversation_message` (to staff) | reply: email, sms | message: push, email |
+| Resolved (4) | `order_digital_delivered`, `gift_card_issued`, `gift_card_sent`, `review_request` | email, sms | none |
+| Staff alert | `review_pending`, `digital_keys_exhausted` | none | push, email |
 
-Admin notification settings must not preserve impossible customer-channel selections. When SMS or WhatsApp readiness says the active provider is missing, paused, undecryptable, or otherwise not ready, the admin channel matrix renders that channel as off and disabled, and save submits it as off. Backend saves still fail closed if a stale client attempts to enable an unready provider.
+- `marketing_opt_in` (double opt-in email) is a buyer flow, not a merchant choice.
+- Defaults (`DEFAULT_CUSTOMER_NOTIFICATION_CHANNELS`, `DEFAULT_ADMIN_NOTIFICATION_CHANNELS` in `documents.ts`): buyers get email for every buyer type, plus SMS for `order_ready_for_pickup`, `order_digital_delivered` and `gift_card_issued`, and never WhatsApp. Staff get push for `order_created`, `order_cancelled`, `support_request_submitted`, `conversation_message` and `review_pending`, and push plus email for `digital_keys_exhausted`.
+- Support notification payloads carry only the order id, request id, request type and status. Free-form customer text stays out of provider payloads.
+- Status changes enqueue a notification only for shipped, delivered, cancelled, returned and refunded orders (`getOrderNotificationTypeForStatus` in `apps/api/src/utils/order-notification-queue.ts`). Other flows (checkout, refunds, pickup, support, fulfilment, reviews) write their own rows.
 
-Obvious placeholder SMS settings are also readiness blockers. Values such as `dummy`, `example`, `changeme`, `your-token-here`, and simple numeric junk are rejected on save or reported as not configured by the shared SMS resolver, so order notifications and OTP delivery do not spend provider calls discovering that test credentials were saved.
+## Settings
 
-## Functions
+| Document | Contents |
+|---|---|
+| `notifications` | `orderChannels`, `adminChannels` (event -> channels), `staffEmailRecipients` (at most 10), `whatsappOrderTemplateName` (default `order_status_update`), `whatsappOrderTemplateLanguage` (default `en_US`) |
+| `notification_templates` | Only the email subject/body and SMS body the merchant changed |
 
-### `sendOrderNotification(db, order, env, requestUrl, options?)`
+- Both are declared in `documents.ts` with `defineSettingsDocument()`. A save sends `expectedRevision`. A stale revision returns 409.
+- `channel-settings.ts` saves the rules. A channel can be newly enabled only while its provider is ready and not paused. The dashboard disables the checkbox of an unready channel (a rule that is already on can still be switched off). The backend refuses a stale client that enables it.
+- Provider pause markers are `settings` rows with category `notification_provider_health` and key `<channel>:<provider>`, not documents.
 
-Sends FCM push notifications to all active admin devices about a new order.
+## Admin routes
 
-- Reads Firebase service account from `settings` table (category `firebase`, key `service_account`) with strict `CREDENTIAL_ENCRYPTION_KEY` reads for encrypted rows; legacy plaintext rows remain readable. There is no environment-variable fallback -- the dashboard-saved row is the only source -- and `JWT_SECRET` is not used for provider credentials.
-- Queries all active tokens from `adminFcmTokens` table
-- Builds notification payload with order ID, customer name (XSS-escaped via `escapeHtml()`), and deep link to order detail page
-- Calls `FCMMessagingService.sendEachForMulticast()` with bounded concurrency. Response order is preserved, so invalid-token cleanup remains aligned with the original active-token query.
-- Auto-deactivates invalid tokens (unregistered, invalid registration, or Firebase stale-device variants such as `Device unregistered`/`NotRegistered`) in the database. In receipt mode, deactivation happens only after the skipped receipt is successfully terminal.
-- Firebase setup failures are terminal until settings change. Invalid service-account JSON, private-key import failures, OAuth `invalid_grant`, mismatched credentials, sender/project blockers, and other credential/configuration failures become skipped outcomes; if FCM throws after per-token receipt claims, each claimed receipt is marked skipped or failed immediately so no row waits for lease expiry.
-- Returns per-target outcomes; receipt-mode retryable failures keep the parent outbox retryable instead of marking it sent
-- All catch blocks use typed `error: unknown` with `instanceof Error` checks
+All paths start with `/api/v1/admin`.
 
-### `sendOrderNotificationEmail(email, name, orderId, type, data, db, options?)`
+| Method and path | Permission |
+|---|---|
+| `GET /settings/notification-channels`, `GET /settings/notification-channels/templates` | `settings.general.view` |
+| `PUT /settings/notification-channels` (buyer rules, order template) | `settings.notifications.edit` |
+| `PUT /settings/notification-channels/admin-channels` (staff rules, recipients) | `settings.notifications.edit` |
+| `PUT /settings/notification-channels/templates` (one event's templates) | `settings.notifications.edit` |
+| `POST /settings/notification-channels/templates/test` | `settings.notifications.edit` (rate limit `RL_STRICT`) |
+| `GET`, `POST /settings/sms` | `settings.general.view`, `settings.notifications.edit` |
+| `POST /settings/auth` (sign-in policy, WhatsApp credentials) | `settings.general.edit` |
+| `GET /orders/{id}/notifications` (newest 20 outbox rows with receipts) | `orders.view` |
+| `POST /orders/{id}/notifications/{outboxId}/retry` | `orders.edit` |
+| `POST /orders/{id}/notifications/{outboxId}/resend` | `orders.edit` |
 
-Sends transactional order emails to customers. Connected via queue.
+- Retry works on a `pending`, `failed` or `dead_lettered` row. It resets the pending and failed receipts and enqueues the same row. Accepted and skipped receipts stay terminal, so nothing is sent twice.
+- Resend works on a `sent` row and creates a new row. It needs a request id (the `Idempotency-Key` header or `resendRequestId`). Its dedupe key is `manual_resend:<outboxId>:<resendRequestId>`.
+- Email, Firebase and push-token routes are in the integration READMEs.
 
-**Channel Preference Checking**: the function checks notification channel preferences via `getNotificationChannels()` before sending. When every customer channel is off for the event, nothing is sent and (with an outbox) one skipped email receipt records `notification_turned_off`, so the order's log says "Not sent" rather than "Sent". If the check fails, it defaults to sending email.
+## Delivery pipeline
 
-**Message text** (`notification-templates.ts`): the email subject and body and the SMS body for each of the 15 order notification types are the merchant's templates (the `notification_templates` settings document stores only what the merchant changed). Until an event is changed it uses the default copy of the store's checkout language: Bangla when the active checkout language's base code is `bn`, otherwise English. A changed template is sent exactly as typed. Variables are per event (`{{order_number}}` renders `#<orderNumber>` via `formatOrderNumber`, or `#<order id>` until the order has a number; money uses `formatMoney` in the order's saved currency). In a message (email body, SMS) a line whose variables are all empty is left out; elsewhere, and always in the subject, an empty variable is left blank and the text closes up around it. A subject or message that still renders empty uses the event's default (`renderEmailTemplate`, `renderSmsTemplate`).
+```text
+fact commits
+  -> notification_outbox row (pending), same batch as the fact or right after
+  -> JOBS_QUEUE { type: "notification", outboxId }
+  -> queue consumer claims the row, reads recipient and text now
+  -> one notification_delivery_receipts row per channel and recipient
+  -> provider call -> receipt accepted | skipped | failed
+  -> outbox row sent | failed (backoff) | dead_lettered
+```
 
-**Email frame** (`renderOrderEmail()`, words in `message-copy.ts`): around the merchant's message every order email shows the header logo when it is an absolute URL, else the store's display name (`storeDisplayName` in `store-messages.ts`: Business `companyName`, else `legalName`, else the Store URL host), the saved items, totals (each discount by promotion name and code from `order_discount_allocations`; free or discounted delivery as the delivery line with the replaced fee struck through, never as a discount line) and payment state, the delivery address and method from the order snapshot, the support contact, and one order link: account orders get "View your order" (`/account/orders/<id>`), guests get "Track your order" (`/track-order?order=<number>`). Phone and email never go into URLs. The same function renders the dashboard preview and test emails (`sampleOrderEmail()`), so the merchant sees the real email. It is sent from the store name.
+- Table `notification_outbox`. Subjects: `order`, `conversation`, `gift_card`, `digital`, `customer`. The consumer dispatches `order`, `gift_card`, `customer` (`marketing_opt_in` only) and `conversation`. It dead-letters any other subject as unsupported.
+- The row and the queue message carry ids only. `sanitizeNotificationData` keeps at most 12 short primitive facts and drops keys that look like a contact, text, code or token. Nothing resolved at send time is persisted.
+- `dedupe_key` is unique.
+- Row states: `pending`, `enqueueing`, `queued`, `processing`, `sent`, `failed`, `dead_lettered`. Leases: 5 minutes to enqueue, 15 to process. Each enqueue or processing claim adds one attempt. At 8 attempts the row becomes `dead_lettered`.
+- Backoff is `60 s x 2^(attempts-1)`, at most 1 hour. A failed delivery marks the row `failed` and acks the queue message. The scheduled flush is the retry authority.
+- `notification_outbox_flush` runs on every cron tick (every 15 minutes) on both plans. It sends due rows, rows with an expired lease and `queued` rows older than 1 hour (`STALE_QUEUED_REPLAY_SECONDS`). The limit per run is 200 on Paid and 40 on Free (`ORDER_NOTIFICATION_OUTBOX_SWEEP_LIMIT` x plan scale), sent in chunks of 50 with `sendBatch`.
+- `NotificationInput.notBefore` schedules a row. It becomes `next_attempt_at`.
+- `jobs-dlq` marks the row `dead_lettered`. It never resends.
 
-Every customer notification type defaults to email, including the `support_request_submitted` acknowledgement; SMS and WhatsApp remain opt-in and still require provider readiness. Admin Push defaults on for new orders, cancellations and support request submissions. Support notification payloads carry only order id, request id, request type and status. Free-form customer reasons, customer messages, and admin notes stay out of provider payloads.
+## Delivery receipts
 
-Every interpolated value is escaped with `escapeHtml()` and the plain-text part is always sent. Sends via the active email provider (Cloudflare Email by default, Resend fallback). Receipt-mode email sends pass the deterministic receipt key to Resend as `Idempotency-Key`; Cloudflare Email returns `messageId`, which is stored on the receipt.
+- Table `notification_delivery_receipts`. `receipt_key` is `<outboxId>:<channel>:<sha256 of the lowercase recipient>`. The table stores only the hash and a masked recipient.
+- States: `pending`, `processing` (15-minute lease), `accepted`, `delivered`, `skipped`, `failed`. `accepted`, `delivered` and `skipped` are terminal.
+- A retryable failure waits with the same backoff. At 8 attempts (`MAX_ORDER_NOTIFICATION_DELIVERY_ATTEMPTS`) the receipt becomes `skipped` with `delivery_attempt_limit_reached`.
+- Provider idempotency: Resend gets the receipt key as `Idempotency-Key`. Cloudflare Email returns a `messageId`. GenNet gets a 20-character receipt-derived `csms_id`. Meta WhatsApp has no idempotency key, so a Worker crash after Meta accepts and before the receipt write can send twice.
+- Code-bearing types (`order_digital_delivered`, `gift_card_issued`) store no `raw_response`. The dispatcher removes the resolved values from every status and error it records.
 
-**SMS channel dispatch**: When SMS is enabled for an event, the function dynamically imports `getActiveSmsProvider()` from `@scalius/core/integrations/sms` and sends via the active provider. 4 SMS providers are supported: smsnetbd, bdbulksms, mimsms, gennet. Receipt-mode SMS stores provider refs; GenNet receives a deterministic receipt-derived `csms_id` so provider retries can dedupe. SMS readiness rejects missing, undecryptable, or obvious placeholder credentials before provider work. Provider credential/configuration failures such as invalid API keys, authorization failures, missing/invalid sender IDs, suspended accounts, or exhausted balance are marked as skipped receipts instead of retryable failures; 408/409/425/429, 5xx, timeout, temporary, gateway, and network-style responses remain retryable. Credential/config/account failures that prove the active provider setup is bad also pause future external calls for that provider until SMS settings are saved, including capped historical receipts whose last provider response still classifies as a setup failure. If SMS provider resolution throws a merchant-fixable setup/decrypt/config/auth error before a recipient receipt exists, receipt mode records a terminal `sms-setup:*` skipped receipt so the parent outbox does not keep retrying bad settings.
+## Failures and provider pause
 
-**WhatsApp channel dispatch**: When WhatsApp is enabled for an event, the function reads the order's normalized `customerPhone`, resolves the shared encrypted Meta Cloud API credentials from the `whatsapp` settings document (strict decryption with `CREDENTIAL_ENCRYPTION_KEY`), reads the order template settings from the `notifications` document, and sends a template message through `sendWhatsAppTemplateMessage()`. The reusable order template receives 4 body variables: customer name, order number, event label, and tracking ID or `-`. Missing/invalid order phones, missing Meta credentials, paused templates, and non-retryable provider validation errors become skipped receipts; malformed 200 responses, 5xx, 408/409/429, and network failures remain retryable. Credential/template/account failures that prove the Meta setup is bad also pause future external calls until WhatsApp credentials or the order template are saved. If WhatsApp credential/template resolution throws a merchant-fixable setup/decrypt/config/auth error before a recipient receipt exists, receipt mode records a terminal `whatsapp-setup:*` skipped receipt.
+- Setup and recipient failures are not retried. They end as `skipped` receipts: no provider, undecryptable or invalid credentials, authorization errors, rejected sender or template, exhausted balance, a bad Firebase service account.
+- Transient failures stay `failed` and retry: timeouts, network errors, HTTP 408, 409, 429 and 5xx (SMS also treats 425 as transient).
+- A setup failure also writes a pause marker for that channel and provider. Later sends skip the provider until the merchant saves its settings.
+- Each settings save clears the markers of its channel in the same batch: email, SMS, WhatsApp (credentials or order template) and push (service account change).
+- If a marker is missing, `notification-provider-health.ts` rebuilds the pause from the 25 newest skipped or failed receipts. It ignores evidence older than the latest save of the channel's settings.
+- Marker reasons are masked (emails and phone numbers replaced) and cut to 240 characters.
+- Provider failures log masked metadata only (`compactProviderLogDetail`). Never log OTPs, credentials, tokens, provider payloads or buyer PII.
 
-### `sendStaffOrderEmails(db, order, options?)`
+## Message content
 
-For `order_created` only: emails every address in the notifications document's `staffEmailRecipients` (Settings -> Notifications -> Staff notifications), in the store's language, with the same order frame and a link to the dashboard order page (`BETTER_AUTH_URL`) instead of the buyer's links. Called by the queue consumer after the order committed; each recipient is its own delivery receipt (`staff:<email>`), so outbox retries never resend.
+- **Templates.** The 20 templated types (16 order, 4 resolved) use merchant templates. Defaults are in the store's checkout language: Bangla when the active language's base code is `bn`, otherwise English. A changed template is sent as typed. Copy equal to the default is not stored.
+- **Limits.** Subject 200, email body 10,000, SMS body 1,000 characters. A save rejects variables the event cannot fill (`variablesForEvent()` in `notification-templates.ts` lists them per event).
+- **Rendering.** In an email body or SMS, a line whose variables are all empty is left out. Elsewhere an empty variable is left blank and the text closes up. A subject or message that renders empty uses the event default.
+- **Email frame.** `renderOrderEmail()` wraps the merchant message: the header logo (absolute URL) or the store name, the items and totals (each discount by promotion name and code), the payment state, the delivery address and method, the support contact and one order link. The link is `/account/orders/<id>` for account orders and `/track-order?order=<number>` for guests. Phone and email never enter URLs.
+- **Store name.** Business `companyName`, else `legalName`, else the Store URL host (`storeDisplayName`).
+- **Escaping.** Every interpolated value passes `escapeHtml()`. The plain-text part is always sent.
+- **WhatsApp order message.** A template message (`sendWhatsAppTemplateMessage`) with four body values: customer name, order number, event label, tracking ID or `-`. Resolved types and thread replies never use WhatsApp. A paused Meta template ends the receipt as skipped.
+- **OTP copy.** `composeAuthOtpMessage()` in `store-messages.ts`. The language follows the checkout language.
 
-**Current provider gaps**: Email has a Cloudflare-native default and external fallback. Admin push is still Firebase-only, SMS is Bangladesh-provider-only, and Meta WhatsApp has no first-class upstream idempotency key; local D1 receipts fence retries but a Worker crash after provider acceptance and before receipt persistence can still duplicate on Meta.
-Auth OTP shares the same provider-health marker for merchant-actionable setup failures. Auth OTP DLQ messages are archived by marking their D1 delivery receipts skipped without calling providers, and busy/retryable OTP queue attempts use the same bounded receipt backoff. If a provider accepts an OTP but D1 cannot immediately persist the accepted receipt, the queue consumer writes a short-lived, non-PII KV recovery hint and retries; later queue/DLQ attempts use that hint to repair the D1 receipt as accepted before any provider call.
+## Staff and push
 
-## Queue Processing
+- `sendOrderNotification()` pushes to every active token in `admin_fcm_tokens`. The link is `<dashboard origin>/admin/orders/<id>`, from the `dashboardUrl` of the `platform` settings document (`BETTER_AUTH_URL`). Without it the link is omitted.
+- With an `outboxId`, each token has its own receipt. An unregistered or invalid token ends as a skipped receipt, then `is_active` becomes false. A setup failure pauses the `push`/`fcm` provider.
+- The queue handler (`apps/api/src/queue-notifications.ts`) checks the staff rule for `push`. It skips push, with a warning log, when the `apiUrl` of the `platform` settings document is empty (Settings > Store details > Web addresses).
+- `sendStaffOrderEmails()` emails every `staffEmailRecipients` address for `order_created` only. Each recipient has a receipt (`staff:<email>`).
+- `sendStaffAlertNotification()` sends `review_pending` and `digital_keys_exhausted` to staff with no buyer content.
+- `sendConversationNotification()` sends thread notifications. Reply email carries the escaped message text. Reply SMS carries no text and goes out at most once per thread per hour. The staff push for a buyer message names the order number and carries no message text.
+- `sendAdminPushNotice()` is a best-effort push with no outbox row (`sendWebhookDisabledNotice()` uses it).
 
-The queue consumer (`apps/api/src/queue-consumer.ts`) handles these notification-related message types:
+## OTP delivery
 
-### `order.notification`
-- Enqueued by: storefront order ingest for new orders, admin order/COD/status routes, payment/refund flows, confirmed balance-payment queue messages, support-request submission/status routes, bulk/single provider shipment creation, and delivery webhook/admin refresh status reconciliation when the committed order status maps to an existing notification type
-- Handler: Calls `sendOrderNotificationEmail()` with `db` for channel checking and delivery receipts, and `sendOrderNotification()` for FCM push to admin devices when push is enabled
-- Queue: `JOBS_QUEUE`
-- Retry: parent outbox rows with `outboxId` are marked failed with D1 `nextAttemptAt` backoff and the Queue message is acked; scheduled outbox flushing is the durable retry authority. Cloudflare auto-retry remains only for legacy messages that do not carry an `outboxId`.
-- Channel receipts: email, SMS, WhatsApp, and FCM push create one receipt per logical target. Accepted/skipped receipts are terminal; retryable failures keep the parent outbox retryable.
-- Configuration/readiness failures are not retry work. Missing email provider setup, no active SMS provider, thrown SMS/WhatsApp setup/decrypt failures, undecryptable credentials, invalid keys/tokens, authorization failures, sender/account blockers, and bad Firebase credentials are skipped receipts with merchant-actionable admin copy. Proven bad provider setup writes a provider-health marker so future sends skip the same external provider until Email, SMS, WhatsApp, or Firebase settings are saved. Transient provider outages remain failed/retryable, but receipt attempts are capped so unknown provider failures settle as `delivery_attempt_limit_reached` instead of retrying forever; capped failures that still match credential/config/account evidence also pause the provider before settling.
-- Stale queue recovery: scheduled maintenance replays parent outbox rows that remain `queued` for more than one hour. The replay uses the same `outboxId`, so channel receipts continue to skip already accepted/skipped targets, and the scheduler logs `staleQueued` for alerting.
+The `auth.send_otp` queue message is handled in `apps/api/src/queue-consumer.ts`, not through the outbox. Its receipts are `auth_otp_delivery_receipts`. The [customers README](../customers/README.md) owns the flow (opaque payload, send-time code, receipts). Notification rules that apply:
 
-### Resolved and staff-alert types (Wave B §10)
-- `order_digital_delivered`, `gift_card_issued` (subject `gift_card`) and `review_request` carry ids only in the outbox; `apps/api/src/queue-notifications.ts` calls the API-layer resolvers in `apps/api/src/notification-content/*` at send time and passes their string variables to `sendResolvedNotification()` as `extraTemplateData` (never persisted). A resolver returning `null` ends the row as sent with one skipped `nothing_to_send` receipt (terminal: no retry, no dead letter). This domain never imports digital, gift-cards or reviews.
-- Code-bearing types (`order_digital_delivered`, `gift_card_issued`) store no `raw_response` in delivery receipts, and the resolved values are scrubbed from every recorded provider status and error.
-- `review_pending` and `digital_keys_exhausted` are staff alerts (`sendStaffAlertNotification()`): push and staff email, no buyer content.
-- `NotificationInput.notBefore` schedules a row (its `next_attempt_at`); the scheduled flush sends up to 200 due rows per run with `queue.sendBatch`, 50 claimed rows per batch, `{ type: "notification", outboxId }` only.
+- Email, SMS and WhatsApp OTP use the same pause markers. A paused provider gives a terminal skipped receipt.
+- WhatsApp OTP uses the `whatsapp` document's `authTemplateName` (default `auth_otp`), language `en_US`, and the code as the one body value.
+- `jobs-dlq` never calls a provider. It marks the receipt `skipped` (`auth_otp_dlq_terminal`), or `accepted` when a recovery hint exists.
+- If a provider accepts a code and D1 cannot record it, the consumer writes the KV hint `auth_otp:accepted:<deliveryKey>` (24 hours). It holds only the delivery key, channel and acceptance metadata. A retry repairs the receipt before any provider call.
 
-Delivery notification enqueue is intentionally API-local because it depends on the Cloudflare Queue binding. `updateOrderStatusFromShipment()` remains a pure order/inventory transition helper and does not send queue messages itself.
+## Dispatch kit
 
-### `auth.send_otp`
-- Enqueued by: Customer auth flow and guest hosted-payment recovery
-- Handler: Inline in queue consumer
-  - Claims `auth_otp_delivery_receipts` by `deliveryKey` before provider work
-  - Skips already accepted/delivered/skipped receipts and marks expired OTP attempts as skipped instead of sending stale codes
-  - Merchant-actionable provider setup failures such as missing providers, undecryptable credentials, invalid keys/tokens, authorization failures, sender/account blockers, exhausted balance, invalid recipients, and paused WhatsApp templates are terminal skipped receipts rather than queue retry work
-  - Proven bad email/SMS/WhatsApp provider setup writes a `notification_provider_health` marker so future OTP messages skip external provider calls until the merchant saves the relevant settings; provider-blocked skips update only the OTP receipt and do not re-write the marker
-  - OTP Queue/provider logs use delivery keys and identifier hashes instead of raw email, phone, or OTP codes
-  - Failed transient attempts retry using the receipt backoff schedule; busy receipts retry around the D1 `nextAttemptAt`/claim lease instead of burning fixed 30-second queue retries
-  - Accepted provider responses retry the D1 receipt write briefly; if D1 still cannot persist, a short-lived KV hint stores only delivery key/channel/provider acceptance metadata so the next queue or DLQ attempt repairs the D1 receipt before provider work
-  - `jobs-dlq` handling of `auth.send_otp` never calls email/SMS/WhatsApp providers; it creates or updates the D1 receipt as `skipped` with redacted evidence, or as `accepted` when a provider-accepted recovery hint exists, then ACKs the DLQ message
-  - Copy comes from `composeAuthOtpMessage()` in `store-messages.ts`: the subject starts with the code ("123456 is your <Store> code"), the sender and body name the store, and the language follows the active checkout language. Sign-in and sign-up share one wording.
-  - `purpose: "order_payment_recovery"` / `"order_lookup"` -- Read the delivery target from `order_payment_recovery_challenges` and use "finish paying" / "view your order" copy while preserving the same D1 delivery receipt, provider-health, idempotency, and redacted logging behavior. They must not create customer sessions or expose receipt proof.
-  - `method: "email"` -- Sends OTP code via email provider. Resend receives `deliveryKey` as `Idempotency-Key`; Cloudflare Email stores the returned `messageId`.
-  - `method: "phone"` + `allowedMethod: "whatsapp_otp"` -- Sends OTP via WhatsApp Business API template and stores Meta message IDs when returned
-  - `method: "phone"` + other -- Sends OTP via active SMS provider (`getActiveSmsProvider()`); GenNet receives a deterministic receipt-derived client reference as `csms_id`
-
-## Files
-
-- `index.ts` -- barrel exports: `sendOrderNotification`, `sendOrderNotificationEmail`
-- `notifications.service.ts` -- both functions
-- `order-email.ts` -- order email composition from the saved order snapshot
-- `store-messages.ts` -- store name/logo/language for buyer messages and the one-time-code message
-- `message-copy.ts` -- the English and Bangla words around messages (email frame, request names, codes, staff email)
-- `notification-templates.ts` -- default templates (en/bn), variables, and the one email renderer used by sends and the dashboard preview
-- `notification-templates.service.ts` -- reads and saves the merchant's templates
-- `documents.ts` -- the `notifications` (customer/staff channel rules with their defaults and allowances, staff email recipients, order WhatsApp template) and `notification_templates` settings documents
-- `channel-settings.ts` -- reads and saves the channel rules; a channel is newly enabled only while its provider is ready and not paused
-- `notification-provider-health.ts` -- D1-backed provider pause markers and receipt-derived recovery for merchant-actionable setup failures
-- `order-notification-outbox.ts` -- parent queue handoff/replay state
-- `order-notification-delivery-receipts.ts` -- per-channel receipt claims and accepted/failed/skipped marks
-- `../customers/otp-delivery-receipts.ts` -- customer OTP receipt claims and provider idempotency helper
-
-## Dependencies
-
-- `@scalius/database` -- `adminFcmTokens` table (FCM tokens), `settings` table (Firebase credentials), `authOtpDeliveryReceipts` table (customer OTP delivery fencing)
-- `@scalius/core/integrations/firebase/admin` -- `getFirebaseAdminMessaging()` for FCM REST API
-- `@scalius/core/integrations/email` -- `sendEmail()` for transactional emails
-- `@scalius/core/integrations/sms` -- `getActiveSmsProvider()` for SMS channel dispatch (4 providers: smsnetbd, bdbulksms, mimsms, gennet)
-- `@scalius/core/integrations/whatsapp` -- encrypted Meta Cloud API credential resolver and template sender for order/customer WhatsApp notifications
-- `../settings` -- the settings store (`defineSettingsDocument`) and the business, platform and provider-credential documents
-- `@scalius/shared/html-escape` -- `escapeHtml()` for XSS prevention in notification content
+Other senders (customer marketing messages) reuse these exports from `index.ts`: `dispatchWithReceipt`, `recordSkippedDelivery`, `recordProviderBlockedDeliveryIfNeeded`, `buildDispatchResult`, `emailResultToDeliveryResult`, `maskEmail`.

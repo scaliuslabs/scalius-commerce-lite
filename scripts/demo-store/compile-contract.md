@@ -1,87 +1,43 @@
 # Demo-store command compiler
 
-`compile.mjs` is a pure boundary between the validated rich-demo manifest and
-the later authenticated apply phase. It performs no reads, writes, asset work,
-or network calls. Its output is a serializable ordered list of admin API
-command intents.
+`compile.mjs` turns the validated manifest into an ordered list of admin API command intents. It is pure: it reads nothing, writes nothing and makes no network call. `pnpm demo:store --compile` prints a summary (commands per phase, retained boundaries) and never runs a command. This file is for contributors who change the manifest, the compiler or the binder.
 
-`pnpm demo:store --compile` exposes that deterministic intent as a network-free,
-write-disabled inspection gate. It never enables execution.
+`compileDemoStoreAdminCommands(manifest, { current })` takes an optional `current` snapshot. Without it, every resource compiles as new. A command has an `id`, `logicalKey`, `phase`, `method`, `path` and `body`, plus `dependsOn`, `preconditions`, `produces` and `pathBindings` where needed.
 
 ## References and identities
 
-- `{ "$ref": "logical-key", "field": "id" }` is an unresolved authority
-  reference. The apply phase must resolve it from a fresh read or a successful
-  prerequisite response before sending the body. Reference objects are never
-  valid API payload values by themselves.
-- New product-media associations use deterministic `pmed_demo_*` IDs so exact
-  SKU image references and the media array agree in the same create request.
-- New option, value, variant, section, collection, and slide draft identities
-  are deterministic hashes of logical manifest identities. No random value or
-  wall clock participates in compilation.
-- New optioned SKUs request `barcode: null` and `barcodeType: null`, allowing
-  the product create authority to generate internal Code 128 identities. New
-  simple-SKU updates omit barcode fields so the server-generated default SKU
-  barcode is retained.
+- `{ "$ref": "logical-key", "field": "id" }` is an unresolved reference. The binder (`apply-bind.mjs`) resolves it from a fresh read or a prerequisite command's result before it sends the body. A reference object is never a valid API value.
+- IDs of new attributes, categories, products, collections, options, values, variants and section drafts are deterministic hashes of logical manifest keys. New product-media associations get `pmed_demo_<hash>` IDs, so the exact SKU image references and the media array agree in one create request. No random value or clock enters compilation.
+- New optioned SKUs send `barcode: null` and `barcodeType: null`, so the product create endpoint generates the internal Code 128 barcode. A simple-SKU update sends no barcode fields, so the generated barcode stays.
 
-## Retained resources
+## Retained products
 
-Rider and Halo are guarded base plus option-matrix updates. Their command
-intents preserve product, SKU, option/value, stock, reservation, and inventory
-ledger authority. The base command computes the exact removed media
-associations referenced by live SKUs and acknowledges only those removals; the
-matrix then rebinds the same SKU IDs to the intended generated images while
-adopting current operational facts. This allows unprovable demo assets to be
-retired without resetting inventory or weakening the exact-SKU-image model.
-Current activation, attributes, SKU/option/value identities, and section IDs
-remain reference tokens until the apply binder resolves them from a fresh
-complete product read. Any missing topology, replacement authority, or
-unresolved preservation reference fails closed.
+Rider and Halo (`retainedProductId` in the manifest) compile to a guarded base update plus an option-matrix update. The commands keep the product, SKU, option, value, stock, reservation and ledger identities.
 
-Existing non-retained option matrices adopt current SKU, stock, tracking,
-weight, barcode, option, value, and variant identities by exact option
-combination. A missing combination may be created from manifest intent; an
-ambiguous current combination fails closed. Existing simple-SKU stock is never
-reseeded merely because the product exists. It is compiled only when the resume
-journal proves the base create completed and its SKU initialization did not.
+- The base command lists the media associations that live SKUs reference and the manifest drops. It acknowledges only those removals (`acknowledgedSkuImageRemovalIds`).
+- The matrix command points the same SKU IDs at the new generated images and adopts the current stock, tracking, weight and barcode values.
+- Identities stay reference tokens until the binder resolves them from a fresh product read. A missing topology, a missing replacement authority or an unresolved reference fails closed.
 
-Every update carries either a numeric revision from the supplied current-state
-snapshot or a reference to the exact prerequisite command result. A later
-consumer must stop on 409 and recompile; it must not replace these claims or
-blind-retry.
+An existing non-retained product with options adopts its current identities (SKU, stock, tracking, weight, barcode, option, value, variant) by exact option combination. A missing combination can be created. An ambiguous combination fails closed. A simple product's stock is not reseeded because the product exists. The compiler emits the simple-SKU update for an existing product only when the caller lists its slug in `current.resumeSimpleSlugs`; only `runRevisionSafeApply` does that.
+
+Every update carries a revision from the snapshot or a reference to the prerequisite command's result. A consumer stops on HTTP 409 and recompiles. It never replaces these claims or retries blindly.
 
 ## Command order
 
-Commands are grouped into create-only vocabulary reconciliation, category
-reconciliation, product base/matrix/simple
-SKU work, activation, category publication, collections, and one theme draft
-(`theme:draft`): the heroes as the first hero section's slides and
-`homepageCollections` as the first collections section's ids, composed by the
-binder into the published theme read in the snapshot (`$demoHomepage`) and
-saved at the workspace revisions read there (`current-theme`). Collections
-carry no homepage flag. Manual collection membership is explicit and ordered. Dynamic
-collections contain explicit category references. New categories publish only
-after a first product dependency; new products start inactive and activate only
-after their SKU/media/content payload is complete.
+| Phase | Commands |
+| --- | --- |
+| `vocabulary` | The `Brand` attribute, create-only. An exact existing definition is adopted. A different name or filterable flag makes compilation throw, because the attribute update API has no revision claim. |
+| `categories` | Create or update (`PUT` with `expectedRevision`) each category. |
+| `products` | A new product: one create command (its option matrix is in the body), plus a simple-SKU update for a simple product. An existing or retained product: a base update, then a matrix update when it has options. A new product starts inactive. |
+| `activation` | Activate a new product after its SKU, media and content are complete. |
+| `publication` | Publish a category after its first product exists. |
+| `collections` | Manual collections list ordered product IDs. Dynamic collections list category references. A collection has no homepage flag. |
+| `presentation` | One `theme:draft` command (`POST /api/v1/admin/settings/theme/draft`). |
 
-The reusable filterable `Brand` attribute is a create-only automated vocabulary
-command. An exact existing definition is adopted. Because the Attribute update
-API has no monotonic revision claim, a drifting name/filterable definition is a
-pre-write conflict rather than an unsafe update.
+The `theme:draft` body holds `$demoHomepage` (heroes and `homepageCollections`). The binder composes it into the published theme read in the snapshot (`theme-homepage.mjs`) and saves the draft at the revisions read in the workspace (`current-theme`). [apply/README.md](apply/README.md) describes the mapping.
 
-`apply-bind.mjs` is resolution-only: it binds compiler references from a fresh
-authenticated snapshot, verified staged assets, or safe prerequisite command
-authority (`id` and monotonic revisions). It must not rebuild or reinterpret a
-request payload; the one composition it performs is `$demoHomepage` (the
-compiled slides and collection ids placed into the snapshot's published
-theme). `run-apply.mjs` currently executes only category, product,
-inactive collection, and theme draft commands. Activation and
-publication remain excluded until the browser-verification milestone; the
-public CLI still exposes no write mode.
+## Binder and executors
 
-The safe publication architecture is defined in `apply/README.md` and
-`apply/phase-model.mjs`. It adds quarantine and explicit activation/publication
-phases, repairs inactive-product resume, blocks unversioned settings, hashes the
-complete intended payload for authorization, and restores safe authority from
-the resume journal. This architecture is intentionally not reachable through a
-public `--apply` flag yet.
+The binder resolves references from a fresh authenticated snapshot, from verified staged assets, or from the safe authority (`id` and revisions) of earlier commands. It never rebuilds a payload, except for `$demoHomepage`.
+
+`run-apply.mjs` exports `runDemoStoreApply`, the full lifecycle behind `pnpm demo:store --apply`, and `runRevisionSafeApply`, a staged-only executor that never activates or publishes. Only tests call the second.

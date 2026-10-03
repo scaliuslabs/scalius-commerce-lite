@@ -1,372 +1,144 @@
 # Storefront (`apps/storefront/`)
 
-Astro 7 SSR customer-facing storefront deployed as a Cloudflare Worker. Communicates with the API worker via Cloudflare Service Binding (`env.BACKEND_API`). Imports `@scalius/shared` and `@scalius/api-client` -- does NOT import `@scalius/core` or `@scalius/database` directly.
-
-Install, configure, and deploy from the repository root; see the [root README](../../README.md). `pnpm dev:storefront` starts the API and this app together.
-
-## Entry Point
-
-Astro generates the Worker entrypoint at `dist/server/entry.mjs` and the deploy-ready Wrangler config at `dist/server/wrangler.json`. The source `wrangler.jsonc` is the adapter input for bindings, routes, and compatibility settings; production deploys must run after `astro build` and use the generated config. The public custom domain is declared as a `custom_domain` route in the source config, and `scripts/deploy.mjs` reads that pattern for post-deploy verification.
-
-## Tech Stack
-
-- **Astro 7** -- SSR with `@astrojs/cloudflare` adapter
-- **React 19** -- Interactive components (islands architecture)
-- **Tailwind CSS 4** -- Styling
-- **Nano Stores** -- Client-side state management (cart, toast)
-- **Radix UI** -- Accessible UI primitives
-- **Lucide React** -- Icons
-
-Page colors come from `src/styles/theme-foundation.css` and the published or preview theme tokens in `Layout.astro`. Components must not override the global page canvas: imported component CSS also reaches routes that omit that component, including checkout without a footer.
-
-## Template fidelity checkpoint (2026-09-29)
-
-The built 30,000-product fidelity stack passed 155/155 selected card, listing, and product-page measurements across all ten templates: 70/70 for spec-catalogue, rounded-tech, and marketplace, then 85/85 for the remaining seven. It saved 60 desktop/phone visual pairs. A separate header/footer run passed 37/37 measurements, and the Department Mall navigation stress run passed 55/55. Marketplace categories start as cards, searches as lists, and shoppers can switch views; the merchant can configure category and search defaults independently. Desktop sidebar filters stay sticky.
-
-These selected measurements do not prove the complete ten-template goal. The marketplace size check still exceeds raw HTML targets (203/150 KB category, 173/120 KB product), and the controlled 30,000-product run missed the 300ms cold TTFB budget (352/1,094/338ms medians for home/category/product). Do not remove buyer-visible products, filters, navigation, or truthful SKU data to meet the byte gate. The synthetic media sometimes mismatches seeded product names; representative merchant content and real touch-browser gallery verification remain necessary.
-
-The next built checkpoint adds an Aarong-style two-column phone department grid and compacts its image-only hero so categories appear on the first screen; configured campaign slides keep their full-height treatment. Mass-retail keeps Target-style phone rows by default and now offers a working buyer Grid/List choice without overriding the merchant's saved layout. A real phone-width browser click produced two card columns, and the 30,000-product fidelity run passed 14/14 heritage metrics. Mass-retail passed 16/17; its remaining card-height comparison uses a sparse fixture against a richer Target card, while the saved Target screenshots are verification blocks. Full-page homepage captures now paint deferred sections before capture so below-the-fold review is possible.
-
-## Local Dev Runtime Notes
-
-`astro.config.mjs` treats React, React DOM, and their JSX runtime entrypoints as Vite singleton dependencies. Keep those entries together in `resolve.dedupe`, including `react-dom/server`. If Vite resolves one React copy for `react-dom/server` and another for SSR-rendered islands, local `astro dev` can blank React account/cart shells with invalid-hook errors even when `astro preview` and production builds are healthy. Do not exclude React from the SSR dependency optimizer for this Cloudflare target; the worker-like dev runner still needs Vite to bundle React instead of externalizing it through `require()`.
-
-## Project Structure
-
-```
-src/
-  components/        # UI Components (Header, Footer, Product, Cart, etc.)
-  config/            # Build ID and runtime config
-  layouts/           # Page layouts (Layout.astro)
-  lib/               # Utilities, API client, caching, middleware helpers
-    api/             # API client modules (per-domain fetch functions + typed unwrap)
-    cart/            # Cart utility functions
-    checkout/        # Checkout page logic + gateway handlers
-    canonical-query.ts # Canonical public query-string handling
-    public-worker-cache.ts # Public cache eligibility and generation-keyed Cache API lane
-    middleware-helper/ # CSP handler
-    tracking/        # Analytics tracking
-  pages/             # File-based routing
-    api/             # Server-side proxy routes
-      checkout/      # create-order, payment-session/[gateway], stripe-reconcile
-      auth/          # Auth proxy routes
-      customer-auth/ # Same-origin Customer OTP auth proxy
-      products/      # Product data proxy
-    products/        # Product detail pages
-    categories/      # Category listing pages
-    collections/     # Collection listing pages
-    blog/            # Articles index, detail, RSS feed
-    buy/             # Buy/redirect pages
-    search/          # Search with filters
-    ucp/, .well-known/ucp.ts  # Read-only UCP catalog discovery
-    robots.txt.ts, sitemap*.xml.ts, llms.txt.ts  # Discovery assets
-    cart.astro       # Cart page
-    checkout.astro   # Checkout page
-    order-success.astro
-    payment-recovery.astro    # Receipt-token payment recovery
-    track-order.astro         # Guest order lookup: order number + phone + one-time code
-    account.astro    # Customer account page
-    account/orders/[id].astro # Private order detail, timeline, shipment/payment history, and owned payment recovery
-  store/             # Global state (cart.ts, toast)
-  middleware.ts      # Public/private response policy + API context injection
-```
-
-## Middleware (`src/middleware.ts`)
-
-Two middleware functions run in sequence via `sequence()`:
-
-### 1. API Context Middleware (`apiContextMiddleware`)
-
-The storefront Worker installs **one secret, `SCALIUS_SECRET`, and zero `vars`** -- no Wrangler `vars` block, no `import.meta.env` URLs. Everything else is resolved per request by `runWithRequestRuntime()` (`src/lib/api/runtime.ts`) and seeded into the request runtime store:
-
-- **Platform origins and merchant CSP sources**: the `platform` and `cspAllowedDomains` fields of `GET /api/v1/storefront/layout`. The middleware makes that read first (`applyPlatformOrigins`) and every page reuses the same request-scoped promise from `getLayoutData()`, so there is no separate platform or CSP sub-request. When the read fails, no API URL is seeded and API callers fail closed; `STOREFRONT_URL` instead stays the request's own origin so sitemaps/feeds/JSON-LD still emit absolute URLs before Platform settings are filled in.
-- **Derived secret**: `API_TOKEN` is derived from `SCALIUS_SECRET` with HKDF (`@scalius/shared/runtime-secrets`) on every request -- cheap, nothing retained in module globals. The API derives the identical value, so nothing is installed or shared out of band.
-- **Cache generation**: on public renders the gateway passes the store's cache generation in `X-Scalius-Cache-Generation`; API reads made during that render send it on, so the page and its API data use one generation.
-
-The resulting store carries:
-
-- `BACKEND_API` -- Service binding Fetcher for 0ms-latency internal API calls
-- `PUBLIC_API_URL` -- Full API URL (`${apiUrl}/api/v1`) for client-side use
-- `PUBLIC_API_BASE_URL` -- Bare API origin, for auth redirects
-- `MEDIA_URL` / `CDN_DOMAIN_URL` -- Platform media base URL and its host[:port] (also set on `window.__CDN_DOMAIN__` for client code)
-- `STOREFRONT_URL` -- This storefront's own origin (Platform setting, or the request-origin fallback above)
-- `DASHBOARD_URL` -- Admin dashboard origin
-- `API_TOKEN` -- Derived per-request secret (see above)
-- `CACHE_GENERATION` -- Public cache generation of this render, if any
-
-### 2. Response Policy Middleware (`responsePolicyMiddleware`)
-
-The Worker entrypoint (`src/worker.ts`) is the only gateway. Allowlisted
-anonymous `GET`/`HEAD` requests are served from the Cache API; everything else
-renders directly. Browser HTML is `no-store`; discovery XML/text is public but
-must revalidate. Requests with authorization, a named private cookie,
-variant-selection parameters, checkout, account, recovery, or other buyer
-state stay private and never reach the shared cache.
-
-`/cart` is the one private page that is a cacheable shell
-(`isBuyerShellPathname` in `src/lib/cache-policy.ts`). Its lines live in
-`localStorage` (`cart:v3`) and paint from there before first paint; sign-in
-state, saved details, discounts, validation and the order come from no-store
-APIs or the POST. So an anonymous `GET /cart` is stored like a public page,
-under one canonical URL (every query is dropped; `?quickBuyStorage=blocked` is
-read in the browser), while the browser copy stays `no-store` and prefetch
-stays off. A signed-in buyer's cart and every `POST /cart` (the cash on
-delivery form, which works without JavaScript) render live. A cart built from
-a failed read calls `markRenderUncacheable`, so the fail-closed "checkout
-unavailable" answer is never shared. `src/lib/cart/cart-shell.render.test.ts`
-renders the real page to prove the shared copy carries nothing from the
-request.
-
-The gateway maps tracking-decorated, default-valued, and permuted query forms
-to one canonical same-host URL, strips the `Cookie` header, and renders that
-canonical request, so every anonymous visitor shares one entry per page.
-
-Astro prefetch remains enabled for anonymous public discovery, but
-`src/lib/prefetch-policy.ts` is the shared deny boundary for private/no-store
-routes and uncached product option URLs. Keep account, buy, cart, checkout,
-order-success, payment-recovery, track-order, theme-preview, and product `size`/`color`
-destinations opted out across configurable navigation and merchant-authored
-content. Any request metadata that bypasses the native public cache (including
-auth, receipt, and attribution cookies) suppresses speculative prefetch for the
-document lifetime, including cookies created after load. Do not disable public
-catalog intent prefetch globally for truly anonymous pages.
-
-**Generated browser assets**:
-- Astro emits generated JS/CSS beneath `/_astro/{BUILD_ID}/...`. Do not flatten
-  this back to a shared `/_astro/...` directory: an Astro entry filename can stay
-  stable when a referenced client module changes, while Cloudflare correctly
-  marks generated assets immutable. The build-scoped path ensures an existing
-  browser requests the new code after every source deployment.
-- The generated build ID is validated as a path-safe token before Astro config
-  uses it. Cloudflare may deduplicate identical file bodies internally; the
-  public URL still remains build-scoped.
-- `global.css` limits Tailwind source detection to `src/`. Astro uses
-  `inlineStylesheets: "auto"` with an 8 KiB asset threshold: the large shared
-  Tailwind output remains an immutable, cross-page browser asset while compact
-  layout and route chunks stay inline. Do not change this boundary based on raw
-  bytes alone; the full-externalization production trial improved FCP but added
-  a second render-blocking request and regressed mobile Speed Index.
-
-## Caching Architecture
-
-- The store has one **cache generation**: an opaque random token stored in the
-  database and mirrored to the `CACHE` KV namespace (shared with the API
-  Worker, read with a 30 s edge cache). Every buyer-visible write replaces it.
-- `servePublicStorefrontRequest()` (`src/lib/public-worker-cache.ts`) keys
-  `caches.default` by host, build ID, Worker version (`CF_VERSION_METADATA`),
-  generation, and canonical path/query. A write or a deploy therefore makes
-  old entries unreachable; nothing is purged, and old entries age out (edge
-  lifetime 1 day). The Worker version changes on every deploy and every dev
-  server start, including changes BUILD_ID's source hash cannot see; without
-  the binding pages render uncached.
-- A miss renders the canonical request pinned to the generation and stores the
-  response only when the middleware marked it `X-Cache-Status: MISS` (a
-  successful anonymous public response without `Set-Cookie`). Hits return
-  `X-Cache-Status: HIT` with the browser cache headers restored.
-- If the generation cannot be read, the request renders uncached.
-- Freshness: a write reaches every page within KV propagation (typically well
-  under 60 s). A lost KV mirror write is repaired by the next pass of the same
-  write or by the 15-minute scheduled sync.
-- `withEdgeCache()` only shares an in-flight Promise between identical reads in
-  one request. It is not a persistent cache layer.
-- Workers Cache (`cache.enabled`) is intentionally off for this Worker: it
-  bills every page hit twice and every static asset request. The Cache API is
-  per data center, which fits stores whose buyers sit in a few regions.
-
-### Cache Key Admission
-
-- `src/lib/canonical-query.ts` owns canonical query handling for API read keys.
-- `@scalius/shared/storefront-cache-path` owns rendered public-path canonicalization.
-- Equivalent safe query forms share one key; product variant-selection
-  parameters bypass public caching entirely.
-
-### Early Hints
-
-Anonymous public HTML includes only a deployment-stable CDN `preconnect` in its
-HTTP `Link` header. Cloudflare may cache that header separately and emit it as a
-`103 Early Hints` response before the Worker runs. Never add merchant hero,
-product, query-specific, private, or build-version asset URLs to that header:
-the separate URI-only hints cache does not follow the cache generation, and a
-stale preload can waste constrained mobile bandwidth. The stable
-preconnect transfers no asset bytes and does not alter commerce freshness.
-
-### Cache Freshness
-
-Only the named private-session cookies (`cs_tok`, `cs_auth`, `stp_theme_preview`)
-or an `Authorization` / `X-API-Token` header move a request onto the uncached
-lane. Analytics and ad-click cookies (`_fbp`, `_fbc`, `_ga`, click-id mirrors)
-never change a public render; the gateway strips the `Cookie` header before
-rendering so every anonymous visitor shares one cached entry.
-
-Persistent public product, search, and feed projections are intentionally
-availability-band stable. `availabilityBand` is the buyer-visible inventory
-truth; the retained `stock` and `reservedStock` fields are compatibility
-sentinels, not exact quantities. Same-band mutations therefore leave the cache
-generation alone, while band transitions replace it. Never render or advertise those sentinels as exact inventory. Cart and
-checkout must validate the requested quantity against the live database-backed
-authority.
-
-
-## Page Data Loading
-
-Product detail pages start layout, product, and shipping reads together. Category pages build product-list options before the first await, then start layout, category-products, and filter metadata in one promise wave; `getProductsByCategory()` must use the full category object returned by `/api/v1/categories/{slug}/products` and the page must not issue a second `getCategoryBySlug()` read. Search/all-products pages build product-list options first, then start layout, product-list, and search filter metadata together. CMS page routes use the consolidated render-data endpoint. Keep `src/lib/page-data-boundaries.test.ts` aligned with these boundaries.
-
-## API Client (`src/lib/api/`)
-
-### Architecture
-
-Each API domain has its own module file (e.g., `products.ts`, `categories.ts`, `orders.ts`). Most read paths use generated SDK methods from `@scalius/api-client/sdk` with the configured clients in `client.ts`, so SSR requests can use the runtime API URL, auth token, retry behavior, and service-binding transport where available. Direct `fetch()` helpers remain for proxy routes and flows that need custom request bodies, polling, retries, or raw response handling.
-
-### Typed Envelope Unwrapping (`src/lib/api/unwrap.ts`)
-
-Two helpers centralize the single `as` cast for the API's `{ success: true, data: T }` envelope:
-
-- `unwrapEnvelope<T>(response)` -- Returns `data` if `success === true`, else `null`
-- `unwrapData<T>(response)` -- Returns `data` without checking `success` (for cases where caller handles success separately)
-
-### Request runtime (`src/lib/api/runtime.ts`)
-
-Consolidated accessors, all delegating to `apiContext.getStore()`. There is no module-level state and no Wrangler `vars` or `import.meta.env` fallback: when a value is absent from the store it is absent for the request, and callers fail closed:
-
-- `getRuntimeApiUrl()` -- `PUBLIC_API_URL`
-- `getRuntimeApiBaseUrl()` -- `PUBLIC_API_BASE_URL`
-- `getRuntimeCdnDomain()` -- `CDN_DOMAIN_URL`
-- `getRuntimeMediaUrl()` -- `MEDIA_URL`
-- `getRuntimeDashboardUrl()` -- `DASHBOARD_URL`
-- `getRuntimeApiToken()` -- `API_TOKEN`, derived from `SCALIUS_SECRET` per request
-- `getRuntimeStorefrontUrl()` -- `STOREFRONT_URL` (Platform setting, or the request-origin fallback seeded by the middleware), trailing slash stripped
-
-### API Module Files
-
-| File | Functions |
-|------|-----------|
-| `products.ts` | Product catalog, detail, variants |
-| `categories.ts` | Category listings, detail |
-| `collections.ts` | Homepage collections |
-| `orders.ts` | Order creation, status polling |
-| `checkout.ts` | Checkout config, gateways |
-| `search.ts` | FTS5 search |
-| `header.ts` | Header config |
-| `footer.ts` | Footer config |
-| `navigation.ts` | Navigation menus |
-| `pages.ts` | CMS pages |
-| `discounts.ts` | Discount validation |
-| `shipping.ts` | Shipping methods, locations |
-| `settings.ts` | Site settings, SEO |
-| `storefront.ts` | Homepage data bundle |
-| `customer-auth.ts` | Customer OTP auth, account order detail, and owned-order payment-session helpers that call the same-origin proxy |
-| `abandoned-checkouts.ts` | Abandoned checkout tracking |
-| `tracking.ts` | Analytics/tracking config |
-
-### Search Client Rules
-
-- Browser search inputs must normalize semantic whitespace with `normalizeSearchQuery()` before building API URLs or `/search?q=` navigation links. This keeps API KV, storefront L2, and HTML cache keys aligned for equivalent queries.
-- Live typeahead/search-palette requests must cancel superseded requests with `AbortController` and ignore stale responses, so slower old searches cannot replace newer results after a user keeps typing or closes the palette.
-- Product-only lookup UI should call `/api/v1/products/search` through `getApiV1ProductsSearch()` so it receives product pagination and variants without using the broader global `/api/v1/search` route.
-
-## Server-Side Proxy Routes (`src/pages/api/`)
-
-Proxy routes handle operations that require the derived `API_TOKEN` (from `SCALIUS_SECRET`) or need to unwrap the API envelope before returning to browser JavaScript.
-
-| Route | Purpose |
-|-------|---------|
-| `checkout/create-order.ts` | Create order via API with synchronous D1 checkout-attempt idempotency; normal online checkout creates the gateway session after order commit |
-| `checkout/payment-session/[gateway].ts` | Create (or replay) a payment session for any gateway |
-| `auth/` | Auth proxy routes |
-| `customer-auth/` | Same-origin Customer OTP auth proxy; preserves `Set-Cookie` on the storefront domain |
-| `products/` | Product data proxy |
-| `ptproxy.ts` | Partytown analytics proxy |
-| `product-feed.xml.ts` | Canonical Google/Base product feed. Reuses the shared catalog feed generator with Google availability values (`in_stock`/`out_of_stock`). |
-| `facebook-feed.xml.ts` | Shared catalog feed generator plus Facebook/Meta compatibility endpoint. Availability comes from the public product list `availableForSale` SKU projection so feed XML matches product-page structured data and checkout purchasability. Feed links require an absolute storefront URL, honor valid product canonical path overrides, preserve variant query params, and skip rows without a safe absolute `http(s)` primary image or a positive original/effective price after feed precision. Discounted rows emit original `price` plus a strictly lower positive `sale_price`; unsupported zero-price subscription/contract rows are not fabricated. True brand/GTIN data is preserved when provided, and the feed never invents a `Generic` brand. |
-
-Checkout proxy endpoints unwrap `.data` before returning to the browser -- the checkout page reads top-level fields.
-`checkout/create-order.ts` must preserve structured `details.itemIssues` from the API; checkout gateway handlers use those issues to return buyers to the cart repair UI instead of collapsing catalog freshness failures into a string-only payment error.
-
-## Cart (`src/store/cart.ts`)
-
-Client-side cart state using Nano Stores (`nanostores/map`):
-
-- Persisted to `localStorage` under key `cart`
-- Cart item keys use `{productId}-{variantId}` for option SKUs, `{productId}-{option1}-{option2}` for legacy option rows without a variant ID, or just `{productId}` for simple products.
-- Discount support with auto-clear when cart contents change
-- Cross-component communication via `CustomEvent` dispatches (`cart-updated`, `discount-applied`, `discount-removed`)
-- Automatic checkout draft snapshots omit untouched empty controls so slow customer/session or React hydration cannot suppress saved contact and location autofill. Native buyer edits own their fields immediately, including intentional clears; submission captures current fields before validation. Account phone prefill is normalized and saved to the existing draft before notifying the phone island, so either hydration order preserves it. The island still enforces the store's country policy. Location changes clear dependent zone/area values.
-- Cart-to-checkout payment transfer uses `src/lib/checkout/session-state.ts` and must persist/read back `scalius_checkout_data` before leaving `/cart`; blocked or quota-full storage restores the submit button and shows a top-of-cart error instead of redirecting to a broken `/checkout`. The gateway snapshot is optional and checkout falls back to fresh public config if it is missing.
-- Checkout repair handoff uses a one-shot `sessionStorage` key (`scalius_cart_repair_state`) written by `/checkout`; `src/lib/cart/client.ts` consumes it, renders line-level issues immediately, then runs the normal backend cart validation as authority. Direct or stale `/checkout` visits show an explicit Return to cart recovery action instead of silently bouncing.
-- Quick-buy still uses a short-lived `quickBuyData` storage payload after server-side SKU/cart validation; if that storage write cannot be proven, `/buy/{slug}` redirects to `/cart?quickBuyStorage=blocked` so the cart can render a server-side explanation instead of an empty-cart mystery.
-
-## Checkout (`src/lib/checkout/`)
-
-Gateway-based payment architecture:
-
-- `registry.ts` -- Gateway handler registry (`registerGateway` / `getGateway`)
-- `handlers/cod.ts` -- Cash on delivery
-- `handlers/stripe.ts` -- Stripe Elements
-- `handlers/hosted.ts` -- every hosted (redirect) gateway, e.g. SSLCommerz
-- `index.ts` -- Checkout page initialization: loads checkout data from `sessionStorage`, validates cart freshness on load and before payment, renders order summary, renders gateway cards, handles payment processing, redirects stale cart snapshots back to `/cart?checkoutIssues=1`, and shows an inline recovery state when the cart-to-checkout transfer is missing or unreadable.
-- Partial payment support: when enabled, COD is hidden and online gateways show "Pay Advance via {gateway}"
-- Payment-session proxies preserve backend `202 processing` responses. Hosted gateways send already-committed orders to receipt recovery without retry loops; Stripe stays on checkout with retryable copy until a real client secret is available. `/order-success` reads fresh checkout config before rendering retry actions: callback-only failed/cancelled returns expose only the current hosted gateway, while durable `payment_issue` states may offer another currently visible online gateway such as SSLCommerz <-> Stripe. The API is still the authority for whether a gateway switch is allowed.
-
-## Account Order Payments (`src/pages/account/orders/[id].astro`)
-
-The private order-detail page can recover failed or remaining online payments for orders owned by the signed-in customer. It reads the API-provided `paymentRecovery` preview from `GET /api/v1/customer-auth/orders/{id}` and creates sessions through `POST /api/v1/customer-auth/orders/{id}/payment-session`. The request can select a gateway and request replacement of an untouched attempt; the API validates those choices and derives payment type, amount, currency, and proof from the customer session and order state. Stripe mounts a local card form and refreshes the order after confirmation; SSLCommerz redirects to hosted checkout and return to `/account/orders/{id}` with neutral status query params. If a durable payment-session attempt is still processing, the helper surfaces retryable copy instead of treating the response as a usable session. This account flow must not use receipt tokens, `/order-success`, cart clearing, or checkout purchase-finalization side effects.
-
-Account payment summaries share the receipt's COD status and visible-balance rules. Active COD balances are due on delivery and use neutral styling; closed unpaid COD orders have no current payment or collection obligation. Keep paid amounts and refund history truthful. A positive balance alone must never promise online payment: only the API's `paymentRecovery` eligibility can expose a recovery action. Each overview card has one link to its full timeline.
-
-## Customer Auth Read Resilience
-
-Browser helpers in `src/lib/api/customer-auth.ts` use bounded same-origin proxy reads/writes and return an explicit `unavailable` state for timeouts, malformed responses, `429`, and `5xx` account/order reads. `/account` and `/account/orders/{id}` must render retryable account/order error states for `unavailable` instead of treating those failures as logged out or empty history. Cart checkout auth-gating may use the readable `cs_auth` cookie only as a hydration hint; submit-time guest-disabled checkout must verify `/api/customer-auth/me`, block with retry copy when that read is unavailable, and open the auth modal only for a real unauthenticated session.
-
-The account delivery editor reads the current profile from `/me`, independently of order history. Blank profile values stay blank instead of falling back to an older order. Retrying order history only reloads orders and preserves any open profile draft; location loading must finish before profile saves are enabled. City changes clear zone and area, zone changes clear area, and saves explicitly include the optional area so a previous selection cannot survive a parent change. Location retries preserve current selections and typed text; stale responses cannot restore descendants from an earlier selection.
-
-`AuthModal` uses the existing storefront theme tokens, one step heading, and a viewport-bounded form with a scrollable body and reachable actions. Native POST submission handles Enter without putting identity or OTP fields in URLs; in-flight submissions are deduplicated. Profile locations are initialized from the customer independently of checkout drafts/events. Shared location dropdowns keep hidden cart field names stable, use instance-specific control IDs, fit their scroll/visual viewport boundary, and consume Escape before the parent dialog. Incomplete profiles remain incomplete until a successful save.
-
-## SEO Features
-
-- **Canonical URLs**: `<link rel="canonical">` on all pages via `Layout.astro` `canonicalUrl` prop. Products, categories, collections, and CMS pages may use a validated same-store `canonicalPath` override; blank values use the normal public route.
-- **Open Graph tags**: Full OG meta tags (og:title, og:description, og:image, og:url, og:site_name, og:type) in `Layout.astro`
-- **JSON-LD**: OnlineStore and WebSite structured data on all pages when enabled, with schema names sourced only from business company/legal name and optional MerchantReturnPolicy sourced from saved SEO return-policy settings
-- **Product SEO**: Product pages emit Product/ProductGroup JSON-LD with price, availability, SKU, safe primary images from the same catalog-discovery media helper used by feeds/UCP, GTINs from variant barcodes, active-method shipping details, aggregate offer data, optional seller identity from business settings, and brand only from explicit product data. Product schema must not fabricate condition, price expiry, placeholder images, or a generic seller.
-- **Discovery XML**: Robots, sitemap index/children, and product feeds are dashboard-policy governed. Product-level sitemap/feed exclusions keep the product page public while removing it from matching XML output. Product, category, collection, and CMS page `noindex` controls keep public pages reachable with `noindex,follow`, remove them from sitemap XML, and suppress resource-specific JSON-LD. Valid same-store canonical path overrides become the sitemap `<loc>` for included resources. Sitemap XML stays loc/lastmod-only, the sitemap index must not advertise disabled child sections, and the browser XSL preview mirrors that contract.
-- **Agent discovery**: `/llms.txt` points agents to the storefront's discovery assets and gives a compact UCP search/lookup guide. `/.well-known/ucp` and `/ucp/catalog/*` stay read-only and catalog-only. UCP products are projected from the same feed-ready SKU/image/availability truth as XML feeds; products without safe catalog media are omitted rather than exposing weaker catalog data.
-
-## Search
-
-- **FTS5 full-text search**: Product search uses SQLite FTS5 via the API worker
-- **Bengali support**: FTS5 tables use the `unicode61` tokenizer with `categories 'L* N* Co Mc Mn'` for Bengali script tokenization
-
-## Import Boundaries
-
-The storefront imports ONLY:
-- `@scalius/shared` -- Pure utility functions (currency formatting, CORS, etc.)
-- `@scalius/api-client` -- Generated SDK types, generated endpoint helpers, and client factory/runtime used through the configured clients in `src/lib/api/transport.ts`
-
-It does NOT import:
-- `@scalius/core` -- Domain services
-- `@scalius/database` -- Schema, client, migrations
-
-All data access goes through the API worker via the configured SDK clients, service binding transport, or explicit HTTP fetch/proxy exceptions. Storefront code should not use the generated singleton client when a request needs runtime env, auth, retry, or service-binding behavior.
-
-## Cloudflare Bindings
-
-| Binding | Type | Purpose |
-|---------|------|---------|
-| `BACKEND_API` | Service | Service binding to the API worker |
-| `ASSETS` | Fetcher | Static asset serving (required by `@astrojs/cloudflare`) |
-
-## Key Files
-
-| File | Purpose |
-|------|---------|
-| `wrangler.jsonc` | Source Cloudflare binding/route config consumed by the Astro adapter (no `vars`) |
-| `dist/server/wrangler.json` | Generated deploy config produced by `astro build`; deploy this file, not the source config |
-| `src/worker.ts` | Gateway: reads the cache generation and serves the public cache lane |
-| `src/middleware.ts` | Public/private response policy and API context |
-| `src/lib/public-worker-cache.ts` | Public eligibility, canonical keys, and the generation-keyed Cache API lane |
-| `src/lib/canonical-query.ts` | Canonical API query strings |
-| `src/lib/api/runtime.ts` | Per-request runtime: derived tokens, platform origins, ALS getters |
-| `src/lib/api/unwrap.ts` | Typed envelope unwrap helpers |
-| `src/lib/api/transport.ts` | `apiFetch`: service binding or local HTTP, fallback policy, system JWT, read coalescing, SDK clients |
-| `src/lib/checkout/index.ts` | Checkout page logic + gateway orchestration |
-| `src/store/cart.ts` | Nano Stores cart state (localStorage-persisted) |
-| `src/config/build-id.ts` | Build-scoped generated asset paths |
+The buyer-facing store: an Astro 7 server-rendered app that runs as the `scalius-storefront` Cloudflare Worker. This guide is for contributors and coding agents. The Worker holds no database. It reads everything from the API Worker through a service binding.
+
+Install, configure and deploy from the repository root (see the [root README](../../README.md)). Deploy with `pnpm run deploy:storefront`. Render budgets and the render path are in [docs/STOREFRONT-PERFORMANCE.md](../../docs/STOREFRONT-PERFORMANCE.md).
+
+## Commands
+
+| Command | What it does |
+| --- | --- |
+| `pnpm dev:storefront` (root) | Starts the API Worker and `astro dev` together. Ports come from `scripts/dev-ports.mjs` (default storefront `:4322`, API `:8787`). |
+| `pnpm --filter ./apps/storefront build` | Runs `scripts/generate-build-id.js`, `astro check`, `astro build`, then `scripts/check-dist-secrets.mjs`. |
+| `pnpm --filter ./apps/storefront typecheck`, `lint` | `astro check` (after the build ID), and ESLint over `src/`. |
+| `pnpm perf:storefront` | Checks TTFB, LCP and CLS budgets against a running stack (`scripts/storefront-perf.mjs`). |
+| `pnpm fidelity:check` | Measures the built storefront against reference sites (`scripts/storefront-fidelity/`). |
+| `pnpm check:env`, `pnpm check:build-canaries` | Check Worker bindings, and prove that local env values never reach `dist/`. |
+
+## Stack
+
+Astro 7 with `@astrojs/cloudflare` (passthrough image service), React 19 islands, Tailwind CSS 4, Nano Stores (cart state), Radix primitives, Lucide icons and Partytown (third-party analytics).
+
+## Worker, bindings and request path
+
+`wrangler.jsonc` is the adapter input. `astro build` writes the deploy config to `dist/server/wrangler.json`, and `scripts/deploy.mjs` deploys that file. The public domain is the `custom_domain` route in the source config.
+
+| Binding | Purpose |
+| --- | --- |
+| `BACKEND_API` | Service binding to `scalius-api`. Every data read and write goes through it. |
+| `ASSETS` | Static assets from `./dist` (required by the adapter). |
+| `CF_VERSION_METADATA` | The Worker version. It is part of every page cache key. Without it, pages render uncached. |
+| `SCALIUS_SECRET` | The only installed secret. The Worker derives `API_TOKEN` from it on every request (HKDF, `@scalius/shared/runtime-secrets`). |
+
+There are no Wrangler `vars`, no KV and no `workers_dev` URL. `pnpm check:env` enforces the binding set. The committed config is the Free config: `pnpm run deploy --plan paid` adds `limits.cpu_ms` to the generated file ([docs/FREE-PLAN.md](../../docs/FREE-PLAN.md)).
+
+The entry is `src/worker.ts` (`StorefrontGateway`). For each request it:
+
+1. Applies a signed front-proxy header, if one is present and valid.
+2. Redirects plain HTTP on a named host to HTTPS (308).
+3. Rewrites an RFC 8058 one-click unsubscribe POST so the page can read it.
+4. Calls `servePublicStorefrontRequest()` (`src/lib/public-worker-cache.ts`), which serves a cached page or renders through the Astro handler.
+
+Astro middleware (`src/middleware.ts`) runs three functions in order. `transportSecurityMiddleware` redirects plain HTTP and adds security headers. `requestRuntimeMiddleware` seeds the per-request runtime: pages start the layout read together with their own reads, and other routes wait for the layout first. `responsePolicyMiddleware` sets `Cache-Control`, `X-Cache-Status` and `X-Storefront-Build`, and builds the page CSP.
+
+## Runtime configuration and API access
+
+`src/lib/api/runtime.ts` keeps a per-request store in `AsyncLocalStorage`. Nothing is kept in module globals, and nothing is read from Wrangler vars or build-time env.
+
+- **Origins.** The storefront, API, dashboard and media origins come from the `platform` field of `GET /api/v1/storefront/layout` (Platform settings). If the read fails, no API URL is set and API callers fail closed. `STOREFRONT_URL` then stays the request origin, so sitemaps, feeds and JSON-LD still emit absolute URLs.
+- **CSP.** Merchant "Trusted websites" arrive in the same layout payload (`cspAllowedDomains`). `src/lib/middleware-helper/csp-handler.ts` builds the page CSP from them, the platform origins and the hosts of approved app scripts.
+- **Getters.** Code reads the store through the `getRuntime*()` getters in `runtime.ts`. A missing value stays missing.
+- **Transport.** `src/lib/api/transport.ts` owns every server-side call (`apiFetch`, default 8 s timeout, 2 retries). It uses the `BACKEND_API` binding in production and plain HTTP to the local API under `astro dev`. A safe public read may fall back once to the public HTTPS API URL. Sensitive reads and every write fail closed.
+- **Batching.** Public reads that a render starts before it yields travel as one `GET /api/v1/storefront/batch` request (at most 8 parts, `MAX_STOREFRONT_BATCH_PARTS`). Authenticated, private and write requests are never batched. Page code starts all its reads together. `loadPageWithLayout()` (`src/lib/page-data.ts`) joins the layout with the page's own data.
+- **Envelope.** The API answers `{ success, data }`. Read modules in `src/lib/api/` call generated SDK methods from `@scalius/api-client/sdk` through the configured clients. `unwrapEnvelope()` and `unwrapData()` (`src/lib/api/unwrap.ts`) hold the one `as` cast. Use direct `fetch` only for proxy routes and flows that need a custom body, polling or raw responses.
+
+## Public cache and private pages
+
+The gateway stores anonymous public pages in the Cache API (`caches.default`) with a dependency proof from the API and serves a hit only after it validates the proof. The contract (frontier, proofs, storing rules) is in [packages/core/src/cache-deps/README.md](../../packages/core/src/cache-deps/README.md).
+
+- The key carries `BUILD_ID` and the Worker version. A deploy therefore starts with a cold cache, and nothing is purged.
+- `@scalius/shared/storefront-cache-path` maps tracking, default-valued and permuted query forms of a page URL to one canonical URL. `src/lib/canonical-query.ts` does the same for API read keys. The gateway strips the `Cookie` header before it renders the canonical URL.
+- `isPublicCachePath()` in `public-worker-cache.ts` defines the public paths: the home page, product, category, brand, collection, CMS and blog pages, search, the category index, `/navigation/panels`, the discovery files and the cart shell.
+- Product variant-selection parameters, a bounded-query violation, an `Authorization` or `X-API-Token` header, and the cookies `cs_tok`, `cs_auth` and `stp_theme_preview` bypass the cache. Analytics and ad-click cookies never do.
+- Private paths (`PRIVATE_STOREFRONT_PATHNAME_RE` in `src/lib/cache-policy.ts`): `/account`, `/buy`, `/cart`, `/checkout`, `/newsletter`, `/order-success`, `/payment-recovery`, `/theme-preview`, `/track-order`. They render for every request with `Cache-Control: private, no-cache, no-store, must-revalidate`.
+- `/cart` is the one private page the edge may store: its HTML is a buyer-agnostic shell (lines come from `localStorage`). The browser copy stays `no-store`. A signed-in buyer's cart and every `POST /cart` render live. `src/lib/cart/cart-shell.render.test.ts` proves the stored shell carries nothing from the request.
+- Public HTML is `Cache-Control: no-cache` for browsers. Discovery files are `public, max-age=0, no-cache, must-revalidate` (`src/lib/public-discovery-cache.ts`).
+- A page built from a failed read calls `markRenderUncacheable()`. The middleware then answers `X-Cache-Status: BYPASS_DEGRADED`, and the gateway does not store it.
+- Public HTML carries only a `Link` header with a `preconnect` to the media CDN. Never add merchant, product, query-specific or build-versioned URLs to it (Early Hints ignores cache validity).
+- Public product, search and feed data is band-stable: `availabilityBand` is the buyer-visible truth, and `stock` and `reservedStock` are not exact quantities. Never render them as stock counts. Cart and checkout validate quantity against the live API.
+- Speculative prefetch stays on for anonymous public pages. `src/lib/prefetch-policy.ts` is the deny list for private routes and product option URLs. Keep account, buy, cart, checkout, order-success, payment-recovery, track-order and theme-preview links opted out, also inside merchant-authored content.
+
+## Routes (`src/pages/`)
+
+The routes are the files in `src/pages/`. Rules for a few of them:
+
+- Buying and account routes (`/cart`, `/checkout`, `/checkout/quick`, `/buy/[slug]`, `/order-success`, `/payment-recovery`, `/track-order`, `/account/*`) are private.
+- `/agent/continue*` and `/checkout/continue*` (agent handoff) are private, `noindex` and `no-store`.
+- `/apps/[pluginId]/[...path]` forwards to an installed app's public API route through `BACKEND_API` (`src/lib/app-proxy.ts`). It never caches, forwards only the `cs_tok` cookie, and draws an app's `{ page }` answer inside the store layout after sanitizing it.
+- `/theme-preview*` serves the dashboard theme editor preview. `/health` answers JSON with `buildId` and `no-store`.
+- Discovery routes: `/robots.txt`, the sitemaps, `/llms.txt`, `/.well-known/ucp`, `/ucp/catalog/{search,lookup,product}` and the two product feeds (see Discovery).
+
+## Same-origin proxies (`src/pages/api/`)
+
+Proxies exist where the browser needs a same-origin cookie, the derived `API_TOKEN`, or an unwrapped response. Every `POST` proxy rejects cross-origin requests with `shouldRejectCrossOriginCookieRequest()`. Read-only `GET` routes do not need it.
+
+- `checkout/create-order.ts` creates the order, then the first payment session for an online gateway. It passes the buyer session as `X-Customer-Session`, sets the receipt cookie and keeps `details.itemIssues` so the cart can repair lines.
+- `checkout/payment-session/[gateway].ts` creates or replays a payment session. It reads the receipt proof from the cookie, never from the body, and passes a backend `202 processing` answer through with `Retry-After`.
+- `customer-auth/[...path].ts` is the customer sign-in proxy. It rewrites `Set-Cookie` onto the storefront origin. `auth/logout.ts` clears `cs_tok`, `cs_auth` and every receipt cookie.
+- The other proxies cover cart validation, quotes, receipts, payment recovery, reviews, warranties, messages, downloads, agent handoff and product data for browser scripts.
+- `ptproxy.ts` is the Partytown reverse proxy. Its host allowlist is exactly the hosts that `src/lib/partytown-config.ts` proxies. Never add a shared CDN.
+- `product-feed.xml.ts` and `facebook-feed.xml.ts` serve the catalog feeds (see Discovery).
+
+## Cart and checkout
+
+- **Cart state.** `src/store/cart.ts` (Nano Stores) persists to `localStorage` key `cart:v3`. Lines are keyed by product, SKU and a hash of the buyer inputs (`line:v3:<product>:variant:<variant>:p:<hash>`). The older `cart` key is dropped, never read. Discount codes live in the store, and every amount comes from the server quote. Components talk through `CustomEvent`s (`cart-updated`).
+- **Cart to checkout.** The cart writes `scalius_checkout_data` (plus gateway and payment-method keys) to `sessionStorage` and reads it back before it leaves `/cart`. If storage is blocked, the cart shows an error and stays. `src/lib/checkout/session-state.ts` owns these keys. Quick buy stores `quickBuyData` the same way and redirects to `/cart?quickBuyStorage=blocked` when the write fails. Quick buy without JavaScript posts to `/checkout/quick`, which runs checkout as server POST steps and places a cash on delivery order.
+- **Gateway handlers.** `src/lib/checkout/registry.ts` holds the handlers. `handlers/cod.ts` and `handlers/gift-card.ts` place the order, `handlers/stripe.ts` mounts the card form, and `handlers/hosted.ts` is the one handler for every redirect gateway, including an app provider's `<plugin id>:<provider id>`.
+- **Partial payment.** When the store enables it, COD is hidden and online gateways show "Pay Advance via {gateway}". The API decides whether a gateway switch is allowed.
+- **No sensitive URLs.** Contact details, OTP codes, tokens, cart, payment and discount values travel in POST bodies or browser storage, never in a URL or query string. Forms post without JavaScript where the flow allows it.
+- **Order request.** It carries a `checkoutRequestId` and the `expectedQuoteFingerprint` of the verified total (`src/lib/checkout/create-order.ts`). `createOrder()` in `src/lib/api/orders.ts` never retries (`retries: 0`), so a slow answer cannot create a second order. Hosted gateways send an already committed order to receipt recovery without a retry loop.
+
+## Receipts, order lookup and payment recovery
+
+- **Receipt proof.** The API returns a receipt token at order creation. The storefront stores it in an httpOnly, secure cookie `scalius_receipt_<order>_<hash>` (7 days, `src/lib/order-receipt-cookie.ts`) and a short checkout marker cookie (10 minutes, path `/order-success`). Proxies read the cookie and send the proof to the API on the server (the `X-Receipt-Token` header, or the body of a payment-session call). The browser never reads it. Never put a receipt token in a URL, analytics payload or log.
+- **Track an order** (`/track-order`). The order number alone shows a status-only view. Full details need a one-time code sent to a contact saved on the order, and a correct code stores the receipt cookie. All fields travel in POST bodies, and the page works without JavaScript.
+- **Payment recovery** (`/payment-recovery?orderId=...`). A merchant can send this link. It opens nothing by itself: a one-time code sent to the order's saved contact proves the buyer, then the receipt opens with the payment choices. A signed-in owner goes straight to the receipt. Never create a bearer recovery URL.
+- **Account order payments** (`/account/orders/[id]`). The page reads `paymentRecovery` from `GET /api/v1/customer-auth/orders/{id}` and creates sessions with `POST /api/v1/customer-auth/orders/{id}/payment-session`. Only the API's `paymentRecovery` eligibility may show a pay action. A positive balance alone never does. This flow must not use receipt tokens, `/order-success` or checkout finalization.
+
+## Customer accounts
+
+- `/api/customer-auth/*` proxies to `/api/v1/customer-auth/*`. The session is `cs_tok` (httpOnly). `cs_auth` is a readable hint for hydration only. Submit-time checks call `/api/customer-auth/me`.
+- Browser helpers in `src/lib/api/customer-auth.ts` use bounded reads and return an explicit `unavailable` state for timeouts, malformed answers, `429` and `5xx`. The account pages then show a retryable error and never treat `unavailable` as logged out or as empty history.
+- `AuthModal` (`src/components/AuthModal.tsx`) is a `method="post"` form, so Enter never puts an identity or OTP field in a URL.
+- The account pages render on the server from the session cookie and work without JavaScript. Order history pages with the API's opaque cursor.
+
+## Discovery, SEO and structured data
+
+- **Robots.** `src/pages/robots.txt.ts` is fixed text: `User-agent: *`, a `Disallow` list for private, search and sort or filter paths (anchored, so CMS slugs are never blocked), `Allow: /`, and one `Sitemap: <Store URL>/sitemap.xml` line only when the Store URL is a valid absolute origin.
+- **Sitemaps.** `sitemap.xml` indexes the static, category, brand, collection, page and article sitemaps and `sitemap-products.xml?page=N` (5000 products per page). The index has no `lastmod`. `sitemap.xsl` is the browser view. All XML fails closed (an unavailable response) when the Store URL is not absolute.
+- **Product feeds.** `/api/product-feed.xml` is the Google/Base feed (`in_stock`, `out_of_stock`). `/api/facebook-feed.xml` is the Meta feed (`in stock`, `out of stock`). Both come from `createCatalogFeedGet()` in `facebook-feed.xml.ts`. They return `404` when the dashboard disables the catalog feed, and page with `?cursor=` and `limit` (default 1000, max 5000; `?page=` answers `400`). Rows follow `@scalius/shared/catalog-feed-row`.
+- **Agents.** `/llms.txt` points agents to the discovery files. `/.well-known/ucp` advertises only `dev.ucp.shopping.catalog.search` and `.lookup` over REST. `POST /ucp/catalog/search`, `lookup` and `product` serve the same buyer-resolvable SKU projection as the feeds (`src/lib/ucp/catalog.ts`). The profile requires an HTTPS Store URL. Do not advertise checkout, cart or payment capabilities.
+- **Canonical and Open Graph.** `Layout.astro` sets `<link rel="canonical">` and Open Graph tags. Products, categories, collections and CMS pages may use a validated same-store `canonicalPath`. A resource with `noIndex`, and a listing with any filter or sort query, gets `noindex,follow`. A page number past the last page answers `404`.
+- **JSON-LD.** `Layout.astro` emits `OnlineStore` and `WebSite`. `OnlineStore` is omitted unless the Store URL, a logo and a company or legal name exist. Product pages emit `Product` or `ProductGroup` (`src/lib/commerce-structured-data.ts`) with `brand`, `seller`, `shippingDetails` and `itemCondition` only when saved data exists. They never emit a placeholder or `priceValidUntil`. Category, collection and brand pages emit `CollectionPage`. Catalog and blog pages emit `BreadcrumbList`. A `noIndex` resource emits no resource JSON-LD. Always build image URLs with the absolute SEO URL helper (`src/lib/seo-base-url.ts`).
+- **Analytics.** Partytown loads only on pages whose enabled analytics script runs in it (`src/lib/partytown-config.ts`, `integrations/deferred-partytown.mjs`).
+
+## Theme and layout
+
+`Layout.astro` renders the published theme document, or the merchant's draft while the `stp_theme_preview` cookie is valid. `src/lib/storefront-theme-context.ts` upgrades older documents in memory and falls back to `DEFAULT_STOREFRONT_THEME` for an invalid one. It resolves once per request and shares the result through `locals`. Default tokens are in `src/styles/theme-foundation.css`. Per-store tokens and font faces are inline. Components must not restyle the page canvas: imported component CSS also reaches routes that omit the component.
+
+## Build
+
+- `scripts/generate-build-id.js` writes `src/config/build-id.ts` (git-ignored). `BUILD_ID` is `commit-<16 chars of the commit SHA>` when the CI provider sets one, else `src-<hash of src/, public/, bundled workspace packages, config and the lockfile>`.
+- Generated JS and CSS live under `/_astro/<BUILD_ID>/`. Keep that build-scoped path: an Astro entry file name can stay the same when a client module changes, and Cloudflare serves generated assets as immutable.
+- `integrations/build-env-isolation.mjs` keeps `.dev.vars`, `.env*` and `process.env` values out of `dist/`. Only the built-in `import.meta.env` keys (`ASSETS_PREFIX`, `BASE_URL`, `DEV`, `MODE`, `PROD`, `SITE`, `SSR`) are inlined. Never write a bare `import.meta.env` (not even in a comment) or `process.env` in source. `__SCALIUS_DEV_API_ORIGIN__` exists only for `astro dev`.
+- `astro.config.mjs` lists React, React DOM, `react-dom/server` and the JSX runtimes in `resolve.dedupe`. Keep them together: two React copies cause invalid-hook errors in the account and cart islands under `astro dev`.
+
+## Import boundaries
+
+The storefront imports only `@scalius/shared` (pure helpers and contracts) and `@scalius/api-client` (generated SDK and client factory, used through the configured clients in `src/lib/api/transport.ts`). It must not import `@scalius/core` or `@scalius/database`. Do not use the generated singleton client when a request needs runtime origin, auth, retry or service-binding behavior.
+
+## Search client rules
+
+- Normalize search input with `normalizeSearchQuery()` (`src/lib/search-query.ts`) before you build an API URL or a `/search?q=` link. Equivalent queries then share one cache key.
+- Cancel superseded typeahead requests with `AbortController` and ignore stale answers (`src/components/search/CommandPalette.tsx`).
+- Product-only lookups call `getApiV1ProductsSearch()` (`/api/v1/products/search`), not the broader global search.

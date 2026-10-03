@@ -1,35 +1,36 @@
 # Plugins
 
-Installed apps' persistent state and lifecycle. Depends only on `events`
-and leaf modules; the API (`apps/api/src/plugins`) runs app code through the
-host and its two loaders (bundled, sandbox).
+Installed apps' persistent state and lifecycle (layer L1), for contributors. The domain imports only `events` (`event-deliveries.ts` implements its fan-out target), plus `@scalius/shared`, the database and the shared `auth`, `cache-deps` and `errors` areas. `checkout` and `storefront` import it. The API runs app code in `apps/api/src/plugins`. The author's guide is `packages/plugin-sdk/README.md`.
 
-| File | What |
+## Tables
+
+| Table | Holds |
 | --- | --- |
-| `installations.ts`, `grants.ts`, `settings-crypto.ts` | Install, activate (approved grant), update, uninstall; app settings with secrets sealed under the credential key |
-| `registry.ts` | Active registrations by kind (`event`, `function`, `cron`, `provider`): one indexed read, none when nothing is active; `selectActiveCheckoutRegistrations` rides checkout's own read batch (functions and payment providers in one statement) |
-| `storage.ts` | `ctx.storage` collections in `plugin_records`, queried only through declared indexes |
-| `kv.ts` | `ctx.kv` with TTLs |
-| `logs.ts`, `event-deliveries.ts`, `cron-runs.ts` | Masked log ring, event delivery and cron bookkeeping |
-| `storefront.ts` | What storefront surfaces may read |
+| `plugin_installations` | One row per app: manifest, approved grant, status, settings (secrets sealed as `ps1:...`), `revision`. |
+| `plugin_registrations` | Rows derived from the manifest in the same batch as each manifest write (`registry.ts`). `kind` is `event`, `function`, `cron` or `provider` (one row per app and port). |
+| `plugin_records`, `plugin_kv` | `ctx.storage` and `ctx.kv` data, each with a `revision`. |
+| `plugin_log_entries`, `plugin_event_deliveries`, `plugin_cron_runs` | The masked log ring, delivery state (8 attempts), cron claims. |
 
-## Revisions and atomic writes
+Records, KV, logs, deliveries and cron runs belong to the plugin id, not to the installation row, so an uninstall that keeps data leaves them. `order_holds` belongs to `orders`. `storefront.ts` reads the active installations a public render needs.
 
-Every `plugin_records` row and `plugin_kv` entry has a `revision` each write
-advances (cache dependencies follow from the 0110 triggers; nothing here
-advances a key by hand).
+## Lifecycle
 
-- `writePluginRecords` writes up to 25 puts, deletes and checks across
-  collections in **one** provider batch. An operation with `expectedRevision`
-  (a number: still at it; null: must not exist) adds a guard statement ahead
-  of the writes; a failed guard aborts the whole batch as `storage.conflict`
-  (`details.index` names the operation). Unique-index violations abort it the
-  same way (`storage.unique_violation`).
-- `getPluginRecordVersion` / `getPluginKvVersion` read what a conditional
-  write names; `compareAndSetPluginKv` is the KV twin (`kv.conflict`).
-- The SDK builds `update` and `increment` as read-check-write loops over these
-  in the app's runtime, so both loaders behave identically.
-- `prepareAppStorageCommit` / `appStorageCommitStatements` let checkout write
-  an app's snapshot record inside the order's commit batch at the revision
-  the app's function saw (`checkout/commit.ts`), and
-  `isAppStorageCommitConflict` recognizes the lost race.
+Status is `installed`, `active`, `disabled` or `failed`. Activate, deactivate, update, uninstall and settings writes compare-and-set on `plugin_installations.revision` (`installation.revision_conflict`).
+
+1. `installPlugin` adds an `installed` row with the setting defaults. Nothing runs. Bundled apps install from `apps/api/src/plugins/bundled-sync.ts`.
+2. `activatePlugin` needs the required settings filled, stores the grant the manifest asks for and sets `active`. Only a Super Admin may activate.
+3. `updatePluginInstallation` replaces the manifest, rewrites the registrations, migrates the settings and re-indexes changed collections. An active app whose update asks for more access returns to `installed` until a Super Admin approves it.
+4. Deactivate sets `disabled`. `markPluginFailed` sets `failed` when the host cannot load the code.
+5. `uninstallPlugin` removes the row. With `keepData` it cancels waiting deliveries. Without it, it also deletes the app's records, KV, logs, deliveries, cron runs and custom-field definitions.
+
+`apps/api/src/plugins/lifecycle.ts` runs the app's hooks around these calls. In `/api/v1/admin/apps/*`, `GET` needs `apps.view`. Activate, deactivate, settings, uninstall and delivery retry need `apps.manage`. An app's own routes (`/api/v1/plugins/<id>/admin/**`) need `apps.view` for `GET` and `apps.use` for other methods.
+
+## Atomic writes
+
+- `writePluginRecords` writes up to 25 puts, deletes and checks across collections in one provider batch. `expectedRevision` (a number, or `null` for "must not exist") adds a guard ahead of the writes. A failed guard aborts the batch as `storage.conflict` (`details.index` names the operation). A unique-index violation aborts it as `storage.unique_violation`.
+- `getPluginRecordVersion`, `getPluginKvVersion` and `compareAndSetPluginKv` (`kv.conflict`) serve conditional writes. The SDK builds `update` and `increment` as read-check-write loops over them.
+- `prepareAppStorageCommit` and `appStorageCommitStatements` let checkout write an app's snapshot record in the order's commit batch at the revision the app saw (`checkout/commit.ts`). `isAppStorageCommitConflict` recognizes the lost race.
+
+## Cache dependencies
+
+Triggers generated for migration 0110 (`cdep_plugin_*`) advance dependencies in the same transaction as each write: `plg:<plugin id>`, `plg:*` and `t:<table>` for installations and registrations, and `plgs:<plugin id>:<collection>` and `t:plugin_records` for records. A write that changes only bookkeeping columns advances nothing. `plugin_kv`, logs, deliveries and cron runs have no public dependency. Readers declare `deps.plugin(id)` or `deps.anyPlugin()` (registry: `packages/shared/src/cache-deps.ts`).

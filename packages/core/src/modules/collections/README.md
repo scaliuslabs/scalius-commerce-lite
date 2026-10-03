@@ -1,130 +1,56 @@
 # Collections
 
-Curated product groups with independent public-page and homepage placement, manual and dynamic membership, drag-and-drop ordering, product resolution, and bulk operations.
+Collection records: curated product groups with manual or dynamic membership, version-guarded admin writes and ordering. Read this before you change a collection write or the `config` JSON. Buyer reads (collection pages, directory, sitemap, the homepage resolvers) and the dashboard product picker are in `catalog` (`catalog/collections.ts`).
 
-## Files
+## Entries and layer
 
-| File | Purpose |
-|------|---------|
-| `index.ts` | Barrel exports (re-exports service + validation) |
-| `collection-config.ts` | Pure canonical parser/stringifier for the JSON `config` column |
-| `collections.validation.ts` | Zod schemas: `createCollectionSchema`, `updateCollectionSchema`, `collectionConfigSchema` |
-| `collections.service.ts` | Collection records: admin list and sections, revision-guarded writes, bulk actions, reference checks |
+- `browser.ts` exports `collection-config.ts` (`normalizeCollectionConfig`, `stringifyCollectionConfig`, `publicCollectionConfig`, `collectionMembershipForConfig`, `collectionProductIdsForLookup`, `COLLECTION_CONFIG_ID_LIMIT`). `index.ts` exports everything in `browser.ts`, plus `collections.service.ts` and `collections.validation.ts`.
+- Layer L0: the domain imports no other domain. `analytics`, `catalog`, `checkout`, `promotions` and `storefront` import it.
 
-Buyer-facing collection reads (the collection page catalog, the batched product resolvers storefront sections use, the public directory and sitemap entries) and the dashboard's product picker live in `../catalog/collections.ts`: they read catalogue cards, so they sit with the catalogue, which depends on this module and never the reverse.
+## Owns
 
-## Collection Types
+| Table | Key columns and constraints |
+|-------|-----------------------------|
+| `collections` | `id` (bare nanoid), `presentation` (`grid`, `carousel`), `config` (JSON text), `sort_order`, `is_active`, `version` (CAS token, at least 1), SEO fields (`canonical_path`, `no_index`, `exclude_from_sitemap`), `listing_template`, `deleted_at` |
 
-| Presentation | Description |
-|--------------|-------------|
-| `"grid"` | Featured-grid presentation |
-| `"carousel"` | Horizontally scrolling presentation |
+The domain declares no settings document and no `deps.*` reads. The buyer readers in `catalog` declare the DVC dependencies.
 
-Membership is independent from presentation. `config.source` is `manual` for
-an explicitly ordered product list or `dynamic` for category-backed automatic
-membership. Runtime reads and writes require this canonical source; migration
-0010 converts the earlier demo-era representation once.
+## The `config` column
 
-## Config Schema
+Every read and write goes through `normalizeCollectionConfig()` or `stringifyCollectionConfig()`. Code never calls `JSON.parse` on `config` itself.
 
-The `config` column stores a JSON object:
+| Field | Rule |
+|-------|------|
+| `source` | `manual` (ordered `productIds`) or `dynamic` (products of the `categoryIds`). Anything else normalizes to `manual` |
+| `categoryIds`, `productIds` | Trimmed, unique, at most 90 each (`COLLECTION_CONFIG_ID_LIMIT`) |
+| `featuredProductId` | Optional product shown first |
+| `maxProducts` | 1 to 24, default 8 |
+| `title`, `subtitle` | Optional homepage text, at most 120 and 240 characters |
 
-```typescript
-{
-  source: "manual" | "dynamic" // Membership semantics, independent of layout
-  categoryIds: string[]      // Categories whose products to include
-  productIds: string[]       // Specific product IDs to include
-  featuredProductId?: string  // Product shown prominently (manual type only)
-  showOnHomepage: boolean    // Explicit homepage placement; default false
-  maxProducts: number        // 1-24, default 8
-  title?: string             // Optional homepage section title
-  subtitle?: string          // Optional homepage section subtitle
-}
-```
+- Only the selected source is buyer-visible. The other source's ids stay for reversible admin switching and never reach the storefront. `publicCollectionConfig()` returns only `maxProducts`, `title` and `subtitle`.
+- Presentation does not decide membership or placement. Homepage placement comes from a `collections` section in the published theme, which names collection ids.
 
-All reads and writes must pass through `normalizeCollectionConfig()` or
-`stringifyCollectionConfig()` from `collection-config.ts`. The helper guarantees
-arrays are always present, clamps `maxProducts` to 1-24, drops invalid product
-IDs, and ignores retired compatibility fields. Admin edit, public collection routes, and storefront
-product resolution should not call `JSON.parse(collection.config)` directly.
+## Routes
 
-`isActive` publishes the collection page. It never implies homepage placement.
-Only active, non-deleted collections with `config.showOnHomepage === true` enter
-the homepage batch resolver. The public collection config projection deliberately
-omits this internal composition flag.
+Admin routes are in `apps/api/src/routes/admin/collections.ts` under `/api/v1/admin/collections`. Permissions are in `packages/core/src/auth/rbac/route-permissions/catalog.ts` (`collections.view`, `create`, `edit`, `delete`, `restore`, `toggle_status`). The list uses page and limit paging (limit at most 100), not cursors.
 
-## Validation (`collections.validation.ts`)
+| Method and path | Note |
+|-----------------|------|
+| `GET /`, `GET /by-ids`, `GET /form-options`, `GET /category-options`, `GET /product-options` | Lists and picker data (`by-ids` takes at most 90 ids) |
+| `GET /{id}`, `GET /{id}/sections/{section}` | One collection; bounded text sections of the two long text fields |
+| `POST /`, `PUT /{id}` | Create; update with `expectedVersion` |
+| `POST /{id}/products` | Add or remove products of a manual collection, with `expectedVersion` |
+| `DELETE /{id}`, `POST /{id}/restore`, `DELETE /{id}/permanent` | Trash, restore, permanent delete |
+| `POST /bulk-delete`, `/bulk-activate`, `/bulk-deactivate`, `/bulk-restore` | At most 90 ids |
+| `POST /reorder` | Complete list with contiguous positions from 0 and each `expectedVersion` |
 
-**`createCollectionSchema`**:
-- `name`: string, 3-100 chars
-- `description`: optional nullable rich-text introduction, max 100,000 chars
-- `content`: optional nullable rich text below products, max 100,000 chars
-- `metaTitle`: optional nullable search title, max 70 chars
-- `metaDescription`: optional nullable search description, max 200 chars
-- `presentation`: enum `["grid", "carousel"]`
-- `isActive`: boolean
-- `config`: collectionConfigSchema (source, categoryIds, productIds, featuredProductId?, showOnHomepage default false, maxProducts 1-24 default 8, title?, subtitle?)
+The public routes (`apps/api/src/routes/collections.ts`, `/api/v1/collections`) are served from `catalog`: `GET /`, `/directory`, `/sitemap`, `/{id}`.
 
-**`updateCollectionSchema`**: Same mutable fields are optional; a positive
-`expectedVersion` is required.
+## Rules
 
-**Exported types:** `CreateCollectionInput`, `UpdateCollectionInput`
-
-## Admin Service Functions
-
-### Queries
-
-| Function | Signature | Notes |
-|----------|-----------|-------|
-| `listCollections` | `(db, { page?, limit?, search?, showTrashed?, sort?, order? })` | LIKE search, sortable by name/presentation/isActive/updatedAt/sortOrder (whitelist-validated), default limit 20 |
-| `getCollectionById` | `(db, id)` | Excludes soft-deleted collections; returns null if not found |
-| `getCollectionsByIds` | `(db, ids)` | Batch lookup by IDs, preserving requested order, excluding soft-deleted collections, and capped at 90 IDs |
-| `getCollectionCategoryOptions` | `(db)` | Lightweight non-deleted category options for collection builders |
-| `listCollectionProductOptions` | `(db, { page?, limit?, search?, categoryIds? })` | Collection picker rows (price, optioned variant count, sellable tracked stock), newest first when opened and A-Z when searching; FTS search and OR-matched categories run in one two-statement D1 batch. Category IDs are deduplicated and capped at 90 so search/limit/offset binds stay below D1's 100-parameter ceiling. |
-
-The admin collection picker calls only `listCollectionProductOptions` through
-`GET /admin/collections/product-options`. Search is debounced and every filter
-combination owns a TanStack Query cache key, so a slower older request cannot
-replace a newer search. Load-more follows authoritative `pagination`; lookup
-failures remain distinct from an empty result. Selected product labels are
-resolved separately by ID and retained independently of picker pages.
-
-### Mutations
-
-| Function | Signature | Notes |
-|----------|-----------|-------|
-| `createCollection` | `(db, data)` | Auto-assigns `sortOrder` as max+1 among active. ID: bare `nanoid()`. Returns full row via `.returning().get()` |
-| `updateCollection` | `(db, id, data)` | Partial update, existence check. Sets `updatedAt` via `unixepoch()`. Returns full row. Throws `NotFoundError`. |
-| `deleteCollection` | `(db, id)` | Soft-delete. Sets both `deletedAt` and `updatedAt` via `unixepoch()`. Throws `NotFoundError`. |
-| `bulkDeleteCollections` | `(db, ids, permanent?)` | Soft or hard delete. Timestamps via `unixepoch()`. |
-| `bulkActivateCollections` | `(db, ids)` | Sets `isActive = true`, updates timestamp |
-| `bulkDeactivateCollections` | `(db, ids)` | Sets `isActive = false`, updates timestamp |
-| `restoreCollections` | `(db, ids)` | Sets `deletedAt = null`, updates timestamp |
-| `reorderCollections` | `(db, items)` | Updates `sortOrder` for each item using `db.batch()` |
-
-## Product Resolution
-
-The service provides product resolution for the storefront, computing `discountedPrice` for each product from the integer buyer-pricing projection (`products/money.ts`).
-
-### Types
-
-- **`ResolvedProduct`**: Product with computed `discountedPrice`, primary image URL (via correlated subquery), `hasVariants` flag
-- **`CollectionProductResult`**: `{ products, categories, featuredProduct }`
-
-### Functions
-
-| Function | Signature | Notes |
-|----------|-----------|-------|
-| `resolveCollectionProductsBatch` | `(db, parsedCollections)` | Batch-resolve products for multiple collections in 2 D1 round-trips (4 batched queries). Returns `Map<collectionId, CollectionProductResult>`. Avoids N+1 queries for homepage. |
-
-Only the selected membership source is buyer-visible. Stale selections from the
-other mode are retained for reversible admin switching but cannot leak into the
-storefront projection. Active manual collections require a product; active
-dynamic collections require a category.
-
-## Dependencies
-
-- `@scalius/database` -- `collections`, `products`, `categories`, `productVariants`, `productMedia`, and `media`; image-only collection surfaces use the shared product image representation resolver
-- `@scalius/core/errors` -- `NotFoundError`
-- `../products/money` -- buyer pricing in minor units, presented as decimals
-- `nanoid` -- ID generation (no prefix)
+- **Version guard.** `updateCollection`, `updateCollectionProducts`, bulk activate, bulk restore and `reorderCollections` compare the stored `version` and advance it by one. A stale write throws `COLLECTION_REVISION_CONFLICT` (409). Reorder needs the full current list or it conflicts.
+- **Publish readiness.** An active manual collection needs at least one product. An active dynamic collection needs at least one category. On create, on activation and on a `config` change, the members of an active collection and any featured product must exist, and the categories of an active collection must be published.
+- **`is_active`** publishes the collection page only. It does not place the collection on the homepage.
+- **Canonical path** is `/collections/<collectionId>` or blank. Create refuses a canonical path because the id does not exist yet. Update accepts only the collection's own id route. The collection id is the route, not a slug.
+- **Soft delete** sets `deleted_at` and advances `version`. Restore appends the collection at the end of the order. Permanent delete works only from trash.
+- **Cross-domain guards live in `categories`.** A category cannot be unpublished or trashed while an active dynamic collection uses it. A permanent category delete strips the id from every `config` in the same batch.

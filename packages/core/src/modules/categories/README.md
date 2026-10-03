@@ -1,109 +1,55 @@
 # Categories
 
-Product category CRUD with explicit publication authority, revision-guarded writes, FTS5 search, soft-delete, storefront queries, and collection config cleanup.
+Category records, their publication rules, revision-guarded admin writes and the category tree. Read this before you change a category write, the tree or a public category read. A category's product listing is `catalog`'s `getStorefrontCategoryProducts`.
 
-## Files
+## Entries and layer
 
-| File | Purpose |
-|------|---------|
-| `index.ts` | Barrel exports (re-exports service, storefront, validation) |
-| `categories.validation.ts` | Zod schemas for create/update/status and revision claims |
-| `categories.publication.ts` | Public predicate and publish readiness (informational: an empty published category is allowed) |
-| `categories.revision.ts` | Single/bulk revision guards and typed conflicts |
-| `categories.service.ts` | Admin DB queries and mutations (9 exported functions) |
-| `categories.storefront.ts` | Public/storefront queries; the category page read carries its children and breadcrumb in the same batch |
-| `categories.tree.ts` | The tree: placement pre-check, move, trash rules, admin and storefront tree reads |
+- `browser.ts` exports `categories.validation.ts` (create, update, status, move and revision-claim schemas, `CATEGORY_BATCH_LIMIT` 90). `index.ts` exports everything in `browser.ts`, plus `categories.service.ts`, `categories.storefront.ts`, `categories.publication.ts`, `categories.revision.ts` and `categories.tree.ts`.
+- Layer L3. The domain imports `custom-fields`, `media-references` and `products`. `catalog`, `navigation`, `storefront` and `store-transfer` import `categories`.
 
-## Schema (Zod)
+## Owns
 
-Create accepts category content and always persists `draft` revision 1. Update
-also requires `expectedRevision` and `status`; status-only writes use the same
-revision claim. Canonical statuses are `draft | published | internal`.
+| Table | Key columns and constraints |
+|-------|-----------------------------|
+| `categories` | `id` (prefix `cat_`), `slug` (unique across live and trashed rows), `status` (`draft`, `published`, `internal`), `revision` (at least 1), `parent_id` (`ON DELETE RESTRICT`), `depth` (0 to 3), `path`, `listing_template`, SEO fields (`canonical_path`, `no_index`, `exclude_from_sitemap`), `deleted_at` |
+| `category_closure` | Every `(ancestor_id, descendant_id)` pair with `depth`, each category included with itself at depth 0 |
 
-Shared content fields:
-- `name`: string, 3-100 chars
-- `description`: trimmed string | null, max 100,000 characters
-- `slug`: string, 3-100 chars, regex `/^[a-z0-9]+(?:-[a-z0-9]+)*$/`. Optional on create: omitted, it is derived from the name (`@scalius/shared/handle`, Bangla transliterated) and a taken one gets `-2`, `-3`…; a typed taken slug is still a conflict.
-- `metaTitle`: trimmed string | null, max 70 characters
-- `metaDescription`: trimmed string | null, max 200 characters
-- `image`: `{ id, url, filename, size, createdAt }` | null
+Admin list search uses the `categories_fts` full-text index. The domain declares no settings document.
 
-**Exported types:** `CreateCategoryInput`, `UpdateCategoryInput`,
-`UpdateCategoryStatusInput`, `CategoryRevisionClaim`
+DVC: `category_closure` advances `c:` keys and `lm:cat:<ancestorId>`, so a move advances the listings of the old and new ancestors. Public readers declare `deps.anyCategory()`; the sitemap read also declares `deps.discoveryMembership()`.
 
-## Admin Service (`categories.service.ts`)
+## Routes
 
-### Queries
+Admin routes are in `apps/api/src/routes/admin/categories.ts` under `/api/v1/admin/categories`. Permissions are in `packages/core/src/auth/rbac/route-permissions/catalog.ts` (`categories.view`, `create`, `edit`, `delete`, `restore`, `permanent_delete`). The admin lists use page and limit paging, not cursors.
 
-| Function | Signature | Notes |
-|----------|-----------|-------|
-| `listCategories` | `(db, { page?, limit?, search?, status?, showTrashed?, sort?, order? })` | Paginated FTS5 list with status, revision, parent, depth, product count, and publish readiness |
-| `getCategoryBySlug` | `(db, slug)` | Single active category by slug (excludes soft-deleted) |
-| `getCategoryById` | `(db, id)` | Single category by ID (includes updatedAt, does not filter on deletedAt) |
+| Method and path | Note |
+|-----------------|------|
+| `GET /`, `GET /summaries` | List (limit at most 500); bounded agent summaries (at most 50) |
+| `GET /form-options`, `GET /children` | Picker data; one tree level under `parentId` |
+| `GET /{id}`, `/{id}/sections/{section}`, `/{id}/publish-readiness`, `/{id}/ancestors` | One category, bounded text sections, readiness, breadcrumb |
+| `POST /`, `PUT /{id}`, `PATCH /{id}/status`, `PATCH /{id}/parent` | Create, edit, status, move |
+| `DELETE /{id}`, `POST /{id}/restore`, `DELETE /{id}/permanent` | Trash, restore, permanent delete |
+| `POST /bulk-delete`, `POST /bulk-restore` | At most 90 `{ id, expectedRevision }` claims |
 
-### Mutations
+Public routes are in `apps/api/src/routes/categories.ts` under `/api/v1/categories`: `GET /`, `/summaries`, `/sitemap`, `/tree`, `/{slug}`, `/{slug}/children`, `/{slug}/breadcrumb`, `/{slug}/sections/{section}`, `/{slug}/products` and `/{slug}/product-summaries`.
 
-| Function | Signature | Notes |
-|----------|-----------|-------|
-| `createCategory` | `(db, data)` | Creates revision 1 with the chosen status (default draft) and returns `{ id, revision, status }` |
-| `updateCategory` | `(db, id, data)` | CAS edit/status write; unpublish guard for active automatic collections; advances revision and affected product revisions |
-| `updateCategoryStatus` | `(db, id, { expectedRevision, status })` | CAS status workflow with the same unpublish guard |
-| `deleteCategory` | `(db, id, expectedRevision)` | CAS soft-delete, forces draft, rejects assigned products |
-| `bulkDeleteCategories` | `(db, claims, permanent?)` | Up to 90 `{id, expectedRevision}` claims; soft trash is one all-or-none guarded `UPDATE … RETURNING`, while hard delete preserves transactional collection cleanup |
-| `restoreCategories` | `(db, claims)` | CAS restore to draft; advances category and affected product revisions |
-| `permanentlyDeleteCategory` | `(db, id, expectedRevision)` | Trash-only hard delete with final transactional claim guard |
+## Rules
 
-## Storefront Queries (`categories.storefront.ts`)
+- **Status.** `published` categories alone own public metadata, filters, navigation, discovery and dynamic collection membership. A draft or internal assignment never hides a public product; the product shows without its category identity.
+- **Revision guard.** Edit, status change, move, trash, restore and permanent delete claim `expectedRevision` and advance it by one. A stale claim is `CATEGORY_REVISION_CONFLICT` (409); the wrong lifecycle state is `CATEGORY_STATE_CONFLICT` (409). Bulk writes apply all or none.
+- **Trash and restore force `draft`.** A permanent delete works only from trash.
+- **Slugs.** A typed taken slug is a conflict (trash counts). An omitted slug derives from the name and gets `-2`, `-3` until free.
+- **Canonical path** is `/categories/<current slug>` or blank.
+- **Publishing** needs no products. `getCategoryPublishReadiness` returns a blocker when no buyer-resolvable product exists and warnings for a missing image or descriptions; it only informs.
+- **Reverse-reference guards.** A status other than `published`, and trash, are refused while an active dynamic collection uses the category. A category with assigned products cannot be trashed. A permanent delete bumps each affected product's `aggregate_revision` and strips the id from every collection `config` in the same batch.
+- **Media.** A create or edit that references a file in deleting state is refused (`media-references` guard).
+- **`listing_template`** is a listing template id from the theme document or NULL (the theme's default). Collections and brands carry the same field.
 
-| Function | Signature | Notes |
-|----------|-----------|-------|
-| `getPublicCategories` | `(db)` | Published, non-trashed categories ordered by name |
-| `getPublicCategoryBySlug` | `(db, slug)` | Published category by slug; draft/internal/deleted return null |
-| `getPublicCategoryById` | `(db, id)` | Published category by ID; draft/internal/deleted return null |
+## The tree
 
-## Tree (migration 0090)
+Write only `parent_id`. Triggers keep `depth`, `path` (`/root/child/`) and `category_closure` exact. They refuse cycles, a fifth level and trashed or missing parents.
 
-The application writes only `categories.parent_id` (and the revision).
-Triggers keep `depth` (0-3), the id `path` (`/root/child/`) and
-`category_closure` exact, and refuse cycles, a fifth level and trashed or
-missing parents: they are the authority. `categoryPlacementRefusal` runs the
-same checks first (one indexed read) so the service can explain a refusal;
-a refusal that only the trigger sees (a race) is translated to the same
-`CATEGORY_PLACEMENT_REFUSED` error (`reason`: `cycle`, `too_deep`,
-`parent_unavailable`).
-
-- **Parent picker writes:** `parentId` on create and edit (omitted keeps the
-  current parent); `moveCategory` moves a whole subtree under the revision.
-- **Trash rules (service):** a category with live children cannot be trashed
-  unless they are trashed in the same selection; a category whose parent is in
-  trash cannot be restored unless the parent is restored with it; a permanent
-  delete must include every child (live or trashed), and deletes deepest first
-  because `parent_id` is ON DELETE RESTRICT. A trashed category keeps its place.
-- **Reads:** `listCategoryChildren` and `getCategoryAncestors` (dashboard);
-  `getPublicCategoryTree` (≤ 150 published nodes whose every ancestor is
-  published, top levels first, flat with `parentId`, for automatic menus),
-  `getPublicCategoryChildren`, `getPublicCategoryBreadcrumb` (≤ 4 rows, one
-  closure read), and `publicCategorySubtreeCondition` (a category plus its
-  published descendants, for listings).
-- **`listingTemplate`:** a theme listing template id or null (theme default). The storefront honours a layout (`grid`, `list`, `shelves`, `quick-grid`) or a filter style (`sidebar-dense`, `sidebar-comfortable`, `bar-dropdowns`, `drawer`) for that listing when the store fits it (shelves need a tree or collections, the quick grid the quick-add card); any other id renders the theme's listing. Collections and brands carry the same field.
-
-## Features
-
-- **FTS5 search**: Admin list uses `ftsMatch("categories_fts", "categories", search)`
-- **Soft-delete with guards**: Cannot soft-delete if products still assigned (throws `ValidationError`)
-- **Permanent delete with collection cleanup**: `bulkDeleteCategories()` with `permanent=true` strips deleted category IDs from collection JSON configs
-- **Slug uniqueness**: Enforced globally across active and trashed categories; database races become typed conflicts
-- **Publication authority**: only `published` categories can drive public metadata, filters, navigation, discovery, or dynamic collections
-- **Reverse-reference guard**: active dynamic collections block category unpublish/trash until membership is removed or the collection is deactivated
-- **Product independence**: draft/internal assignment never hides a public product; category metadata is omitted instead
-- **Optimistic concurrency**: category writes require a monotonic revision claim and advance once
-- **Product count**: Admin list uses an indexed per-row count of all non-trashed assigned products, matching deletion truth
-- **Batch queries**: `listCategories()` batches only total count + the requested page; it does not group-scan every product row
-- **Unix timestamp formatting**: Stored as Unix epochs; converted to ISO strings for API responses
-
-## Dependencies
-
-- `@scalius/database` -- `categories`, `products`, `collections` tables
-- `@scalius/core/search` -- FTS5 (`ftsMatch`)
-- `@scalius/core/errors` -- `NotFoundError`, `ConflictError`, `ValidationError`
-- `nanoid` -- ID generation (`cat_` prefix)
+- `categoryPlacementRefusal` runs the same checks first, so the service can explain a refusal. A refusal only the trigger sees (a race) becomes the same `CATEGORY_PLACEMENT_REFUSED` error (`reason`: `cycle`, `too_deep`, `parent_unavailable`).
+- `moveCategory` moves a whole subtree under the revision. A move to the current parent changes nothing and keeps the revision.
+- Trash rules: a category with live children cannot be trashed unless they go in the same selection. A category whose parent is in trash cannot be restored unless the parent is restored with it. A permanent delete must include every child and deletes deepest first. A trashed category keeps its place.
+- Public reads are bounded. `getPublicCategoryTree` returns at most 150 published nodes whose ancestors are all published (`CATEGORY_TREE_LINK_LIMIT`). `getPublicCategoryChildren` returns at most 100. `getPublicCategoryBreadcrumb` returns at most 4 rows from one closure read. `publicCategorySubtreeCondition` selects a category and its published descendants for listings.

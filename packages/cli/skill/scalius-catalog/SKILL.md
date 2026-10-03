@@ -17,7 +17,7 @@ Treat live workflow and operation contracts as authority. Never invent IDs, revi
 ## Construct an optioned product
 
 1. Resolve or create category/attribute IDs. Use category revisions; keep a new category draft until an active product has a buyer-resolvable SKU. Assign merchant values by attribute ID.
-2. Commit images first. Retain `media_*` IDs and make caller-local `pmed_*` associations. Variant `imageId` points to its `pmed_*`, never `media_*`; `null` deliberately falls back to the primary image.
+2. Commit images first. Retain `media_*` IDs and make caller-local `pmed_*` associations. Variant `imageId` points to its `pmed_*`, never `media_*`; `null` means the primary image.
 3. Define axes and values in merchant order. Make every SKU select one value per axis in that order, materialize the complete Cartesian matrix, and preserve each supplied SKU, price, stock, barcode, and image row. Normalized SKU/barcode identities are globally unique.
 4. Treat products as containers: inventory belongs to persisted variants. A simple product has one hidden/default SKU; an optioned product has no product-level stock.
 5. Submit description, attributes, media, ordered options, full matrix, category, status, and discovery in one atomic create. Do not create variants afterward. If its non-idempotent response is uncertain, reread by identity before retrying.

@@ -1,71 +1,70 @@
-# Catalog Module
+# Catalog
 
-Buyer-facing catalogue reads. Every read here is bounded (chunked id enrichment at 90 or fewer, sequential waves) and uses the product rules from [`../products`](../products/README.md): public eligibility, buyer pricing and availability bands, media resolution. Category, collection, attribute and brand records keep their own domains below this one; this module reads them and none of them reads back.
+The buyer-facing catalogue reads: listings, facets, the product page, comparison, site search, product feeds, sitemaps, recommendations, collection pages, homepage product lists and the dashboard feed tools. Read this before you change a public catalogue read or its cache dependencies. The product rules these reads use (public eligibility, buyer pricing, media) are in [`../products`](../products/README.md).
 
-Public entry: `index.ts`.
+## Entries and layer
 
-## Files
+`index.ts` is the only entry. There is no `browser.ts`. It exports the read modules (listing, compare, product page, search, site search, feed, sitemap, recommendations, feed diagnostics, collections, cards, home lists) and parts of `facets`, `product-reviews` and `home-brands`. `shared.ts`, `buyer-state.ts`, `declare-deps.ts`, `search-correction.ts` and `search-relevance.ts` stay internal.
 
-| Path | Exports | Purpose |
-|------|---------|---------|
-| `listing.ts` | `getStorefrontProducts()`, `getStorefrontCategoryProducts()`, `getStorefrontBrandProducts()`, `getStorefrontCollectionProducts()`, `storefrontCollectionVisibleCountQuery()`, `SHOP_ALL_LIVE_FACET_PRODUCT_LIMIT` | Shop, category, brand and collection listings over the stored buyer state (`product_buyer_state` indexes: newest, price, category, brand). Shop-all facet counts run live only up to 2,000 public products |
-| `buyer-state.ts` | -- | The public buyer set and card pricing columns read from `product_buyer_state` (kept by `products/catalog-projections.ts`); not exported |
-| `facets.ts` | `resolvePublicAttributeFilters()`, `getPublicCategoryFacets()`, `getPublicSearchFacets()`, `PublicProductFacet` | Typed facet filters and counts over `product_buyer_state` ⋈ `product_facet_values`: attribute values and number ranges, option axes on one SKU, the brand entity. One statement counts every facet (see "Facets" below) |
-| `compare.ts` | `getStorefrontProductComparison()`, `loadProductSpecGroups()`, `MAX_COMPARE_PRODUCTS` | Up to 4 public products side by side with specs grouped by attribute group; `loadProductSpecGroups` is the grouped spec-table read the product page reuses |
-| `product-page.ts` | `getStorefrontProductBySlug()` | The product page read |
-| `search.ts` | `searchStorefrontProducts()` | Storefront product search |
-| `feed.ts` | `getStorefrontFeedProducts()`, `getEligibleStorefrontFeedProductById()`, `getFeedProjectionDiagnosticById()` | Google/Base and Meta catalogue feed rows |
-| `sitemap.ts` | `getStorefrontSitemapProducts()` | Product sitemap rows from the buyer state's newest index (noIndex and sitemap exclusions filtered before paging) |
-| `recommendations.ts` | `getStorefrontProductRecommendations()`, `rankRecommendationRows()` | One product's stored top 24, filtered by the current buyer state; the live ranking (buyer state only) for carts, pages without a source and products never computed |
-| `recommendation-refresh.ts` | `refreshProductRecommendations()`, `recommendationRefreshTargets()`, `nightlyRecommendationRefreshCandidates()`, `refreshProductSalesStats()` | Off-request refresh of `product_recommendations` (queue `catalog.recommendations.refresh`, 20 products a message) and `product_sales_stats` (nightly) |
-| `storefront-sections.ts` | homepage/section product resolution | Storefront sections |
-| `home-lists.ts` | `planHomeProductLists()` | Homepage section product lists (newest, on sale, popular, a category) planned into the homepage's second D1 batch, each scoped to its own products and paired with the media statement of exactly those rows. On sale reads its window from two partial indexes of discounted rows (migration 0087; the queries repeat the index predicates word for word); popular walks `product_sales_stats` (units sold in 30 days, refreshed nightly) by its popularity index, public products only. At 30k products: on sale 7k rows (1.8k with ten old sales). Newest and category lists take their members from the buyer-state newest indexes (`lm:all`, `lm:cat:<id>`). Each list also returns the ids its selection read (members, or the on-sale candidate window) as one more statement and declares every one's `p:`, shown or not; on sale adds `lo:sale:all` (any write to a discount-marked product or live SKU) |
-| `home-brands.ts` | `planHomeBrands()` | Brand-wall catalog selection: public brands with buyer-resolvable public products, using shared brand publication/logo rules in the homepage's second batch |
-| `cards.ts` | `buildCollectionProductSelect()`, `resolveProductCards()` | Buyer cards for curated lists (homepage collections and section lists) |
-| `collections.ts` | `getPublicCollectionCatalog()`, `planCollectionProducts()`, `resolveCollectionProductsBatch()`, `listPublicCollectionDirectory()`, `getPublicCollectionSitemapEntries()`, `listCollectionProductOptions()` | Collection pages, the batched collection products storefront sections read, the public directory and sitemap entries, and the dashboard's collection product picker (the same buyer-visible facts). Collection records and their membership config are `../collections`' |
-| `card-facts.ts` | `selectProductCardFactRows()`, `resolveProductCardFacts()`, `loadCatalogCardData()` | What a card can say beyond title and price, from stored data only: the published brand, up to four key specs in spec-table order, option axes with two or more values on live SKUs (colour swatches from a swatch attribute), units sold in 30 days from 10, a pack-size attribute, and the cheapest active delivery rate. One four-term statement (D1 allows five) per page of cards, batched with the card media in listings and put in the batch homepage and collection plans already run: no page gains a round trip |
-| `feed-diagnostics.ts`, `feed-row-preview.ts` | bounded read-only feed diagnostics and row preview | Dashboard feed tools, same policy as the XML feed |
-| `shared.ts` | -- | Helpers shared by the reads (not exported) |
-| `declare-deps.ts` | `declareProductCards()`, `declareRequestedProducts()` | Cache dependency declarations (`CACHE-DESIGN.md` §6.5): a card is `p:` plus the `m:` rows its images come from (primary and hover photo, never the rest of the gallery); a listing is `lm:`/`lo:price:` of its scope plus the order, filter and facet keys it used. Every read here declares where it loads; `apps/api/src/cache-deps-catalogue.test.ts` renders each public catalogue route in a strict scope and `cache-deps-scale.local.test.ts` checks coverage and the 256-key budget at 30k products |
+Layer L4. The domain imports `brands`, `categories`, `collections`, `custom-fields`, `products`, `promotions` and `settings`. `navigation` and `storefront` import `catalog`. Collection reads and site search live here; the collection records live in `collections`.
 
-## API Endpoints
+## Owns
 
-### Storefront Products (`/api/storefront/products`)
-| Method | Path | Handler | Description |
-|--------|------|---------|-------------|
-| GET | `/` | `getStorefrontProducts` | Paginated list with category, search, price range, freeDelivery, hasDiscount, inStock (the stored `available_for_sale`), attribute filters, sort, `hasVariants`, and SKU-aware `availableForSale` |
-| GET | `/feed` | `getStorefrontFeedProducts` | Dedicated feed projection with description, primary image, category summary, filterable attributes, SKU-aware availability, and buyer-safe variants bulk-read for the current page |
-| GET | `/search` | `searchStorefrontProducts` | Lightweight search with variants for cart/checkout |
-| GET | `/recommendations` | `getStorefrontProductRecommendations` | Ranked buyable products for up to 20 source ids (cart, order) or, without ids, popular/newest. `reason` (`also_bought` only with ≥2 distinct co-buyers for at least half the list, `similar`, `popular`, `new_arrivals`) drives an honest title. Stored lists use their source dependency. Live fallback uses one ranking statement, one media read and a recorded next-window boundary; relevant order writes and exact rolling-window exits refresh it without routine expiration. |
-| GET | `/{slug}` | `getStorefrontProductBySlug` | Full product detail with variants, images, attributes, additionalInfo, recommendations |
+The domain declares no settings document. It writes `product_recommendations` (stored top 24 per product) and `product_sales_stats` (units sold in 30 days) in `recommendation-refresh.ts`. It reads the projections that `products/catalog-projections.ts` writes in the batch of every product, SKU and stock write: `product_buyer_state` (one row per product: `is_public`, card SKU, price range in minor units, `availability_band`, category, brand; every listing, count and sitemap read starts here) and `product_facet_values` (one row per attribute value and per option value on a live SKU).
 
-### Storefront Category Products (`/api/v1/categories`)
-| Method | Path | Handler | Description |
-|--------|------|---------|-------------|
-| GET | `/{slug}/products` | `getStorefrontCategoryProducts` | Category-scoped product list using shared public list filtering/sort helpers, preserving the category-products response shape |
+Readers declare DVC dependencies through `declare-deps.ts` (see [`cache-deps`](../../cache-deps/README.md)): a card its product and image keys, a listing the keys of its scope plus the order, filter and facet keys it used.
 
-### Storefront Attributes (`/api/v1/attributes`)
-Facet definitions outside a listing (agents, tools); storefront pages read the facets of their listing response instead. `GET /attributes/filterable` was removed (F20: 1.65M rows, no caller).
-| Method | Path | Handler | Description |
-|--------|------|---------|-------------|
-| GET | `/category/{categoryId}` | `getPublicCategoryFacets` | Typed facets of a category and its published sub-categories (≤ 20 attribute facets, 30 values) |
-| GET | `/category-slug/{categorySlug}` | `getPublicCategoryFacets` | The same by slug |
-| GET | `/search-filters?q=X&categoryId=Y` | `getPublicSearchFacets` | Typed facets of a search's public hits |
+## Routes
 
-### Product comparison
-| Method | Path | Handler | Description |
-|--------|------|---------|-------------|
-| GET | `/api/v1/products/compare?ids=a,b,c,d` | `getStorefrontProductComparison` | 1-4 product ids; non-public ids are left out; one wave of three statements |
+All paths are under `/api/v1` and public except the last two (admin).
 
-## Facets
+| Path | Note |
+|------|------|
+| `GET /products` | Shop listing. |
+| `GET /products/{slug}`, `/{slug}/sections/{section}` | Product page; section text in chunks of 12,000 characters, 60 KiB result cap. |
+| `GET /products/search` | Legacy search with SKUs, page paging, never cached. |
+| `GET /products/compare?ids=` | 1 to 4 public products. |
+| `GET /products/recommendations` | Up to 20 source ids, limit 1 to 12 (default 8). |
+| `GET /products/feed`, `/products/sitemap` | Feed and sitemap sources. |
+| `GET /products/{id}/reviews` | Keyset pages of 10 (max 20). |
+| `GET /search` | Products, pages and categories in one batch. |
+| `GET /categories/{slug}/products`, `/brands/{slug}/products` | Scoped listings. |
+| `GET /collections`, `/collections/directory`, `/collections/sitemap`, `/collections/{id}` | Collection catalogue, directory, sitemap entries. |
+| `GET /attributes/category/{categoryId}`, `/category-slug/{categorySlug}`, `/search-filters` | Facets for agents and tools. |
+| `GET /admin/settings/seo/feed-diagnostics`, `/seo/feed-row-preview/{productId}` | Feed tools (admin). |
+| `GET /admin/collections/product-options` | Collection product picker (admin). |
 
-URL contract (`resolvePublicAttributeFilters`, one statement; none for option-only filters):
+## Rules
 
-- `?<attribute slug>=<value>`: repeatable, OR within a facet, AND across facets. Values are normalised: text and enum values lowercased and trimmed (an enum value must exist), numbers canonical (`15.6`), booleans `1`/`0`.
-- `?<slug>.min=` / `?<slug>.max=`: inclusive range on a number attribute's `value_number`.
-- `?option.<axis>=<value>`: merchant option axes, matched on one live SKU (a Chalk 42 SKU for Chalk + 42).
-- `?brand=<brand slug>`: published brands (`product_buyer_state.brand_id`). A legacy attribute whose slug is `brand` is neither filterable nor offered.
+### Listings and facets
 
-Counts (`buildCatalogFacetCountQuery`): the listing scope (public set, category or subtree, search, price, collection, brand page) is read once through its own index and materialized with each product's match flags; attribute rows are probed by primary key (owner = product) and option rows through `product_facet_values_product_idx`, in a fixed `CROSS JOIN` order. Each value counts products matching every other facet's selection. Readers join only live, filterable attribute definitions, so definition writes (filterable, display, unit, order, trash) need no projection refresh. A category's effective attribute set (its own and its ancestors', root first) orders and restricts its attribute facets. The same statement counts the category-tree facet (`kind: "category"`, values are category slugs to link to, never a filter): a subtree listing counts each published child of the category over its subtree (closure rows by descendant), and search, collection, brand and shop-all listings count the published category each product sits in; one category is no choice, so the facet needs two values. Caps: 50 attribute facets, 100 values per facet and 500 for brands (most common first, selected values always kept); range facets return their bounds instead of values. A subtree listing's rows also carry `subcategoryId`, the child whose subtree holds the product (shelves group by it), from the categories read the page already makes. Shop-all counts stay live only up to 2,000 public products.
+- Public products are the `product_buyer_state` rows with `is_public = 1`. Live cart and checkout validation stay authoritative.
+- The listing routes take `page` or `cursor`. A cursor continues `newest`, `price-asc` and `price-desc` only. Other orders (relevance, name, discount, rating) page by number. A numbered page past `planLimits().lists.maxOffset` (1,000 on Free, 10,000 on Paid) is empty. The total stops at `lists.countCap`.
+- A search with no hit is retried once with the closest catalogue words. The response carries `correctedQuery`.
+- A category listing includes its published descendants. A draft or internal descendant's products stay out of the parent.
+- Public variants carry `availabilityBand`, never an exact stock count (`maskPublicBuyerAvailability`).
+- Facet filters come from the query string: `?<attribute slug>=<value>` (repeat for OR within a facet, AND across facets), `?<slug>.min=` and `.max=` for number attributes, `?option.<axis>=<value>` (matched on one live SKU) and `?brand=<slug>` (published brands). A request carries at most 90 filter values. Unknown slugs and values are dropped.
+- One statement counts every facet. Each value counts the products that match every other facet's selection. Caps: 50 attribute facets, 100 values per facet, 500 for brands.
+- The category-tree facet (`kind: "category"`) holds links, never a filter. A category's effective attribute set (see `attributes`) orders and restricts its facets.
+- Shop-all facet counts run live only while the public catalogue has at most 2,000 products (`SHOP_ALL_LIVE_FACET_PRODUCT_LIMIT`).
 
-Measured on the 30k-product seed after typing it (`facets-scale.local.test.ts`, which also proves every count, range and total equal to a brute-force count from the source tables): the 3.3k-product Laptop page reads 128k D1 rows in 123 ms (the facet statement 110k rows, 55 ms), 155k with two enum filters, 246k with two option axes, a small leaf 3.3k rows.
+### Feeds and sitemaps
+
+- `GET /products/feed` is cursor-paged (`feed-v1.` cursor), newest first, at most 100 per page. A `page` other than 1 is refused.
+- A product enters the feed when it is public with a buyer SKU, has a live physical SKU, has a real primary image and is not `exclude_from_product_feed`. Gift cards and products with service or digital SKUs stay out. Feed exclusion does not hide or noindex the product page.
+- `projectCatalogFeedRows` (`packages/shared/src/catalog-feed-row.ts`) builds the rows. The storefront renders them as XML (`apps/storefront/src/pages/api/product-feed.xml.ts`, `facebook-feed.xml.ts`).
+  - Availability: Google `in_stock` and `out_of_stock`; Meta `in stock` and `out of stock`.
+  - Brand comes only from the published brand record. GTIN comes only from a variant barcode of type `ean13`, `upc`, `isbn` or `gtin`. Condition comes only from `products.product_condition`. Taxonomy categories come only from the explicit slug mapping. A missing fact is omitted, never invented.
+  - A row whose original or current price is not positive is omitted (`non_positive_price`). `<g:sale_price>` appears only when it is lower than `<g:price>`.
+  - The default strategy is one row per SKU (`variants`). The feed policy can switch it to one row per product. An empty catalogue gives a valid empty feed.
+- `feed-diagnostics.ts` scans the 500 most recently updated products and returns counts per skip reason with 5 samples each (at most 50). `feed-row-preview.ts` returns at most 10 rows per call within a 46 KiB budget. Both are read-only and follow the XML feed's policy.
+- `getStorefrontSitemapProducts` filters `noIndex` and `excludeFromSitemap` in the query, before paging. `getPublicCollectionSitemapEntries` does the same for active, live collections, with a limit of 5,000.
+
+### Recommendations, cards and homepage
+
+- A product page reads its stored list (filtered to products still public). The live ranking runs for a product never computed, for several source products (cart, order) and for none (404, search dead end). A live result declares `recommendation-signals` and the next order-window boundary.
+- `reason` is `also_bought` only when at least two distinct buyers co-bought for at least half the list. Otherwise it is `similar`, `popular` or `new_arrivals`.
+- The API cron refreshes `product_sales_stats` nightly (the 20:00 UTC tick) and queues `catalog.recommendations.refresh` messages for the 3,000 oldest or missing lists, at most 20 products per message (5 on the Free plan profile). Product writes queue the same job for the product, the products that list it and its newest category peers. Code: `apps/api/src/scheduled/catalog-projections.ts`, `apps/api/src/utils/catalog-jobs.ts`.
+- Card facts (`card-facts.ts`: published brand, up to 4 key specs, option axes, units sold from 10, pack size, cheapest delivery rate) come from stored data and are omitted when missing. One statement serves a page of cards inside a batch the page already runs.
+- `planHomeProductLists` (newest, on sale, popular, category), `planHomeBrands` and `planCollectionProducts` return statements that `storefront` puts in the homepage's second D1 batch. Each product statement is scoped to its own rows and brings a media statement for the same rows. The on-sale list reads two partial indexes of discounted rows, and its query repeats the index predicates word for word.
+- `getPublicCollectionCatalog` lists a collection's products: its picked ids (manual) or the public products of its published categories (dynamic).
