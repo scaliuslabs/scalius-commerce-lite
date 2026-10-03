@@ -1,155 +1,79 @@
 # Online store builder phase 2
 
-Theme v7 keeps page composition in the existing theme document. `template`
-remains a label. The same draft revision guards home, landing and fixed product,
-collection and search blocks; publishing is the only way draft changes go live.
+The theme document (v7) holds the whole storefront: tokens, brand, the
+header/footer/product/listing blocks, the homepage's sections and up to 20
+landing pages (`pages.landing`, `/pages/<slug>`, homepage sections). There are
+no per-page templates: every product page renders `blocks.product` (gallery,
+buy box, the ordered `below` modules, app blocks, sticky bars) and every
+collection, category, brand and search page renders `blocks.listing`. CMS pages
+keep their own content; the theme frames them.
 
-- Up to 20 landing pages at `/pages/<slug>` use the homepage section registry.
-  Writes cap the complete UTF-8 theme document at 512 KiB, bounding D1 rows and
-  the retained history's memory on Workers Free. Older reads still upgrade.
-  A matching published CMS page at `/<slug>` can replace its body with those
-  sections using `overrideCms`; CMS visibility, title, canonical and noIndex
-  remain authoritative.
-- Product and listing templates retain fixed blocks, in merchant order, with
-  explicit visibility. They reuse the existing page reads, SKU image selection
-  and structured-data rules. Collection/category and search share listing blocks;
-  grid density remains the existing theme density control.
-- The last 20 published versions are retained; pruning is in the guarded publish
-  batch. Immutable history rows carry the upgraded theme plus publication
-  metadata inside the existing JSON column: author name/id, time, bounded change
-  summary and optional note. Older bare document rows still read.
-- Restore and discard only replace the draft and advance its revision. Staff
-  conflicts require reload or explicit overwrite against the newly read revision.
-  Version previews encode an authenticated selector in the random session token;
-  draft tokens reserve `D` and immutable versions reserve `V`, keeping the
-  existing 52-character protocol unambiguous. The stored token hash remains
-  authority. Pruned versions lose preview access.
-- `upgradeThemeDocument` clones and applies one step per historical version,
-  then validates the current strict schema. Reads upgrade in memory; writes
-  require v7. Historical golden fixtures and migration notes are beside the
-  shared document code. A future v8 adds one upgrade step.
-  Independent historical heading/body font stacks stay intact until an explicit
-  pairing choice; the dashboard describes that state in English and Bangla.
-- Agent page edits, draft reads/saves, history, restore/discard and previews use
-  stable operations with theme RBAC and revision requirements. The curated
-  `theme.draft-landing-page.v1` workflow ends at review; publish is explicit.
-  Browser responses retain complete documents; agent commands use compact
-  revision receipts. Agent history is paginated five versions at a time. Full
-  theme/page reads use authenticated JSON artifacts. The landing workflow's
-  read-only page check proves exact approved content and draft/live revisions.
+## Drafts, publishing and versions
 
-Public landing/CMS data uses the existing section query planner with `deps.theme`
-and the planners' media, catalog, category, collection, promotion and app keys.
-Storefront pages start all public reads together in one batch. Draft/version
-preview reads are private and uncached.
+- One shared draft per store, guarded by its revision. Save, page edits,
+  restore, discard and publish are each one guarded D1 batch
+  (`packages/core/src/modules/settings/site-settings.service.ts`). Restore and
+  discard replace the draft only; publishing is the one way anything goes live.
+- Publishing writes live, a version row and the rebased draft, and prunes to
+  the newest 20 versions in the same batch. A version row holds
+  `{ meta: { changes, moreChanges, note }, theme }`: at most 20 typed changes
+  (`compareThemeDocuments`) and a 500-character note; author and time come
+  from the row. Documents are capped at 512 KiB.
+- Preview sessions store only a SHA-256 of the token. Draft tokens are `D` +
+  random; version tokens are `V` + base-36 revision + random. Pruned versions
+  lose preview.
 
-Measured in-process D1 render trips/waves: home 10/2, product 19/3,
-category 6/3, search 6/2, collection 7/3, landing 10/2, CMS override 11/2.
-Authoritative validation adds 1/1; repeat hits cost 1/1. Landing pages retain
-the homepage budget of 13/2. No schema migration, Worker binding or dependency
-was added.
+## Upgrades
 
-Real MCP/D1 checks with a large Bangla campaign measured a maximum compact
-result of 1,100 bytes (4 KiB ceiling), a five-version metadata page of 33,520
-bytes (64 KiB ceiling), and a page artifact of 426,732 bytes (1 MiB ceiling).
-Artifact reads support merchant MCP/CLI connections; generic plugin principals
-use the compact commands and cannot consume the full-document artifact.
+`upgradeThemeDocument` applies one pure step per version (v1 to v7) on a clone,
+from frozen literals, then fills current defaults and validates strictly. Reads
+upgrade in memory; writes require v7. Golden fixtures v1 to v7 live in
+`packages/shared/src/storefront-theme/fixtures`; `upgrade.md` says how to add v8.
 
-## Verification, 2026-10-03
+## Editor (`/admin/online-store/theme/editor`)
 
-Lead source changes through `46060229651b85b14869ededc37eed06854c9bd6`
-were integrated before the final verification, including the Free-plan and
-cursor hardening. Generated contracts were rebuilt: 612 runtime routes and
-1,406 agent records. Dashboard route generation produced no further changes.
-The sandbox denied Git's shared worktree merge metadata writes. The merge-tree
-content was therefore applied and committed linearly in `61a0623c3`,
-`b7ba27430`, `e2c0c8557` and `dac64c025`; these commits do not record merge
-ancestry. The last integration uses `ce1b0613f` as the explicit merge base,
-since its source content was already integrated. Its only conflicts were
-generated contracts, which are regenerated rather than hand-edited.
+Shopify's layout: a top bar (back, theme state and who published last, the page
+picker, device toggle, undo/redo, More actions with Versions, Preview in a new
+tab and Discard draft, Save, Publish), the page's tree on the left, the live
+preview in the middle, and the selected part's settings on the right (in place
+of the tree below 1280px). Edits autosave after 800 ms; a conflict keeps the
+edits and offers reload or an explicit overwrite.
 
-Recorded phase-2 sweeps passed 181 editor checks, 765 storefront checks,
-259 shared/core/API domain checks, 412 operation/route/budget checks, 29 DVC
-checks, 29 CLI checks, three real MCP checks and seven lead input checks
-(1,685 checks; repeated runs are excluded). Final post-integration reruns also
-passed the 396-check service/workflow group, 214-check frontier/render/MCP
-group, 76-check generated-contract/CLI group, eight template render checks,
-three route-family parity checks, and all 26 storefront budget checks. The
-last editor component run passed 36 checks, including historical CMS and
-missing-page preview paths. Performance boundary checks passed 47 checks;
-navigation/settings checks passed 173 checks. The latest lead integration's
-frontier/preview/budget group passed 86 checks, and its domain/product/editor
-group passed 173 checks. The domain graph passed.
+- Page picker: Home page, Products, Collections, Categories, Search results,
+  Pages (CMS) and every landing page, plus New landing page. Resource pages
+  preview the store's first item and can switch to another.
+- Tree: Header (announcement bar, header), the page, Footer. Home and landing
+  pages list their sections (add from the illustrated picker, drag or Space +
+  arrows to reorder, duplicate, hide, remove with undo) and their page settings.
+  Product pages list Product information, each module (shown first in page
+  order, then hidden ones; eye toggles and reordering) and App blocks. Listing
+  pages list Toolbar, Filters and Product grid (search adds its own layout and a
+  filter drawer). CMS pages link to their content editor.
+- Clicking the preview selects the section or part under the pointer: sections,
+  header, announcement bar, footer, product information, modules, app blocks,
+  the listing grid and filters carry preview marks.
+- Theme settings tab: colours (contrast-checked), typography, logos and product
+  cards. The Themes page shows the current theme with Customize, Preview and
+  Publish, and the template library (a template restyles the draft and keeps
+  the merchant's content).
 
-The required five-seed DVC property/race gate passed all 29 checks with zero
-findings. Typechecks passed for shared, core, API, API client, admin, storefront
-and CLI. Storefront checking used Astro's in-process `--noSync` mode: 728 files,
-zero errors, zero warnings and 19 hints. Admin lint has zero errors and one
-existing unused-disable warning in `StoreSettings.tsx:277`. All verification
-ran without a dev server. Browser checks belong to the lead after merging.
+## API and agents
 
-### Dashboard bundle measurements
+Routes in `apps/api/src/routes/admin/settings/site.ts`: `editor_get` (the
+editor's bundle, not an agent operation), `workspace_get` (revisions, last
+publication, landing pages), `document_get` (a whole draft, live or version
+document, delivered to agents as an authenticated JSON artifact),
+`versions_list` (five per page), and the commands `draft_save`,
+`page_draft_update`, `version_restore`, `draft_discard` and `publish`, which
+answer revision receipts only. The curated `theme.draft-landing-page.v1`
+workflow drafts a landing page and verifies it through `workspace_get`; it never
+publishes.
 
-`scripts/admin-perf-check.mjs` built both this branch and an environment-file-free
-snapshot of the lead at `ce1b0613f`. Budgets were unchanged. Values below are
-Brotli KiB; route measurements include their initial entry and layout imports.
+## Storefront budgets
 
-| Surface | Lead baseline | Builder | Budget |
-| --- | ---: | ---: | ---: |
-| Initial entry | 159.05 | 144.75 | 138 |
-| Theme editor | 352.40 | 352.88 | 360 |
-| Stylesheet | 16.18 | 16.18 | 17 |
-
-The editor remains lazy, with no editor code in the initial module graph and no
-lazy-only library findings. Initial JavaScript decreased by 14.30 KiB. The
-editor increased by 0.48 KiB while staying within its budget. Deferring closed
-import dialogs, report/nav metadata and loader-only helpers also removed the
-lead baseline's phone-metadata violations and brought product-list and
-order-edit/new routes within their existing budgets.
-
-The whole-dashboard gate still exits nonzero with ten findings, all on surfaces
-already over budget in the clean lead baseline. This is a remaining dashboard
-performance gap, not a passing gate:
-
-| Surface | Lead baseline | Builder | Budget |
-| --- | ---: | ---: | ---: |
-| Initial entry | 159.1 | 144.8 | 138 |
-| Customers | 356.9 | 300.0 | 245 |
-| Home | 227.1 | 227.7 | 206 |
-| Inventory | 281.0 | 271.3 | 255 |
-| Order detail | 362.4 | 352.9 | 288 |
-| Order list | 315.0 | 307.7 | 290 |
-| Product edit | 381.6 | 374.5 | 367 |
-| Product new | 379.9 | 372.8 | 365 |
-| Store settings | 329.2 | 319.3 | 291 |
-| Login | 189.4 | 178.0 | 168 |
-
-### Lead browser checks
-
-1. Open `/admin/online-store/theme/editor` in English, then Bangla. Add a
-   section from the illustrated picker, duplicate it, hide/show it and delete
-   it. Focus its drag handle, press Space, ArrowUp/ArrowDown, then Space.
-   Undo/redo changes; switch desktop, tablet and 390px phone previews; attempt
-   to navigate away with unsaved edits.
-2. Create landing handle `eid-offers`, add copy and an existing Files image,
-   save the draft and preview `/pages/eid-offers`. Confirm the public page is
-   unchanged. With a published CMS page using that handle, enable its body
-   override and confirm the preview uses `/eid-offers` and preserves CMS SEO.
-3. Publish with a note. Check author/time and readable history changes; preview
-   an older version, restore it and confirm only the draft changes. Preview a
-   version predating the landing page and confirm it shows that version's home.
-   Edit again and confirm the preview returns to the draft. Confirm discard.
-   Open a private preview in its own tab: the localized preview bar should show
-   and Exit preview should return to live. The editor frame must not show the bar.
-4. Save from two staff tabs using the same revision. The second must show the
-   conflict banner; exercise reload and explicit overwrite.
-5. Enter a real product URL and blur it to preview. Reorder/hide its fixed
-   blocks and check exact-SKU image precedence, purchase options, JSON-LD and
-   noIndex. Repeat with a category/collection URL for banner, filters and grid
-   density, then check search including an empty search.
-6. In the public storefront Network panel, confirm exactly one
-   `/api/v1/storefront/batch` request per landing, CMS override, product,
-   collection/category and search page render. Private previews have their
-   separate authenticated transport.
-7. Run merchant MCP workflow `theme.draft-landing-page.v1`. Confirm its exact
-   page proof matches, the saved draft revision matches and live is unchanged.
+Each page renders from one `/api/v1/storefront/batch` call. In-process D1
+trips/waves: home 10/2, landing 10/2 (budget 13/2), product 19/3, category 6/3,
+collection 7/3, search 6/2; validation 1/1, a repeat hit 1/1. Landing reads use
+`deps.theme` plus the section planner's precise dependencies (including
+`deps.collections` for named collections). Previews are private and uncached.
+No schema migration, binding or dependency was added.
