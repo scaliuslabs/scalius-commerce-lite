@@ -8,41 +8,64 @@
  * answers every part from the same generation-keyed cache in one invocation.
  * Only routes in this list can be batched, so a batch never reaches a private
  * or uncached route.
+ *
+ * Every route also says, here and only here, whether its answer varies by
+ * market (docs/MARKETS-DESIGN.md D4). A market-keyed read carries the page's
+ * presence (`?presence=en-in`; none means the root, the backup market), so
+ * the presence is part of its cache key, and the route reads its market
+ * through `readPublicMarket`, which refuses a market-invariant route. A
+ * market-invariant read gets no presence: one cache entry serves every
+ * market. Moving a read to market-keyed (price lists, FX and translations
+ * in step 4) is a change of this table, never of a route alone.
  */
 import type { StorefrontBatchPartCache } from "./cache-frontier";
+import { MARKET_PRESENCE_QUERY_PARAM } from "./markets";
+
+/** How a public read relates to markets: keyed by the page's presence, or the same in every market (with the reason). */
+export type PublicApiMarketScope = { readonly keyed: true } | { readonly invariant: string };
 
 export interface PublicApiCacheRoute {
   path: string;
   exact?: boolean;
   isEligible?: (url: URL) => boolean;
+  market: PublicApiMarketScope;
 }
+
+/** Step 2: every market sells the one catalogue at base prices in the shop currency, untranslated. */
+const SAME_CATALOGUE = "Every market sells the same catalogue at base prices in the shop currency until price lists, FX and translations (step 4).";
+const STORE_WIDE_DELIVERY = "Delivery methods and locations are store-wide until markets link delivery methods (step 3).";
+const STORE_WIDE_COPY = "Buyer copy is store-wide until translations (step 4).";
 
 const MAX_PUBLIC_CACHE_QUERY_ENTRIES = 30;
 const MAX_PUBLIC_CACHE_QUERY_KEY_LENGTH = 64;
 const MAX_PUBLIC_CACHE_QUERY_VALUE_LENGTH = 512;
 
 export const PUBLIC_API_CACHE_ROUTES: readonly PublicApiCacheRoute[] = [
-  { path: "/api/v1/products" },
-  { path: "/api/v1/categories" },
-  { path: "/api/v1/brands" },
-  { path: "/api/v1/collections" },
+  { path: "/api/v1/products", market: { invariant: SAME_CATALOGUE } },
+  { path: "/api/v1/categories", market: { invariant: SAME_CATALOGUE } },
+  { path: "/api/v1/brands", market: { invariant: SAME_CATALOGUE } },
+  { path: "/api/v1/collections", market: { invariant: SAME_CATALOGUE } },
   // One fixed read: a query string is rejected by the route, and never cached or batched.
-  { path: "/api/v1/storefront/homepage", exact: true, isEligible: (url) => url.searchParams.size === 0 },
-  { path: "/api/v1/checkout/config", exact: true },
+  { path: "/api/v1/storefront/homepage", exact: true, isEligible: (url) => url.searchParams.size === 0, market: { invariant: SAME_CATALOGUE } },
+  // The checkout settings of the page's market; payment and delivery methods are store-wide until markets link them (steps 3 and 6).
+  { path: "/api/v1/checkout/config", exact: true, market: { keyed: true } },
   // The cart and checkout copy; every checkout-language write bumps the generation.
-  { path: "/api/v1/checkout-languages/active", exact: true, isEligible: (url) => url.searchParams.size === 0 },
-  { path: "/api/v1/shipping-methods" },
-  { path: "/api/v1/locations" },
-  { path: "/api/v1/attributes" },
-  { path: "/api/v1/pages" },
-  { path: "/api/v1/articles" },
-  { path: "/api/v1/seo" },
-  { path: "/api/v1/navigation" },
-  { path: "/api/v1/storefront/pages/slug" },
-  { path: "/api/v1/storefront/landing", isEligible: (url) => url.searchParams.size === 0 },
-  { path: "/api/v1/storefront/layout", exact: true },
+  { path: "/api/v1/checkout-languages/active", exact: true, isEligible: (url) => url.searchParams.size === 0, market: { invariant: STORE_WIDE_COPY } },
+  { path: "/api/v1/shipping-methods", market: { invariant: STORE_WIDE_DELIVERY } },
+  { path: "/api/v1/locations", market: { invariant: STORE_WIDE_DELIVERY } },
+  { path: "/api/v1/attributes", market: { invariant: SAME_CATALOGUE } },
+  { path: "/api/v1/pages", market: { invariant: SAME_CATALOGUE } },
+  { path: "/api/v1/articles", market: { invariant: SAME_CATALOGUE } },
+  { path: "/api/v1/seo", market: { invariant: "Discovery policy (feeds, titles, the social image) is store-wide." } },
+  { path: "/api/v1/navigation", market: { invariant: SAME_CATALOGUE } },
+  { path: "/api/v1/storefront/pages/slug", market: { invariant: SAME_CATALOGUE } },
+  { path: "/api/v1/storefront/landing", isEligible: (url) => url.searchParams.size === 0, market: { invariant: SAME_CATALOGUE } },
+  // The layout carries the whole presence matrix, the same for every market.
+  { path: "/api/v1/storefront/layout", exact: true, market: { invariant: "The layout is store-wide and carries the whole active presence matrix." } },
   // A product page's app blocks (`/product-apps/<slug>`); a query string is rejected by the route.
-  { path: "/api/v1/storefront/product-apps", isEligible: (url) => url.searchParams.size === 0 },
+  { path: "/api/v1/storefront/product-apps", isEligible: (url) => url.searchParams.size === 0, market: { invariant: SAME_CATALOGUE } },
+  // The active presence matrix, for the storefront gateway's buyer-choice redirect.
+  { path: "/api/v1/storefront/markets", exact: true, isEligible: (url) => url.searchParams.size === 0, market: { invariant: "The presence matrix is the same for every market." } },
 ];
 
 function routeMatches(pathname: string, route: PublicApiCacheRoute): boolean {
@@ -62,13 +85,36 @@ export function hasBoundedPublicQuery(url: URL): boolean {
   );
 }
 
+/** The cached public route this GET reads, or null. */
+export function publicApiCacheRouteOf(url: URL): PublicApiCacheRoute | null {
+  if (!hasBoundedPublicQuery(url)) return null;
+  const pathname = url.pathname.replace(/\/$/, "") || "/";
+  return PUBLIC_API_CACHE_ROUTES.find(
+    (route) => routeMatches(pathname, route) && (!route.isEligible || route.isEligible(url)),
+  ) ?? null;
+}
+
 /** Whether a GET of this URL is a generation-cached public API read. */
 export function isPublicApiCacheRoute(url: URL): boolean {
-  if (!hasBoundedPublicQuery(url)) return false;
-  const pathname = url.pathname.replace(/\/$/, "") || "/";
-  return PUBLIC_API_CACHE_ROUTES.some(
-    (route) => routeMatches(pathname, route) && (!route.isEligible || route.isEligible(url)),
-  );
+  return publicApiCacheRouteOf(url) !== null;
+}
+
+/** Whether this public read's answer varies by market (it then carries the page's presence). */
+export function isMarketKeyedPublicRead(url: URL): boolean {
+  const route = publicApiCacheRouteOf(url);
+  return route !== null && "keyed" in route.market;
+}
+
+/**
+ * The public read for a page under a subfolder presence: a market-keyed
+ * read gains `?presence=<value>`; every other URL, and every URL of a root
+ * page (`presence` empty), is returned as it is.
+ */
+export function withMarketPresence(url: URL, presence: string | null | undefined): URL {
+  if (!presence || !isMarketKeyedPublicRead(url)) return url;
+  const next = new URL(url);
+  next.searchParams.set(MARKET_PRESENCE_QUERY_PARAM, presence);
+  return next;
 }
 
 /** One storefront render's public reads, answered in one API invocation. */
