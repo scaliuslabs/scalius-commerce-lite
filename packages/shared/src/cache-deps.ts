@@ -93,6 +93,13 @@ export const CACHE_DEP_KINDS = [
   "plg",
   /** `plgs:<pluginId>:<collection>`: one storage collection of an app, advanced with every record write in it. */
   "plgs",
+  /**
+   * `mk:<marketId>`: one market (status, name, handle, countries, presences);
+   * `mk:*`: any market (the active presence matrix); `mk:backup`: the backup
+   * market's pricing facts (its price increment), which every price read in
+   * the shop currency uses.
+   */
+  "mk",
   /** `t:<table>`: coarse fallback, any buyer-visible change of the table. */
   "t",
   /** `store`: everything (dashboard "clear cache", catalogue-wide rebuilds). */
@@ -164,6 +171,12 @@ export const cacheDep = {
   anyPlugin: () => `plg:${CACHE_DEP_ANY}`,
   /** One storage collection of an app. */
   pluginCollection: (pluginId: string, collection: string) => `plgs:${pluginId}:${collection}`,
+  /** One market: its status, identity, countries and presences. */
+  market: (marketId: string) => `mk:${marketId}`,
+  /** Any market: the set of markets, their countries and presences (the presence matrix). */
+  anyMarket: () => `mk:${CACHE_DEP_ANY}`,
+  /** The backup market's pricing facts: the price increment every shop-currency price rounds to. */
+  backupMarketPricing: () => "mk:backup",
   table: (table: string) => `t:${table}`,
   store: () => "store",
 } as const;
@@ -726,6 +739,31 @@ const CACHE_DEP_TABLE_RULES = {
     noise: ["revision", "created_at", "updated_at", "idx1", "idx2", "idx3", "idx4", "uq1", "uq2"],
     note: "A storefront render reads only the collections its section declares in reads; the index columns are derived from data_json.",
     rules: everyChange([{ prefix: "plgs:", columns: ["plugin_id", "collection"] }]),
+  },
+
+  // --- Markets (docs/MARKETS-DESIGN.md D4) -----------------------------------------
+  markets: {
+    kinds: ["mk"],
+    noise: ["revision", "created_at", "updated_at"],
+    note: "Readers of one market (a keyed public read) declare `mk:<id>`; the presence matrix (layout, sitemap index, the gateway's buyer-choice redirect) `mk:*`. Prices read the backup market's increment through `storePriceIncrementSql`, which declares `mk:backup`: only a change of that increment advances it, so editing markets never invalidates the catalogue.",
+    rules: [
+      ...everyChange(own("mk")),
+      {
+        name: "backup_price", event: "update", image: "new", changed: ["price_increment_minor"],
+        where: { equals: { is_backup: 1 } }, keys: [{ dep: "mk:backup" }],
+      },
+    ],
+  },
+  market_countries: {
+    kinds: ["mk"],
+    noise: ["created_at"],
+    note: "A country moved between markets advances both markets (the old image through the derived companion).",
+    rules: everyChange([{ prefix: "mk:", columns: ["market_id"] }, { dep: "mk:*" }]),
+  },
+  market_presences: {
+    kinds: ["mk"],
+    noise: ["created_at"],
+    rules: everyChange([{ prefix: "mk:", columns: ["market_id"] }, { dep: "mk:*" }]),
   },
 
   orders: {

@@ -17,7 +17,9 @@ describe("canonical schema hygiene", () => {
         RETIRED_PRE_CONSOLIDATION_TABLES.has(table));
 
       expect(d1Tables).toEqual(tursoTables);
-      expect(d1Tables).toHaveLength(171);
+      expect(d1Tables).toHaveLength(174);
+      // 0112: markets, the countries each sells to and their URL presences.
+      for (const markets of ["markets", "market_countries", "market_presences"]) expect(d1Tables).toContain(markets);
       // 0110: an app's order.risk hold stops fulfilment until staff release it.
       expect(d1Tables).toContain("order_holds");
       for (const purchasing of ["suppliers", "purchase_orders", "purchase_order_lines", "purchase_order_receipt_lines", "inventory_commands", "inventory_transfers", "inventory_transfer_lines", "inventory_transfer_movements"]) {

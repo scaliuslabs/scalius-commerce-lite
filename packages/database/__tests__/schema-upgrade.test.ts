@@ -478,6 +478,15 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 17,
         postgresStatements: 17,
       },
+      {
+        version: 112,
+        name: "0112_markets",
+        // Three tables, their indexes and guards, orders.market_id, the backup
+        // market and its backfills, the checkout authority fence and the
+        // generated cache dependency triggers: one statement each on both providers.
+        sqliteStatements: 38,
+        postgresStatements: 38,
+      },
     ]);
   });
 
@@ -638,6 +647,7 @@ describe("provider-neutral schema upgrades", () => {
           { version: 109, name: "0109_inventory_purchasing" },
           { version: 110, name: "0110_plugin_providers" },
           { version: 111, name: "0111_order_money_chain" },
+          { version: 112, name: "0112_markets" },
         ],
       });
     } finally {

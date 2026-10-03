@@ -22,8 +22,8 @@ export const DATABASE_SCHEMA_LEGACY_BASELINE = {
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA = {
-  version: 111,
-  name: "0111_order_money_chain",
+  version: 112,
+  name: "0112_markets",
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
@@ -336,6 +336,11 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
     version: 111,
     name: "0111_order_money_chain",
     sourceSha256: "19d1617b34d3c5f245a316505431358960578e214440de499ab3fb33f58f6833",
+  },
+  {
+    version: 112,
+    name: "0112_markets",
+    sourceSha256: "b558d17ad0707700f956c46aa7c892760df786f7dddd34b781ef7b56ae2b13e8",
   },
 ] as const;
 

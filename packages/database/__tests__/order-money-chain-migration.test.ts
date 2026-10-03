@@ -95,7 +95,7 @@ describe(`${NAME} over a populated 0110 database`, () => {
     expect(count("SELECT count(*) AS n FROM event_outbox")).toBe(outbox);
     expect(count("SELECT count(*) AS n FROM cache_dep")).toBe(deps);
     expect(db.prepare("SELECT * FROM customer_order_stats").all()).toEqual(stats);
-    expect(db.prepare("SELECT version, name FROM scalius_schema_migrations ORDER BY version DESC LIMIT 1").get())
+    expect(db.prepare("SELECT version, name FROM scalius_schema_migrations WHERE version = 111").get())
       .toEqual({ version: 111, name: NAME });
     // The order search index still finds the orders it found.
     expect(count("SELECT count(*) AS n FROM orders_fts WHERE orders_fts MATCH 'Rahim'")).toBe(1);

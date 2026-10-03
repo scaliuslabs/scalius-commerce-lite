@@ -12,6 +12,7 @@ export * from "./rbac";
 export * from "./products";
 export * from "./catalog";
 export * from "./media";
+export * from "./markets";
 export * from "./customers";
 export * from "./customer-marketing";
 export * from "./orders";

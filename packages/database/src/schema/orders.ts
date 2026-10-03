@@ -15,6 +15,7 @@ import { UNIX_NOW } from "./shared";
 import { user } from "./auth";
 import { conversations } from "./conversations";
 import { warrantyPolicyRevisions } from "./warranty";
+import { markets } from "./markets";
 import {
     OrderStatus,
     PaymentMethod,
@@ -151,6 +152,14 @@ export const orders = sqliteTable("orders", {
     channel: text("channel", { enum: ORDER_CHANNEL_VALUES }).notNull().default("online_store"),
     /** Merchant label within the channel (`facebook`, `walk_in`, a plugin id): a lowercase slug of at most 64. */
     channelSource: text("channel_source"),
+    /**
+     * The market the order was placed in (MARKETS-DESIGN D4, migration 0112):
+     * the market of the shipping country, else the backup market. Every
+     * order writer sets it in the insert (null only on a row written by raw
+     * SQL, which counts as the backup market). A market with orders cannot be
+     * deleted.
+     */
+    marketId: text("market_id").references(() => markets.id, { onDelete: "restrict" }),
 }, (table) => [
     check("orders_requires_shipping_check", sql`${table.requiresShipping} IN (0, 1)`),
     check(
@@ -216,6 +225,7 @@ export const orders = sqliteTable("orders", {
         .on(table.fulfillmentLocationId, table.inventoryAction)
         .where(sql`${table.fulfillmentLocationId} IS NOT NULL`),
     index("orders_channel_list_idx").on(table.deletedAt, table.channel, table.updatedAt),
+    index("orders_market_idx").on(table.marketId, table.createdAt),
 ]);
 
 export const checkoutAttempts = sqliteTable("checkout_attempts", {
