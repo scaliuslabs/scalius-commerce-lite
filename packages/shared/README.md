@@ -40,8 +40,10 @@ import { getStatusBadgeClass } from "@scalius/shared/status-badges";
 |------|---------|-------------|
 | `utils.ts` | Tailwind class merging (re-exports date/badge utils for backward compat) | `cn()`, re-exports `unixToDate`, `formatDate`, `getStatusBadgeClass` |
 | `status-badges.ts` | Tailwind CSS badge styling for all 11 order statuses (pending, processing, confirmed, shipped, delivered, completed, cancelled, returned, refunded, partially_refunded, incomplete) | `getStatusBadgeClass()` |
-| `currency.ts` | ISO 4217 currency formatting with `currency.js` precision | `CurrencyConfig`, `DEFAULT_CURRENCY`, `getDecimalPlaces()`, `getCurrencySymbol()`, `getCurrencyCode()`, `formatPrice()`, `formatPriceShort()` |
-| `money.ts` | Integer minor-unit money: the one decimal/minor boundary pair and exact catalog discount rounding | `toMinor()`, `fromMinor()`, `percentToBps()`, `bpsToPercent()`, `discountedPriceMinor()` |
+| `currency-policy.ts` | One row per supported currency: ISO exponent, CLDR cash increment, display digits (CLF and UYW excluded); the price increment and COD cash increment policies | `SUPPORTED_CURRENCY_CODES`, `EXCLUDED_CURRENCY_CODES`, `currencyPolicy()`, `currencyExponent()`, `defaultPriceIncrementMinor()`, `priceIncrementChoices()`, `resolvePriceIncrementMinor()`, `PricingCurrency`, `cashOnDeliveryIncrementMinor()` |
+| `currency.ts` | ISO 4217 currency formatting with `currency.js` precision | `CurrencyConfig`, `DEFAULT_CURRENCY`, `getDecimalPlaces()`, `getPriceIncrementMinor()`, `getCurrencySymbol()`, `getCurrencyCode()`, `formatPrice()`, `formatPriceShort()` |
+| `money.ts` | Integer minor-unit money: the one decimal/minor boundary pair, price-increment rounding and exact catalog discount rounding | `toMinor()`, `fromMinor()`, `toIncrementMinor()`, `roundToIncrementMinor()`, `percentOfMinor()`, `PriceIncrementError`, `percentToBps()`, `bpsToPercent()`, `discountedPriceMinor()` |
+| `money-chain.ts` | The order money chain and payment settlement (MARKETS-DESIGN D2, D3): exact decimal-rate conversion and the columns every order and payment writes | `orderMoneyChainColumns()`, `orderShopAmounts()`, `convertMinorAtRate()`, `paymentSettlement()`, `presentedSettlement()` |
 | `price-utils.ts` | Display rounding for decimal prices already converted from minor units | `roundPriceToPrecision()`, `calculateDiscountedPrice()` |
 | `media-variants.ts` | Pre-generated WebP rendition ladder and URL helpers | `mediaVariantWidths()`, `mediaImageUrl()`, `mediaImageSrcSet()`, `mediaOriginalUrl()` |
 | `media-url.ts` | Resolve bare R2 keys to full CDN URLs | `resolveMediaUrl()` |
@@ -72,7 +74,7 @@ Runtime dependencies (listed in `package.json`):
 
 ### Currency Formatting
 
-`currency.ts` reads from `window.__CURRENCY_SYMBOL__` / `window.__CURRENCY_CODE__` globals injected by the storefront's `Layout.astro`. Server-side calls safely fall through to `DEFAULT_CURRENCY` (BDT). The `getDecimalPlaces()` lookup covers all ISO 4217 exceptions (0-decimal currencies like JPY, 3-decimal currencies like BHD) -- everything else defaults to 2.
+`currency.ts` reads the `window.__CURRENCY_SYMBOL__`, `__CURRENCY_CODE__` and `__CURRENCY_PRICE_INCREMENT__` globals injected by the storefront's `Layout.astro`. Server-side calls fall through to `DEFAULT_CURRENCY` (BDT). `getDecimalPlaces()` is the ISO 4217 exponent from the currency policy table (JPY 0, BHD 3, BDT 2).
 
 ### Image renditions
 
