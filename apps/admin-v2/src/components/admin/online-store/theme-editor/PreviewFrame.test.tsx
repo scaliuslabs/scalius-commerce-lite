@@ -169,4 +169,30 @@ describe("the editor's storefront frame", () => {
     expect(container.querySelector("[data-device]")?.getAttribute("style")).toContain("390px");
   });
 
+  it("keeps the newest page when an earlier session answers last", async () => {
+    const continuation = (path: string, code: string) => ({
+      continuation: { url: `${STOREFRONT}/theme-preview/continue`, method: "POST", fields: { continuationCode: code, path, device: "full" } },
+      draftRevision: 3,
+      basePublishedRevision: 1,
+    });
+    let resolveSlow: (value: ReturnType<typeof continuation>) => void = () => {};
+    const slow = { promise: new Promise<ReturnType<typeof continuation>>((resolve) => { resolveSlow = resolve; }), resolve: (value: ReturnType<typeof continuation>) => resolveSlow(value) };
+    api.session.mockReturnValueOnce(slow.promise);
+    const controller = createRef<PreviewController>();
+    const frame = (previewPath: string) => (
+      <PreviewFrame draftRevision={3} previewPath={previewPath} device="desktop" names={{}} selectedId={null} onSelect={onSelect} controller={controller} />
+    );
+    await act(async () => root.render(frame("/products/honey")));
+    // The merchant moves to Search before the product's session answers.
+    const SEARCH_CODE = `tpc_${"s".repeat(48)}`;
+    api.session.mockResolvedValueOnce(continuation("/search", SEARCH_CODE));
+    await act(async () => root.render(frame("/search")));
+    await act(async () => slow.resolve(continuation("/products/honey", CODE)));
+    // The product's late answer is dropped: no failure, and the frame opens Search.
+    expect(container.textContent).not.toContain("Try again");
+    const iframe = container.querySelector("iframe")!;
+    Object.defineProperty(iframe, "contentWindow", { configurable: true, get: () => frameWindow });
+    deliver({ type: "scalius-continuation-ready-v1" });
+    expect(posted().at(-1)?.[0]).toMatchObject({ fields: { path: "/search", continuationCode: SEARCH_CODE } });
+  });
 });

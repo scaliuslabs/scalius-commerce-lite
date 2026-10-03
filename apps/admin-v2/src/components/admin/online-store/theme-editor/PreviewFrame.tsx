@@ -72,24 +72,30 @@ export function PreviewFrame({ draftRevision, sourceRevision, previewPath = "/",
   const pendingFields = useRef<{ continuationCode: string; path: string; device: string } | null>(null);
   const latest = useRef({ names, selectedId, onSelect, draftRevision, sourceRevision, previewPath });
   latest.current = { names, selectedId, onSelect, draftRevision, sourceRevision, previewPath };
+  /** The newest session request: an older one answering later (a page switched meanwhile) is dropped. */
+  const opening = useRef(0);
 
   // A session: the storefront origin from Platform settings, then a
   // one-time continuation the frame's embed relay redeems.
   const open = useCallback(async () => {
+    const ticket = ++opening.current;
     connected.current = false;
     window.clearTimeout(helloTimer.current);
     setPhase("connecting");
     try {
       const { storefrontUrl } = await apiData(getApiV1Platform());
       const origin = normalizeStorefrontOrigin(storefrontUrl);
+      if (ticket !== opening.current) return;
       if (!origin) {
         setPhase("no-url");
         return;
       }
+      const { draftRevision: revision, sourceRevision: source, previewPath: page } = latest.current;
       const result = await apiData(postApiV1AdminSettingsThemePreviewSession({
-        body: { expectedDraftRevision: latest.current.draftRevision, ...(latest.current.sourceRevision === undefined ? {} : { sourceRevision: latest.current.sourceRevision }), path: latest.current.previewPath, device: "full" },
+        body: { expectedDraftRevision: revision, ...(source === undefined ? {} : { sourceRevision: source }), path: page, device: "full" },
       }));
-      if (!isSafeThemePreviewContinuation(result.continuation, origin, latest.current.previewPath, "full")) throw new Error("Unsafe continuation");
+      if (ticket !== opening.current) return;
+      if (!isSafeThemePreviewContinuation(result.continuation, origin, page, "full")) throw new Error("Unsafe continuation");
       pendingFields.current = result.continuation.fields;
       setSession((current) => ({
         origin,
@@ -97,7 +103,7 @@ export function PreviewFrame({ draftRevision, sourceRevision, previewPath = "/",
         attempt: (current?.attempt ?? 0) + 1,
       }));
     } catch {
-      setPhase("failed");
+      if (ticket === opening.current) setPhase("failed");
     }
   }, []);
 
