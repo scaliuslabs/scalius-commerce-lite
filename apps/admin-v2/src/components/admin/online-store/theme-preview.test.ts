@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   isSafeThemePreviewContinuation,
   isSafeThemePreviewPath,
-} from "./ThemePreviewAction";
+} from "./theme-preview";
 
 describe("theme preview handoff", () => {
   const continuation = {

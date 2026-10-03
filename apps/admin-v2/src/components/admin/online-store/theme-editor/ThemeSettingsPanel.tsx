@@ -1,7 +1,8 @@
 /**
- * The editor's theme settings: colours, fonts, the brand images, the header
- * with its top bar, the menus and the footer. Each block's own settings are
- * generated from its registry schema.
+ * Theme settings (the editor's second tab, Shopify's): colours, fonts, the
+ * brand images and product cards, store-wide. The header (with its
+ * announcement bar and menus) and the footer are rows of every page's tree;
+ * their settings are here too, for the editor's settings panel.
  */
 import type { ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
@@ -23,14 +24,14 @@ import { useMessages } from "~/i18n";
 import { onlineStoreMessages } from "~/i18n/online-store";
 import { MediaField, type MediaPreviews, type SectionMediaPreview } from "../schema-form/resource-fields";
 import { BlockSettingsFields, ColorFields, FitNote, useFitReason, variantRenders, type SetTheme, type Theme } from "../theme-fields";
-import { FooterSketch, HeaderSketch, MobileNavigationSketch, NavigationSketch, VisualChoice } from "../ThemeChoices";
-import { blockFallback, setBlockVariant, THEME_FIELD_IDS, type ThemeBlockSlot } from "../theme-settings";
+import { CardStyleSketch, FooterSketch, HeaderSketch, MobileNavigationSketch, NavigationSketch, VisualChoice } from "../ThemeChoices";
+import { blockFallback, blockVariant, setBlockVariant, THEME_FIELD_IDS, type ThemeBlockSlot } from "../theme-settings";
 import { TypographyCard } from "../TypographyCard";
 
 type MessageKey = keyof (typeof onlineStoreMessages)["en"];
 
-/** One group of theme settings in the sidebar: a heading, then its fields. */
-export function SettingsGroup({ title, description, action, children }: {
+/** One group of settings in a panel: a heading, then its fields. */
+function SettingsGroup({ title, description, action, children }: {
   title: ReactNode;
   description?: ReactNode;
   action?: ReactNode;
@@ -50,10 +51,31 @@ export function SettingsGroup({ title, description, action, children }: {
   );
 }
 
+/** A block's variant picker as sketches, its fit note and its generated settings. */
+function useBlockChoice(theme: Theme, resolved: ResolvedStorefrontTheme, setDraft: SetTheme, media: MediaPreviews) {
+  const t = useMessages(onlineStoreMessages);
+  const option = (key: string) => t(key as MessageKey);
+  const fitReason = useFitReason(resolved.facts);
+  return {
+    options: <Render,>(slot: ThemeBlockSlot, prefix: string, sketch: (render: Render, variant: string) => ReactNode, help = false) =>
+      storefrontBlockVariants(slot).map((value) => ({
+        value,
+        label: option(`${prefix}_${value}`),
+        help: help ? option(`${prefix}_${value}Help`) : undefined,
+        sketch: sketch(variantRenders<Render>(slot, value), value),
+      })),
+    set: (slot: ThemeBlockSlot) => (variant: string) => setDraft((current) => setBlockVariant(current, slot, variant)),
+    fitNote: (slot: ThemeBlockSlot, prefix: string) => (
+      <FitNote fallback={blockFallback(resolved, slot)} name={(variant) => option(`${prefix}_${variant}`)} reason={fitReason} />
+    ),
+    fields: (slot: ThemeBlockSlot) => <BlockSettingsFields slot={slot} theme={theme} setDraft={setDraft} media={media} />,
+  };
+}
+
 /**
  * The brand: header logo (and its width), footer logo and browser tab icon,
  * picked from Files and kept as media ids in the theme draft, so they
- * preview, publish and roll back with the rest of the theme.
+ * preview, publish and restore with the rest of the theme.
  */
 function BrandFields({ theme, media, setDraft }: { theme: Theme; media: MediaPreviews; setDraft: SetTheme }) {
   const t = useMessages(onlineStoreMessages);
@@ -102,69 +124,83 @@ export function ThemeSettingsPanel({ theme, resolved, media, setDraft }: {
   setDraft: SetTheme;
 }) {
   const t = useMessages(onlineStoreMessages);
-  const option = (key: string) => t(key as MessageKey);
-  const fitReason = useFitReason(resolved.facts);
-  const setBlock = (slot: ThemeBlockSlot) => (variant: string) => setDraft((current) => setBlockVariant(current, slot, variant));
-  const blockOptions = <Render,>(slot: ThemeBlockSlot, prefix: string, sketch: (render: Render, variant: string) => ReactNode, help = false) =>
-    storefrontBlockVariants(slot).map((value) => ({
-      value,
-      label: option(`${prefix}_${value}`),
-      help: help ? option(`${prefix}_${value}Help`) : undefined,
-      sketch: sketch(variantRenders<Render>(slot, value), value),
-    }));
-  const fitNote = (slot: ThemeBlockSlot, prefix: string) => (
-    <FitNote fallback={blockFallback(resolved, slot)} name={(variant) => option(`${prefix}_${variant}`)} reason={fitReason} />
-  );
-  const blockFields = (slot: ThemeBlockSlot) => <BlockSettingsFields slot={slot} theme={theme} setDraft={setDraft} media={media} />;
-
+  const block = useBlockChoice(theme, resolved, setDraft, media);
   return (
     <div>
       <SettingsGroup title={t("colors")}>
         <ColorFields theme={theme} setDraft={setDraft} />
       </SettingsGroup>
-
       <TypographyCard theme={theme} setDraft={setDraft} frame={SettingsGroup} />
-
       <SettingsGroup title={t("logo")}>
         <BrandFields theme={theme} media={media} setDraft={setDraft} />
       </SettingsGroup>
+      <SettingsGroup title={t("productCards")}>
+        <VisualChoice
+          label={t("productCards")}
+          value={blockVariant(theme, "card")}
+          className="grid-cols-2"
+          options={block.options<Omit<ResolvedStorefrontThemeLayout["productCard"], "imageRatio">>("card", "cardStyle", (card, variant) => (
+            <CardStyleSketch variant={variant} card={{ ...(variant === "quick-add" && theme.blocks.card.variant === variant ? resolved.layout.productCard : card), imageRatio: resolved.layout.productCard.imageRatio }} />
+          ), true)}
+          onChange={block.set("card")}
+        />
+        {block.fields("card")}
+      </SettingsGroup>
+    </div>
+  );
+}
 
-      <SettingsGroup title={t("header")}>
+/** The announcement bar over the header. */
+export function AnnouncementSettings({ theme, resolved, media, setDraft }: { theme: Theme; resolved: ResolvedStorefrontTheme; media: MediaPreviews; setDraft: SetTheme }) {
+  const t = useMessages(onlineStoreMessages);
+  const block = useBlockChoice(theme, resolved, setDraft, media);
+  return (
+    <div className="space-y-4">
+      <div className="space-y-1.5">
+        <Label htmlFor="theme-top-bar">{t("topBar")}</Label>
+        <SearchableSelect
+          id="theme-top-bar"
+          value={theme.blocks.topBar.variant}
+          options={storefrontBlockVariants("topBar").map((variant) => ({
+            value: variant,
+            label: t(`topBar_${variant}` as MessageKey),
+            description: t(`topBar_${variant}Help` as MessageKey),
+          }))}
+          onValueChange={block.set("topBar")}
+          triggerClassName="w-full"
+        />
+      </div>
+      {block.fields("topBar")}
+    </div>
+  );
+}
+
+/** The header's layout and the menus it shows on computers and phones. */
+export function HeaderSettings({ theme, resolved, media, setDraft }: { theme: Theme; resolved: ResolvedStorefrontTheme; media: MediaPreviews; setDraft: SetTheme }) {
+  const t = useMessages(onlineStoreMessages);
+  const fitReason = useFitReason(resolved.facts);
+  const block = useBlockChoice(theme, resolved, setDraft, media);
+  return (
+    <div className="space-y-5">
+      <div className="space-y-3">
         <VisualChoice
           label={t("header")}
           value={theme.blocks.header.variant}
           className="grid-cols-2"
-          options={blockOptions<ResolvedStorefrontThemeLayout["header"]>("header", "header", (kind, variant) => <HeaderSketch kind={kind} variant={variant} />)}
-          onChange={setBlock("header")}
+          options={block.options<ResolvedStorefrontThemeLayout["header"]>("header", "header", (kind, variant) => <HeaderSketch kind={kind} variant={variant} />)}
+          onChange={block.set("header")}
         />
-        {fitNote("header", "header")}
-        {blockFields("header")}
-        <div className="space-y-1.5">
-          <Label htmlFor="theme-top-bar">{t("topBar")}</Label>
-          <SearchableSelect
-            id="theme-top-bar"
-            value={theme.blocks.topBar.variant}
-            options={storefrontBlockVariants("topBar").map((variant) => ({
-              value: variant,
-              label: option(`topBar_${variant}`),
-              description: option(`topBar_${variant}Help`),
-            }))}
-            onValueChange={setBlock("topBar")}
-            triggerClassName="w-full"
-          />
-        </div>
-        {blockFields("topBar")}
-      </SettingsGroup>
-
-      <SettingsGroup
-        title={t("menuStyle")}
-        description={
-          <>
+        {block.fitNote("header", "header")}
+        {block.fields("header")}
+      </div>
+      <div className="space-y-3 border-t border-border pt-4">
+        <div className="space-y-1">
+          <p className="text-body font-medium">{t("menuStyle")}</p>
+          <p className="text-body text-muted-foreground">
             {t("menuStyleHelp")}{" "}
             <Link to="/admin/online-store/navigation" className="text-link hover:underline">{t("editMenus")}</Link>
-          </>
-        }
-      >
+          </p>
+        </div>
         <div className="space-y-1.5">
           <Label htmlFor="theme-navigation-source">{t("menuSource")}</Label>
           <SearchableSelect
@@ -172,8 +208,8 @@ export function ThemeSettingsPanel({ theme, resolved, media, setDraft }: {
             value={theme.blocks.navigation.source}
             options={STOREFRONT_NAVIGATION_SOURCES.map((source) => ({
               value: source,
-              label: option(`menuSource_${source}`),
-              description: option(`menuSource_${source}Help`),
+              label: t(`menuSource_${source}` as MessageKey),
+              description: t(`menuSource_${source}Help` as MessageKey),
             }))}
             onValueChange={(source) => setDraft((current) => ({
               ...current,
@@ -183,7 +219,7 @@ export function ThemeSettingsPanel({ theme, resolved, media, setDraft }: {
           />
           <FitNote
             fallback={resolved.fallbacks.find((fallback) => fallback.kind === "navigation" && fallback.key === "source") ?? null}
-            name={(source) => option(`menuSource_${source}`)}
+            name={(source) => t(`menuSource_${source}` as MessageKey)}
             reason={fitReason}
           />
         </div>
@@ -192,33 +228,40 @@ export function ThemeSettingsPanel({ theme, resolved, media, setDraft }: {
           showLabel
           value={theme.blocks.desktopNav.variant}
           className="grid-cols-2"
-          options={blockOptions<ResolvedStorefrontThemeLayout["navigation"]>("desktopNav", "navigation", (kind) => <NavigationSketch kind={kind} />, true)}
-          onChange={setBlock("desktopNav")}
+          options={block.options<ResolvedStorefrontThemeLayout["navigation"]>("desktopNav", "navigation", (kind) => <NavigationSketch kind={kind} />, true)}
+          onChange={block.set("desktopNav")}
         />
-        {fitNote("desktopNav", "navigation")}
-        {blockFields("desktopNav")}
+        {block.fitNote("desktopNav", "navigation")}
+        {block.fields("desktopNav")}
         <VisualChoice
           label={t("menuStylePhone")}
           showLabel
           value={theme.blocks.mobileNav.variant}
           className="grid-cols-2"
-          options={blockOptions<ResolvedStorefrontThemeLayout["mobileNavigation"]>("mobileNav", "mobileNavigation", (kind) => <MobileNavigationSketch kind={kind} />, true)}
-          onChange={setBlock("mobileNav")}
+          options={block.options<ResolvedStorefrontThemeLayout["mobileNavigation"]>("mobileNav", "mobileNavigation", (kind) => <MobileNavigationSketch kind={kind} />, true)}
+          onChange={block.set("mobileNav")}
         />
-        {blockFields("mobileNav")}
-      </SettingsGroup>
+        {block.fields("mobileNav")}
+      </div>
+    </div>
+  );
+}
 
-      <SettingsGroup title={t("footer")} description={t("footerLayoutHelp")}>
-        <VisualChoice
-          label={t("footer")}
-          value={theme.blocks.footer.variant}
-          className="grid-cols-2"
-          options={blockOptions<ResolvedStorefrontThemeLayout["footer"]>("footer", "footer", (kind) => <FooterSketch kind={kind} />)}
-          onChange={setBlock("footer")}
-        />
-        {fitNote("footer", "footer")}
-        {blockFields("footer")}
-      </SettingsGroup>
+export function FooterSettings({ theme, resolved, media, setDraft }: { theme: Theme; resolved: ResolvedStorefrontTheme; media: MediaPreviews; setDraft: SetTheme }) {
+  const t = useMessages(onlineStoreMessages);
+  const block = useBlockChoice(theme, resolved, setDraft, media);
+  return (
+    <div className="space-y-3">
+      <p className="text-body text-muted-foreground">{t("footerLayoutHelp")}</p>
+      <VisualChoice
+        label={t("footer")}
+        value={theme.blocks.footer.variant}
+        className="grid-cols-2"
+        options={block.options<ResolvedStorefrontThemeLayout["footer"]>("footer", "footer", (kind) => <FooterSketch kind={kind} />)}
+        onChange={block.set("footer")}
+      />
+      {block.fitNote("footer", "footer")}
+      {block.fields("footer")}
     </div>
   );
 }

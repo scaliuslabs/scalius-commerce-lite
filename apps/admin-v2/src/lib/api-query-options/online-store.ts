@@ -4,7 +4,7 @@ import {
   getApiV1AdminNavigationMenusByMenuId,
   getApiV1AdminNavigationPlacementSettings,
   getApiV1AdminSettingsSeoFeedDiagnostics,
-  getApiV1AdminSettingsThemeWorkspace,
+  getApiV1AdminSettingsThemeEditor,
 } from "@scalius/api-client/sdk";
 import { apiData, type ApiResult } from "../api";
 import { queryKeys } from "../query-keys";
@@ -13,8 +13,8 @@ import type {
   NavigationPlacementSetting,
 } from "./navigation";
 
-/** The published theme, the shared draft, and what the editor reads (store shape, every image the draft names). */
-export type ThemeWorkspaceDocument = ApiResult<typeof getApiV1AdminSettingsThemeWorkspace>;
+/** The published theme, the shared draft, who published last, and what the editor reads (store shape, every image the draft names, app surfaces). */
+export type ThemeWorkspaceDocument = ApiResult<typeof getApiV1AdminSettingsThemeEditor>;
 /** An active app with the homepage sections and product-page blocks it offers the theme. */
 export type ThemeApp = ThemeWorkspaceDocument["apps"][number];
 export type ThemeAppSection = ThemeApp["sections"][number];
@@ -28,7 +28,7 @@ export type FeedDiagnostics = ApiResult<typeof getApiV1AdminSettingsSeoFeedDiagn
 export const themeWorkspaceQueryOptions = () =>
   queryOptions({
     queryKey: [...queryKeys.settings.theme(), "workspace"] as const,
-    queryFn: () => apiData(getApiV1AdminSettingsThemeWorkspace()),
+    queryFn: () => apiData(getApiV1AdminSettingsThemeEditor()),
   });
 
 export const navigationMenusQueryOptions = () =>

@@ -14,16 +14,13 @@ import {
   type StorefrontThemeDocument,
 } from "@scalius/shared/storefront-theme";
 import {
-  OPTIONAL_PRODUCT_MODULES,
   applyTemplate,
   blockFallback,
   blockVariant,
   cardForBackground,
-  colorFieldForPath,
   previewFamily,
   resetTypeTokens,
   resolveThemeForStore,
-  sameThemeLook,
   selectedTemplate,
   setBlockVariant,
   setThemeColor,
@@ -31,7 +28,6 @@ import {
   templateTypeTokens,
   themeContrastProblems,
   themeDraftInvalid,
-  themeFieldForPath,
   toggleProductModule,
   typePairingPreview,
   typeTokensAreTemplateDefault,
@@ -122,7 +118,6 @@ describe("templates", () => {
       template: applied.template,
       version: applied.version,
     }));
-    expect(sameThemeLook(reloaded, applied)).toBe(true);
     expect(selectedTemplate(reloaded)).toBe("marketplace");
   });
 
@@ -190,8 +185,6 @@ describe("theme colors", () => {
     expect(theme.tokens.colors["accent-foreground"]).toBe("#ffffff");
     expect(theme.tokens.colors.primary).toBe(base.tokens.colors.primary);
     expect(themeDraftInvalid(theme)).toBe(false);
-    expect(colorFieldForPath("theme.tokens.colors.accent")).toBe("theme-color-highlight");
-    expect(colorFieldForPath("theme.tokens.colors.accent-foreground")).toBe("theme-color-highlight-text");
   });
 
   it("moves the card by the template's own card-to-page step instead of flattening it", () => {
@@ -249,25 +242,6 @@ describe("theme colors", () => {
     expect(themeDraftInvalid({ ...theme, pages: { ...theme.pages, homeMode: { kind: "product", productId: "" } } })).toBe(true);
   });
 
-  it("marks the control behind a rejected document path", () => {
-    expect(themeFieldForPath("brand.logo")).toBe("theme-brand-logo");
-    expect(themeFieldForPath("theme.brand.favicon")).toBe("theme-brand-favicon");
-    expect(themeFieldForPath("pages.homeMode.productId")).toBe("theme-home-product");
-    // Generated block settings are named after their document path.
-    expect(themeFieldForPath("blocks.topBar.settings.link")).toBe("theme-blocks-topBar-settings-link");
-    expect(themeFieldForPath("theme.blocks.product.buyBox.settings.showBuyNow")).toBe("theme-blocks-product-buyBox-settings-showBuyNow");
-    expect(themeFieldForPath("tokens.colors.primary")).toBe("theme-color-buttons");
-    // Section settings are edited (and marked) in the theme editor.
-    expect(themeFieldForPath("pages.home.0.settings.title")).toBeUndefined();
-  });
-
-  it("marks the field behind a rejected colour token", () => {
-    expect(colorFieldForPath("theme.tokens.colors.primary-foreground")).toBe("theme-color-button-text");
-    expect(colorFieldForPath("theme.tokens.colors.card")).toBe("theme-color-background");
-    expect(colorFieldForPath("theme.tokens.colors.muted-foreground")).toBe("theme-color-background");
-    expect(colorFieldForPath("theme.blocks.header")).toBeUndefined();
-  });
-
   it("adds sections with their default settings", () => {
     expect(storefrontSectionDefault("faq", "faq")).toEqual({ id: "faq", type: "faq", version: 1, settings: { heading: "", items: [] } });
   });
@@ -312,13 +286,13 @@ describe("typography", () => {
   });
 });
 
-describe("product page modules on the Theme page", () => {
-  it("turns an optional module on at its registry place and off again", () => {
+describe("product page modules in the theme editor", () => {
+  it("shows a module at its registry place and hides it again", () => {
     const below = storefrontTemplateTheme("department-mall").blocks.product.below;
     expect(below).toEqual(["description", "reviews", "related"]);
     const bundled = toggleProductModule(below, "frequently-bought-together", true);
     expect(bundled).toEqual(["frequently-bought-together", "description", "reviews", "related"]);
-    const everything = OPTIONAL_PRODUCT_MODULES.reduce((list, module) => toggleProductModule(list, module, true), below);
+    const everything = (["frequently-bought-together", "compare-similar", "policies", "recently-viewed"] as const).reduce((list, module) => toggleProductModule(list, module, true), below);
     expect(everything).toEqual(["frequently-bought-together", "description", "compare-similar", "reviews", "policies", "related", "recently-viewed"]);
     expect(toggleProductModule(everything, "policies", false)).not.toContain("policies");
     // Turning a present module on again keeps one copy.

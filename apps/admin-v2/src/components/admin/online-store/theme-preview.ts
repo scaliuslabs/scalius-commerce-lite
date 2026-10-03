@@ -1,17 +1,11 @@
-import { useState } from "react";
+// Opening the saved theme draft (or one published version) on the real
+// storefront in a new tab, and the checks that keep that handoff safe.
 import {
   getApiV1Platform,
   postApiV1AdminSettingsThemePreviewSession,
 } from "@scalius/api-client/sdk";
 import { normalizeStorefrontOrigin } from "@scalius/shared/storefront-url";
-import { Button } from "~/components/ui/button";
-import { Input } from "~/components/ui/input";
-import { Label } from "~/components/ui/label";
-import { SearchableSelect } from "~/components/ui/searchable-select";
-import { useMessages } from "~/i18n";
-import { onlineStoreMessages } from "~/i18n/online-store";
 import { apiData } from "~/lib/api";
-import { SectionCard } from "./shared";
 
 type Device = "full" | "desktop" | "mobile";
 
@@ -101,8 +95,9 @@ export function useOpenThemePreview() {
       const result = await apiData(postApiV1AdminSettingsThemePreviewSession({
         body: { expectedDraftRevision: draftRevision, ...(sourceRevision === undefined ? {} : { sourceRevision }), path, device },
       }));
+      // A version preview answers with the version's revision, a draft preview with the draft's.
       if (
-        result.draftRevision !== draftRevision ||
+        result.draftRevision !== (sourceRevision ?? draftRevision) ||
         !isSafeThemePreviewContinuation(result.continuation, trustedOrigin, path, device) ||
         popup.closed
       ) throw new Error("Theme preview handoff is invalid");
@@ -137,71 +132,3 @@ export function useOpenThemePreview() {
   };
 }
 
-export function ThemePreviewAction({ draftRevision, disabled }: {
-  draftRevision: number;
-  disabled: boolean;
-}) {
-  const t = useMessages(onlineStoreMessages);
-  const [path, setPath] = useState("/");
-  const [device, setDevice] = useState<Device>("full");
-  const [opening, setOpening] = useState(false);
-  const [error, setError] = useState<"path" | "open" | null>(null);
-  const open = useOpenThemePreview();
-
-  const openPreview = async () => {
-    setOpening(true);
-    setError(null);
-    const result = await open(draftRevision, path.trim(), device);
-    setOpening(false);
-    if (result !== "opened") setError(result === "path" ? "path" : "open");
-  };
-
-  return (
-    <SectionCard title={t("themePreviewTitle")}>
-      <div className="flex flex-wrap items-end gap-3">
-        <div className="min-w-48 flex-1 space-y-1">
-          <Label htmlFor="theme-preview-path">{t("themePreviewPath")}</Label>
-          <Input
-            id="theme-preview-path"
-            value={path}
-            onChange={(event) => { setPath(event.target.value); setError(null); }}
-            placeholder="/categories/keyboard"
-            aria-describedby="theme-preview-path-help"
-            aria-invalid={error === "path"}
-          />
-        </div>
-        <div className="min-w-36 space-y-1">
-          <Label htmlFor="theme-preview-device">{t("themePreviewDevice")}</Label>
-          <SearchableSelect
-            id="theme-preview-device"
-            value={device}
-            options={[
-              { value: "full", label: t("themePreviewFull") },
-              { value: "desktop", label: t("themePreviewDesktop") },
-              { value: "mobile", label: t("themePreviewMobile") },
-            ]}
-            onValueChange={(value) => setDevice(value as Device)}
-            triggerClassName="w-full"
-          />
-        </div>
-        <Button
-          type="button"
-          variant="outline"
-          disabled={disabled || draftRevision < 1}
-          loading={opening}
-          onClick={() => void openPreview()}
-        >
-          {t("themePreviewOpen")}
-        </Button>
-      </div>
-      <p id="theme-preview-path-help" className="mt-2 text-body text-muted-foreground">
-        {draftRevision < 1 ? t("themePreviewSaveFirst") : t("themePreviewPathHelp")}
-      </p>
-      {error ? (
-        <p role="alert" className="mt-2 text-body text-destructive">
-          {t(error === "path" ? "themePreviewInvalidPath" : "themePreviewFailed")}
-        </p>
-      ) : null}
-    </SectionCard>
-  );
-}

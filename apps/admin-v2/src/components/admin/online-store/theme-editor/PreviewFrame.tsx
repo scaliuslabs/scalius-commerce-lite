@@ -21,7 +21,7 @@ import { Button } from "~/components/ui/button";
 import { apiData } from "~/lib/api";
 import { useMessages } from "~/i18n";
 import { themeEditorMessages } from "~/i18n/theme-editor";
-import { isSafeThemePreviewContinuation } from "../ThemePreviewAction";
+import { isSafeThemePreviewContinuation } from "../theme-preview";
 
 export type PreviewDevice = "desktop" | "tablet" | "phone";
 
@@ -190,10 +190,11 @@ export function PreviewFrame({ draftRevision, sourceRevision, previewPath = "/",
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2">
-      {path !== "/" && phase === "ready" ? (
+      {path !== previewPath.split("?")[0] && phase === "ready" ? (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-card px-3 py-1.5 shadow-card">
           <p className="min-w-0 truncate text-body text-muted-foreground">{t("viewingPath", { path })}</p>
-          <Button type="button" variant="outline" size="sm" onClick={() => send({ type: "go-home" })}>
+          {/* A link followed in the preview: back to the page being edited. */}
+          <Button type="button" variant="outline" size="sm" onClick={() => void open()}>
             {t("backToHome")}
           </Button>
         </div>

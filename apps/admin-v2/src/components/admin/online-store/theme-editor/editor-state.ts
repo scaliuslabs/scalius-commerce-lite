@@ -1,7 +1,7 @@
 /**
  * The theme editor's client state: the draft with undo and redo history,
- * homepage section operations, and what a saved change means for the
- * preview (swap the changed sections, or load the page again).
+ * section operations, and what a saved change means for the preview (swap
+ * the changed sections, or load the page again).
  */
 import { PLUGIN_HOME_SECTIONS_MAX } from "@scalius/shared/plugins/storefront";
 import {
@@ -15,7 +15,7 @@ import {
 import type { ThemeApp, ThemeAppSection } from "~/lib/api-query-options/online-store";
 import { newSectionId } from "../SectionSettings";
 import { appValuesInvalid, type AppSettingValues } from "../schema-form/app-settings";
-import { rebaseDraft } from "../shared";
+import { pageSections, withPageSections, type EditorPage } from "./editor-pages";
 
 type Theme = StorefrontThemeDocument;
 type Section = StorefrontSection;
@@ -96,16 +96,12 @@ export function editorHistory(state: EditorHistory, action: EditorAction): Edito
   }
 }
 
-// ─── Homepage sections ─────────────────────────────────────────────────────
+// ─── Sections and blocks ───────────────────────────────────────────────────
 
-export function withSections(theme: Theme, home: Section[]): Theme {
-  return { ...theme, pages: { ...theme.pages, home } };
-}
-
-/** The list with one section moved from one place to another. */
-export function moveSectionTo(sections: readonly Section[], from: number, to: number): Section[] {
-  if (from === to || from < 0 || to < 0 || from >= sections.length || to >= sections.length) return [...sections];
-  const next = [...sections];
+/** The list with one item moved from one place to another (unchanged out of range). */
+export function moveSectionTo<Item>(items: readonly Item[], from: number, to: number): Item[] {
+  if (from === to || from < 0 || to < 0 || from >= items.length || to >= items.length) return [...items];
+  const next = [...items];
   const [moved] = next.splice(from, 1);
   next.splice(to, 0, moved!);
   return next;
@@ -204,42 +200,6 @@ export function restoreSection(sections: readonly Section[], section: Section, i
   return next;
 }
 
-/**
- * The merchant's edits on top of a newer saved draft (another session's
- * save): every field they changed keeps their value, the rest take the
- * newer one, and homepage sections merge by id rather than as one list, so
- * two people editing different sections both keep their work. The order is
- * the merchant's when they reordered, the newer draft's otherwise.
- */
-export function mergeDrafts(mine: Theme, base: Theme, theirs: Theme): Theme {
-  const merged = rebaseDraft(
-    { ...mine, pages: { ...mine.pages, home: [] } },
-    { ...base, pages: { ...base.pages, home: [] } },
-    { ...theirs, pages: { ...theirs.pages, home: [] } },
-  );
-  const order = (sections: readonly Section[]) => sections.map((section) => section.id).join(",");
-  const baseById = new Map(base.pages.home.map((section) => [section.id, section]));
-  const theirsById = new Map(theirs.pages.home.map((section) => [section.id, section]));
-  const mineById = new Map(mine.pages.home.map((section) => [section.id, section]));
-  const pick = (id: string): Section | null => {
-    const own = mineById.get(id);
-    const before = baseById.get(id);
-    const newer = theirsById.get(id);
-    if (!own) return before ? null : newer ?? null; // removed here, or added there
-    if (!newer) return before ? null : own; // removed there, or added here
-    if (!before) return own;
-    return rebaseDraft(own, before, newer);
-  };
-  // Reordered here: the sections both drafts started with are in another order.
-  const reordered = order(mine.pages.home.filter((section) => baseById.has(section.id)))
-    !== order(base.pages.home.filter((section) => mineById.has(section.id)));
-  const ids = !reordered
-    ? [...theirs.pages.home.map((section) => section.id), ...mine.pages.home.filter((section) => !baseById.has(section.id)).map((section) => section.id)]
-    : [...mine.pages.home.map((section) => section.id), ...theirs.pages.home.filter((section) => !baseById.has(section.id) && !mineById.has(section.id)).map((section) => section.id)];
-  const home = [...new Set(ids)].map(pick).filter((section): section is Section => section !== null);
-  return { ...merged, pages: { ...merged.pages, home: home.slice(0, STOREFRONT_MAX_SECTIONS) } };
-}
-
 // ─── What a saved change means for the preview ─────────────────────────────
 
 export type PreviewChange =
@@ -252,17 +212,20 @@ export type PreviewChange =
 /** Most sections a change swaps in place before a reload is simpler. */
 const SWAP_LIMIT = 4;
 
-export function previewChange(before: Theme, after: Theme): PreviewChange {
-  const { pages: beforePages, ...beforeRest } = before;
-  const { pages: afterPages, ...afterRest } = after;
-  if (JSON.stringify(beforeRest) !== JSON.stringify(afterRest)) return { kind: "reload" };
-  const { home: _beforeHome, ...beforeOther } = beforePages;
-  const { home: _afterHome, ...afterOther } = afterPages;
-  if (JSON.stringify(beforeOther) !== JSON.stringify(afterOther)) return { kind: "reload" };
-  const shape = (pages: Theme["pages"]) => pages.home.map((section) => `${section.id}:${section.type}:${section.version}:${section.hidden ?? false}`).join(",");
-  if (shape(beforePages) !== shape(afterPages)) return { kind: "reload" };
-  const ids = afterPages.home
-    .filter((section, index) => JSON.stringify(section.settings) !== JSON.stringify(beforePages.home[index]!.settings))
+/**
+ * What the preview of `page` does after a save: swap the page's sections
+ * whose settings alone changed, or load the page again for anything else.
+ */
+export function previewChange(before: Theme, after: Theme, page: EditorPage = { kind: "home" }): PreviewChange {
+  const beforeSections = pageSections(before, page);
+  const afterSections = pageSections(after, page);
+  if (JSON.stringify(before) === JSON.stringify(after)) return { kind: "none" };
+  if (!beforeSections || !afterSections) return { kind: "reload" };
+  if (JSON.stringify(withPageSections(before, page, [])) !== JSON.stringify(withPageSections(after, page, []))) return { kind: "reload" };
+  const shape = (sections: readonly Section[]) => sections.map((section) => `${section.id}:${section.type}:${section.version}:${section.hidden ?? false}`).join(",");
+  if (shape(beforeSections) !== shape(afterSections)) return { kind: "reload" };
+  const ids = afterSections
+    .filter((section, index) => JSON.stringify(section.settings) !== JSON.stringify(beforeSections[index]!.settings))
     .map((section) => section.id);
   if (ids.length === 0) return { kind: "none" };
   return ids.length > SWAP_LIMIT ? { kind: "reload" } : { kind: "sections", ids };
