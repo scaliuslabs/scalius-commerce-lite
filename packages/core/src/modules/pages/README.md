@@ -4,33 +4,27 @@ Static CMS pages and chronological articles (one `pages` table), their publish a
 
 ## Entries and layer
 
-| Entry | Exports |
-|-------|---------|
-| `index.ts` | Everything in `browser.ts`, plus `pages.service.ts`, `pages.revision.ts` and `store-policies.ts` |
-| `browser.ts` | `pages.validation.ts`: page schemas, `contentEntryPath`, `isValidContentEntryPath`, `PAGE_BATCH_LIMIT` (90) |
-
-Layer L3. The domain imports `custom-fields`, `media-references` and `settings`. `navigation` and `storefront` import `pages`.
+- `browser.ts` exports `pages.validation.ts` (page schemas, `contentEntryPath`, `isValidContentEntryPath`, `PAGE_BATCH_LIMIT` 90). `index.ts` exports everything in `browser.ts`, plus `pages.service.ts`, `pages.revision.ts` and `store-policies.ts`.
+- Layer L3. The domain imports `custom-fields`, `media-references` and `settings`. `navigation` and `storefront` import `pages`.
 
 ## Owns
 
 | Table | Key columns and constraints |
 |-------|-----------------------------|
-| `pages` | `id` (prefix `page_` or `article_`), `content_type` (`page`, `article`; never changes), `slug` (unique across live and trashed rows), `title`, `content` (sanitized HTML), `excerpt`, `author`, `tags` (articles only; a CHECK keeps them empty on a page), SEO fields (`meta_title`, `meta_description`, `canonical_path`, `no_index`, `exclude_from_sitemap`), `is_published`, `published_at`, `hide_header`, `hide_footer`, `hide_title`, `featured_image`, `revision`, `deleted_at` |
+| `pages` | `id` (prefix `page_` or `article_`), `content_type` (`page`, `article`; never changes), `slug` (unique across live and trashed rows), `content` (sanitized HTML), `tags` (articles only; a CHECK keeps them empty on a page), SEO fields (`canonical_path`, `no_index`, `exclude_from_sitemap`), `is_published`, `published_at`, `hide_header`, `hide_footer`, `hide_title`, `revision`, `deleted_at` |
 
 `pages.sort_order` is internal: new rows write 0, and no write input or admin sort uses it. Admin search uses the `pages_fts` full-text index.
 
 The domain declares no settings document. The `policies` document (`refund`, `privacy`, `terms`, `shipping`, `contact`, each a page id or null) is declared in `settings/documents.ts`; `store-policies.ts` reads and writes it.
 
-DVC: the registry maps `pages` to `pg:<pageId>` and `lm:seo` (sitemap lastmod). Public readers declare `deps.page(id)`, or `deps.anyPage()` when a slug lookup finds nothing. A page scheduled for later declares `deps.validUntil` at its `published_at`, so the cache entry ends when the page goes live.
+DVC: public readers declare `deps.page(id)`, or `deps.anyPage()` when a slug lookup finds nothing. A page scheduled for later declares `deps.validUntil` at its `published_at`, so the cache entry ends when the page goes live.
 
 ## Routes
 
-| Surface | Path and file |
-|---------|---------------|
-| Admin | `/api/v1/admin/pages` in `apps/api/src/routes/admin/pages.ts`: `GET /` (filter by `contentType`, `status`, `trashed`; page and limit paging), `POST /`, `GET /{id}`, `PUT /{id}`, `DELETE /{id}`, `DELETE /{id}/permanent`, `POST /{id}/restore`, `POST /bulk-delete`, `/bulk-publish`, `/bulk-unpublish`, `/bulk-restore` |
-| Public pages | `/api/v1/pages` in `apps/api/src/routes/pages.ts`: `GET /`, `GET /slug/{slug}`, `GET /{id}` |
-| Public articles | `/api/v1/articles` in `apps/api/src/routes/articles.ts`: `GET /` (newest first, limit at most 24, optional `tag`), `GET /slug/{slug}` |
-| Store policies | `GET` and `PUT /api/v1/admin/settings/policies` in `apps/api/src/routes/admin/settings/policies.ts` |
+- Admin: `/api/v1/admin/pages` in `apps/api/src/routes/admin/pages.ts`: `GET /` (filter by `contentType`, `status`, `trashed`; page and limit paging), `POST /`, `GET /{id}`, `PUT /{id}`, `DELETE /{id}`, `DELETE /{id}/permanent`, `POST /{id}/restore`, `POST /bulk-delete`, `/bulk-publish`, `/bulk-unpublish`, `/bulk-restore`.
+- Public pages: `/api/v1/pages` in `apps/api/src/routes/pages.ts`: `GET /`, `GET /slug/{slug}`, `GET /{id}`.
+- Public articles: `/api/v1/articles` in `apps/api/src/routes/articles.ts`: `GET /` (newest first, limit at most 24, optional `tag`), `GET /slug/{slug}`.
+- Store policies: `GET` and `PUT /api/v1/admin/settings/policies` in `apps/api/src/routes/admin/settings/policies.ts`.
 
 Permissions are in `packages/core/src/auth/rbac/route-permissions/content.ts` (`pages.view`, `create`, `edit`, `delete`, `publish`). Policies need `settings.general.view` to read and `settings.seo.edit` to save. The storefront serves pages at `/{slug}` and articles at `/blog/{slug}`; it renders page data from `GET /api/v1/storefront/pages/slug/{slug}` (see `storefront`).
 
@@ -45,10 +39,5 @@ Permissions are in `packages/core/src/auth/rbac/route-permissions/content.ts` (`
 - **Content.** The service sanitizes HTML on write and again on public read. A write that names a file in deleting state is refused (`media-references` guard).
 - **Articles.** `excerpt`, `author` and `tags` (at most 20, unique ignoring case) exist only on articles. A static page that carries them is refused.
 - **Public shape.** Public reads omit `revision` and keep `updatedAt` for sitemap lastmod. Public page reads by id or slug also carry the storefront-visible `customFields`.
-- **Display flags** `hideHeader`, `hideFooter` and `hideTitle` are read by the storefront layout (`apps/storefront/src/pages/[slug].astro`, `apps/storefront/src/pages/blog/[slug].astro`).
-- **Shortcodes.** The storefront replaces `[product slug="..."]` in page content with a product card (`apps/storefront/src/lib/shortcodes.ts`).
+- **Display flags** `hideHeader`, `hideFooter` and `hideTitle` are read by the storefront layout (`apps/storefront/src/pages/[slug].astro` and `blog/[slug].astro`). The storefront replaces `[product slug="..."]` in page content with a product card (`apps/storefront/src/lib/shortcodes.ts`).
 - **Store policies.** `saveStorePolicies` links only the store's own pages (`content_type = 'page'`, not trashed, drafts allowed) and takes the document's `expectedRevision`. Buyers see a linked policy only while its page is public (`planPublicStorePolicies`, batched into the storefront layout read).
-
-## Where to look
-
-`pages.service.ts` (reads, create, update, lifecycle commands), `pages.revision.ts` (guards and typed conflicts), `pages.validation.ts` (schemas, canonical-path helpers), `store-policies.ts` (policy links and public policy resolution). Tests sit beside the code: `pages.service.test.ts`, `pages.revision.test.ts`, `pages.validation.test.ts`.

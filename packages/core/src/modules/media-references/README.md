@@ -6,7 +6,7 @@ The Files library itself (uploads, trash, renditions, usage index, permanent del
 
 ## Entries
 
-- `index.ts` is the only entry. There is no `browser.ts`.
+`index.ts` is the only entry. There is no `browser.ts`.
 
 | File | Exports | Purpose |
 |------|---------|---------|
@@ -24,7 +24,3 @@ The Files library itself (uploads, trash, renditions, usage index, permanent del
 - `hasDeletingMediaReference()` is the same check as a read, for early validation. The batch guard stays the authority.
 - A poster that is not a `ready` or `trashed` image projects as `posterUrl: null`. So does a poster whose URL would be a bare object key (no media base URL). The dashboard then shows its neutral video placeholder.
 - The usage index and permanent delete stay in `media`, because they must read every referrer.
-
-## Where to look
-
-- Tests: `presentation.test.ts`.

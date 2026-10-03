@@ -6,19 +6,14 @@ The dashboard reads the CSV in the browser and sends bounded batches. This domai
 
 ## Entries
 
-- `index.ts` is the only entry. There is no `browser.ts`.
-- CSV parsing, format detection and row mapping are not here. They run in the dashboard (`packages/shared/src/store-transfer/`: `csv.ts`, `detect.ts`, `shopify-products.ts`, `woocommerce-products.ts`, `customers.ts`, `inventory.ts`).
+`index.ts` is the only entry. There is no `browser.ts`. CSV parsing, format detection and row mapping are not here: they run in the dashboard (`packages/shared/src/store-transfer/`).
 
-| File | Owns |
-|------|------|
-| `product-import.ts` | `importProducts`: match, create, update, reprice. |
-| `product-images.ts` | `importProductImages`: attach remote images to imported products. |
-| `customer-import.ts` | `importCustomers`. |
-| `inventory-import.ts` | `importInventory`: on-hand counts as ledger-v2 stocktakes. |
-| `references.ts` | `ImportReferenceResolver`: find or create brands, categories and specification attributes by name. |
-| `pricing.ts` | Compare-at price to and from stored discounts. |
-| `budget.ts` | `ImportBudget` (20 s per request) and `isWorkerLimitError`. |
-| `product-export.ts`, `inventory-export.ts` | CSV pages for products and inventory. |
+Main files:
+
+- `product-import.ts` (`importProducts`: match, create, update, reprice), `product-images.ts`, `customer-import.ts`, and `inventory-import.ts` (on-hand counts as ledger-v2 stocktakes).
+- `references.ts`: `ImportReferenceResolver` finds or creates brands, categories and specification attributes by name.
+- `pricing.ts` converts compare-at prices to and from stored discounts. `budget.ts` holds `ImportBudget` (20 s per request).
+- `product-export.ts`, `inventory-export.ts`: CSV pages.
 
 ## Layer and imports
 
@@ -27,10 +22,9 @@ The dashboard reads the CSV in the browser and sends bounded batches. This domai
 
 ## Flow
 
-1. The dashboard streams the file through the CSV parser, detects the format, maps rows to normalized items, and validates each with the zod schemas the API uses.
+1. The dashboard parses the file, detects the format, maps rows to normalized items and validates each with the API's zod schemas.
 2. A dry run per batch (`dryRun: true`) reports each item's action, the aggregate revision (or on-hand count) it saw, and the brands, categories and specifications the write would create.
-3. The write sends the items back with that revision as `expected`. A product that changed since the preview is refused (`changed_since_preview`).
-4. Images attach afterwards.
+3. The write sends the items back with that revision as `expected`. A product that changed since the preview is refused (`changed_since_preview`). Images attach afterwards.
 
 A batch may stop early when its time budget runs out or D1's per-invocation query limit is hit (1,000 on Workers Paid, 50 on Free). It returns `processed`. The caller sends the rest again and halves its batch size.
 
@@ -38,9 +32,9 @@ A batch may stop early when its time budget runs out or D1's per-invocation quer
 
 ### Products
 
-- Writes go through `createProduct`, `updateProduct`, `updateVariant` and `saveProductOptionMatrix`. So SKU identity, the option matrix (up to five axes, 150 combinations), ledger-v2 stock at the default location, gift-card rules, catalogue projections and DVC hold for imports.
+- Writes go through `createProduct`, `updateProduct`, `updateVariant` and `saveProductOptionMatrix`, so SKU identity, the option matrix (up to five axes, 150 combinations), ledger-v2 stock at the default location, gift-card rules, catalogue projections and DVC hold for imports.
 - Matching order: the source handle (Shopify), then SKUs, then, for WooCommerce (no handle in the file), the derived handle or its `-2` twins with the same name.
-- Mode `create` skips matched products. Mode `upsert` updates only what the file states. It never removes options, SKUs, media, attributes or descriptions. It leaves stock of existing SKUs alone. It turns tracking on but never off. Mode `price` changes only prices of SKUs found by SKU.
+- Mode `create` skips matched products. Mode `upsert` updates only what the file states. It never removes options, SKUs, media, attributes or descriptions, leaves stock of existing SKUs alone, and turns tracking on but never off. Mode `price` changes only prices of SKUs found by SKU.
 - An item that changes nothing writes nothing.
 - An option set that differs from the stored one fails with `option_shape_changed`. Change options in the product editor.
 - A compare-at price above the price becomes a flat discount. A stored percentage discount that already gives the file's prices is kept.
@@ -81,11 +75,6 @@ Mounted at `/api/v1/admin/import` and `/api/v1/admin/export` by `apps/api/src/ro
 | `POST /import/product-images` | 20 products, 250 images per product | `products.edit` and `media.upload` |
 | `POST /import/customers` | 100 items | `customers.create` or `customers.edit` (`upsert` needs both) |
 | `POST /import/inventory` | 100 items | `products.edit` |
-| `GET /export/products` | page | `products.view` |
-| `GET /export/inventory` | page | `products.view` |
+| `GET /export/products`, `GET /export/inventory` | page | `products.view` |
 
-## Where to look
-
-- Dashboard: `apps/admin-v2/src/components/admin/store-transfer/` (`import-runner.ts` drives the batches).
-- Tests: `store-transfer.d1.test.ts`, `digital-stock-import.d1.test.ts`, `apps/api/src/routes/admin/store-transfer.test.ts`.
-- The demo-store seed bundle (`pnpm demo:store --export`) is a separate tool that reads a local SQLite file. It shares no code with this domain. See [`scripts/demo-store/README.md`](../../../../../scripts/demo-store/README.md).
+The demo-store seed bundle (`pnpm demo:store --export`) is a separate tool that shares no code with this domain (see [`scripts/demo-store/README.md`](../../../../../scripts/demo-store/README.md)).

@@ -12,26 +12,21 @@ Layer L5. The domain imports `catalog`, `categories` and `pages`. `storefront` i
 
 | Table | Key columns and constraints |
 |-------|-----------------------------|
-| `navigation_menus` | `id` (prefix `menu_`), `name`, `handle` (unique among live menus, lowercase), `revision` (draft edits), `published_revision`, `dependency_revision`, `deleted_at` |
-| `navigation_menu_items` | The draft: `menu_id`, `parent_id`, `position`, `label`, `label_mode` (`custom`, `resource`), `target_type`, `target_id`, `target_value`, `target_query`, `open_in_new_tab`, `is_enabled`. The target columns follow a CHECK per target type |
-| `navigation_menu_publications` | One row per published revision: `item_count`, `checksum`, `published_by`. Immutable |
-| `navigation_menu_publication_items` | The item snapshot of each publication |
+| `navigation_menus` | `id` (prefix `menu_`), `handle` (unique among live menus, lowercase), `revision` (draft edits), `published_revision`, `dependency_revision`, `deleted_at` |
+| `navigation_menu_items` | The draft: `parent_id`, `position`, `label_mode` (`custom`, `resource`), `target_type`, `target_id`, `target_value`, `target_query`, `open_in_new_tab`, `is_enabled`. The target columns follow a CHECK per target type |
+| `navigation_menu_publications`, `navigation_menu_publication_items` | One immutable row per published revision (`item_count`, `checksum`, `published_by`) and its item snapshot |
 | `navigation_placements` | `surface`, `slot`, `position`, `menu_id` (`restrict`), `label_override`, `is_enabled`, `revision`. One enabled menu per location |
 
 Target types: `label`, `system` (`home`, `catalog`, `search`, `account`, `cart`, `checkout`, `order_lookup`), `page`, `category`, `collection`, `product`, `internal_path`, `external_url` (credential-free HTTPS). A menu holds at most 10,000 items in at most 3 levels. Positions are sparse (gap 1,024).
 
-Placement locations are fixed in `NAVIGATION_PLACEMENT_REGISTRY`: `header.primary` (one position) and `footer.column` (positions 0 to 3). Each placement renders at most 150 items.
+Placement locations are fixed in `NAVIGATION_PLACEMENT_REGISTRY`: `header.primary` (one position) and `footer.column` (positions 0 to 3). Each placement renders at most 150 items. The domain declares no settings document.
 
-The domain declares no settings document.
-
-DVC: the registry maps `navigation_menus`, `navigation_menu_publications`, `navigation_menu_publication_items` and `navigation_placements` to `nav:<menuId>` and `nav:*`. The draft `navigation_menu_items` table is exempt, and `revision` is noise: a draft edit invalidates nothing, because public reads show the published revision. Triggers on `pages`, `categories`, `collections` and `products` (migration 0036) advance `navigation_menus.dependency_revision` when a linked resource changes its title, route or readiness. The resolver declares `deps.pages`, `deps.categories`, `deps.collections` and `deps.products` for every target id it reads.
+DVC (`nav:<menuId>`): a draft edit invalidates nothing, because public reads show the published revision. Triggers on `pages`, `categories`, `collections` and `products` advance `navigation_menus.dependency_revision` when a linked resource changes its title, route or readiness. The resolver declares `deps.pages`, `deps.categories`, `deps.collections` and `deps.products` for every target id it reads.
 
 ## Routes
 
-| Surface | Path and file |
-|---------|---------------|
-| Admin | `/api/v1/admin/navigation` in `apps/api/src/routes/admin/navigation.ts`: `GET`/`POST /menus`, `GET`/`PATCH`/`DELETE /menus/{menuId}`, `POST .../restore`, `.../publish`, `.../rollback`, `GET .../publications`, `GET`/`POST .../items`, `GET .../search`, `GET`/`PATCH`/`DELETE .../items/{itemId}`, `GET .../items/{itemId}/move-options`, `POST .../items/{itemId}/move`, `GET /placements`, `GET /placement-settings`, `PUT /placements/{placementId}`, `GET /resources`, `GET /preview-products`, `GET /items` (legacy picker) |
-| Public | `/api/v1/navigation` in `apps/api/src/routes/navigation.ts`: `GET /` (header and footer placements), `GET /categories`, `GET /placements`, `GET /menus/{menuId}` and `/menus/{menuId}/items` (take the current `revision` and `dependencyRevision`), `GET /{id}` |
+- Admin: `/api/v1/admin/navigation` in `apps/api/src/routes/admin/navigation.ts`: `GET`/`POST /menus`, `GET`/`PATCH`/`DELETE /menus/{menuId}`, `POST .../restore`, `.../publish`, `.../rollback`, `GET .../publications`, `GET`/`POST .../items`, `GET .../search`, `GET`/`PATCH`/`DELETE .../items/{itemId}`, `GET .../items/{itemId}/move-options`, `POST .../items/{itemId}/move`, `GET /placements`, `GET /placement-settings`, `PUT /placements/{placementId}`, `GET /resources`, `GET /preview-products`, `GET /items` (legacy picker).
+- Public: `/api/v1/navigation` in `apps/api/src/routes/navigation.ts`: `GET /` (header and footer placements), `GET /categories`, `GET /placements`, `GET /menus/{menuId}` and `/menus/{menuId}/items` (take the current `revision` and `dependencyRevision`), `GET /{id}`.
 
 Permissions are in `packages/core/src/auth/rbac/route-permissions/content.ts`: every admin navigation route needs `settings.header.edit`, except `/preview-products`, which needs `products.view`.
 
@@ -48,7 +43,3 @@ Menu lists, item lists, publication lists and resource search page by keyset cur
 - **Label.** In `resource` label mode the live resource title wins over the stored label.
 - **Category tree.** `navigation.categories.ts` reads the reachable tree in one statement: published categories whose ancestors are all published and whose published subtree holds a public product, top levels first. The read returns at most 1,000 nodes (`CATEGORY_NAVIGATION_NODE_LIMIT`); the layout carries a round-robin cut of 150 (`CATEGORY_NAVIGATION_LAYOUT_NODES`). The theme's `blocks.navigation.source` chooses the header menu, the tree or both.
 - **Preview count.** `getNavigationPreviewProductCount` counts a category link's products through `catalog`'s listing, so the count matches the storefront. It returns `countIsCapped` when the plan's count cap applies.
-
-## Where to look
-
-`navigation.authority.ts` (placement registry, item normalization, hierarchy, checksum, errors), `navigation.authority.service.ts` (menus, items, publish, rollback, placements, published reads), `navigation.resolver.ts` (resource snapshots, item resolution), `navigation.resources.service.ts` (admin resource search), `navigation.categories.ts` (category tree), `navigation.service.ts` (legacy picker, preview count, `buildDefaultNavigation`). Tests sit beside the code: `navigation.authority.service.test.ts`, `navigation.resolver.test.ts`, `navigation.categories.test.ts`.

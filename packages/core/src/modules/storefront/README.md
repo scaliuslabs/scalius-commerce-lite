@@ -6,13 +6,10 @@ The orchestrator for the public storefront reads: the homepage, landing pages, t
 
 `index.ts` is the only entry. There is no `browser.ts`. It exports:
 
-| Source | Exports |
-|--------|---------|
-| `storefront.service.ts` | `getHomepageData`, `getLandingPageData`, `getPageRenderData`, `getLayoutData`, types `HomepageProductList`, `HomepageCategory`, `HomepageAppSection` |
-| `store-shape.ts` | `selectStoreShapeCounts`, `storeShapeFromCounts`, `readStoreShape` |
-| `product-apps.ts` | `readProductAppContext`, `ProductAppContext` |
-| `app-render.ts` | `planPluginRenderStoreFacts`, `readPluginRenderContext`, `PluginRenderStoreFacts` |
-| `homepage-sections.ts` | `readThemeBrandAssets`, `readThemeMedia`, `HomeMediaAsset` |
+- `storefront.service.ts`: `getHomepageData`, `getLandingPageData`, `getPageRenderData`, `getLayoutData` and their result types.
+- `store-shape.ts`: `selectStoreShapeCounts`, `storeShapeFromCounts`, `readStoreShape`.
+- `product-apps.ts` and `app-render.ts`: `readProductAppContext`, `planPluginRenderStoreFacts`, `readPluginRenderContext`.
+- `homepage-sections.ts`: `readThemeBrandAssets`, `readThemeMedia`, `HomeMediaAsset`.
 
 Layer L9. The domain imports `analytics`, `catalog`, `categories`, `collections`, `navigation`, `pages`, `platform`, `plugins` and `settings`. Nothing in core imports `storefront`; only API routes call it (`apps/api/src/routes/storefront.ts`, `routes/admin/settings/site.ts`, `plugins/storefront-render.ts`).
 
@@ -20,16 +17,16 @@ Layer L9. The domain imports `analytics`, `catalog`, `categories`, `collections`
 
 The domain owns no table and declares no settings document. It reads the published theme (`theme_settings`, row `default`), `analytics`, `checkout_languages`, `promotions`, `media`, `categories`, `collections` and `product_buyer_state`, and the settings documents `currency`, `media`, `metaConversions`, `seo`, `business`, `security`, `policies` and `platform`.
 
-DVC: readers declare their dependencies where they load data. The homepage declares `deps.theme()` and `deps.anyCollection()` (a landing page declares its own collections). The layout declares `deps.analytics()`, `deps.theme()` and `deps.checkoutLanguages()`. The store shape declares `lm:shape`, `lm:all`, the any-row keys of categories, brands, attributes and collections, shipping, the `emi` document and `t:product_content_blocks`. Catalogue and navigation reads add their own keys. Keys and triggers: `packages/shared/src/cache-deps.ts`.
+DVC: readers declare their dependencies where they load data. The homepage declares `deps.theme()` and `deps.anyCollection()`, the layout `deps.analytics()`, `deps.theme()` and `deps.checkoutLanguages()`. The store shape declares the any-row keys of categories, brands, attributes and collections, shipping, the `emi` document and `t:product_content_blocks`. Catalogue and navigation reads add their own keys.
 
 ## Routes
 
 All routes are in `apps/api/src/routes/storefront.ts` under `/api/v1/storefront`.
 
-| Method and path | Function |
-|-----------------|----------|
+| Method and path | Note |
+|-----------------|------|
 | `GET /homepage` | `getHomepageData`. Takes no query string |
-| `GET /landing/{slug}` | `getLandingPageData`: a theme landing page's sections |
+| `GET /landing/{slug}` | A theme landing page's sections |
 | `GET /product-apps/{slug}` | `readProductAppContext`, then the apps draw the blocks |
 | `GET /pages/slug/{slug}` | `getPageRenderData` |
 | `GET /layout` | `getLayoutData`, plus the public Platform origins |
@@ -53,7 +50,3 @@ How a page renders from one batch, the per-page API and D1 budgets and `pnpm per
 - **Meta CAPI.** `metaCapi.browserEventsEnabled` is true only for an enabled pixel with a readable access token. The token is decrypted (with `credentialEncryptionKey`) only when the stored document turns the pixel on.
 - **Apps.** App sections draw beside batch 2. A failed draw returns no section and sets `deps.validUntil` 60 seconds ahead, so the page retries.
 - **Store shape.** `selectStoreShapeCounts` is one statement that joins the layout batch. Counts read at most 1,000 rows and existence checks stop at the first match. Category facts count only what a buyer can reach: a published category with all ancestors published and a public product (`product_buyer_state.is_public`).
-
-## Where to look
-
-`storefront.service.ts` (homepage, landing, CMS page, layout), `homepage-sections.ts` (section images, deal countdowns, theme brand images), `store-shape.ts` (theme fit counts), `product-apps.ts` and `app-render.ts` (app blocks and the store facts apps receive). Tests sit beside the code: `storefront.service.test.ts`, `homepage-sections.d1.test.ts`, `store-shape.test.ts`.

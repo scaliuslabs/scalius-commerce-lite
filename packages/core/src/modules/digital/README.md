@@ -8,17 +8,13 @@ Digital goods: downloadable files in private R2, licence-key pools that are the 
 - `browser.ts` is the closed entry: `DIGITAL_ASSET_KINDS`, `DIGITAL_UPLOAD_STATUSES`, `LICENCE_KEY_STATUSES`, `DIGITAL_LIMITS` and the `LineDigitalExtra` types.
 - Pure rules (limits, part geometry, download filenames, key import parsing) live in `@scalius/shared/digital`.
 
-| File | Owns |
-|------|------|
-| `assets.ts` | Files and key pools of a product. Multipart uploads into `private/digital/<asset>/<upload>`. Replace a file, archive, delete. |
-| `uploads.ts` | `sweepDigitalUploads`: aborts uploads older than 24 hours and deletes a replaced file's object one day after the switch. |
-| `licence-keys.ts` | Import (at most 500 per request, deduped by HMAC per pool) and revoke of unused keys. Each change commits with a ledger-v2 stock edge. |
-| `fulfiller.ts` | `planDigitalDelivery`: file entitlements and FIFO key assignment for the auto-fulfil batch. |
-| `downloads.ts` | Buyer list, counted ticket mint, ticket open, key reveal. |
-| `entitlements.ts` | Staff reset and revoke, the resend guard, the send-time delivery content. |
-| `extras.ts` | Per-line `downloads` and `licenceKeys`, and the account Downloads count. |
-| `deliverable.ts` | `digitalDeliverableSql`: the cart-validation readiness column. |
-| `secrets.ts` | Licence-key hash and ciphertext keys, and the ticket HMAC. |
+Main files:
+
+- `assets.ts`, `uploads.ts`: files and key pools, multipart uploads into `private/digital/<asset>/<upload>`. `sweepDigitalUploads` aborts uploads older than 24 hours and deletes a replaced file's object one day after the switch.
+- `licence-keys.ts`: import (at most 500 keys per request, deduped by HMAC per pool) and revoke of unused keys. Each change commits with a ledger-v2 stock edge.
+- `fulfiller.ts`: `planDigitalDelivery` (file entitlements and FIFO key assignment for the auto-fulfil batch).
+- `downloads.ts`, `entitlements.ts`: buyer list, counted ticket mint, key reveal; staff reset and revoke.
+- `deliverable.ts`: `digitalDeliverableSql`, the cart-validation readiness column.
 
 ## Layer and imports
 
@@ -59,14 +55,9 @@ Admin permissions are in `packages/core/src/auth/rbac/route-permissions/digital.
 |-----------------|------------|
 | `GET, POST /api/v1/admin/products/{id}/digital-assets` | `products.view`, `products.edit` |
 | `PATCH, DELETE /api/v1/admin/digital-assets/{id}` | `products.edit` |
-| `POST /api/v1/admin/digital-assets/{id}/uploads` | `products.edit` |
-| `GET /api/v1/admin/digital-assets/{id}/uploads/{uploadId}` | `products.edit` |
-| `PUT /api/v1/admin/digital-assets/{id}/uploads/{uploadId}/parts/{n}` | `products.edit` |
-| `POST /api/v1/admin/digital-assets/{id}/uploads/{uploadId}/complete` | `products.edit` |
-| `GET, POST /api/v1/admin/digital-assets/{id}/licence-keys` | `products.edit` |
-| `POST /api/v1/admin/digital-assets/{id}/licence-keys/revoke` | `products.edit` |
-| `POST /api/v1/admin/digital-entitlements/{id}/reset` and `/revoke` | `orders.edit` |
-| `POST /api/v1/admin/orders/{id}/digital/resend` | `orders.edit` |
+| `POST /api/v1/admin/digital-assets/{id}/uploads`, `GET .../uploads/{uploadId}`, `PUT .../uploads/{uploadId}/parts/{n}`, `POST .../uploads/{uploadId}/complete` | `products.edit` |
+| `GET, POST /api/v1/admin/digital-assets/{id}/licence-keys`, `POST .../licence-keys/revoke` | `products.edit` |
+| `POST /api/v1/admin/digital-entitlements/{id}/reset` and `/revoke`, `POST /api/v1/admin/orders/{id}/digital/resend` | `orders.edit` |
 
 Buyer routes:
 
@@ -74,7 +65,4 @@ Buyer routes:
 - Guest receipt: `GET /api/v1/orders/receipt/{id}/downloads`, `POST /api/v1/orders/receipt/{id}/downloads/{entitlementId}/ticket`, `POST /api/v1/orders/receipt/{id}/licence-keys/{keyId}/reveal`.
 - `GET /api/v1/orders/downloads/{entitlementId}/{exp}/{sig}` streams the file. The proof is `X-Receipt-Token` or the customer session. The storefront proxies it from `apps/storefront/src/pages/api/downloads/`.
 
-## Where to look
-
-- Dashboard: `apps/admin-v2/src/components/admin/product-form/DigitalDeliveryCard.tsx` and `DigitalKeyDialogs.tsx`.
-- Tests: `digital.d1.test.ts`.
+Dashboard code: `apps/admin-v2/src/components/admin/product-form/DigitalDeliveryCard.tsx` and `DigitalKeyDialogs.tsx`.

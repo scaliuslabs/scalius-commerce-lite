@@ -4,31 +4,27 @@ Category records, their publication rules, revision-guarded admin writes and the
 
 ## Entries and layer
 
-| Entry | Exports |
-|-------|---------|
-| `index.ts` | Everything in `browser.ts`, plus `categories.service.ts`, `categories.storefront.ts`, `categories.publication.ts`, `categories.revision.ts` and `categories.tree.ts` |
-| `browser.ts` | `categories.validation.ts`: create, update, status, move and revision-claim schemas, `CATEGORY_BATCH_LIMIT` (90) |
-
-Layer L3. The domain imports `custom-fields`, `media-references` and `products`. `catalog`, `navigation`, `storefront` and `store-transfer` import `categories`.
+- `browser.ts` exports `categories.validation.ts` (create, update, status, move and revision-claim schemas, `CATEGORY_BATCH_LIMIT` 90). `index.ts` exports everything in `browser.ts`, plus `categories.service.ts`, `categories.storefront.ts`, `categories.publication.ts`, `categories.revision.ts` and `categories.tree.ts`.
+- Layer L3. The domain imports `custom-fields`, `media-references` and `products`. `catalog`, `navigation`, `storefront` and `store-transfer` import `categories`.
 
 ## Owns
 
 | Table | Key columns and constraints |
 |-------|-----------------------------|
-| `categories` | `id` (prefix `cat_`), `slug` (unique across live and trashed rows), `status` (`draft`, `published`, `internal`), `revision` (at least 1), `parent_id` (`ON DELETE RESTRICT`), `depth` (0 to 3), `path`, `listing_template`, SEO fields (`meta_title`, `meta_description`, `canonical_path`, `no_index`, `exclude_from_sitemap`), `image_url`, `description`, `content`, `deleted_at` |
+| `categories` | `id` (prefix `cat_`), `slug` (unique across live and trashed rows), `status` (`draft`, `published`, `internal`), `revision` (at least 1), `parent_id` (`ON DELETE RESTRICT`), `depth` (0 to 3), `path`, `listing_template`, SEO fields (`canonical_path`, `no_index`, `exclude_from_sitemap`), `deleted_at` |
 | `category_closure` | Every `(ancestor_id, descendant_id)` pair with `depth`, each category included with itself at depth 0 |
 
 Admin list search uses the `categories_fts` full-text index. The domain declares no settings document.
 
-DVC: the registry maps `categories` to `c:<categoryId>`, `srch` (name or description change) and `lm:seo` (sitemap lastmod). `category_closure` advances `c:` keys and `lm:cat:<ancestorId>`, so a move advances the listings of the old and new ancestors. Public readers declare `deps.anyCategory()`; the sitemap read also declares `deps.discoveryMembership()`.
+DVC: `category_closure` advances `c:` keys and `lm:cat:<ancestorId>`, so a move advances the listings of the old and new ancestors. Public readers declare `deps.anyCategory()`; the sitemap read also declares `deps.discoveryMembership()`.
 
 ## Routes
 
 Admin routes are in `apps/api/src/routes/admin/categories.ts` under `/api/v1/admin/categories`. Permissions are in `packages/core/src/auth/rbac/route-permissions/catalog.ts` (`categories.view`, `create`, `edit`, `delete`, `restore`, `permanent_delete`). The admin lists use page and limit paging, not cursors.
 
-| Method and path | Purpose |
-|-----------------|---------|
-| `GET /`, `GET /summaries` | List (limit at most 500) and bounded agent summaries (at most 50) |
+| Method and path | Note |
+|-----------------|------|
+| `GET /`, `GET /summaries` | List (limit at most 500); bounded agent summaries (at most 50) |
 | `GET /form-options`, `GET /children` | Picker data; one tree level under `parentId` |
 | `GET /{id}`, `/{id}/sections/{section}`, `/{id}/publish-readiness`, `/{id}/ancestors` | One category, bounded text sections, readiness, breadcrumb |
 | `POST /`, `PUT /{id}`, `PATCH /{id}/status`, `PATCH /{id}/parent` | Create, edit, status, move |
@@ -57,7 +53,3 @@ Write only `parent_id`. Triggers keep `depth`, `path` (`/root/child/`) and `cate
 - `moveCategory` moves a whole subtree under the revision. A move to the current parent changes nothing and keeps the revision.
 - Trash rules: a category with live children cannot be trashed unless they go in the same selection. A category whose parent is in trash cannot be restored unless the parent is restored with it. A permanent delete must include every child and deletes deepest first. A trashed category keeps its place.
 - Public reads are bounded. `getPublicCategoryTree` returns at most 150 published nodes whose ancestors are all published (`CATEGORY_TREE_LINK_LIMIT`). `getPublicCategoryChildren` returns at most 100. `getPublicCategoryBreadcrumb` returns at most 4 rows from one closure read. `publicCategorySubtreeCondition` selects a category and its published descendants for listings.
-
-## Where to look
-
-`categories.service.ts` (admin reads and writes, bulk trash and delete), `categories.tree.ts` (placement pre-check, move, trash rules, tree reads), `categories.storefront.ts` (public reads; the page read carries its children and breadcrumb in one batch), `categories.publication.ts` (`publicCategoryConditions`, readiness), `categories.revision.ts` (guards and typed conflicts). Tests sit beside the code: `categories.lifecycle.test.ts`, `categories.tree.d1.test.ts`, `categories.bulk-trash-d1.test.ts`.

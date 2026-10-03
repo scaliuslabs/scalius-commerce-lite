@@ -4,12 +4,8 @@ Typed product attributes: definitions, spec groups, the value vocabulary, value-
 
 ## Entries and layer
 
-| Entry | Exports |
-|-------|---------|
-| `index.ts` | Everything in `browser.ts`, plus the attribute service, vocabulary, groups, type conversion, category sets, `prepareProductAttributeValueRows` and the projection-refresh helpers |
-| `browser.ts` | `attributes.validation.ts` (Zod schemas, `RESERVED_ATTRIBUTE_SLUGS`) and `attribute-value-codec.ts` (pure value encoding) |
-
-Layer L0: the domain imports no other domain. `product-admin` and `store-transfer` import it.
+- `browser.ts` exports `attributes.validation.ts` (Zod schemas, `RESERVED_ATTRIBUTE_SLUGS`) and `attribute-value-codec.ts` (pure value encoding). `index.ts` exports everything in `browser.ts`, plus the attribute service, vocabulary, groups, type conversion, category sets, `prepareProductAttributeValueRows` and the projection-refresh helpers.
+- Layer L0: the domain imports no other domain. `product-admin` and `store-transfer` import it.
 
 ## Owns
 
@@ -22,14 +18,14 @@ Layer L0: the domain imports no other domain. `product-admin` and `store-transfe
 
 The domain also writes `product_attribute_values` (enum rows carry `value_id`, number and yes/no rows carry `value_number`, `value` stays the display text) and deletes an attribute's `product_facet_values` rows. The `products` domain owns both tables.
 
-The domain declares no settings document and no `deps.*` reads. Triggers advance the DVC keys of its tables: `attr:<id>` and `attr:*` for definitions, values and groups, `c:<categoryId>` for a category set and `p:<productId>` for product values (`packages/shared/src/cache-deps.ts`).
+The domain declares no settings document and no `deps.*` reads. Triggers on its tables advance the DVC keys (`attr:`, `c:<categoryId>` for a category set, `p:<productId>` for product values).
 
 ## Routes
 
 Admin routes are in `apps/api/src/routes/admin/attributes.ts` and `attributes-typed.ts` under `/api/v1/admin/attributes`. Permissions are in `packages/core/src/auth/rbac/route-permissions/catalog.ts` and `attributes-typed.ts` (`attributes.view`, `create`, `edit`, `delete`). Lists use page and limit paging, not cursors.
 
-| Method and path | Purpose |
-|-----------------|---------|
+| Method and path | Note |
+|-----------------|------|
 | `GET /`, `GET /summaries`, `POST /` | List (with `valueCount`), bounded agent summaries, create |
 | `PUT /{id}`, `DELETE /{id}`, `POST /{id}/restore`, `DELETE /{id}/permanent` | Update, trash, restore, permanent delete |
 | `POST /bulk-delete`, `POST /bulk-restore` | At most 90 ids |
@@ -45,17 +41,10 @@ Public reads (`apps/api/src/routes/attributes.ts`: `/api/v1/attributes/category/
 
 - A write that changes `product_attribute_values` rows, or their facet key or label, takes a `CatalogProjectionRefresh`. The domain does not import `products`, so the API passes `catalogProjectionRefreshStatements`.
 - Such a write runs in batches of at most 90 products. A batch holds the row writes, the aggregate revision bump and the projection refresh, so it commits whole or not at all.
-- Every statement binds at most 90 parameters. Id and value lists go in as one `json_each` JSON parameter.
-- `valueType` changes only through `convertAttributeValueType`. It validates every value, switches the type, then rewrites rows in keyset chunks of 90 products. A repeated run continues with rows still in the wrong shape.
-- A conversion first drops the attribute's facet rows, because they carry old-type keys.
+- `valueType` changes only through `convertAttributeValueType`. It validates every value, switches the type, then rewrites rows in keyset chunks of 90 products. A repeated run continues with rows still in the wrong shape. A conversion first drops the attribute's facet rows, because they carry old-type keys.
 - A number row is in shape only when its display text equals the canonical number plus the unit. A unit change through conversion rewrites the display text.
 - Number and yes/no attributes have no vocabulary. An enum conversion creates at most 2,000 values. Any conversion refuses more than 50,000 distinct values.
 - Deleting an enum value that products use is refused, unless the request names another live value of the same attribute to merge into.
-- Trash and permanent delete are refused while any product value uses the attribute. A permanent delete removes the facet rows, the product values, the vocabulary and then the definition.
-- Trashing a group ungroups its attributes in the same batch.
+- Trash and permanent delete are refused while any product value uses the attribute. A permanent delete removes the facet rows, the product values, the vocabulary and then the definition. Trashing a group ungroups its attributes in the same batch.
 - Reserved slugs (`brand`, `category`, `search`, `q`, `page`, `limit`, `sort`, `ids`) are storefront query keys and cannot be attribute slugs.
 - A category's effective set is its own rows plus every ancestor's, read through `category_closure`. The order key is `(3 - depth) * 100000 + sort_order`. The lowest key per attribute wins; ties sort by name. The facet reader in `catalog` uses the same rule.
-
-## Where to look
-
-Services: `attributes.service.ts` (definitions, trash, string-keyed values), `attribute-values.ts` (vocabulary), `attribute-groups.ts`, `attribute-types.ts` (conversion), `category-attribute-sets.ts`, `product-attribute-values.ts` (called by `product-admin/write.ts`), `projection-refresh.ts` (`CatalogProjectionRefresh`, 90-product walker). Tests: `attributes.lifecycle.test.ts`, `attribute-types.d1.test.ts`, `attribute-vocabulary.d1.test.ts`.

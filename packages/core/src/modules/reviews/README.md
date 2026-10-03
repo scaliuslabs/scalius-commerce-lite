@@ -4,16 +4,14 @@ Verified-purchase product reviews: buyers review delivered order lines, staff mo
 
 ## Entries
 
-- `index.ts` is the server entry.
-- `browser.ts` is the closed entry: `REVIEW_STATUSES`, `REVIEW_MODERATION_REASONS`, `REVIEW_MODERATION_MODES`, `REVIEW_MODERATION_ACTIONS`, `REVIEW_CHECK_FLAG_VALUES`, `REVIEW_MODERATION_BATCH_MAX` and `LineReviewExtra`.
+`index.ts` is the server entry. `browser.ts` is the closed entry (`REVIEW_*` constants, `REVIEW_MODERATION_BATCH_MAX` and `LineReviewExtra`).
 
-| File | Owns |
-|------|------|
-| `shared.ts` | Ids, the fail-closed settings read, the buyer actor, `reviewableLineConditions`. |
-| `lines.ts` | `listLineReviewStates` (`extras.review`), reviewable-line counts and lists ("To review", one line per product). |
-| `buyer.ts` | `submitReview`, `editReview`, `withdrawReview`, `listBuyerReviews`, `getBuyerReview`, `readBuyerProductReviewState`. |
-| `staff.ts` | `listAdminReviews`, `getAdminReview`, `getAdminReviewSummary`, `moderateReviews`, `setReviewReply`, `openReviewThread`, review settings read and save. |
-| `requests.ts` | `sweepReviewRequests` and `reviewRequestSendCheck`. |
+Main files:
+
+- `shared.ts`: the fail-closed settings read, the buyer actor, `reviewableLineConditions`.
+- `lines.ts`: `listLineReviewStates` (`extras.review`), reviewable-line counts and lists, one line per product.
+- `buyer.ts`: submit, edit, withdraw, read. `staff.ts`: admin reads, `moderateReviews`, `setReviewReply`, `openReviewThread`, settings.
+- `requests.ts`: `sweepReviewRequests`, `reviewRequestSendCheck`.
 
 The public reads (the product page `reviews` field and `GET /api/v1/products/{id}/reviews`) live in `catalog/product-reviews.ts`. They read the same tables, so `catalog` never depends on this domain.
 
@@ -31,7 +29,7 @@ The public reads (the product page `reviews` field and `GET /api/v1/products/{id
 | `product_review_stats` | One row per reviewed product: counts per star, `rating_avg_centi`, `rating_rank_milli` (Bayesian rank), `last_published_at`. A trigger projection of published reviews. No code writes it (source policy). |
 | `order_review_requests` | One row per delivered order, recorded by a trigger on `orders.status`. `status` is `scheduled`, `queued` or `skipped`. |
 
-Triggers (migration 0095): `product_reviews_line_eligible` refuses a line that was not handed over on a delivered or completed order. `product_reviews_stats_*` maintain the stats row.
+The trigger `product_reviews_line_eligible` refuses a line that was not handed over on a delivered or completed order. The `product_reviews_stats_*` triggers maintain the stats row.
 
 ## Rules
 
@@ -65,9 +63,4 @@ Permissions are in `packages/core/src/auth/rbac/route-permissions/reviews.ts`.
 | `GET, POST /api/v1/customer-auth/reviews`, `GET /reviews/products/{productId}`, `PATCH /reviews/{id}` | customer session |
 | `GET, POST /api/v1/orders/receipt/{id}/reviews`, `PATCH /{reviewId}` | receipt proof |
 
-`GET /api/v1/admin/reviews` pages by keyset on `(created_at, id)`, 25 rows a page.
-
-## Where to look
-
-- Dashboard: `apps/admin-v2/src/components/admin/reviews/`.
-- Tests: `submit.d1.test.ts`, `moderation.d1.test.ts`, `requests.d1.test.ts`; `testing/fixture.ts` is the shared fixture.
+`GET /api/v1/admin/reviews` pages by keyset on `(created_at, id)`, 25 rows a page. Dashboard code: `apps/admin-v2/src/components/admin/reviews/`.
