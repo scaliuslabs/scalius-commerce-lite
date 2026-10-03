@@ -249,6 +249,10 @@ export const pluginManifestSchema = z.object({
     if (!publicRoutes.has(route)) context.addIssue({ code: "custom", path, message: `Public route ${route} is not declared.` });
   };
   const collections = new Set(Object.keys(manifest.storage));
+  // `ctx.storage.batch` is the atomic multi-record write.
+  if (collections.has("batch")) {
+    context.addIssue({ code: "custom", path: ["storage", "batch"], message: "\"batch\" is reserved: name the collection something else." });
+  }
   const surfaces = [
     ...manifest.storefront.sections.map((surface, index) => ({ surface, path: ["storefront", "sections", index] as (string | number)[] })),
     ...manifest.storefront.productBlocks.map((surface, index) => ({ surface, path: ["storefront", "productBlocks", index] as (string | number)[] })),

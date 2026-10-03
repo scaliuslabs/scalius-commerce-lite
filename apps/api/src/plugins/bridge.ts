@@ -14,7 +14,13 @@ import type {
   PluginApiResult,
   PluginStorageQuery,
 } from "@scalius/plugin-sdk";
-import { PluginError, type PluginCollectionDeclaration, type PluginStorageQueryResult } from "@scalius/core/modules/plugins";
+import {
+  PluginError,
+  type PluginCollectionDeclaration,
+  type PluginRecordVersion,
+  type PluginStorageOperation,
+  type PluginStorageQueryResult,
+} from "@scalius/core/modules/plugins";
 import { checkOutboundUrl, describeOutboundUrlIssue } from "@scalius/shared/outbound-url";
 import { isPluginHostAllowed } from "@scalius/shared/plugins/manifest";
 import { pluginWithinRateLimit } from "./authority";
@@ -58,6 +64,11 @@ export interface PluginHttpResult {
   body: string;
 }
 
+export interface PluginKvSetOptions {
+  ttlSeconds?: number;
+  expectedRevision?: number | null;
+}
+
 export interface PluginHttpInit {
   method?: string;
   headers?: Record<string, string>;
@@ -68,13 +79,15 @@ export interface PluginHttpInit {
 /** The RPC surface: plain data in, plain data out. */
 export interface PluginBridgeApi {
   apiCall(operationId: string, input?: unknown): Promise<PluginApiResult>;
-  storageGet(collection: string, id: string): Promise<Record<string, unknown> | null>;
-  storagePut(collection: string, id: string, record: unknown): Promise<void>;
-  storageDelete(collection: string, id: string): Promise<boolean>;
+  /** The record and its revision (what a conditional write names), or null. */
+  storageGet(collection: string, id: string): Promise<PluginRecordVersion | null>;
+  /** Puts and deletes across collections, all-or-nothing, each optionally at an expected revision. */
+  storageWrite(operations: PluginStorageOperation[]): Promise<Array<number | null>>;
   storageQuery(collection: string, query?: PluginStorageQuery): Promise<PluginStorageQueryResult>;
   storageCount(collection: string, where?: PluginStorageQuery["where"]): Promise<number>;
-  kvGet(key: string): Promise<unknown>;
-  kvSet(key: string, value: unknown, options?: { ttlSeconds?: number }): Promise<void>;
+  kvGet(key: string): Promise<{ value: unknown; revision: number } | null>;
+  /** With `expectedRevision` only while the live entry is still at it (null: absent). */
+  kvSet(key: string, value: unknown, options?: PluginKvSetOptions): Promise<{ revision: number }>;
   kvDelete(key: string): Promise<void>;
   kvList(prefix?: string): Promise<string[]>;
   httpFetch(url: string, init?: PluginHttpInit): Promise<PluginHttpResult>;
@@ -176,27 +189,19 @@ export class PluginBridgeHost implements PluginBridgeApi {
 
   // ── storage ────────────────────────────────────────────────────────────
 
-  async storageGet(collection: string, id: string): Promise<Record<string, unknown> | null> {
+  async storageGet(collection: string, id: string): Promise<PluginRecordVersion | null> {
     return this.guard("storageGet", async () => {
       this.collection(collection);
-      const { getPluginRecord } = await import("@scalius/core/modules/plugins");
-      return getPluginRecord(this.runtime.db(), this.pluginId, collection, id);
+      const { getPluginRecordVersion } = await import("@scalius/core/modules/plugins");
+      return getPluginRecordVersion(this.runtime.db(), this.pluginId, collection, id);
     });
   }
 
-  async storagePut(collection: string, id: string, record: unknown): Promise<void> {
-    return this.guard("storagePut", async () => {
-      const declaration = this.collection(collection);
-      const { putPluginRecord } = await import("@scalius/core/modules/plugins");
-      await putPluginRecord(this.runtime.db(), this.pluginId, collection, declaration, id, record);
-    });
-  }
-
-  async storageDelete(collection: string, id: string): Promise<boolean> {
-    return this.guard("storageDelete", async () => {
-      this.collection(collection);
-      const { deletePluginRecord } = await import("@scalius/core/modules/plugins");
-      return deletePluginRecord(this.runtime.db(), this.pluginId, collection, id);
+  async storageWrite(operations: PluginStorageOperation[]): Promise<Array<number | null>> {
+    return this.guard("storageWrite", async () => {
+      if (!Array.isArray(operations)) fail("storage.invalid_batch", "A write is a list of operations.");
+      const { writePluginRecords } = await import("@scalius/core/modules/plugins");
+      return writePluginRecords(this.runtime.db(), this.pluginId, (name) => this.collection(name), operations);
     });
   }
 
@@ -219,17 +224,21 @@ export class PluginBridgeHost implements PluginBridgeApi {
 
   // ── kv ─────────────────────────────────────────────────────────────────
 
-  async kvGet(key: string): Promise<unknown> {
+  async kvGet(key: string): Promise<{ value: unknown; revision: number } | null> {
     return this.guard("kvGet", async () => {
-      const { getPluginKv } = await import("@scalius/core/modules/plugins");
-      return getPluginKv(this.runtime.db(), this.pluginId, key);
+      const { getPluginKvVersion } = await import("@scalius/core/modules/plugins");
+      return getPluginKvVersion(this.runtime.db(), this.pluginId, key);
     });
   }
 
-  async kvSet(key: string, value: unknown, options: { ttlSeconds?: number } = {}): Promise<void> {
+  async kvSet(key: string, value: unknown, options: PluginKvSetOptions = {}): Promise<{ revision: number }> {
     return this.guard("kvSet", async () => {
-      const { setPluginKv } = await import("@scalius/core/modules/plugins");
-      await setPluginKv(this.runtime.db(), this.pluginId, key, value, isRecord(options) ? options : {});
+      const { compareAndSetPluginKv, setPluginKv } = await import("@scalius/core/modules/plugins");
+      const { ttlSeconds, expectedRevision }: PluginKvSetOptions = isRecord(options) ? options : {};
+      const ttl = ttlSeconds === undefined ? {} : { ttlSeconds };
+      return expectedRevision === undefined
+        ? setPluginKv(this.runtime.db(), this.pluginId, key, value, ttl)
+        : compareAndSetPluginKv(this.runtime.db(), this.pluginId, key, expectedRevision, value, ttl);
     });
   }
 

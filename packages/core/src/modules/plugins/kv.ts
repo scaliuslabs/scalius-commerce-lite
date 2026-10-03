@@ -1,9 +1,11 @@
 // A plugin's small key/value store (`ctx.kv`), in the relational database so
 // it is consistent with the plugin's other state on every provider. Expired
-// entries read as absent and are pruned a few at a time on writes.
+// entries read as absent and are pruned a few at a time on writes. Every
+// write advances the entry's revision; `compareAndSet` writes only while the
+// live entry is still at the revision read (null: absent).
 
 import type { Database } from "@scalius/database/client";
-import { safeBatch } from "@scalius/database/client";
+import { buildBatchGuard, isBatchGuardError, safeBatch } from "@scalius/database/client";
 import { pluginKv } from "@scalius/database/schema";
 import { and, asc, eq, gt, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import { PluginError } from "./errors";
@@ -23,12 +25,22 @@ export function requireKvKey(key: unknown): string {
 
 const live = () => or(isNull(pluginKv.expiresAt), gt(pluginKv.expiresAt, sql`unixepoch()`));
 
-export async function getPluginKv(db: Database, pluginId: string, key: string): Promise<unknown> {
-  const row = await db.select({ valueJson: pluginKv.valueJson }).from(pluginKv)
+export async function getPluginKvVersion(
+  db: Database,
+  pluginId: string,
+  key: string,
+): Promise<{ value: unknown; revision: number } | null> {
+  const row = await db.select({ valueJson: pluginKv.valueJson, revision: pluginKv.revision }).from(pluginKv)
     .where(and(eq(pluginKv.pluginId, pluginId), eq(pluginKv.key, requireKvKey(key)), live()))
     .get();
-  return row ? JSON.parse(row.valueJson) as unknown : null;
+  return row ? { value: JSON.parse(row.valueJson) as unknown, revision: row.revision } : null;
 }
+
+export async function getPluginKv(db: Database, pluginId: string, key: string): Promise<unknown> {
+  return (await getPluginKvVersion(db, pluginId, key))?.value ?? null;
+}
+
+const CONFLICT_MARKER = "PLUGIN_KV_CONFLICT";
 
 export async function setPluginKv(
   db: Database,
@@ -36,7 +48,36 @@ export async function setPluginKv(
   key: string,
   value: unknown,
   options: { ttlSeconds?: number } = {},
-): Promise<void> {
+): Promise<{ revision: number }> {
+  return writePluginKv(db, pluginId, key, value, options, undefined);
+}
+
+/**
+ * Sets the entry only while it is still at `expectedRevision` (null: no live
+ * entry); otherwise nothing changes and it fails `kv.conflict`.
+ */
+export async function compareAndSetPluginKv(
+  db: Database,
+  pluginId: string,
+  key: string,
+  expectedRevision: unknown,
+  value: unknown,
+  options: { ttlSeconds?: number } = {},
+): Promise<{ revision: number }> {
+  if (expectedRevision !== null && !(typeof expectedRevision === "number" && Number.isSafeInteger(expectedRevision) && expectedRevision >= 1)) {
+    throw new PluginError("kv.invalid_revision", "expectedRevision is a revision you read (a whole number from 1), or null for an absent entry.");
+  }
+  return writePluginKv(db, pluginId, key, value, options, expectedRevision);
+}
+
+async function writePluginKv(
+  db: Database,
+  pluginId: string,
+  key: string,
+  value: unknown,
+  options: { ttlSeconds?: number },
+  expectedRevision: number | null | undefined,
+): Promise<{ revision: number }> {
   const kvKey = requireKvKey(key);
   let json: string | undefined;
   try {
@@ -53,19 +94,45 @@ export async function setPluginKv(
     throw new PluginError("kv.invalid_ttl", `ttlSeconds is a whole number from 1 to ${PLUGIN_KV_MAX_TTL_SECONDS}.`);
   }
   const expiresAt = ttl === undefined ? null : sql`unixepoch() + ${ttl}`;
-  await safeBatch(db, [
-    db.insert(pluginKv).values({ pluginId, key: kvKey, valueJson: json, expiresAt, updatedAt: sql`unixepoch()` })
-      .onConflictDoUpdate({
-        target: [pluginKv.pluginId, pluginKv.key],
-        set: { valueJson: sql`excluded.value_json`, expiresAt: sql`excluded.expires_at`, updatedAt: sql`excluded.updated_at` },
-      }),
-    db.delete(pluginKv).where(and(
-      eq(pluginKv.pluginId, pluginId),
-      inArray(pluginKv.key, db.select({ key: pluginKv.key }).from(pluginKv)
-        .where(and(eq(pluginKv.pluginId, pluginId), lte(pluginKv.expiresAt, sql`unixepoch()`)))
-        .limit(PRUNE_PER_WRITE)),
-    )),
-  ] as never);
+  const entry = and(eq(pluginKv.pluginId, pluginId), eq(pluginKv.key, kvKey));
+  const guards = expectedRevision === undefined ? [] : [buildBatchGuard(
+    db,
+    expectedRevision === null
+      ? sql`NOT EXISTS (SELECT 1 FROM ${pluginKv} WHERE ${entry} AND ${live()})`
+      : sql`EXISTS (SELECT 1 FROM ${pluginKv} WHERE ${entry} AND ${live()} AND ${pluginKv.revision} = ${expectedRevision})`,
+    CONFLICT_MARKER,
+  )];
+  let results: unknown[];
+  try {
+    results = await safeBatch(db, [
+      ...guards,
+      db.insert(pluginKv).values({ pluginId, key: kvKey, valueJson: json, revision: 1, expiresAt, updatedAt: sql`unixepoch()` })
+        .onConflictDoUpdate({
+          target: [pluginKv.pluginId, pluginKv.key],
+          set: {
+            valueJson: sql`excluded.value_json`,
+            revision: sql`${pluginKv.revision} + 1`,
+            expiresAt: sql`excluded.expires_at`,
+            updatedAt: sql`excluded.updated_at`,
+          },
+        })
+        .returning({ revision: pluginKv.revision }),
+      db.delete(pluginKv).where(and(
+        eq(pluginKv.pluginId, pluginId),
+        inArray(pluginKv.key, db.select({ key: pluginKv.key }).from(pluginKv)
+          .where(and(eq(pluginKv.pluginId, pluginId), lte(pluginKv.expiresAt, sql`unixepoch()`)))
+          .limit(PRUNE_PER_WRITE)),
+      )),
+    ] as never) as unknown[];
+  } catch (error) {
+    if (guards.length > 0 && isBatchGuardError(error, CONFLICT_MARKER)) {
+      throw new PluginError("kv.conflict", `${kvKey} changed since it was read: read it again and retry.`);
+    }
+    throw error;
+  }
+  const rows = results[guards.length];
+  const revision = Array.isArray(rows) ? (rows[0] as { revision?: unknown } | undefined)?.revision : undefined;
+  return { revision: typeof revision === "number" ? revision : 1 };
 }
 
 export async function deletePluginKv(db: Database, pluginId: string, key: string): Promise<void> {

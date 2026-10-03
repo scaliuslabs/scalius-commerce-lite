@@ -143,10 +143,15 @@ describe("plugin bridge", () => {
   it("only reaches declared collections and returns copies", async () => {
     const bridge = createInProcessBridge(host);
     await expect(bridge.storageGet("secrets", "x")).rejects.toThrow(/^\[storage\.undeclared_collection\] /);
+    await expect(bridge.storageWrite([{ collection: "secrets", op: "put", id: "x", record: {} }])).rejects.toThrow(/^\[storage\.undeclared_collection\] /);
     const record = { owner: "c1", tags: ["a"] };
-    await bridge.storagePut("notes", "n1", record);
+    expect(await bridge.storageWrite([{ collection: "notes", op: "put", id: "n1", record, expectedRevision: null }])).toEqual([1]);
     record.tags.push("mutated");
-    expect(await bridge.storageGet("notes", "n1")).toEqual({ owner: "c1", tags: ["a"] });
+    expect(await bridge.storageGet("notes", "n1")).toEqual({ data: { owner: "c1", tags: ["a"] }, revision: 1 });
+    await expect(bridge.storageWrite([{ collection: "notes", op: "put", id: "n1", record, expectedRevision: null }])).rejects.toThrow(/^\[storage\.conflict\] /);
+    expect(await bridge.kvSet("k", { n: 1 }, { expectedRevision: null })).toEqual({ revision: 1 });
+    await expect(bridge.kvSet("k", { n: 2 }, { expectedRevision: null })).rejects.toThrow(/^\[kv\.conflict\] /);
+    expect(await bridge.kvGet("k")).toEqual({ value: { n: 1 }, revision: 1 });
     expect(await bridge.storageQuery("notes", { where: { owner: "c1" } })).toMatchObject({ records: [{ id: "n1" }], nextCursor: null });
     await expect(bridge.storageQuery("notes", { where: { tags: "a" } })).rejects.toThrow(/^\[storage\.unindexed_query\] /);
   });

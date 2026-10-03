@@ -7,13 +7,14 @@
 
 import { WorkerEntrypoint } from "cloudflare:workers";
 import type { PluginApiResult, PluginStorageQuery } from "@scalius/plugin-sdk";
-import type { PluginStorageQueryResult } from "@scalius/core/modules/plugins";
+import type { PluginRecordVersion, PluginStorageOperation, PluginStorageQueryResult } from "@scalius/core/modules/plugins";
 import type {
   PluginBridgeApi,
   PluginBridgeEnvironment,
   PluginBridgeProps,
   PluginHttpInit,
   PluginHttpResult,
+  PluginKvSetOptions,
 } from "./bridge";
 
 const PLUGIN_ID = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?$/;
@@ -73,16 +74,12 @@ export class PluginBridge extends WorkerEntrypoint<Env, PluginBridgeProps> imple
     return (await this.#host()).apiCall(operationId, input);
   }
 
-  async storageGet(collection: string, id: string): Promise<Record<string, unknown> | null> {
+  async storageGet(collection: string, id: string): Promise<PluginRecordVersion | null> {
     return (await this.#host()).storageGet(collection, id);
   }
 
-  async storagePut(collection: string, id: string, record: unknown): Promise<void> {
-    return (await this.#host()).storagePut(collection, id, record);
-  }
-
-  async storageDelete(collection: string, id: string): Promise<boolean> {
-    return (await this.#host()).storageDelete(collection, id);
+  async storageWrite(operations: PluginStorageOperation[]): Promise<Array<number | null>> {
+    return (await this.#host()).storageWrite(operations);
   }
 
   async storageQuery(collection: string, query?: PluginStorageQuery): Promise<PluginStorageQueryResult> {
@@ -93,11 +90,11 @@ export class PluginBridge extends WorkerEntrypoint<Env, PluginBridgeProps> imple
     return (await this.#host()).storageCount(collection, where);
   }
 
-  async kvGet(key: string): Promise<unknown> {
+  async kvGet(key: string): Promise<{ value: unknown; revision: number } | null> {
     return (await this.#host()).kvGet(key);
   }
 
-  async kvSet(key: string, value: unknown, options?: { ttlSeconds?: number }): Promise<void> {
+  async kvSet(key: string, value: unknown, options?: PluginKvSetOptions): Promise<{ revision: number }> {
     return (await this.#host()).kvSet(key, value, options);
   }
 
