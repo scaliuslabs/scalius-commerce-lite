@@ -5,7 +5,7 @@ Brand records and their pages: revision-guarded dashboard writes and the buyer r
 ## Entries and layer
 
 - `browser.ts` exports `brands.validation.ts` (write schemas, `BRAND_BATCH_LIMIT` 90). `index.ts` exports everything in `browser.ts`, plus `brands.service.ts` (admin reads and writes, `BRAND_REVISION_CONFLICT`, error classes) and `brands.storefront.ts` (buyer reads, `publicBrandJoinCondition`, logo helpers).
-- Layer L3. The only domain import is `custom-fields` (the brand page's storefront-visible custom fields). `catalog` and `store-transfer` import `brands`.
+- Layer L4. The only domain import is `custom-fields` (the brand page's storefront-visible custom fields). `catalog` and `store-transfer` import `brands`.
 
 ## Owns
 

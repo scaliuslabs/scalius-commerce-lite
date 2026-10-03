@@ -2,7 +2,7 @@
 
 Marketing consent per customer and channel (`email`, `sms`, `whatsapp`), the surfaces that change it, the e-mail double opt-in and the signed links in marketing messages. For contributors and plugin authors.
 
-- Layer L6. The domain imports `customers`, `notifications` and `settings` (`scripts/core-domain-graph.allow.json`). `store-transfer` imports it for the customer import.
+- Layer L7. The domain imports `customers`, `notifications` and `settings` (`scripts/core-domain-graph.allow.json`). `store-transfer` imports it for the customer import.
 - One entry, `index.ts`. Shared vocabulary (channels, states, sources, settings schema, text versions) is in `packages/shared/src/customer-marketing.ts`.
 - Tags, segments and the CSV export belong to [`customers`](../customers/README.md).
 

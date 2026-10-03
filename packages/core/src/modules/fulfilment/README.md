@@ -5,7 +5,7 @@ The `fulfilment` domain records the actions that hand an order's units to the bu
 ## Entries and layer
 
 - `index.ts` is the only entry. The domain has no `browser.ts`.
-- Layer L8. It imports `delivery`, `digital`, `gift-cards`, `inventory`, `notifications`, `order-kernel`, `orders`, `payments` and `settings`. Only `checkout` imports it (`scripts/core-domain-graph.allow.json`).
+- Layer L9. It imports `delivery`, `digital`, `gift-cards`, `inventory`, `notifications`, `order-kernel`, `orders`, `payments` and `settings`. Only `checkout` imports it (`scripts/core-domain-graph.allow.json`).
 
 ## Owns
 

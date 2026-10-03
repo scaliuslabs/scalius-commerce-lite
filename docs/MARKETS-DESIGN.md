@@ -85,9 +85,12 @@ and links from markets to delivery methods and payment methods.
 - Exactly one **backup market** (Shopify's 2025-04 model) used when no signal
   matches. Migration creates it from today's store: BDT, `bn`/`en`, BD,
   prices include tax as today.
-- **Resolution on the server**, deterministic: explicit buyer choice (cookie)
-  > cart shipping country > URL presence > geo hint (`cf-ipcountry`) >
-  backup. Crawlers are never geo-redirected; EU-safe: no forced redirects.
+- **Resolution on the server**, deterministic. The URL presence decides the
+  page (the root is the backup market), so a URL is cacheable and
+  Google-safe. An explicit buyer choice (cookie) may redirect a top-level
+  navigation to the same path under its presence. Geo (`cf-ipcountry`) is
+  only a suggestion. At checkout the shipping country decides the order's
+  market. Crawlers are never redirected; EU-safe: no forced redirects.
 - One URL per locale × market (subfolders by default, `/en-us/...`); never
   locale-adaptive content on one URL (Google's guidance).
 - **DVC**: market, currency, locale and price-list identity are dimensions
@@ -197,10 +200,8 @@ increment and display digits are recorded but not used yet.
 **Price increment** (D1). `PricingCurrency` is `{ code, decimalPlaces,
 priceIncrementMinor }`. Defaults: `defaultPriceIncrementMinor()` is 100 for
 BDT and 1 otherwise; `priceIncrementChoices()` is the minor unit or the whole
-unit. Until step 2 it is stored as `priceIncrementMinor` in the `currency`
-settings document (`priceIncrementOf()`, `readStoreCurrency()`,
-`storePriceIncrementSql()`), edited in Settings → Store details, and served to
-the dashboard (`useCurrency()`) and the storefront
+unit. Step 2 moved it to the backup market (see "Step 2 implemented"). It is
+served to the dashboard (`useCurrency()`) and the storefront
 (`window.__CURRENCY_PRICE_INCREMENT__`, the layout `currency` block). A change
 queues a catalogue projection rebuild. `money.ts` replaces the BDT cash
 helpers with `toIncrementMinor()`, `roundToIncrementMinor()`,
@@ -252,6 +253,120 @@ settings dependency already covers.
 needs the balance transaction). `customer_order_stats`, order lines and
 report measures hold presentment amounts; they move to shop amounts before a
 second currency is enabled (step 6).
+
+## Step 2 implemented
+
+A store with only the backup market behaves as before: the same URLs, HTML,
+feeds, sitemaps, checkout and cache keys. Hreflang, the market selector and
+the geo suggestion appear only when two or more presences are active.
+
+**Schema.** Migration `0112_markets` (D1/Turso file, PostgreSQL sidecar,
+ledger digest, schema contract 112) adds `markets` (id, handle, name, status
+`draft` | `active`, `is_backup`, `price_increment_minor`, `revision`),
+`market_countries` (`country_code` primary key: one market per country) and
+`market_presences` (market_id, kind `subfolder` | `domain`, value, locale).
+The database enforces these rules:
+
+- One backup market (a partial unique index). Triggers refuse to delete it
+  or clear its flag (`MARKET_BACKUP_REQUIRED`). It is always active.
+- Only the backup market has a price increment (1, 10, 100 or 1000). Other
+  markets hold NULL and use it.
+- A subfolder value is `''` (the root URL) or `<locale>-<country>`, such as
+  `en-in`, and starts with its locale. Only the backup market holds the root
+  (`MARKET_ROOT_PRESENCE_BACKUP_ONLY`). The API creates only subfolders;
+  `domain` is reserved.
+- `orders.market_id` references `markets` (`ON DELETE RESTRICT`). The checkout
+  commit and the staff order create set it.
+
+The migration creates `mkt_backup` (handle `bangladesh`, BD, the root URL in
+the active checkout language, else `en`). It carries the currency document's
+increment to the backup row by the step 1 rule, removes the document field,
+and backfills every order. A change of a market's status, increment or
+countries advances the checkout authority fence.
+
+**Price increment** (D1). The backup market row is the one source. The
+`markets` domain owns `readStoreCurrency()`, `selectBackupPriceIncrement()`
+and `storePriceIncrementSql()`. Settings → Markets edits it on the backup
+market; Store details no longer does. A change queues a catalogue projection
+rebuild. A new shop currency resets it to that currency's default
+(`resetBackupPriceIncrement()`). The shop currency stays in the `currency`
+document, and a market never stores a copy.
+
+**Resolution** (`resolveMarket()` in `@scalius/shared/markets`). One pure
+function returns the market, the presence and the reason:
+
+- Page: the URL presence decides (`url_presence`). The root is the backup
+  market (`root`). An unknown or draft subfolder answers 404.
+- Buyer choice: the selector form posts to `/localization` and works without
+  JavaScript. It sets the `localization` cookie (`COUNTRY:presence`) and
+  answers 303 to the same page under the chosen presence. The gateway then
+  redirects (302, `private, no-store`) a top-level navigation whose cookie
+  names another presence. It never redirects a crawler, a fetch, a prefetch,
+  a POST or a discovery file. The cookie never bypasses the shared cache.
+- Geo: `cf-ipcountry` feeds only a dismissible suggestion
+  (`/api/market-suggestion`), never a redirect.
+- Checkout: the shipping country decides the order's market
+  (`orderMarketId()`), else the backup market. The shipping country is BD
+  until addresses are country-aware (step 3).
+
+**Presences and links.** One route tree serves every presence. The gateway
+(`apps/storefront/src/worker.ts`, `src/lib/market-presence.ts`) removes the
+subfolder, renders the root page with the presence in a gateway-only header,
+and localizes the response.
+
+- Decision: response rewriting, not a path helper in every template.
+  Reason: merchant menus, rich text, theme sections and app output carry
+  root-relative links that no template helper reaches (the gap that
+  Shopify's `routes.*` leaves). The HTMLRewriter changes page links in `a`,
+  `area`, `form` and `formaction` of presence responses only; a root
+  response is not touched. The cache stores the rewritten page, so a hit
+  costs nothing. The gateway also localizes the `Location` and feed `Link`
+  headers.
+- Code that builds a page URL in the browser or in inline script uses the
+  same rule: `pagePath()` and `logicalPathname()` (`src/lib/presence-url.ts`)
+  or `serverPagePath()`. `presence-links.test.ts` fails on a new
+  root-relative page URL in that code.
+- Canonical, Open Graph, JSON-LD and breadcrumb URLs of a presence page use
+  its presence. Hreflang alternates (reciprocal, self-referencing,
+  `x-default` = the backup root) come from the active presence matrix, only
+  when two or more presences are active. A presence page has the presence's
+  `lang` and `og:locale`. A CMS slug cannot be `localization` or `xx-yy`.
+
+**DVC** (D4). New key kind `mk`: `mk:<market id>` (a market's row, countries
+and presences), `mk:*` (the presence matrix) and `mk:backup` (only the backup
+market's `price_increment_minor`; every price reader declares it).
+`PUBLIC_API_CACHE_ROUTES` gives every public read a `market` field, keyed or
+invariant with its reason. This is the one list of market-invariant reads.
+Only `/api/v1/checkout/config` is keyed: presence pages add `?presence=`, and
+it reads its market through `readPublicMarket()`, which refuses an invariant
+route. All other reads are invariant today: one catalogue, store-wide
+delivery and store-wide text. Step 4 must mark a read keyed before it varies
+by market.
+
+**Discovery.** Each presence serves its own `sitemap.xml`, child sitemaps,
+`/api/product-feed.xml` and `/api/facebook-feed.xml` with presence URLs. The
+root `sitemap.xml` also lists the child sitemaps of each active presence.
+`robots.txt`, `llms.txt` and UCP stay at the root and serve the backup market.
+
+**Dashboard.** Settings → Markets lists each market with a Backup badge,
+status, countries, currency and web presence. A market page edits the name,
+handle, status, countries (a country of another market is disabled), web
+presence (language and a two-letter country code) and, on the backup market
+only, the price increment. Currency is the shop currency, locked until
+step 6. A market with orders cannot be deleted; set it to draft. The API is
+`dashboard.markets.{list,get,create,update,delete}` under
+`/api/v1/admin/settings/markets` with revision checks, and
+`storefront.markets.get` serves the active matrix.
+
+**Checkout.** The order records `market_id`.
+`GET /api/v1/checkout/config?presence=` reads its market and returns it
+(`market`). Delivery and payment methods are still store-wide.
+
+**Left for later steps.** Domain presences. Per-market delivery and payment
+methods (steps 3 and 6). Country-aware addresses, so every order's market is
+BD's today (step 3). Translations and localized slugs: a presence page shows
+the store's text under its own `lang` (step 4). The root page keeps the
+store's `lang`. Market currencies (step 6).
 
 ## Non-goals in this wave
 

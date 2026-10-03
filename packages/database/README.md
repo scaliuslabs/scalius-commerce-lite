@@ -89,7 +89,8 @@ Constraints, triggers and indexes protect these rules. Do not work around them i
 | Variant image | `product_variants.image_id` is nullable and references `product_media.id` (`ON DELETE SET NULL`). `NULL` means the product's primary image. |
 | Product media | A product has unique media ids and sort orders, and at most one primary image (`product_media_one_primary_uidx`). |
 | Categories | Write only `parent_id`. Triggers keep `depth` (0-3), `path` and `category_closure` exact and refuse cycles, trashed parents and a fifth level. |
-| Orders | `orders.version` is a CAS counter. `channel` never changes after insert (`orders_channel_immutable`). `order_payments` is unique on `(payment_method, provider_ref)` where `provider_ref` is not null. `orders.currency_code` is the presentment currency; `shop_currency`, `fx_rate` (decimal string), `fx_source`, `fx_as_of`, `fx_locked_until` and the `*_shop_minor` totals are the money chain, and `order_payments.settlement_*` plus `exchange_adjustment_minor` record settlement (`0111`). |
+| Orders | `orders.version` is a CAS counter. `channel` never changes after insert (`orders_channel_immutable`). `order_payments` is unique on `(payment_method, provider_ref)` where `provider_ref` is not null. `orders.currency_code` is the presentment currency; `shop_currency`, `fx_rate` (decimal string), `fx_source`, `fx_as_of`, `fx_locked_until` and the `*_shop_minor` totals are the money chain, and `order_payments.settlement_*` plus `exchange_adjustment_minor` record settlement (`0111`). `orders.market_id` is the market the order was placed in (`ON DELETE RESTRICT`, `0112`). |
+| Markets | One backup market (partial unique index on `is_backup`); triggers refuse to delete it or clear its flag. Only the backup market has `price_increment_minor` and holds the root presence (`''`). A country belongs to one market (`market_countries.country_code` is the primary key). A subfolder is `<locale>-<country>`. Rules: [MARKETS-DESIGN.md](../../docs/MARKETS-DESIGN.md), "Step 2 implemented". |
 | Fulfilment | `order_items.fulfilled_quantity` is a trigger projection of active `order_fulfillment_lines`. A fulfilment only moves active to voided. Lines are otherwise immutable. |
 | Inventory | Each `inventory_movements` row is unique per `(variant_id, stock_version_after)`. Triggers check the ledger-v2 edge shape and maintain `inventory_levels.on_hand`. In-transit transfer units are out of both levels and out of the SKU's stock, so the levels always sum to the SKU's `stock`. |
 | Purchasing | Purchase-order lines lock once the order is placed, and received quantities only move up. Transfer lines are fixed once shipped. Receipt lines, transfer movements and `inventory_commands` are append-only. |
@@ -105,19 +106,19 @@ D1 holds FTS5 virtual tables (with sync triggers and a `unicode61` tokenizer) fo
 
 Two trigger families come from generators, not from hand-written SQL:
 
-- **DVC dependency triggers.** `packages/shared/src/cache-deps.ts` is the registry of buyer-visible tables. `scripts/cache-dep-triggers.ts` generates one trigger per registered rule (`cdep_*`) plus the clock triggers. Each table is registered or listed in `CACHE_DEP_EXEMPT_TABLES`. Migration `0100_cache_dependencies` is immutable. `pnpm --filter @scalius/database exec tsx scripts/cache-dep-triggers.ts --write` rewrites only `0101_cache_ordering_dependencies`. A table registered later has a hand-assembled migration that must contain the generated statements verbatim: `CACHE_DEP_LATER_TABLES` maps each table to its migration (`0104`, `0108`, `0110`). `__tests__/cache-dep-triggers.test.ts` keeps the generator and the migrations equal. See the [cache-deps README](../core/src/cache-deps/README.md).
+- **DVC dependency triggers.** `packages/shared/src/cache-deps.ts` is the registry of buyer-visible tables. `scripts/cache-dep-triggers.ts` generates one trigger per registered rule (`cdep_*`) plus the clock triggers. Each table is registered or listed in `CACHE_DEP_EXEMPT_TABLES`. Migration `0100_cache_dependencies` is immutable. `pnpm --filter @scalius/database exec tsx scripts/cache-dep-triggers.ts --write` rewrites only `0101_cache_ordering_dependencies`. A table registered later has a hand-assembled migration that must contain the generated statements verbatim: `CACHE_DEP_LATER_TABLES` maps each table to its migration (`0104`, `0108`, `0110`, `0112`). `__tests__/cache-dep-triggers.test.ts` keeps the generator and the migrations equal. See the [cache-deps README](../core/src/cache-deps/README.md).
 - **Event outbox triggers.** `scripts/event-outbox-triggers.ts` generates the `evt_*` triggers. Each writes one `event_outbox` row in the same transaction as the domain write. `0103_order_channel_event_outbox` installs them, and `EVENT_TRIGGER_MIGRATIONS` maps later triggers to `0108` and `0109`. `__tests__/event-outbox.test.ts` requires each migration to contain the generated statements verbatim. The event catalog is `@scalius/shared/events`.
 
 Both generators emit a PostgreSQL form. Remote D1 rejects a trigger body that embeds `SELECT CASE WHEN`, so the guard goes in the trigger `WHEN` clause and the body is one statement.
 
 ## Migrations
 
-`migrations/` holds 112 SQL files, `0000` to `0111`. The latest is `0111_order_money_chain`. `0000_blushing_jack_power.sql` is the baseline and holds the raw SQL Drizzle cannot express (FTS5, partial indexes, guard triggers). Never delete or squash a released migration. Installed D1 databases depend on Wrangler's history, and installed TursoDB and PostgreSQL databases depend on the release ledger.
+`migrations/` holds 113 SQL files, `0000` to `0112`. The latest is `0112_markets`. `0000_blushing_jack_power.sql` is the baseline and holds the raw SQL Drizzle cannot express (FTS5, partial indexes, guard triggers). Never delete or squash a released migration. Installed D1 databases depend on Wrangler's history, and installed TursoDB and PostgreSQL databases depend on the release ledger.
 
 | Path | Content |
 |------|---------|
 | `migrations/NNNN_<name>.sql` | The canonical SQLite SQL (D1 and TursoDB) |
-| `migrations/postgres/NNNN_<name>.sql` | The transaction-safe PostgreSQL sidecar (`0050` to `0111`, 62 files) |
+| `migrations/postgres/NNNN_<name>.sql` | The transaction-safe PostgreSQL sidecar (`0050` to `0112`, 63 files) |
 | `migrations/meta/` | Drizzle journal and snapshots |
 
 ### Release ledger

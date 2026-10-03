@@ -17,7 +17,7 @@ The public reads (the product page `reviews` field and `GET /api/v1/products/{id
 
 ## Layer and imports
 
-- Layer L6. Imports `settings` (the `reviews` document), `notifications` (outbox rows built in the review's own batch) and `media-references` (published image keys).
+- Layer L7. Imports `settings` (the `reviews` document), `notifications` (outbox rows built in the review's own batch) and `media-references` (published image keys).
 - Orders, order items, fulfilments, products and the review thread row are read or written through the schema, not through domain entries.
 - Nothing imports `reviews`.
 

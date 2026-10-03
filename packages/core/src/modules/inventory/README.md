@@ -5,7 +5,7 @@ The `inventory` domain owns SKU stock: reservations, deductions, releases and re
 ## Entries and layer
 
 - `index.ts` is the only entry. The domain has no `browser.ts`.
-- Layer L3. It imports `products` and `settings` only (`scripts/core-domain-graph.allow.json`). `checkout`, `orders`, `payments`, `delivery`, `fulfilment`, `digital`, `product-admin` and `store-transfer` import it.
+- Layer L4. It imports `markets`, `products` and `settings` only (`scripts/core-domain-graph.allow.json`). `checkout`, `orders`, `payments`, `delivery`, `fulfilment`, `digital`, `product-admin` and `store-transfer` import it.
 
 ## Owns
 

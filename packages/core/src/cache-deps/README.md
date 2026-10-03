@@ -46,16 +46,26 @@ lo:<facet>:<scope>   lf:<scope>   srch
 c|b|col|pg|attr|promo : <id> or *    (categories, brands, collections, CMS pages, attributes, promotions)
 m:<mediaId>   set:<category>:<key>   theme   nav:<menuId> or nav:*
 ship  loc  tax  lang  an   cf:<ownerType>   plg:<pluginId> or plg:*   plgs:<pluginId>:<collection>
+mk:<marketId>   mk:*   mk:backup
 t:<table>   store
 ```
 
 - `p` advances on any buyer-visible fact of the product (page, card, JSON-LD, feed row). `lm` covers membership and newest order of a public product set, sitemap and feed flags and lastmods, and the store-shape counts (`lm:shape`). `lo` facets are `price`, `band`, `disc`, `name`, `rating` and `sale` (scope `all` only).
 - `sold` advances only when the visible sold count changes (10 or more units in 30 days), `popular` only at 2 or more units. `recommendation-signals` advances on any order or order line change, and only the live ranking fallback reads it.
+- `mk:<marketId>` advances on any change of a market's row, countries or presences, and `mk:*` on any market change (the active presence matrix). `mk:backup` advances only when the backup market's `price_increment_minor` changes. Every reader that prices at the increment declares it (`deps.backupMarketPricing()`).
 - `t:<table>` is the coarse fallback for any buyer-visible change of the table. `store` is everything.
+
+### Market-keyed and market-invariant reads
+
+`PUBLIC_API_CACHE_ROUTES` (`packages/shared/src/public-api-cache-routes.ts`) gives every public read a `market` field: `{ keyed: true }` or `{ invariant: <reason> }` (MARKETS-DESIGN D4). This is the one list of reads that are the same in every market.
+
+- A keyed read carries the page's presence (`?presence=en-in`), so the presence is part of its key. Only `/api/v1/checkout/config` is keyed. The storefront transport adds the presence to keyed reads only (`withMarketPresence()`), so root pages keep their keys.
+- A route reads its market only through `readPublicMarket()` (`apps/api/src/utils/public-market.ts`). It refuses an invariant route, so a read cannot vary by market while its key does not.
+- Before a read varies by market (price lists, FX, translations in step 4), mark it keyed. Its presence then enters its key.
 
 ### Migrations
 
-Migration 0100 holds the clock tables and the baseline triggers (deployed, immutable). Migration 0101 holds the triggers of the ordering projections (`product_recommendations`, `product_sales_stats`, `orders`, `order_items`). `pnpm --filter @scalius/database exec tsx scripts/cache-dep-triggers.ts --write` regenerates only 0101. A table registered after 0101 gets a hand-assembled migration that contains every generated statement verbatim, and `CACHE_DEP_LATER_TABLES` names that migration (0104 custom fields, 0108 promotion customer segments, 0110 the plugin tables).
+Migration 0100 holds the clock tables and the baseline triggers (deployed, immutable). Migration 0101 holds the triggers of the ordering projections (`product_recommendations`, `product_sales_stats`, `orders`, `order_items`). `pnpm --filter @scalius/database exec tsx scripts/cache-dep-triggers.ts --write` regenerates only 0101. A table registered after 0101 gets a hand-assembled migration that contains every generated statement verbatim, and `CACHE_DEP_LATER_TABLES` names that migration (0104 custom fields, 0108 promotion customer segments, 0110 the plugin tables, 0112 the market tables).
 
 ## Read side: recording
 

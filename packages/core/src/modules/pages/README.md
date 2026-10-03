@@ -5,7 +5,7 @@ Static CMS pages and chronological articles (one `pages` table), their publish a
 ## Entries and layer
 
 - `browser.ts` exports `pages.validation.ts` (page schemas, `contentEntryPath`, `isValidContentEntryPath`, `PAGE_BATCH_LIMIT` 90). `index.ts` exports everything in `browser.ts`, plus `pages.service.ts`, `pages.revision.ts` and `store-policies.ts`.
-- Layer L3. The domain imports `custom-fields`, `media-references` and `settings`. `navigation` and `storefront` import `pages`.
+- Layer L4. The domain imports `custom-fields`, `media-references` and `settings`. `navigation` and `storefront` import `pages`.
 
 ## Owns
 

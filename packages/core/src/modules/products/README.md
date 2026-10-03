@@ -18,7 +18,7 @@ This domain reads and defines. [`product-admin`](../product-admin/README.md) wri
 
 ## Layer and imports
 
-- Layer L2. Imports `settings` only (currency helpers and the `currency` and `emi` documents). It also uses `settings-store`, `cache-deps` and `packages/core/src/integrations/storage.ts` (public media URL).
+- Layer L3. Imports `markets` (the store pricing currency and the price increment) and `settings` (currency helpers and the `currency` and `emi` documents). It also uses `settings-store`, `cache-deps` and `packages/core/src/integrations/storage.ts` (public media URL).
 - Imported by `analytics`, `catalog`, `categories`, `checkout`, `inventory`, `orders`, `product-admin`, `promotions` and `store-transfer`.
 
 ## Tables

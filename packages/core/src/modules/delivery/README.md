@@ -5,7 +5,7 @@ The `delivery` domain owns the courier port and its adapters, saved courier acco
 ## Entries and layer
 
 - `index.ts` exports the services, the courier port and registry (`couriers/port.ts`, `couriers/registry.ts`), `pathaoCourier` and `steadfastCourier`, and re-exports `browser.ts` (`types.ts`, `getTrackingUrl()`, `provider-readiness.ts`).
-- Layer L4. It imports `inventory`, `order-kernel` and `settings`. `checkout`, `fulfilment`, `notifications` and `orders` import it (`scripts/core-domain-graph.allow.json`).
+- Layer L5. It imports `inventory`, `order-kernel` and `settings`. `checkout`, `fulfilment`, `notifications` and `orders` import it (`scripts/core-domain-graph.allow.json`).
 
 ## Owns
 

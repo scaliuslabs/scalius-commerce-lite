@@ -6,7 +6,7 @@ Named storefront menus with a draft and an immutable published revision, the pla
 
 `index.ts` is the only entry. There is no `browser.ts`. It exports `navigation.service`, `navigation.resolver`, `navigation.authority`, `navigation.authority.service`, `navigation.resources.service` and `navigation.categories`.
 
-Layer L5. The domain imports `catalog`, `categories` and `pages`. `storefront` imports `navigation`. Shared link types and href parsing are in `@scalius/shared/navigation-target` and `navigation-href`.
+Layer L6. The domain imports `catalog`, `categories` and `pages`. `storefront` imports `navigation`. Shared link types and href parsing are in `@scalius/shared/navigation-target` and `navigation-href`.
 
 ## Owns
 

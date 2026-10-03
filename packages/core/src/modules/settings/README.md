@@ -11,9 +11,9 @@ wrappers over the documents.
 - `documents.ts` -- the shared document definitions (key, zod schema, defaults, secret fields, optional KV mirror); a domain that owns a document declares it itself (`platform/document.ts`, `notifications/documents.ts`, `delivery/zones.ts`, `products/low-stock-policy.ts`)
 - `staff-shortcuts.ts` -- one per-staff-member document (`staff-shortcuts:<userId>`, no KV, no secrets) for dashboard keyboard shortcuts; saves replace the whole map; the row is deleted with staff removal and invitation revocation
 - `../platform/` (the platform domain owns the `platform` document and its service) -- deployment public origins (storefront/API/dashboard/media URLs, customer cookie domain, extra CORS origins) and their KV-first Worker-entry resolution
-- `site-settings.service.ts` -- currency (code, symbol, price increment), the theme (live, draft, versions, preview sessions), media delivery, SEO, allowed countries
+- `site-settings.service.ts` -- currency (code, symbol), the theme (live, draft, versions, preview sessions), media delivery, SEO, allowed countries
 - `settings.service.ts` -- `getCurrencyConfig()`
-- `store-money.ts` -- the store's pricing currency (`readStoreCurrency()`, `toStoreMinor()`, `orderPricePolicy()`) and the SQL twin of its price increment (`storePriceIncrementSql()`)
+- `store-money.ts` -- code-only money helpers: `StoreCurrency`, `toStoreMinor()`, `orderPricePolicy()`, `priceIncrementForCurrency()` and the SQL currency code. The store pricing currency (`readStoreCurrency()`) and the SQL twin of its price increment (`storePriceIncrementSql()`) are in the `markets` domain, because the backup market holds the increment
 - `business-settings.service.ts`, `customer-request-policy.ts` -- one document each
 - Readiness is not here: checkout readiness lives in `checkout/readiness.ts`, customer sign-in readiness in `customers/sign-in-readiness.ts`, and their shared shapes and codes in `@scalius/shared/checkout-readiness`
 
@@ -34,7 +34,7 @@ A document is `settings(category = <document key>, key = 'document', type = 'jso
 | `security` | `cspAllowedDomains` | -- |
 | `media` | image optimization / delivery hosts | -- |
 | `business` | company, TIN, logo, address, invoice prefix/logo | -- |
-| `currency` | `currencyCode`, `currencySymbol`, optional `priceIncrementMinor` | -- |
+| `currency` | `currencyCode`, `currencySymbol` | -- |
 | `customer_countries` | `allowedCountries`, `allowedCountriesMode` | -- |
 | `checkout` | `guestCheckoutEnabled`, `checkoutMode`, `partialPaymentEnabled`, `partialPaymentAmount` (admin CAS revision) | -- |
 | `customer_auth` | Customer accounts: `email` / `whatsapp` collection and code `channels` (any other shape resets to defaults) | -- |
@@ -118,8 +118,8 @@ with a 60s `Cache-Control`; the storefront gets them in the `platform` block of
 
 ## Currency
 
-`getCurrencyConfig(db)` returns `{ code, symbol, decimalPlaces,
-priceIncrementMinor }` from the `currency` document. `decimalPlaces` is the
+`getCurrencyConfig(db)` returns `{ code, symbol, decimalPlaces }` from the
+`currency` document. `decimalPlaces` is the
 ISO 4217 exponent from the currency policy table
 (`@scalius/shared/currency-policy`). A missing document yields the BDT
 defaults; a relational read error throws. Catalog, shipping and order amounts
@@ -127,15 +127,15 @@ are stored as integer minor units of this currency, so once any product,
 shipping method or order exists the code is locked (`isCurrencyCodeLocked`).
 
 The price increment is the step every price, discount, fee and computed total
-rounds to: the minor unit (1) or one whole unit (10^exponent).
-`priceIncrementOf()` resolves a missing or invalid value to the currency's
-default: whole taka for BDT, the minor unit otherwise. Merchants change it in
-Settings → Store details; it stays editable after the code locks. Saved
-prices are never rewritten. A save that changes it returns
-`priceIncrementChanged`, and the route queues a full catalogue projection
-rebuild, because stored card prices round to it. A change of currency drops a
-saved increment. Readers that price in SQL use `storePriceIncrementSql()`,
-which reads the document inline and falls back to the default.
+rounds to: the minor unit (1) or one whole unit (10^exponent). The backup
+market holds it (`markets.price_increment_minor`, MARKETS-DESIGN step 2), not
+this document. Merchants change it in Settings → Markets on the backup
+market; it stays editable after the code locks. Saved prices are never
+rewritten. A change queues a full catalogue projection rebuild, because
+stored card prices round to it. A change of currency resets it to the new
+currency's default (`resetBackupPriceIncrement()`): whole taka for BDT, the
+minor unit otherwise. Read it through `readStoreCurrency()` or, in SQL,
+`storePriceIncrementSql()` (both in `markets`).
 
 ## Notification channels
 

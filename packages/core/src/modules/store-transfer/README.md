@@ -17,7 +17,7 @@ Main files:
 
 ## Layer and imports
 
-- Layer L7. Imports `attributes`, `brands`, `categories`, `customer-marketing`, `inventory`, `product-admin`, `products` and `settings`.
+- Layer L8. Imports `attributes`, `brands`, `categories`, `customer-marketing`, `inventory`, `markets`, `product-admin`, `products` and `settings`.
 - Nothing imports it except the API routes.
 
 ## Flow

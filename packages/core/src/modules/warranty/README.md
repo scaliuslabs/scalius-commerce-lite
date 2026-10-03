@@ -15,7 +15,7 @@ Main files:
 
 ## Layer and imports
 
-- Layer L9. Imports `conversations` (claim threads) and `media-references` (product image keys in the extras read).
+- Layer L10. Imports `conversations` (claim threads) and `media-references` (product image keys in the extras read).
 - Nothing imports `warranty`. An edge back from a lower domain would close a cycle, which the domain graph check rejects.
 
 ## Tables

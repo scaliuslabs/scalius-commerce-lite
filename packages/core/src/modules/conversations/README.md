@@ -15,7 +15,7 @@ Main files:
 
 ## Layer and imports
 
-- Layer L8. Imports `notifications` (outbox rows) and `orders` (support-request reads and order events).
+- Layer L9. Imports `notifications` (outbox rows) and `orders` (support-request reads and order events).
 - Imported by `agent-storefront` and `warranty` (claim threads).
 
 ## Tables

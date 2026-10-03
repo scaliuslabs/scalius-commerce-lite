@@ -28,7 +28,7 @@ Related docs:
 └────────────────────────────┬───────────────────────────┘
                              │
 ┌────────────────────────────▼───────────────────────────┐
-│ @scalius/core: 39 domains (acyclic graph)              │
+│ @scalius/core: 40 domains (acyclic graph)              │
 │ plus settings-store, cache-deps, errors, auth,         │
 │ integrations, search, utils                            │
 └────────────────────────────┬───────────────────────────┘
@@ -68,7 +68,7 @@ Worker bindings, database clients, credentials, in-flight I/O and tenant data ar
 Each directory under `packages/core/src/modules/` is one domain with at most two public entries:
 
 - `index.ts` is the server API.
-- `browser.ts` exists only when the domain has pure types and policies that other code needs without its server graph. It is closed: every file it reaches is exported by a browser entry, and it imports only `zod`, `@scalius/shared/*` and other browser files. 23 of the 39 domains have one.
+- `browser.ts` exists only when the domain has pure types and policies that other code needs without its server graph. It is closed: every file it reaches is exported by a browser entry, and it imports only `zod`, `@scalius/shared/*` and other browser files. 23 of the 40 domains have one.
 
 Other code reaches a domain only through these entries: `../<domain>` or `../<domain>/browser` inside core, `@scalius/core/modules/<domain>` (and `/browser`) outside it. Core also has shared areas that are not domains: `settings-store`, `cache-deps`, `errors`, `auth`, `integrations`, `search`, `utils` and `testing` (test-only fixtures).
 
@@ -94,6 +94,7 @@ Other code reaches a domain only through these entries: `../<domain>` or `../<do
 | `fulfilment` | Actions that hand units over (the fulfilment ledger) and automatic fulfilment |
 | `gift-cards` | Codes, the append-only balance ledger, issue, redemption, refund credit |
 | `inventory` | Reservations, deductions, ledger v2, locations, low-stock alerts, suppliers, purchase orders, transfers |
+| `markets` | Markets, their countries and URL presences, the presence matrix, the backup market's price increment and the store pricing currency, an order's market |
 | `media` | The Files library: uploads, usage index, permanent delete |
 | `media-references` | Stored-file key and URL projection, deleting-reference guard |
 | `navigation` | Menus, publications, placements |
@@ -130,18 +131,19 @@ The graph has no cycle, and no file cycle crosses a unit. So importing a domain 
 
 ### The dependency graph
 
-The allowlist holds 130 directed edges. A domain sits one layer above the highest domain it imports. There are 11 layers:
+The allowlist holds 144 directed edges. A domain sits one layer above the highest domain it imports. There are 12 layers:
 
 ```text
-L10  agent-storefront
-L9   checkout · storefront · warranty
-L8   analytics · conversations · fulfilment
-L7   orders · store-transfer
-L6   customer-marketing · payments · reviews
-L5   navigation · notifications
-L4   catalog · delivery · digital · product-admin
-L3   brands · categories · inventory · pages · promotions
-L2   custom-fields · customers · media · platform · products · tax
+L11  agent-storefront
+L10  checkout · storefront · warranty
+L9   analytics · conversations · fulfilment
+L8   orders · store-transfer
+L7   customer-marketing · payments · reviews
+L6   navigation · notifications
+L5   catalog · delivery · digital · product-admin
+L4   brands · categories · inventory · pages · promotions
+L3   custom-fields · products · tax
+L2   customers · markets · media · platform
 L1   plugins · settings
 L0   agent-access · attributes · collections · events · fraud-checker
      gift-cards · media-references · order-kernel
@@ -151,6 +153,7 @@ Rules that keep it acyclic:
 
 - **Leaf domains import no domain:** `agent-access`, `attributes`, `collections`, `events`, `fraud-checker`, `gift-cards`, `media-references`, `order-kernel`. Put a fact in a leaf when several domains act on it and none should own the others.
 - **`settings` imports only `media-references`.** The document store is infrastructure (`@scalius/core/settings-store`). A domain declares the documents it owns.
+- **`markets` imports only `settings`.** A domain that prices reads the store currency and the price increment from `markets` (`readStoreCurrency()`, `storePriceIncrementSql()`); the code-only money helpers stay in `settings`.
 - **`plugins` imports only `events`.**
 - **Orchestrators sit on top.** `checkout`, `fulfilment`, `storefront`, `agent-storefront` and `store-transfer` compose lower domains, and nothing below them imports them. Work that needs two peers goes into the orchestrator or the API route that calls both.
 - **The model sits below its editor.** `products` is below `inventory`. `product-admin` is above `inventory` and `tax`.

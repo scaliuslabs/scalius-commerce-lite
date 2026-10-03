@@ -16,7 +16,7 @@ The product model and its rules live in [`products`](../products/README.md). Sto
 
 ## Layer and imports
 
-- Layer L4. Imports `attributes`, `inventory`, `products`, `settings` and `tax`.
+- Layer L5. Imports `attributes`, `inventory`, `markets`, `products`, `settings` and `tax`.
 - Imported by `store-transfer` and by the admin routes `products.ts`, `taxes.ts` and `orders/list.ts` (`apps/api/src/routes/admin/`).
 
 ## Aggregate revision

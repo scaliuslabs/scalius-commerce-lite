@@ -4,7 +4,7 @@ The analytics domain manages third-party analytics scripts, checks provider read
 
 ## Where it fits
 
-- Layer L8. Imports from other domains: `collections`, `orders`, `products`, `settings` (`scripts/core-domain-graph.allow.json`).
+- Layer L9. Imports from other domains: `collections`, `markets`, `orders`, `products`, `settings` (`scripts/core-domain-graph.allow.json`).
 - `index.ts` is the server API. `browser.ts` is the closed browser entry (`analytics.validation.ts` and `analytics-scripts.ts`, both pure).
 - Money is integer minor units until the API converts it once (`fromMinor`).
 

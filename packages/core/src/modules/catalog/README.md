@@ -6,7 +6,7 @@ The buyer-facing catalogue reads: listings, facets, the product page, comparison
 
 `index.ts` is the only entry. There is no `browser.ts`. It exports the read modules (listing, compare, product page, search, site search, feed, sitemap, recommendations, feed diagnostics, collections, cards, home lists) and parts of `facets`, `product-reviews` and `home-brands`. `shared.ts`, `buyer-state.ts`, `declare-deps.ts`, `search-correction.ts` and `search-relevance.ts` stay internal.
 
-Layer L4. The domain imports `brands`, `categories`, `collections`, `custom-fields`, `products`, `promotions` and `settings`. `navigation` and `storefront` import `catalog`. Collection reads and site search live here; the collection records live in `collections`.
+Layer L5. The domain imports `brands`, `categories`, `collections`, `custom-fields`, `markets`, `products`, `promotions` and `settings`. `navigation` and `storefront` import `catalog`. Collection reads and site search live here; the collection records live in `collections`.
 
 ## Owns
 

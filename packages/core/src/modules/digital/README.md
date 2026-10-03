@@ -18,7 +18,7 @@ Main files:
 
 ## Layer and imports
 
-- Layer L4. Imports `inventory` (key import and revoke run through `executeInventoryOperation` with companion statements).
+- Layer L5. Imports `inventory` (key import and revoke run through `executeInventoryOperation` with companion statements).
 - Imported by `checkout` (`digitalDeliverableSql`) and `fulfilment` (`planDigitalDelivery`, composed in `fulfilment/auto/digital.ts`). Send-time message content is resolved in `apps/api/src/notification-content/digital.ts`.
 
 ## Tables

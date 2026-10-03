@@ -5,7 +5,7 @@ Category records, their publication rules, revision-guarded admin writes and the
 ## Entries and layer
 
 - `browser.ts` exports `categories.validation.ts` (create, update, status, move and revision-claim schemas, `CATEGORY_BATCH_LIMIT` 90). `index.ts` exports everything in `browser.ts`, plus `categories.service.ts`, `categories.storefront.ts`, `categories.publication.ts`, `categories.revision.ts` and `categories.tree.ts`.
-- Layer L3. The domain imports `custom-fields`, `media-references` and `products`. `catalog`, `navigation`, `storefront` and `store-transfer` import `categories`.
+- Layer L4. The domain imports `custom-fields`, `media-references` and `products`. `catalog`, `navigation`, `storefront` and `store-transfer` import `categories`.
 
 ## Owns
 
