@@ -20,6 +20,11 @@ export const BUNDLED_PLUGINS: Readonly<Record<string, BundledPluginEntry>> = {
     sha256: "c54c837ff5a576b5cd99b25709d63a1d012f59834851fd5ecf14e4d71f4a485c",
     load: () => import("../../../../plugins/hello/src/index"),
   },
+  "scalius.loyalty": {
+    version: "0.1.0",
+    sha256: "0003d53f89325ff0c2e7f99fdf846e8440545c3aa4c5ff906958e21e85448542",
+    load: () => import("../../../../plugins/loyalty/src/index"),
+  },
   "scalius.nagad": {
     version: "0.1.0",
     sha256: "fe58d80cdd691548fd7eb2aae7d6b68d228ff182b6db9f7cbd2664072dbad42e",

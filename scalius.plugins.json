@@ -22,6 +22,12 @@
       "sha256": "c54c837ff5a576b5cd99b25709d63a1d012f59834851fd5ecf14e4d71f4a485c"
     },
     {
+      "id": "scalius.loyalty",
+      "version": "0.1.0",
+      "source": "plugins/loyalty",
+      "sha256": "0003d53f89325ff0c2e7f99fdf846e8440545c3aa4c5ff906958e21e85448542"
+    },
+    {
       "id": "scalius.nagad",
       "version": "0.1.0",
       "source": "plugins/nagad",
