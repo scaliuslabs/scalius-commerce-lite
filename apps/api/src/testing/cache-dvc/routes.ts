@@ -125,7 +125,7 @@ export function dvcPageCatalogue(): DvcPage[] {
     { name: "collection", parts: [...SHELL, "/api/v1/collections/col_manual"] },
     { name: "collection-dynamic", parts: [...SHELL, "/api/v1/collections/col_dynamic"] },
     { name: "brand", parts: [...SHELL, "/api/v1/brands/aarong", `/api/v1/brands/aarong/products?${LIST}`] },
-    { name: "cms", parts: [...SHELL, "/api/v1/storefront/pages/slug/about", ...COMMERCE] },
+    { name: "cms", parts: [...SHELL, "/api/v1/storefront/pages/slug/about"] },
     { name: "landing", parts: [...SHELL, "/api/v1/storefront/landing/eid", ...COMMERCE] },
     { name: "article", parts: [...SHELL, "/api/v1/articles/slug/eid-lookbook"] },
     { name: "cart-shell", parts: [...SHELL, ...COMMERCE, "/api/v1/checkout-languages/active", "/api/v1/locations/cities"] },
