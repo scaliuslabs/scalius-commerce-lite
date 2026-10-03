@@ -133,7 +133,7 @@ export const shellMessages = defineMessages({
     goTo: "যান",
     recent: "সাম্প্রতিক",
     searchHint: "কিবোর্ড শর্টকাট দেখতে ? চাপুন",
-    draft: "ড্রাফট",
+    draft: "খসড়া",
     results: "ফলাফল",
     searching: "খোঁজা হচ্ছে…",
     searchNothing: "কিছু পাওয়া যায়নি",

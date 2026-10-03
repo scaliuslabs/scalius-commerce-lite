@@ -43,7 +43,7 @@ export function HomeAnalytics() {
   const [preset, setPreset] = useState<AnalyticsPreset>("last_30_days");
   const overview = useQuery(homeOverviewQuery(preset, today));
   const data = overview.data;
-  const compared = t("comparison.previous_period").toLowerCase();
+  const compared = "previous_period" as const;
 
   return (
     <section className="space-y-3" aria-label={t("analytics")}>

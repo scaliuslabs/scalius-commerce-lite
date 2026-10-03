@@ -200,8 +200,8 @@ export const installedAppsMessages = defineMessages({
     emptyTitle: "কোনো অ্যাপ ইনস্টল করা নেই",
     emptyBody: "আপনার ডেভেলপার এই স্টোরে যে অ্যাপ যোগ করেন তা এখানে দেখা যাবে, দেখে নিয়ে চালু করার জন্য তৈরি।",
 
-    status_active: "চালু",
-    status_installed: "চালু নয়",
+    status_active: "সক্রিয়",
+    status_installed: "সক্রিয় নয়",
     status_disabled: "বন্ধ",
     status_failed: "ব্যর্থ",
     status_needsApproval: "আপডেটের অনুমোদন দরকার",

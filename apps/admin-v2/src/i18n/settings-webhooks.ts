@@ -143,7 +143,7 @@ export const webhooksMessages = defineMessages({
     usage: "{max}টির মধ্যে {count}টি ওয়েবহুক · API ভার্সন {version}",
     limitReached: "সর্বোচ্চ {max}টি ওয়েবহুক রাখা যায়। নতুন যোগ করতে একটি ডিলিট করুন।",
 
-    status_active: "চালু",
+    status_active: "সক্রিয়",
     status_disabled: "বন্ধ",
     status_failing: "বন্ধ — বারবার ব্যর্থ",
     failedOnce: "শেষ ডেলিভারি ব্যর্থ হয়েছে",

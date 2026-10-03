@@ -118,7 +118,7 @@ export function AnalyticsOverview({
   }
 
   const { current, previous } = data;
-  const compared = previous ? t(`comparison.${data.comparison}`).toLowerCase() : null;
+  const compared = previous && data.comparison !== "none" ? data.comparison : null;
   const tile = (key: Extract<keyof Period["totals"], string>, upIsGood = true) => ({
     current: current.totals[key],
     previous: previous?.totals[key] ?? null,

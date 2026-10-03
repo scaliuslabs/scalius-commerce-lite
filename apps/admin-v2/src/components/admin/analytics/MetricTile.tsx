@@ -1,5 +1,5 @@
 import { ArrowDownRight, ArrowUpRight, Minus } from "lucide-react";
-import { analyticsChange } from "@scalius/shared/analytics-period";
+import { analyticsChange, type AnalyticsComparison } from "@scalius/shared/analytics-period";
 import { cn } from "@scalius/shared/utils";
 import { Card, CardHeader } from "~/components/ui/card";
 import { formatNumber, useMessages } from "~/i18n";
@@ -12,8 +12,12 @@ export interface MetricTileProps {
   /** Raw numbers for the change; `previous` null (or no comparison) shows no change line. */
   current?: number | null;
   previous?: number | null;
-  /** The comparison period's words ("previous period"). */
-  comparedTo?: string | null;
+  /**
+   * The period the change is against. Each has its own whole phrase ("vs
+   * previous period", "আগের সময়ের তুলনায়"): a period name is never glued
+   * into another sentence, which reads wrong in Bangla.
+   */
+  comparedTo?: Exclude<AnalyticsComparison, "none"> | null;
   /** Rates change in percentage points; amounts and counts in percent. */
   change?: "relative" | "points";
   /** Whether a rise is good news (sales) or bad news (cancellations). */
@@ -58,7 +62,7 @@ export function MetricTile({ label, value, current, previous, comparedTo, change
               <span className="sr-only">{delta! > 0 ? t("changeUp", { change: words }) : t("changeDown", { change: words })}</span>
               <span aria-hidden>{words}</span>
             </span>
-            <span className="text-muted-foreground">{t("vsPeriod", { period: comparedTo })}</span>
+            <span className="text-muted-foreground">{t(`vs.${comparedTo}`)}</span>
           </p>
         ) : comparedTo ? (
           <p className="text-body text-muted-foreground">{t("noBaseline")}</p>
