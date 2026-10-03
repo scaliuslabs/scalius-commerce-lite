@@ -10,7 +10,7 @@ import { sortHeader } from "~/components/admin/resource/columns";
 import { translate } from "~/i18n";
 import { productMessages, type ProductMessageKey } from "~/i18n/products";
 import type { ProductListItemDto } from "~/lib/api-query-options/products";
-import { priceRangeText } from "~/hooks/use-currency";
+import { priceRangeText } from "~/lib/format-utils";
 
 export type ProductListItem = ProductListItemDto;
 

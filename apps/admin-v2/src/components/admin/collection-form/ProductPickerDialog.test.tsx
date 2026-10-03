@@ -12,10 +12,7 @@ vi.mock("~/lib/api", () => ({ apiData: (call: unknown) => call }));
 vi.mock("@scalius/api-client/sdk", () => ({
   getApiV1AdminCollectionsProductOptions: getCollectionProductOptions,
 }));
-vi.mock("~/hooks/use-currency", async (importOriginal) => ({
-  ...await importOriginal<typeof import("~/hooks/use-currency")>(),
-  useCurrency: () => ({ fmt: (value: number) => `৳${value}` }),
-}));
+vi.mock("~/hooks/use-currency", () => ({ useCurrency: () => ({ fmt: (value: number) => `৳${value}` }) }));
 vi.mock("@tanstack/react-router", () => ({
   Link: ({ to, children }: { to: string; children: React.ReactNode }) => <a href={to}>{children}</a>,
 }));

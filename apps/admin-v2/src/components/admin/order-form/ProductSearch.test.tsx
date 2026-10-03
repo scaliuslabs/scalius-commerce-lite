@@ -8,8 +8,7 @@ import type { Product } from "./types";
 vi.mock("./OrderFormContext", () => ({
   useOrderForm: () => ({ refs: { productSearchInputRef: { current: null } } }),
 }));
-vi.mock("@/hooks/use-currency", async (importOriginal) => ({
-  ...await importOriginal<typeof import("@/hooks/use-currency")>(),
+vi.mock("@/hooks/use-currency", () => ({
   useCurrency: () => ({ fmt: (price: number) => `৳${price}` }),
 }));
 

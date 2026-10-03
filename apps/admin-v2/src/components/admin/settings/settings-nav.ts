@@ -16,6 +16,9 @@ import {
   Webhook,
   type LucideIcon,
 } from "lucide-react";
+import { translate } from "~/i18n";
+import { settingsNavMessages } from "~/i18n/settings";
+import { titleHead } from "~/i18n/page-titles";
 
 /**
  * The settings pages in Shopify's order (the navigation panel lists them
@@ -44,3 +47,8 @@ export const SETTINGS_NAV = [
 export const SETTINGS_GROUPS = ["general", "selling", "customers", "more"] as const;
 
 export type SettingsNavKey = (typeof SETTINGS_NAV)[number]["key"];
+
+/** Route `head` for a settings page, in the dashboard language. */
+export function settingsHead(key: SettingsNavKey) {
+  return titleHead(translate(settingsNavMessages, key));
+}

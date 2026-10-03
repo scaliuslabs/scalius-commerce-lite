@@ -46,7 +46,7 @@ import { RouteErrorComponent } from "~/lib/route-error";
 import { useMessages } from "~/i18n";
 import { settingsMessages, settingsNavMessages } from "~/i18n/settings";
 import { usersMessages } from "~/i18n/settings-users";
-import { settingsHead } from "~/i18n/page-titles";
+import { settingsHead } from "~/components/admin/settings/settings-nav";
 
 // Stopgap until `pnpm generate:sdk` adds postApiV1AdminAuthUsersByIdRemove.
 const removeStaff = (id: string) =>

@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { DeliveryZonesCard } from "~/components/admin/settings/DeliveryZones";
 import { SettingsPage } from "~/components/admin/settings/SettingsPage";
 import { CouriersCard, DeliveryAreasCard } from "~/components/admin/settings/ShippingSettings";
-import { settingsHead } from "~/i18n/page-titles";
+import { settingsHead } from "~/components/admin/settings/settings-nav";
 import {
   areaCountsQuery,
   couriersQuery,

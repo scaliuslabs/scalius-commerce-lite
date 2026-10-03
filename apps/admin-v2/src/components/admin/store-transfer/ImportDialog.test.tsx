@@ -18,7 +18,7 @@ vi.mock("@scalius/api-client/sdk", () => sdk);
 vi.mock("~/hooks/use-currency", () => ({ useCurrency: () => ({ code: "BDT", symbol: "৳", fmt: String }) }));
 vi.mock("@tanstack/react-router", () => ({ Link: ({ children }: { children: unknown }) => children }));
 
-import { ImportDialog } from "./LazyImportDialog";
+import { ImportDialog } from "./ImportDialog";
 import { ImportPreview } from "./ImportPreview";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -80,7 +80,6 @@ describe("import dialog", () => {
         </QueryClientProvider>,
       );
     });
-    await vi.waitFor(() => expect(document.querySelector("input[type=file]")).not.toBeNull());
     const input = document.querySelector<HTMLInputElement>("input[type=file]")!;
     const file = new File([CSV], "shopify.csv", { type: "text/csv" });
     Object.defineProperty(input, "files", { value: [file], configurable: true });

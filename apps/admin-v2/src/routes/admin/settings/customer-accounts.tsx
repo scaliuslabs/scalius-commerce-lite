@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { CustomerSignInCard } from "~/components/admin/settings/CustomerSignInCard";
 import { MarketingConsentCard } from "~/components/admin/settings/MarketingConsentCard";
 import { SettingsPage } from "~/components/admin/settings/SettingsPage";
-import { settingsHead } from "~/i18n/page-titles";
+import { settingsHead } from "~/components/admin/settings/settings-nav";
 import { useHasPermission } from "~/contexts/PermissionContext";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { customerRulesQuery, marketingConsentQuery, signInPolicyQuery } from "~/lib/api-query-options/settings-screens";

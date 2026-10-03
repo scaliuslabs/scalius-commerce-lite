@@ -5,7 +5,7 @@ import {
   getApiV1AdminReportsOverview,
 } from "@scalius/api-client/sdk";
 import type { AnalyticsReportId } from "@scalius/shared/analytics-reports";
-import { analyticsPresetRange, analyticsToday, defaultAnalyticsGranularity, type AnalyticsComparison, type AnalyticsGranularity, type AnalyticsPreset } from "@scalius/shared/analytics-period";
+import type { AnalyticsComparison, AnalyticsGranularity } from "@scalius/shared/analytics-period";
 import { apiData, type ApiResult } from "../api";
 import { queryKeys } from "../query-keys";
 
@@ -41,16 +41,6 @@ export const analyticsOverviewQueryOptions = (query: AnalyticsOverviewQuery) =>
     staleTime: ANALYTICS_STALE_TIME_MS,
     placeholderData: keepPreviousData,
   });
-
-/** Home's loader uses the same read without importing its chart component. */
-export function homeOverviewQuery(preset: AnalyticsPreset, today: string = analyticsToday()) {
-  const range = analyticsPresetRange(preset, today);
-  return analyticsOverviewQueryOptions({
-    ...range,
-    comparison: "previous_period",
-    granularity: defaultAnalyticsGranularity(range),
-  });
-}
 
 export const analyticsReportCatalogQueryOptions = () =>
   queryOptions({

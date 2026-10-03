@@ -41,7 +41,7 @@ import { productMessages } from "~/i18n/products";
 import { resourceMessages } from "~/i18n/resource";
 import { pageHead } from "~/i18n/page-titles";
 import { storeTransferMessages } from "~/i18n/store-transfer";
-import { ImportDialog } from "~/components/admin/store-transfer/LazyImportDialog";
+import { ImportDialog } from "~/components/admin/store-transfer/ImportDialog";
 
 const STATUSES = ["active", "draft"] as const;
 const validateBase = createListSearchValidator(["updatedAt", "createdAt", "name", "price", "category"] as const, { sort: "updatedAt" });

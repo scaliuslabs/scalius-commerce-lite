@@ -9,7 +9,7 @@ import {
   currencyQuery,
   platformQuery,
 } from "~/lib/api-query-options/settings-screens";
-import { settingsHead } from "~/i18n/page-titles";
+import { settingsHead } from "~/components/admin/settings/settings-nav";
 import { RouteErrorComponent } from "~/lib/route-error";
 
 export const Route = createFileRoute("/admin/settings/store")({

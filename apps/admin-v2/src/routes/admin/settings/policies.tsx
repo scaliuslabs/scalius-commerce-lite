@@ -13,7 +13,7 @@ import { SearchableSelect } from "~/components/ui/searchable-select";
 import { SettingsLoadFailure } from "~/components/admin/settings/SettingsLoadFailure";
 import { WarrantyPoliciesEntry } from "~/components/admin/settings/warranty-policies/WarrantyPoliciesEntry";
 import { SettingsCard, SettingsField, SettingsPage, SettingsCardLoading } from "~/components/admin/settings/SettingsPage";
-import { settingsHead } from "~/i18n/page-titles";
+import { settingsHead } from "~/components/admin/settings/settings-nav";
 import { useHasPermission } from "~/contexts/PermissionContext";
 import { useSettingsForm } from "~/hooks/use-settings-form";
 import { apiData } from "~/lib/api";
