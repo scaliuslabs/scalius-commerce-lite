@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { ChevronDown } from "lucide-react";
-import { Badge } from "~/components/ui/badge";
+import { StatusBadge } from "~/components/admin/resource/StatusBadge";
 import { Button } from "~/components/ui/button";
 import { Command, CommandGroup, CommandInput, CommandItem, CommandList } from "~/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover";
@@ -64,7 +64,7 @@ export function ProductPickerPopover({ triggerLabel, selectedCategoryIds = [], o
                       <span className="block truncate">{product.name}</span>
                       <ProductOptionMeta product={product} />
                     </span>
-                    {product.isActive === false ? <Badge variant="attention">{t("draft")}</Badge> : null}
+                    {product.isActive === false ? <StatusBadge status="draft">{t("draft")}</StatusBadge> : null}
                   </CommandItem>
                 ))}
               </CommandGroup>

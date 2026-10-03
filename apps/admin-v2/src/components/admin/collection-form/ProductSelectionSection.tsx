@@ -2,7 +2,7 @@ import React from "react";
 import type { UseFormReturn } from "react-hook-form";
 import { Link } from "@tanstack/react-router";
 import { ChevronDown, ChevronUp, X } from "lucide-react";
-import { Badge } from "~/components/ui/badge";
+import { StatusBadge } from "~/components/admin/resource/StatusBadge";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { FormControl, FormField, FormItem, FormMessage } from "~/components/ui/form";
@@ -70,7 +70,7 @@ function RulePreview({ categoryIds }: { categoryIds: string[] }) {
                   <span className="block truncate">{product.name}</span>
                   <ProductOptionMeta product={product} />
                 </span>
-                {product.isActive === false ? <Badge variant="attention">{t("draft")}</Badge> : null}
+                {product.isActive === false ? <StatusBadge status="draft">{t("draft")}</StatusBadge> : null}
               </li>
             ))}
             {query.hasNextPage ? (
@@ -203,7 +203,7 @@ export const ProductSelectionSection = React.memo(function ProductSelectionSecti
                         <li key={product.id} className="flex items-center gap-3 px-3 py-2">
                           <ProductThumbnail image={product.primaryImage} />
                           <span className="min-w-0 flex-1 truncate">{product.name}</span>
-                          {product.isActive === false ? <Badge variant="attention">{t("draft")}</Badge> : null}
+                          {product.isActive === false ? <StatusBadge status="draft">{t("draft")}</StatusBadge> : null}
                           <Button type="button" variant="ghost" size="icon-sm" disabled={index === 0} onClick={() => moveProduct(product.id, -1)} aria-label={t("moveUp", { name: product.name })}>
                             <ChevronUp />
                           </Button>
@@ -234,8 +234,8 @@ export const ProductSelectionSection = React.memo(function ProductSelectionSecti
                       {selectedCategories.map((category) => (
                         <li key={category.id} className="flex items-center gap-3 px-3 py-2">
                           <span className="min-w-0 flex-1 truncate">{category.name}</span>
-                          {category.status === "draft" ? <Badge variant="attention">{tc("draft")}</Badge> : null}
-                          {category.status === "internal" ? <Badge variant="secondary">{tc("hidden")}</Badge> : null}
+                          {category.status === "draft" ? <StatusBadge status="draft">{tc("draft")}</StatusBadge> : null}
+                          {category.status === "internal" ? <StatusBadge status="hidden">{tc("hidden")}</StatusBadge> : null}
                           <Button type="button" variant="ghost" size="icon-sm" onClick={() => removeCategory(category.id)} aria-label={t("remove", { name: category.name })}>
                             <X />
                           </Button>

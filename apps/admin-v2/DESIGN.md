@@ -49,7 +49,7 @@ Theme document content (Online store → Theme) stores images as media ids and l
 | Order | delivered | processing, confirmed, shipped | returned, partially_refunded | pending | — | completed, cancelled, refunded, incomplete |
 | Payment | — | — | unpaid, partial | — | failed | paid, refunded |
 | Fulfillment | — | — | partial | pending (Unfulfilled) | — | complete |
-| Product/discount | active | scheduled | — | draft | expired, error | archived |
+| Record (`resource/StatusBadge`: products, categories, brands, collections, pages, posts, discounts) | active | scheduled | — | draft | expired, error | archived, hidden, inactive |
 
 `default` (strong) is only for counts. The badge always carries the word; colour is never the only signal.
 

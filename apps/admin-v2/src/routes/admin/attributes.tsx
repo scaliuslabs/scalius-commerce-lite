@@ -19,7 +19,7 @@ import { useCatalogActionPermissions } from "~/hooks/use-catalog-action-permissi
 import { Button } from "~/components/ui/button";
 import type { ColumnDef } from "~/components/admin/data-table/table-config";
 import { ResourceListPage } from "~/components/admin/resource/ResourceListPage";
-import { StatusBadge } from "~/components/admin/resource/StatusBadge";
+import { Badge } from "~/components/ui/badge";
 import { sortHeader } from "~/components/admin/resource/columns";
 import { AttributeDialog } from "~/components/admin/attributes-manager/components/AttributeDialog";
 import { AttributeValueEditor } from "~/components/admin/attributes-manager/components/AttributeValueEditor";
@@ -130,7 +130,7 @@ function AttributesPage() {
       accessorKey: "filterable",
       header: sortHeader(t("filterable")),
       meta: { mobile: "status", priority: 50, minWidth: 110 },
-      cell: ({ row }) => (row.original.filterable ? <StatusBadge tone="neutral">{t("filterableYes")}</StatusBadge> : null),
+      cell: ({ row }) => (row.original.filterable ? <Badge variant="secondary">{t("filterableYes")}</Badge> : null),
     },
   ], [t, a, can.canEdit, search.trashed]);
 
