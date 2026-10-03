@@ -12,6 +12,7 @@ import {
   priceIncrementChoices,
   resolvePriceIncrementMinor,
 } from "@scalius/shared/currency-policy";
+import { MARKET_HANDLE_MAX_LENGTH, MARKET_NAME_MAX_LENGTH } from "@scalius/shared/markets";
 import { toast } from "~/lib/toast";
 import { StatusBadge } from "~/components/admin/resource/StatusBadge";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
@@ -113,10 +114,10 @@ export function MarketEditor({ marketId }: { marketId: string }) {
     >
       <SettingsCard title={t("detailsTitle")}>
         <SettingsField id="market-name" label={t("name")} help={t("nameHelp")} error={problems.name ? t(problems.name) : null}>
-          <Input id="market-name" value={values.name} maxLength={80} disabled={!canEdit} onChange={(event) => setValue("name", event.target.value)} />
+          <Input id="market-name" value={values.name} maxLength={MARKET_NAME_MAX_LENGTH} disabled={!canEdit} onChange={(event) => setValue("name", event.target.value)} />
         </SettingsField>
         <SettingsField id="market-handle" label={t("handle")} help={t("handleHelp")} error={problems.handle ? t(problems.handle) : null}>
-          <Input id="market-handle" value={values.handle} maxLength={60} disabled={!canEdit} onChange={(event) => setValue("handle", event.target.value)} />
+          <Input id="market-handle" value={values.handle} maxLength={MARKET_HANDLE_MAX_LENGTH} disabled={!canEdit} onChange={(event) => setValue("handle", event.target.value)} />
         </SettingsField>
         {values.isBackup ? (
           <p className="text-body text-muted-foreground">{t("backupAlwaysActive")}</p>

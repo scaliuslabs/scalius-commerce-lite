@@ -3,6 +3,7 @@
 // dialog leads.
 import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate } from "@tanstack/react-router";
+import { MARKET_NAME_MAX_LENGTH } from "@scalius/shared/markets";
 import { toast } from "~/lib/toast";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
 import { useDirtyDialogClose } from "~/components/admin/shared/use-dirty-dialog-close";
@@ -79,7 +80,7 @@ export function CreateMarketDialog({ open, onOpenChange, taken }: {
               <Input
                 id="market-create-name"
                 value={name}
-                maxLength={80}
+                maxLength={MARKET_NAME_MAX_LENGTH}
                 aria-invalid={errors.name ? true : undefined}
                 aria-describedby="market-create-name-note"
                 onChange={(event) => {
