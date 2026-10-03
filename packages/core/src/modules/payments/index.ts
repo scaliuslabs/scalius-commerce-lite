@@ -16,6 +16,7 @@ export type {
 export {
   BUILT_IN_PAYMENT_GATEWAY_IDS,
   BUILT_IN_PAYMENT_PROVIDERS,
+  CASH_ON_DELIVERY_AMOUNT_REASON,
   COD_PAYMENT_METHOD,
   createPaymentProviders,
   isOnlinePaymentMethod,

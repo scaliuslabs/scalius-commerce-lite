@@ -8,7 +8,10 @@
 
 import { ValidationError } from "@scalius/core/errors";
 import { getDecimalPlaces, normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
+import { cashOnDeliveryIncrementMinor, isWholeUnitIncrement } from "@scalius/shared/currency-policy";
 import { toMinor } from "@scalius/shared/money";
+import type { ProviderAmountCodecs } from "@scalius/shared/plugins/providers";
+import { encodeProviderAmount, type EncodedProviderAmount } from "@scalius/shared/plugins/providers/amount";
 import { isQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
 import {
   COD_LABEL,
@@ -51,6 +54,32 @@ export function getGatewayAmountIssue(
   return `${label} must be between ${minorToMajorString(limits.minMinor, decimals)} ${limits.currency} and ${minorToMajorString(limits.maxMinor, decimals)} ${limits.currency}.`;
 }
 
+/** The refusal reason when cash on delivery cannot collect an amount exactly. */
+export const CASH_ON_DELIVERY_AMOUNT_REASON = "cash_on_delivery_amount";
+
+/**
+ * Cash on delivery's wire form: the cash it collects comes in its cash
+ * increment (`cashOnDeliveryIncrementMinor`: whole taka in BDT).
+ */
+export function cashOnDeliveryAmountCodecs(currency: string): ProviderAmountCodecs {
+  const code = currency.trim().toUpperCase();
+  return { [code]: { minorIncrement: cashOnDeliveryIncrementMinor(code) } };
+}
+
+/** Why `label` cannot charge exactly this amount (the codec's rounding), or null. */
+function exactAmountIssue(label: string, encoded: EncodedProviderAmount, amountMinor: number, cash: boolean): string | null {
+  if (encoded.roundingMinor === 0) return null;
+  const decimals = getDecimalPlaces(encoded.currency);
+  const amount = `${minorToMajorString(amountMinor, decimals)} ${encoded.currency}`;
+  if (cash) {
+    return encoded.currency === "BDT" && isWholeUnitIncrement("BDT", cashOnDeliveryIncrementMinor("BDT"))
+      ? `Cash on delivery collects whole taka, so ${amount} can't be paid on delivery. Choose an online payment method.`
+      : `Cash on delivery can't collect ${amount} exactly. Choose an online payment method.`;
+  }
+  return `${label} cannot charge ${amount} exactly `
+    + `(it would drop ${minorToMajorString(encoded.roundingMinor, decimals)}). Set prices in steps the provider accepts.`;
+}
+
 /** Public checkout copy of a gateway's limits, in major units. */
 export function publicAmountLimits(gateway: PaymentGateway): { currency: string; min: number; max: number } | undefined {
   const limits = gateway.amountLimits;
@@ -86,10 +115,23 @@ export interface PaymentProviders {
   currencyIssue(id: string, currencyCode: unknown): string | null;
   filterForCurrency(ids: readonly string[], currencyCode: unknown): string[];
   /**
+   * The one amount codec of every payment path (MARKETS-DESIGN D2): the
+   * amount in the method's wire form (a gateway's declared codecs, cash on
+   * delivery's cash increment) and what that form cannot carry
+   * (`roundingMinor`, never added to a charge).
+   */
+  encodeAmount(methodId: string, amountMinor: number, currency: string): EncodedProviderAmount;
+  /**
+   * Why the method cannot charge exactly this amount, or null. Every path
+   * refuses a non-zero rounding before the order commits or a provider is
+   * called, so what is charged always equals what the order owes.
+   */
+  amountIssue(methodId: string, amountMinor: number, currency: string): string | null;
+  /**
    * Checks an online checkout must pass before its order commits: the store
    * currency is one the gateway can charge, and the first charge (the
    * configured advance when it is below the total, else the total) is within
-   * provider limits.
+   * provider limits and exact in the gateway's wire form.
    */
   precommitIssue(input: CheckoutGatewayPrecommitInput): string | null;
 }
@@ -122,6 +164,16 @@ export function createPaymentProviders(apps: readonly PaymentGateway[] = []): Pa
     return null;
   };
 
+  const encodeAmount = (methodId: string, amountMinor: number, currency: string): EncodedProviderAmount =>
+    encodeProviderAmount(
+      amountMinor,
+      currency,
+      methodId === COD_PAYMENT_METHOD ? cashOnDeliveryAmountCodecs(currency) : get(methodId)?.amountCodecs,
+    );
+
+  const amountIssue = (methodId: string, amountMinor: number, currency: string): string | null =>
+    exactAmountIssue(label(methodId), encodeAmount(methodId, amountMinor, currency), amountMinor, methodId === COD_PAYMENT_METHOD);
+
   return {
     gateways,
     get,
@@ -134,6 +186,8 @@ export function createPaymentProviders(apps: readonly PaymentGateway[] = []): Pa
     label,
     currencyIssue,
     filterForCurrency: (ids, currencyCode) => ids.filter((id) => currencyIssue(id, currencyCode) === null),
+    encodeAmount,
+    amountIssue,
     precommitIssue(input) {
       const gateway = get(input.paymentMethod);
       if (!gateway) return null;
@@ -147,7 +201,8 @@ export function createPaymentProviders(apps: readonly PaymentGateway[] = []): Pa
       const chargeMinor = input.partialPaymentEnabled && depositMinor > 0 && depositMinor < totalMinor
         ? depositMinor
         : totalMinor;
-      return getGatewayAmountIssue(gateway, chargeMinor, input.currencyCode);
+      return getGatewayAmountIssue(gateway, chargeMinor, input.currencyCode)
+        ?? amountIssue(gateway.id, chargeMinor, input.currencyCode);
     },
   };
 }

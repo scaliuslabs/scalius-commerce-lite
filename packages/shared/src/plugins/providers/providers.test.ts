@@ -4,6 +4,7 @@ import {
   PROVIDER_OPERATIONS,
   PROVIDER_PORTS,
   ProviderError,
+  decodeProviderAmount,
   encodeProviderAmount,
   isQualifiedProviderId,
   parseQualifiedProviderId,
@@ -157,6 +158,15 @@ describe("payment amount codec", () => {
     });
     // A wire without decimals for a two-decimal currency charges whole units only.
     expect(encodeProviderAmount(10_050, "IDR", { IDR: { wireExponent: 0 } })).toMatchObject({ chargedMinor: 10_000, roundingMinor: 50, wire: wire(100, "100") });
+  });
+
+  it("decodes a reported wire amount back to ISO minor units, refusing one it could not have sent", () => {
+    expect(decodeProviderAmount(12_550, "BDT")).toBe(12_550);
+    expect(decodeProviderAmount(150_000, "ISK", { ISK: { wireExponent: 2 } })).toBe(1_500);
+    expect(decodeProviderAmount(150_050, "ISK", { ISK: { wireExponent: 2 } })).toBeNull();
+    expect(decodeProviderAmount(100, "IDR", { IDR: { wireExponent: 0 } })).toBe(10_000);
+    expect(decodeProviderAmount(-1, "BDT")).toBeNull();
+    expect(decodeProviderAmount(1.5, "BDT")).toBeNull();
   });
 });
 

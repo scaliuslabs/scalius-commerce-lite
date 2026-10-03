@@ -47,6 +47,28 @@ function decimalString(value: number, places: number): string {
 }
 
 /**
+ * A provider-reported wire amount (Stripe's `amount_received`, a refund's
+ * `amount`) back in ISO minor units; null when the wire value is not a whole
+ * number of minor units (it is not an amount this codec produced).
+ */
+export function decodeProviderAmount(
+  wireMinor: number,
+  currency: string,
+  codecs?: ProviderAmountCodecs,
+): number | null {
+  if (!Number.isSafeInteger(wireMinor) || wireMinor < 0) return null;
+  const code = currency.toUpperCase();
+  const isoExponent = getDecimalPlaces(code);
+  const wireExponent = codecs?.[code]?.wireExponent ?? isoExponent;
+  if (wireExponent >= isoExponent) {
+    const unit = 10 ** (wireExponent - isoExponent);
+    return wireMinor % unit === 0 ? wireMinor / unit : null;
+  }
+  const minor = wireMinor * 10 ** (isoExponent - wireExponent);
+  return Number.isSafeInteger(minor) ? minor : null;
+}
+
+/**
  * Encodes an amount for a provider. Rounds down to the provider's increment
  * (and to a whole wire unit when the wire exponent is smaller than ISO's), so
  * the charge never exceeds what was asked.

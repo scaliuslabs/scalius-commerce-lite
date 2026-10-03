@@ -29,9 +29,6 @@ import {
   type PaymentProviders,
 } from "@scalius/core/modules/payments";
 import { assertNoActivePaymentSessionAttempt, noActivePaymentSessionAttemptForOrderSqlCondition } from "@scalius/core/modules/order-kernel";
-import { encodeProviderAmount } from "@scalius/shared/plugins/providers/amount";
-import { minorToMajorString } from "@scalius/core/modules/payments";
-import { getDecimalPlaces } from "@scalius/shared/currency";
 import { isQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
 import { requestPaymentProviders } from "../../plugins/providers/payment";
 import {
@@ -287,16 +284,12 @@ async function createPaymentSessionForOrder(
   const amountMinor = policy.chargeAmountMinor;
   const amountIssue = getGatewayAmountIssue(gateway, amountMinor, currency);
   if (amountIssue) throw new ValidationError(amountIssue);
-  // The provider's wire form, encoded once (D2). A form that cannot carry the
-  // exact amount is refused here: the difference is never added to the charge.
-  const encoded = encodeProviderAmount(amountMinor, currency, gateway.amountCodecs);
-  if (encoded.roundingMinor !== 0) {
-    const decimals = getDecimalPlaces(currency);
-    throw new ValidationError(
-      `${gateway.label} cannot charge ${minorToMajorString(amountMinor, decimals)} ${currency} exactly `
-      + `(it would drop ${minorToMajorString(encoded.roundingMinor, decimals)}). Set prices in steps the provider accepts.`,
-    );
-  }
+  // The provider's wire form, through the one payment amount codec (D2). A
+  // form that cannot carry the exact amount is refused here: the difference
+  // is never added to the charge.
+  const exactIssue = providers.amountIssue(gateway.id, amountMinor, currency);
+  if (exactIssue) throw new ValidationError(exactIssue);
+  const encoded = providers.encodeAmount(gateway.id, amountMinor, currency);
 
   const settings = await loadCheckoutGatewaySettings(db, encryptionKey, gateway);
   const urls = buildGatewayUrls(c, gateway.id, input, policy);

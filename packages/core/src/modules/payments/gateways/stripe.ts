@@ -4,6 +4,8 @@
 import Stripe from "stripe";
 import { ValidationError } from "@scalius/core/errors";
 import { getStripeCredentialEnvironment } from "@scalius/shared/payment-gateway-environment";
+import type { ProviderAmountCodecs } from "@scalius/shared/plugins/providers";
+import { decodeProviderAmount } from "@scalius/shared/plugins/providers/amount";
 import {
   getStripeCheckoutReadiness,
   getStripeSettings,
@@ -18,6 +20,30 @@ import {
   type PaymentGateway,
   type PaymentType,
 } from "./port";
+
+/**
+ * Stripe's wire forms where they differ from ISO 4217 (Stripe's currency
+ * special cases): ISK and UGX are sent as two-decimal values, the
+ * three-decimal currencies only in multiples of ten, MGA without decimals.
+ */
+export const STRIPE_AMOUNT_CODECS: ProviderAmountCodecs = {
+  ISK: { wireExponent: 2 },
+  UGX: { wireExponent: 2 },
+  BHD: { minorIncrement: 10 },
+  JOD: { minorIncrement: 10 },
+  KWD: { minorIncrement: 10 },
+  OMR: { minorIncrement: 10 },
+  TND: { minorIncrement: 10 },
+  MGA: { wireExponent: 0 },
+};
+
+/**
+ * A Stripe amount back in ISO minor units. NaN when it is not a value the
+ * codec could have sent: the kernel refuses it (never a wrong amount).
+ */
+function isoMinor(wireMinor: number, currency: string): number {
+  return decodeProviderAmount(wireMinor, currency, STRIPE_AMOUNT_CODECS) ?? Number.NaN;
+}
 
 function stripeClient(secretKey: string): Stripe {
   // The client holds credentials and transport state: keep it per request.
@@ -50,7 +76,7 @@ function confirmedEvent(intent: Stripe.PaymentIntent, eventType: string, eventId
     orderId,
     providerRef: intent.id,
     secondaryRef: idOf(intent.latest_charge),
-    amountMinor: intent.amount_received,
+    amountMinor: isoMinor(intent.amount_received, intent.currency),
     currency: intent.currency.toUpperCase(),
     paymentType: paymentTypeOf(intent.metadata),
   };
@@ -87,7 +113,7 @@ function toEvent(event: Stripe.Event): PaymentEvent | null {
         orderId: charge.metadata.orderId,
         providerRef: paymentIntentId,
         secondaryRef: charge.id,
-        details: { amountRefunded: charge.amount_refunded, currency: charge.currency.toUpperCase() },
+        details: { amountRefunded: isoMinor(charge.amount_refunded, charge.currency), currency: charge.currency.toUpperCase() },
       };
     }
     default:
@@ -99,7 +125,7 @@ function refundOf(refund: Stripe.Refund): GatewayProviderRefund {
   return {
     id: refund.id,
     succeeded: refund.status === "succeeded",
-    amountMinor: refund.amount,
+    amountMinor: isoMinor(refund.amount, refund.currency),
     currency: refund.currency.toUpperCase(),
     sourceRef: idOf(refund.charge) ?? null,
     status: refund.status,
@@ -119,6 +145,7 @@ export const stripeGateway: PaymentGateway<StripeSettings> = {
   checkoutName: "Card Payment",
   flow: "card",
   chargeCurrencies: "any",
+  amountCodecs: STRIPE_AMOUNT_CODECS,
   supportsRefund: true,
 
   loadSettings: getStripeSettings,
@@ -219,7 +246,7 @@ export const stripeGateway: PaymentGateway<StripeSettings> = {
         refund = listed.data.find((candidate) =>
           refundMatchesAttempt(candidate, input) &&
           candidate.currency.toUpperCase() === input.currency &&
-          candidate.amount === input.amountMinor
+          isoMinor(candidate.amount, candidate.currency) === input.amountMinor
         );
       }
     } catch (error) {
@@ -236,7 +263,7 @@ export const stripeGateway: PaymentGateway<StripeSettings> = {
     if (refund.currency.toUpperCase() !== input.currency) {
       return { outcome: "unknown", error: "Stripe refund currency does not match the immutable order currency.", manualReview: true };
     }
-    if (refund.amount !== input.amountMinor) {
+    if (isoMinor(refund.amount, refund.currency) !== input.amountMinor) {
       return { outcome: "unknown", providerRefundId: refund.id, providerStatus: refund.status ?? "unknown", error: "Stripe refund amount does not match the immutable local refund attempt.", responsePayload: payload, manualReview: true };
     }
     if (refund.status === "succeeded") {

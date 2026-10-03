@@ -70,6 +70,26 @@ describe("registry currency and limit policy", () => {
       .toBeNull();
     expect(getCheckoutGatewayPrecommitIssue({ ...input, paymentMethod: "cod", totalAmountMinor: 100 })).toBeNull();
   });
+
+  it("encodes every payment path through one amount codec and refuses what a wire form cannot carry", () => {
+    const { amountIssue, encodeAmount } = BUILT_IN_PAYMENT_PROVIDERS;
+    // Cash on delivery collects whole taka; other currencies collect what is owed.
+    expect(encodeAmount("cod", 12_550, "BDT")).toMatchObject({ chargedMinor: 12_500, roundingMinor: 50 });
+    expect(amountIssue("cod", 12_550, "BDT"))
+      .toBe("Cash on delivery collects whole taka, so 125.50 BDT can't be paid on delivery. Choose an online payment method.");
+    expect(amountIssue("cod", 12_500, "BDT")).toBeNull();
+    expect(amountIssue("cod", 1_999, "USD")).toBeNull();
+    // Stripe's wire forms: two-decimal ISK, three-decimal currencies in tens.
+    expect(encodeAmount("stripe", 1_500, "ISK")).toMatchObject({ roundingMinor: 0, wire: { minor: 150_000, decimal: "1500.00" } });
+    expect(amountIssue("stripe", 12_345, "KWD"))
+      .toBe("Stripe cannot charge 12.345 KWD exactly (it would drop 0.005). Set prices in steps the provider accepts.");
+    expect(amountIssue("stripe", 12_340, "KWD")).toBeNull();
+    expect(getCheckoutGatewayPrecommitIssue({
+      paymentMethod: "stripe", currencyCode: "KWD", totalAmountMinor: 12_345, partialPaymentEnabled: false, partialPaymentAmount: 0,
+    })).toMatch(/^Stripe cannot charge 12\.345 KWD exactly/);
+    // SSLCommerz takes ISO minor units as they are.
+    expect(encodeAmount("sslcommerz", 12_550, "BDT")).toMatchObject({ chargedMinor: 12_550, roundingMinor: 0 });
+  });
 });
 
 describe("payment correlation ids", () => {
@@ -112,6 +132,22 @@ describe("Stripe adapter", () => {
     });
     await expect(stripeGateway.verifyWebhook({ ...authentic, rawBody: `${authentic.rawBody} ` }, call(settings)))
       .resolves.toMatchObject({ status: "invalid" });
+  });
+
+  it("reports Stripe's wire amounts back in ISO minor units, never a value its codec could not have sent", async () => {
+    const succeeded = (id: string, amount: number) => signed({
+      id, type: "payment_intent.succeeded",
+      data: { object: {
+        id: `pi_${id}`, object: "payment_intent", amount_received: amount, currency: "isk",
+        latest_charge: `ch_${id}`, metadata: { orderId: "order_isk" },
+      } },
+    });
+    // ISK is sent to Stripe as a two-decimal value: 150000 is 1500 krónur.
+    await expect(stripeGateway.verifyWebhook(await succeeded("evt_isk", 150_000), call(settings)))
+      .resolves.toMatchObject({ status: "event", event: { amountMinor: 1_500, currency: "ISK" } });
+    // A fraction of a króna is not an amount: the kernel refuses NaN.
+    await expect(stripeGateway.verifyWebhook(await succeeded("evt_odd", 150_050), call(settings)))
+      .resolves.toMatchObject({ status: "event", event: { amountMinor: Number.NaN } });
   });
 
   it("ignores authentic events the kernel does not act on", async () => {

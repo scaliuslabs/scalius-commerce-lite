@@ -19,7 +19,7 @@ import {
     quoteGiftCardTender,
 } from "../gift-cards";
 import { isGiftCardTenderBlocked } from "@scalius/shared/gift-card-tender";
-import { BUILT_IN_PAYMENT_PROVIDERS, type PaymentProviders } from "../payments";
+import { BUILT_IN_PAYMENT_PROVIDERS, CASH_ON_DELIVERY_AMOUNT_REASON, type PaymentProviders } from "../payments";
 import { assertDiscountCodesApplied } from "../promotions";
 import type { CheckoutAppFunctions } from "./app-functions";
 import { assertNoCheckoutRuleErrors, priceStorefrontCheckout } from "./pricing";
@@ -625,6 +625,13 @@ export async function createStorefrontOrder(
         throw new ValidationError("Choose how to pay for this order.");
     }
     if (giftCardHandles.length > 0) assertCashOnDeliveryFits(paymentMethod);
+    if (paymentMethod === PaymentMethod.COD) {
+        // Cash on delivery collects cash amounts (whole taka in BDT): an
+        // amount due it cannot collect exactly is refused before the commit.
+        const cashIssue = (appOptions.paymentProviders ?? BUILT_IN_PAYMENT_PROVIDERS)
+            .amountIssue(paymentMethod, giftCardTender.amountDueMinor, taxQuote.currencyCode);
+        if (cashIssue) throw new ValidationError(cashIssue, { reason: CASH_ON_DELIVERY_AMOUNT_REASON });
+    }
 
     if (isPartialEnabled && paymentMethod === PaymentMethod.COD) {
         throw new ValidationError(giftCardsApplied

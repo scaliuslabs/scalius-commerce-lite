@@ -277,6 +277,17 @@ describe.each(["d1", "turso"] as const)("integer money (%s)", (provider) => {
     expect(cart.valid).toBe(true);
     expect(cart.subtotalMinor).toBe(874);
 
+    // A staff order is cash on delivery, which collects whole taka: a paisa
+    // total is refused at the quote, before anything commits.
+    sqlite!.exec(`
+      INSERT INTO delivery_locations (id, name, type, parent_id, external_ids, metadata, is_active)
+      VALUES ('city_1', 'Dhaka', 'city', NULL, '{}', '{}', 1), ('zone_1', 'North', 'zone', 'city_1', '{}', '{}', 1);
+    `);
+    await expect(quoteManualOrder(db, manualOrder({ items: [{ productId: "tee", variantId: "tee_sku", quantity: 1 }], discountAmount: 0 })))
+      .rejects.toMatchObject({ status: 400, message: expect.stringMatching(/^Cash on delivery collects whole taka, so 68\.74 BDT/) });
+    await expect(quoteManualOrder(db, manualOrder({ items: [{ productId: "tee", variantId: "tee_sku", quantity: 1 }], discountAmount: 0.74 })))
+      .resolves.toMatchObject({ totalAmount: 68 });
+
     // Back to whole taka: the rebuild (queued by the settings save) restores ৳9.
     sqlite!.exec(`UPDATE settings SET value = '{"currencyCode":"BDT","currencySymbol":"৳","priceIncrementMinor":100}' WHERE id = 'currency_doc'`);
     await rebuildCatalogProjections(db);

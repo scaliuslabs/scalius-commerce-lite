@@ -5,7 +5,9 @@
 // Rules every implementation keeps:
 // - Money is integer minor units plus an ISO 4217 code. The platform encodes
 //   the wire form once (`wireAmount`, amount.ts) from the provider's declared
-//   codecs; a provider sends exactly that.
+//   codecs; a provider sends exactly that. Amounts a provider reports
+//   (events, refunds) are ISO minor units again: an adapter whose wire form
+//   differs decodes them with `decodeProviderAmount`.
 // - The platform claims an attempt locally before `createSession`, so the
 //   order exists before any provider side effect; `attemptKey` is stable
 //   across retries of that attempt: pass it as the provider's idempotency key.

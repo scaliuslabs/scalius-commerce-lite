@@ -21,7 +21,6 @@ import {
     paymentProvidersFor,
     type PaymentProvidersSource,
 } from "./gateways/registry";
-import { encodeProviderAmount } from "@scalius/shared/plugins/providers/amount";
 import { presentedSettlement } from "@scalius/shared/money-chain";
 import { providerErrorOf } from "@scalius/shared/plugins/providers/kinds";
 import { applyInventoryForStatusChangeWithImpact } from "../inventory";
@@ -1113,7 +1112,8 @@ async function dispatchRefund(
     providers: PaymentProvidersSource | undefined,
 ): Promise<string | undefined> {
     if (payment.paymentMethod === COD_PAYMENT_METHOD) return undefined;
-    const gateway = (await paymentProvidersFor(providers, payment.paymentMethod)).get(payment.paymentMethod);
+    const gateways = await paymentProvidersFor(providers, payment.paymentMethod);
+    const gateway = gateways.get(payment.paymentMethod);
     if (!gateway?.refund) throw new ValidationError(`Unsupported refund gateway: ${payment.paymentMethod}`);
     const settings = await gateway.loadSettings(db, encryptionKey);
     if (!settings) throw new ServiceUnavailableError(`${gateway.label} is not configured`);
@@ -1124,8 +1124,9 @@ async function dispatchRefund(
         throw new ValidationError(`${gateway.label} refund must resolve to a positive provider amount.`);
     }
 
-    // A refund is asked for exactly; a wire form that cannot carry it is refused before the call.
-    const encoded = encodeProviderAmount(refundAmountMinor, currency.code, gateway.amountCodecs);
+    // A refund is asked for exactly, through the one payment amount codec; a
+    // wire form that cannot carry it is refused before the call.
+    const encoded = gateways.encodeAmount(gateway.id, refundAmountMinor, currency.code);
     if (encoded.roundingMinor !== 0) {
         throw new ValidationError(`${gateway.label} cannot refund this exact amount in ${currency.code}.`);
     }

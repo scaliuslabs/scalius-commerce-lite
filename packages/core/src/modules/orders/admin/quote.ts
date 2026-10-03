@@ -27,7 +27,13 @@ import {
 import { discountedPriceMinor, fromMinor } from "@scalius/shared/money";
 import type { QuoteManualOrderInput } from "../validation";
 import { ValidationError } from "@scalius/core/errors";
-import { createOrderCurrencySnapshot, type OrderCurrencySnapshot } from "../../payments";
+import {
+    BUILT_IN_PAYMENT_PROVIDERS,
+    CASH_ON_DELIVERY_AMOUNT_REASON,
+    COD_PAYMENT_METHOD,
+    createOrderCurrencySnapshot,
+    type OrderCurrencySnapshot,
+} from "../../payments";
 import { buildStorefrontTaxAllocationLineId, calculateStorefrontTaxQuote } from "../../tax";
 import { type TaxQuote } from "../../tax/browser";
 import {
@@ -466,6 +472,11 @@ export async function prepareManualOrderQuote(
             priceIncrementMinor: currency.priceIncrementMinor,
         },
     });
+    // A staff order is cash on delivery, which collects cash amounts (whole
+    // taka in BDT): a total it cannot collect exactly is refused here, so the
+    // quote, the create and the amendment all say so before anything commits.
+    const cashIssue = BUILT_IN_PAYMENT_PROVIDERS.amountIssue(COD_PAYMENT_METHOD, taxQuote.totalMinor, currency.code);
+    if (cashIssue) throw new ValidationError(cashIssue, { reason: CASH_ON_DELIVERY_AMOUNT_REASON });
 
     return {
         currency,

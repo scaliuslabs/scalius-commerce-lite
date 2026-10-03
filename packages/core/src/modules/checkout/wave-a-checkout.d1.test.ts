@@ -85,7 +85,10 @@ describe("Wave A checkout", () => {
     const line = (productId: string, variantId: string, quantity: number, price: number, properties?: Line["properties"]): Line =>
         ({ productId, variantId, quantity, price, properties });
 
-    async function checkout(overrides: Partial<CreateStorefrontOrderInput> & { items: Line[] }) {
+    async function checkout(
+        overrides: Partial<CreateStorefrontOrderInput> & { items: Line[] },
+        currency = { code: "BDT", decimalPlaces: 2, priceIncrementMinor: 100 },
+    ) {
         const data: CreateStorefrontOrderInput = {
             checkoutRequestId: `request_${crypto.randomUUID()}`,
             expectedQuoteFingerprint: "taxq_unused_in_core_tests0",
@@ -122,7 +125,7 @@ describe("Wave A checkout", () => {
             authority.cartValidation,
             authority.deliveryPreflight,
             undefined,
-            { code: "BDT", decimalPlaces: 2, priceIncrementMinor: 100 },
+            currency,
             createTrustedStorefrontCheckoutPolicySnapshot({
                 partialPaymentEnabled: false,
                 authorityRevision: authority.authorityRevision,
@@ -303,6 +306,25 @@ describe("Wave A checkout", () => {
         // original stock mutation bounds remain unchanged.
         expect(soldOut.depWrites - 4).toBeLessThanOrEqual(6);
         expect(soldOut.clockWrites - 2).toBeLessThanOrEqual(2);
+    });
+
+    it("refuses cash on delivery for an amount it cannot collect (a paisa total) before anything commits", async () => {
+        sqlite.exec(`
+            INSERT INTO settings (id, key, value, type, category)
+            VALUES ('currency_doc', 'document', '{"currencyCode":"BDT","currencySymbol":"৳","priceIncrementMinor":1}', 'json', 'currency');
+            INSERT INTO products (id, name, slug, price_minor, is_active) VALUES ('p_pin', 'Pin', 'pin', 30050, 1);
+            INSERT INTO product_variants
+              (id, product_id, sku, price_minor, stock, reserved_stock, stock_version, is_default, track_inventory, fulfillment_kind)
+            VALUES ('v_pin', 'p_pin', 'PIN-1', 30050, 5, 0, 0, 1, 1, 'physical');
+        `);
+        const paisa = { code: "BDT", decimalPlaces: 2, priceIncrementMinor: 1 };
+        await expect(checkout({ ...address, shippingMethodId: "m_ship", items: [line("p_pin", "v_pin", 1, 300.5)] }, paisa))
+            .rejects.toThrow("Cash on delivery collects whole taka, so 360.50 BDT can't be paid on delivery. Choose an online payment method.");
+        expect(one("SELECT count(*) AS n FROM orders")).toEqual({ n: 0 });
+        // Two pins come to whole taka, which cash on delivery collects exactly.
+        const result = await checkout({ ...address, shippingMethodId: "m_ship", items: [line("p_pin", "v_pin", 2, 300.5)] }, paisa);
+        expect(one("SELECT payment_method, total_amount_minor FROM orders WHERE id = ?", result.orderId))
+            .toEqual({ payment_method: "cod", total_amount_minor: 66_100 });
     });
 
     it("offers cash on delivery only when something is handed over in person", async () => {
