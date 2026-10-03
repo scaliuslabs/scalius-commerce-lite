@@ -206,19 +206,31 @@ Required: `createShipment`, `trackShipment`.
    order number your courier records; `codAmountMinor` is the cash to collect
    (0 for prepaid) in minor units of `currency` (`decimalPlaces` for couriers
    that take major units). Return the booking: `externalId`, `trackingId`,
-   a normalized `status` plus your `rawStatus`, the `chargeMinor` you quoted
-   and an optional label (an https URL, or a PDF as base64 the platform
-   stores privately). If the call may have reached the courier but you got no
+   a normalized `status` plus your `rawStatus`, the `chargeMinor` you quoted,
+   an optional label (an https URL, or a PDF as base64 the platform stores
+   privately) and optional flat `details` (short audit facts kept with the
+   shipment for staff). If the call may have reached the courier but you got no
    answer, raise `retryable` + `uncertain`; with `findShipment` (by order
    number) the platform finds the booking instead of booking twice.
 2. **`trackShipment`** maps your courier's status onto
    `COURIER_SHIPMENT_STATUSES` (`picked_up`, `in_transit`, `delivered`,
    `returned`, …) with an ISO timestamp; the platform moves the order from it.
-3. **`verifyWebhook`** authenticates a tracking push and answers
-   `{ status: "update", externalId, tracking }`, `"ignored"` or `"invalid"`;
-   the platform claims each push once.
+3. **`verifyWebhook`** authenticates a tracking push sent to
+   `POST /api/v1/webhooks/couriers/<plugin id>:<provider id>` (the merchant
+   copies it from the courier's settings) and answers
+   `{ status: "update", externalId, tracking, eventId? }`, `"ignored"` or
+   `"invalid"` (nothing changes). The platform claims each push once (by your
+   `eventId` when you send one) and moves the shipment and order exactly as
+   for the built-in couriers.
 4. **`reconcileCod`** reports what the courier collected and paid out for a
    parcel (minor units), so the merchant's COD ledger matches.
 
-Never trust your courier's free text beyond the port's fields: the platform
-stores only the normalized status and your short raw status for staff.
+A merchant adds your courier in Settings → Shipping beside Pathao and
+Steadfast; its credentials stay in your app's settings. Never trust your
+courier's free text beyond the port's fields: the platform stores only the
+normalized status, your short raw status and your flat `details`.
+
+The SMS, email and fraud ports work the same way: declare the provider,
+implement `send` (with the platform's idempotency key: never send twice for
+one key) or `check`, and the merchant picks it in Settings → Notifications or
+the fraud checker beside the built-in services.
