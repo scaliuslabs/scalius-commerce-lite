@@ -303,7 +303,7 @@ pnpm release:check --api-base-url https://api.example.com --storefront-url https
 | [docs/DATABASE-PORTABILITY.md](docs/DATABASE-PORTABILITY.md) | Database runtime contract and provider cutover |
 | [docs/STOREFRONT-PERFORMANCE.md](docs/STOREFRONT-PERFORMANCE.md) | Page render path, per-page budgets, `pnpm perf:storefront` |
 | [docs/PERFORMANCE-RELEASE.md](docs/PERFORMANCE-RELEASE.md) | Release performance baseline |
-| [docs/ONLINE-STORE-BUILDER-PHASE2.md](docs/ONLINE-STORE-BUILDER-PHASE2.md) | Storefront theme document |
+| [packages/shared/src/storefront-theme.md](packages/shared/src/storefront-theme.md) | Storefront theme document and the online store builder |
 | [docs/delivery-providers/README.md](docs/delivery-providers/README.md) | Pathao and Steadfast contracts |
 | [docs/MARKETS-DESIGN.md](docs/MARKETS-DESIGN.md) | Markets design (not built) |
 | [apps/admin-v2/README.md](apps/admin-v2/README.md), [apps/admin-v2/DESIGN.md](apps/admin-v2/DESIGN.md) | Dashboard app and design rules |
