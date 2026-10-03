@@ -30,7 +30,8 @@ vi.mock("@scalius/core/modules/fulfilment", async (importOriginal) => ({
   syncCourierFulfilmentFromShipment: courierLedger.sync,
 }));
 
-vi.mock("@scalius/core/modules/order-kernel", () => ({
+vi.mock("@scalius/core/modules/order-kernel", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/order-kernel")>()),
   assertNoActiveRefundAttempt: mocks.assertNoActiveRefundAttempt,
   assertNoActivePaymentSessionAttempt: mocks.assertNoActivePaymentSessionAttempt,
 }));

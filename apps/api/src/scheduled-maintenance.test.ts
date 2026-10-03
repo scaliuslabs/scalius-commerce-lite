@@ -36,7 +36,8 @@ vi.mock("@scalius/database/client", () => ({
   getDb: mocks.getDb,
 }));
 
-vi.mock("@scalius/core/modules/inventory", () => ({
+vi.mock("@scalius/core/modules/inventory", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/inventory")>()),
   releaseExpiredReservations: mocks.releaseExpiredReservations,
 }));
 
@@ -51,24 +52,29 @@ vi.mock("@scalius/core/modules/orders", async (importOriginal) => ({
   cleanupExpiredOrderPaymentRecoveryChallenges: mocks.cleanupExpiredOrderPaymentRecoveryChallenges,
 }));
 
-vi.mock("@scalius/core/modules/notifications", () => ({
+vi.mock("@scalius/core/modules/notifications", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/notifications")>()),
   flushPendingNotificationOutbox: mocks.flushPendingNotificationOutbox,
 }));
 
-vi.mock("@scalius/core/modules/reviews", () => ({
+vi.mock("@scalius/core/modules/reviews", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/reviews")>()),
   sweepReviewRequests: mocks.sweepReviewRequests,
 }));
 
-vi.mock("@scalius/core/modules/digital", () => ({
+vi.mock("@scalius/core/modules/digital", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/digital")>()),
   sweepDigitalUploads: mocks.sweepDigitalUploads,
 }));
 
 // The real fulfillers are registered (Wave B); the sweep itself has its own D1 tests.
-vi.mock("@scalius/core/modules/fulfilment", () => ({
+vi.mock("@scalius/core/modules/fulfilment", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/fulfilment")>()),
   sweepAutoFulfilment: mocks.sweepAutoFulfilment,
 }));
 
-vi.mock("@scalius/core/modules/conversations", () => ({
+vi.mock("@scalius/core/modules/conversations", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/conversations")>()),
   sweepOrphanConversationAttachments: vi.fn(async () => ({ scanned: 0, deleted: 0 })),
 }));
 
@@ -88,12 +94,14 @@ vi.mock("@scalius/core/auth", () => ({
   pruneExpiredIdentityHandoffEvents: mocks.pruneExpiredIdentityHandoffEvents,
 }));
 
-vi.mock("@scalius/core/modules/payments", () => ({
+vi.mock("@scalius/core/modules/payments", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/payments")>()),
   reconcileDueRefundAttempts: mocks.reconcileDueRefundAttempts,
   reconcileExternalRefundWebhooks: mocks.reconcileExternalRefundWebhooks,
 }));
 
-vi.mock("@scalius/core/modules/media", () => ({
+vi.mock("@scalius/core/modules/media", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/media")>()),
   backfillMissingMediaVariants: mocks.backfillMissingMediaVariants,
   enqueueMediaVariantsBacklog: mocks.enqueueMediaVariantsBacklog,
 }));
