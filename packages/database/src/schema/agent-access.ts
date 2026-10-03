@@ -640,9 +640,17 @@ export const agentStorefrontContexts = sqliteTable("agent_storefront_contexts", 
     revision: integer("revision").notNull().default(1),
     cartJson: text("cart_json").notNull().default("[]"),
     discountCode: text("discount_code"),
+    /**
+     * The destination checkout prices (MARKETS-DESIGN step 3b): its country
+     * (null: Bangladesh), and Bangladesh's City/Thana/Area or another
+     * country's admin area and postal code. Shipping zones match on these.
+     */
+    countryCode: text("country_code"),
     cityId: text("city_id"),
     zoneId: text("zone_id"),
     areaId: text("area_id"),
+    adminArea: text("admin_area"),
+    postalCode: text("postal_code"),
     shippingMethodId: text("shipping_method_id"),
     customerSessionTokenHash: text("customer_session_token_hash")
         .references(() => customerSessions.tokenHash, { onDelete: "set null" }),
@@ -672,6 +680,11 @@ export const agentStorefrontContexts = sqliteTable("agent_storefront_contexts", 
         sql`${jsonArrayCheck(table.cartJson)} AND json_array_length(${table.cartJson}) BETWEEN 0 AND 99 AND length(${table.cartJson}) BETWEEN 2 AND 65536`,
     ),
     check("agent_storefront_contexts_expiry", sql`${table.expiresAt} > ${table.createdAt}`),
+    // Column check added by 0114 (ALTER TABLE ADD ... CHECK).
+    check(
+        "agent_storefront_contexts_country_shape",
+        sql`${table.countryCode} IS NULL OR (length(${table.countryCode}) = 2 AND ${table.countryCode} NOT GLOB '*[^A-Z]*')`,
+    ),
     check(
         "agent_storefront_contexts_close_state",
         sql`(

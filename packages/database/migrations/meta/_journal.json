@@ -799,6 +799,13 @@
       "when": 1791054292746,
       "tag": "0113_country_aware_addresses",
       "breakpoints": true
+    },
+    {
+      "idx": 114,
+      "version": "6",
+      "when": 1791065018541,
+      "tag": "0114_shipping_zones",
+      "breakpoints": true
     }
   ]
 }

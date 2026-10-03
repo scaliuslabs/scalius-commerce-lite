@@ -632,6 +632,12 @@ const CACHE_DEP_TABLE_RULES = {
   shipping_methods: { kinds: ["ship"], noise: ["updated_at"], rules: everyChange([{ dep: "ship" }]) },
   delivery_zones: { kinds: ["ship"], noise: ["revision", "updated_at"], rules: everyChange([{ dep: "ship" }]) },
   delivery_zone_locations: { kinds: ["ship"], noise: [], rules: everyChange([{ dep: "ship" }]) },
+  delivery_zone_regions: {
+    kinds: ["ship"],
+    noise: ["created_at"],
+    note: "The countries, admin areas and postal prefixes a shipping zone serves (MARKETS-DESIGN step 3b): which rates an address gets and which countries discovery claims.",
+    rules: everyChange([{ dep: "ship" }]),
+  },
   delivery_locations: { kinds: ["loc"], noise: ["updated_at"], rules: everyChange([{ dep: "loc" }]) },
   tax_classes: { kinds: ["tax"], noise: ["version", "updated_at"], rules: everyChange([{ dep: "tax" }]) },
   tax_rates: { kinds: ["tax"], noise: ["version", "updated_at"], rules: everyChange([{ dep: "tax" }]) },

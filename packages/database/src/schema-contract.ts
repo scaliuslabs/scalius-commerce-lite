@@ -22,8 +22,8 @@ export const DATABASE_SCHEMA_LEGACY_BASELINE = {
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA = {
-  version: 113,
-  name: "0113_country_aware_addresses",
+  version: 114,
+  name: "0114_shipping_zones",
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
@@ -346,6 +346,11 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
     version: 113,
     name: "0113_country_aware_addresses",
     sourceSha256: "b7331d0aab61c2fc111305687d7350db463fec9b07fdf69d670da6cb32b1bd59",
+  },
+  {
+    version: 114,
+    name: "0114_shipping_zones",
+    sourceSha256: "26615b7089869e68377d7a7b14f7a6d644c01597c0311c81a10d362ee682da22",
   },
 ] as const;
 

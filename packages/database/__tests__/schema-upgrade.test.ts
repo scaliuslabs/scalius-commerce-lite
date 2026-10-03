@@ -497,6 +497,17 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 42,
         postgresStatements: 42,
       },
+      {
+        version: 114,
+        name: "0114_shipping_zones",
+        // The regions table and its index, the Bangladesh zone from the
+        // Everywhere else rates (zone, region, rate move), the renamed pickup
+        // document, the zone guard, the checkout authority fence, the
+        // generated cache dependency triggers and three agent context
+        // columns: one statement each on both providers.
+        sqliteStatements: 18,
+        postgresStatements: 18,
+      },
     ]);
   });
 
@@ -659,6 +670,7 @@ describe("provider-neutral schema upgrades", () => {
           { version: 111, name: "0111_order_money_chain" },
           { version: 112, name: "0112_markets" },
           { version: 113, name: "0113_country_aware_addresses" },
+          { version: 114, name: "0114_shipping_zones" },
         ],
       });
     } finally {

@@ -51,9 +51,9 @@ describe("checkout authority fence", () => {
     const beforeShipping = revision(database);
     database.exec(`
       INSERT INTO shipping_methods (
-        id, name, fee_minor, is_active, sort_order, created_at, updated_at
+        id, name, fee_minor, is_active, sort_order, kind, pickup_address, created_at, updated_at
       ) VALUES (
-        'shipping_fence', 'Fence shipping', 6000, 1, 0, unixepoch(), unixepoch()
+        'shipping_fence', 'Fence shipping', 6000, 1, 0, 'pickup', 'House 1', unixepoch(), unixepoch()
       );
     `);
     expect(revision(database)).toBe(beforeShipping + 1);

@@ -65,6 +65,7 @@ export const CACHE_DEP_LATER_TABLES: Readonly<Record<string, string>> = {
   markets: "0112_markets",
   market_countries: "0112_markets",
   market_presences: "0112_markets",
+  delivery_zone_regions: "0114_shipping_zones",
 };
 const isBaselineTable = (table: string) => !PROJECTION_TABLES.has(table) && !(table in CACHE_DEP_LATER_TABLES);
 

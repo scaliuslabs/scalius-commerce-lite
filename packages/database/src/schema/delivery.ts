@@ -1,9 +1,10 @@
 // src/db/schema/delivery.ts
-// Delivery domain tables: deliveryLocations, deliveryZones (+ their locations),
-// shippingMethods (a zone's delivery rates), deliveryProviders, deliveryShipments.
+// Delivery domain tables: deliveryLocations, deliveryZones (+ their regions and
+// Bangladesh locations), shippingMethods (a zone's delivery rates and local
+// pickup), deliveryProviders, deliveryShipments.
 
 import { sql } from "drizzle-orm";
-import { sqliteTable, text, integer, index, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, index, uniqueIndex, primaryKey, check } from "drizzle-orm/sqlite-core";
 import type { InferSelectModel } from "drizzle-orm";
 import { UNIX_NOW } from "./shared";
 import { orders } from "./orders";
@@ -38,10 +39,13 @@ export const deliveryLocations = sqliteTable("delivery_locations", {
 ]);
 
 /**
- * A delivery zone groups cities, zones and areas that share delivery rates.
- * A buyer address resolves to its most specific assigned location (area, then
- * zone, then city); an address in no zone gets the zoneless ("Everywhere
- * else") rates.
+ * A shipping zone (Shopify's model, MARKETS-DESIGN step 3b): the places that
+ * share delivery rates. It serves countries, admin areas and postal-code
+ * prefixes (`delivery_zone_regions`) and Bangladesh delivery locations
+ * (`delivery_zone_locations`). An address belongs to its most specific
+ * matching zone: Bangladesh location (area, thana, city) > postal prefix >
+ * admin area > country. An address no zone matches gets no delivery rate.
+ * Zones serve countries, not markets.
  */
 export const deliveryZones = sqliteTable("delivery_zones", {
     id: text("id").primaryKey(),
@@ -57,7 +61,36 @@ export const deliveryZones = sqliteTable("delivery_zones", {
         .default(UNIX_NOW),
 });
 
-/** A location belongs to at most one zone (the primary key). */
+/**
+ * The regions a zone serves: a whole country (`admin_area` and
+ * `postal_prefix` empty), one admin area of it (the address rules' code), or
+ * the postal codes that start with a prefix (upper case, no spaces). A
+ * region belongs to at most one zone (the primary key).
+ */
+export const deliveryZoneRegions = sqliteTable("delivery_zone_regions", {
+    /** ISO 3166-1 alpha-2, upper case. */
+    countryCode: text("country_code").notNull(),
+    /** The admin area code of the country's address rules; '' for none. */
+    adminArea: text("admin_area").notNull().default(""),
+    /** Upper-case letters and digits; '' for none. */
+    postalPrefix: text("postal_prefix").notNull().default(""),
+    zoneId: text("zone_id")
+        .notNull()
+        .references(() => deliveryZones.id, { onDelete: "cascade" }),
+    createdAt: integer("created_at", { mode: "timestamp" })
+        .notNull()
+        .default(UNIX_NOW),
+}, (table) => [
+    primaryKey({ columns: [table.countryCode, table.adminArea, table.postalPrefix] }),
+    index("delivery_zone_regions_zone_idx").on(table.zoneId),
+    check("delivery_zone_regions_country_shape", sql`length(${table.countryCode}) = 2 AND ${table.countryCode} NOT GLOB '*[^A-Z]*'`),
+    // A region is a whole country, an admin area or a postal prefix: never two at once.
+    check("delivery_zone_regions_one_kind", sql`${table.adminArea} = '' OR ${table.postalPrefix} = ''`),
+    check("delivery_zone_regions_admin_area_shape", sql`length(${table.adminArea}) <= 120 AND ${table.adminArea} = trim(${table.adminArea})`),
+    check("delivery_zone_regions_postal_prefix_shape", sql`length(${table.postalPrefix}) <= 10 AND ${table.postalPrefix} NOT GLOB '*[^A-Z0-9]*'`),
+]);
+
+/** A Bangladesh location belongs to at most one zone (the primary key). */
 export const deliveryZoneLocations = sqliteTable("delivery_zone_locations", {
     locationId: text("location_id")
         .primaryKey()
@@ -70,9 +103,11 @@ export const deliveryZoneLocations = sqliteTable("delivery_zone_locations", {
 ]);
 
 /**
- * A delivery rate, offered to buyers whose address resolves to its zone. A
- * rate without a zone is an "Everywhere else" rate. Removed rates are
- * soft-deleted: orders keep referencing the rate they were placed with.
+ * A rate: a delivery rate of one zone, offered to buyers whose address
+ * belongs to that zone, or a local pickup rate (no zone), offered to every
+ * buyer. A live delivery rate always has a zone (a trigger refuses one
+ * without). Removed rates are soft-deleted: orders keep referencing the rate
+ * they were placed with.
  */
 export const shippingMethods = sqliteTable("shipping_methods", {
     id: text("id").primaryKey(),
@@ -162,6 +197,7 @@ export const deliveryShipments = sqliteTable("delivery_shipments", {
 
 export type DeliveryLocation = InferSelectModel<typeof deliveryLocations>;
 export type DeliveryZone = InferSelectModel<typeof deliveryZones>;
+export type DeliveryZoneRegion = InferSelectModel<typeof deliveryZoneRegions>;
 export type ShippingMethod = InferSelectModel<typeof shippingMethods>;
 /** Row type for the delivery_providers table (the const enum is DeliveryProvider from enums.ts) */
 export type DeliveryProviderRecord = InferSelectModel<typeof deliveryProviders>;
