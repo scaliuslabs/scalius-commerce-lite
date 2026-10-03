@@ -9,6 +9,7 @@ import {
 } from "@scalius/api-client/sdk";
 import { DIGITAL_DOWNLOAD_LIMIT_DEFAULT, DIGITAL_MAX_FILE_BYTES } from "@scalius/shared/digital";
 import { Badge, type BadgeVariant } from "@/components/ui/badge";
+import { statusBadgeVariant } from "@/components/admin/resource/StatusBadge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -67,9 +68,9 @@ export function variantLabel(variant: Pick<ProductVariant, "selectedOptions">): 
 }
 
 const STATUS: Record<DigitalAssetDto["status"], { key: DigitalMessageKey; variant: BadgeVariant }> = {
-  draft: { key: "statusDraft", variant: "attention" },
-  ready: { key: "statusReady", variant: "success" },
-  archived: { key: "statusArchived", variant: "secondary" },
+  draft: { key: "statusDraft", variant: statusBadgeVariant("draft") },
+  ready: { key: "statusReady", variant: statusBadgeVariant("active") },
+  archived: { key: "statusArchived", variant: statusBadgeVariant("archived") },
 };
 
 interface Upload {

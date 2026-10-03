@@ -255,11 +255,11 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
       if (units === 0) continue;
       const breakdown = [...levels]
         .sort((a, b) => (order.get(a.locationId) ?? Infinity) - (order.get(b.locationId) ?? Infinity))
-        .map((level) => t("stockAtLocation", { location: locationName.get(level.locationId) ?? level.locationId, count: formatNumber(level.onHand) }))
+        .map((level) => t("stockAtLocation", { location: locationName.get(level.locationId) ?? t("otherLocation"), count: formatNumber(level.onHand) }))
         .join(" · ");
       const places = levels
         .filter((level) => level.locationId !== homeLocation.id)
-        .map((level) => locationName.get(level.locationId) ?? level.locationId)
+        .map((level) => locationName.get(level.locationId) ?? t("otherLocation"))
         .join(", ");
       byVariant.set(variantId, { units, breakdown, places });
     }

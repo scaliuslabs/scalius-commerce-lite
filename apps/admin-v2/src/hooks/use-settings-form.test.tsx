@@ -5,6 +5,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { notifyManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { toast } from "sonner";
+import { saveBarMessages } from "~/i18n/save-bar";
 import { useSettingsForm } from "./use-settings-form";
 
 vi.mock("sonner", () => ({
@@ -293,7 +294,7 @@ describe("useSettingsForm freshness", () => {
       dependentInvalidation.resolve();
       await submit;
     });
-    expect(toast.success).toHaveBeenCalledWith("Settings saved");
+    expect(toast.success).toHaveBeenCalledWith(saveBarMessages.en.saved);
   });
 
   it("keeps a canonical save response instead of refetching stale form data", async () => {

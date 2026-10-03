@@ -76,8 +76,8 @@ export function useSettingsForm<
   saveFn,
   resolveSavedValues,
   defaultValues,
-  successMessage = "Settings saved",
-  errorMessage = "Failed to save settings",
+  successMessage = translate(saveBarMessages, "saved"),
+  errorMessage = translate(saveBarMessages, "notSavedOne"),
   invalidateQueryKeys = [],
   isValid,
   canEdit = true,
@@ -198,7 +198,7 @@ export function useSettingsForm<
 
   const handleSubmit = useCallback(async () => {
     if (!hasLoaded) {
-      toast.error("Reload settings before saving.");
+      toast.error(translate(saveBarMessages, "reloadFirst"));
       return;
     }
     await mutation.mutateAsync(values);

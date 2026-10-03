@@ -17,6 +17,7 @@ import {
   getCheckoutLanguagePreset,
   resolveCheckoutLanguageData,
 } from "@scalius/shared/checkout-language";
+import { StatusBadge } from "~/components/admin/resource/StatusBadge";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -398,7 +399,7 @@ export function CheckoutTextCard() {
                     label={
                       <span className="flex items-center gap-2">
                         {language.name}
-                        {language.isActive ? <Badge>{t("active")}</Badge> : null}
+                        {language.isActive ? <StatusBadge status="active">{t("active")}</StatusBadge> : null}
                         {language.isDefault ? <Badge variant="secondary">{t("fallback")}</Badge> : null}
                       </span>
                     }

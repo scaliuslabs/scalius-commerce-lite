@@ -29,7 +29,7 @@ function DiscountName({ discount, name }: { discount: OrderDiscount; name: strin
       <>
         {name} · {before}
         <Link to="/admin/apps/$pluginId" params={{ pluginId: discount.appId }} className="text-link hover:underline">
-          {discount.appName ?? discount.appId}
+          {discount.appName ?? t("summary.anApp")}
         </Link>
         {after}
       </>

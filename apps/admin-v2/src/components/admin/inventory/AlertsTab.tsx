@@ -156,7 +156,7 @@ export function AlertsTab({ filters, onFiltersChange, onReview }: AlertsTabProps
 
   const actions = (alert: InventoryAlert) => (
     <div className="flex justify-end gap-2">
-      <Button type="button" variant="ghost" size="sm" onClick={() => onReview(alert.variantSku ?? alert.variantId)}>
+      <Button type="button" variant="ghost" size="sm" onClick={() => onReview(alert.variantSku || alert.productName || "")}>
         {t("review")}
       </Button>
       {alert.alertStatus === "active" && permissions.canAcknowledgeAlerts ? (

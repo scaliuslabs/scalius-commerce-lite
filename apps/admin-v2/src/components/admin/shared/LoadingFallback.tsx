@@ -1,4 +1,6 @@
 import { cn } from "@scalius/shared/utils";
+import { translate } from "~/i18n";
+import { resourceMessages } from "~/i18n/resource";
 
 interface LoadingFallbackProps {
   /** Height class, e.g. "h-48", "h-96", "h-[400px]" */
@@ -20,7 +22,7 @@ export function LoadingFallback({ height = "h-48", className }: LoadingFallbackP
 /** Stable page-shaped fallback for a cold lazy surface. */
 export function PageLoadingSkeleton() {
   return (
-    <div className="animate-pulse space-y-4" role="status" aria-label="Loading page">
+    <div className="animate-pulse space-y-4" role="status" aria-label={translate(resourceMessages, "loading")}>
       <div className="flex items-center justify-between gap-4">
         <div className="h-7 w-48 rounded-md bg-muted" />
         <div className="h-9 w-28 rounded-md bg-muted" />
@@ -31,7 +33,7 @@ export function PageLoadingSkeleton() {
         <div className="h-24 rounded-lg bg-muted" />
       </div>
       <div className="h-64 rounded-lg bg-muted" />
-      <span className="sr-only">Loading page</span>
+      <span className="sr-only">{translate(resourceMessages, "loading")}</span>
     </div>
   );
 }
@@ -39,7 +41,7 @@ export function PageLoadingSkeleton() {
 /** Stable panel-shaped fallback for a cold lazy settings editor. */
 export function PanelLoadingSkeleton() {
   return (
-    <div className="animate-pulse space-y-4 py-4" role="status" aria-label="Loading settings">
+    <div className="animate-pulse space-y-4 py-4" role="status" aria-label={translate(resourceMessages, "loading")}>
       <div className="h-6 w-44 rounded-md bg-muted" />
       <div className="h-4 w-2/3 rounded bg-muted" />
       <div className="space-y-3 rounded-lg border p-4">
@@ -47,7 +49,7 @@ export function PanelLoadingSkeleton() {
         <div className="h-10 rounded-md bg-muted" />
         <div className="h-10 w-1/3 rounded-md bg-muted" />
       </div>
-      <span className="sr-only">Loading settings</span>
+      <span className="sr-only">{translate(resourceMessages, "loading")}</span>
     </div>
   );
 }

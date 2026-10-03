@@ -1,4 +1,6 @@
 import type { OrderEditLockMessageKey } from "~/i18n/order-edit-locks";
+import { translate } from "~/i18n";
+import { orderFormMessages } from "~/i18n/order-form";
 
 interface EditState {
   allowed: boolean;
@@ -57,7 +59,8 @@ export function savedDeliveryMethod(order: {
     shippingMethodKind,
     savedShippingMethod: {
       id: order.shippingMethodId,
-      name: order.shippingMethodName ?? order.shippingMethodId,
+      // A method removed since: named in words, never by its id.
+      name: order.shippingMethodName ?? translate(orderFormMessages, "savedDeliveryMethod"),
       kind: shippingMethodKind,
     },
   };

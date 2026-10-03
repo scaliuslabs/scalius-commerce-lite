@@ -244,7 +244,8 @@ export async function sendOrderNotification(
         setupRecipient: `firebase-setup:${order.id}:${notificationType}`,
         logLabel: `order ${order.id}`,
         title: notificationType === "order_created" ? "New Order Created!" : label,
-        body: `${label}: Order ${order.id} from ${safeName}. Click to view.`,
+        // Staff never see an order's internal id; the link opens the order.
+        body: `${label} from ${safeName}. Click to view.`,
         link: orderViewLink,
         data: {
             orderId: order.id,
