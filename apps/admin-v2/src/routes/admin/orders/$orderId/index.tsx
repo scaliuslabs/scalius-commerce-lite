@@ -79,6 +79,10 @@ function toOrderViewModel(
     zoneName: order.zoneName ?? undefined,
     supportRequests: order.supportRequests ?? [],
     appRiskChecks: order.appRiskChecks ?? [],
+    holds: (order.holds ?? []).map((hold) => ({
+      ...hold,
+      releasedAt: typeof hold.releasedAt === "string" || typeof hold.releasedAt === "number" ? hold.releasedAt : null,
+    })),
     shipments: shipments.map((shipment) => toOrderShipment(shipment, order.createdAt)),
     deliveryProviders,
     operationalReads,

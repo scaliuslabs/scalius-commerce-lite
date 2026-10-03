@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { formatPhoneForDisplay } from "@scalius/shared/phone-input";
 import { setLocale } from "~/i18n";
 import { formatOrderTimestamp } from "./formatters";
-import type { Order, OrderAppRiskCheck, OrderCustomerRecord } from "./types";
+import type { Order, OrderAppRiskCheck, OrderCustomerRecord, OrderHold } from "./types";
 
 vi.mock("@tanstack/react-router", () => ({
   Link: ({ to, params, children, ...props }: { to: string; params?: Record<string, string>; children: ReactNode }) => (
@@ -118,6 +118,32 @@ describe("order customer card", () => {
       expect(medium!.querySelector("time")?.textContent).toBe(`Checked ${formatOrderTimestamp(1_790_000_000)}`);
       expect(low!.textContent).toContain("Low risk");
       expect(low!.querySelector("ul")).toBeNull();
+    });
+
+    it("says when staff released an app's hold, under that app's check", () => {
+      const holds: OrderHold[] = [
+        // Open: the page's hold notice shows it, not this card.
+        { id: "ohd_open", appId: "acme.trust", appName: "Trust score", reason: "New customer", placedAt: 1_790_000_000, releasedAt: null },
+        {
+          id: "ohd_radar", appId: "acme.radar", appName: "Risk radar", reason: "Phone has 3 returned orders",
+          placedAt: "2026-10-01T08:00:00.000Z", releasedAt: "2026-10-01T09:30:00.000Z",
+        },
+        // An app whose check isn't on the order still has its released hold listed.
+        { id: "ohd_other", appId: "acme.other", appName: "Address check", reason: "Unknown area", placedAt: 1_790_000_000, releasedAt: 1_790_000_600 },
+      ];
+      show({ ...baseOrder, appRiskChecks: checks, holds } as unknown as Order);
+      const [high, medium, low, other] = items();
+      expect(high!.textContent).toContain(`Hold released ${formatOrderTimestamp("2026-10-01T09:30:00.000Z")}`);
+      expect(high!.querySelectorAll("time")[1]?.getAttribute("datetime")).toBe("2026-10-01T09:30:00.000Z");
+      expect(medium!.textContent).not.toContain("Hold released");
+      expect(low!.textContent).not.toContain("Hold released");
+      expect(other!.querySelector("a")?.getAttribute("href")).toBe("/admin/apps/acme.other");
+      expect(other!.textContent).toBe(`Address check${`Hold released ${formatOrderTimestamp(1_790_000_600)}`}`);
+
+      // Released holds alone still show the section.
+      show({ ...baseOrder, holds: holds.slice(2) } as unknown as Order);
+      expect(container.textContent).toContain("Risk checks by apps");
+      expect(items()).toHaveLength(1);
     });
 
     it("shows nothing when no app checked the order", () => {

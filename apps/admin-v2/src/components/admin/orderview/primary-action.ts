@@ -3,7 +3,7 @@ import { getAdminOrderStatusTransitions } from "~/lib/admin-order-status-policy"
 import type { OrderActionPermissions } from "~/lib/order-action-permissions";
 import { canSendWithOwnCourier, remainingToSend } from "./ManualFulfillmentDialog";
 import { canHandOver, fulfilledUnits, isReadyForPickup, lineFulfillmentType, unitsLeft } from "./fulfilment-groups";
-import type { Order, OrderSupportRequest } from "./types";
+import type { Order, OrderHold, OrderSupportRequest } from "./types";
 
 export type OrderPrimaryAction =
   | "confirm"
@@ -23,6 +23,11 @@ const CLOSED_SHIPMENT_STATUSES = new Set(["cancelled", "failed", "returned"]);
 /** The customer's open request to cancel, if any. */
 export function openCancellationRequest(order: Pick<Order, "supportRequests">): OrderSupportRequest | null {
   return order.supportRequests?.find((request) => request.active && request.type === "cancel_pre_shipment") ?? null;
+}
+
+/** Apps' holds staff haven't released: until then nothing ships or moves on (cancelling stays possible). */
+export function openOrderHolds(order: Pick<Order, "holds">): OrderHold[] {
+  return (order.holds ?? []).filter((hold) => hold.releasedAt === null);
 }
 
 /** Ship units not handed to a courier yet, once part of them has gone out; 0 otherwise. */
@@ -61,8 +66,8 @@ export function canMarkDelivered(
  * confirm → hand over (book a courier or your own rider for ship lines; mark
  * a pickup order ready, then picked up; mark a service done) → collect the
  * cash, or mark a paid order delivered. An open cancellation request comes
- * first. Every card still applies its own guards; this only picks which card
- * flow to start.
+ * first; an app's open hold leaves no next step until it's released. Every
+ * card still applies its own guards; this only picks which card flow to start.
  */
 export function resolveOrderPrimaryAction(
   order: Order,
@@ -72,6 +77,8 @@ export function resolveOrderPrimaryAction(
   if (order.archivedAt || order.activeRefundOperation?.active || order.shipmentRecovery?.activeLock) return null;
   const status = order.status.toLowerCase();
   if (actions.canResolveOrderSupportRequests && openCancellationRequest(order)) return "reviewCancellation";
+  // A held order's next step is the hold notice's Release.
+  if (openOrderHolds(order).length > 0) return null;
 
   const shipmentsKnown = (order.operationalReads?.shipments.status ?? "ready") === "ready";
   if (actions.canManageOrderShipments && shipmentsKnown && unitsLeftToSend(order) > 0 && canSendWithOwnCourier(order)) {

@@ -38,7 +38,7 @@ const button = (label: string) =>
   [...document.querySelectorAll<HTMLButtonElement>("button")].find((element) => element.textContent?.trim() === label)!;
 const note = () => document.getElementById("language-terms-note")?.textContent;
 
-describe("checkout agreement text", () => {
+describe("checkout text editor", () => {
   let root: Root;
   let container: HTMLDivElement;
 
@@ -59,7 +59,8 @@ describe("checkout agreement text", () => {
     notifyManager.setNotifyFunction((callback) => callback());
   });
 
-  it("keeps both policy links: explains the tokens, warns when one is removed, and won't save without them", async () => {
+  /** Opens the English language's editor. */
+  async function openEnglish() {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     await act(async () => {
       root.render(
@@ -74,6 +75,10 @@ describe("checkout agreement text", () => {
       return found!;
     });
     await act(async () => row.click());
+  }
+
+  it("keeps both policy links: explains the tokens, warns when one is removed, and won't save without them", async () => {
+    await openEnglish();
     const terms = await vi.waitFor(() => document.querySelector<HTMLTextAreaElement>("#language-terms")!);
 
     expect(terms.value).toBe("By placing this order, you agree to our {terms} and {privacy}.");
@@ -91,6 +96,24 @@ describe("checkout agreement text", () => {
     const body = sdk.putApiV1AdminSettingsCheckoutLanguagesById.mock.calls[0]![0].body;
     expect(body.languageData.termsText).toBe("Ordering means you accept our {terms} and {privacy}.");
     expect(body.expectedRevision).toBe(2);
+  });
+
+  it("edits what buyers read when an app at checkout can't answer, in its own section", async () => {
+    await openEnglish();
+    const unavailable = await vi.waitFor(() => document.querySelector<HTMLTextAreaElement>("#language-checkoutAppUnavailableText")!);
+    const section = document.querySelector('section[aria-labelledby="language-apps"]')!;
+    expect(section.querySelector("h3")?.textContent).toBe("Apps at checkout");
+    expect(section.contains(unavailable)).toBe(true);
+    expect(unavailable.value).toBe("We can't confirm your order right now. Please try again in a few minutes.");
+    expect(document.getElementById("language-checkoutAppUnavailableText-note")?.textContent).toContain("pause checkout");
+    expect(section.querySelector<HTMLTextAreaElement>("#language-checkoutAppOfferChangedText")?.value)
+      .toBe("An offer in your order changed while it was being placed. Review your order and try again.");
+
+    typeInto(unavailable, "Our points service is down. Try again soon.");
+    await act(async () => button("Save").click());
+    await vi.waitFor(() => expect(sdk.putApiV1AdminSettingsCheckoutLanguagesById).toHaveBeenCalledTimes(1));
+    const body = sdk.putApiV1AdminSettingsCheckoutLanguagesById.mock.calls[0]![0].body;
+    expect(body.languageData.checkoutAppUnavailableText).toBe("Our points service is down. Try again soon.");
   });
 
   it("keeps links the way the storefront makes them: both tokens, or both link names in older copy", () => {

@@ -87,6 +87,8 @@ export const GIFT_CARD_TEXT_FIELDS = [
   "giftCardPayOnDeliveryText",
   "giftCardCheckoutStepText",
 ] as const;
+/** Apps at checkout: an app the store relies on can't answer (checkout pauses), or an app's offer changed. */
+export const APP_TEXT_FIELDS = ["checkoutAppUnavailableText", "checkoutAppOfferChangedText"] as const;
 /** The agreement line's link placeholders; the storefront links each to its policy page. */
 const TERMS_TOKENS = ["{terms}", "{privacy}"] as const;
 
@@ -337,6 +339,17 @@ function LanguageForm({ language }: { language: Language | null }) {
             </SettingsField>
           ))}
         </div>
+      </section>
+      <section aria-labelledby="language-apps" className="space-y-4 border-t border-border pt-4">
+        <div className="space-y-1">
+          <h3 id="language-apps" className="text-heading-sm">{t("appTextTitle")}</h3>
+          <p className="text-body text-muted-foreground">{t("appTextHelp")}</p>
+        </div>
+        {APP_TEXT_FIELDS.map((key) => (
+          <SettingsField key={key} id={`language-${key}`} label={t(key)} help={t(`${key}Help`)}>
+            <Textarea id={`language-${key}`} rows={2} value={draft.languageData[key] ?? ""} onChange={(event) => setText(key, event.target.value)} />
+          </SettingsField>
+        ))}
       </section>
       <div className="flex flex-wrap gap-2">
         <Button
