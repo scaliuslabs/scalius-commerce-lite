@@ -9,7 +9,6 @@ import type { ExtraAction } from "~/components/admin/data-table/DataTableRowActi
 import { useServerTable } from "~/components/admin/data-table/useServerTable";
 import { createActionsColumn, createSelectColumn } from "~/components/admin/data-table/columns/column-factories";
 import type { ColumnDef } from "~/components/admin/data-table/table-config";
-import { AppBulkActionsMenu } from "~/components/admin/apps/ui/AppActions";
 import { useAppActions, type AppTarget } from "~/components/admin/apps/ui/surfaces";
 import {
   NO_CURSOR,
@@ -28,8 +27,11 @@ import { IndexTabs, type IndexTab } from "./IndexTabs";
 import { PageHeader } from "./PageHeader";
 import { EmptyState } from "./EmptyState";
 
-// The trash and delete confirmation loads the first time it is asked for.
+// The trash and delete confirmation loads the first time it is asked for;
+// apps' bulk menu as soon as an app offers this list a bulk action.
 const ConfirmDialog = lazy(() => import("~/components/admin/shared/ConfirmDialog").then((module) => ({ default: module.ConfirmDialog })));
+const loadAppActions = () => import("~/components/admin/apps/ui/AppActions");
+const AppBulkActionsMenu = lazy(() => loadAppActions().then((module) => ({ default: module.AppBulkActionsMenu })));
 
 export type ResourceAction = "trash" | "restore" | "delete";
 
@@ -162,6 +164,9 @@ export function ResourceListPage<T extends { id: string }>(props: ResourceListPa
 
   const appBulkActions = useAppActions(props.appActions ?? "product", true);
   const hasAppBulkActions = Boolean(props.appActions) && appBulkActions.length > 0;
+  useEffect(() => {
+    if (hasAppBulkActions) void loadAppActions();
+  }, [hasAppBulkActions]);
   const canBulk = trashed
     ? Boolean(lifecycle?.canRestore || lifecycle?.canDelete)
     : Boolean(lifecycle?.canTrash || props.bulkActions || hasAppBulkActions);
@@ -362,7 +367,9 @@ export function ResourceListPage<T extends { id: string }>(props: ResourceListPa
       ) : null}
       {!trashed ? props.bulkActions?.(bulkRows, clearAll) : null}
       {!trashed && props.appActions && hasAppBulkActions ? (
-        <AppBulkActionsMenu target={props.appActions} ids={bulkRows.map((row) => row.id)} onDone={clearAll} />
+        <Suspense fallback={null}>
+          <AppBulkActionsMenu target={props.appActions} ids={bulkRows.map((row) => row.id)} onDone={clearAll} />
+        </Suspense>
       ) : null}
       {!trashed && lifecycle?.canTrash ? (
         <Button variant="outline" size="sm" onClick={() => request("trash", bulkRows)}>
