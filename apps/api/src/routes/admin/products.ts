@@ -636,7 +636,7 @@ const duplicateProductRoute = createRoute({
     operationId: "dashboard.products.duplicate",
     tags: ["Admin - Products"],
     summary: "Copy a product as a new draft",
-    description: "Copies text, pricing, media, attributes, sections, content blocks, quantity bundles, the page template, options and variants. The copy is a draft with no stock, new SKUs (…-COPY) and generated barcodes.",
+    description: "Copies text, pricing, media, attributes, sections, content blocks, quantity bundles, the page template, EMI and tax class, custom fields (namespace custom), options and variants with their cost per item and selling settings. The copy is a draft with no stock, new SKUs (…-COPY) and generated barcodes.",
     request: {
         params: z.object({ id: z.string() }),
         body: {
@@ -807,6 +807,7 @@ const updateProductRoute = createRoute({
     operationId: "dashboard.products.update",
     tags: ["Admin - Products"],
     summary: "Update a product",
+    description: "Replaces the product's details under expectedAggregateRevision; unchanged details are not rewritten. Everything else an editor Save changed goes in the same write: optionMatrix (the complete options and SKUs, as dashboard.product_options.save_matrix takes them) or defaultSku (the hidden SKU of a product without options), contentBlocks, bundles, pageTemplate, emiEligible and skuCosts (each naming the cost it replaces; a new optionMatrix row by its draft id). All of it is checked before anything is written: a refused save changes nothing.",
     request: {
         params: z.object({ id: z.string() }),
         body: { content: { "application/json": { schema: updateProductSchema } } }
@@ -825,7 +826,7 @@ app.openapi(updateProductRoute, async (c) => {
     const { id } = c.req.valid("param");
     const data = c.req.valid("json");
     try {
-        const result = await updateProduct(db, id, data);
+        const result = await updateProduct(db, id, data, c.get("user")?.id);
 
         scheduleRecommendationRefreshAfterWrite(c, db, [id]);
         return ok(c, result);

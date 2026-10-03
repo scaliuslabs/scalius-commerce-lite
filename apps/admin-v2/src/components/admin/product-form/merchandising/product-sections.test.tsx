@@ -17,7 +17,7 @@ describe("product section conflict rebase", () => {
       const state = useSectionDraft(`old ${label.toLowerCase()}`);
       drafts.set(label, state);
       useProductSection({
-        label, dirty: state.dirty, problems: null, save: async (revision) => revision + 1,
+        label, dirty: state.dirty, problems: null, changes: () => ({}), saved: () => undefined,
         prepareRebase: async () => () => state.prepareRebase(latest.get(label)!),
       });
       return null;
@@ -61,11 +61,11 @@ describe("product section conflict rebase", () => {
     function Cards() {
       section = useSectionDraft("old");
       useProductSection({
-        label: "Content", dirty: section.dirty, problems: null, save: async (revision) => revision,
+        label: "Content", dirty: section.dirty, problems: null, changes: () => ({}), saved: () => undefined,
         prepareRebase: async () => () => section.prepareRebase("theirs"),
       });
       useProductSection({
-        label: "Page", dirty: false, problems: null, save: async (revision) => revision,
+        label: "Page", dirty: false, problems: null, changes: () => ({}), saved: () => undefined,
         prepareRebase: async () => { await waiting; return () => () => {}; },
       });
       return null;

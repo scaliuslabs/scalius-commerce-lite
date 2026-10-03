@@ -72,6 +72,31 @@ async function postJson(path: string, body: unknown): Promise<Response> {
   });
 }
 
+/** The readable sign-in hint the storefront sets beside its httpOnly session cookie. */
+function isSignedIn(): boolean {
+  try {
+    return document.cookie.split(";").some((cookie) => cookie.trim().startsWith("cs_auth=1"));
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * A guest's preview goes straight to the public API. A signed-in buyer's goes
+ * through this origin, which adds the httpOnly session the API cannot see
+ * cross-origin, so discounts limited to customer segments preview as checkout
+ * prices them.
+ */
+function postDiscountPreview(body: DiscountPreviewBody): Promise<Response> {
+  if (!isSignedIn()) return postJson("/discounts/validate", body);
+  return fetch("/api/checkout/discount-preview", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
 export type DiscountPreview =
   | ({ ok: true; totalDiscount: number } & CheckoutDiscountFacts)
   | { ok: false; message: string | null };
@@ -103,7 +128,8 @@ export function previewCartDiscounts(
   customerPhone?: string,
 ): Promise<DiscountPreview> {
   const body = buildDiscountPreviewBody(codes, items, shippingCost, customerPhone);
-  const key = JSON.stringify(body);
+  // Signing in or out changes who the preview prices, so it is part of the cart state.
+  const key = JSON.stringify([isSignedIn(), body]);
   if (lastPreview?.key === key) return lastPreview.result;
   const result = requestDiscountPreview(body);
   lastPreview = { key, result };
@@ -116,7 +142,7 @@ export function previewCartDiscounts(
 
 async function requestDiscountPreview(body: DiscountPreviewBody): Promise<DiscountPreview> {
   try {
-    const response = await postJson("/discounts/validate", body);
+    const response = await postDiscountPreview(body);
     const json = (await response.json().catch(() => null)) as
       | { data?: Record<string, unknown> }
       | null;

@@ -269,6 +269,20 @@ describe("normalized product option matrix", () => {
         ], [{ stock: 12, trackInventory: true }])).toThrow(ConflictError);
     });
 
+    it("lets a simple SKU with nothing on hand start its new combinations with typed quantities", () => {
+        // Nothing to allocate (a fresh copy): each new row's quantity is an initial stocktake.
+        expect(() => assertOptionMatrixStockAllocation([{
+            isDefault: true, stock: 0, reservedStock: 0, preorderStock: 0, trackInventory: true,
+        }], [
+            { stock: 1, trackInventory: true },
+            { stock: 2, trackInventory: true },
+        ])).not.toThrow();
+        expect(() => assertOptionMatrixReplacementStockAllocation(
+            [{ stock: 0, trackInventory: true }],
+            [{ stock: 3, trackInventory: true }],
+        )).not.toThrow();
+    });
+
     it("preserves tracked stock when an axis edit replaces combinations", () => {
         const retiring = [
             { stock: 8, trackInventory: true },

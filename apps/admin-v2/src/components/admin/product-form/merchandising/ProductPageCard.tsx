@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -7,7 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { TemplateSelect } from "@/components/admin/catalog/TemplateSelect";
 import { useMessages } from "~/i18n";
 import { productMerchandisingMessages } from "~/i18n/product-merchandising";
-import { productBaseSectionQueryOptions, saveProductSection } from "./section-api";
+import { productBaseSectionQueryOptions } from "./section-api";
 import { useProductSection } from "./product-sections";
 import { useSectionDraft } from "./use-section-draft";
 
@@ -26,6 +26,7 @@ export default function ProductPageCard({ productId, readOnly }: { productId: st
     [data],
   );
   const { draft, setDraft, saved, dirty, markSaved, prepareRebase } = useSectionDraft(loaded);
+  const sent = useRef<PageSettings | null>(null);
 
   useProductSection({
     label: t("productPage"),
@@ -35,23 +36,17 @@ export default function ProductPageCard({ productId, readOnly }: { productId: st
       const latest = await queryClient.fetchQuery(productBaseSectionQueryOptions(productId));
       return () => prepareRebase({ pageTemplate: latest.product.pageTemplate, emiEligible: latest.product.emiEligible });
     },
-    save: async (revision) => {
-      if (!draft || !saved) return revision;
-      const sent = draft;
-      let next = revision;
-      if (sent.pageTemplate !== saved.pageTemplate) {
-        next = await saveProductSection(productId, { section: "template", expectedAggregateRevision: next, pageTemplate: sent.pageTemplate });
-      }
-      if (sent.emiEligible !== saved.emiEligible) {
-        next = await saveProductSection(productId, {
-          section: "base",
-          expectedAggregateRevision: next,
-          patch: { emiEligible: sent.emiEligible },
-        });
-      }
-      markSaved(sent);
+    changes: () => {
+      if (!draft || !saved) return {};
+      sent.current = draft;
+      return {
+        ...(draft.pageTemplate !== saved.pageTemplate ? { pageTemplate: draft.pageTemplate } : {}),
+        ...(draft.emiEligible !== saved.emiEligible ? { emiEligible: draft.emiEligible } : {}),
+      };
+    },
+    saved: () => {
+      if (sent.current) markSaved(sent.current);
       void queryClient.invalidateQueries({ queryKey: productBaseSectionQueryOptions(productId).queryKey });
-      return next;
     },
   });
 

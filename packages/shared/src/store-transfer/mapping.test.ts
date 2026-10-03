@@ -88,7 +88,10 @@ describe("Shopify product CSV", () => {
 
   it("summarizes what it can't import", () => {
     const codes = result.unsupported.map((entry) => entry.code);
-    expect(codes).toEqual(expect.arrayContaining(["product_tags", "sku_cost", "market_prices", "google_shopping_columns", "unit_price", "tax_codes", "extra_option"]));
+    expect(codes).toEqual(expect.arrayContaining(["product_tags", "market_prices", "google_shopping_columns", "unit_price", "tax_codes", "extra_option"]));
+    // Cost per item is stored on each SKU (cost_minor), so it is imported, not reported.
+    expect(codes).not.toContain("sku_cost");
+    expect(byRef.get("classic-cotton-tee")!.variants.map((variant) => variant.cost)).toEqual(Array(6).fill(310));
     expect(result.unsupported.find((entry) => entry.code === "product_tags")!.count).toBe(3);
   });
 

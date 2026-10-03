@@ -42,7 +42,9 @@ catalog projections and cache dependencies hold for imports.
 - Brands and categories (`references.ts`) are found by name (category paths
   level by level) or created published; specifications become text attributes.
   Creating any of them needs the staff member's create permission.
-- SKU costs are reported (`sku_cost_not_stored`) until `cost_minor` exists.
+- Cost per item maps to `product_variants.cost_minor` in the store currency's minor
+  units: create sets it, upsert sets the file's cost where it differs (a blank
+  keeps the SKU's cost; price mode leaves costs alone), and the export writes it.
 
 ## Images (`product-images.ts`)
 
