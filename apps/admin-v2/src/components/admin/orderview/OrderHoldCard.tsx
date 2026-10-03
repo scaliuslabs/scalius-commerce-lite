@@ -38,7 +38,7 @@ export function OrderHoldCard({ order }: { order: Pick<Order, "id" | "holds"> })
           <CardTitle id="order-hold-title">{t("holds.title")}</CardTitle>
           <Badge variant="warning">{t("holds.badge")}</Badge>
         </CardHeader>
-        <CardContent className="space-y-3 text-body">
+        <CardContent className="space-y-3">
           <p className="text-muted-foreground">{t("holds.help")}</p>
           <ul className="space-y-3">
             {open.map((hold) => {
