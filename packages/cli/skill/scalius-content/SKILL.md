@@ -18,14 +18,14 @@ Contracts are authority. Never invent IDs, revisions, fields, state, URLs, media
 
 - Preserve type, revision, lifecycle, canonical, and discovery. Keep drafts private until publish; reread visibility changes.
 - Edit menus/items at current revisions. Read siblings/targets, keep the draft coherent, then publish.
-- Prefer bounded header, footer, homepage, and hero documents. Commit media before use.
+- Edit the header, footer, homepage sections, and hero slides only through the theme document draft (see below). Commit media before use.
 - Trash, restore, and publish are revisioned. On conflict, reread; never retry stale input or infer success.
 
-For the campaign subset, require a new unused slug and staged/non-atomic acceptance. Create draft, accept sanitized reread, then publish its revision; any active/trashed slug stops. Require a clean published main menu with no page-target match; append at current revision, publish returned revision, never update/move/reorder others. CAS-merge only topBar text/enabled; no link. Preserve full active-now desktop/mobile slider arrays; require distinct assets or approved reuse. Preflight unique filename/folder for at most three HTTPS imports; if uncertain, list and accept one unambiguous new exact match, never re-import. Local/base64 need upload/re-entry. Stop on ambiguity, conflict, unrelated menu drafts, or scheduling. Preserve theme/presentation; report partial work, no rollback.
+For the campaign subset, require a new unused slug and staged/non-atomic acceptance. Create draft, accept sanitized reread, then publish its revision; any active/trashed slug stops. Require a clean published main menu with no page-target match; append at current revision, publish returned revision, never update/move/reorder others. In the theme draft, change only the topBar `text` and `link` (a store path or https URL) and append desktop/mobile hero slides; stop if the draft differs from the published theme, then publish that draft revision. Require distinct desktop and mobile assets or approved reuse. Preflight unique filename/folder for at most three HTTPS imports; if uncertain, list and accept one unambiguous new exact match, never re-import. Local/base64 need upload/re-entry. Stop on ambiguity, conflict, unrelated menu drafts, or scheduling. Preserve theme/presentation; report partial work, no rollback.
 
 ## Handle themes securely
 
-Use draft → rebase if needed → publish at exact revisions. Open the secure body-only preview handoff; never print, persist, log, put its code in a URL, or replay it. Verify the active theme.
+Read the theme workspace, save the shared draft at its current draft and base-published revisions, then publish that exact draft revision. Open the secure body-only preview handoff; never print, persist, log, put its code in a URL, or replay it. Verify the active theme.
 
 ## Preserve discovery truth
 
