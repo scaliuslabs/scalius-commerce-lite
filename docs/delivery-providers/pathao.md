@@ -1,8 +1,6 @@
 # Pathao
 
-Pathao is a built-in courier (`type = pathao`). This page is for operators who set it up and contributors who change its adapter. Runtime rules are in the [delivery domain README](../../packages/core/src/modules/delivery/README.md). Webhook verification is in the [folder README](README.md).
-
-Provider documentation: [Pathao Merchant Courier developer API](https://merchant.pathao.com/courier/developer-api) and the [official WooCommerce bridge](https://github.com/pathao-eng/courier-woocommerce-plugin/blob/main/pathao-bridge.php). Never copy example credentials into a saved setup.
+Pathao is a built-in courier (`type = pathao`). This page is for operators who set it up and contributors who change its adapter. Runtime rules are in the [delivery domain README](../../packages/core/src/modules/delivery/README.md). Webhook verification is in the [folder README](README.md). Provider documentation: [Pathao Merchant Courier developer API](https://merchant.pathao.com/courier/developer-api) and the [official WooCommerce bridge](https://github.com/pathao-eng/courier-woocommerce-plugin/blob/main/pathao-bridge.php). Never copy example credentials into a saved setup.
 
 ## Environments and credentials
 
@@ -11,7 +9,7 @@ Provider documentation: [Pathao Merchant Courier developer API](https://merchant
 | Sandbox (default for a new courier) | `https://courier-api-sandbox.pathao.com` |
 | Production | `https://api-hermes.pathao.com` |
 
-A saved courier uses the base URL it contains; a name does not make production a sandbox. Changing the environment in the form clears the draft keys, because each environment has its own.
+A saved courier uses the base URL it contains. Changing the environment in the form clears the draft keys, because each environment has its own.
 
 | Field | Where | Notes |
 |-------|-------|-------|
@@ -22,7 +20,7 @@ A saved courier uses the base URL it contains; a name does not make production a
 
 ## Calls
 
-Paths start with `/aladdin/api/v1`. Each adapter call requests a new token. Source: `packages/core/src/modules/delivery/couriers/pathao.ts`, `packages/core/src/modules/delivery/pathao-location-import.ts`.
+Paths start with `/aladdin/api/v1`. Each adapter call requests a new token (`packages/core/src/modules/delivery/couriers/pathao.ts`, `packages/core/src/modules/delivery/pathao-location-import.ts`).
 
 | Purpose | Request |
 |---------|---------|
@@ -36,29 +34,29 @@ Paths start with `/aladdin/api/v1`. Each adapter call requests a new token. Sour
 
 - The body carries `store_id`, `merchant_order_id` (the Scalius order id), recipient name, local-format phone and address, the Pathao city, zone and area ids, `delivery_type`, `item_type`, `item_quantity`, `item_weight`, `item_description`, `special_instruction` and `amount_to_collect`. The saved order supplies all money and content.
 - COD must be a whole taka. A fraction is refused before any call, with advice to use another courier. Scalius never rounds order money.
-- City and zone need a positive integer in `delivery_locations.external_ids.pathao`. The area is optional. The check runs before the placeholder row and before any token request. The import in Settings, Shipping, Delivery areas creates the mapping.
+- City and zone need a positive integer in `delivery_locations.external_ids.pathao`, and the area is optional. The check runs before the placeholder row and before any token request. The import in Settings, Shipping, Delivery areas creates the mapping.
 - Success needs HTTP success, body `code` 200, a non-empty `data.consignment_id` and a string `data.order_status`. The consignment id is both `external_id` and `tracking_id`. The delivery fee (taka) is kept as the booking charge.
 - Explicit rejection: body `code` 400, 401, 403, 404 or 422, with a matching or successful HTTP status. A corrected booking is then safe. Anything else (network or read failure, server error, malformed JSON, missing identity) is an unknown outcome. A booking is never retried automatically.
 - Pathao has no lookup by `merchant_order_id`. An unknown outcome resolves only by merchant attestation after the Pathao portal or support confirms.
 
 ## Status map
 
-`mapProviderStatus("pathao", status)` tries the exact value (webhook events), then the value lowercased with spaces turned into `_` (API strings). An unmapped value becomes `unknown` with a logged warning.
+`mapProviderStatus("pathao", status)` tries the exact value (webhook events), then the value lowercased with spaces turned into `_` (API strings, for example `assigned_for_pickup`). An unmapped value becomes `unknown` with a logged warning. The API strings are mostly the event names without `order.` and with `_` for `-`; `status-mapper.ts` has the full list.
 
-| Canonical status | Webhook events | API strings |
-|------------------|----------------|-------------|
-| `pending` | `order.created`, `order.updated`, `order.pickup-requested` | `pending`, `pickup_requested` |
-| `pickup_assigned` | `order.assigned-for-pickup` | `assigned_for_pickup` |
-| `picked_up` | `order.picked` | `picked`, `pickup` |
-| `pickup_failed` | `order.pickup-failed` | `pickup_failed` |
-| `cancelled` | `order.pickup-cancelled` | `pickup_cancel`, `pickup_cancelled` |
-| `in_transit` | `order.at-the-sorting-hub`, `order.in-transit`, `order.received-at-last-mile-hub` | `at_the_sorting_hub`, `in_transit`, `received_at_last_mile_hub` |
-| `out_for_delivery` | `order.assigned-for-delivery` | `assigned_for_delivery` |
-| `delivered` | `order.delivered`, `order.paid`, `order.exchanged` | `delivered`, `payment_invoice`, `exchange` |
-| `partial_delivered` | `order.partial-delivery` | `partial_delivery`, `partial_delivered` |
-| `returned` | `order.returned`, `order.paid-return` | `return`, `returned`, `paid_return` |
-| `delivery_failed` | `order.delivery-failed` | `delivery_failed` |
-| `on_hold` | `order.on-hold` | `on_hold` |
+| Canonical status | Webhook events |
+|------------------|----------------|
+| `pending` | `order.created`, `order.updated`, `order.pickup-requested` |
+| `pickup_assigned` | `order.assigned-for-pickup` |
+| `picked_up` | `order.picked` |
+| `pickup_failed` | `order.pickup-failed` |
+| `cancelled` | `order.pickup-cancelled` |
+| `in_transit` | `order.at-the-sorting-hub`, `order.in-transit`, `order.received-at-last-mile-hub` |
+| `out_for_delivery` | `order.assigned-for-delivery` |
+| `delivered` | `order.delivered`, `order.paid`, `order.exchanged` |
+| `partial_delivered` | `order.partial-delivery` |
+| `returned` | `order.returned`, `order.paid-return` |
+| `delivery_failed` | `order.delivery-failed` |
+| `on_hold` | `order.on-hold` |
 
 ## Webhook
 
@@ -84,7 +82,3 @@ Callback URL: `<API origin>/api/v1/webhooks/pathao`. Source: `apps/api/src/route
 - Pathao's limits: an 11-digit recipient phone, an address of 10 to 220 characters, a weight of 0.5 to 10 kg, delivery type 48 for normal delivery, item type 2 for a parcel.
 - On 2026-09-09 the sandbox answered HTTP 422 "The amount to collect must be an integer." for `5570.8` and accepted `5571`.
 - A sandbox booking proves the request path only, not production approval.
-
-## Tests
-
-`packages/core/src/modules/delivery/couriers/pathao.test.ts`, `packages/core/src/modules/delivery/delivery.create-outcome.d1.test.ts`, `apps/api/src/routes/webhooks/pathao.test.ts`.

@@ -1,6 +1,6 @@
 # Email
 
-Transactional email goes through the email port (`@scalius/shared/plugins/providers/messaging`). Every sender, built in or an installed app's, implements the same `send`. `sendEmail()` does not ask which kind it got. This document is for contributors and operators. Message content and delivery receipts are in the [notifications README](../../modules/notifications/README.md).
+Transactional email goes through the email port (`@scalius/shared/plugins/providers/messaging`). Every sender, built in or an installed app's, implements the same `send`. This document is for contributors and operators. Message content and delivery receipts are in the [notifications README](../../modules/notifications/README.md).
 
 ## Providers
 
@@ -27,7 +27,7 @@ Transactional email goes through the email port (`@scalius/shared/plugins/provid
 
 Cloudflare can send when the binding exists. Resend can send when a readable key exists. If no sender can send, the call logs masked metadata only (never the content) and returns `{ success: false, provider: "log" }`.
 
-The result carries `provider`, `providerRef` and `retryable`. `retryable: false` means the same message can never pass. The notification queue honors it.
+The result carries `provider`, `providerRef` and `retryable`. `retryable: false` means the same message can never pass.
 
 ## Readiness
 
@@ -52,10 +52,10 @@ The `email` settings document (`emailDocument` in `packages/core/src/modules/set
 
 ## Admin routes
 
-| Method and path | Permission | Behavior |
-|---|---|---|
-| `GET /api/v1/admin/settings/email` | `settings.general.view` | Provider, masked key, sender, readiness, `revision` |
-| `POST /api/v1/admin/settings/email` | `settings.general.edit` | Saves `provider`, `sender`, `apiKey` with `expectedRevision` |
+| Method and path | Permission |
+|---|---|
+| `GET /api/v1/admin/settings/email` (provider, masked key, sender, readiness, `revision`) | `settings.general.view` |
+| `POST /api/v1/admin/settings/email` (saves `provider`, `sender`, `apiKey` with `expectedRevision`) | `settings.general.edit` |
 
 - A stale `expectedRevision` returns 409.
 - An app provider id must name an installed app's provider.
@@ -65,33 +65,10 @@ The `email` settings document (`emailDocument` in `packages/core/src/modules/set
 
 ## Call context
 
-Callers inside Workers pass the context:
-
-```typescript
-await sendEmail(message, {
-  db,
-  env,
-  encryptionKey,
-  appProviders, // requestAppProviders(c), or detachedAppProviders(env, db, key) in queues
-});
-```
-
-The context gives the selector the `env.EMAIL` binding, the database for settings, and the credential key. Queue consumers, Better Auth callbacks, order notifications and admin invitations all pass it.
-
-## Files
-
-| File | Purpose |
-|---|---|
-| `index.ts` | `sendEmail()`: selection and fallback |
-| `provider.ts` | Port types, context types, sender and header helpers |
-| `settings.ts` | Settings loader, readiness, Mailpit URL check |
-| `cloudflare.ts`, `resend.ts`, `mailpit.ts` | The built-in adapters |
-| `../email.ts` | Public entry `@scalius/core/integrations/email` |
+Callers inside Workers pass `{ db, env, encryptionKey, appProviders }` as the second argument (`requestAppProviders(c)`, or `detachedAppProviders(env, db, key)` in queues). The context gives the selector the `env.EMAIL` binding, the database for settings and the credential key.
 
 ## Adding a provider
 
 1. Write an `EmailAdapter` with `configured()` and `send()`.
 2. Add its id to `BUILT_IN_EMAIL_PROVIDER_IDS` in `provider.ts`, and the adapter to `BUILT_IN_EMAIL_ADAPTERS` in `index.ts`. Or ship it as an app provider instead.
 3. Extend `emailDocument` and the settings route only if it needs credentials.
-4. Keep Cloudflare Email Service available as the default.
-5. Add cases to `provider-selection.test.ts`.

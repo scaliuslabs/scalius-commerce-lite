@@ -1,12 +1,10 @@
 # Steadfast
 
-Steadfast is a built-in courier (`type = steadfast`). This page is for operators who set it up and contributors who change its adapter. Runtime rules are in the [delivery domain README](../../packages/core/src/modules/delivery/README.md). Webhook verification is in the [folder README](README.md).
-
-Provider documentation: [Steadfast API documentation](https://docs.google.com/document/d/e/2PACX-1vTi0sTyR353xu1AK0nR8E_WKe5onCkUXGEf8ch8uoJy9qxGfgGnboSIkNosjQ0OOdXkJhgGuAsWxnIh/pub), [webhook settings](https://steadfast.com.bd/user/webhook/add) and the [official WordPress plugin](https://wordpress.org/plugins/steadfast-api/).
+Steadfast is a built-in courier (`type = steadfast`). This page is for operators who set it up and contributors who change its adapter. Runtime rules are in the [delivery domain README](../../packages/core/src/modules/delivery/README.md). Webhook verification is in the [folder README](README.md). Provider documentation: [Steadfast API documentation](https://docs.google.com/document/d/e/2PACX-1vTi0sTyR353xu1AK0nR8E_WKe5onCkUXGEf8ch8uoJy9qxGfgGnboSIkNosjQ0OOdXkJhgGuAsWxnIh/pub), [webhook settings](https://steadfast.com.bd/user/webhook/add) and the [official WordPress plugin](https://wordpress.org/plugins/steadfast-api/).
 
 ## Environment and credentials
 
-The dashboard preset is the production base URL `https://portal.packzy.com/api/v1`. There is no sandbox preset. A saved courier uses the base URL it contains; a name such as "Steadfast Demo" gives no test isolation.
+The dashboard preset is the production base URL `https://portal.packzy.com/api/v1`. There is no sandbox preset, and a courier name such as "Steadfast Demo" gives no test isolation.
 
 | Field | Where | Notes |
 |-------|-------|-------|
@@ -75,8 +73,4 @@ Callback URL: `<API origin>/api/v1/webhooks/steadfast`. Source: `apps/api/src/ro
 
 - The documented statuses are pending or in review, hold, delivered, partial delivered, cancelled, unknown, and approval-pending forms.
 - The documentation calls the invoice unique, but a published bulk example repeats invoice values.
-- On 2026-09-09 the portal account was on an ownership hold with an unverified email, and neither a callback sent by Steadfast nor a real booking was observed. A test of this setup does not prove production readiness.
-
-## Tests
-
-`packages/core/src/modules/delivery/delivery.create-outcome.d1.test.ts`, `apps/api/src/routes/webhooks/steadfast.test.ts`.
+- No callback sent by Steadfast and no real booking has been observed. A test of this setup does not prove production readiness.
