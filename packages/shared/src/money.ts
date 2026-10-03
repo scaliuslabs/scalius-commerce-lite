@@ -6,12 +6,14 @@
  * Rounding rules, all exact integer math:
  * - `toMinor` rounds half-up at the currency's decimal places.
  * - A percentage discount prices each unit at round-half-up of
- *   `priceMinor × (10000 − bps) / 10000`; the discount is the difference.
- *   In BDT that rounding is to whole taka (`cashRoundingMinor`).
+ *   `priceMinor × (10000 − bps) / 10000` to the market's price increment
+ *   (`@scalius/shared/currency-policy`; a BDT store defaults to whole taka);
+ *   the discount is the difference.
  * - Proportional splits (order discounts, tax) use largest-remainder
  *   allocation with a stable key tie-break, so parts always sum to the whole.
  */
 import currency from "currency.js";
+import { currencyExponent, isWholeUnitIncrement } from "./currency-policy";
 
 const MAX_MINOR_AMOUNT = 9_000_000_000_000;
 
@@ -53,77 +55,102 @@ export function bpsToPercent(bps: number): number {
   return bps / 100;
 }
 
-/**
- * Cash rounding: amounts that come from a percentage are rounded half-up to
- * whole taka in BDT, because couriers and riders collect whole taka. Other
- * currencies keep minor-unit rounding.
- */
-export function cashRoundingMinor(currencyCode: string): number {
-  return currencyCode.trim().toUpperCase() === "BDT" ? 100 : 1;
+// ---------------------------------------------------------------------------
+// The market's price increment
+// ---------------------------------------------------------------------------
+
+function assertIncrement(incrementMinor: number): void {
+  if (!Number.isSafeInteger(incrementMinor) || incrementMinor < 1) {
+    throw new RangeError("A price increment is a positive integer of minor units.");
+  }
 }
 
-/** Why a Bangladesh-taka amount with paisa is refused. */
+/** Why a BDT amount with paisa is refused while the market prices in whole taka. */
 export const WHOLE_TAKA_MESSAGE = "Taka amounts are whole numbers.";
 
 /**
- * True when the currency's cash is whole units only (BDT): every amount a
- * merchant enters or a buyer pays is a multiple of `cashRoundingMinor`.
+ * Why an amount off the market's price increment is refused. Whole taka keeps
+ * its long-standing message; another whole unit says the same of its code.
  */
-export function requiresWholeCashAmounts(currencyCode: string): boolean {
-  return cashRoundingMinor(currencyCode) > 1;
+export function priceIncrementMessage(currencyCode: string, incrementMinor: number): string {
+  const code = currencyCode.trim().toUpperCase();
+  if (isWholeUnitIncrement(code, incrementMinor)) {
+    return code === "BDT" ? WHOLE_TAKA_MESSAGE : `${code} amounts are whole numbers.`;
+  }
+  return `${code} amounts go in steps of ${fromMinor(incrementMinor, currencyExponent(code))}.`;
 }
 
-/** True when the amount can be paid in the currency's cash (BDT: whole taka). */
-export function isWholeCashAmountMinor(amountMinor: number, currencyCode: string): boolean {
-  return Number.isSafeInteger(amountMinor) && amountMinor % cashRoundingMinor(currencyCode) === 0;
+/** True when the amount is a whole number of increments (an increment of 1 accepts every amount). */
+export function isIncrementMultipleMinor(amountMinor: number, incrementMinor: number): boolean {
+  assertIncrement(incrementMinor);
+  return Number.isSafeInteger(amountMinor) && amountMinor % incrementMinor === 0;
 }
 
-/** Half-up to the currency's cash unit (BDT: whole taka); other currencies are unchanged. */
-export function roundToCashMinor(amountMinor: number, currencyCode: string): number {
-  const unit = cashRoundingMinor(currencyCode);
-  if (unit === 1) return amountMinor;
-  return Math.floor((amountMinor + unit / 2) / unit) * unit;
+/** Half-up to a multiple of the increment; an increment of 1 leaves the amount. */
+export function roundToIncrementMinor(amountMinor: number, incrementMinor: number): number {
+  assertIncrement(incrementMinor);
+  if (incrementMinor === 1) return amountMinor;
+  return Math.floor((amountMinor + incrementMinor / 2) / incrementMinor) * incrementMinor;
 }
 
-export class WholeCashAmountError extends RangeError {
-  constructor() {
-    super(WHOLE_TAKA_MESSAGE);
-    this.name = "WholeCashAmountError";
+/** Down to a multiple of the increment: a fixed amount never grows to fit it. */
+export function floorToIncrementMinor(amountMinor: number, incrementMinor: number): number {
+  assertIncrement(incrementMinor);
+  return incrementMinor === 1 ? amountMinor : Math.floor(amountMinor / incrementMinor) * incrementMinor;
+}
+
+export class PriceIncrementError extends RangeError {
+  constructor(message: string) {
+    super(message);
+    this.name = "PriceIncrementError";
   }
 }
 
 /**
  * A merchant-entered decimal amount (price, fixed discount, delivery charge,
- * threshold, refund, manual adjustment) in minor units. In BDT it must be
- * whole taka, else `WholeCashAmountError`; other currencies keep minor units.
+ * threshold, refund, manual adjustment) in minor units, refused with
+ * `PriceIncrementError` unless it is a multiple of the market's price
+ * increment (a BDT store by default: whole taka).
  */
-export function toCashMinor(amount: number, decimalPlaces: number, currencyCode: string): number {
+export function toIncrementMinor(
+  amount: number,
+  decimalPlaces: number,
+  incrementMinor: number,
+  currencyCode: string,
+): number {
   const minor = toMinor(amount, decimalPlaces);
-  if (!isWholeCashAmountMinor(minor, currencyCode)) throw new WholeCashAmountError();
+  if (!isIncrementMultipleMinor(minor, incrementMinor)) {
+    throw new PriceIncrementError(priceIncrementMessage(currencyCode, incrementMinor));
+  }
   return minor;
 }
 
 /**
  * `baseMinor × basisPoints / 10000`, rounded half-up to a multiple of the
- * currency's cash rounding unit and never above the base.
+ * price increment and never above the base.
  */
-export function percentOfMinor(baseMinor: number, basisPoints: number, currencyCode: string): number {
+export function percentOfMinor(baseMinor: number, basisPoints: number, incrementMinor: number): number {
+  assertIncrement(incrementMinor);
   if (basisPoints >= 10_000) return baseMinor;
-  const unit = BigInt(cashRoundingMinor(currencyCode));
+  const unit = BigInt(incrementMinor);
   const value = ((BigInt(baseMinor) * BigInt(basisPoints) + 5_000n * unit) / (10_000n * unit)) * unit;
   return Math.min(baseMinor, Number(value));
 }
 
-/** The per-unit price after a catalog (product/variant) discount, in minor units. */
+/**
+ * The per-unit price after a catalog (product/variant) discount, in minor
+ * units: a percentage price rounds half-up to the price increment, a flat
+ * discount keeps the merchant's exact amount.
+ */
 export function discountedPriceMinor(
   priceMinor: number,
   discountType: unknown,
   discountBps: number | null | undefined,
   discountAmountMinor: number | null | undefined,
-  currencyCode: string,
+  incrementMinor: number,
 ): number {
   if (discountType === "percentage" && discountBps != null && discountBps > 0) {
-    return percentOfMinor(priceMinor, 10_000 - Math.min(discountBps, 10_000), currencyCode);
+    return percentOfMinor(priceMinor, 10_000 - Math.min(discountBps, 10_000), incrementMinor);
   }
   if (discountType === "flat" && discountAmountMinor != null && discountAmountMinor > 0) {
     return Math.max(priceMinor - discountAmountMinor, 0);

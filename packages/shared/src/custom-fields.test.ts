@@ -27,7 +27,7 @@ import {
   type CustomFieldCodecContext,
 } from "./custom-fields";
 
-const BDT = { decimalPlaces: 2, currencyCode: "BDT" } as const;
+const BDT = { decimalPlaces: 2, currencyCode: "BDT", priceIncrementMinor: 100 } as const;
 const USD = { decimalPlaces: 2, currencyCode: "USD" } as const;
 
 function parse(type: CustomFieldType, input: unknown, validations: CustomFieldValidations = {}, context: CustomFieldCodecContext = USD) {
@@ -175,9 +175,12 @@ describe("custom field value codec", () => {
     // Never rounded, never negative.
     expect(issue("money", "1.255").code).toBe("invalid");
     expect(issue("money", -1).code).toBe("invalid");
-    // Taka amounts are whole numbers.
+    // A BDT store's default increment: taka amounts are whole numbers.
     expect(stored("money", 120, {}, BDT)).toBe("12000");
-    expect(issue("money", 12.5, {}, BDT).code).toBe("whole_amount");
+    expect(issue("money", 12.5, {}, BDT)).toMatchObject({ code: "whole_amount", message: "Taka amounts are whole numbers." });
+    // A merchant who prices in paisa stores paisa; reads never re-check the increment.
+    expect(stored("money", 12.5, {}, { ...BDT, priceIncrementMinor: 1 })).toBe("1250");
+    expect(customFieldWireValue("money", "1250", { decimalPlaces: 2, currencyCode: "BDT" })).toBe(12.5);
     // A zero-decimal currency stores whole units.
     expect(stored("money", 500, {}, { decimalPlaces: 0, currencyCode: "JPY" })).toBe("500");
   });

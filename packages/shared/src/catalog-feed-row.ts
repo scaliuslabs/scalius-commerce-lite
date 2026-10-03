@@ -109,6 +109,8 @@ export interface ProjectCatalogFeedRowsInput {
   products: readonly CatalogFeedProductInput[];
   storefrontBaseUrl: string;
   currencyCode: string;
+  /** The market's price increment: feed prices are what checkout charges. */
+  priceIncrementMinor: number;
   policy: CatalogFeedProjectionPolicy;
   /** Resolves a persisted image source (bare key, CDN alias) to its public URL. */
   resolveImageUrl?: (source: string) => string | null | undefined;
@@ -366,6 +368,7 @@ function pricingForRow(
   product: CatalogFeedProductInput,
   variant: CatalogFeedVariantInput | null,
   currencyCode: string,
+  incrementMinor: number,
 ): CatalogFeedRowPricing | null {
   const originalAmount = variant?.price ?? product.price;
   const variantHasDiscount = Boolean(
@@ -382,6 +385,7 @@ function pricingForRow(
     discount.discountPercentage,
     discount.discountAmount,
     currencyCode,
+    incrementMinor,
   );
 
   if (
@@ -513,7 +517,7 @@ function buildRow(
     : productImageLink(product, input);
   if (!image) return "missing_image";
 
-  const pricing = pricingForRow(product, variant, input.currencyCode);
+  const pricing = pricingForRow(product, variant, input.currencyCode, input.priceIncrementMinor);
   if (!pricing) return "non_positive_price";
 
   const brand = normalizedText(product.brand?.name);

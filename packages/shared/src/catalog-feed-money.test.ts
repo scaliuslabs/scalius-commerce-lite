@@ -49,10 +49,12 @@ describe("catalog feed money", () => {
         10,
         null,
         "USD",
+        1,
       ),
     ).toBe(0.91);
-    // BDT feed prices follow checkout's whole-taka cash rounding.
-    expect(calculateCatalogFeedDiscountedAmount(8990, "percentage", 8, null, "BDT")).toBe(8271);
+    // Feed prices follow checkout's price increment: whole taka by default in BDT.
+    expect(calculateCatalogFeedDiscountedAmount(8990, "percentage", 8, null, "BDT", 100)).toBe(8271);
+    expect(calculateCatalogFeedDiscountedAmount(8990, "percentage", 8, null, "BDT", 1)).toBe(8270.8);
   });
 
   it("rejects exponent-form legacy amounts instead of emitting invalid XML money", () => {
@@ -63,10 +65,10 @@ describe("catalog feed money", () => {
 
   it("calculates at currency precision before catalog comparison", () => {
     expect(
-      calculateCatalogFeedDiscountedAmount(10.4, "flat", null, 10, "BDT"),
+      calculateCatalogFeedDiscountedAmount(10.4, "flat", null, 10, "BDT", 100),
     ).toBe(0.4);
     expect(
-      calculateCatalogFeedDiscountedAmount(10.4, "flat", null, 10, "JPY"),
+      calculateCatalogFeedDiscountedAmount(10.4, "flat", null, 10, "JPY", 1),
     ).toBe(0);
     expect(
       calculateCatalogFeedDiscountedAmount(
@@ -75,6 +77,7 @@ describe("catalog feed money", () => {
         1,
         null,
         "KWD",
+        1,
       ),
     ).toBe(1.22);
     expect(isCatalogFeedSalePrice(1.234, 1.233, "KWD")).toBe(false);

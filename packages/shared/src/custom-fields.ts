@@ -19,7 +19,7 @@
 // those for lists. `null`, an empty string or an empty list clears a value.
 
 import { toHandle } from "./handle";
-import { fromMinor, isWholeCashAmountMinor, toMinor, WHOLE_TAKA_MESSAGE } from "./money";
+import { fromMinor, isIncrementMultipleMinor, priceIncrementMessage, toMinor } from "./money";
 import { PLUGIN_ID_PATTERN } from "./plugins/ids";
 
 // ---------------------------------------------------------------------------
@@ -245,6 +245,12 @@ const fail = (code: CustomFieldIssueCode, message: string, extra: { index?: numb
 export interface CustomFieldCodecContext {
   readonly decimalPlaces: number;
   readonly currencyCode: string;
+  /**
+   * Writes: the market's price increment a money value must be a multiple of
+   * (`@scalius/shared/currency-policy`). Reads leave it out: a stored value
+   * was valid when it was written.
+   */
+  readonly priceIncrementMinor?: number;
 }
 
 export type CustomFieldJson =
@@ -476,7 +482,10 @@ function canonicalItem(type: CustomFieldScalarType, input: unknown, context: Cus
       } catch {
         return invalid();
       }
-      if (!isWholeCashAmountMinor(minor, context.currencyCode)) return fail("whole_amount", WHOLE_TAKA_MESSAGE);
+      const increment = context.priceIncrementMinor;
+      if (increment !== undefined && !isIncrementMultipleMinor(minor, increment)) {
+        return fail("whole_amount", priceIncrementMessage(context.currencyCode, increment));
+      }
       return ok(String(minor));
     }
     case "product_reference":

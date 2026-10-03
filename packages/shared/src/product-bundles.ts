@@ -7,13 +7,14 @@
  * display-only discount. Money is integer minor units.
  *
  * - `percentage`: every unit in the group is priced like a percentage
- *   catalog discount (`discountedPriceMinor`, half-up to the cash unit).
+ *   catalog discount (`discountedPriceMinor`, half-up to the market's price
+ *   increment).
  * - `fixed_price`: each complete set of `quantity` units costs `priceMinor`;
  *   leftover units pay the unit price. A set never costs more than buying the
  *   units one by one.
  */
 import { z } from "zod";
-import { cashRoundingMinor, discountedPriceMinor } from "./money";
+import { discountedPriceMinor } from "./money";
 
 export const PRODUCT_BUNDLE_DISCOUNT_TYPES = ["percentage", "fixed_price"] as const;
 export const PRODUCT_BUNDLE_MIN_QUANTITY = 2;
@@ -60,7 +61,8 @@ export function bundleTotalMinor(
   unitPriceMinor: number,
   quantity: number,
   tiers: readonly ProductBundleTier[],
-  currencyCode: string,
+  /** The market's price increment (`@scalius/shared/currency-policy`). */
+  incrementMinor: number,
 ): { totalMinor: number; savingMinor: number; tier: ProductBundleTier | null } {
   if (!Number.isSafeInteger(unitPriceMinor) || unitPriceMinor < 0) {
     throw new RangeError("Unit prices are non-negative integer minor units.");
@@ -72,7 +74,7 @@ export function bundleTotalMinor(
   if (!tier) return { totalMinor: plainMinor, savingMinor: 0, tier: null };
   let totalMinor: number;
   if (tier.discountType === "percentage") {
-    totalMinor = discountedPriceMinor(unitPriceMinor, "percentage", tier.discountBps, 0, currencyCode) * quantity;
+    totalMinor = discountedPriceMinor(unitPriceMinor, "percentage", tier.discountBps, 0, incrementMinor) * quantity;
   } else {
     const sets = Math.floor(quantity / tier.quantity);
     const setMinor = Math.min(tier.priceMinor, unitPriceMinor * tier.quantity);
@@ -130,20 +132,22 @@ function allocateCashUnits(amountMinor: number, weights: readonly number[], unit
  * reaches (`selectBundleTier`).
  *
  * - `percentage`: each unit is priced like a percentage catalog discount of
- *   its own unit price (half-up to the cash unit).
+ *   its own unit price (half-up to the price increment).
  * - `fixed_price`: sets of `quantity` units are formed from the dearest units
  *   first (the buyer gets the saving the tier advertises); a set costs
  *   `priceMinor` but never more than its units bought singly, and leftover
  *   units pay their own price. A set's saving is split over its units by
- *   price in whole cash units.
+ *   price in whole increments.
  *
- * With one unit price this equals `bundleTotalMinor`. With BDT's whole-taka
- * prices every saving, and every line's share of it, is whole taka.
+ * With one unit price this equals `bundleTotalMinor`. With prices on the
+ * increment (a BDT store's default: whole taka) every saving, and every
+ * line's share of it, is on the increment too.
  */
 export function bundleGroupPricing(
   lines: readonly BundleGroupLine[],
   tiers: readonly ProductBundleTier[],
-  currencyCode: string,
+  /** The market's price increment (`@scalius/shared/currency-policy`). */
+  incrementMinor: number,
 ): BundleGroupPricing {
   let quantity = 0;
   let plainMinor = 0;
@@ -161,11 +165,11 @@ export function bundleGroupPricing(
   const tier = selectBundleTier(quantity, tiers);
   if (tier?.discountType === "percentage") {
     for (const line of lines) {
-      const unitMinor = discountedPriceMinor(line.unitPriceMinor, "percentage", tier.discountBps, 0, currencyCode);
+      const unitMinor = discountedPriceMinor(line.unitPriceMinor, "percentage", tier.discountBps, 0, incrementMinor);
       savings.set(line.key, (line.unitPriceMinor - unitMinor) * line.quantity);
     }
   } else if (tier?.discountType === "fixed_price") {
-    const unit = cashRoundingMinor(currencyCode);
+    const unit = incrementMinor;
     // Every unit, dearest first; line order breaks ties.
     const units = lines
       .flatMap((line, index) => Array.from({ length: line.quantity }, () => ({ index, priceMinor: line.unitPriceMinor })))
@@ -175,7 +179,7 @@ export function bundleGroupPricing(
       const members = units.slice(set * tier.quantity, (set + 1) * tier.quantity);
       const setPlainMinor = members.reduce((sum, member) => sum + member.priceMinor, 0);
       const savingMinor = setPlainMinor - Math.min(tier.priceMinor, setPlainMinor);
-      // Only a price that is not whole cash leaves a remainder; it stays on the dearest unit.
+      // Only a price off the increment leaves a remainder; it stays on the dearest unit.
       const cashSavingMinor = savingMinor - (savingMinor % unit);
       const shares = allocateCashUnits(cashSavingMinor, members.map((member) => member.priceMinor), unit);
       shares[0] = shares[0]! + savingMinor - cashSavingMinor;

@@ -9,7 +9,7 @@ import { productImportItemSchema, compareAtDiscount } from "./products";
 import { buildFailedRowsCsv, buildImportIssuesCsv } from "./issues";
 import { parseCsv } from "./csv";
 
-const BDT = { code: "BDT", decimalPlaces: 2 };
+const BDT = { code: "BDT", decimalPlaces: 2, priceIncrementMinor: 100 };
 const FIXTURES = ["shopify-products.csv", "woocommerce-products.csv", "shopify-customers.csv", "woocommerce-customers.csv"];
 const fixtures = new Map(await Promise.all(FIXTURES.map(async (name) => [name, await readFixture(name)] as const)));
 const file = (name: string) => parseImportText(fixtures.get(name)!);
@@ -131,7 +131,9 @@ describe("Shopify product CSV", () => {
     expect(strict.issues[0]).toMatchObject({ code: "price_not_whole_taka", line: 2 });
     const rounded = mapShopifyProducts(soapTable, { currency: BDT, roundPrices: true });
     expect(rounded.items[0]!.variants[0]!.price).toBe(100);
-    expect(mapShopifyProducts(soapTable, { currency: { code: "USD", decimalPlaces: 2 } }).items[0]!.variants[0]!.price).toBe(99.5);
+    expect(mapShopifyProducts(soapTable, { currency: { code: "USD", decimalPlaces: 2, priceIncrementMinor: 1 } }).items[0]!.variants[0]!.price).toBe(99.5);
+    // A BDT store that prices in paisa imports paisa.
+    expect(mapShopifyProducts(soapTable, { currency: { ...BDT, priceIncrementMinor: 1 } }).items[0]!.variants[0]!.price).toBe(99.5);
   });
 
   it("produces items the API schema accepts", () => {

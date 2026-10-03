@@ -84,7 +84,8 @@ export interface ManualOrderAppDeliveryMethod {
 }
 
 export interface ManualOrderAppInput {
-  currency: { code: string; decimalPlaces: number };
+  /** The order's currency at the store's price increment (app amounts round to it). */
+  currency: { code: string; decimalPlaces: number; priceIncrementMinor: number };
   lines: readonly ManualOrderAppLine[];
   /** The staff discount, already checked against the discountable subtotal. */
   manualDiscountMinor: number;

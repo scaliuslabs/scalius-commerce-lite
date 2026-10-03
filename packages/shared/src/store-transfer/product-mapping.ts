@@ -21,15 +21,17 @@ import {
   type ProductImportVariant,
 } from "./products";
 import { stableHash, truncateText } from "./values";
+import type { PricingCurrency } from "../currency-policy";
 
 /** What to do with option axes past the second (Shopify's Option3). */
 export type ExtraOptionStrategy = "keep" | "skip" | "fold";
 
 export interface ProductMappingOptions {
-  currency: { code: string; decimalPlaces: number };
+  /** The store currency at its price increment: imported prices are multiples of it. */
+  currency: PricingCurrency;
   /** Option3 (and beyond): keep it as a third option (default), drop it, or make one product per value. */
   extraOptions?: ExtraOptionStrategy;
-  /** Round prices to whole taka (or the store's decimals) instead of failing those rows. */
+  /** Round prices to the store's price increment (whole taka by default in BDT) instead of failing those rows. */
   roundPrices?: boolean;
   /** Shopify: which column names the category (`auto`: Type, else Product Category). */
   categorySource?: "auto" | "type" | "product_category" | "none";

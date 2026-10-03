@@ -13,19 +13,20 @@ describe("roundPriceToPrecision", () => {
 
 describe("calculateDiscountedPrice", () => {
   it("applies percentage and flat discounts with the checkout integer rule", () => {
-    expect(calculateDiscountedPrice(1800, "percentage", 15, 0, "USD")).toBe(1530);
-    expect(calculateDiscountedPrice(1800, "flat", 0, 200, "USD")).toBe(1600);
-    expect(calculateDiscountedPrice(100, "flat", 0, 150, "USD")).toBe(0);
+    expect(calculateDiscountedPrice(1800, "percentage", 15, 0, "USD", 1)).toBe(1530);
+    expect(calculateDiscountedPrice(1800, "flat", 0, 200, "USD", 1)).toBe(1600);
+    expect(calculateDiscountedPrice(100, "flat", 0, 150, "USD", 1)).toBe(0);
   });
 
   it("rounds the discounted unit price half-up in minor units", () => {
     // 10.05 at 50% is 502.5 paisa, which rounds up to 5.03.
-    expect(calculateDiscountedPrice(10.05, "percentage", 50, null, "USD")).toBe(5.03);
-    expect(calculateDiscountedPrice(1.005, "percentage", 10, null, "USD")).toBe(0.91);
+    expect(calculateDiscountedPrice(10.05, "percentage", 50, null, "USD", 1)).toBe(5.03);
+    expect(calculateDiscountedPrice(1.005, "percentage", 10, null, "USD", 1)).toBe(0.91);
   });
 
-  it("rounds BDT percentage prices to whole taka", () => {
-    expect(calculateDiscountedPrice(8990, "percentage", 8, null, "BDT")).toBe(8271);
-    expect(calculateDiscountedPrice(8990, "flat", 0, 0.5, "BDT")).toBe(8989.5);
+  it("rounds percentage prices to the market's increment: whole taka by default in BDT", () => {
+    expect(calculateDiscountedPrice(8990, "percentage", 8, null, "BDT", 100)).toBe(8271);
+    expect(calculateDiscountedPrice(8990, "flat", 0, 0.5, "BDT", 100)).toBe(8989.5);
+    expect(calculateDiscountedPrice(8990, "percentage", 8, null, "BDT", 1)).toBe(8270.8);
   });
 });

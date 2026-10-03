@@ -21,6 +21,8 @@ import {
   type ProductOptionStandardMapping,
 } from "../product-options";
 import { getBarcodeValidationError, detectBarcodeType } from "../barcode-identity";
+import { isWholeUnitIncrement, type PricingCurrency } from "../currency-policy";
+import { roundToIncrementMinor } from "../money";
 import type { ImportIssue } from "./issues";
 
 export const PRODUCT_IMPORT_MODES = ["create", "upsert", "price"] as const;
@@ -261,28 +263,33 @@ export function productItemRuleIssues(item: {
 }
 
 /**
- * Money rules that depend on the store currency: in Bangladesh taka every
- * price is whole taka. Returns the issues (with lines) for one item.
+ * Money rules that depend on the store currency: every price is a multiple
+ * of the store's price increment (a BDT store's default: whole taka).
+ * Returns the issues (with lines) for one item.
  */
 export function productItemCurrencyIssues(
   item: Pick<ProductImportItem, "ref" | "lines" | "variants">,
-  currency: { code: string; decimalPlaces: number },
+  currency: PricingCurrency,
   variantLines?: readonly (number | null)[],
 ): ImportIssue[] {
-  const whole = currency.code.trim().toUpperCase() === "BDT";
-  const scale = 10 ** (whole ? 0 : currency.decimalPlaces);
+  const code = currency.code.trim().toUpperCase();
+  const wholeTaka = code === "BDT" && isWholeUnitIncrement(code, currency.priceIncrementMinor);
+  // The increment in major units: 1 for whole units, 10^-decimals for minor units.
+  const step = currency.priceIncrementMinor / 10 ** currency.decimalPlaces;
   const issues: ImportIssue[] = [];
   item.variants.forEach((variant, index) => {
     for (const [column, amount] of [["price", variant.price], ["compareAtPrice", variant.compareAtPrice]] as const) {
       if (amount === null) continue;
-      const scaled = amount * scale;
+      const scaled = amount / step;
       if (Math.abs(scaled - Math.round(scaled)) > 1e-6) {
         issues.push({
           severity: "error",
-          code: whole ? "price_not_whole_taka" : "price_too_precise",
-          message: whole
+          code: wholeTaka ? "price_not_whole_taka" : "price_too_precise",
+          message: wholeTaka
             ? `Taka amounts are whole numbers (${amount}).`
-            : `${amount} has more than ${currency.decimalPlaces} decimal places.`,
+            : isWholeUnitIncrement(code, currency.priceIncrementMinor)
+              ? `${code} amounts are whole numbers (${amount}).`
+              : `${amount} has more than ${currency.decimalPlaces} decimal places.`,
           line: variantLines?.[index] ?? item.lines[0] ?? null,
           subject: variant.sku ?? item.ref,
           column,
@@ -294,13 +301,14 @@ export function productItemCurrencyIssues(
   return issues;
 }
 
-/** Rounds every price to whole taka (or the store's decimals), half up. */
+/** Rounds every price half up to the store's price increment (a BDT store's default: whole taka). */
 export function roundItemPrices<T extends Pick<ProductImportItem, "variants">>(
   item: T,
-  currency: { code: string; decimalPlaces: number },
+  currency: PricingCurrency,
 ): T {
-  const digits = currency.code.trim().toUpperCase() === "BDT" ? 0 : currency.decimalPlaces;
-  const round = (amount: number) => Math.round(amount * 10 ** digits) / 10 ** digits;
+  const scale = 10 ** currency.decimalPlaces;
+  const round = (amount: number) =>
+    roundToIncrementMinor(Math.round(amount * scale), currency.priceIncrementMinor) / scale;
   return {
     ...item,
     variants: item.variants.map((variant) => ({

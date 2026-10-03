@@ -141,6 +141,13 @@ export function resolvePriceIncrementMinor(code: string, stored: unknown): numbe
   return isPriceIncrementMinor(code, stored) ? stored : defaultPriceIncrementMinor(code);
 }
 
+/** A currency as pricing needs it: its ISO exponent and the market's price increment. */
+export interface PricingCurrency {
+  code: string;
+  decimalPlaces: number;
+  priceIncrementMinor: number;
+}
+
 /** True when the increment is the currency's whole unit (BDT 100: "Taka amounts are whole numbers."). */
 export function isWholeUnitIncrement(code: string, incrementMinor: number): boolean {
   return incrementMinor > 1 && incrementMinor === 10 ** currencyExponent(code);

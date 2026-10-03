@@ -1,16 +1,23 @@
 import { describe, expect, it } from "vitest";
+import { defaultPriceIncrementMinor } from "./currency-policy";
 import {
   bpsToPercent,
-  cashRoundingMinor,
   discountedPriceMinor,
+  floorToIncrementMinor,
+  isIncrementMultipleMinor,
   percentOfMinor,
   fromMinor,
   percentToBps,
-  roundToCashMinor,
-  toCashMinor,
+  priceIncrementMessage,
+  PriceIncrementError,
+  roundToIncrementMinor,
+  toIncrementMinor,
   toMinor,
   WHOLE_TAKA_MESSAGE,
 } from "./money";
+
+const WHOLE_TAKA = defaultPriceIncrementMinor("BDT");
+const MINOR = 1;
 
 describe("toMinor / fromMinor", () => {
   it("converts decimal HTTP amounts to exact minor units at the currency precision", () => {
@@ -46,41 +53,56 @@ describe("percentage discounts", () => {
   });
 
   it("prices each unit at round-half-up of price × (1 − rate)", () => {
-    expect(discountedPriceMinor(1_005, "percentage", 5_000, 0, "USD")).toBe(503);
-    expect(discountedPriceMinor(999, "percentage", 3_333, 0, "USD")).toBe(666);
-    expect(discountedPriceMinor(180_000, "percentage", 1_500, 0, "USD")).toBe(153_000);
-    expect(discountedPriceMinor(10_000, "flat", 0, 12_000, "USD")).toBe(0);
-    expect(discountedPriceMinor(10_000, null, 5_000, 0, "USD")).toBe(10_000);
+    expect(discountedPriceMinor(1_005, "percentage", 5_000, 0, MINOR)).toBe(503);
+    expect(discountedPriceMinor(999, "percentage", 3_333, 0, MINOR)).toBe(666);
+    expect(discountedPriceMinor(180_000, "percentage", 1_500, 0, MINOR)).toBe(153_000);
+    expect(discountedPriceMinor(10_000, "flat", 0, 12_000, MINOR)).toBe(0);
+    expect(discountedPriceMinor(10_000, null, 5_000, 0, MINOR)).toBe(10_000);
   });
 
-  it("rounds BDT percentage prices half-up to whole taka, so COD totals are whole", () => {
+  it("rounds percentage prices half-up to a whole-taka increment, so COD totals are whole", () => {
     // ৳8,990 at 8% off is ৳8,270.80 exactly; buyers pay ৳8,271.
-    expect(discountedPriceMinor(899_000, "percentage", 800, 0, "BDT")).toBe(827_100);
+    expect(discountedPriceMinor(899_000, "percentage", 800, 0, WHOLE_TAKA)).toBe(827_100);
     // ৳250 at 5% off is ৳237.50: half-up to ৳238.
-    expect(discountedPriceMinor(25_000, "percentage", 500, 0, "BDT")).toBe(23_800);
+    expect(discountedPriceMinor(25_000, "percentage", 500, 0, WHOLE_TAKA)).toBe(23_800);
     // Flat discounts keep the merchant's exact amount.
-    expect(discountedPriceMinor(25_050, "flat", 0, 50, "BDT")).toBe(25_000);
-    expect(percentOfMinor(205_000, 1_500, "BDT")).toBe(30_800);
-    expect(percentOfMinor(205_000, 1_500, "USD")).toBe(30_750);
-    expect(percentOfMinor(40, 10_000, "BDT")).toBe(40);
-    expect(cashRoundingMinor(" bdt ")).toBe(100);
+    expect(discountedPriceMinor(25_050, "flat", 0, 50, WHOLE_TAKA)).toBe(25_000);
+    expect(percentOfMinor(205_000, 1_500, WHOLE_TAKA)).toBe(30_800);
+    expect(percentOfMinor(205_000, 1_500, MINOR)).toBe(30_750);
+    expect(percentOfMinor(40, 10_000, WHOLE_TAKA)).toBe(40);
+  });
+
+  it("follows the market's increment, not the currency: a BDT store with paisa prices keeps paisa", () => {
+    expect(discountedPriceMinor(899_000, "percentage", 800, 0, MINOR)).toBe(827_080);
+    // A CHF market pricing in 5-rappen steps.
+    expect(percentOfMinor(1_003, 1_000, 5)).toBe(100);
+    expect(discountedPriceMinor(1_990, "percentage", 1_000, 0, 5)).toBe(1_790);
   });
 });
 
-describe("whole-taka amounts", () => {
-  it("accepts whole taka and refuses paisa in BDT; other currencies keep minor units", () => {
-    expect(toCashMinor(60, 2, "BDT")).toBe(6_000);
-    expect(toCashMinor(1_250, 2, "bdt")).toBe(125_000);
-    expect(() => toCashMinor(60.5, 2, "BDT")).toThrow(WHOLE_TAKA_MESSAGE);
-    expect(() => toCashMinor(0.01, 2, "BDT")).toThrow(WHOLE_TAKA_MESSAGE);
-    expect(toCashMinor(60.5, 2, "USD")).toBe(6_050);
-    expect(toCashMinor(0.01, 2, "EUR")).toBe(1);
+describe("price increment amounts", () => {
+  it("accepts multiples of the increment and refuses the rest with the policy's message", () => {
+    expect(toIncrementMinor(60, 2, WHOLE_TAKA, "BDT")).toBe(6_000);
+    expect(toIncrementMinor(1_250, 2, WHOLE_TAKA, "bdt")).toBe(125_000);
+    expect(() => toIncrementMinor(60.5, 2, WHOLE_TAKA, "BDT")).toThrow(WHOLE_TAKA_MESSAGE);
+    expect(() => toIncrementMinor(0.01, 2, WHOLE_TAKA, "BDT")).toThrow(PriceIncrementError);
+    expect(toIncrementMinor(60.5, 2, MINOR, "BDT")).toBe(6_050);
+    expect(toIncrementMinor(60.5, 2, MINOR, "USD")).toBe(6_050);
+    expect(toIncrementMinor(0.01, 2, MINOR, "EUR")).toBe(1);
+    expect(() => toIncrementMinor(12.5, 2, 100, "USD")).toThrow("USD amounts are whole numbers.");
+    expect(priceIncrementMessage("CHF", 5)).toBe("CHF amounts go in steps of 0.05.");
   });
 
-  it("rounds existing amounts half-up to whole taka, and leaves other currencies alone", () => {
-    expect(roundToCashMinor(6_049, "BDT")).toBe(6_000);
-    expect(roundToCashMinor(6_050, "BDT")).toBe(6_100);
-    expect(roundToCashMinor(6_000, "BDT")).toBe(6_000);
-    expect(roundToCashMinor(6_049, "USD")).toBe(6_049);
+  it("rounds, floors and checks against the increment", () => {
+    expect(roundToIncrementMinor(6_049, WHOLE_TAKA)).toBe(6_000);
+    expect(roundToIncrementMinor(6_050, WHOLE_TAKA)).toBe(6_100);
+    expect(roundToIncrementMinor(6_000, WHOLE_TAKA)).toBe(6_000);
+    expect(roundToIncrementMinor(6_049, MINOR)).toBe(6_049);
+    expect(floorToIncrementMinor(6_099, WHOLE_TAKA)).toBe(6_000);
+    expect(floorToIncrementMinor(6_099, MINOR)).toBe(6_099);
+    expect(isIncrementMultipleMinor(6_000, WHOLE_TAKA)).toBe(true);
+    expect(isIncrementMultipleMinor(6_050, WHOLE_TAKA)).toBe(false);
+    expect(isIncrementMultipleMinor(6_050, MINOR)).toBe(true);
+    expect(() => roundToIncrementMinor(1, 0)).toThrow(RangeError);
   });
 });

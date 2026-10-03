@@ -42,6 +42,8 @@ export function calculateCatalogFeedDiscountedAmount(
   discountPercentage: number | null | undefined,
   discountAmount: number | null | undefined,
   currencyCode: string,
+  /** The market's price increment, as checkout prices it. */
+  incrementMinor: number,
 ): number {
   const effectivePrice = calculateDiscountedPrice(
     price,
@@ -49,6 +51,7 @@ export function calculateCatalogFeedDiscountedAmount(
     discountPercentage,
     discountAmount,
     currencyCode,
+    incrementMinor,
   );
 
   return quantizeCatalogFeedAmount(effectivePrice, currencyCode);

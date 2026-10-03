@@ -20,8 +20,8 @@ export function roundPriceToPrecision(
 
 /**
  * The discounted unit price of a decimal HTTP price, using the exact integer
- * rule checkout applies (`discountedPriceMinor`, including BDT cash
- * rounding), so displayed and charged prices always agree.
+ * rule checkout applies (`discountedPriceMinor`, rounded to the market's
+ * price increment), so displayed and charged prices always agree.
  */
 export function calculateDiscountedPrice(
   price: number,
@@ -29,6 +29,8 @@ export function calculateDiscountedPrice(
   discountPercentage: number | null | undefined,
   discountAmount: number | null | undefined,
   currencyCode: string,
+  /** The market's price increment (`@scalius/shared/currency-policy`). */
+  incrementMinor: number,
 ): number {
   const places = getDecimalPlaces(currencyCode);
   // Amounts too large for integer minor units are not prices: the result is
@@ -45,7 +47,7 @@ export function calculateDiscountedPrice(
   const discountMinor = amount(discountAmount);
   if (priceMinor === null || discountMinor === null) return 0;
   return fromMinor(
-    discountedPriceMinor(priceMinor, discountType, percentToBps(discountPercentage), discountMinor, currencyCode),
+    discountedPriceMinor(priceMinor, discountType, percentToBps(discountPercentage), discountMinor, incrementMinor),
     places,
   );
 }

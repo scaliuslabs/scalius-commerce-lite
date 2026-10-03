@@ -4,12 +4,23 @@
 // Uses currency.js for precision arithmetic; per-currency facts come from ./currency-policy.
 
 import Currency from "currency.js";
-import { currencyExponent, SUPPORTED_CURRENCY_CODES, type SupportedCurrencyCode } from "./currency-policy";
+import {
+  currencyExponent,
+  defaultPriceIncrementMinor,
+  resolvePriceIncrementMinor,
+  SUPPORTED_CURRENCY_CODES,
+  type SupportedCurrencyCode,
+} from "./currency-policy";
 
 // Declare window for environments without DOM types (e.g. Cloudflare Workers).
 // Uses a plain object type so it compiles without the DOM lib.
 // The typeof check at runtime ensures this is only accessed in browsers.
-declare const window: { __CURRENCY_SYMBOL__?: string; __CURRENCY_CODE__?: string; __CURRENCY_DECIMAL_PLACES__?: number } | undefined;
+declare const window: {
+  __CURRENCY_SYMBOL__?: string;
+  __CURRENCY_CODE__?: string;
+  __CURRENCY_DECIMAL_PLACES__?: number;
+  __CURRENCY_PRICE_INCREMENT__?: number;
+} | undefined;
 
 export interface CurrencyConfig {
   code: string;
@@ -73,6 +84,20 @@ export function getCurrencyCode(): string {
     return window.__CURRENCY_CODE__;
   }
   return DEFAULT_CURRENCY.code;
+}
+
+/**
+ * The page store's price increment for `code` (set by Layout.astro from the
+ * layout currency): percentage prices round to it exactly as checkout
+ * charges. Another currency, or a page without the global (server render),
+ * gets that currency's default; server renders pass the layout value
+ * explicitly.
+ */
+export function getPriceIncrementMinor(code: string = getCurrencyCode()): number {
+  const normalized = code.trim().toUpperCase();
+  if (normalized !== getCurrencyCode().trim().toUpperCase()) return defaultPriceIncrementMinor(normalized);
+  const pageIncrement = typeof window !== "undefined" ? window.__CURRENCY_PRICE_INCREMENT__ : undefined;
+  return resolvePriceIncrementMinor(normalized, pageIncrement);
 }
 
 /**

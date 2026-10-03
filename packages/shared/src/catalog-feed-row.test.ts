@@ -17,6 +17,7 @@ function project(
     products,
     storefrontBaseUrl: BASE_URL,
     currencyCode: "BDT",
+    priceIncrementMinor: 100,
     policy: {
       variantStrategy: "variants",
       includeUnavailableProducts: true,

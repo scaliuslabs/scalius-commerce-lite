@@ -10,12 +10,13 @@
  * Money is integer minor units. A plan's bank conversion fee is a flat
  * percentage of the price over the whole tenure (how Bangladeshi banks quote
  * "0% EMI, 3% conversion fee for 6 months"). The fee rounds half-up to the
- * cash unit (whole taka in BDT) like every percentage in `money.ts`; the
- * monthly amount rounds UP to the cash unit, so `months × monthly` always
- * covers the total and the buyer is never shown less than the bank charges.
+ * market's price increment (a BDT store's default: whole taka) like every
+ * percentage in `money.ts`; the monthly amount rounds UP to the increment, so
+ * `months × monthly` always covers the total and the buyer is never shown
+ * less than the bank charges.
  */
 import { z } from "zod";
-import { cashRoundingMinor, percentOfMinor } from "./money";
+import { percentOfMinor } from "./money";
 
 export const EMI_MAX_PLANS = 24;
 export const EMI_MIN_MONTHS = 2;
@@ -71,11 +72,11 @@ function assertPrice(priceMinor: number): void {
 }
 
 /** One plan applied to a price, or null when the price is below the plan's minimum or zero. */
-export function emiQuote(priceMinor: number, plan: EmiPlan, currencyCode: string): EmiQuote | null {
+export function emiQuote(priceMinor: number, plan: EmiPlan, incrementMinor: number): EmiQuote | null {
   assertPrice(priceMinor);
   if (priceMinor === 0 || priceMinor < plan.minAmountMinor) return null;
-  const unit = BigInt(cashRoundingMinor(currencyCode));
-  const feeMinor = plan.feeBps === 0 ? 0 : percentOfMinor(priceMinor, plan.feeBps, currencyCode);
+  const unit = BigInt(incrementMinor);
+  const feeMinor = plan.feeBps === 0 ? 0 : percentOfMinor(priceMinor, plan.feeBps, incrementMinor);
   const total = BigInt(priceMinor) + BigInt(feeMinor);
   const perMonth = (total + BigInt(plan.months) - 1n) / BigInt(plan.months);
   const monthly = ((perMonth + unit - 1n) / unit) * unit;
@@ -90,15 +91,15 @@ export function emiQuote(priceMinor: number, plan: EmiPlan, currencyCode: string
 }
 
 /** Every applicable quote, cheapest monthly amount first (ties: fewer months, then id). */
-export function emiQuotes(priceMinor: number, settings: EmiSettings, currencyCode: string): EmiQuote[] {
+export function emiQuotes(priceMinor: number, settings: EmiSettings, incrementMinor: number): EmiQuote[] {
   if (!settings.enabled) return [];
   return settings.plans
-    .map((plan) => emiQuote(priceMinor, plan, currencyCode))
+    .map((plan) => emiQuote(priceMinor, plan, incrementMinor))
     .filter((quote): quote is EmiQuote => quote !== null)
     .sort((a, b) => a.monthlyMinor - b.monthlyMinor || a.months - b.months || a.planId.localeCompare(b.planId));
 }
 
 /** The "from X/month" line: the lowest monthly amount, or null when no plan applies. */
-export function lowestEmiQuote(priceMinor: number, settings: EmiSettings, currencyCode: string): EmiQuote | null {
-  return emiQuotes(priceMinor, settings, currencyCode)[0] ?? null;
+export function lowestEmiQuote(priceMinor: number, settings: EmiSettings, incrementMinor: number): EmiQuote | null {
+  return emiQuotes(priceMinor, settings, incrementMinor)[0] ?? null;
 }
