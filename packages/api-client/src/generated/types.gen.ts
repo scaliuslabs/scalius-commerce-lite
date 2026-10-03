@@ -6844,10 +6844,6 @@ export type GetApiV1StorefrontAgentContextsByContextIdCustomerProfileResponse = 
 export type PutApiV1StorefrontAgentContextsByContextIdCustomerProfileData = {
     body: {
         name?: string;
-        address?: string;
-        city?: string;
-        zone?: string;
-        area?: string;
     };
     path: {
         contextId: string;
@@ -6898,6 +6894,127 @@ export type PutApiV1StorefrontAgentContextsByContextIdCustomerProfileResponses =
 };
 
 export type PutApiV1StorefrontAgentContextsByContextIdCustomerProfileResponse = PutApiV1StorefrontAgentContextsByContextIdCustomerProfileResponses[keyof PutApiV1StorefrontAgentContextsByContextIdCustomerProfileResponses];
+
+export type PostApiV1StorefrontAgentContextsByContextIdCustomerAddressesData = {
+    body: {
+        action: 'list';
+    } | {
+        action: 'create';
+        address: {
+            countryCode?: string | null;
+            name?: string | null;
+            company?: string | null;
+            line1?: string | null;
+            line2?: string | null;
+            dependentLocality?: string | null;
+            locality?: string | null;
+            adminArea?: string | null;
+            postalCode?: string | null;
+            phone?: string | null;
+            city?: string | null;
+            zone?: string | null;
+            area?: string | null;
+            isDefault?: boolean;
+        };
+    } | {
+        action: 'update';
+        addressId: string;
+        address: {
+            countryCode?: string | null;
+            name?: string | null;
+            company?: string | null;
+            line1?: string | null;
+            line2?: string | null;
+            dependentLocality?: string | null;
+            locality?: string | null;
+            adminArea?: string | null;
+            postalCode?: string | null;
+            phone?: string | null;
+            city?: string | null;
+            zone?: string | null;
+            area?: string | null;
+            isDefault?: boolean;
+        };
+    } | {
+        action: 'set_default';
+        addressId: string;
+    } | {
+        action: 'delete';
+        addressId: string;
+    };
+    path: {
+        contextId: string;
+    };
+    query?: never;
+    url: '/api/v1/storefront/agent-contexts/{contextId}/customer/addresses';
+};
+
+export type PostApiV1StorefrontAgentContextsByContextIdCustomerAddressesErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1StorefrontAgentContextsByContextIdCustomerAddressesError = PostApiV1StorefrontAgentContextsByContextIdCustomerAddressesErrors[keyof PostApiV1StorefrontAgentContextsByContextIdCustomerAddressesErrors];
+
+export type PostApiV1StorefrontAgentContextsByContextIdCustomerAddressesResponses = {
+    /**
+     * The address book
+     */
+    200: {
+        success: true;
+        data: {
+            addresses: Array<{
+                id: string;
+                customerId: string;
+                isDefault: boolean;
+                countryCode: string;
+                name: string | null;
+                company: string | null;
+                line1: string | null;
+                line2: string | null;
+                dependentLocality: string | null;
+                locality: string | null;
+                adminArea: string | null;
+                postalCode: string | null;
+                phone: string | null;
+                phoneRaw: string | null;
+                city: string | null;
+                zone: string | null;
+                area: string | null;
+                cityName: string | null;
+                zoneName: string | null;
+                areaName: string | null;
+                validationSkipped: boolean;
+                createdAt: number;
+                updatedAt: number;
+            }>;
+        };
+    };
+};
+
+export type PostApiV1StorefrontAgentContextsByContextIdCustomerAddressesResponse = PostApiV1StorefrontAgentContextsByContextIdCustomerAddressesResponses[keyof PostApiV1StorefrontAgentContextsByContextIdCustomerAddressesResponses];
 
 export type GetApiV1StorefrontAgentContextsByContextIdCustomerOrdersData = {
     body?: never;
@@ -8290,13 +8407,31 @@ export type PostApiV1CustomerAuthVerifyOtpResponses = {
                 name: string;
                 phone?: string | null;
                 customerId?: string | null;
-                address?: string | null;
-                city?: string | null;
-                zone?: string | null;
-                area?: string | null;
-                cityName?: string | null;
-                zoneName?: string | null;
-                areaName?: string | null;
+                defaultAddress: {
+                    id: string;
+                    customerId: string;
+                    isDefault: boolean;
+                    countryCode: string;
+                    name: string | null;
+                    company: string | null;
+                    line1: string | null;
+                    line2: string | null;
+                    dependentLocality: string | null;
+                    locality: string | null;
+                    adminArea: string | null;
+                    postalCode: string | null;
+                    phone: string | null;
+                    phoneRaw: string | null;
+                    city: string | null;
+                    zone: string | null;
+                    area: string | null;
+                    cityName: string | null;
+                    zoneName: string | null;
+                    areaName: string | null;
+                    validationSkipped: boolean;
+                    createdAt: number;
+                    updatedAt: number;
+                } | null;
                 profileComplete: boolean;
             };
             isNewUser?: boolean;
@@ -8367,13 +8502,31 @@ export type GetApiV1CustomerAuthMeResponses = {
                 name: string;
                 phone?: string | null;
                 customerId?: string | null;
-                address?: string | null;
-                city?: string | null;
-                zone?: string | null;
-                area?: string | null;
-                cityName?: string | null;
-                zoneName?: string | null;
-                areaName?: string | null;
+                defaultAddress: {
+                    id: string;
+                    customerId: string;
+                    isDefault: boolean;
+                    countryCode: string;
+                    name: string | null;
+                    company: string | null;
+                    line1: string | null;
+                    line2: string | null;
+                    dependentLocality: string | null;
+                    locality: string | null;
+                    adminArea: string | null;
+                    postalCode: string | null;
+                    phone: string | null;
+                    phoneRaw: string | null;
+                    city: string | null;
+                    zone: string | null;
+                    area: string | null;
+                    cityName: string | null;
+                    zoneName: string | null;
+                    areaName: string | null;
+                    validationSkipped: boolean;
+                    createdAt: number;
+                    updatedAt: number;
+                } | null;
                 profileComplete: boolean;
             };
         };
@@ -8435,13 +8588,6 @@ export type PostApiV1CustomerAuthLogoutResponse = PostApiV1CustomerAuthLogoutRes
 export type PutApiV1CustomerAuthProfileData = {
     body?: {
         name?: string;
-        address?: string;
-        city?: string;
-        zone?: string;
-        area?: string;
-        cityName?: string;
-        zoneName?: string;
-        areaName?: string;
     };
     path?: never;
     query?: never;
@@ -8489,13 +8635,31 @@ export type PutApiV1CustomerAuthProfileResponses = {
                 name: string;
                 phone?: string | null;
                 customerId?: string | null;
-                address?: string | null;
-                city?: string | null;
-                zone?: string | null;
-                area?: string | null;
-                cityName?: string | null;
-                zoneName?: string | null;
-                areaName?: string | null;
+                defaultAddress: {
+                    id: string;
+                    customerId: string;
+                    isDefault: boolean;
+                    countryCode: string;
+                    name: string | null;
+                    company: string | null;
+                    line1: string | null;
+                    line2: string | null;
+                    dependentLocality: string | null;
+                    locality: string | null;
+                    adminArea: string | null;
+                    postalCode: string | null;
+                    phone: string | null;
+                    phoneRaw: string | null;
+                    city: string | null;
+                    zone: string | null;
+                    area: string | null;
+                    cityName: string | null;
+                    zoneName: string | null;
+                    areaName: string | null;
+                    validationSkipped: boolean;
+                    createdAt: number;
+                    updatedAt: number;
+                } | null;
                 profileComplete: boolean;
             };
         };
@@ -8573,14 +8737,26 @@ export type GetApiV1CustomerAuthOrdersResponses = {
                 fulfillmentStatus: string;
                 expectedDelivery?: string | null;
                 shippingAddress: string | null;
+                shippingAddressLine2: string | null;
+                shippingCountryCode: string | null;
+                shippingDependentLocality: string | null;
+                shippingLocality: string | null;
+                shippingAdminArea: string | null;
+                shippingPostalCode: string | null;
+                shippingCompany: string | null;
+                shippingName: string | null;
+                shippingPhone: string | null;
+                city: string | null;
+                zone: string | null;
+                area: string | null;
+                cityName: string | null;
+                zoneName: string | null;
+                areaName: string | null;
                 requiresShipping: boolean;
                 /**
                  * `delivery` ships to the buyer's address; `pickup` is collected at the store.
                  */
                 shippingMethodKind: 'delivery' | 'pickup' | null;
-                cityName: string | null;
-                zoneName: string | null;
-                areaName?: string | null;
                 notes: string | null;
                 createdAt: NullableTimestamp;
                 latestShipment?: {
@@ -8636,13 +8812,31 @@ export type GetApiV1CustomerAuthOrdersResponses = {
                 name: string;
                 email?: string;
                 phone?: string;
-                address?: string | null;
-                cityName?: string | null;
-                zoneName?: string | null;
-                city?: string | null;
-                zone?: string | null;
-                area?: string | null;
-                areaName?: string | null;
+                defaultAddress?: {
+                    id: string;
+                    customerId: string;
+                    isDefault: boolean;
+                    countryCode: string;
+                    name: string | null;
+                    company: string | null;
+                    line1: string | null;
+                    line2: string | null;
+                    dependentLocality: string | null;
+                    locality: string | null;
+                    adminArea: string | null;
+                    postalCode: string | null;
+                    phone: string | null;
+                    phoneRaw: string | null;
+                    city: string | null;
+                    zone: string | null;
+                    area: string | null;
+                    cityName: string | null;
+                    zoneName: string | null;
+                    areaName: string | null;
+                    validationSkipped: boolean;
+                    createdAt: number;
+                    updatedAt: number;
+                } | null;
             };
         };
     };
@@ -8902,8 +9096,21 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                 fulfillmentStatus: string;
                 expectedDelivery: string | null;
                 shippingAddress: string | null;
+                shippingAddressLine2: string | null;
+                shippingCountryCode: string | null;
+                shippingDependentLocality: string | null;
+                shippingLocality: string | null;
+                shippingAdminArea: string | null;
+                shippingPostalCode: string | null;
+                shippingCompany: string | null;
+                shippingName: string | null;
+                shippingPhone: string | null;
                 city: string | null;
                 zone: string | null;
+                area: string | null;
+                cityName: string | null;
+                zoneName: string | null;
+                areaName: string | null;
                 requiresShipping: boolean;
                 /**
                  * `delivery` ships to the buyer's address; `pickup` is collected at the store.
@@ -8915,10 +9122,6 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                     readyAt: string | null;
                 } | null;
                 conversationId: string | null;
-                area: string | null;
-                cityName: string | null;
-                zoneName: string | null;
-                areaName: string | null;
                 notes: string | null;
                 statusLabel: string;
                 customerName: string;
@@ -10986,6 +11189,412 @@ export type PutApiV1CustomerAuthMarketingResponses = {
 
 export type PutApiV1CustomerAuthMarketingResponse = PutApiV1CustomerAuthMarketingResponses[keyof PutApiV1CustomerAuthMarketingResponses];
 
+export type GetApiV1CustomerAuthAddressesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/customer-auth/addresses';
+};
+
+export type GetApiV1CustomerAuthAddressesErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1CustomerAuthAddressesError = GetApiV1CustomerAuthAddressesErrors[keyof GetApiV1CustomerAuthAddressesErrors];
+
+export type GetApiV1CustomerAuthAddressesResponses = {
+    /**
+     * The address book, the default first
+     */
+    200: {
+        success: true;
+        data: {
+            addresses: Array<{
+                id: string;
+                customerId: string;
+                isDefault: boolean;
+                countryCode: string;
+                name: string | null;
+                company: string | null;
+                line1: string | null;
+                line2: string | null;
+                dependentLocality: string | null;
+                locality: string | null;
+                adminArea: string | null;
+                postalCode: string | null;
+                phone: string | null;
+                phoneRaw: string | null;
+                city: string | null;
+                zone: string | null;
+                area: string | null;
+                cityName: string | null;
+                zoneName: string | null;
+                areaName: string | null;
+                validationSkipped: boolean;
+                createdAt: number;
+                updatedAt: number;
+            }>;
+        };
+    };
+};
+
+export type GetApiV1CustomerAuthAddressesResponse = GetApiV1CustomerAuthAddressesResponses[keyof GetApiV1CustomerAuthAddressesResponses];
+
+export type PostApiV1CustomerAuthAddressesData = {
+    body: {
+        countryCode?: string | null;
+        name?: string | null;
+        company?: string | null;
+        line1?: string | null;
+        line2?: string | null;
+        dependentLocality?: string | null;
+        locality?: string | null;
+        adminArea?: string | null;
+        postalCode?: string | null;
+        phone?: string | null;
+        city?: string | null;
+        zone?: string | null;
+        area?: string | null;
+        isDefault?: boolean;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/customer-auth/addresses';
+};
+
+export type PostApiV1CustomerAuthAddressesErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1CustomerAuthAddressesError = PostApiV1CustomerAuthAddressesErrors[keyof PostApiV1CustomerAuthAddressesErrors];
+
+export type PostApiV1CustomerAuthAddressesResponses = {
+    /**
+     * The address book, the default first
+     */
+    200: {
+        success: true;
+        data: {
+            addresses: Array<{
+                id: string;
+                customerId: string;
+                isDefault: boolean;
+                countryCode: string;
+                name: string | null;
+                company: string | null;
+                line1: string | null;
+                line2: string | null;
+                dependentLocality: string | null;
+                locality: string | null;
+                adminArea: string | null;
+                postalCode: string | null;
+                phone: string | null;
+                phoneRaw: string | null;
+                city: string | null;
+                zone: string | null;
+                area: string | null;
+                cityName: string | null;
+                zoneName: string | null;
+                areaName: string | null;
+                validationSkipped: boolean;
+                createdAt: number;
+                updatedAt: number;
+            }>;
+        };
+    };
+};
+
+export type PostApiV1CustomerAuthAddressesResponse = PostApiV1CustomerAuthAddressesResponses[keyof PostApiV1CustomerAuthAddressesResponses];
+
+export type DeleteApiV1CustomerAuthAddressesByAddressIdData = {
+    body?: never;
+    path: {
+        addressId: string;
+    };
+    query?: never;
+    url: '/api/v1/customer-auth/addresses/{addressId}';
+};
+
+export type DeleteApiV1CustomerAuthAddressesByAddressIdErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type DeleteApiV1CustomerAuthAddressesByAddressIdError = DeleteApiV1CustomerAuthAddressesByAddressIdErrors[keyof DeleteApiV1CustomerAuthAddressesByAddressIdErrors];
+
+export type DeleteApiV1CustomerAuthAddressesByAddressIdResponses = {
+    /**
+     * The address book, the default first
+     */
+    200: {
+        success: true;
+        data: {
+            addresses: Array<{
+                id: string;
+                customerId: string;
+                isDefault: boolean;
+                countryCode: string;
+                name: string | null;
+                company: string | null;
+                line1: string | null;
+                line2: string | null;
+                dependentLocality: string | null;
+                locality: string | null;
+                adminArea: string | null;
+                postalCode: string | null;
+                phone: string | null;
+                phoneRaw: string | null;
+                city: string | null;
+                zone: string | null;
+                area: string | null;
+                cityName: string | null;
+                zoneName: string | null;
+                areaName: string | null;
+                validationSkipped: boolean;
+                createdAt: number;
+                updatedAt: number;
+            }>;
+        };
+    };
+};
+
+export type DeleteApiV1CustomerAuthAddressesByAddressIdResponse = DeleteApiV1CustomerAuthAddressesByAddressIdResponses[keyof DeleteApiV1CustomerAuthAddressesByAddressIdResponses];
+
+export type PutApiV1CustomerAuthAddressesByAddressIdData = {
+    body: {
+        countryCode?: string | null;
+        name?: string | null;
+        company?: string | null;
+        line1?: string | null;
+        line2?: string | null;
+        dependentLocality?: string | null;
+        locality?: string | null;
+        adminArea?: string | null;
+        postalCode?: string | null;
+        phone?: string | null;
+        city?: string | null;
+        zone?: string | null;
+        area?: string | null;
+        isDefault?: boolean;
+    };
+    path: {
+        addressId: string;
+    };
+    query?: never;
+    url: '/api/v1/customer-auth/addresses/{addressId}';
+};
+
+export type PutApiV1CustomerAuthAddressesByAddressIdErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PutApiV1CustomerAuthAddressesByAddressIdError = PutApiV1CustomerAuthAddressesByAddressIdErrors[keyof PutApiV1CustomerAuthAddressesByAddressIdErrors];
+
+export type PutApiV1CustomerAuthAddressesByAddressIdResponses = {
+    /**
+     * The address book, the default first
+     */
+    200: {
+        success: true;
+        data: {
+            addresses: Array<{
+                id: string;
+                customerId: string;
+                isDefault: boolean;
+                countryCode: string;
+                name: string | null;
+                company: string | null;
+                line1: string | null;
+                line2: string | null;
+                dependentLocality: string | null;
+                locality: string | null;
+                adminArea: string | null;
+                postalCode: string | null;
+                phone: string | null;
+                phoneRaw: string | null;
+                city: string | null;
+                zone: string | null;
+                area: string | null;
+                cityName: string | null;
+                zoneName: string | null;
+                areaName: string | null;
+                validationSkipped: boolean;
+                createdAt: number;
+                updatedAt: number;
+            }>;
+        };
+    };
+};
+
+export type PutApiV1CustomerAuthAddressesByAddressIdResponse = PutApiV1CustomerAuthAddressesByAddressIdResponses[keyof PutApiV1CustomerAuthAddressesByAddressIdResponses];
+
+export type PostApiV1CustomerAuthAddressesByAddressIdDefaultData = {
+    body?: never;
+    path: {
+        addressId: string;
+    };
+    query?: never;
+    url: '/api/v1/customer-auth/addresses/{addressId}/default';
+};
+
+export type PostApiV1CustomerAuthAddressesByAddressIdDefaultErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1CustomerAuthAddressesByAddressIdDefaultError = PostApiV1CustomerAuthAddressesByAddressIdDefaultErrors[keyof PostApiV1CustomerAuthAddressesByAddressIdDefaultErrors];
+
+export type PostApiV1CustomerAuthAddressesByAddressIdDefaultResponses = {
+    /**
+     * The address book, the default first
+     */
+    200: {
+        success: true;
+        data: {
+            addresses: Array<{
+                id: string;
+                customerId: string;
+                isDefault: boolean;
+                countryCode: string;
+                name: string | null;
+                company: string | null;
+                line1: string | null;
+                line2: string | null;
+                dependentLocality: string | null;
+                locality: string | null;
+                adminArea: string | null;
+                postalCode: string | null;
+                phone: string | null;
+                phoneRaw: string | null;
+                city: string | null;
+                zone: string | null;
+                area: string | null;
+                cityName: string | null;
+                zoneName: string | null;
+                areaName: string | null;
+                validationSkipped: boolean;
+                createdAt: number;
+                updatedAt: number;
+            }>;
+        };
+    };
+};
+
+export type PostApiV1CustomerAuthAddressesByAddressIdDefaultResponse = PostApiV1CustomerAuthAddressesByAddressIdDefaultResponses[keyof PostApiV1CustomerAuthAddressesByAddressIdDefaultResponses];
+
 export type GetApiV1CheckoutLanguagesActiveData = {
     body?: never;
     path?: never;
@@ -11655,6 +12264,126 @@ export type GetApiV1LocationsAreasSummariesResponses = {
 };
 
 export type GetApiV1LocationsAreasSummariesResponse = GetApiV1LocationsAreasSummariesResponses[keyof GetApiV1LocationsAreasSummariesResponses];
+
+export type GetApiV1AddressRulesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/address-rules';
+};
+
+export type GetApiV1AddressRulesErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AddressRulesError = GetApiV1AddressRulesErrors[keyof GetApiV1AddressRulesErrors];
+
+export type GetApiV1AddressRulesResponses = {
+    /**
+     * Countries
+     */
+    200: {
+        success: true;
+        data: {
+            countries: Array<string>;
+        };
+    };
+};
+
+export type GetApiV1AddressRulesResponse = GetApiV1AddressRulesResponses[keyof GetApiV1AddressRulesResponses];
+
+export type GetApiV1AddressRulesByCountryCodeData = {
+    body?: never;
+    path: {
+        countryCode: string;
+    };
+    query?: never;
+    url: '/api/v1/address-rules/{countryCode}';
+};
+
+export type GetApiV1AddressRulesByCountryCodeErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AddressRulesByCountryCodeError = GetApiV1AddressRulesByCountryCodeErrors[keyof GetApiV1AddressRulesByCountryCodeErrors];
+
+export type GetApiV1AddressRulesByCountryCodeResponses = {
+    /**
+     * Address rules
+     */
+    200: {
+        success: true;
+        data: {
+            countryCode: string;
+            format: string;
+            rows: Array<Array<'name' | 'company' | 'line1' | 'line2' | 'dependentLocality' | 'locality' | 'adminArea' | 'postalCode'>>;
+            allowedFields: Array<'name' | 'company' | 'line1' | 'line2' | 'dependentLocality' | 'locality' | 'adminArea' | 'postalCode'>;
+            requiredFields: Array<'name' | 'company' | 'line1' | 'line2' | 'dependentLocality' | 'locality' | 'adminArea' | 'postalCode'>;
+            upperFields: Array<'name' | 'company' | 'line1' | 'line2' | 'dependentLocality' | 'locality' | 'adminArea' | 'postalCode'>;
+            postalCodePattern: string | null;
+            postalCodeExamples: Array<string>;
+            labels: {
+                adminArea: string;
+                locality: string;
+                dependentLocality: string;
+                postalCode: string;
+            };
+            adminAreas: Array<{
+                code: string;
+                name: string;
+                isoCode: string | null;
+            }>;
+        };
+    };
+};
+
+export type GetApiV1AddressRulesByCountryCodeResponse = GetApiV1AddressRulesByCountryCodeResponses[keyof GetApiV1AddressRulesByCountryCodeResponses];
 
 export type GetApiV1ShippingMethodsData = {
     body?: never;
@@ -14371,6 +15100,21 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                 customerEmail: string | null;
                 accountLinked: boolean;
                 shippingAddress: string | null;
+                shippingAddressLine2: string | null;
+                shippingCountryCode: string | null;
+                shippingDependentLocality: string | null;
+                shippingLocality: string | null;
+                shippingAdminArea: string | null;
+                shippingPostalCode: string | null;
+                shippingCompany: string | null;
+                shippingName: string | null;
+                shippingPhone: string | null;
+                city: string | null;
+                zone: string | null;
+                area: string | null;
+                cityName: string | null;
+                zoneName: string | null;
+                areaName: string | null;
                 requiresShipping: boolean;
                 /**
                  * `delivery` ships to the buyer's address; `pickup` is collected at the store.
@@ -14475,12 +15219,6 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                 totalAmountMinor: number | null;
                 taxLabel: string | null;
                 pricesIncludeTax: boolean;
-                city: string | null;
-                zone: string | null;
-                area: string | null;
-                cityName: string | null;
-                zoneName: string | null;
-                areaName: string | null;
                 status: string;
                 paymentMethod: string | null;
                 paymentStatus: string;
@@ -14734,6 +15472,7 @@ export type PostApiV1OrdersCartValidationData = {
             }>;
         }>;
         inventoryPool?: 'regular' | 'preorder' | 'backorder';
+        shippingCountryCode?: string | null;
         city?: string | null;
         zone?: string | null;
         area?: string | null;
@@ -14899,6 +15638,7 @@ export type PostApiV1OrdersTaxQuoteData = {
             }>;
         }>;
         inventoryPool?: 'regular' | 'preorder' | 'backorder';
+        shippingCountryCode?: string | null;
         city?: string | null;
         zone?: string | null;
         area?: string | null;
@@ -15167,13 +15907,16 @@ export type PostApiV1OrdersData = {
         customerPhone: string;
         customerEmail: string | null;
         customerWhatsapp?: string | null;
+        shippingCountryCode?: string | null;
         shippingAddress?: string | null;
+        shippingAddressLine2?: string | null;
+        shippingDependentLocality?: string | null;
+        shippingLocality?: string | null;
+        shippingAdminArea?: string | null;
+        shippingPostalCode?: string | null;
         city?: string | null;
         zone?: string | null;
         area?: string | null;
-        cityName?: string | null;
-        zoneName?: string | null;
-        areaName?: string | null;
         notes: string | null;
         items: Array<{
             cartKey?: string | null;
@@ -19827,13 +20570,16 @@ export type PostApiV1AdminCustomersSegmentsPreviewResponses = {
                 name: string;
                 email: string | null;
                 phone: string;
-                address: string | null;
-                city: string | null;
-                zone: string | null;
-                area: string | null;
-                cityName: string | null;
-                zoneName: string | null;
-                areaName: string | null;
+                defaultAddress: {
+                    countryCode: string;
+                    line1: string | null;
+                    locality: string | null;
+                    adminArea: string | null;
+                    postalCode: string | null;
+                    cityName: string | null;
+                    zoneName: string | null;
+                    areaName: string | null;
+                } | null;
                 accountClaimedAt: string | null;
                 kind: 'account' | 'guest' | 'merchant';
                 latestOrderName: string | null;
@@ -20373,13 +21119,16 @@ export type GetApiV1AdminCustomersResponses = {
                 name: string;
                 email: string | null;
                 phone: string;
-                address: string | null;
-                city: string | null;
-                zone: string | null;
-                area: string | null;
-                cityName: string | null;
-                zoneName: string | null;
-                areaName: string | null;
+                defaultAddress: {
+                    countryCode: string;
+                    line1: string | null;
+                    locality: string | null;
+                    adminArea: string | null;
+                    postalCode: string | null;
+                    cityName: string | null;
+                    zoneName: string | null;
+                    areaName: string | null;
+                } | null;
                 accountClaimedAt: string | null;
                 kind: 'account' | 'guest' | 'merchant';
                 latestOrderName: string | null;
@@ -20435,10 +21184,22 @@ export type PostApiV1AdminCustomersData = {
         name: string;
         email: string | null;
         phone: string;
-        address: string | null;
-        city: string | null;
-        zone: string | null;
-        area: string | null;
+        address?: {
+            countryCode?: string | null;
+            name?: string | null;
+            company?: string | null;
+            line1?: string | null;
+            line2?: string | null;
+            dependentLocality?: string | null;
+            locality?: string | null;
+            adminArea?: string | null;
+            postalCode?: string | null;
+            phone?: string | null;
+            city?: string | null;
+            zone?: string | null;
+            area?: string | null;
+            skipValidation?: boolean;
+        } | null;
     };
     path?: never;
     query?: never;
@@ -20583,13 +21344,6 @@ export type GetApiV1AdminCustomersByIdResponses = {
             name: string;
             email: string | null;
             phone: string;
-            address: string | null;
-            city: string | null;
-            zone: string | null;
-            area: string | null;
-            cityName: string | null;
-            zoneName: string | null;
-            areaName: string | null;
             accountClaimedAt: NullableTimestamp;
             kind: 'account' | 'guest' | 'merchant';
             latestOrderName: string | null;
@@ -20609,6 +21363,31 @@ export type GetApiV1AdminCustomersByIdResponses = {
                 status: 'subscribed' | 'pending' | 'unsubscribed' | 'not_subscribed';
                 updatedAt: string | null;
             }>;
+            addresses: Array<{
+                id: string;
+                customerId: string;
+                isDefault: boolean;
+                countryCode: string;
+                name: string | null;
+                company: string | null;
+                line1: string | null;
+                line2: string | null;
+                dependentLocality: string | null;
+                locality: string | null;
+                adminArea: string | null;
+                postalCode: string | null;
+                phone: string | null;
+                phoneRaw: string | null;
+                city: string | null;
+                zone: string | null;
+                area: string | null;
+                cityName: string | null;
+                zoneName: string | null;
+                areaName: string | null;
+                validationSkipped: boolean;
+                createdAt: number;
+                updatedAt: number;
+            }>;
         };
     };
 };
@@ -20620,10 +21399,6 @@ export type PutApiV1AdminCustomersByIdData = {
         name?: string;
         email?: string | null;
         phone?: string;
-        address?: string | null;
-        city?: string | null;
-        zone?: string | null;
-        area?: string | null;
     };
     path: {
         id: string;
@@ -20711,6 +21486,386 @@ export type PostApiV1AdminCustomersByIdRestoreResponses = {
 
 export type PostApiV1AdminCustomersByIdRestoreResponse = PostApiV1AdminCustomersByIdRestoreResponses[keyof PostApiV1AdminCustomersByIdRestoreResponses];
 
+export type GetApiV1AdminCustomersByIdAddressesData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/customers/{id}/addresses';
+};
+
+export type GetApiV1AdminCustomersByIdAddressesErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminCustomersByIdAddressesError = GetApiV1AdminCustomersByIdAddressesErrors[keyof GetApiV1AdminCustomersByIdAddressesErrors];
+
+export type GetApiV1AdminCustomersByIdAddressesResponses = {
+    /**
+     * Addresses
+     */
+    200: {
+        success: true;
+        data: {
+            addresses: Array<{
+                id: string;
+                customerId: string;
+                isDefault: boolean;
+                countryCode: string;
+                name: string | null;
+                company: string | null;
+                line1: string | null;
+                line2: string | null;
+                dependentLocality: string | null;
+                locality: string | null;
+                adminArea: string | null;
+                postalCode: string | null;
+                phone: string | null;
+                phoneRaw: string | null;
+                city: string | null;
+                zone: string | null;
+                area: string | null;
+                cityName: string | null;
+                zoneName: string | null;
+                areaName: string | null;
+                validationSkipped: boolean;
+                createdAt: number;
+                updatedAt: number;
+            }>;
+        };
+    };
+};
+
+export type GetApiV1AdminCustomersByIdAddressesResponse = GetApiV1AdminCustomersByIdAddressesResponses[keyof GetApiV1AdminCustomersByIdAddressesResponses];
+
+export type PostApiV1AdminCustomersByIdAddressesData = {
+    body: {
+        countryCode?: string | null;
+        name?: string | null;
+        company?: string | null;
+        line1?: string | null;
+        line2?: string | null;
+        dependentLocality?: string | null;
+        locality?: string | null;
+        adminArea?: string | null;
+        postalCode?: string | null;
+        phone?: string | null;
+        city?: string | null;
+        zone?: string | null;
+        area?: string | null;
+        isDefault?: boolean;
+        skipValidation?: boolean;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/customers/{id}/addresses';
+};
+
+export type PostApiV1AdminCustomersByIdAddressesErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminCustomersByIdAddressesError = PostApiV1AdminCustomersByIdAddressesErrors[keyof PostApiV1AdminCustomersByIdAddressesErrors];
+
+export type PostApiV1AdminCustomersByIdAddressesResponses = {
+    /**
+     * Address added
+     */
+    201: {
+        success: true;
+        data: {
+            id: string;
+            customerId: string;
+            isDefault: boolean;
+            countryCode: string;
+            name: string | null;
+            company: string | null;
+            line1: string | null;
+            line2: string | null;
+            dependentLocality: string | null;
+            locality: string | null;
+            adminArea: string | null;
+            postalCode: string | null;
+            phone: string | null;
+            phoneRaw: string | null;
+            city: string | null;
+            zone: string | null;
+            area: string | null;
+            cityName: string | null;
+            zoneName: string | null;
+            areaName: string | null;
+            validationSkipped: boolean;
+            createdAt: number;
+            updatedAt: number;
+        };
+    };
+};
+
+export type PostApiV1AdminCustomersByIdAddressesResponse = PostApiV1AdminCustomersByIdAddressesResponses[keyof PostApiV1AdminCustomersByIdAddressesResponses];
+
+export type DeleteApiV1AdminCustomersByIdAddressesByAddressIdData = {
+    body?: never;
+    path: {
+        id: string;
+        addressId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/customers/{id}/addresses/{addressId}';
+};
+
+export type DeleteApiV1AdminCustomersByIdAddressesByAddressIdErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type DeleteApiV1AdminCustomersByIdAddressesByAddressIdError = DeleteApiV1AdminCustomersByIdAddressesByAddressIdErrors[keyof DeleteApiV1AdminCustomersByIdAddressesByAddressIdErrors];
+
+export type DeleteApiV1AdminCustomersByIdAddressesByAddressIdResponses = {
+    /**
+     * No content
+     */
+    204: void;
+};
+
+export type DeleteApiV1AdminCustomersByIdAddressesByAddressIdResponse = DeleteApiV1AdminCustomersByIdAddressesByAddressIdResponses[keyof DeleteApiV1AdminCustomersByIdAddressesByAddressIdResponses];
+
+export type PutApiV1AdminCustomersByIdAddressesByAddressIdData = {
+    body: {
+        countryCode?: string | null;
+        name?: string | null;
+        company?: string | null;
+        line1?: string | null;
+        line2?: string | null;
+        dependentLocality?: string | null;
+        locality?: string | null;
+        adminArea?: string | null;
+        postalCode?: string | null;
+        phone?: string | null;
+        city?: string | null;
+        zone?: string | null;
+        area?: string | null;
+        isDefault?: boolean;
+        skipValidation?: boolean;
+    };
+    path: {
+        id: string;
+        addressId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/customers/{id}/addresses/{addressId}';
+};
+
+export type PutApiV1AdminCustomersByIdAddressesByAddressIdErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PutApiV1AdminCustomersByIdAddressesByAddressIdError = PutApiV1AdminCustomersByIdAddressesByAddressIdErrors[keyof PutApiV1AdminCustomersByIdAddressesByAddressIdErrors];
+
+export type PutApiV1AdminCustomersByIdAddressesByAddressIdResponses = {
+    /**
+     * Address updated
+     */
+    200: {
+        success: true;
+        data: {
+            id: string;
+            customerId: string;
+            isDefault: boolean;
+            countryCode: string;
+            name: string | null;
+            company: string | null;
+            line1: string | null;
+            line2: string | null;
+            dependentLocality: string | null;
+            locality: string | null;
+            adminArea: string | null;
+            postalCode: string | null;
+            phone: string | null;
+            phoneRaw: string | null;
+            city: string | null;
+            zone: string | null;
+            area: string | null;
+            cityName: string | null;
+            zoneName: string | null;
+            areaName: string | null;
+            validationSkipped: boolean;
+            createdAt: number;
+            updatedAt: number;
+        };
+    };
+};
+
+export type PutApiV1AdminCustomersByIdAddressesByAddressIdResponse = PutApiV1AdminCustomersByIdAddressesByAddressIdResponses[keyof PutApiV1AdminCustomersByIdAddressesByAddressIdResponses];
+
+export type PostApiV1AdminCustomersByIdAddressesByAddressIdDefaultData = {
+    body?: never;
+    path: {
+        id: string;
+        addressId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/customers/{id}/addresses/{addressId}/default';
+};
+
+export type PostApiV1AdminCustomersByIdAddressesByAddressIdDefaultErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminCustomersByIdAddressesByAddressIdDefaultError = PostApiV1AdminCustomersByIdAddressesByAddressIdDefaultErrors[keyof PostApiV1AdminCustomersByIdAddressesByAddressIdDefaultErrors];
+
+export type PostApiV1AdminCustomersByIdAddressesByAddressIdDefaultResponses = {
+    /**
+     * Default address
+     */
+    200: {
+        success: true;
+        data: {
+            id: string;
+            customerId: string;
+            isDefault: boolean;
+            countryCode: string;
+            name: string | null;
+            company: string | null;
+            line1: string | null;
+            line2: string | null;
+            dependentLocality: string | null;
+            locality: string | null;
+            adminArea: string | null;
+            postalCode: string | null;
+            phone: string | null;
+            phoneRaw: string | null;
+            city: string | null;
+            zone: string | null;
+            area: string | null;
+            cityName: string | null;
+            zoneName: string | null;
+            areaName: string | null;
+            validationSkipped: boolean;
+            createdAt: number;
+            updatedAt: number;
+        };
+    };
+};
+
+export type PostApiV1AdminCustomersByIdAddressesByAddressIdDefaultResponse = PostApiV1AdminCustomersByIdAddressesByAddressIdDefaultResponses[keyof PostApiV1AdminCustomersByIdAddressesByAddressIdDefaultResponses];
+
 export type GetApiV1AdminCustomersByIdHistoryData = {
     body?: never;
     path: {
@@ -20766,13 +21921,6 @@ export type GetApiV1AdminCustomersByIdHistoryResponses = {
                 name: string;
                 email: string | null;
                 phone: string;
-                address: string | null;
-                city: string | null;
-                zone: string | null;
-                area: string | null;
-                cityName: string | null;
-                zoneName: string | null;
-                areaName: string | null;
                 accountClaimedAt: NullableTimestamp;
                 kind: 'account' | 'guest' | 'merchant';
                 latestOrderName: string | null;
@@ -20798,13 +21946,6 @@ export type GetApiV1AdminCustomersByIdHistoryResponses = {
                 name: string;
                 email: string | null;
                 phone: string | null;
-                address: string | null;
-                city: string | null;
-                zone: string | null;
-                area: string | null;
-                cityName: string | null;
-                zoneName: string | null;
-                areaName: string | null;
                 /**
                  * created, updated, deleted, signed_up, order_linked, or order_moved_in / order_moved_out (see `order`, `relatedCustomer` and `verifiedContact`)
                  */
@@ -29611,6 +30752,7 @@ export type PostApiV1AdminFraudCheckerByIdTestResponse = PostApiV1AdminFraudChec
 export type PostApiV1AdminFraudCheckerLookupData = {
     body?: {
         phone: string;
+        countryCode?: string | null;
     };
     path?: never;
     query?: never;
@@ -29658,6 +30800,10 @@ export type PostApiV1AdminFraudCheckerLookupResponses = {
         success: true;
         data: {
             configured: boolean;
+            unsupportedCountry?: {
+                provider: string;
+                countryCode: string | null;
+            };
             total_parcels?: number;
             total_delivered?: number;
             total_cancel?: number;
@@ -34323,6 +35469,7 @@ export type GetApiV1AdminSettingsDeliveryProvidersResponses = {
                 credentials: string;
                 config: string;
                 isActive: boolean;
+                countries: 'any' | Array<string>;
                 readiness?: {
                     status: 'ready' | 'incomplete' | 'error';
                     issues: Array<{
@@ -34495,6 +35642,7 @@ export type PostApiV1AdminSettingsDeliveryProvidersResponses = {
             credentials: string;
             config: string;
             isActive: boolean;
+            countries: 'any' | Array<string>;
             readiness?: {
                 status: 'ready' | 'incomplete' | 'error';
                 issues: Array<{
@@ -34664,6 +35812,7 @@ export type PutApiV1AdminSettingsDeliveryProvidersResponses = {
             credentials: string;
             config: string;
             isActive: boolean;
+            countries: 'any' | Array<string>;
             readiness?: {
                 status: 'ready' | 'incomplete' | 'error';
                 issues: Array<{
@@ -34702,6 +35851,7 @@ export type PutApiV1AdminSettingsDeliveryProvidersResponses = {
             credentials: string;
             config: string;
             isActive: boolean;
+            countries: 'any' | Array<string>;
             readiness?: {
                 status: 'ready' | 'incomplete' | 'error';
                 issues: Array<{
@@ -34960,6 +36110,7 @@ export type GetApiV1AdminSettingsDeliveryProvidersByIdResponses = {
             credentials: string;
             config: string;
             isActive: boolean;
+            countries: 'any' | Array<string>;
             readiness?: {
                 status: 'ready' | 'incomplete' | 'error';
                 issues: Array<{
@@ -38013,6 +39164,15 @@ export type GetApiV1AdminOrdersByIdInvoiceResponses = {
                 customerEmail: string | null;
                 customerId: string | null;
                 shippingAddress: string | null;
+                shippingAddressLine2?: string | null;
+                shippingCountryCode?: string | null;
+                shippingDependentLocality?: string | null;
+                shippingLocality?: string | null;
+                shippingAdminArea?: string | null;
+                shippingPostalCode?: string | null;
+                shippingCompany?: string | null;
+                shippingName?: string | null;
+                shippingPhone?: string | null;
                 city: string | null;
                 zone: string | null;
                 area: string | null;
@@ -38177,6 +39337,15 @@ export type PostApiV1AdminOrdersByIdInvoiceResponses = {
                 customerEmail: string | null;
                 customerId: string | null;
                 shippingAddress: string | null;
+                shippingAddressLine2?: string | null;
+                shippingCountryCode?: string | null;
+                shippingDependentLocality?: string | null;
+                shippingLocality?: string | null;
+                shippingAdminArea?: string | null;
+                shippingPostalCode?: string | null;
+                shippingCompany?: string | null;
+                shippingName?: string | null;
+                shippingPhone?: string | null;
                 city: string | null;
                 zone: string | null;
                 area: string | null;
@@ -39298,6 +40467,8 @@ export type GetApiV1AdminOrdersResponses = {
                 createdAt: string | number;
                 updatedAt: string | number;
                 version: number;
+                shippingCountryCode: string | null;
+                shippingLocality: string | null;
                 city: string | null;
                 zone: string | null;
                 area: string | null;
@@ -39444,7 +40615,15 @@ export type PostApiV1AdminOrdersData = {
         customerName: string;
         customerPhone: string;
         customerEmail: string | null;
+        shippingCountryCode?: string | null;
         shippingAddress?: string | null;
+        shippingAddressLine2?: string | null;
+        shippingDependentLocality?: string | null;
+        shippingLocality?: string | null;
+        shippingAdminArea?: string | null;
+        shippingPostalCode?: string | null;
+        shippingCompany?: string | null;
+        skipAddressValidation?: boolean;
         city?: string | null;
         zone?: string | null;
         area?: string | null;
@@ -39713,6 +40892,8 @@ export type GetApiV1AdminOrdersPaymentRecoveryResponses = {
                 createdAt: string | number;
                 updatedAt: string | number;
                 version: number;
+                shippingCountryCode: string | null;
+                shippingLocality: string | null;
                 city: string | null;
                 zone: string | null;
                 area: string | null;
@@ -39950,6 +41131,7 @@ export type GetApiV1AdminOrdersPaymentRecoveryExportResponse = GetApiV1AdminOrde
 
 export type PostApiV1AdminOrdersQuoteData = {
     body?: {
+        shippingCountryCode?: string | null;
         city?: string | null;
         zone?: string | null;
         area?: string | null;
@@ -40051,7 +41233,15 @@ export type PostApiV1AdminOrdersByIdAmendmentsPreviewData = {
         customerName: string;
         customerPhone: string;
         customerEmail: string | null;
+        shippingCountryCode?: string | null;
         shippingAddress?: string | null;
+        shippingAddressLine2?: string | null;
+        shippingDependentLocality?: string | null;
+        shippingLocality?: string | null;
+        shippingAdminArea?: string | null;
+        shippingPostalCode?: string | null;
+        shippingCompany?: string | null;
+        skipAddressValidation?: boolean;
         city?: string | null;
         zone?: string | null;
         area?: string | null;
@@ -40161,7 +41351,15 @@ export type PostApiV1AdminOrdersByIdAmendmentsData = {
         customerName: string;
         customerPhone: string;
         customerEmail: string | null;
+        shippingCountryCode?: string | null;
         shippingAddress?: string | null;
+        shippingAddressLine2?: string | null;
+        shippingDependentLocality?: string | null;
+        shippingLocality?: string | null;
+        shippingAdminArea?: string | null;
+        shippingPostalCode?: string | null;
+        shippingCompany?: string | null;
+        skipAddressValidation?: boolean;
         city?: string | null;
         zone?: string | null;
         area?: string | null;
@@ -40809,12 +42007,22 @@ export type GetApiV1AdminOrdersByIdResponses = {
             fulfillmentStatus: string | null;
             notes: string | null;
             shippingAddress: string | null;
+            shippingAddressLine2: string | null;
+            shippingCountryCode: string | null;
+            shippingDependentLocality: string | null;
+            shippingLocality: string | null;
+            shippingAdminArea: string | null;
+            shippingPostalCode: string | null;
+            shippingCompany: string | null;
+            shippingName: string | null;
+            shippingPhone: string | null;
             city: string | null;
             zone: string | null;
             area: string | null;
             cityName: string | null;
             zoneName: string | null;
             areaName: string | null;
+            shippingValidationSkipped: boolean;
             paidAmount: number | null;
             balanceDue: number | null;
             version: number;
@@ -41061,7 +42269,15 @@ export type PutApiV1AdminOrdersByIdDetailsData = {
         customerName: string;
         customerPhone: string;
         customerEmail: string | null;
+        shippingCountryCode?: string | null;
         shippingAddress?: string | null;
+        shippingAddressLine2?: string | null;
+        shippingDependentLocality?: string | null;
+        shippingLocality?: string | null;
+        shippingAdminArea?: string | null;
+        shippingPostalCode?: string | null;
+        shippingCompany?: string | null;
+        skipAddressValidation?: boolean;
         city?: string | null;
         zone?: string | null;
         area?: string | null;
@@ -41559,18 +42775,28 @@ export type GetApiV1AdminOrdersByIdFormDataResponses = {
                 customerPhone: string;
                 customerEmail: string | null;
                 shippingAddress: string | null;
+                shippingAddressLine2: string | null;
+                shippingCountryCode: string | null;
+                shippingDependentLocality: string | null;
+                shippingLocality: string | null;
+                shippingAdminArea: string | null;
+                shippingPostalCode: string | null;
+                shippingCompany: string | null;
+                shippingName: string | null;
+                shippingPhone: string | null;
                 city: string | null;
                 zone: string | null;
                 area: string | null;
+                cityName: string | null;
+                zoneName: string | null;
+                areaName: string | null;
+                shippingValidationSkipped: boolean;
                 requiresShipping: boolean;
                 shippingMethodId: string | null;
                 /**
                  * `delivery` ships to the buyer's address; `pickup` is collected at the store.
                  */
                 shippingMethodKind: 'delivery' | 'pickup' | null;
-                cityName: string | null;
-                zoneName: string | null;
-                areaName: string | null;
                 notes: string | null;
                 discountAmount: number | null;
                 shippingCharge: number;
@@ -41674,18 +42900,28 @@ export type GetApiV1AdminOrdersByIdFormDataResponses = {
                 customerPhone: string;
                 customerEmail: string | null;
                 shippingAddress: string | null;
+                shippingAddressLine2: string | null;
+                shippingCountryCode: string | null;
+                shippingDependentLocality: string | null;
+                shippingLocality: string | null;
+                shippingAdminArea: string | null;
+                shippingPostalCode: string | null;
+                shippingCompany: string | null;
+                shippingName: string | null;
+                shippingPhone: string | null;
                 city: string | null;
                 zone: string | null;
                 area: string | null;
+                cityName: string | null;
+                zoneName: string | null;
+                areaName: string | null;
+                shippingValidationSkipped: boolean;
                 requiresShipping: boolean;
                 shippingMethodId: string | null;
                 /**
                  * `delivery` ships to the buyer's address; `pickup` is collected at the store.
                  */
                 shippingMethodKind: 'delivery' | 'pickup' | null;
-                cityName: string | null;
-                zoneName: string | null;
-                areaName: string | null;
                 notes: string | null;
                 discountAmount: number | null;
                 shippingCharge: number;
@@ -55006,7 +56242,15 @@ export type PostApiV1AdminImportCustomersData = {
             name: string | null;
             phone: string;
             email: string | null;
-            address: string | null;
+            address: {
+                countryCode: string | null;
+                company: string | null;
+                line1: string | null;
+                line2: string | null;
+                locality: string | null;
+                adminArea: string | null;
+                postalCode: string | null;
+            } | null;
             tags?: Array<string>;
             marketing?: {
                 email?: boolean;

@@ -316,6 +316,75 @@ const orderListFactsShape = {
   ...orderFulfilmentListShape,
 };
 
+/**
+ * An order's shipping-address snapshot as a buyer sees it (MARKETS-DESIGN
+ * D7): canonical fields beside Bangladesh's City/Thana/Area adapter.
+ * `shippingAddress` is the first street line; every field is null when
+ * nothing ships.
+ */
+export const buyerOrderShippingAddressShape = {
+  shippingAddress: z.string().nullable(),
+  shippingAddressLine2: z.string().nullable(),
+  /** ISO 3166-1 alpha-2; it decided the order's market. */
+  shippingCountryCode: z.string().nullable(),
+  shippingDependentLocality: z.string().nullable(),
+  shippingLocality: z.string().nullable(),
+  shippingAdminArea: z.string().nullable(),
+  shippingPostalCode: z.string().nullable(),
+  shippingCompany: z.string().nullable(),
+  /** The recipient when not the order contact (null: `customerName`). */
+  shippingName: z.string().nullable(),
+  /** The recipient's phone (E.164) when not the contact's (null: `customerPhone`). */
+  shippingPhone: z.string().nullable(),
+  /** Bangladesh adapter: delivery location ids and names. */
+  city: z.string().nullable(),
+  zone: z.string().nullable(),
+  area: z.string().nullable(),
+  cityName: z.string().nullable(),
+  zoneName: z.string().nullable(),
+  areaName: z.string().nullable(),
+};
+
+/** The snapshot as staff see it: with the skipped-rules flag. */
+export const orderShippingAddressShape = {
+  ...buyerOrderShippingAddressShape,
+  /** Staff saved it although it breaks its country's rules. */
+  shippingValidationSkipped: z.boolean(),
+};
+
+/** One address of a customer's address book (MARKETS-DESIGN D7). */
+export const customerAddressSchema = z.object({
+  id: z.string(),
+  customerId: z.string(),
+  isDefault: z.boolean(),
+  /** ISO 3166-1 alpha-2. */
+  countryCode: z.string(),
+  /** The recipient when not the customer (null: the customer's name). */
+  name: z.string().nullable(),
+  company: z.string().nullable(),
+  line1: z.string().nullable(),
+  line2: z.string().nullable(),
+  dependentLocality: z.string().nullable(),
+  locality: z.string().nullable(),
+  adminArea: z.string().nullable(),
+  postalCode: z.string().nullable(),
+  /** E.164 (null: the customer's phone, or one that could not be read). */
+  phone: z.string().nullable(),
+  /** What was typed for the phone. */
+  phoneRaw: z.string().nullable(),
+  /** Bangladesh adapter: delivery location ids and names. */
+  city: z.string().nullable(),
+  zone: z.string().nullable(),
+  area: z.string().nullable(),
+  cityName: z.string().nullable(),
+  zoneName: z.string().nullable(),
+  areaName: z.string().nullable(),
+  /** Saved by staff although it breaks its country's rules. */
+  validationSkipped: z.boolean(),
+  createdAt: z.number().int(),
+  updatedAt: z.number().int(),
+});
+
 /** Order summary — returned by listOrders (admin). */
 export const orderSummarySchema = z.object({
   id: z.string(),
@@ -334,6 +403,9 @@ export const orderSummarySchema = z.object({
   createdAt: timestampSchema,
   updatedAt: timestampSchema,
   version: z.number().int().min(1),
+  /** The shipping country (ISO 3166-1 alpha-2); null when nothing ships. */
+  shippingCountryCode: z.string().nullable(),
+  shippingLocality: z.string().nullable(),
   city: z.string().nullable(),
   zone: z.string().nullable(),
   area: z.string().nullable(),
@@ -515,13 +587,7 @@ export const orderDetailSchema = z.object({
   paymentMethod: z.string().nullable(),
   fulfillmentStatus: z.string().nullable(),
   notes: z.string().nullable(),
-  shippingAddress: z.string().nullable(),
-  city: z.string().nullable(),
-  zone: z.string().nullable(),
-  area: z.string().nullable(),
-  cityName: z.string().nullable(),
-  zoneName: z.string().nullable(),
-  areaName: z.string().nullable(),
+  ...orderShippingAddressShape,
   paidAmount: z.number().nullable(),
   balanceDue: z.number().nullable(),
   version: z.number().int().min(1),
@@ -637,13 +703,17 @@ export const customerSummarySchema = z.object({
   name: z.string(),
   email: z.string().nullable(),
   phone: z.string(),
-  address: z.string().nullable(),
-  city: z.string().nullable(),
-  zone: z.string().nullable(),
-  area: z.string().nullable(),
-  cityName: z.string().nullable(),
-  zoneName: z.string().nullable(),
-  areaName: z.string().nullable(),
+  /** The default address in brief (the list's location column); null without one. */
+  defaultAddress: z.object({
+    countryCode: z.string(),
+    line1: z.string().nullable(),
+    locality: z.string().nullable(),
+    adminArea: z.string().nullable(),
+    postalCode: z.string().nullable(),
+    cityName: z.string().nullable(),
+    zoneName: z.string().nullable(),
+    areaName: z.string().nullable(),
+  }).nullable(),
   accountClaimedAt: z.string().nullable(),
   ...customerTitleFields,
   totalOrders: z.number(),
@@ -659,13 +729,6 @@ export const customerDetailSchema = z.object({
   name: z.string(),
   email: z.string().nullable(),
   phone: z.string(),
-  address: z.string().nullable(),
-  city: z.string().nullable(),
-  zone: z.string().nullable(),
-  area: z.string().nullable(),
-  cityName: z.string().nullable(),
-  zoneName: z.string().nullable(),
-  areaName: z.string().nullable(),
   accountClaimedAt: nullableTimestampSchema,
   ...customerTitleFields,
   totalOrders: z.number(),
@@ -684,6 +747,8 @@ export const customerDetailSchema = z.object({
     status: z.enum(["subscribed", "pending", "unsubscribed", "not_subscribed"]),
     updatedAt: z.string().nullable(),
   })),
+  /** The address book, the default first. */
+  addresses: z.array(customerAddressSchema),
 });
 
 // ─────────────────────────────────────────

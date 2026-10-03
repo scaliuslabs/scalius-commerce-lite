@@ -118,8 +118,12 @@ const orderChannelSourceInputSchema = z
     .optional()
     .describe("Where the order came in: facebook, instagram, whatsapp, phone, walk_in, or free text (stored as a lowercase slug of at most 64 characters).");
 
-/** Schema for creating a new order (POST /api/orders). */
-export const createOrderSchema = sellableOrderContentSchema.extend({
+/**
+ * A new order's fields without the Bangladesh line rule, for a route that
+ * extends them (and applies `refineDeliveryLine` again): zod refuses to
+ * extend a refined object.
+ */
+export const createOrderObjectSchema = sellableOrderContentSchema.extend({
     requestKey: z.uuid("A valid manual-order request key is required"),
     /**
      * The delivery method picked: a pickup method needs no address, a
@@ -128,7 +132,10 @@ export const createOrderSchema = sellableOrderContentSchema.extend({
      */
     shippingMethodId: z.string().trim().min(1).max(180).nullable().optional(),
     channelSource: orderChannelSourceInputSchema,
-}).superRefine(refineDeliveryLine);
+});
+
+/** Schema for creating a new order (POST /api/orders). */
+export const createOrderSchema = createOrderObjectSchema.superRefine(refineDeliveryLine);
 
 export type CreateOrderInput = z.infer<typeof createOrderSchema>;
 
@@ -167,13 +174,16 @@ export const previewManualOrderAmendmentSchema = orderBaseContentSchema.extend({
         .max(MAX_ORDER_LINE_ITEMS, `Add at most ${MAX_ORDER_LINE_ITEMS} sellable items`),
 });
 
-export const confirmManualOrderAmendmentSchema = previewManualOrderAmendmentSchema.extend({
+/** The confirmed amendment's fields without the Bangladesh line rule (see `createOrderObjectSchema`). */
+export const confirmManualOrderAmendmentObjectSchema = previewManualOrderAmendmentSchema.extend({
     requestKey: z.uuid("A valid amendment request key is required"),
     quoteFingerprint: z.string().regex(
         /^[a-f0-9]{64}$/,
         "A valid amendment quote fingerprint is required",
     ),
-}).superRefine(refineDeliveryLine);
+});
+
+export const confirmManualOrderAmendmentSchema = confirmManualOrderAmendmentObjectSchema.superRefine(refineDeliveryLine);
 
 export type PreviewManualOrderAmendmentInput = z.infer<typeof previewManualOrderAmendmentSchema>;
 export type ConfirmManualOrderAmendmentInput = z.infer<typeof confirmManualOrderAmendmentSchema>;

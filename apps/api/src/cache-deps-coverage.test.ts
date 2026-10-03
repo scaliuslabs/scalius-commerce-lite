@@ -97,6 +97,8 @@ const URLS = [
   "/api/v1/locations/cities",
   "/api/v1/locations/zones?cityId=city_1",
   "/api/v1/locations/areas?zoneId=zone_1",
+  "/api/v1/address-rules",
+  "/api/v1/address-rules/US",
   "/api/v1/attributes/search-filters",
   "/api/v1/attributes/category-slug/panjabi",
   "/api/v1/attributes/category/cat_panjabi",

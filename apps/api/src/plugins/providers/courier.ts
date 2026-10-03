@@ -130,6 +130,7 @@ export function appCourier(
   const courier: Courier<AppProviderSettings> = {
     id: qualifiedProviderId(installation.pluginId, declaration.id),
     label: declaration.name,
+    countries: declaration.kind === "courier" ? declaration.countries : "any",
 
     // Read once per request and key: readiness, settings pages and every call share it.
     async setup(provider, encryptionKey) {

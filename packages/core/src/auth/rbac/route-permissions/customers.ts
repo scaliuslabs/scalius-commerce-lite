@@ -69,4 +69,16 @@ export const CUSTOMER_ROUTE_PERMISSIONS: RoutePermissionMap = {
     GET: { permission: PERMISSIONS.CUSTOMERS_VIEW },
     PUT: { permission: PERMISSIONS.CUSTOMERS_EDIT },
   },
+  // The address book. Deleting an address deletes no customer: an edit.
+  "/api/v1/admin/customers/*/addresses": {
+    GET: { permission: PERMISSIONS.CUSTOMERS_VIEW },
+    POST: { permission: PERMISSIONS.CUSTOMERS_EDIT },
+  },
+  "/api/v1/admin/customers/*/addresses/*": {
+    PUT: { permission: PERMISSIONS.CUSTOMERS_EDIT },
+    DELETE: { permission: PERMISSIONS.CUSTOMERS_EDIT },
+  },
+  "/api/v1/admin/customers/*/addresses/*/default": {
+    POST: { permission: PERMISSIONS.CUSTOMERS_EDIT },
+  },
 };

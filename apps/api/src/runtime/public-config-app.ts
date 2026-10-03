@@ -3,6 +3,7 @@ import { checkoutRoutes } from "../routes/checkout";
 import { checkoutGiftCardRoutes } from "../routes/checkout-gift-cards";
 import { publicCheckoutLanguageRoutes } from "../routes/checkout-languages";
 import { locationRoutes } from "../routes/locations";
+import { addressRuleRoutes } from "../routes/address-rules";
 import { navigationRoutes } from "../routes/navigation";
 import { seoRoutes } from "../routes/seo";
 import { shippingMethodRoutes } from "../routes/shipping-methods";
@@ -26,6 +27,7 @@ app.route("/checkout", checkoutRoutes);
 app.route("/checkout/gift-cards", checkoutGiftCardRoutes);
 app.route("/checkout-languages", publicCheckoutLanguageRoutes);
 app.route("/locations", locationRoutes);
+app.route("/address-rules", addressRuleRoutes);
 app.route("/shipping-methods", shippingMethodRoutes);
 app.route("/seo", seoRoutes);
 

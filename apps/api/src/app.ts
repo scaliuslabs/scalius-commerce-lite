@@ -27,6 +27,7 @@ import {
 } from "./routes/checkout-languages";
 import { abandonedCheckoutsRoutes } from "./routes/abandoned-checkouts";
 import { locationRoutes } from "./routes/locations";
+import { addressRuleRoutes } from "./routes/address-rules";
 import { shippingMethodRoutes } from "./routes/shipping-methods";
 import { seoRoutes } from "./routes/seo";
 import { metaConversionsRoutes } from "./routes/meta-conversions";
@@ -159,6 +160,7 @@ app.route("/checkout-languages", publicCheckoutLanguageRoutes);
 app.route("/abandoned-checkouts", abandonedCheckoutsRoutes);
 app.route("/marketing", marketingRoutes);
 app.route("/locations", locationRoutes);
+app.route("/address-rules", addressRuleRoutes);
 app.route("/shipping-methods", shippingMethodRoutes);
 // SEO settings — used by storefront product/page routes for meta tags
 app.route("/seo", seoRoutes);

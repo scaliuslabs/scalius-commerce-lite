@@ -6,6 +6,7 @@
 import { OpenAPIHono, createRoute, z, type RouteConfig, type RouteHandler } from "@hono/zod-openapi";
 import {
     assertDeliveryProviderActivatable,
+    courierFor,
     getDeliveryProviders,
     getDeliveryProvider,
     getDeliveryProviderReadiness,
@@ -200,9 +201,10 @@ async function serializeProviderForClient(
     couriers: CourierProvidersSource,
 ) {
     // Unreadable credentials mask to nothing; the courier judges readiness.
-    const [maskedCredentials, readiness] = await Promise.all([
+    const [maskedCredentials, readiness, courier] = await Promise.all([
         maskCredentialsForClient(provider.type, provider.credentials, env).catch(() => "{}"),
         getDeliveryProviderReadiness(provider, getCredentialEncryptionKey(env), couriers),
+        courierFor(couriers, provider.type),
     ]);
 
     return {
@@ -210,6 +212,8 @@ async function serializeProviderForClient(
         name: provider.name.slice(0, 100),
         type: provider.type.slice(0, PROVIDER_TYPE_MAX),
         isActive: provider.isActive,
+        // The countries it delivers to: the order page offers it only for an order shipping there.
+        countries: courier?.countries ?? "any",
         credentials: maskedCredentials,
         config: projectProviderConfig(provider.type, provider.config),
         createdAt: requiredTimestampForClient(provider.createdAt),
@@ -248,6 +252,8 @@ const deliveryProviderSchema = z.object({
     credentials: z.string().max(4096),
     config: z.string().max(4096),
     isActive: z.boolean(),
+    /** `any`, or the ISO countries it delivers to (MARKETS-DESIGN step 3a): offered only for an order shipping there. */
+    countries: z.union([z.literal("any"), z.array(z.string().length(2)).max(250)]),
     readiness: readinessSchema.extend({
         /** Setup lifecycle position; the readiness verdict is `status`. */
         lifecycle: z.enum(["draft", "configured", "tested", "active", "blocked"]),

@@ -9,6 +9,7 @@ import {
     getOrderDetails,
     getOrderEditReadiness,
     listOrderTimeline,
+    orderShippingAddressSelection,
     previewOrderPaymentRecoveryLink,
     releaseOrderHold,
     recordOrderEvent,
@@ -62,6 +63,7 @@ import {
     orderItemSchema,
     orderPaymentRecoverySchema,
     orderRefundAttemptSchema,
+    orderShippingAddressShape,
     productVariantSchema,
     selectedProductOptionSchema,
 } from "../../../schemas/entities";
@@ -271,19 +273,16 @@ const orderFormDataSchema = z.object({
     customerName: z.string(),
     customerPhone: z.string(),
     customerEmail: z.string().nullable(),
-    /** Null when nothing ships (pickup or service-only orders). */
-    shippingAddress: z.string().nullable(),
-    city: z.string().nullable(),
-    zone: z.string().nullable(),
-    area: z.string().nullable(),
+    /**
+     * The shipping-address snapshot; null fields when nothing ships (pickup or
+     * service-only orders). The saved place names label the City/Thana/Area
+     * pickers before they load.
+     */
+    ...orderShippingAddressShape,
     /** An amendment keeps the order's delivery method; new physical lines take its kind. */
     requiresShipping: z.boolean(),
     shippingMethodId: z.string().nullable(),
     shippingMethodKind: deliveryMethodKindSchema.nullable(),
-    /** The place names saved with the order, to label the pickers before they load. */
-    cityName: z.string().nullable(),
-    zoneName: z.string().nullable(),
-    areaName: z.string().nullable(),
     notes: z.string().nullable(),
     discountAmount: z.number().nullable(),
     shippingCharge: z.number(),
@@ -1019,13 +1018,7 @@ app.openapi(getFormDataRoute, (async (c: AdminRouteContext<typeof getFormDataRou
             customerName: orders.customerName,
             customerPhone: orders.customerPhone,
             customerEmail: orders.customerEmail,
-            shippingAddress: orders.shippingAddress,
-            city: orders.city,
-            zone: orders.zone,
-            area: orders.area,
-            cityName: orders.cityName,
-            zoneName: orders.zoneName,
-            areaName: orders.areaName,
+            ...orderShippingAddressSelection(orders),
             requiresShipping: orders.requiresShipping,
             shippingMethodId: orders.shippingMethodId,
             shippingMethodKind: orders.shippingMethodKind,

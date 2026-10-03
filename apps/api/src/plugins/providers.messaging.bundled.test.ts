@@ -162,8 +162,10 @@ describe("app messaging and fraud providers through the bundled loader", () => {
     expect(email).toEqual({ success: true, providerRef: "M-outbox2:emai", rawStatus: "Queued for [email]", provider: MAIL });
 
     const row = await saveFraudProvider(db, { name: "Acme Radar", providerType: RADAR, isActive: true, apiUrl: "", apiKey: "" }, KEY);
-    const check = await fraudLookupWithActiveProvider(db, "01712-345678", KEY, providers);
-    expect(PROVIDER_PORTS.fraud.check.output.parse(check)).toMatchObject({ riskLevel: "medium", phone: "+8801712345678", totalParcels: 5 });
+    const lookup = await fraudLookupWithActiveProvider(db, "01712-345678", KEY, providers);
+    expect(lookup.status).toBe("checked");
+    if (lookup.status !== "checked") return;
+    expect(PROVIDER_PORTS.fraud.check.output.parse(lookup.check)).toMatchObject({ riskLevel: "medium", phone: "+8801712345678", totalParcels: 5 });
     await expect(fraudLookupWithActiveProvider(db, "+8801999999999", KEY, providers)).rejects.toThrow("Acme Radar has no history for this number.");
     await expect(testFraudProvider(db, row.id, KEY, providers)).resolves.toEqual({ success: true, message: "Radar reachable." });
   });

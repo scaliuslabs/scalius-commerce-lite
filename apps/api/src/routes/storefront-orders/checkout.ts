@@ -4,7 +4,9 @@ import type { Database } from "@scalius/database/client";
 import { PaymentMethod, PaymentStatus, InventoryPool } from "@scalius/database/schema";
 import { discountCodesSchema } from "../../schemas/storefront-discounts";
 import { isOnlinePaymentMethod, isPaymentMethodId, type PaymentProviders } from "@scalius/core/modules/payments";
-import { assertPhoneCountryAllowed, phoneNumberSchema } from "@scalius/shared/customer-utils";
+import { assertPhoneCountryAllowed, validateAndFormatPhone } from "@scalius/shared/customer-utils";
+import { BD_MOBILE_REQUIRED_MESSAGE } from "@scalius/shared/phone-input";
+import { refineDeliveryLine } from "@scalius/core/modules/orders";
 import { readMasterSecret } from "@scalius/shared/runtime-secrets";
 import { GIFT_CARD_PAYMENT_METHOD } from "@scalius/core/modules/gift-cards";
 import { recordCheckoutMarketingConsent } from "@scalius/core/modules/customer-marketing";
@@ -222,27 +224,36 @@ const createOrderSchema = z.object({
     .string()
     .min(3, "Customer name must be at least 3 characters")
     .max(100, "Customer name must be less than 100 characters"),
-  customerPhone: phoneNumberSchema,
+  /** Read in the shipping country (`shippingCountryCode`): a national number there becomes E.164. */
+  customerPhone: z.string().trim().min(7, "Phone number too short").max(32, "Phone number too long"),
   customerEmail: z.email().nullable(),
   /** Kept only when Customer accounts asks for a separate WhatsApp number. */
   customerWhatsapp: z.string().trim().max(32).nullable().optional(),
   /**
-   * Required only when something ships: a physical line with a delivery
-   * rate. Pickup, service-only and digital orders omit it (and it is ignored
-   * if sent).
+   * The shipping country (MARKETS-DESIGN D7): one an active market sells to.
+   * Absent means Bangladesh, whose City/Thana/Area form sends `city`, `zone`
+   * and `area` instead of a locality. Another country sends what its rules
+   * require (GET /api/v1/address-rules/{countryCode}).
+   */
+  shippingCountryCode: z.string().trim().length(2).nullable().optional(),
+  /**
+   * The first street line, required only when something ships: a physical
+   * line with a delivery rate. Pickup, service-only and digital orders omit
+   * the address (and it is ignored if sent).
    */
   shippingAddress: z
     .string()
-    .min(10, "Address must be at least 10 characters")
     .max(500, "Address must be less than 500 characters")
     .nullable()
     .optional(),
+  shippingAddressLine2: z.string().trim().max(200).nullable().optional(),
+  shippingDependentLocality: z.string().trim().max(120).nullable().optional(),
+  shippingLocality: z.string().trim().max(120).nullable().optional(),
+  shippingAdminArea: z.string().trim().max(120).nullable().optional(),
+  shippingPostalCode: z.string().trim().max(20).nullable().optional(),
   city: z.string().min(1, "City is required").nullable().optional(),
   zone: z.string().min(1, "Zone is required").nullable().optional(),
   area: z.string().nullable().optional(),
-  cityName: z.string().nullable().optional(),
-  zoneName: z.string().nullable().optional(),
-  areaName: z.string().nullable().optional(),
   notes: z
     .string()
     .max(500, "Notes must be less than 500 characters")
@@ -296,6 +307,20 @@ const createOrderSchema = z.object({
       path: ["expectedAmountDueMinor"],
       message: "The reviewed amount due is required with gift cards.",
     });
+  }
+  refineDeliveryLine(order, context);
+}).transform((order, context) => {
+  // The phone is customer identity and the code-sign-in channel: always
+  // required, read as E.164 in the address country (MARKETS-DESIGN D7).
+  try {
+    return { ...order, customerPhone: validateAndFormatPhone(order.customerPhone, undefined, { defaultCountry: order.shippingCountryCode }) };
+  } catch (error: unknown) {
+    context.addIssue({
+      code: "custom",
+      path: ["customerPhone"],
+      message: error instanceof Error && error.message === BD_MOBILE_REQUIRED_MESSAGE ? error.message : "Enter a valid phone number",
+    });
+    return z.NEVER;
   }
 });
 
@@ -429,6 +454,7 @@ app.openapi(createOrderRoute, async (c) => {
           properties: item.properties,
         })),
         inventoryPool: data.inventoryPool,
+        shippingCountryCode: data.shippingCountryCode,
         city: data.city,
         zone: data.zone,
         area: data.area,
@@ -517,6 +543,7 @@ app.openapi(createOrderRoute, async (c) => {
           checkoutAuthority.sideEffects.orderCreatedNotification,
         metaPurchaseEnabled: checkoutAuthority.sideEffects.metaPurchase,
         contactFields: checkoutAuthority.contactFields,
+        shippingCountries: checkoutAuthority.shippingCountries,
       }),
       checkoutAuthority.taxAuthority,
       { masterSecret: readMasterSecret(c.env) },

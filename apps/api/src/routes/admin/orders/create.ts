@@ -5,10 +5,11 @@ import {
     createManualOrder,
     previewManualOrderAmendment,
     quoteManualOrder,
-    createOrderSchema,
+    createOrderObjectSchema,
     quoteManualOrderSchema,
     previewManualOrderAmendmentSchema,
-    confirmManualOrderAmendmentSchema,
+    confirmManualOrderAmendmentObjectSchema,
+    refineDeliveryLine,
 } from "@scalius/core/modules/orders";
 import { ok, created } from "../../../utils/api-response";
 import {
@@ -43,9 +44,9 @@ const manualOrderIdempotencyHeadersSchema = z.object({
         description: "Standard retry key. May replace body.requestKey; if both are sent they must match.",
     }),
 });
-const createOrderRequestSchema = createOrderSchema.extend({
+const createOrderRequestSchema = createOrderObjectSchema.extend({
     requestKey: manualOrderRequestKeySchema.optional(),
-});
+}).superRefine(refineDeliveryLine);
 
 // ─── POST / (Create) ────────────────────────────────────────────────────────
 
@@ -161,7 +162,7 @@ const confirmManualOrderAmendmentRoute = createRoute({
     request: {
         params: z.object({ id: z.string() }),
         headers: manualOrderIdempotencyHeadersSchema,
-        body: { content: { "application/json": { schema: confirmManualOrderAmendmentSchema.partial({ requestKey: true }) } } },
+        body: { content: { "application/json": { schema: confirmManualOrderAmendmentObjectSchema.partial({ requestKey: true }).superRefine(refineDeliveryLine) } } },
     },
     responses: {
         200: {

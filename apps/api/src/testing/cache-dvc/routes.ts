@@ -85,6 +85,8 @@ function otherParts(): string[] {
     "/api/v1/locations/cities",
     "/api/v1/locations/zones?cityId=loc_dhaka",
     "/api/v1/locations/areas?zoneId=loc_mirpur",
+    // Address rules are code: a release, never a write, changes them.
+    "/api/v1/address-rules/US",
     "/api/v1/attributes/category/cat_panjabi",
     "/api/v1/attributes/category-slug/panjabi",
     "/api/v1/attributes/search-filters",

@@ -17,17 +17,23 @@ import {
     customerKind,
     latestOrderNameSql,
     paidSpendAmount,
+    createCustomerAddress,
+    customerAddressInputSchema,
+    deleteCustomerAddress,
+    listCustomerAddresses,
+    setDefaultCustomerAddress,
+    updateCustomerAddress,
 } from "@scalius/core/modules/customers";
 import { fromMinor } from "@scalius/shared/money";
-import { customers, customerHistory, orders, deliveryLocations, user } from "@scalius/database/schema";
-import { eq, sql, inArray, isNull, and } from "drizzle-orm";
+import { customers, customerHistory, orders, user } from "@scalius/database/schema";
+import { eq, sql, isNull, and } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import { NotFoundError } from "../../utils/api-error";
 import { customerListFilterQuery, customerListFiltersFromQuery } from "./customer-marketing";
 
 import { ok, created, noContent } from "../../utils/api-response";
 import { successEnvelope, keysetPaginatedEnvelope, keysetQuerySchema, idResponse, noContentResponse, errorResponses } from "../../schemas/responses";
-import { customerSummarySchema, customerDetailSchema } from "../../schemas/entities";
+import { customerAddressSchema, customerSummarySchema, customerDetailSchema } from "../../schemas/entities";
 import { timestampSchema, nullableTimestampSchema, optionalNullableTimestampSchema } from "../../schemas/timestamps";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -66,13 +72,6 @@ const customerHistoryEntrySchema = z.object({
     name: z.string(),
     email: z.string().nullable(),
     phone: z.string().nullable(),
-    address: z.string().nullable(),
-    city: z.string().nullable(),
-    zone: z.string().nullable(),
-    area: z.string().nullable(),
-    cityName: z.string().nullable(),
-    zoneName: z.string().nullable(),
-    areaName: z.string().nullable(),
     changeType: z.string().openapi({
         description: "created, updated, deleted, signed_up, order_linked, or order_moved_in / order_moved_out (see `order`, `relatedCustomer` and `verifiedContact`)",
     }),
@@ -107,7 +106,7 @@ const customerHistoryOrderSchema = z.object({
     createdAt: timestampSchema,
 });
 
-const customerHistoryCustomerSchema = customerDetailSchema.omit({ tags: true, marketing: true }).extend({
+const customerHistoryCustomerSchema = customerDetailSchema.omit({ tags: true, marketing: true, addresses: true }).extend({
     lastOrderAt: nullableTimestampSchema,
     createdAt: timestampSchema,
     updatedAt: timestampSchema,
@@ -331,6 +330,113 @@ app.openapi(restoreCustomerRoute, async (c) => {
     return noContent(c);
 });
 
+// ── The address book (MARKETS-DESIGN D7, Shopify's customer addresses) ──
+
+const addressListPayload = z.object({ addresses: z.array(customerAddressSchema) });
+const addressParams = z.object({ id: z.string(), addressId: z.string() });
+
+const listAddressesRoute = createRoute({
+    operationId: "dashboard.customers.addresses_list",
+    method: "get",
+    path: "/{id}/addresses",
+    tags: ["Admin - Customers"],
+    summary: "List a customer's addresses",
+    description: "The address book, the default first. Each address has the canonical fields its country's rules allow (GET /api/v1/address-rules/{countryCode}) and, in Bangladesh, the City/Thana/Area location ids and names.",
+    request: { params: z.object({ id: z.string() }) },
+    responses: {
+        200: { description: "Addresses", content: { "application/json": { schema: successEnvelope(addressListPayload) } } },
+        ...errorResponses,
+    },
+});
+
+app.openapi(listAddressesRoute, async (c) => {
+    const { id } = c.req.valid("param");
+    return ok(c, { addresses: await listCustomerAddresses(c.get("db"), id) });
+});
+
+const createAddressRoute = createRoute({
+    operationId: "dashboard.customers.addresses_create",
+    method: "post",
+    path: "/{id}/addresses",
+    tags: ["Admin - Customers"],
+    summary: "Add an address to a customer's address book",
+    description: "The country's rules decide the required fields; a Bangladesh address sends the City/Thana/Area ids (`city`, `zone`, optional `area`). The first address is the default; `isDefault` makes a later one the default. `skipValidation` keeps an address that breaks its rules, marked validationSkipped.",
+    request: {
+        params: z.object({ id: z.string() }),
+        body: { content: { "application/json": { schema: customerAddressInputSchema } } },
+    },
+    responses: {
+        201: { description: "Address added", content: { "application/json": { schema: successEnvelope(customerAddressSchema) } } },
+        ...errorResponses,
+    },
+});
+
+app.openapi(createAddressRoute, async (c) => {
+    const { id } = c.req.valid("param");
+    const { skipValidation, ...address } = c.req.valid("json");
+    return created(c, await createCustomerAddress(c.get("db"), id, address, { skipValidation }));
+});
+
+const updateAddressRoute = createRoute({
+    operationId: "dashboard.customers.addresses_update",
+    method: "put",
+    path: "/{id}/addresses/{addressId}",
+    tags: ["Admin - Customers"],
+    summary: "Replace an address in a customer's address book",
+    request: {
+        params: addressParams,
+        body: { content: { "application/json": { schema: customerAddressInputSchema } } },
+    },
+    responses: {
+        200: { description: "Address updated", content: { "application/json": { schema: successEnvelope(customerAddressSchema) } } },
+        ...errorResponses,
+    },
+});
+
+app.openapi(updateAddressRoute, async (c) => {
+    const { id, addressId } = c.req.valid("param");
+    const { skipValidation, ...address } = c.req.valid("json");
+    return ok(c, await updateCustomerAddress(c.get("db"), id, addressId, address, { skipValidation }));
+});
+
+const setDefaultAddressRoute = createRoute({
+    operationId: "dashboard.customers.addresses_set_default",
+    method: "post",
+    path: "/{id}/addresses/{addressId}/default",
+    tags: ["Admin - Customers"],
+    summary: "Make an address the customer's default",
+    request: { params: addressParams },
+    responses: {
+        200: { description: "Default address", content: { "application/json": { schema: successEnvelope(customerAddressSchema) } } },
+        ...errorResponses,
+    },
+});
+
+app.openapi(setDefaultAddressRoute, async (c) => {
+    const { id, addressId } = c.req.valid("param");
+    return ok(c, await setDefaultCustomerAddress(c.get("db"), id, addressId));
+});
+
+const deleteAddressRoute = createRoute({
+    operationId: "dashboard.customers.addresses_delete",
+    method: "delete",
+    path: "/{id}/addresses/{addressId}",
+    tags: ["Admin - Customers"],
+    summary: "Remove an address from a customer's address book",
+    description: "When the default goes, the most recently updated other address becomes the default.",
+    request: { params: addressParams },
+    responses: {
+        204: noContentResponse,
+        ...errorResponses,
+    },
+});
+
+app.openapi(deleteAddressRoute, async (c) => {
+    const { id, addressId } = c.req.valid("param");
+    await deleteCustomerAddress(c.get("db"), id, addressId);
+    return noContent(c);
+});
+
 // ── Get Customer History ──
 
 const getHistoryRoute = createRoute({
@@ -373,10 +479,6 @@ app.openapi(getHistoryRoute, async (c) => {
                 name: customers.name,
                 email: customers.email,
                 phone: customers.phone,
-                address: customers.address,
-                city: customers.city,
-                zone: customers.zone,
-                area: customers.area,
                 accountClaimedAt: sql<number | null>`CAST(${customers.accountClaimedAt} AS INTEGER)`,
                 origin: customers.origin,
                 latestOrderName: latestOrderNameSql(customers.id).as("latest_order_name"),
@@ -404,13 +506,6 @@ app.openapi(getHistoryRoute, async (c) => {
                 name: customerHistory.name,
                 email: customerHistory.email,
                 phone: customerHistory.phone,
-                address: customerHistory.address,
-                city: customerHistory.city,
-                zone: customerHistory.zone,
-                area: customerHistory.area,
-                cityName: customerHistory.cityName,
-                zoneName: customerHistory.zoneName,
-                areaName: customerHistory.areaName,
                 changeType: customerHistory.changeType,
                 orderId: customerHistory.orderId,
                 orderNumber: sql<number | null>`${movedOrder.orderNumber}`.as("moved_order_number"),
@@ -482,27 +577,6 @@ app.openapi(getHistoryRoute, async (c) => {
     const customer = customerResults[0];
     if (!customer) throw new NotFoundError("Customer not found");
 
-    // Collect location IDs for name enrichment
-    const locationIds = new Set<string>();
-    if (customer.city) locationIds.add(customer.city);
-    if (customer.zone) locationIds.add(customer.zone);
-    if (customer.area) locationIds.add(customer.area);
-    for (const record of history) {
-        if (record.city) locationIds.add(record.city);
-        if (record.zone) locationIds.add(record.zone);
-        if (record.area) locationIds.add(record.area);
-    }
-
-    const locationArray = Array.from(locationIds).filter(Boolean) as string[];
-    const locationMap = new Map<string, string>();
-    if (locationArray.length > 0) {
-        const locations = await db
-            .select({ id: deliveryLocations.id, name: deliveryLocations.name })
-            .from(deliveryLocations)
-            .where(and(inArray(deliveryLocations.id, locationArray), isNull(deliveryLocations.deletedAt)));
-        locations.forEach((loc) => locationMap.set(loc.id, loc.name));
-    }
-
     const { totalSpentMinor, spendDecimalPlaces, origin, mergedIntoId, mergedIntoName, ...customerFacts } = customer;
     const enrichedCustomer = {
         ...customerFacts,
@@ -515,9 +589,6 @@ app.openapi(getHistoryRoute, async (c) => {
         lastOrderAt: customer.lastOrderAt ? new Date(customer.lastOrderAt * 1000) : null,
         createdAt: new Date(customer.createdAt * 1000),
         updatedAt: new Date(customer.updatedAt * 1000),
-        cityName: customer.city ? locationMap.get(customer.city) || customer.city : "",
-        zoneName: customer.zone ? locationMap.get(customer.zone) || customer.zone : "",
-        areaName: customer.area ? locationMap.get(customer.area) || customer.area : null,
     };
 
     const enrichedHistory = history.map(({
@@ -536,9 +607,6 @@ app.openapi(getHistoryRoute, async (c) => {
             }
             : null,
         createdAt: new Date(record.createdAt * 1000),
-        cityName: record.city ? locationMap.get(record.city) || record.city : "",
-        zoneName: record.zone ? locationMap.get(record.zone) || record.zone : "",
-        areaName: record.area ? locationMap.get(record.area) || record.area : null,
     }));
 
     const enrichedOrders = customerOrders.map(({ totalAmountMinor, currencyDecimalPlaces, ...order }) => ({

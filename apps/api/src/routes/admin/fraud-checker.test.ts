@@ -239,14 +239,17 @@ describe("admin fraud checker credential handling", () => {
   it("projects lookup facts without echoing phone or arbitrary provider fields", async () => {
     const { app, env } = createTestApp();
     mocks.fraudLookupWithActiveProvider.mockResolvedValueOnce({
-      riskLevel: "medium",
-      phone: "+8801700000000",
-      totalParcels: 12,
-      delivered: 9,
-      cancelled: 3,
-      message: "owner@example.com token=secret",
-      providerStatus: "verified",
-      arbitrarySecret: "must-not-leave",
+      status: "checked",
+      check: {
+        riskLevel: "medium",
+        phone: "+8801700000000",
+        totalParcels: 12,
+        delivered: 9,
+        cancelled: 3,
+        message: "owner@example.com token=secret",
+        providerStatus: "verified",
+        arbitrarySecret: "must-not-leave",
+      },
     });
 
     const response = await app.request("/api/v1/admin/fraud-checker/lookup", {
@@ -267,6 +270,26 @@ describe("admin fraud checker credential handling", () => {
     expect(JSON.stringify(body)).not.toContain("+8801700000000");
     expect(JSON.stringify(body)).not.toContain("owner@example.com");
     expect(JSON.stringify(body)).not.toContain("must-not-leave");
+  });
+
+  it("says when the connected checker does not know buyers in the order's country, without asking it", async () => {
+    const { app, env } = createTestApp();
+    mocks.fraudLookupWithActiveProvider.mockResolvedValueOnce({ status: "country_unsupported", provider: "Acme Radar", countryCode: "US" });
+
+    const response = await app.request("/api/v1/admin/fraud-checker/lookup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ phone: "+14155552671", countryCode: "US" }),
+    }, env);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      success: true,
+      data: { configured: true, unsupportedCountry: { provider: "Acme Radar", countryCode: "US" } },
+    });
+    expect(mocks.fraudLookupWithActiveProvider).toHaveBeenCalledWith(
+      { id: "db" }, "+14155552671", expect.any(String), expect.anything(), { countryCode: "US" },
+    );
   });
 
   it("returns generic connection status instead of upstream provider messages", async () => {
@@ -346,6 +369,7 @@ describe("admin fraud checker credential handling", () => {
       "+8801700000000",
       undefined,
       expect.objectContaining({ resolve: expect.any(Function) }),
+      { countryCode: undefined },
     );
   });
 

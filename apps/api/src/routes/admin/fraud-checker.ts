@@ -358,11 +358,18 @@ app.openapi(testProviderRoute, async (c) => {
 
 const lookupSchema = z.object({
     phone: z.string().min(1).max(32),
+    /** The order's shipping country: a checker that does not know buyers there is not asked. */
+    countryCode: z.string().trim().length(2).nullable().optional(),
 });
 
 const lookupResponseSchema = z.object({
     /** False when no courier fraud-check service is connected: a state, not an error. */
     configured: z.boolean(),
+    /**
+     * Set when the connected checker does not know buyers in this country
+     * (MARKETS-DESIGN step 3a): it was not asked, and the order page says so.
+     */
+    unsupportedCountry: z.object({ provider: z.string(), countryCode: z.string().nullable() }).optional(),
     total_parcels: z.number().optional(),
     total_delivered: z.number().optional(),
     total_cancel: z.number().optional(),
@@ -396,17 +403,20 @@ const lookupRoute = createRoute({
 
 app.openapi(lookupRoute, async (c) => {
     const db = c.get("db");
-    const { phone } = c.req.valid("json");
+    const { phone, countryCode } = c.req.valid("json");
     let result: Awaited<ReturnType<typeof fraudLookupWithActiveProvider>>;
     try {
-        result = await fraudLookupWithActiveProvider(db, phone, getCredentialEncryptionKey(c.env as Record<string, unknown>), requestAppProviders(c));
+        result = await fraudLookupWithActiveProvider(db, phone, getCredentialEncryptionKey(c.env as Record<string, unknown>), requestAppProviders(c), { countryCode });
     } catch (error: unknown) {
         if (error instanceof NotFoundError) return ok(c, { configured: false });
         throw error;
     }
+    if (result.status === "country_unsupported") {
+        return ok(c, { configured: true, unsupportedCountry: { provider: result.provider, countryCode: result.countryCode } });
+    }
     return ok(c, {
         configured: true,
-        ...projectFraudLookupResult(result),
+        ...projectFraudLookupResult(result.check),
     });
 });
 

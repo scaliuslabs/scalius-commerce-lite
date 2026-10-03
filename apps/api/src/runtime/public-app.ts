@@ -12,7 +12,7 @@ export function classifyPublicRuntimePath(pathname: string): PublicRuntimeGroup 
   if (matchesPrefix(pathname, "/api/v1/__ptproxy")) return "proxy";
   if (
     pathname === "/api/v1" || pathname === "/api/v1/" ||
-    ["navigation", "storefront", "platform", "checkout", "checkout-languages", "locations", "shipping-methods", "seo"]
+    ["navigation", "storefront", "platform", "checkout", "checkout-languages", "locations", "address-rules", "shipping-methods", "seo"]
       .some((segment) => matchesPrefix(pathname, `/api/v1/${segment}`))
   ) return "config";
   if (

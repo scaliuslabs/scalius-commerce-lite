@@ -9,7 +9,8 @@ import {
   listOrderCodeOptions,
   readCustomerIdentity,
 } from "@scalius/core/modules/customers";
-import { issueAccountOwnerReceipt } from "@scalius/core/modules/orders";
+import { buyerOrderShippingAddress, issueAccountOwnerReceipt, orderShippingAddressSelection } from "@scalius/core/modules/orders";
+import { buyerOrderShippingAddressShape } from "../../schemas/entities";
 import { getBuyerOrderTracking, getCustomerVisibleBalanceDueMinor } from "@scalius/core/modules/orders";
 import { buyerOrderTrackingSchema } from "../../schemas/order-tracking";
 import {
@@ -90,8 +91,8 @@ const orderReceiptSchema = z.object({
   customerEmail: z.string().nullable(),
   /** True when the order is saved to a customer account. */
   accountLinked: z.boolean(),
-  /** Null when nothing ships (pickup, service-only or digital orders). */
-  shippingAddress: z.string().nullable(),
+  /** The shipping-address snapshot; null fields when nothing ships (pickup, service-only or digital orders). */
+  ...buyerOrderShippingAddressShape,
   ...orderFulfilmentShape,
   /** Each handed-over action: a parcel sent, a pickup, a performed service. */
   fulfillments: z.array(buyerOrderFulfilmentSchema),
@@ -120,12 +121,6 @@ const orderReceiptSchema = z.object({
   totalAmountMinor: z.number().int().nullable(),
   taxLabel: z.string().nullable(),
   pricesIncludeTax: z.boolean(),
-  city: z.string().nullable(),
-  zone: z.string().nullable(),
-  area: z.string().nullable(),
-  cityName: z.string().nullable(),
-  zoneName: z.string().nullable(),
-  areaName: z.string().nullable(),
   status: z.string(),
   paymentMethod: z.string().nullable(),
   paymentStatus: z.string(),
@@ -486,7 +481,7 @@ app.openapi(getOrderReceiptRoute, async (c) => {
       customerPhone: orders.customerPhone,
       customerEmail: orders.customerEmail,
       accountOwnerCustomerId: orders.accountOwnerCustomerId,
-      shippingAddress: orders.shippingAddress,
+      ...orderShippingAddressSelection(orders),
       ...orderMoneySelection(orders),
       currencyCode: orders.currencyCode,
       subtotalAmountMinor: orders.subtotalAmountMinor,
@@ -504,12 +499,6 @@ app.openapi(getOrderReceiptRoute, async (c) => {
       taxAmountMinor: orders.taxAmountMinor,
       taxLabel: orders.taxLabel,
       pricesIncludeTax: orders.pricesIncludeTax,
-      city: orders.city,
-      zone: orders.zone,
-      area: orders.area,
-      cityName: orders.cityName,
-      zoneName: orders.zoneName,
-      areaName: orders.areaName,
       status: orders.status,
       paymentMethod: orders.paymentMethod,
       paymentStatus: orders.paymentStatus,
@@ -579,7 +568,7 @@ app.openapi(getOrderReceiptRoute, async (c) => {
       customerPhone: order.customerPhone,
       customerEmail: order.customerEmail,
       accountLinked: order.accountOwnerCustomerId !== null,
-      shippingAddress: order.shippingAddress,
+      ...buyerOrderShippingAddress(order),
       requiresShipping: order.requiresShipping,
       shippingMethodKind: presentShippingMethodKind(order.shippingMethodKind),
       pickup: presentOrderPickup(order),
@@ -605,12 +594,6 @@ app.openapi(getOrderReceiptRoute, async (c) => {
       totalAmountMinor: order.totalAmountMinor,
       taxLabel: order.taxLabel,
       pricesIncludeTax: order.pricesIncludeTax,
-      city: order.city,
-      zone: order.zone,
-      area: order.area,
-      cityName: order.cityName,
-      zoneName: order.zoneName,
-      areaName: order.areaName,
       status: order.status,
       paymentMethod: order.paymentMethod,
       paymentStatus: order.paymentStatus,

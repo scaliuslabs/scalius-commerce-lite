@@ -112,6 +112,8 @@ const cartValidationRoute = createRoute({
             inventoryPool: z
               .enum([InventoryPool.REGULAR, InventoryPool.PREORDER, InventoryPool.BACKORDER])
               .default(InventoryPool.REGULAR),
+            /** The shipping country (absent: Bangladesh); a foreign country gets pickup only until shipping zones by country. */
+            shippingCountryCode: z.string().trim().length(2).optional().nullable(),
             city: z.string().min(1).optional().nullable(),
             zone: z.string().min(1).optional().nullable(),
             area: z.string().optional().nullable(),
@@ -286,6 +288,7 @@ app.openapi(cartValidationRoute, async (c) => {
   const delivery = await validateStorefrontDeliveryPreflight(
     db,
     {
+      shippingCountryCode: data.shippingCountryCode,
       city: data.city,
       zone: data.zone,
       area: data.area,

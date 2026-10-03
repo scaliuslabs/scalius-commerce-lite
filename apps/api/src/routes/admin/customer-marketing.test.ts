@@ -18,10 +18,14 @@ type Envelope = { success: boolean; data: any; error?: any };
 function createApp(options: { plugin?: string } = {}) {
     const { sqlite, db } = createSqliteD1Database();
     sqlite.exec(`
-        INSERT INTO customers (id, name, phone, email, city) VALUES
-          ('cust_a', 'Asha', '+8801711111111', 'asha@example.com', 'loc_dhaka'),
-          ('cust_b', 'Bilal', '+8801722222222', NULL, 'loc_ctg'),
-          ('cust_c', 'Chandni', '+8801733333333', 'chandni@example.com', 'loc_dhaka');
+        INSERT INTO customers (id, name, phone, email) VALUES
+          ('cust_a', 'Asha', '+8801711111111', 'asha@example.com'),
+          ('cust_b', 'Bilal', '+8801722222222', NULL),
+          ('cust_c', 'Chandni', '+8801733333333', 'chandni@example.com');
+        INSERT INTO customer_addresses (id, customer_id, is_default, country_code, line1, city) VALUES
+          ('caddr_a', 'cust_a', 1, 'BD', 'House 1', 'loc_dhaka'),
+          ('caddr_b', 'cust_b', 1, 'BD', 'House 2', 'loc_ctg'),
+          ('caddr_c', 'cust_c', 1, 'BD', 'House 3', 'loc_dhaka');
         INSERT INTO orders (id, customer_id, customer_name, customer_phone, shipping_address, city, zone, status, paid_amount_minor, currency_code, currency_decimal_places, created_at)
           VALUES ('ord_a', 'cust_a', 'Asha', '+8801711111111', 'House', 'c', 'z', 'delivered', 150000, 'BDT', 2, 1700000000),
                  ('ord_c', 'cust_c', 'Chandni', '+8801733333333', 'House', 'c', 'z', 'pending', 20000, 'BDT', 2, 1700000000);

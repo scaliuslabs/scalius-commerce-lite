@@ -20,6 +20,7 @@ import {
   setAgentStorefrontDiscount,
   submitAgentStorefrontCheckout,
   updateAgentStorefrontCustomerProfile,
+  manageAgentStorefrontCustomerAddresses,
   validateAgentStorefrontCheckout,
 } from "@scalius/core/modules/agent-storefront";
 import { ForbiddenError, ValidationError } from "@scalius/core/errors";
@@ -30,6 +31,8 @@ import { paymentProvidersFromRegistrations } from "../plugins/providers/payment"
 import { requestProviderRuntime } from "../plugins/providers/runtime";
 import type { Database } from "@scalius/database/client";
 import { phoneNumberSchema } from "@scalius/shared/customer-utils";
+import { addressInputSchema } from "@scalius/core/modules/customers";
+import { customerAddressSchema } from "../schemas/entities";
 import { createCheckoutAppFunctions } from "../plugins/checkout-functions";
 import { runOrderRiskChecks } from "../plugins/order-risk";
 import type { AgentPrincipal } from "../agent-access/types";
@@ -288,11 +291,16 @@ const continuationStatusPathSchema = z.object({
 
 const profileUpdateSchema = z.object({
   name: z.string().trim().min(1).max(100).optional(),
-  address: z.string().trim().max(500).optional(),
-  city: z.string().trim().max(180).optional(),
-  zone: z.string().trim().max(180).optional(),
-  area: z.string().trim().max(180).optional(),
 }).strict();
+
+/** One address-book action of the authorized customer (MARKETS-DESIGN D7); a buyer never skips the country rules. */
+const addressBookActionSchema = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("list") }).strict(),
+  z.object({ action: z.literal("create"), address: addressInputSchema.extend({ isDefault: z.boolean().optional() }).strict() }).strict(),
+  z.object({ action: z.literal("update"), addressId: z.string().min(1).max(64), address: addressInputSchema.extend({ isDefault: z.boolean().optional() }).strict() }).strict(),
+  z.object({ action: z.literal("set_default"), addressId: z.string().min(1).max(64) }).strict(),
+  z.object({ action: z.literal("delete"), addressId: z.string().min(1).max(64) }).strict(),
+]);
 
 const supportRequestSchema = z.object({
   type: z.enum(["cancel_pre_shipment", "return", "refund"]),
@@ -857,7 +865,7 @@ const updateCustomerProfileRoute = createRoute({
   path: "/{contextId}/customer/profile",
   operationId: "storefront.customer_profile.update",
   tags: ["Storefront Agent Contexts"],
-  summary: "Update the authorized customer delivery profile",
+  summary: "Update the authorized customer's name",
   request: {
     params: contextPathSchema,
     body: { required: true, content: { "application/json": { schema: profileUpdateSchema } } },
@@ -871,6 +879,30 @@ app.openapi(updateCustomerProfileRoute, async (c) => {
   noStore(c);
   const principal = requireStorefrontPrincipal(c);
   return ok(c, await updateAgentStorefrontCustomerProfile(
+    c.get("db"), principal.grantId, c.req.valid("param").contextId, c.req.valid("json"),
+  ));
+});
+
+const customerAddressesRoute = createRoute({
+  method: "post",
+  path: "/{contextId}/customer/addresses",
+  operationId: "storefront.customer_addresses.manage",
+  tags: ["Storefront Agent Contexts"],
+  summary: "List or change the authorized customer's address book",
+  description: "One action: list, create, update, set_default or delete. Addresses follow their country's rules (GET /api/v1/address-rules/{countryCode}); a Bangladesh address sends the City/Thana/Area ids. Answers the address book, the default first.",
+  request: {
+    params: contextPathSchema,
+    body: { required: true, content: { "application/json": { schema: addressBookActionSchema } } },
+  },
+  responses: {
+    200: { description: "The address book", content: { "application/json": { schema: successEnvelope(z.object({ addresses: z.array(customerAddressSchema) })) } } },
+    ...mutationErrors,
+  },
+});
+app.openapi(customerAddressesRoute, async (c) => {
+  noStore(c);
+  const principal = requireStorefrontPrincipal(c);
+  return ok(c, await manageAgentStorefrontCustomerAddresses(
     c.get("db"), principal.grantId, c.req.valid("param").contextId, c.req.valid("json"),
   ));
 });

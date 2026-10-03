@@ -110,6 +110,32 @@ function createTestApp() {
   return app;
 }
 
+const DEFAULT_ADDRESS = {
+  id: "caddr_1",
+  customerId: "customer_1",
+  isDefault: true,
+  countryCode: "BD",
+  name: null,
+  company: null,
+  line1: "House 1",
+  line2: null,
+  dependentLocality: "Mirpur",
+  locality: "Dhaka",
+  adminArea: null,
+  postalCode: null,
+  phone: null,
+  phoneRaw: null,
+  city: "city_dhaka",
+  zone: "zone_mirpur",
+  area: "area_1",
+  cityName: "Dhaka",
+  zoneName: "Mirpur",
+  areaName: "Section 10",
+  validationSkipped: false,
+  createdAt: 1_781_726_400,
+  updatedAt: 1_781_726_400,
+};
+
 describe("customer auth private cache policy", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -146,13 +172,7 @@ describe("customer auth private cache policy", () => {
       name: "Customer",
       phone: "+8801712345678",
       customerId: "customer_1",
-      address: "House 1",
-      city: "city_dhaka",
-      zone: "zone_mirpur",
-      area: "area_1",
-      cityName: "Dhaka",
-      zoneName: "Mirpur",
-      areaName: "Section 10",
+      defaultAddress: DEFAULT_ADDRESS,
       profileComplete: true,
     });
     mocks.updateCustomerProfile.mockResolvedValue({
@@ -161,13 +181,7 @@ describe("customer auth private cache policy", () => {
         name: "Customer",
         phone: "+8801712345678",
         customerId: "customer_1",
-        address: "House 1",
-        city: "city_dhaka",
-        zone: "zone_mirpur",
-        area: "area_1",
-        cityName: "Dhaka",
-        zoneName: "Mirpur",
-        areaName: "Section 10",
+        defaultAddress: DEFAULT_ADDRESS,
         profileComplete: true,
         },
       customer: {
@@ -175,13 +189,7 @@ describe("customer auth private cache policy", () => {
         name: "Customer",
         phone: "+8801712345678",
         customerId: "customer_1",
-        address: "House 1",
-        city: "city_dhaka",
-        zone: "zone_mirpur",
-        area: "area_1",
-        cityName: "Dhaka",
-        zoneName: "Mirpur",
-        areaName: "Section 10",
+        defaultAddress: DEFAULT_ADDRESS,
         profileComplete: true,
         },
     });
@@ -475,20 +483,14 @@ describe("customer auth private cache policy", () => {
         authenticated: true,
         customer: {
           customerId: "customer_1",
-          address: "House 1",
-          city: "city_dhaka",
-          zone: "zone_mirpur",
-          area: "area_1",
-          cityName: "Dhaka",
-          zoneName: "Mirpur",
-          areaName: "Section 10",
+          defaultAddress: DEFAULT_ADDRESS,
           profileComplete: true,
             },
       },
     });
   });
 
-  it("updates customer profiles through the canonical profile service", async () => {
+  it("updates the customer's name through the canonical profile service", async () => {
     const app = createTestApp();
 
     const response = await app.request(
@@ -510,26 +512,17 @@ describe("customer auth private cache policy", () => {
     );
 
     expect(response.status, await response.clone().text()).toBe(200);
+    // The profile is the name; addresses go through the address book, so the old fields are dropped.
     expect(mocks.updateCustomerProfile).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ customerId: "customer_1" }),
-      expect.objectContaining({
-        name: "Customer",
-        address: "House 1",
-        city: "city_dhaka",
-        zone: "zone_mirpur",
-        area: "area_1",
-      }),
+      { name: "Customer" },
     );
-    expect(JSON.stringify(mocks.updateCustomerProfile.mock.calls[0]?.[2])).not.toContain("Forged City");
     await expect(response.json()).resolves.toMatchObject({
       success: true,
       data: {
         customer: {
-          address: "House 1",
-          city: "city_dhaka",
-          zone: "zone_mirpur",
-          area: "area_1",
+          defaultAddress: { line1: "House 1", city: "city_dhaka", zone: "zone_mirpur", area: "area_1" },
           profileComplete: true,
             },
       },

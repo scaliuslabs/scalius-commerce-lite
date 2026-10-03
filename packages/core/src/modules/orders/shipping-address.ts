@@ -106,6 +106,32 @@ export function orderShippingCountry(fields: Pick<OrderShippingAddressFields, "s
     return fields.shippingAddress?.trim() ? DELIVERY_HIERARCHY_COUNTRY : null;
 }
 
+/**
+ * The snapshot as a buyer sees it, picked field by field from a wider row
+ * (never spread: the row carries private columns), without the staff-only
+ * skipped-rules flag.
+ */
+export function buyerOrderShippingAddress(row: OrderShippingAddressFields): Omit<OrderShippingAddressFields, "shippingValidationSkipped"> {
+    return {
+        shippingAddress: row.shippingAddress,
+        shippingAddressLine2: row.shippingAddressLine2,
+        shippingCountryCode: row.shippingCountryCode,
+        shippingDependentLocality: row.shippingDependentLocality,
+        shippingLocality: row.shippingLocality,
+        shippingAdminArea: row.shippingAdminArea,
+        shippingPostalCode: row.shippingPostalCode,
+        shippingCompany: row.shippingCompany,
+        shippingName: row.shippingName,
+        shippingPhone: row.shippingPhone,
+        city: row.city,
+        zone: row.zone,
+        area: row.area,
+        cityName: row.cityName,
+        zoneName: row.zoneName,
+        areaName: row.areaName,
+    };
+}
+
 /** The snapshot as a display address (`formatAddressInline`). */
 export function orderDisplayAddress(fields: Partial<OrderShippingAddressFields>): DisplayAddress {
     return {

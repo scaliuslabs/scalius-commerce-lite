@@ -155,6 +155,8 @@ type PaymentSessionOrderRow = {
   customerEmail: string | null;
   /** Null when nothing ships; the gateway address is optional. */
   shippingAddress: string | null;
+  /** The address's city (Bangladesh: the picked city's name). */
+  shippingLocality: string | null;
   cityName: string | null;
   status: string;
   paymentMethod: string;
@@ -331,7 +333,7 @@ async function createPaymentSessionForOrder(
           phone: order.customerPhone,
           email: order.customerEmail ?? undefined,
           address: order.shippingAddress ?? undefined,
-          city: order.cityName ?? undefined,
+          city: order.shippingLocality ?? order.cityName ?? undefined,
         },
         urls,
         requestTimeoutMs,
@@ -518,6 +520,7 @@ async function loadPaymentSessionOrder(
       customerPhone: orders.customerPhone,
       customerEmail: orders.customerEmail,
       shippingAddress: orders.shippingAddress,
+      shippingLocality: orders.shippingLocality,
       cityName: orders.cityName,
       status: orders.status,
       paymentMethod: orders.paymentMethod,

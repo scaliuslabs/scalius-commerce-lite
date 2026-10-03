@@ -8,6 +8,7 @@ import { getCustomerOrders } from "@scalius/core/modules/orders";
 import { errorResponses, successEnvelope } from "../../schemas/responses";
 import { deliveryMethodKindSchema } from "../../schemas/order-lines";
 import { nullableTimestampSchema } from "../../schemas/timestamps";
+import { buyerOrderShippingAddressShape, customerAddressSchema } from "../../schemas/entities";
 import { ok } from "../../utils/api-response";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
 import { requestAppProviders } from "../../plugins/providers/app-providers";
@@ -56,13 +57,10 @@ const getCustomerOrdersRoute = createRoute({
               paymentMethod: z.string(),
               fulfillmentStatus: z.string(),
               expectedDelivery: z.string().nullable().optional(),
-              /** Null when nothing ships (pickup, service-only or digital orders). */
-              shippingAddress: z.string().nullable(),
+              /** The shipping-address snapshot; null fields when nothing ships (pickup, service-only or digital orders). */
+              ...buyerOrderShippingAddressShape,
               requiresShipping: z.boolean(),
               shippingMethodKind: deliveryMethodKindSchema.nullable(),
-              cityName: z.string().nullable(),
-              zoneName: z.string().nullable(),
-              areaName: z.string().nullable().optional(),
               notes: z.string().nullable(),
               createdAt: nullableTimestampSchema,
               latestShipment: z.object({
@@ -112,13 +110,8 @@ const getCustomerOrdersRoute = createRoute({
               name: z.string(),
               email: z.string().optional(),
               phone: z.string().optional(),
-              address: z.string().nullable().optional(),
-              cityName: z.string().nullable().optional(),
-              zoneName: z.string().nullable().optional(),
-              city: z.string().nullable().optional(),
-              zone: z.string().nullable().optional(),
-              area: z.string().nullable().optional(),
-              areaName: z.string().nullable().optional(),
+              /** The address book's default address. */
+              defaultAddress: customerAddressSchema.nullable().optional(),
             }),
           })),
         },

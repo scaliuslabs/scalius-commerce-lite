@@ -21,6 +21,8 @@ export const STOREFRONT_ORDER_OPERATIONS = {
   "storefront.cart.get": {},
   "storefront.cart.remove": { revision: "required" },
   "storefront.cart.set_quantity": { revision: "required" },
+  "storefront.address_rules.countries": { limits: { request: 16_384, response: 16_384 } },
+  "storefront.address_rules.get": { limits: { request: 16_384, response: 32_768 } },
   "storefront.checkout_language.get_active": { limits: { request: 16_384, response: 16_384 } },
   "storefront.checkout.get_config": { limits: { request: 16_384, response: 16_384 } },
   "storefront.checkout.quote": { risk: "read" },

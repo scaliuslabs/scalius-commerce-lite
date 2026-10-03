@@ -173,6 +173,11 @@ const taxQuoteRoute = createRoute({
               InventoryPool.PREORDER,
               InventoryPool.BACKORDER,
             ]).default(InventoryPool.REGULAR),
+            /**
+             * The shipping country (absent: Bangladesh). A country the
+             * delivery rates do not serve gets pickup only (MARKETS-DESIGN step 3a).
+             */
+            shippingCountryCode: z.string().trim().length(2).optional().nullable(),
             /** Required for a delivery method; omitted for pickup or when nothing is physical. */
             city: z.string().min(1).max(180).optional().nullable(),
             zone: z.string().min(1).max(180).optional().nullable(),
@@ -235,6 +240,7 @@ app.openapi(taxQuoteRoute, async (c) => {
     });
   }
   const delivery = await validateStorefrontDeliveryPreflight(db, {
+    shippingCountryCode: data.shippingCountryCode,
     city: data.city,
     zone: data.zone,
     area: data.area,
@@ -257,7 +263,7 @@ app.openapi(taxQuoteRoute, async (c) => {
     },
     apps,
     channel: "online_store",
-    location: { city: data.city, zone: data.zone, area: data.area },
+    location: { countryCode: data.shippingCountryCode, city: data.city, zone: data.zone, area: data.area },
   });
   assertNoCheckoutRuleErrors(pricing.ruleErrors);
   const quote = pricing.taxQuote;

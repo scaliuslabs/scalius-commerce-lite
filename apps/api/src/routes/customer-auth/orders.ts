@@ -19,6 +19,7 @@ import {
     successEnvelope,
 } from "../../schemas/responses";
 import { nullableTimestampSchema } from "../../schemas/timestamps";
+import { buyerOrderShippingAddressShape } from "../../schemas/entities";
 import {
     buyerOrderFulfilmentSchema,
     orderFulfilmentShape,
@@ -209,17 +210,11 @@ const customerOrderDetailSchema = z.object({
     paymentMethod: z.string(),
     fulfillmentStatus: z.string(),
     expectedDelivery: z.string().nullable(),
-    /** Null when nothing ships (pickup, service-only or digital orders). */
-    shippingAddress: z.string().nullable(),
-    city: z.string().nullable(),
-    zone: z.string().nullable(),
+    /** The shipping-address snapshot; null fields when nothing ships (pickup, service-only or digital orders). */
+    ...buyerOrderShippingAddressShape,
     ...orderFulfilmentShape,
     /** The order thread, once the buyer or the store has written on it. */
     conversationId: z.string().nullable(),
-    area: z.string().nullable(),
-    cityName: z.string().nullable(),
-    zoneName: z.string().nullable(),
-    areaName: z.string().nullable(),
     notes: z.string().nullable(),
     statusLabel: z.string(),
     customerName: z.string(),

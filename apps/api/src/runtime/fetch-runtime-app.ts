@@ -2,6 +2,7 @@ export type RuntimeAppName = "probe" | "public" | "admin" | "system" | "docs" | 
 
 const PUBLIC_PREFIXES = [
   "/api/v1/abandoned-checkouts",
+  "/api/v1/address-rules",
   "/api/v1/analytics",
   "/api/v1/articles",
   "/api/v1/attributes",

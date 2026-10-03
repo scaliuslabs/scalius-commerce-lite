@@ -3,6 +3,7 @@
 // published OpenAPI path order: append new routers, do not reorder.
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { customerAccountSummaryRoutes } from "./account-summary";
+import { customerAddressRoutes } from "./addresses";
 import { customerConversationRoutes } from "./conversations";
 import { customerDownloadRoutes } from "./downloads";
 import { customerGiftCardRoutes } from "./gift-cards";
@@ -29,5 +30,6 @@ app.route("/", customerDownloadRoutes);
 app.route("/", customerGiftCardRoutes);
 app.route("/", customerWarrantyRoutes);
 app.route("/", customerMarketingRoutes);
+app.route("/", customerAddressRoutes);
 
 export { app as customerAuthRoutes };

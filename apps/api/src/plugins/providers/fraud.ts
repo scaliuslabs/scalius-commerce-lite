@@ -40,6 +40,7 @@ export function appFraudProvider(
   const provider: FraudProvider = {
     id: qualifiedProviderId(installation.pluginId, declaration.id),
     label: declaration.name,
+    countries: declaration.kind === "fraud" ? declaration.countries : "any",
     check: async (input: FraudCheckInput, { signal } = {}) =>
       invoke("check", { ...input, phone: e164(input.phone) }, signal) as ReturnType<FraudProvider["check"]>,
   };

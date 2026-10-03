@@ -1,6 +1,15 @@
 // Agent operation registry rows for the storefront customer account routes.
 import type { OperationRegistryEntry } from "./entry";
 
+/** The hosted account page's address book (customer cookie); agents have their own operation. */
+const addressBook = (): OperationRegistryEntry => ({
+  exposure: "excluded",
+  principals: ["customer"],
+  sensitive: true,
+  reason:
+    "Customer-cookie address book for the hosted account page; use storefront.customer_addresses.manage with live delegated authority.",
+});
+
 export const STOREFRONT_CUSTOMER_OPERATIONS = {
   "storefront.customer_auth_marketing.get": {
     exposure: "excluded",
@@ -69,6 +78,11 @@ export const STOREFRONT_CUSTOMER_OPERATIONS = {
     reason:
       "Accepts a raw OTP, verifies the customer-cookie account's phone and moves orders placed with it; proof must be entered by the buyer in the hosted account page.",
   },
+  "storefront.customer_auth_addresses.list": addressBook(),
+  "storefront.customer_auth_addresses.create": addressBook(),
+  "storefront.customer_auth_addresses.update": addressBook(),
+  "storefront.customer_auth_addresses.set_default": addressBook(),
+  "storefront.customer_auth_addresses.delete": addressBook(),
   "storefront.customer_auth_profile.replace_profile": {
     exposure: "excluded",
     principals: ["customer"],
@@ -110,4 +124,5 @@ export const STOREFRONT_CUSTOMER_OPERATIONS = {
   "storefront.customer_auth.status": { exposure: "continuation" },
   "storefront.customer_profile.get": {},
   "storefront.customer_profile.update": {},
+  "storefront.customer_addresses.manage": {},
 } satisfies Record<string, OperationRegistryEntry>;

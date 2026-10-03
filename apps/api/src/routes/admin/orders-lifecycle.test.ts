@@ -23,11 +23,12 @@ describe("admin order lifecycle routes", () => {
             INSERT INTO delivery_locations (id, name, type, parent_id, external_ids, metadata, is_active)
             VALUES ('city_1', 'Dhaka', 'city', NULL, '{}', '{}', 1), ('zone_1', 'North', 'zone', 'city_1', '{}', '{}', 1);
             INSERT INTO orders (id, order_number, customer_name, customer_phone, shipping_address, city, zone,
+              city_name, zone_name, shipping_country_code, shipping_locality, shipping_dependent_locality,
               total_amount_minor, balance_due_minor, status, payment_method, payment_status, version, created_at)
             VALUES
-              ('order_a', 1001, 'Rahim', '+8801712345601', 'House 1, Road 2', 'city_1', 'zone_1', 10000, 10000, 'pending', 'cod', 'unpaid', 1, 1700000000),
-              ('order_b', 1002, 'Karim', '+8801712345602', 'House 3, Road 4', 'city_1', 'zone_1', 20000, 20000, 'pending', 'cod', 'unpaid', 1, 1700000100),
-              ('order_c', 1003, 'Salma', '+8801712345603', 'House 5, Road 6', 'city_1', 'zone_1', 30000, 30000, 'shipped', 'cod', 'unpaid', 1, 1700000200);
+              ('order_a', 1001, 'Rahim', '+8801712345601', 'House 1, Road 2', 'city_1', 'zone_1', 'Dhaka', 'North', 'BD', 'Dhaka', 'North', 10000, 10000, 'pending', 'cod', 'unpaid', 1, 1700000000),
+              ('order_b', 1002, 'Karim', '+8801712345602', 'House 3, Road 4', 'city_1', 'zone_1', 'Dhaka', 'North', 'BD', 'Dhaka', 'North', 20000, 20000, 'pending', 'cod', 'unpaid', 1, 1700000100),
+              ('order_c', 1003, 'Salma', '+8801712345603', 'House 5, Road 6', 'city_1', 'zone_1', 'Dhaka', 'North', 'BD', 'Dhaka', 'North', 30000, 30000, 'shipped', 'cod', 'unpaid', 1, 1700000200);
             INSERT INTO cod_tracking (id, order_id, cod_status) VALUES ('cod_a', 'order_a', 'pending');
             INSERT INTO order_support_requests (id, order_id, type, status, reason, active_key)
             VALUES ('osr_1', 'order_a', 'cancel_pre_shipment', 'submitted', 'Ordered by mistake', 'order:order_a');
