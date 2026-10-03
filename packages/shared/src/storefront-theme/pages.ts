@@ -15,15 +15,24 @@ export const STOREFRONT_LANDING_DESCRIPTION_MAX = 320;
 export const storefrontLandingSlugSchema = z.string().min(1).max(100)
   .refine((slug) => isValidResourceCanonicalPath("page", `/${slug}`) && slug !== "pages", "Use a non-reserved lowercase URL handle.");
 
-export const storefrontLandingPageSchema = z.object({
-  /** The page's title: its `<title>`, Open Graph title and the hidden heading. */
-  title: z.string().trim().min(1).max(STOREFRONT_LANDING_TITLE_MAX),
-  /** The search-result description; blank leaves the meta description out. */
-  description: z.string().trim().max(STOREFRONT_LANDING_DESCRIPTION_MAX),
-  sections: storefrontSectionListSchema,
-}).strict();
+/** A landing page whose sections are `sections` (the document's own section list schema). */
+export function storefrontLandingPageSchemaOf<Sections extends typeof storefrontSectionListSchema>(sections: Sections) {
+  return z.object({
+    /** The page's title: its `<title>`, Open Graph title and the hidden heading. */
+    title: z.string().trim().min(1).max(STOREFRONT_LANDING_TITLE_MAX),
+    /** The search-result description; blank leaves the meta description out. */
+    description: z.string().trim().max(STOREFRONT_LANDING_DESCRIPTION_MAX),
+    sections,
+  }).strict();
+}
 
-export const storefrontLandingPagesSchema = z.record(storefrontLandingSlugSchema, storefrontLandingPageSchema)
-  .refine((pages) => Object.keys(pages).length <= STOREFRONT_MAX_LANDING_PAGES, `Keep at most ${STOREFRONT_MAX_LANDING_PAGES} landing pages.`);
+/** The document's landing pages by handle, each a `page`. */
+export function storefrontLandingPagesSchemaOf<Page extends z.ZodType>(page: Page) {
+  return z.record(storefrontLandingSlugSchema, page)
+    .refine((pages) => Object.keys(pages).length <= STOREFRONT_MAX_LANDING_PAGES, `Keep at most ${STOREFRONT_MAX_LANDING_PAGES} landing pages.`);
+}
+
+export const storefrontLandingPageSchema = storefrontLandingPageSchemaOf(storefrontSectionListSchema);
+export const storefrontLandingPagesSchema = storefrontLandingPagesSchemaOf(storefrontLandingPageSchema);
 
 export type StorefrontLandingPage = z.infer<typeof storefrontLandingPageSchema>;

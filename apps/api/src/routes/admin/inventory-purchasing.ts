@@ -248,7 +248,7 @@ const purchaseOrderDetailSchema = purchaseOrderSummarySchema.extend({
     })),
   })),
 });
-const purchaseOrderEnvelope = successEnvelope(purchaseOrderDetailSchema);
+const purchaseOrderEnvelope = successEnvelope(purchaseOrderDetailSchema.openapi("PurchaseOrder"));
 const poParams = z.object({ purchaseOrderId: z.string().trim().min(1).max(100) });
 
 export const adminPurchaseOrderRoutes = new OpenAPIHono<{ Bindings: Env }>();
@@ -497,7 +497,7 @@ const transferDetailSchema = transferSummarySchema.extend({
     lines: z.array(z.object({ lineId: z.string(), variantId: z.string(), sku: z.string(), quantity: z.number().int(), locationId: z.string() })),
   })),
 });
-const transferEnvelope = successEnvelope(transferDetailSchema);
+const transferEnvelope = successEnvelope(transferDetailSchema.openapi("InventoryTransfer"));
 const transferCommandSchema = z.object({
   transferId: z.string(),
   displayNumber: z.string(),

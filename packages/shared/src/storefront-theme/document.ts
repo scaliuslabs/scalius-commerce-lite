@@ -25,7 +25,7 @@ import {
 } from "./blocks";
 import { storefrontThemeBrandSchema } from "./brand";
 import { storefrontSectionListSchema } from "./sections";
-import { storefrontLandingPagesSchema } from "./pages";
+import { storefrontLandingPageSchemaOf, storefrontLandingPagesSchemaOf } from "./pages";
 import { upgradeThemeDocumentSteps } from "./upgrade";
 import { buildStorefrontTokenCss, storefrontThemeTokensSchema, type StorefrontThemeTokens } from "./tokens";
 
@@ -105,41 +105,56 @@ export const storefrontHomeModeSchema = z.discriminatedUnion("kind", [
 ]);
 export type StorefrontHomeMode = z.infer<typeof storefrontHomeModeSchema>;
 
+/**
+ * Names a shared part of the document schema. The API names each part
+ * (`.openapi(name)`), so its contract states the section list and the
+ * landing page once and refers to them; everywhere else they stay unnamed.
+ */
+export type StorefrontSchemaNamer = <Schema extends z.ZodType>(name: string, schema: Schema) => Schema;
+
+/** The document schema and its shared parts, each part named by `name`. */
+export function buildStorefrontThemeDocumentSchemas(name: StorefrontSchemaNamer = (_name, schema) => schema) {
+  const sections = name("StorefrontSectionList", storefrontSectionListSchema);
+  const landingPage = name("StorefrontLandingPage", storefrontLandingPageSchemaOf(sections));
+  const document = z.object({
+    version: z.literal(STOREFRONT_THEME_DOCUMENT_VERSION),
+    /**
+     * The template the document is based on; it stays when blocks or tokens
+     * change. A label only: every behaviour is a block, setting or token, so
+     * blocks from any template (or a builder) mix freely.
+     */
+    template: z.enum(STOREFRONT_TEMPLATE_IDS),
+    tokens: storefrontThemeTokensSchema,
+    /** The logo, its width, the footer logo and the tab icon (media ids). */
+    brand: storefrontThemeBrandSchema,
+    blocks: storefrontThemeBlocksSchema,
+    /**
+     * Section pages: the homepage and landing pages (`/pages/<slug>`). Product,
+     * collection and search pages take their structure from `blocks`.
+     */
+    pages: z.object({
+      home: sections,
+      /** What `/` shows: the sections, or one product's page. */
+      homeMode: storefrontHomeModeSchema,
+      landing: storefrontLandingPagesSchemaOf(landingPage),
+    }).strict(),
+  }).strict().superRefine((value, context) => {
+    for (const { text, surface, ratio } of listStorefrontThemeDocumentContrastProblems(value)) {
+      context.addIssue({
+        code: "custom",
+        path: ["tokens", "colors", storefrontContrastRoleToken(text, value.tokens)],
+        message: `${text} on ${surface} has contrast ${ratio.toFixed(2)}:1; it needs at least 4.5:1.`,
+      });
+    }
+    for (const problem of listStorefrontThemeSemanticColorProblems(value.tokens.colors)) {
+      context.addIssue({ code: "custom", path: ["tokens", "colors", "muted-foreground"], message: problem });
+    }
+  });
+  return { document, sections, landingPage };
+}
+
 /** The complete, strict theme document schema. Writes and reads both use it. */
-export const storefrontThemeDocumentSchema = z.object({
-  version: z.literal(STOREFRONT_THEME_DOCUMENT_VERSION),
-  /**
-   * The template the document is based on; it stays when blocks or tokens
-   * change. A label only: every behaviour is a block, setting or token, so
-   * blocks from any template (or a builder) mix freely.
-   */
-  template: z.enum(STOREFRONT_TEMPLATE_IDS),
-  tokens: storefrontThemeTokensSchema,
-  /** The logo, its width, the footer logo and the tab icon (media ids). */
-  brand: storefrontThemeBrandSchema,
-  blocks: storefrontThemeBlocksSchema,
-  /**
-   * Section pages: the homepage and landing pages (`/pages/<slug>`). Product,
-   * collection and search pages take their structure from `blocks`.
-   */
-  pages: z.object({
-    home: storefrontSectionListSchema,
-    /** What `/` shows: the sections, or one product's page. */
-    homeMode: storefrontHomeModeSchema,
-    landing: storefrontLandingPagesSchema,
-  }).strict(),
-}).strict().superRefine((document, context) => {
-  for (const { text, surface, ratio } of listStorefrontThemeDocumentContrastProblems(document)) {
-    context.addIssue({
-      code: "custom",
-      path: ["tokens", "colors", storefrontContrastRoleToken(text, document.tokens)],
-      message: `${text} on ${surface} has contrast ${ratio.toFixed(2)}:1; it needs at least 4.5:1.`,
-    });
-  }
-  for (const problem of listStorefrontThemeSemanticColorProblems(document.tokens.colors)) {
-    context.addIssue({ code: "custom", path: ["tokens", "colors", "muted-foreground"], message: problem });
-  }
-});
+export const storefrontThemeDocumentSchema = buildStorefrontThemeDocumentSchemas().document;
 
 export type StorefrontThemeDocument = z.infer<typeof storefrontThemeDocumentSchema>;
 export type StorefrontThemePages = StorefrontThemeDocument["pages"];

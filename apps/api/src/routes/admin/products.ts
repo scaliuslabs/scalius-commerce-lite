@@ -311,7 +311,7 @@ const productMutationConflictResponse = {
                         details: z.unknown().optional(),
                     }),
                 }),
-            ]),
+            ]).openapi("ProductMutationConflict"),
         },
     },
 } as const;

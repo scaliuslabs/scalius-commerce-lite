@@ -5,6 +5,8 @@ import {
   AGENT_OPERATIONS,
 } from "../generated/agent-operations.gen";
 import { describeOperation, isMcpOperationExposure } from "../agent-access/mcp/operations";
+import { AGENT_MAX_RESULT_BYTES } from "../agent-access/limits";
+import { OPENAPI_CONTRACT_JSON } from "../generated/openapi-contract.gen";
 import {
   buildAgentComponentSchemas,
   buildAgentOperationManifest,
@@ -128,6 +130,27 @@ describe("shared component schemas in the agent manifest", () => {
     expect(source.split('"template":{"type":"string","enum":["boutique"').length - 1).toBe(1);
     // Compact JSON: no indented value lines.
     expect(source).not.toMatch(/\n {2}"/);
+  });
+
+  it("states the contract's shared shapes once, and never makes a shared component nullable through one nullable use", () => {
+    const contract = JSON.parse(OPENAPI_CONTRACT_JSON) as { components: { schemas: Record<string, { nullable?: boolean }> } };
+    const schemas = contract.components.schemas;
+    for (const name of ["ErrorResponse", "StorefrontThemeDocument", "StorefrontSectionList", "StorefrontLandingPage", "StorefrontHomepageSections"]) {
+      expect(schemas, name).toHaveProperty(name);
+    }
+    // `.nullable()` on a named schema makes the component itself nullable; a
+    // nullable use is `z.union([Named, z.null()])` (finalized as `allOf` + `nullable`).
+    expect(Object.entries(schemas).filter(([name, schema]) => schema.nullable === true && !name.startsWith("Nullable")).map(([name]) => name))
+      .toEqual([]);
+    // The section list is written once, not per page or per route.
+    expect(OPENAPI_CONTRACT_JSON.split('"enum":["usp-strip"]').length - 1).toBe(1);
+  });
+
+  it("keeps every full MCP description within one agent result", () => {
+    const oversized = AGENT_OPERATIONS.filter(isMcpOperationExposure)
+      .map((entry) => ({ operationId: entry.operationId, bytes: new TextEncoder().encode(JSON.stringify({ ok: true, operation: describeOperation(entry, true) })).byteLength }))
+      .filter((entry) => entry.bytes > AGENT_MAX_RESULT_BYTES);
+    expect(oversized).toEqual([]);
   });
 
   it("gives every full MCP description the shared schemas its references need", () => {

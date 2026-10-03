@@ -494,6 +494,20 @@ function normalizeUnconstrainedOpenApiSchemas(value: unknown): void {
     delete record.nullable;
     return;
   }
+  // A shared component that may be null (`z.union([Named, z.null()])`, since
+  // `.nullable()` on a named schema would make the component itself
+  // nullable) is OpenAPI 3.0's nullable reference: `allOf` with `nullable`.
+  for (const key of ["anyOf", "oneOf"] as const) {
+    const options = record[key];
+    if (!Array.isArray(options) || options.length !== 2) continue;
+    const nullIndex = options.findIndex((option) =>
+      option && typeof option === "object" && Object.keys(option).length === 1 && (option as { nullable?: unknown }).nullable === true);
+    const reference = options[1 - nullIndex] as Record<string, unknown> | undefined;
+    if (nullIndex < 0 || !reference || typeof reference.$ref !== "string" || Object.keys(reference).length !== 1) continue;
+    delete record[key];
+    record.allOf = [reference];
+    record.nullable = true;
+  }
   for (const item of Object.values(record)) {
     normalizeUnconstrainedOpenApiSchemas(item);
   }

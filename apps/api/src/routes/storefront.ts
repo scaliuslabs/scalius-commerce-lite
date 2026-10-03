@@ -180,7 +180,7 @@ const homepageSectionsSchema = z.object({
   apps: z.array(appSurfaceRenderSchema.extend({ sectionId: z.string() })).max(PLUGIN_HOME_SECTIONS_MAX).openapi({
     description: "The app sections that drew something, by section id: sanitized HTML (no scripts, styles or event handlers) and the head tags their apps may add. An app section missing here renders nothing.",
   }),
-});
+}).openapi("StorefrontHomepageSections");
 const homepageDataSchema = z.object({
   seo: z.object({
     homepageTitle: z.string().nullable(),

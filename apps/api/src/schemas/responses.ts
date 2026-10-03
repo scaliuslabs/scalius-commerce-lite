@@ -106,6 +106,10 @@ export const keysetQuerySchema = {
 // Error response
 // ─────────────────────────────────────────
 
+/**
+ * The error envelope, one named component: every route's error responses
+ * refer to it instead of repeating it (about 4,000 times in the contract).
+ */
 export const errorResponseSchema = z.object({
   success: z.literal(false),
   error: z.object({
@@ -113,7 +117,7 @@ export const errorResponseSchema = z.object({
     message: z.string(),
     details: z.unknown().optional(),
   }),
-});
+}).openapi("ErrorResponse");
 
 export const serviceUnavailableResponse = {
   description: "Service unavailable",

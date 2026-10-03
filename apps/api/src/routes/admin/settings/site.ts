@@ -1,9 +1,7 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import {
   THEME_VERSION_CHANGES_MAX,
-  storefrontLandingPageSchema,
   storefrontLandingSlugSchema,
-  storefrontSectionListSchema,
   themeDocumentChangeSchema,
 } from "@scalius/shared/storefront-theme";
 import { SUPPORTED_CURRENCY_CODES } from "@scalius/shared/currency";
@@ -63,7 +61,12 @@ import {
   conflictResponse,
   serviceUnavailableResponse,
 } from "../../../schemas/responses";
-import { storeShapeApiSchema, storefrontThemeDocumentApiSchema } from "../../../schemas/storefront-theme";
+import {
+  storeShapeApiSchema,
+  storefrontLandingPageApiSchema,
+  storefrontSectionListApiSchema,
+  storefrontThemeDocumentApiSchema,
+} from "../../../schemas/storefront-theme";
 import { appSettingField, appSettingFieldSchema } from "../../../schemas/app-settings";
 import { readStoreShape, readThemeMedia } from "@scalius/core/modules/storefront";
 import { listPluginInstallations } from "@scalius/core/modules/plugins";
@@ -477,8 +480,8 @@ app.openapi(createRoute({
       content: {
         "application/json": {
           schema: z.discriminatedUnion("page", [
-            z.object({ ...draftRevisionFields, page: z.literal("home"), value: storefrontSectionListSchema }).strict(),
-            z.object({ ...draftRevisionFields, page: z.literal("landing"), slug: storefrontLandingSlugSchema, value: storefrontLandingPageSchema.nullable() }).strict(),
+            z.object({ ...draftRevisionFields, page: z.literal("home"), value: storefrontSectionListApiSchema }).strict(),
+            z.object({ ...draftRevisionFields, page: z.literal("landing"), slug: storefrontLandingSlugSchema, value: z.union([storefrontLandingPageApiSchema, z.null()]) }).strict(),
           ]),
         },
       },

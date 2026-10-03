@@ -73,17 +73,20 @@ function segmentView(record: CustomerSegmentRecord, decimals: number) {
     return { ...record, definition: mapSegmentMoney(record.definition, (amount) => fromMinor(amount, decimals)) };
 }
 
+/** A segment's rules (one contract component: lists, reads, writes and previews share it). */
+const segmentDefinitionSchema = customerSegmentDefinitionInputSchema.openapi("CustomerSegmentDefinition");
+
 const segmentSchema = z.object({
     id: z.string(),
     name: z.string(),
     description: z.string().nullable(),
-    definition: customerSegmentDefinitionInputSchema,
+    definition: segmentDefinitionSchema,
     revision: z.number().int(),
     createdAt: z.string(),
     updatedAt: z.string(),
     /** Discounts (not archived) limited to this segment. */
     promotionCount: z.number().int(),
-});
+}).openapi("CustomerSegment");
 
 const segmentIdParam = z.object({ segmentId: z.string().min(1).max(64) });
 const customerIdParam = z.object({ id: z.string().min(1).max(128) });
@@ -270,7 +273,7 @@ app.openapi(listSegmentsRoute, async (c) => {
 const segmentBody = z.object({
     name: z.string().max(200),
     description: z.string().max(600).nullable().optional(),
-    definition: customerSegmentDefinitionInputSchema,
+    definition: segmentDefinitionSchema,
 }).strict();
 
 const createSegmentRoute = createRoute({
@@ -301,7 +304,7 @@ const previewSegmentRoute = createRoute({
     tags: ["Admin - Customers"],
     summary: "Count and sample a segment before saving it",
     description: "Live member count (capped) and the first customers of an unsaved definition. Changes nothing.",
-    request: { body: { required: true, content: { "application/json": { schema: z.object({ definition: customerSegmentDefinitionInputSchema }).strict() } } } },
+    request: { body: { required: true, content: { "application/json": { schema: z.object({ definition: segmentDefinitionSchema }).strict() } } } },
     responses: {
         200: {
             description: "Preview",
