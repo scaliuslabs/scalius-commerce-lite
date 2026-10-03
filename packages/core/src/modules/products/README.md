@@ -46,7 +46,7 @@ This domain reads and defines. [`product-admin`](../product-admin/README.md) wri
 - A product is `availableForSale` when at least one SKU in its buyer pool is untracked or has `stock - reserved_stock > 0`. Feeds, JSON-LD and checkout read the same rule.
 - A product's brand is the record `brand_id`, never an attribute. The editor accepts any brand that is not in trash. Feeds, JSON-LD and the product page publish only a published, live brand and never a placeholder.
 - `product_condition` null means unknown. Feeds and JSON-LD emit a condition only from this column.
-- A valid SKU discount overrides the product discount. A percentage discount rounds half-up to the store currency's cash unit (whole taka for BDT) and never exceeds the price.
+- A valid SKU discount overrides the product discount. A percentage discount rounds half-up to the store's price increment (whole taka by default for BDT) and never exceeds the price.
 - The alert level of a SKU is its own `low_stock_threshold`, else the store default. Level 0 turns alerts off. The same level bands buyer availability.
 - Money is integer minor units. `presentCatalogPrice` converts to decimal once, at the edge. A staff read of a SKU row adds `cost`. Buyer reads never carry it.
 - A digital SKU's stock is its licence keys. Every manual stock path refuses to change it (`details.reason = "digital_stock_is_keys"`). A SKU turns digital only with no stock, and a digital SKU with a ready key pool keeps tracking.

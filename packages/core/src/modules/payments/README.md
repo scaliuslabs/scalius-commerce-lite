@@ -60,9 +60,20 @@ gateway; the kernel suites in `gateways/gateway-kernel.test.ts` and
   terminal pre-dispatch failure); a port `ProviderError` that is certain the
   provider did nothing ends the attempt; any other error is an unknown outcome
   that reconciliation must resolve.
-- Amounts go out in the gateway's declared wire form (`amountCodecs`,
-  `encodeProviderAmount`); a charge or refund the wire form cannot carry
-  exactly is refused before the call, never rounded up.
+- One amount codec serves every payment path (MARKETS-DESIGN D2):
+  `PaymentProviders.encodeAmount(methodId, amountMinor, currency)` returns the
+  wire amount and the rounding it would drop; `amountIssue()` turns a
+  non-zero rounding into a refusal. A gateway declares its wire forms
+  (`amountCodecs`); cash on delivery uses its cash increment
+  (`cashOnDeliveryIncrementMinor`: whole taka in BDT). Checkout precommit,
+  session creation, refunds, storefront COD and staff (COD) quotes check it
+  before the order commits or the provider is called, so the charge always
+  equals the stored amount. Nothing is ever rounded up.
+- Stripe declares `STRIPE_AMOUNT_CODECS` (ISK and UGX two-decimal; BHD, JOD,
+  KWD, OMR and TND in tens; MGA whole units). Amounts a provider reports
+  (events, refunds) are ISO minor units: an adapter whose wire form differs
+  decodes them with `decodeProviderAmount`, and a value it cannot decode
+  becomes `NaN`, which the kernel refuses.
 
 ## Storage
 
@@ -72,6 +83,17 @@ provider's unique payment reference (Stripe PaymentIntent, SSLCommerz
 confirmation credit an order at most once. `provider_secondary_ref` is the
 captured-transaction reference refunds use (Stripe charge, SSLCommerz
 `bank_tran_id`). Refund rows never carry a `provider_ref`.
+
+Every row also records settlement (migration 0111, MARKETS-DESIGN D2):
+`settlement_currency`, `settlement_amount_minor`, `settlement_rate` (a decimal
+string) and `exchange_adjustment_minor`. A confirmed payment takes the
+provider's report when the payment event carries `settlement`
+(`paymentSettlement()` in `@scalius/shared/money-chain`); the adjustment is
+the gain or loss against the order's locked `fx_rate` when it settled in the
+shop currency, else 0. Without a report, and for COD, gift-card tenders,
+refunds and imported refunds, a row settles as presented
+(`presentedSettlement()`: same currency and amount, rate "1"). Refunds stay in
+the presentment currency. No built-in adapter reports settlement yet.
 
 ## Flow
 

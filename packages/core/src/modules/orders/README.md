@@ -114,6 +114,15 @@ See [checkout](../checkout/README.md#storefront-order-creation-synchronous-idemp
 7. **On preparation or batch failure** -- the attempt is marked failed when safe to reclaim. Reserved stock is released with deterministic movement claims only while this worker still owns the attempt; an expired worker must never release a new owner's shared reservation. Cleanup failure is surfaced as temporary unavailability.
 8. **Fulfillment owns deduction** -- the committed confirmed order intentionally keeps `inventoryAction = "reserved"`. Shipment/final-fulfillment commands later call `applyInventoryForStatusChange()` with deterministic movement claims, stock CAS, and guarded `inventoryAction` convergence. There is no post-commit creation step that can leave a newly created manual order half-converted.
 
+### Order money
+
+All order money is integer minor units. `currency_code` is the presentment currency: what the buyer sees and pays. The money chain (migration 0111, MARKETS-DESIGN D3) records the conversion into the shop currency: `shop_currency`, `fx_rate` (a decimal string, shop units per presentment unit), `fx_source`, `fx_as_of`, `fx_locked_until`, and the shop totals `subtotal_shop_minor`, `shipping_shop_minor`, `discount_shop_minor`, `tax_shop_minor` and `total_shop_minor`. Every order is same-currency today: rate "1", source `same_currency`, no quote times, and shop amounts equal to the presentment amounts.
+
+- The checkout commit and `createOrder()` write the chain in the order insert (`orderMoneyChainColumns()`, `@scalius/shared/money-chain`). An amendment rewrites the shop amounts at the order's own rate (`orderShopAmounts()`).
+- Dashboard revenue sums `total_shop_minor`. Reports read only orders whose presentment and shop currency are the report currency.
+- `customer_order_stats` and order lines still hold presentment amounts only. They move to shop amounts before a second currency is enabled (Markets step 6).
+- Staff amounts (delivery charge, discount) are on the store's price increment (`toStoreMinor()`). A staff order is cash on delivery, so `prepareManualOrderQuote()` refuses a total that COD cannot collect exactly (`details.reason = "cash_on_delivery_amount"`). The quote, the create and the amendment all run it.
+
 ### Editing an Order
 
 `buildOrderEditReadiness()` decides what can still change, with a reason code the dashboard words:

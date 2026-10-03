@@ -93,7 +93,7 @@ Admin status checks use the same sync through `checkAndSyncShipmentStatus()` (`a
 - Pathao needs positive-integer `external_ids` for city and zone. The area is optional.
 - A zone is a name plus a set of places. An address resolves to the zone of its most specific assigned place (area, then zone, then city). With no zone it gets the "Everywhere else" rates. A `pickup` rate is store-wide, needs a pickup address, and is offered for every address.
 - `resolveDeliveryRate()` is the one checkout decision: the rate is active and live, its zone matches the address (pickup always matches), and the rate is free when the items subtotal before discounts reaches `free_over_minor`.
-- Limits: a rate or threshold up to 100,000 major units (`MAX_DELIVERY_AMOUNT`), 20 rates per zone, 2,000 places per zone. In BDT a fee is a whole taka.
+- Limits: a rate or threshold up to 100,000 major units (`MAX_DELIVERY_AMOUNT`), 20 rates per zone, 2,000 places per zone. A fee is on the store's price increment (whole taka by default in BDT).
 - Zone edits need the current `delivery_zones.revision`. "Everywhere else" edits need the revision of the `delivery_everywhere_else` document. A write cannot remove the last active rate. `applyDeliveryZoneTemplate()` creates starter Dhaka zones only when no zone exists.
 - `processPathaoImportChunk()` imports cities, zones and areas in chunks through repeated dashboard calls until the status is `complete`. Progress is in KV under `location_import:pathao` (24-hour TTL).
 

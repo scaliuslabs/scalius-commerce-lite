@@ -67,7 +67,7 @@ All paths start with `/api/v1/admin`.
 
 ## Home statistics
 
-Home's sales numbers (total sales, orders, average order value, return-to-sender rate, trend) come from the Analytics overview for staff with `dashboard.analytics`. The two reads below serve order counts and the recent-order feed. Their "revenue" is the booked-gross figure: order totals of orders that are not cancelled or returned.
+Home's sales numbers (total sales, orders, average order value, return-to-sender rate, trend) come from the Analytics overview for staff with `dashboard.analytics`. The two reads below serve order counts and the recent-order feed. Their "revenue" is the booked-gross figure: the shop-currency totals (`total_shop_minor`, the order money chain) of orders that are not cancelled or returned. They never sum presentment totals in mixed currencies.
 
 - `getDashboardHomeSummary(db, recentOrderLimit)`: one provider batch with product and customer counts, current-month and last-month orders and revenue, growth, an order-status breakdown and the newest orders. A limit of `0` skips the order feed. The route uses 11.
 - `getDailyActivityData(db, days)`: per merchant day `date`, `orders`, `revenue`, `newCustomers`, zero-filled. `days` is 1 to 90.
@@ -81,9 +81,9 @@ The report catalog (ids, columns, types, default sorts) is `packages/shared/src/
 
 ### Which orders count
 
-- **Sales orders:** not deleted, placed in the range on the store calendar, in the store currency, and not `incomplete` or `cancelled`. An `incomplete` order is a hosted payment the buyer never finished. Every sales figure, rate and breakdown reads these orders.
+- **Sales orders:** not deleted, placed in the range on the store calendar, presented and reported in the store currency (`currency_code` and `shop_currency`), and not `incomplete` or `cancelled`. An `incomplete` order is a hosted payment the buyer never finished. Every sales figure, rate and breakdown reads these orders.
 - **Cancelled orders** count only in the cancellation rate. Most COD cancellations never shipped, so counting them would inflate gross sales and returns alike.
-- **Other currencies:** the store is single-currency. Orders in another currency count in `otherCurrencyOrders` and are never summed or converted.
+- **Other currencies:** the store is single-currency. Orders in another currency count in `otherCurrencyOrders` and are never summed or converted. Report measures are presentment line amounts; they move to shop amounts before a second currency is enabled (Markets step 6).
 - **Test orders:** the schema has no test-order marker. Sandbox gateway orders count as real ones.
 
 ### Metric definitions

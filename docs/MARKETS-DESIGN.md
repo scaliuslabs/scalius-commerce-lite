@@ -182,6 +182,77 @@ availability. Feeds, UCP and POS read their channel's publications. Orders get
 6. Only then enable a second currency: fixed prices first, FX generation
    later. Payment methods gated by `chargeCurrencies`.
 
+## Step 1 implemented
+
+Behaviour is unchanged for a BDT store: prices stay whole taka, COD collects
+whole taka, and every order is same-currency.
+
+**Currency policy** (`packages/shared/src/currency-policy.ts`).
+`SUPPORTED_CURRENCY_CODES` (156 codes) moved here. `EXCLUDED_CURRENCY_CODES`
+is `["CLF", "UYW"]`. A table gives each code `[exponent, cashIncrementMinor,
+displayDigits]`, read through `currencyPolicy()` and `currencyExponent()`.
+`getDecimalPlaces()` (`currency.ts`) is `currencyExponent()`. The CLDR cash
+increment and display digits are recorded but not used yet.
+
+**Price increment** (D1). `PricingCurrency` is `{ code, decimalPlaces,
+priceIncrementMinor }`. Defaults: `defaultPriceIncrementMinor()` is 100 for
+BDT and 1 otherwise; `priceIncrementChoices()` is the minor unit or the whole
+unit. Until step 2 it is stored as `priceIncrementMinor` in the `currency`
+settings document (`priceIncrementOf()`, `readStoreCurrency()`,
+`storePriceIncrementSql()`), edited in Settings → Store details, and served to
+the dashboard (`useCurrency()`) and the storefront
+(`window.__CURRENCY_PRICE_INCREMENT__`, the layout `currency` block). A change
+queues a catalogue projection rebuild. `money.ts` replaces the BDT cash
+helpers with `toIncrementMinor()`, `roundToIncrementMinor()`,
+`floorToIncrementMinor()`, `percentOfMinor()`, `discountedPriceMinor(..., inc)`,
+`PriceIncrementError` and `priceIncrementMessage()`. Catalogue and SQL-twin
+prices, cart validation, bundles, promotions (`promotionAmountIssues()`),
+app discounts, tax, EMI, feeds, delivery fees, manual orders, refunds,
+custom-field prices and store import all price at the increment. The
+dashboard `MoneyInput` resolves "Taka amounts are whole numbers" from it.
+
+**Cash increment** (D1, D2). `cashOnDeliveryIncrementMinor()` is 100 for BDT
+and 1 otherwise. `toCashOnDeliveryMinor()` parses cash entered for COD
+collection; `MoneyInput` takes `cashOnDelivery` for those fields.
+
+**Order money chain** (D3). Migration `0111_order_money_chain` (D1/Turso file,
+PostgreSQL sidecar, ledger digest, schema contract 111) adds to `orders`:
+`shop_currency`, `fx_rate`, `fx_source`, `fx_as_of`, `fx_locked_until`,
+`subtotal_shop_minor`, `shipping_shop_minor`, `discount_shop_minor`,
+`tax_shop_minor`, `total_shop_minor`; existing rows are backfilled
+same-currency. `@scalius/shared/money-chain` holds `SAME_CURRENCY_FX_RATE`
+("1"), `SAME_CURRENCY_FX_SOURCE` ("same_currency"), `convertMinorAtRate()`
+(exact decimal rate, half-up), `orderMoneyChainColumns()` and
+`orderShopAmounts()`. The checkout commit and `createOrder()` write the chain
+in the order insert; an amendment rewrites the shop amounts. Dashboard
+revenue sums `total_shop_minor`; reports read only orders whose
+`currency_code` and `shop_currency` are the report currency.
+
+**Settlement** (D2). The same migration adds `settlement_currency`,
+`settlement_amount_minor`, `settlement_rate` and `exchange_adjustment_minor`
+to `order_payments`. `paymentSettlement()` records a provider's report (the
+payment event's `settlement`); the adjustment is measured against the order's
+locked rate when it settled in the shop currency. Every other row uses
+`presentedSettlement()`. Refunds stay in the presentment currency.
+
+**Amount codec** (D2). `PaymentProviders.encodeAmount()` and `amountIssue()`
+serve every path: gateway `amountCodecs`, and `cashOnDeliveryAmountCodecs()`
+for COD. A non-zero rounding is refused before the commit or the provider
+call (`precommitIssue()`, session creation, refunds, storefront COD with
+reason `cash_on_delivery_amount`, staff COD quotes), so the charge equals
+the stored amount. Stripe declares `STRIPE_AMOUNT_CODECS` and decodes what it
+reports with `decodeProviderAmount()`.
+
+**DVC.** No new buyer-visible column: `orders` and `order_payments` are
+private, and the increment lives in the `currency` document, which its
+settings dependency already covers.
+
+**Left for later steps.** Checkout locks no FX quote yet (`fx_as_of` and
+`fx_locked_until` stay null). No built-in adapter reports settlement (Stripe
+needs the balance transaction). `customer_order_stats`, order lines and
+report measures hold presentment amounts; they move to shop amounts before a
+second currency is enabled (step 6).
+
 ## Non-goals in this wave
 
 Duties calculation, merchant-of-record, B2B company locations (later through
