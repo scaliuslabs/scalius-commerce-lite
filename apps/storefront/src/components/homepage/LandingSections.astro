@@ -1,0 +1,20 @@
+---
+import HomepageSections from "./HomepageSections.astro";
+import { homepageContent, homepageLeadSection } from "@/lib/homepage-sections";
+import type { StorefrontSection } from "@scalius/shared/storefront-theme";
+import type { HomepageSectionData } from "@/lib/api/storefront";
+import type { DeliveryFact } from "@/lib/delivery-facts";
+
+interface Props {
+  sections: StorefrontSection[];
+  data: HomepageSectionData;
+  deliveryFacts: DeliveryFact[];
+  currencySymbol: string;
+  currencyCode: string;
+  previewMarks?: boolean;
+  languageCode?: string;
+}
+const { sections, data, deliveryFacts, ...props } = Astro.props;
+const content = homepageContent(data, deliveryFacts);
+---
+<HomepageSections sections={sections} content={content} leadSectionId={homepageLeadSection(sections, content)?.id ?? null} {...props} />

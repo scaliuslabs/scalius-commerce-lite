@@ -24,6 +24,7 @@ import {
   storefrontThemeDocumentSchema,
   storefrontTemplateTheme,
   type StorefrontSection,
+  type StorefrontThemeDocument,
 } from "@scalius/shared/storefront-theme";
 
 /**
@@ -48,6 +49,8 @@ const PAGE_D1_BUDGETS = {
   product: { roundTrips: 21, waves: 3 },
   category: { roundTrips: 7, waves: 3 },
   search: { roundTrips: 7, waves: 2 },
+  collection: { roundTrips: 7, waves: 3 },
+  landing: { roundTrips: 13, waves: 2 },
 } as const;
 
 /**
@@ -69,6 +72,8 @@ const PAGE_PARTS: Record<keyof typeof PAGE_D1_BUDGETS, string[]> = {
   product: ["/api/v1/storefront/layout", "/api/v1/products/linen-panjabi", "/api/v1/shipping-methods", "/api/v1/checkout/config", "/api/v1/storefront/product-apps/linen-panjabi"],
   category: ["/api/v1/storefront/layout", "/api/v1/categories/panjabi/products?page=1&limit=20&sort=newest"],
   search: ["/api/v1/storefront/layout", "/api/v1/products?page=1&limit=20&sort=relevance&search=linen"],
+  collection: ["/api/v1/storefront/layout", "/api/v1/collections/col_grid?page=1&limit=20&sort=newest"],
+  landing: ["/api/v1/storefront/layout", "/api/v1/storefront/landing/eid", "/api/v1/shipping-methods", "/api/v1/checkout/config"],
 };
 
 const SEED = `
@@ -259,7 +264,7 @@ class MemoryCache {
 async function renderPage(
   page: keyof typeof PAGE_PARTS,
   extraSeed = "",
-  options: { paths?: readonly string[]; prepare?: (db: Database) => Promise<void>; apps?: boolean } = {},
+  options: { paths?: readonly string[]; prepare?: (db: Database) => Promise<void>; apps?: boolean; editTheme?: (theme: StorefrontThemeDocument) => void } = {},
 ) {
   const { sqlite, binding, db } = createSqliteD1Database();
   sqlite.exec(SEED);
@@ -271,18 +276,23 @@ async function renderPage(
     const wishlist = await installPlugin(db, { manifest: wishlistManifest, source: "bundled", bundleSha256: BUNDLED_PLUGINS["scalius.wishlist"]!.sha256, actorUserId: "owner" });
     await activatePlugin(db, "scalius.wishlist", { actorUserId: "owner", expectedRevision: wishlist.revision });
   }
-  if (page === "home") {
+  const sectionPage = page === "home" || page === "landing";
+  const theme = sectionPage ? everySectionTheme() : storefrontTemplateTheme("department-mall");
+  if (sectionPage) {
     sqlite.exec(HOME_SEED);
-    const theme = everySectionTheme();
     if (options.apps) theme.pages.home.push({ id: "hello", type: "app", version: 1, settings: { app: "scalius.hello/greeting", values: { heading: "Eid Mubarak" } } });
-    sqlite.prepare("INSERT INTO theme_settings (id, colors, revision, created_at, updated_at) VALUES ('default', ?, 1, 1, 1)")
-      .run(JSON.stringify(theme));
-  } else if (options.apps) {
-    const theme = storefrontTemplateTheme("department-mall");
-    theme.blocks.product.apps = [{ id: "wish", app: "scalius.wishlist/button", values: {} }];
-    sqlite.prepare("INSERT INTO theme_settings (id, colors, revision, created_at, updated_at) VALUES ('default', ?, 1, 1, 1)")
-      .run(JSON.stringify(theme));
+    theme.pages.landing.eid = { title: "ঈদের বাছাই", description: "", sections: structuredClone(theme.pages.home) };
+  } else if (page === "collection") {
+    sqlite.exec(`INSERT INTO collections (id, name, presentation, config, sort_order) VALUES
+      ('col_grid', 'Best sellers', 'grid', '{"source":"manual","productIds":["p_linen","p_cotton"],"maxProducts":8}', 0)`);
   }
+  if (options.apps && !sectionPage) {
+    theme.blocks.product.apps = [{ id: "wish", app: "scalius.wishlist/button", values: {} }];
+  }
+  options.editTheme?.(theme);
+  expect(storefrontThemeDocumentSchema.safeParse(theme).error?.issues ?? []).toEqual([]);
+  sqlite.prepare("INSERT INTO theme_settings (id, colors, revision, created_at, updated_at) VALUES ('default', ?, 1, 1, 1)")
+    .run(JSON.stringify(theme));
   // The steady state of a live store (unmetered): the catalogue projections
   // and sales stats a release rebuild and the nightly run keep, and every
   // product's stored recommendations.
@@ -403,6 +413,40 @@ describe("storefront page render D1 budget", () => {
     expect(product.emi).toEqual({ provider: "City Bank", months: 6, monthly: 430, monthlyMinor: 43_000 });
   });
 
+  it("reads a landing page's sections through the home planner, including media and every product source", async () => {
+    const result = await renderPage("landing");
+    const body = (result.bodies[1] as { data: {
+      title: string;
+      description: string;
+      sections: { lists: Array<{ key: string; products: unknown[] }>; media: unknown[]; homeProduct: unknown };
+    } }).data;
+    expect(body).toMatchObject({ title: "ঈদের বাছাই", description: "" });
+    // Every section type is on the page (the layout's theme names them; this read carries their data).
+    const layout = (result.bodies[0] as { data: { theme: { pages: { landing: Record<string, { sections: StorefrontSection[] }> } } } }).data;
+    expect(new Set(layout.theme.pages.landing.eid!.sections.map((section) => section.type))).toEqual(new Set(STOREFRONT_SECTION_TYPES));
+    expect(Object.fromEntries(body.sections.lists.map((list) => [list.key, list.products.length]))).toMatchObject({
+      newest: 2, "on-sale": 1, popular: 1, "category:cat_panjabi": 2, "collection:col_grid": 2,
+    });
+    expect(body.sections.media).toHaveLength(5);
+    expect(body.sections.homeProduct).toBeNull();
+  });
+
+  it.each(["product", "category", "collection", "search"] as const)("%s page: the editor's block edits (modules, toolbar) use the existing parts and budget", async (page) => {
+    const result = await renderPage(page, "", {
+      editTheme: (theme) => {
+        theme.blocks.product = { ...theme.blocks.product, below: [...theme.blocks.product.below].reverse() };
+        theme.blocks.listing = { ...theme.blocks.listing, toolbar: theme.blocks.listing.toolbar.filter((piece) => piece !== "breadcrumb") };
+      },
+    });
+    const theme = (result.bodies[0] as { data: { theme: StorefrontThemeDocument } }).data.theme;
+    expect(theme.blocks.product.below).toEqual([...storefrontTemplateTheme("department-mall").blocks.product.below].reverse());
+    expect(theme.blocks.listing.toolbar).not.toContain("breadcrumb");
+    expect(result.statuses).toEqual(PAGE_PARTS[page].map(() => 200));
+    expect(result.render.roundTrips).toBeLessThanOrEqual(PAGE_D1_BUDGETS[page].roundTrips);
+    expect(result.render.waves).toBeLessThanOrEqual(PAGE_D1_BUDGETS[page].waves);
+    expect(result.hit).toEqual({ roundTrips: 1, waves: 1, statuses: PAGE_PARTS[page].map(() => "hit"), sameBodies: true });
+  });
+
   it("reads a reviewed product's summary and first five reviews in its existing render budget (22 round trips, 3 waves) plus authoritative validation", async () => {
     const result = await renderPage("product", REVIEW_SEED);
     const product = (result.bodies[1] as { data: { product: { reviews: { summary: { count: number; average: number }; items: unknown[]; nextCursor: string | null } } } }).data.product;
@@ -506,7 +550,7 @@ describe("storefront page render D1 budget", () => {
   // show up as extra waves that production (one bundle) never has.
   beforeAll(async () => {
     for (const page of Object.keys(PAGE_PARTS) as Array<keyof typeof PAGE_PARTS>) await renderPage(page);
-  });
+  }, 60_000);
 
   it.each(Object.keys(PAGE_D1_BUDGETS) as Array<keyof typeof PAGE_D1_BUDGETS>)(
     "%s page stays within its D1 round trips and waves",
@@ -527,6 +571,7 @@ describe("storefront page render D1 budget", () => {
       });
       // Every part was stored with its dependency proof.
       expect(result.stored).toEqual(PAGE_PARTS[page].map(() => "miss"));
+      process.stdout.write(`[storefront budget] ${page}: render ${result.render.roundTrips} trips/${result.render.waves} waves; validation ${result.validation.roundTrips}/${result.validation.waves}; hit ${result.hit.roundTrips}/${result.hit.waves}\n`);
     },
   );
 

@@ -1,7 +1,7 @@
 /**
- * The product page's app blocks (Theme page): the blocks installed apps add
- * to every product page, in the merchant's order, each with the settings its
- * app declares. Where a block sits (the buy box or below the product) is its
+ * The product page's app blocks: the blocks installed apps add to every
+ * product page, in the merchant's order, each with the settings its app
+ * declares. Where a block sits (the buy box or below the product) is its
  * app's choice, so the list says it rather than asking. A block whose app is
  * not active stays in the theme, shows nothing, and can be removed.
  */
@@ -14,10 +14,9 @@ import { useMessages } from "~/i18n";
 import { onlineStoreMessages } from "~/i18n/online-store";
 import { themeEditorMessages } from "~/i18n/theme-editor";
 import type { ThemeApp, ThemeAppBlock } from "~/lib/api-query-options/online-store";
-import { appSettingDefaults, themeAppFields } from "./schema-form/app-settings";
-import { AppSettingFields } from "./schema-form/AppSettingFields";
-import { SectionCard } from "./shared";
-import type { SetTheme, Theme } from "./theme-fields";
+import { appSettingDefaults, themeAppFields } from "../schema-form/app-settings";
+import { AppSettingFields } from "../schema-form/AppSettingFields";
+import type { SetTheme, Theme } from "../theme-fields";
 import {
   addProductAppBlock,
   appBlocksByKey,
@@ -27,7 +26,7 @@ import {
   removeProductAppBlock,
   setProductAppBlockValues,
   type AppBlockEntry,
-} from "./theme-settings";
+} from "../theme-settings";
 
 function usePlacementName() {
   const t = useMessages(themeEditorMessages);
@@ -80,45 +79,44 @@ function AppBlockItem({ block, entry, index, count, setDraft }: {
   );
 }
 
-export function ProductAppBlocksCard({ theme, apps, setDraft }: { theme: Theme; apps: readonly ThemeApp[]; setDraft: SetTheme }) {
+export function ProductAppBlocksSettings({ theme, apps, setDraft }: { theme: Theme; apps: readonly ThemeApp[]; setDraft: SetTheme }) {
   const t = useMessages(themeEditorMessages);
   const placement = usePlacementName();
   const byKey = appBlocksByKey(apps);
   const blocks = productAppBlocks(theme);
-  // Nothing to place and nothing placed: the card would only be empty.
-  if (blocks.length === 0 && byKey.size === 0) return null;
   const full = blocks.length >= PLUGIN_PRODUCT_BLOCKS_MAX;
   return (
-    <SectionCard title={t("appBlocks")} description={t("appBlocksHelp")}>
-      <div className="space-y-4" data-product-app-blocks>
-        {blocks.length > 0 ? (
-          <ol className="space-y-3" aria-label={t("appBlocks")}>
-            {blocks.map((block, index) => (
-              <AppBlockItem key={block.id} block={block} entry={byKey.get(block.app)} index={index} count={blocks.length} setDraft={setDraft} />
-            ))}
-          </ol>
-        ) : null}
-        {byKey.size > 0 ? (
-          <SearchableSelect
-            value=""
-            placeholder={t("addAppBlock")}
-            ariaLabel={t("addAppBlock")}
-            disabled={full}
-            options={[...byKey.values()].map(({ app, block }) => ({
-              value: block.key,
-              label: block.name,
-              description: `${app.name} · ${placement(block.placement)}`,
-            }))}
-            onValueChange={(key) => {
-              const entry = byKey.get(key);
-              if (!entry) return;
-              setDraft((current) => addProductAppBlock(current, key, appSettingDefaults(entry.block.settings))?.theme ?? current);
-            }}
-            triggerClassName="w-full"
-          />
-        ) : null}
-        {full ? <p className="text-body text-muted-foreground">{t("appBlockLimit", { count: PLUGIN_PRODUCT_BLOCKS_MAX })}</p> : null}
-      </div>
-    </SectionCard>
+    <div className="space-y-4" data-product-app-blocks>
+      <p className="text-body text-muted-foreground">{t("appBlocksHelp")}</p>
+      {blocks.length > 0 ? (
+        <ol className="space-y-3" aria-label={t("appBlocks")}>
+          {blocks.map((block, index) => (
+            <AppBlockItem key={block.id} block={block} entry={byKey.get(block.app)} index={index} count={blocks.length} setDraft={setDraft} />
+          ))}
+        </ol>
+      ) : (
+        <p className="text-body text-muted-foreground">{t(byKey.size > 0 ? "appBlocksNone" : "appBlocksNoApps")}</p>
+      )}
+      {byKey.size > 0 ? (
+        <SearchableSelect
+          value=""
+          placeholder={t("addAppBlock")}
+          ariaLabel={t("addAppBlock")}
+          disabled={full}
+          options={[...byKey.values()].map(({ app, block }) => ({
+            value: block.key,
+            label: block.name,
+            description: `${app.name} · ${placement(block.placement)}`,
+          }))}
+          onValueChange={(key) => {
+            const entry = byKey.get(key);
+            if (!entry) return;
+            setDraft((current) => addProductAppBlock(current, key, appSettingDefaults(entry.block.settings))?.theme ?? current);
+          }}
+          triggerClassName="w-full"
+        />
+      ) : null}
+      {full ? <p className="text-body text-muted-foreground">{t("appBlockLimit", { count: PLUGIN_PRODUCT_BLOCKS_MAX })}</p> : null}
+    </div>
   );
 }

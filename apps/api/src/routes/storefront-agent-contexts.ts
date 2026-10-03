@@ -85,7 +85,7 @@ const contextSchema = z.object({
   lastUsedAt: z.string(),
   createdAt: z.string(),
   updatedAt: z.string(),
-});
+}).openapi("AgentContext");
 
 const cartIssueSchema = z.object({
   index: z.number().int(),
@@ -142,7 +142,7 @@ const cartProjectionSchema = z.object({
     zoneName: z.string().nullable(),
     areaName: z.string().nullable(),
   }).optional(),
-});
+}).openapi("AgentContextCart");
 
 const agentCustomerPhoneSchema = z.string().min(7).max(16).openapi({
   description: "Customer phone number. Use international E.164 form to avoid country ambiguity (for example, +8801712345678).",

@@ -20,14 +20,12 @@ import {
   changedLeaf,
   duplicateSection,
   editorHistory,
-  mergeDrafts,
   moveSectionTo,
   previewChange,
   removeSection,
   restoreSection,
   setAppSectionValues,
   startHistory,
-  withSections,
 } from "./editor-state";
 
 type Theme = StorefrontThemeDocument;
@@ -36,6 +34,7 @@ const section = (type: StorefrontSectionType, id: string, settings: Record<strin
   ({ ...storefrontSectionDefault(type, id), settings: { ...storefrontSectionDefault(type, id).settings, ...settings } }) as StorefrontSection;
 
 const HOME = [section("hero", "hero"), section("product-rail", "rail", { title: "New" }), section("faq", "faq")];
+const withSections = (base: Theme, home: StorefrontSection[]): Theme => ({ ...base, pages: { ...base.pages, home } });
 const theme = (home: StorefrontSection[] = HOME): Theme => withSections(DEFAULT_STOREFRONT_THEME, home);
 const ids = (sections: readonly StorefrontSection[]) => sections.map((each) => each.id);
 const setTitle = (title: string) => (current: Theme) => withSections(current, current.pages.home.map((each) =>
@@ -131,35 +130,6 @@ describe("what a saved change means for the preview", () => {
   });
 });
 
-describe("merging edits onto a newer draft", () => {
-  it("keeps the merchant's section edits and the other session's, section by section", () => {
-    const base = theme();
-    const mine = setTitle("Mine")(base);
-    const theirs = withSections(base, base.pages.home.map((each) => each.id === "faq" ? { ...each, settings: { ...each.settings, heading: "Theirs" } } as StorefrontSection : each));
-    const merged = mergeDrafts(mine, base, theirs);
-    expect(merged.pages.home.find((each) => each.id === "rail")!.settings).toMatchObject({ title: "Mine" });
-    expect(merged.pages.home.find((each) => each.id === "faq")!.settings).toMatchObject({ heading: "Theirs" });
-  });
-
-  it("keeps sections added on either side, drops ones removed, and follows the order the merchant set", () => {
-    const base = theme();
-    const mine = withSections(base, [...moveSectionTo(HOME, 2, 0), section("seo-text", "seo")]);
-    const theirs = withSections(base, [...HOME.filter((each) => each.id !== "hero"), section("brand-wall", "brands")]);
-    expect(ids(mergeDrafts(mine, base, theirs).pages.home)).toEqual(["faq", "rail", "seo", "brands"]);
-    // Without a reorder here, their order wins.
-    const added = withSections(base, [...HOME, section("seo-text", "seo")]);
-    expect(ids(mergeDrafts(added, base, theirs).pages.home)).toEqual(["rail", "faq", "brands", "seo"]);
-  });
-
-  it("takes the newer value for fields the merchant left alone", () => {
-    const base = theme();
-    const mine = setTitle("Mine")(base);
-    const theirs = { ...base, tokens: { ...base.tokens, density: "airy" as const } };
-    const merged = mergeDrafts(mine, base, theirs);
-    expect(merged.tokens.density).toBe("airy");
-  });
-});
-
 describe("app sections", () => {
   const field = (key: string, extra: Partial<ThemeAppSettingField> = {}): ThemeAppSettingField => ({
     key, label: key, help: null, type: "text", required: false, options: null, default: null,
@@ -231,11 +201,35 @@ describe("app sections", () => {
     expect(previewChange(theme(), added)).toEqual({ kind: "reload" });
   });
 
-  it("keeps the merchant's app values and the other session's edits when merging", () => {
-    const base = theme(addAppSection(HOME, "acme.reviews/carousel", { heading: "Reviews", count: 4 }).sections);
-    const mine = withSections(base, setAppSectionValues(base.pages.home, "app", { heading: "Mine", count: 4 }));
-    const theirs = withSections(base, setAppSectionValues(base.pages.home, "app", { heading: "Reviews", count: 8 }));
-    expect(mergeDrafts(mine, base, theirs).pages.home.find((each) => each.id === "app")!.settings)
-      .toEqual({ app: "acme.reviews/carousel", values: { heading: "Mine", count: 8 } });
+});
+
+describe("preview changes on other pages", () => {
+  const withLanding = (sections: StorefrontSection[]): Theme => ({
+    ...theme(),
+    pages: { ...theme().pages, landing: { sale: { title: "Sale", description: "", sections } } },
+  });
+  const sale = { kind: "landing", slug: "sale" } as const;
+
+  it("swaps a landing page's own sections in place, and reloads for its order or another page's edits", () => {
+    const before = withLanding([section("faq", "faq"), section("seo-text", "seo")]);
+    const edited = withLanding([section("faq", "faq", { heading: "Questions" }), section("seo-text", "seo")]);
+    expect(previewChange(before, edited, sale)).toEqual({ kind: "sections", ids: ["faq"] });
+    expect(previewChange(before, withLanding([section("seo-text", "seo"), section("faq", "faq")]), sale)).toEqual({ kind: "reload" });
+    // The homepage's preview reloads for a landing page edit (it is another page).
+    expect(previewChange(before, edited)).toEqual({ kind: "reload" });
+    // Hiding a section reloads: it leaves the page.
+    expect(previewChange(before, withLanding([{ ...section("faq", "faq"), hidden: true }, section("seo-text", "seo")]), sale)).toEqual({ kind: "reload" });
+  });
+
+  it("reloads product and listing pages for any change, and leaves an unchanged draft alone", () => {
+    const before = theme();
+    const product = { kind: "product" } as const;
+    const reordered = { ...before, blocks: { ...before.blocks, product: { ...before.blocks.product, below: [...before.blocks.product.below].reverse() } } };
+    expect(previewChange(before, reordered, product)).toEqual({ kind: "reload" });
+    expect(previewChange(before, structuredClone(before), product)).toEqual({ kind: "none" });
+  });
+
+  it("moves any list item, as the tree's rows do for product modules", () => {
+    expect(moveSectionTo(["description", "reviews", "related"], 2, 0)).toEqual(["related", "description", "reviews"]);
   });
 });

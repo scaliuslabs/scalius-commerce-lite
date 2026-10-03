@@ -426,7 +426,7 @@ strict reads now bypass that entrypoint; this incident is retained as context.
 | Guardrail | Where | Budget |
 | --- | --- | --- |
 | API calls per page render | `apps/storefront/src/lib/api/render-batch.test.ts`, `apps/storefront/src/lib/cart/cart-shell.render.test.ts` | 1 for home, product, category, search and cart (the pages' own read functions, started as the pages start them) |
-| D1 render-only round trips / dependent waves (cache miss, seeded store; home uses every section type). Original render limits remain unchanged; every declared dependency read is included | `apps/api/src/storefront-render-budget.test.ts` | home ≤13 / 2, product ≤21 / 3, category ≤7 / 3, search ≤7 / 2 |
+| D1 render-only round trips / dependent waves (cache miss, seeded store; home uses every section type). Original render limits remain unchanged; every declared dependency read is included | `apps/api/src/storefront-render-budget.test.ts` | home ≤13 / 2, landing page ≤13 / 2, product ≤21 / 3, category ≤7 / 3, collection ≤7 / 3, search ≤7 / 2 |
 | Authoritative freshness read before a cold render: exact clock + Platform + dependency validation SQL | Same test, separately identified from render statements | Exactly 1 statement / 1 first wave; every render starts in wave 2 |
 | Total measured cold D1 round trips / waves, including authoritative freshness | Same seeded integration measurement | home 12 / 3, product 20 / 4, category 8 / 4, search 8 / 3 |
 | Same page again, all validated hits | Same test | Exactly 1 statement / 1 wave; identical response bodies |

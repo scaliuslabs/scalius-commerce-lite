@@ -56,11 +56,14 @@ describe("theme content", () => {
   });
 
   it("carries the merchant's content into another template", () => {
-    const next = storefrontThemeWithContent(storefrontTemplateTheme("heritage-editorial"), withContent());
+    const source = withContent();
+    source.pages.landing.offer = { title: "ঈদ অফার", description: "", sections: [source.pages.home[0]!] };
+    const next = storefrontThemeWithContent(storefrontTemplateTheme("heritage-editorial"), source);
     expect(storefrontThemeDocumentSchema.safeParse(next).success).toBe(true);
     expect(next.template).toBe("heritage-editorial");
     expect(next.brand.logo).toBe("media_logo");
     expect(next.pages.homeMode).toEqual({ kind: "product", productId: "prod_1" });
+    expect(next.pages.landing).toEqual(source.pages.landing);
     expect(next.blocks.footer.settings).toMatchObject({ tagline: "Since 1998", copyright: "Acme Ltd." });
     // Heritage has no top bar: the template's choice stands.
     expect(next.blocks.topBar).toEqual({ variant: "none", settings: {} });
@@ -95,5 +98,50 @@ describe("theme media references", () => {
       { path: `pages.home.${heroIndex}.settings.slides.0.phoneImage`, mediaId: "media_hero_phone" },
     ]);
     expect(storefrontThemeMediaIds(theme)).toEqual(["media_logo", "media_footer_logo", "media_icon", "media_hero", "media_hero_phone"]);
+  });
+
+  it("validates hidden landing images while public section reads omit them", async () => {
+    const { storefrontThemeMediaReferences } = await import("./content");
+    const theme = withContent();
+    const hero = { ...theme.pages.home[0]!, hidden: true };
+    theme.pages.landing.offer = { title: "Offer", description: "", sections: [hero] };
+    expect(storefrontThemeMediaReferences(theme)).toContainEqual({ path: "pages.landing.offer.sections.0.settings.slides.0.image", mediaId: "media_hero" });
+  });
+
+  it("leaves out images deleted from Files, keeping the document valid and every other image", async () => {
+    const { storefrontThemeMediaIds, storefrontThemeWithoutMedia } = await import("./content");
+    const { storefrontSectionDefault } = await import("./sections");
+    const theme = withContent();
+    const heroIndex = theme.pages.home.findIndex((section) => section.type === "hero");
+    const hero = theme.pages.home[heroIndex]! as Extract<StorefrontThemeDocument["pages"]["home"][number], { type: "hero" }>;
+    hero.settings.slides.push({ ...hero.settings.slides[0]!, image: "media_kept", phoneImage: "media_gone_phone" });
+    hero.settings.sideBanners = [
+      { mediaId: "media_gone_side", alt: "", href: null },
+      { mediaId: "media_side", alt: "", href: null },
+    ];
+    const banner = { ...storefrontSectionDefault("banner", "banner"), settings: { ...storefrontSectionDefault("banner", "banner").settings, mediaId: "media_gone_banner" } };
+    const mosaic = { ...storefrontSectionDefault("banner-mosaic", "mosaic"), settings: { tiles: [
+      { mediaId: "media_gone_tile", alt: "", href: null },
+      { mediaId: "media_tile", alt: "", href: null },
+    ] } };
+    theme.pages.home.push(mosaic as never, banner as never);
+    theme.pages.landing.offer = { title: "Offer", description: "", sections: [structuredClone(hero)] };
+    const missing = new Set(["media_logo", "media_hero", "media_gone_phone", "media_gone_side", "media_gone_banner", "media_gone_tile"]);
+    const restored = storefrontThemeWithoutMedia(theme, missing);
+
+    expect(storefrontThemeMediaIds(restored).filter((id) => missing.has(id))).toEqual([]);
+    expect(restored.brand).toMatchObject({ logo: null, footerLogo: "media_footer_logo", favicon: "media_icon" });
+    const restoredHero = restored.pages.home[heroIndex]! as typeof hero;
+    // The slide whose photo is gone is left out; the other keeps its photo without the missing phone image.
+    expect(restoredHero.settings.slides).toHaveLength(1);
+    expect(restoredHero.settings.slides[0]).toMatchObject({ image: "media_kept" });
+    expect(restoredHero.settings.slides[0]).not.toHaveProperty("phoneImage");
+    expect(restoredHero.settings.sideBanners).toEqual([{ mediaId: "media_side", alt: "", href: null }]);
+    expect(restored.pages.home.at(-1)!.settings).toMatchObject({ mediaId: null });
+    expect(restored.pages.home.at(-2)!.settings).toEqual({ tiles: [{ mediaId: "media_tile", alt: "", href: null }] });
+    expect(restored.pages.landing.offer!.sections[0]!.settings).toMatchObject({ slides: [{ image: "media_kept" }] });
+    expect(storefrontThemeDocumentSchema.safeParse(restored).error?.issues ?? []).toEqual([]);
+    // Nothing missing: the same document.
+    expect(storefrontThemeWithoutMedia(theme, new Set())).toBe(theme);
   });
 });

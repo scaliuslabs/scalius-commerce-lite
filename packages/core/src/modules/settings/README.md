@@ -59,6 +59,41 @@ same table, not settings.
 Phone collection is not a setting: checkout and customer identity always
 require it.
 
+## Theme: draft, publish and history
+
+The theme is one document (`@scalius/shared/storefront-theme`) in three
+places: the live row (`theme_settings`), one shared draft
+(`theme_settings_drafts`) and immutable published versions
+(`theme_settings_versions`). Every write is one guarded provider batch:
+
+- **Save, restore, discard** replace only the draft. The live revision and
+  the draft revision the caller read must both still hold; the draft revision
+  only grows, so a stale editor gets a 409 and must reload or overwrite.
+  Restore puts a published version in the draft (never live); discard puts
+  the live document back in the draft at a new revision.
+- **Publish** writes the live row, its version row (what changed since the
+  previous live document, at most 30 structured changes plus a count, and an
+  optional 500-character note), prunes history to the newest **20 versions**
+  and rebases the draft onto the new live revision, all in one batch.
+- A version row stores `{"meta": {changes, moreChanges, note}, "theme": …}`;
+  the history list reads only `meta` (`json_extract`) and the publisher's
+  name (joined from `user`), ten versions a page. Rows from before history
+  metadata hold the bare document and list with no changes.
+- Reads upgrade older documents in memory (`upgradeThemeDocument`); writes
+  store only the current version, at most 512 KiB.
+
+Previews: a draft preview follows saved edits; a version preview shows that
+version. The 52-character bearer is `tpc_`/`tpv_` plus `D` and 47 random
+characters (draft), or `V`, the revision in 10 base-36 digits, `_` and 36
+random characters (version). Only its SHA-256 is stored, so the revision
+cannot be changed without losing the session, and a pruned version stops
+previewing. Bearers travel in POST bodies and an HttpOnly cookie, never URLs.
+
+Agents use the same operations (Settings view/edit RBAC): the compact
+workspace status, the full document as an authenticated JSON artifact,
+history, draft save, one-page edits (homepage or one landing page), restore,
+discard and publish. Every command answers revisions only.
+
 ## Platform origins
 
 `env.STOREFRONT_URL` and the other public origins are resolved at Worker entry

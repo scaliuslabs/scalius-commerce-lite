@@ -5,10 +5,12 @@ import type { Page, PaginatedResponse } from "./types";
 import { withEdgeCache, CACHE_TTL } from "@/lib/api/transport";
 import { unwrapData, unwrapEnvelope } from "./unwrap";
 import { BUILD_ID } from "@/config/build-id";
+import type { HomepageSectionData } from "./storefront";
 import {
   getApiV1PagesSlugBySlug,
   getApiV1Pages,
   getApiV1StorefrontPagesSlugBySlug,
+  getApiV1StorefrontLandingBySlug,
 } from "@scalius/api-client/sdk";
 
 /**
@@ -46,6 +48,30 @@ export async function getPageBySlug(slug: string): Promise<Page | null> {
 
 export interface PageRenderData {
   page: Page;
+}
+
+/** A published landing page's words and its sections' data (its sections come from the layout's theme). */
+export interface LandingPageData {
+  title: string;
+  description: string;
+  sections: HomepageSectionData;
+}
+
+/**
+ * A published landing page (`/pages/<slug>`) with its sections' data:
+ * `"missing"` when the live theme has no page at that handle (a 404), null
+ * when the read failed (the page answers 503 rather than a false 404).
+ * Starts beside the layout read and joins its one public batch.
+ */
+export async function getLandingPageData(slug: string): Promise<LandingPageData | "missing" | null> {
+  return withEdgeCache<LandingPageData | "missing">(`landing_${slug}_${BUILD_ID}`, async () => {
+    const { data, response } = await getApiV1StorefrontLandingBySlug({
+      client: getConfiguredSdkClient(), path: { slug },
+    });
+    if (response?.status === 404) return "missing";
+    if (!response?.ok) return null;
+    return unwrapEnvelope<LandingPageData>(data);
+  }, { ttlSeconds: CACHE_TTL.LONG });
 }
 
 export async function getPageRenderData(

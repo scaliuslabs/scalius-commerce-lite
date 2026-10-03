@@ -1,0 +1,208 @@
+/**
+ * Choosing what the editor shows, Shopify's page dropdown: the homepage,
+ * product, collection, category and search pages, CMS pages and the
+ * theme's landing pages (and making a new one). Product, collection,
+ * category and CMS pages preview one of the store's own; the tree says
+ * which, with a way to change it.
+ */
+import { useEffect, useState } from "react";
+import { useInfiniteQuery } from "@tanstack/react-query";
+import { Check, ChevronDown, Plus } from "lucide-react";
+import {
+  STOREFRONT_LANDING_TITLE_MAX,
+  STOREFRONT_MAX_LANDING_PAGES,
+  storefrontLandingSlugSchema,
+} from "@scalius/shared/storefront-theme";
+import { Button } from "~/components/ui/button";
+import { Command, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from "~/components/ui/command";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "~/components/ui/dialog";
+import { Input } from "~/components/ui/input";
+import { Label } from "~/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover";
+import { useMessages } from "~/i18n";
+import { themeEditorMessages } from "~/i18n/theme-editor";
+import { navigationResourcesQueryOptions, type NavigationResourceOption } from "~/lib/api-query-options/navigation";
+import { NavigationResourcePicker } from "../NavigationResourcePicker";
+import type { Theme } from "../theme-fields";
+import { samePage, type EditorPage, type ResourcePageKind } from "./editor-pages";
+
+const FIXED_PAGES = ["home", "product", "collection", "category", "search", "page"] as const;
+
+export function usePageName() {
+  const t = useMessages(themeEditorMessages);
+  return (page: EditorPage, theme: Theme): string =>
+    page.kind === "landing" ? theme.pages.landing[page.slug]?.title ?? page.slug : t(`page_${page.kind}`);
+}
+
+export function PagePicker({ theme, page, onPage, onCreate }: {
+  theme: Theme;
+  page: EditorPage;
+  onPage: (page: EditorPage) => void;
+  /** Absent for staff who may only view the theme. */
+  onCreate?: () => void;
+}) {
+  const t = useMessages(themeEditorMessages);
+  const name = usePageName();
+  const [open, setOpen] = useState(false);
+  const landing = Object.entries(theme.pages.landing);
+  const choose = (next: EditorPage) => {
+    onPage(next);
+    setOpen(false);
+  };
+  const item = (value: EditorPage, label: string, description?: string) => (
+    <CommandItem key={value.kind === "landing" ? `landing:${value.slug}` : value.kind} value={`${label} ${description ?? ""}`} onSelect={() => choose(value)} className="cursor-pointer">
+      <Check className={samePage(value, page) ? "size-4 opacity-100" : "size-4 opacity-0"} aria-hidden="true" />
+      <span className="min-w-0 flex-1">
+        <span className="block truncate">{label}</span>
+        {description ? <span className="block truncate text-muted-foreground">{description}</span> : null}
+      </span>
+    </CommandItem>
+  );
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button type="button" variant="outline" data-page-picker aria-label={t("pagePicker", { page: name(page, theme) })} className="max-w-full min-w-0 justify-between sm:min-w-48">
+          <span className="min-w-0 truncate">{name(page, theme)}</span>
+          <ChevronDown className="size-4 shrink-0 opacity-60" aria-hidden="true" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="center" className="w-80 p-0">
+        <Command>
+          <CommandInput aria-label={t("findPage")} placeholder={t("findPage")} />
+          <CommandList>
+            <CommandGroup heading={t("pageGroupStore")}>
+              {FIXED_PAGES.map((kind) => item({ kind } as EditorPage, t(`page_${kind}`), t(`pageHint_${kind}`)))}
+            </CommandGroup>
+            <CommandSeparator />
+            <CommandGroup heading={t("landingPages")}>
+              {landing.map(([slug, value]) => item({ kind: "landing", slug }, value.title, `/pages/${slug}`))}
+              {onCreate ? (
+                <CommandItem
+                  value={t("newLanding")}
+                  disabled={landing.length >= STOREFRONT_MAX_LANDING_PAGES}
+                  onSelect={() => { setOpen(false); onCreate(); }}
+                  className="cursor-pointer"
+                >
+                  <Plus className="size-4" aria-hidden="true" />
+                  <span>{landing.length >= STOREFRONT_MAX_LANDING_PAGES ? t("landingLimit") : t("newLanding")}</span>
+                </CommandItem>
+              ) : null}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/** A URL handle from a title: lowercase Latin letters and digits joined by hyphens. */
+function landingHandle(title: string): string {
+  return title.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 100);
+}
+
+/** Naming a new landing page: its title and the handle in its address. */
+export function CreateLandingDialog({ open, onOpenChange, theme, onCreate }: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  theme: Theme;
+  onCreate: (slug: string, title: string) => void;
+}) {
+  const t = useMessages(themeEditorMessages);
+  const [title, setTitle] = useState("");
+  const [slug, setSlug] = useState("");
+  const [slugEdited, setSlugEdited] = useState(false);
+  useEffect(() => {
+    if (!open) { setTitle(""); setSlug(""); setSlugEdited(false); }
+  }, [open]);
+  const handle = slugEdited ? slug : landingHandle(title);
+  const taken = Boolean(theme.pages.landing[handle]);
+  const handleValid = storefrontLandingSlugSchema.safeParse(handle).success && !taken;
+  const valid = handleValid && title.trim().length > 0;
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{t("newLanding")}</DialogTitle>
+          <DialogDescription>{t("newLandingHelp")}</DialogDescription>
+        </DialogHeader>
+        <form
+          id="new-landing-form"
+          method="post"
+          className="space-y-3"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (valid) onCreate(handle, title.trim());
+          }}
+        >
+          <div className="space-y-1">
+            <Label htmlFor="new-landing-title">{t("landingTitle")}</Label>
+            <Input id="new-landing-title" value={title} maxLength={STOREFRONT_LANDING_TITLE_MAX} onChange={(event) => setTitle(event.target.value)} autoFocus />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="new-landing-slug">{t("landingSlug")}</Label>
+            <Input
+              id="new-landing-slug"
+              value={handle}
+              maxLength={100}
+              aria-invalid={handle !== "" && !handleValid}
+              aria-describedby="landing-slug-help"
+              onChange={(event) => { setSlugEdited(true); setSlug(event.target.value); }}
+            />
+            <p id="landing-slug-help" className={handle !== "" && !handleValid ? "text-body text-destructive" : "text-body text-muted-foreground"}>
+              {handle !== "" && !handleValid ? t(taken ? "landingSlugTaken" : "landingSlugInvalid") : t("landingSlugHelp", { path: `/pages/${handle || "…"}` })}
+            </p>
+          </div>
+        </form>
+        <DialogFooter>
+          <Button type="submit" form="new-landing-form" disabled={!valid}>{t("addLanding")}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * The store's first product (collection, category, page) for a page that
+ * previews one, until the merchant picks another. Null while it loads or
+ * when the store has none (or the staff member may not browse them).
+ */
+export function useDefaultResource(kind: ResourcePageKind | null) {
+  const query = useInfiniteQuery({
+    ...navigationResourcesQueryOptions({ type: kind ?? "product", limit: 1 }),
+    enabled: kind !== null,
+  });
+  const first = query.data?.pages[0]?.items.find((item) => item.available) ?? null;
+  return { resource: first, loading: kind !== null && query.isPending, failed: query.isError };
+}
+
+/** "Previewing Cotton shirt · Change", above the tree of a page that shows one of the store's own. */
+export function PreviewResource({ kind, resource, loading, failed, onChange }: {
+  kind: ResourcePageKind;
+  resource: NavigationResourceOption | null;
+  loading: boolean;
+  failed: boolean;
+  onChange: (resource: NavigationResourceOption) => void;
+}) {
+  const t = useMessages(themeEditorMessages);
+  return (
+    <div className="flex items-center gap-2 border-b border-border px-4 py-3" data-preview-resource={kind}>
+      <p className="min-w-0 flex-1 text-body">
+        {resource ? (
+          <>
+            <span className="block text-muted-foreground">{t("previewing")}</span>
+            <span className="block truncate font-medium">{resource.name}</span>
+          </>
+        ) : (
+          <span className="text-muted-foreground">{t(loading ? "previewLoading" : failed ? "resourceFailed" : `resourceNone_${kind}`)}</span>
+        )}
+      </p>
+      <NavigationResourcePicker
+        id={`theme-preview-${kind}`}
+        type={kind}
+        value={resource?.id ?? ""}
+        onValueChange={onChange}
+        trigger={<Button type="button" variant="outline" size="sm" disabled={failed}>{t(resource ? "changePreview" : "choosePreview")}</Button>}
+      />
+    </div>
+  );
+}

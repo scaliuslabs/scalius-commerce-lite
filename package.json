@@ -53,7 +53,7 @@
     "check:api-bundle": "node scripts/check-api-bundle.mjs",
     "free-plan:budget": "node scripts/free-plan-budget.mjs",
     "plugin": "node scripts/plugins.mjs",
-    "generate:agent-contract": "pnpm --dir apps/api exec tsx src/openapi/generate-agent-operation-manifest-cli.ts",
+    "generate:agent-contract": "pnpm --dir apps/api exec node --import tsx src/openapi/generate-agent-operation-manifest-cli.ts",
     "generate:sdk": "pnpm generate:agent-contract && node scripts/turbo-run.mjs generate --filter=@scalius/api-client",
     "lint": "node scripts/turbo-run.mjs lint --filter=!@scalius/tsconfig",
     "test": "vitest run --passWithNoTests",

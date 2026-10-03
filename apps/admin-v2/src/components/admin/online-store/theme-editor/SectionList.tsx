@@ -1,8 +1,9 @@
 /**
- * The homepage sections in order: drag a row by its handle (or focus the
- * handle, press Space, move with the arrow keys, Space again), select a
- * row to edit it, and each row's menu moves, duplicates or removes it.
- * Hovering a row outlines its section in the preview.
+ * The rows of a page's sections or blocks, Shopify's tree: select a row to
+ * edit it, drag it by its handle (or focus the handle, press Space, move with
+ * the arrow keys, Space again), show or hide it with the eye, and each row's
+ * menu moves, duplicates or removes it. Hovering a row outlines it in the
+ * preview.
  */
 import type { CSSProperties, ReactNode } from "react";
 import {
@@ -22,8 +23,7 @@ import {
   useSortable,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { ChevronRight, GripVertical, MoreHorizontal } from "lucide-react";
-import type { StorefrontSection } from "@scalius/shared/storefront-theme";
+import { Eye, EyeOff, GripVertical, MoreHorizontal } from "lucide-react";
 import { cn } from "@scalius/shared/utils";
 import { Button } from "~/components/ui/button";
 import {
@@ -37,110 +37,142 @@ import { useMessages } from "~/i18n";
 import { onlineStoreMessages } from "~/i18n/online-store";
 import { themeEditorMessages } from "~/i18n/theme-editor";
 
-type Section = StorefrontSection;
-
-export interface SectionRowInfo {
+export interface TreeRow {
+  id: string;
   name: string;
   /** Why buyers don't see it (fit, missing content), or an error from a save. */
   note?: ReactNode;
   invalid?: boolean;
+  hidden?: boolean;
+  /** Fixed rows (hidden product modules) select and toggle, but do not move. */
+  fixed?: boolean;
+  canDuplicate?: boolean;
+  canRemove?: boolean;
 }
 
-function SectionRow({ section, info, index, count, canDuplicate, onSelect, onHover, onMove, onDuplicate, onRemove }: {
-  section: Section;
-  info: SectionRowInfo;
+function Row({ row, index, count, selected, onSelect, onHover, onMove, onDuplicate, onRemove, onToggle }: {
+  row: TreeRow;
   index: number;
   count: number;
-  canDuplicate: boolean;
+  selected: boolean;
   onSelect: () => void;
   onHover: (hovering: boolean) => void;
   onMove: (to: number) => void;
-  onDuplicate: () => void;
-  onRemove: () => void;
+  onDuplicate?: () => void;
+  onRemove?: () => void;
+  onToggle?: () => void;
 }) {
   const t = useMessages(themeEditorMessages);
   const store = useMessages(onlineStoreMessages);
-  const sortable = useSortable({ id: section.id });
+  const sortable = useSortable({ id: row.id, disabled: row.fixed });
   const { transform, isDragging } = sortable;
+  const menu = !row.fixed && (onDuplicate || onRemove);
   return (
     <li
       ref={sortable.setNodeRef}
       // The dragged row and the rows making room move by runtime offsets (custom properties).
       style={{ "--sort-x": `${transform?.x ?? 0}px`, "--sort-y": `${transform?.y ?? 0}px` } as CSSProperties}
-      data-section-row={section.id}
+      data-section-row={row.id}
+      aria-current={selected ? "true" : undefined}
       onPointerEnter={() => onHover(true)}
       onPointerLeave={() => onHover(false)}
       className={cn(
-        "flex min-h-12 translate-x-(--sort-x) translate-y-(--sort-y) items-center gap-1 rounded-lg bg-card px-1 hover:bg-muted",
-        isDragging ? "relative z-20 opacity-80 shadow-popover" : "transition-[translate] duration-200 motion-reduce:transition-none",
+        "group flex min-h-10 translate-x-(--sort-x) translate-y-(--sort-y) items-center gap-0.5 rounded-lg px-1 hover:bg-muted",
+        selected && "bg-accent",
+        isDragging ? "relative z-20 bg-card opacity-80 shadow-popover" : "transition-[translate] duration-200 motion-reduce:transition-none",
       )}
     >
-      <Button
-        ref={sortable.setActivatorNodeRef}
-        type="button"
-        variant="ghost"
-        size="icon"
-        className="cursor-grab touch-none"
-        aria-label={store("reorderItem", { name: info.name })}
-        {...sortable.attributes}
-        {...sortable.listeners}
-      >
-        <GripVertical aria-hidden="true" />
-      </Button>
+      {row.fixed ? (
+        <span className="size-9 shrink-0" aria-hidden="true" />
+      ) : (
+        <Button
+          ref={sortable.setActivatorNodeRef}
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          className="cursor-grab touch-none"
+          aria-label={store("reorderItem", { name: row.name })}
+          {...sortable.attributes}
+          {...sortable.listeners}
+        >
+          <GripVertical aria-hidden="true" />
+        </Button>
+      )}
       <button
         type="button"
         onClick={onSelect}
         onFocus={() => onHover(true)}
         onBlur={() => onHover(false)}
-        className="flex min-w-0 flex-1 items-center gap-2 rounded-md py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="flex min-w-0 flex-1 items-center rounded-md py-1.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-body font-medium">{info.name}</span>
-          {info.note ? (
-            <span className={cn("block text-body", info.invalid ? "text-destructive" : "text-muted-foreground")}>{info.note}</span>
+          <span className={cn("block truncate text-body", row.hidden && "text-muted-foreground")}>{row.name}</span>
+          {row.note ? (
+            <span className={cn("block text-body", row.invalid ? "text-destructive" : "text-muted-foreground")}>{row.note}</span>
           ) : null}
         </span>
-        <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
       </button>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button type="button" variant="ghost" size="icon" aria-label={t("sectionActions", { name: info.name })}>
-            <MoreHorizontal aria-hidden="true" />
+      {onToggle ? (
+        // A shown row's eye appears on hover or focus (always on touch screens); a hidden row's stays, so the state reads at a glance.
+        <span className={cn("flex", !row.hidden && "opacity-0 group-hover:opacity-100 focus-within:opacity-100 pointer-coarse:opacity-100")}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label={t(row.hidden ? "showItem" : "hideItem", { name: row.name })}
+            aria-pressed={!row.hidden}
+            onClick={onToggle}
+          >
+            {row.hidden ? <EyeOff aria-hidden="true" /> : <Eye aria-hidden="true" />}
           </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem disabled={index === 0} onSelect={() => onMove(index - 1)}>{t("moveUp")}</DropdownMenuItem>
-          <DropdownMenuItem disabled={index === count - 1} onSelect={() => onMove(index + 1)}>{t("moveDown")}</DropdownMenuItem>
-          <DropdownMenuItem disabled={!canDuplicate} onSelect={onDuplicate}>{t("duplicate")}</DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem variant="destructive" onSelect={onRemove}>{t("remove")}</DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+        </span>
+      ) : null}
+      {menu ? (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button type="button" variant="ghost" size="icon-sm" aria-label={t("sectionActions", { name: row.name })}>
+              <MoreHorizontal aria-hidden="true" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem disabled={index === 0} onSelect={() => onMove(index - 1)}>{t("moveUp")}</DropdownMenuItem>
+            <DropdownMenuItem disabled={index === count - 1} onSelect={() => onMove(index + 1)}>{t("moveDown")}</DropdownMenuItem>
+            {onToggle ? <DropdownMenuItem onSelect={onToggle}>{t(row.hidden ? "show" : "hide")}</DropdownMenuItem> : null}
+            {onDuplicate ? <DropdownMenuItem disabled={!row.canDuplicate} onSelect={onDuplicate}>{t("duplicate")}</DropdownMenuItem> : null}
+            {onRemove ? (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem variant="destructive" disabled={row.canRemove === false} onSelect={onRemove}>{t("remove")}</DropdownMenuItem>
+              </>
+            ) : null}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ) : null}
     </li>
   );
 }
 
-export function SectionList({ sections, info, canDuplicate, onSelect, onHover, onMove, onDuplicate, onRemove }: {
-  sections: readonly Section[];
-  info: (section: Section) => SectionRowInfo;
-  canDuplicate: (section: Section) => boolean;
+export function SectionList({ rows, label, selectedId, onSelect, onHover, onMove, onDuplicate, onRemove, onToggle }: {
+  rows: readonly TreeRow[];
+  /** The list's accessible name (the template's name). */
+  label: string;
+  selectedId: string | null;
   onSelect: (id: string) => void;
   onHover: (id: string | null) => void;
-  /** Moves a section to another index. */
+  /** Moves a row to another index among the movable rows. */
   onMove: (id: string, to: number) => void;
-  onDuplicate: (id: string) => void;
-  onRemove: (id: string) => void;
+  onDuplicate?: (id: string) => void;
+  onRemove?: (id: string) => void;
+  onToggle?: (id: string) => void;
 }) {
   const t = useMessages(themeEditorMessages);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
-  const ids = sections.map((section) => section.id);
-  const nameOf = (id: UniqueIdentifier) => {
-    const section = sections.find((each) => each.id === id);
-    return section ? info(section).name : String(id);
-  };
+  const movable = rows.filter((row) => !row.fixed);
+  const ids = movable.map((row) => row.id);
+  const nameOf = (id: UniqueIdentifier) => rows.find((row) => row.id === id)?.name ?? String(id);
   const position = (id: UniqueIdentifier | undefined) => ({ position: ids.indexOf(String(id)) + 1, count: ids.length });
   const announcements: Announcements = {
     onDragStart: ({ active }) => t("pickedUp", { name: nameOf(active.id) }),
@@ -162,22 +194,25 @@ export function SectionList({ sections, info, canDuplicate, onSelect, onHover, o
       accessibility={{ announcements, screenReaderInstructions: { draggable: t("dragInstructions") } }}
     >
       <SortableContext items={ids} strategy={verticalListSortingStrategy}>
-        <ol className="space-y-0.5" aria-label={t("homepage")}>
-          {sections.map((section, index) => (
-            <SectionRow
-              key={section.id}
-              section={section}
-              info={info(section)}
-              index={index}
-              count={sections.length}
-              canDuplicate={canDuplicate(section)}
-              onSelect={() => onSelect(section.id)}
-              onHover={(hovering) => onHover(hovering ? section.id : null)}
-              onMove={(to) => onMove(section.id, to)}
-              onDuplicate={() => onDuplicate(section.id)}
-              onRemove={() => onRemove(section.id)}
-            />
-          ))}
+        <ol className="space-y-0.5" aria-label={label}>
+          {rows.map((row) => {
+            const index = ids.indexOf(row.id);
+            return (
+              <Row
+                key={row.id}
+                row={row}
+                index={index}
+                count={ids.length}
+                selected={row.id === selectedId}
+                onSelect={() => onSelect(row.id)}
+                onHover={(hovering) => onHover(hovering ? row.id : null)}
+                onMove={(to) => onMove(row.id, to)}
+                onDuplicate={onDuplicate ? () => onDuplicate(row.id) : undefined}
+                onRemove={onRemove ? () => onRemove(row.id) : undefined}
+                onToggle={onToggle ? () => onToggle(row.id) : undefined}
+              />
+            );
+          })}
         </ol>
       </SortableContext>
     </DndContext>

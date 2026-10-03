@@ -25,7 +25,7 @@ export const productFacetSchema = z.object({
   range: z.object({ min: z.number(), max: z.number() }).nullable().openapi({
     description: "`display: range` only: the value bounds over products matching the other selections; `values` is empty.",
   }),
-});
+}).openapi("CatalogFacet");
 
 export const appliedFacetFilterSchema = z.object({
   id: z.string(),

@@ -93,7 +93,10 @@ export function themePreviewBridgeScript(dashboardOrigin: string): string {
     const current = find(id);
     const unit = current && current.closest("[data-home-render-unit]");
     if (!unit) return reload();
-    const response = await fetch(SECTION + "?id=" + encodeURIComponent(id), {
+    // A landing page (/pages/<slug>) swaps its own sections; anything else is the homepage.
+    const segments = location.pathname.split("/").filter(Boolean);
+    const page = segments.length === 2 && segments[0] === "pages" && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(segments[1]) ? segments[1] : null;
+    const response = await fetch(SECTION + "?id=" + encodeURIComponent(id) + (page ? "&page=" + encodeURIComponent(page) : ""), {
       credentials: "same-origin",
       cache: "no-store",
       headers: { Accept: "text/html" },
@@ -106,9 +109,9 @@ export function themePreviewBridgeScript(dashboardOrigin: string): string {
     const template = document.createElement("template");
     template.innerHTML = await response.text();
     const wrap = template.content.querySelector("[data-theme-preview-unit]");
-    const page = document.querySelector("[data-theme-preview-layout]");
+    const pageLayout = document.querySelector("[data-theme-preview-layout]");
     const next = wrap && wrap.firstElementChild;
-    if (!wrap || !page || !next || wrap.getAttribute("data-theme-preview-layout") !== page.getAttribute("data-theme-preview-layout")) return reload();
+    if (!wrap || !pageLayout || !next || wrap.getAttribute("data-theme-preview-layout") !== pageLayout.getAttribute("data-theme-preview-layout")) return reload();
     // Sections with scripts are set up when the page loads: load it again.
     if (next.querySelector("script")) return reload();
     unit.replaceWith(next);

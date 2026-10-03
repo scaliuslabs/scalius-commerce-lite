@@ -29,7 +29,7 @@ const PREVIEW_TOKEN = `tpv_${"p".repeat(48)}`;
 const PREVIEW_COOKIE = `stp_theme_preview=${PREVIEW_TOKEN}`;
 
 interface Container {
-  renderToResponse(component: unknown, options: { request?: Request; locals?: object }): Promise<Response>;
+  renderToResponse(component: unknown, options: { request?: Request; locals?: object; params?: Record<string, string> }): Promise<Response>;
 }
 interface RuntimeModule {
   requestRuntime: { run<T>(runtime: object, task: () => T): T };
@@ -39,6 +39,7 @@ let server: ViteDevServer;
 let container: Container;
 let HomePage: unknown;
 let SectionPage: unknown;
+let LandingPage: unknown;
 let runtimeModule: RuntimeModule;
 
 beforeAll(async () => {
@@ -71,6 +72,7 @@ beforeAll(async () => {
   });
   HomePage = (await server.ssrLoadModule("/src/pages/index.astro")).default;
   SectionPage = (await server.ssrLoadModule("/src/pages/theme-preview/section.astro")).default;
+  LandingPage = (await server.ssrLoadModule("/src/pages/pages/[slug].astro")).default;
   runtimeModule = (await server.ssrLoadModule("/src/lib/api/runtime.ts")) as RuntimeModule;
 }, 120_000);
 
@@ -190,6 +192,11 @@ function stubApi(api: Api) {
     if (path === "/api/v1/storefront/homepage") {
       return { status: 200, body: envelope({ seo: { homepageTitle: null, homepageMetaDescription: null }, sections: sectionData() }) };
     }
+    if (path.startsWith("/api/v1/storefront/landing/")) {
+      const slug = path.split("/").at(-1)!;
+      const landing = api.document.pages.landing[slug];
+      return landing ? { status: 200, body: envelope({ title: landing.title, description: landing.description, sections: sectionData() }) } : { status: 404, body: "{}" };
+    }
     if (path === "/api/v1/shipping-methods") return { status: 200, body: envelope({ shippingMethods: [] }) };
     if (path === "/api/v1/checkout/config") return { status: 200, body: envelope({ gateways: [] }) };
     if (api.preview && path === "/api/v1/storefront/theme-preview/resolve") {
@@ -237,7 +244,7 @@ async function renderPage(component: unknown, api: Api, options: { cookie?: stri
   const headers = { ...options.headers, ...(options.cookie ? { Cookie: options.cookie } : {}) };
   const request = new Request(options.url ?? "https://shop.test/", { headers });
   const response = await runtimeModule.requestRuntime.run(runtime, () =>
-    container.renderToResponse(component, { request, locals: {} }),
+    container.renderToResponse(component, { request, locals: {}, params: { slug: new URL(request.url).pathname.split("/").filter(Boolean).at(-1) ?? "" } }),
   );
   return { response, calls, html: await response.text() };
 }
@@ -250,6 +257,63 @@ describe("a buyer's homepage", () => {
     expect(response.status).toBe(200);
     // Dev-server module paths name this checkout: the snapshot names none.
     await expect(html.replaceAll(root, "/@storefront/").replaceAll(repoRoot, "/@repo/")).toMatchFileSnapshot("./__snapshots__/homepage-published.html");
+  });
+});
+
+describe("theme landing pages", () => {
+  const campaign = () => {
+    const document = fixedTheme();
+    document.pages.landing.eid = { title: "ঈদের উৎসব", description: "Eid gifts, delivered.", sections: [
+      section("editorial", "campaign", { heading: "ঈদের অফার", body: "Made in Bangladesh." }),
+      { ...section("editorial", "hidden", { heading: "Hidden copy", body: "Should not render" }), hidden: true },
+      section("faq", "campaign-faq", { heading: "Campaign questions", items: [{ question: "Delivery?", answer: "Across Bangladesh." }] }),
+    ] };
+    return document;
+  };
+
+  it("renders published landing sections in one batch, in order, without hidden copy", async () => {
+    const result = await renderPage(LandingPage, { document: campaign(), platform: true }, { url: "https://shop.test/pages/eid" });
+    expect(result.response.status).toBe(200);
+    expect(result.html).toContain("ঈদের অফার");
+    expect(result.html).not.toContain("Hidden copy");
+    expect(result.html.indexOf("ঈদের অফার")).toBeLessThan(result.html.indexOf("Campaign questions"));
+    expect(result.html).toContain('href="https://shop.test/pages/eid"');
+    expect(result.html).toContain('<meta name="description" content="Eid gifts, delivered."');
+    expect(result.html).toContain("<title>ঈদের উৎসব");
+    expect(result.calls).toHaveLength(1);
+    expect(result.calls[0]).toContain("/api/v1/storefront/batch?");
+    expect(result.html).not.toContain("data-theme-section-id");
+  });
+
+  it("keeps a landing page hidden from search engines public, with noindex,follow", async () => {
+    const document = campaign();
+    document.pages.landing.eid = { ...document.pages.landing.eid!, noIndex: true };
+    const result = await renderPage(LandingPage, { document, platform: true }, { url: "https://shop.test/pages/eid" });
+    expect(result.response.status).toBe(200);
+    expect(result.html).toContain('<meta name="robots" content="noindex,follow"');
+    expect(result.html).toContain("ঈদের অফার");
+    expect(result.calls).toHaveLength(1);
+    const listed = await renderPage(LandingPage, { document: campaign(), platform: true }, { url: "https://shop.test/pages/eid" });
+    expect(listed.html).not.toContain('name="robots"');
+  });
+
+  it("previews a draft-only landing page and its individual sections privately", async () => {
+    const preview = campaign();
+    const result = await renderPage(LandingPage, { document: fixedTheme(), preview }, { cookie: PREVIEW_COOKIE, url: "https://shop.test/pages/eid" });
+    expect(result.response.status).toBe(200);
+    expect(marked(result.html)).toEqual(["announcement", "header", "campaign", "campaign-faq", "footer"]);
+    expect(result.response.headers.get("Cache-Control")).toContain("no-store");
+    const partial = await renderPage(SectionPage, { document: fixedTheme(), preview }, { cookie: PREVIEW_COOKIE, url: "https://shop.test/theme-preview/section?id=campaign&page=eid" });
+    expect(partial.response.status).toBe(200);
+    expect(marked(partial.html)).toEqual(["campaign"]);
+    expect(partial.html).toContain("ঈদের অফার");
+  });
+
+  it("returns 404 for absent landing pages and 503 when the landing read fails", async () => {
+    const result = await renderPage(LandingPage, { document: fixedTheme() }, { url: "https://shop.test/pages/absent" });
+    expect(result.response.status).toBe(404);
+    const reserved = await renderPage(LandingPage, { document: fixedTheme() }, { url: "https://shop.test/pages/products" });
+    expect(reserved.response.status).toBe(404);
   });
 });
 
@@ -271,7 +335,8 @@ describe("a theme preview of the homepage", () => {
 
     const preview = await renderPage(HomePage, { document: fixedTheme(), preview: fixedTheme() }, { cookie: PREVIEW_COOKIE });
     expect(preview.response.status).toBe(200);
-    expect(marked(preview.html)).toEqual(["hero", "usp", "rail", "banner-a", "banner-b", "story", "faq", "seo"]);
+    // The sections in order, between the header (with its announcement bar) and the footer.
+    expect(marked(preview.html)).toEqual(["announcement", "header", "hero", "usp", "rail", "banner-a", "banner-b", "story", "faq", "seo", "footer"]);
     expect(layoutOf(preview.html)).toBeDefined();
     // The bridge talks to the dashboard origin only; it names no token.
     expect(preview.html).toContain("scalius-theme-preview");

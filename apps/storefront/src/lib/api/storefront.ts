@@ -155,7 +155,7 @@ export interface LayoutData {
   footerMenus?: FooterMenu[];
   currency?: CurrencyData;
   /**
-   * The published theme document (v6). Untrusted until
+   * The published theme document (v7). Untrusted until
    * `readStorefrontTheme` (lib/storefront-theme-context) validates it.
    */
   theme?: unknown;
@@ -288,6 +288,7 @@ export function getLayoutData(): Promise<LayoutData | null> {
  */
 export async function getThemePreviewHomepageSections(
   token: string,
+  pageSlug?: string,
 ): Promise<HomepageSectionData | null> {
   const normalizedToken = token.trim();
   if (!/^tpv_[A-Za-z0-9_-]{48}$/.test(normalizedToken)) return null;
@@ -297,7 +298,7 @@ export async function getThemePreviewHomepageSections(
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token: normalizedToken }),
+        body: JSON.stringify({ token: normalizedToken, ...(pageSlug ? { pageSlug } : {}) }),
         cache: "no-store",
       },
       { retries: 0, timeout: 4_000, auth: false },

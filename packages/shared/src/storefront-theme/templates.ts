@@ -537,7 +537,7 @@ export function storefrontTemplateTheme(
     tokens: { ...structuredClone(template.tokens), colors: { ...STOREFRONT_THEME_PALETTES[palette] } } as StorefrontThemeTokens,
     brand: { ...DEFAULT_STOREFRONT_THEME_BRAND },
     blocks: structuredClone(template.blocks) as StorefrontThemeBlocks,
-    pages: { home: structuredClone(template.home) as StorefrontSection[], homeMode: { kind: "sections" } },
+    pages: { home: structuredClone(template.home) as StorefrontSection[], homeMode: { kind: "sections" }, landing: {} },
   };
 }
 

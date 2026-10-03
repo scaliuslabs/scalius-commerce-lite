@@ -6,6 +6,7 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 import {
   getHomepageData,
+  getLandingPageData,
   getLayoutData,
   getPageRenderData,
   readProductAppContext,
@@ -27,6 +28,7 @@ import {
   HOME_PRODUCT_LIST_LIMIT,
   homeSectionRequests,
   type HomeAppSectionRequest,
+  type StorefrontThemeDocument,
 } from "@scalius/shared/storefront-theme";
 import { readWorkerVersion } from "@scalius/shared/cache-generation";
 import {
@@ -178,7 +180,7 @@ const homepageSectionsSchema = z.object({
   apps: z.array(appSurfaceRenderSchema.extend({ sectionId: z.string() })).max(PLUGIN_HOME_SECTIONS_MAX).openapi({
     description: "The app sections that drew something, by section id: sanitized HTML (no scripts, styles or event handlers) and the head tags their apps may add. An app section missing here renders nothing.",
   }),
-});
+}).openapi("StorefrontHomepageSections");
 const homepageDataSchema = z.object({
   seo: z.object({
     homepageTitle: z.string().nullable(),
@@ -398,6 +400,40 @@ app.openapi(homepageRoute, async (c) => {
   return ok(c, data);
 });
 
+// GET /storefront/landing/:slug — a published landing page's sections' data
+// (the storefront takes the page's sections from the layout's theme).
+const landingPageRoute = createRoute({
+  method: "get",
+  path: "/landing/{slug}",
+  operationId: "storefront.landing.get",
+  tags: ["Storefront"],
+  summary: "Get a published landing page: its title, description and its sections' data",
+  request: { params: z.object({ slug: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).max(100) }) },
+  responses: {
+    200: {
+      description: "Landing page and its bounded section data",
+      content: {
+        "application/json": {
+          schema: successEnvelope(z.object({
+            title: z.string(),
+            description: z.string(),
+            sections: homepageSectionsSchema,
+          })),
+        },
+      },
+    },
+    400: errorResponses[400],
+    404: errorResponses[404],
+    500: errorResponses[500],
+  },
+});
+app.openapi(landingPageRoute, async (c) => {
+  if (new URL(c.req.url).search) throw new ValidationError("The landing page read takes no query parameters");
+  const data = await getLandingPageData(c.get("db"), c.req.valid("param").slug, { renderApps: homeAppRenderer(c) });
+  if (!data) throw new NotFoundError("Landing page not found");
+  return ok(c, { title: data.landing.title, description: data.landing.description, sections: data.sections });
+});
+
 // GET /storefront/product-apps/:slug — the product page's app blocks
 const productAppsRoute = createRoute({
   method: "get",
@@ -425,10 +461,9 @@ const productAppsRoute = createRoute({
   },
 });
 
-app.openapi(productAppsRoute, async (c) => {
-  if (new URL(c.req.url).search) throw new ValidationError("The product apps read takes no query parameters");
+async function drawProductAppBlocks(c: Context<{ Bindings: Env }>, slug: string, theme?: StorefrontThemeDocument) {
   const db = c.get("db");
-  const context = await readProductAppContext(db, c.req.valid("param").slug);
+  const context = await readProductAppContext(db, slug, theme);
   if (!context) throw new NotFoundError("Product not found");
   const requests = context.blocks.flatMap((block) => {
     const key = parsePluginSurfaceKey(block.app);
@@ -441,7 +476,7 @@ app.openapi(productAppsRoute, async (c) => {
       product: context.product,
     }] : [];
   });
-  if (requests.length === 0) return ok(c, { blocks: [] });
+  if (requests.length === 0) return { blocks: [] };
   const { renderAppSurfaces } = await import("../plugins/storefront-render");
   const drawn = await renderAppSurfaces(requests, {
     env: c.env,
@@ -450,7 +485,7 @@ app.openapi(productAppsRoute, async (c) => {
     context: { installations: context.installations, store: context.store },
   });
   const appOf = new Map(context.blocks.map((block) => [block.id, block.app]));
-  return ok(c, {
+  return {
     blocks: drawn.map((each) => ({
       id: each.instanceId,
       app: appOf.get(each.instanceId) ?? `${each.pluginId}/${each.type}`,
@@ -458,7 +493,11 @@ app.openapi(productAppsRoute, async (c) => {
       html: each.html,
       head: each.head,
     })),
-  });
+  };
+}
+app.openapi(productAppsRoute, async (c) => {
+  if (new URL(c.req.url).search) throw new ValidationError("The product apps read takes no query parameters");
+  return ok(c, await drawProductAppBlocks(c, c.req.valid("param").slug));
 });
 
 // GET /storefront/pages/slug/:slug — consolidated CMS page render data
@@ -689,6 +728,7 @@ const themePreviewHomepageRoute = createRoute({
         "application/json": {
           schema: z.object({
             token: z.string().length(52).regex(/^tpv_[A-Za-z0-9_-]{48}$/),
+            pageSlug: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).max(100).optional(),
           }).strict(),
         },
       },
@@ -710,10 +750,33 @@ app.openapi(themePreviewHomepageRoute, async (c) => {
   const db = c.get("db");
   const preview = await resolveThemePreviewSession(db, c.req.valid("json").token);
   if (!preview) throw new NotFoundError("Theme preview is unavailable or expired");
-  const requests = homeSectionRequests(preview.theme.pages.home, preview.theme.pages.homeMode);
+  const { pageSlug } = c.req.valid("json");
+  const landing = pageSlug ? preview.theme.pages.landing[pageSlug] : null;
+  if (pageSlug && !landing) throw new NotFoundError("Landing page not found");
+  const requests = landing
+    ? homeSectionRequests(landing.sections, { kind: "sections" })
+    : homeSectionRequests(preview.theme.pages.home, preview.theme.pages.homeMode);
   // A draft's app sections are drawn live (this answer is never cached).
   const data = (await getHomepageData(db, { requests, renderApps: homeAppRenderer(c) })).sections;
   return ok(c, data as unknown as HomepageData["sections"]);
+});
+
+const themePreviewProductAppsRoute = createRoute({
+  method: "post", path: "/theme-preview/product-apps/{slug}", tags: ["Storefront"],
+  summary: "Render a preview theme's app blocks for a public product",
+  operationId: "system.storefront_theme_preview.product_apps",
+  request: {
+    params: z.object({ slug: z.string().min(1).max(255) }),
+    body: { required: true, content: { "application/json": { schema: z.object({ token: z.string().length(52).regex(/^tpv_[A-Za-z0-9_-]{48}$/) }).strict() } } },
+  },
+  responses: productAppsRoute.responses,
+});
+app.openapi(themePreviewProductAppsRoute, async (c) => {
+  c.header("Cache-Control", "private, no-cache, no-store, must-revalidate");
+  c.header("Referrer-Policy", "no-referrer");
+  const preview = await resolveThemePreviewSession(c.get("db"), c.req.valid("json").token);
+  if (!preview) throw new NotFoundError("Theme preview is unavailable or expired");
+  return ok(c, await drawProductAppBlocks(c, c.req.valid("param").slug, preview.theme));
 });
 
 export { app as storefrontRoutes };

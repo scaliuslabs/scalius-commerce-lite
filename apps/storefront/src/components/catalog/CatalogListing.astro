@@ -50,6 +50,7 @@ import {
 } from "@/lib/catalog-listing";
 import { STOREFRONT_FILTER_VALUES_IN_HTML } from "@scalius/shared/storefront-theme";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import { THEME_EDITOR_MARKS } from "@scalius/shared/theme-editor-bridge";
 import Icon from "@/components/icons/Icon.astro";
 
 export interface CatalogBand {
@@ -114,7 +115,7 @@ const {
   band,
 } = Astro.props;
 const { currentFilters, sortBy, defaultSort, query, limit } = queryState;
-const { resolved } = await currentRequestTheme(Astro.locals);
+const { resolved, preview } = await currentRequestTheme(Astro.locals);
 const listingPresentation = catalogListingPresentation(resolved, listingTemplate);
 // The listing's page chrome (blocks.listing): band, phone bar, link style.
 const { band: bandStyle, phoneBar, links } = resolved.blocks.listing;
@@ -423,6 +424,7 @@ const visibleBreadcrumb = breadcrumbVisible && Boolean(band.breadcrumb?.length);
   {showFilters && (
     <aside
       id="filter-section"
+      data-theme-section-id={preview ? THEME_EDITOR_MARKS.listingFilters : undefined}
       aria-labelledby="mobile-filter-title"
       data-catalog-dialog={drawer ? "drawer" : undefined}
       data-marketplace-filter-rail={marketplacePhoneFilters ? "" : undefined}

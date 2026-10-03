@@ -19,6 +19,7 @@ describe("theme preview route selection", () => {
       "/categories/home-living?page=2",
     );
     expect(normalizeThemePreviewRoutePath("/about-us")).toBe("/about-us");
+    expect(normalizeThemePreviewRoutePath("/pages/eid-sale")).toBe("/pages/eid-sale");
   });
 
   it("fails unsafe, private, recursive, and discovery paths back to home", () => {
@@ -34,6 +35,8 @@ describe("theme preview route selection", () => {
       "/products/too/deep",
       "/products/encoded%2Fsegment",
       "/about-us/more",
+      "/pages",
+      "/pages/eid/more",
       "/products/x#token",
       "/products\\x",
     ]) {

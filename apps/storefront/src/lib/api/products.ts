@@ -16,7 +16,7 @@ import type {
   ProductRecommendations,
   RatingFacetValue,
 } from "./types";
-import { withEdgeCache, CACHE_TTL } from "@/lib/api/transport";
+import { apiFetch, withEdgeCache, CACHE_TTL } from "@/lib/api/transport";
 import { unwrapData, unwrapEnvelope } from "./unwrap";
 import {
   getApiV1ProductsBySlug,
@@ -188,6 +188,28 @@ export async function getProductAppBlocks(slug: string): Promise<ProductAppBlock
     },
   );
   return result ?? { blocks: [], failed: true };
+}
+
+/** Draw the draft or historical version's app blocks behind its private preview token. */
+export async function getThemePreviewProductAppBlocks(token: string, slug: string): Promise<ProductAppBlocksResult> {
+  const normalizedToken = token.trim();
+  if (!slug || !/^tpv_[A-Za-z0-9_-]{48}$/.test(normalizedToken)) return { blocks: [], failed: true };
+  try {
+    const response = await apiFetch(`/storefront/theme-preview/product-apps/${encodeURIComponent(slug)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: normalizedToken }),
+      cache: "no-store",
+    }, { retries: 0, timeout: 4_000, auth: false });
+    if (!response.ok) {
+      await response.body?.cancel();
+      return { blocks: [], failed: response.status >= 500 };
+    }
+    const payload = unwrapEnvelope<{ blocks?: unknown }>(await response.json() as unknown);
+    return { blocks: readProductAppBlocks(payload?.blocks), failed: !payload };
+  } catch {
+    return { blocks: [], failed: true };
+  }
 }
 
 /**

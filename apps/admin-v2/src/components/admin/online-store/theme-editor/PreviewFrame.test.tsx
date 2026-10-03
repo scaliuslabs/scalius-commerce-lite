@@ -45,12 +45,13 @@ afterEach(() => {
   container.remove();
 });
 
-async function open() {
+async function open(options: { sourceRevision?: number; previewPath?: string } = {}) {
   const controller = createRef<PreviewController>();
   await act(async () => {
     root.render(
       <PreviewFrame
         draftRevision={3}
+        {...options}
         device="desktop"
         names={{ hero: "Banners", faq: "Questions" }}
         selectedId={null}
@@ -146,5 +147,52 @@ describe("the editor's storefront frame", () => {
     expect(container.textContent).toContain("Set your Store URL");
     expect(api.session).not.toHaveBeenCalled();
     expect(container.querySelector("iframe")).toBeNull();
+  });
+  it("starts an immutable version session at a landing page, without sending its bearer in a URL", async () => {
+    api.session.mockResolvedValue({ continuation: { url: `${STOREFRONT}/theme-preview/continue`, method: "POST", fields: { continuationCode: CODE, path: "/pages/eid-offers", device: "full" } }, draftRevision: 3, basePublishedRevision: 1 });
+    await open({ sourceRevision: 8, previewPath: "/pages/eid-offers" });
+    expect(api.session).toHaveBeenCalledWith({ body: { expectedDraftRevision: 3, sourceRevision: 8, path: "/pages/eid-offers", device: "full" } });
+    deliver({ type: "scalius-continuation-ready-v1" });
+    expect(posted().at(-1)?.[0]).toMatchObject({ fields: { path: "/pages/eid-offers", continuationCode: CODE } });
+    expect(container.querySelector("iframe")?.getAttribute("src")).not.toContain(CODE);
+  });
+
+  it("opens a new session when the merchant changes template or historical version", async () => {
+    const { controller } = await open();
+    api.session.mockResolvedValue({ continuation: { url: `${STOREFRONT}/theme-preview/continue`, method: "POST", fields: { continuationCode: CODE, path: "/search", device: "full" } }, draftRevision: 3, basePublishedRevision: 1 });
+    await act(async () => root.render(<PreviewFrame draftRevision={3} sourceRevision={8} previewPath="/search" device="tablet" names={{}} selectedId={null} onSelect={onSelect} controller={controller} />));
+    expect(api.session).toHaveBeenCalledTimes(2);
+    expect(api.session.mock.calls.at(-1)![0].body).toMatchObject({ sourceRevision: 8, path: "/search" });
+    expect(container.querySelector("[data-device]")?.getAttribute("style")).toContain("768px");
+    await act(async () => root.render(<PreviewFrame draftRevision={3} sourceRevision={8} previewPath="/search" device="phone" names={{}} selectedId={null} onSelect={onSelect} controller={controller} />));
+    expect(api.session).toHaveBeenCalledTimes(2);
+    expect(container.querySelector("[data-device]")?.getAttribute("style")).toContain("390px");
+  });
+
+  it("keeps the newest page when an earlier session answers last", async () => {
+    const continuation = (path: string, code: string) => ({
+      continuation: { url: `${STOREFRONT}/theme-preview/continue`, method: "POST", fields: { continuationCode: code, path, device: "full" } },
+      draftRevision: 3,
+      basePublishedRevision: 1,
+    });
+    let resolveSlow: (value: ReturnType<typeof continuation>) => void = () => {};
+    const slow = { promise: new Promise<ReturnType<typeof continuation>>((resolve) => { resolveSlow = resolve; }), resolve: (value: ReturnType<typeof continuation>) => resolveSlow(value) };
+    api.session.mockReturnValueOnce(slow.promise);
+    const controller = createRef<PreviewController>();
+    const frame = (previewPath: string) => (
+      <PreviewFrame draftRevision={3} previewPath={previewPath} device="desktop" names={{}} selectedId={null} onSelect={onSelect} controller={controller} />
+    );
+    await act(async () => root.render(frame("/products/honey")));
+    // The merchant moves to Search before the product's session answers.
+    const SEARCH_CODE = `tpc_${"s".repeat(48)}`;
+    api.session.mockResolvedValueOnce(continuation("/search", SEARCH_CODE));
+    await act(async () => root.render(frame("/search")));
+    await act(async () => slow.resolve(continuation("/products/honey", CODE)));
+    // The product's late answer is dropped: no failure, and the frame opens Search.
+    expect(container.textContent).not.toContain("Try again");
+    const iframe = container.querySelector("iframe")!;
+    Object.defineProperty(iframe, "contentWindow", { configurable: true, get: () => frameWindow });
+    deliver({ type: "scalius-continuation-ready-v1" });
+    expect(posted().at(-1)?.[0]).toMatchObject({ fields: { path: "/search", continuationCode: SEARCH_CODE } });
   });
 });

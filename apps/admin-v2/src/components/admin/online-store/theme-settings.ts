@@ -103,19 +103,6 @@ export function setThemeColor(theme: StorefrontThemeDocument, role: ColorRole, v
   return { ...theme, tokens: { ...theme.tokens, colors } };
 }
 
-/**
- * The colour field an API issue on `theme.tokens.colors.<token>` belongs to.
- * Tokens no field sets (muted text, error red) are read on the background, so
- * the background field is the one that can fix them.
- */
-export function colorFieldForPath(path: string): string | undefined {
-  const token = /(?:^|\.)colors\.([a-z-]+)$/.exec(path)?.[1];
-  if (!token) return undefined;
-  const role = (Object.keys(COLOR_ROLES) as ColorRole[]).find((key) =>
-    (COLOR_ROLES[key] as readonly string[]).includes(token));
-  return COLOR_FIELD_IDS[role ?? "background"];
-}
-
 /** A single-variant block slot the Theme page offers as a picker. */
 export type ThemeBlockSlot = Exclude<StorefrontBlockSlot, "listing">;
 
@@ -236,7 +223,7 @@ export function themeDraftInvalid(theme: StorefrontThemeDocument): boolean {
     || homeProductMissing(theme);
 }
 
-/** DOM ids of the Theme page's own fields, so a rejected save marks them. */
+/** DOM ids of the theme's own fields (brand images, the homepage's product). */
 export const THEME_FIELD_IDS = {
   logo: "theme-brand-logo",
   logoWidth: "theme-logo-width",
@@ -244,29 +231,6 @@ export const THEME_FIELD_IDS = {
   favicon: "theme-brand-favicon",
   homeProduct: "theme-home-product",
 } as const;
-
-/**
- * The control that shows an API issue on a document path (`brand.logo`,
- * `pages.homeMode.productId`, a colour token, a block's generated setting
- * such as `blocks.topBar.settings.link`), with or without the request
- * body's `theme.` prefix. Section settings are the theme editor's.
- */
-export function themeFieldForPath(path: string): string | undefined {
-  const at = path.replace(/^theme\./, "");
-  const color = colorFieldForPath(at);
-  if (color) return color;
-  const fixed: Record<string, string> = {
-    "brand.logo": THEME_FIELD_IDS.logo,
-    "brand.logoWidth": THEME_FIELD_IDS.logoWidth,
-    "brand.footerLogo": THEME_FIELD_IDS.footerLogo,
-    "brand.favicon": THEME_FIELD_IDS.favicon,
-    "pages.homeMode": THEME_FIELD_IDS.homeProduct,
-    "pages.homeMode.productId": THEME_FIELD_IDS.homeProduct,
-  };
-  if (fixed[at]) return fixed[at];
-  // Generated block settings name their fields after their document path.
-  return /^blocks\.(?:[A-Za-z]+\.){1,2}settings\.[A-Za-z0-9.]+$/.test(at) ? `theme-${at.replace(/\./g, "-")}` : undefined;
-}
 
 function canonical(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(canonical);
@@ -284,15 +248,6 @@ function same(left: unknown, right: unknown): boolean {
 
 function sameLook(left: StorefrontThemeDocument, right: StorefrontThemeDocument): boolean {
   return same(left.tokens, right.tokens) && same(left.blocks, right.blocks) && same(left.pages, right.pages);
-}
-
-/**
- * Same look: tokens, blocks and sections match once the merchant's content
- * (logo, words, slides, chosen categories and collections, what `/` shows)
- * is set aside, whatever order the saved document lists its keys in.
- */
-export function sameThemeLook(left: StorefrontThemeDocument, right: StorefrontThemeDocument): boolean {
-  return sameLook(storefrontThemeLook(left), storefrontThemeLook(right));
 }
 
 /** Each template's complete document, for previews and matching. */
@@ -452,15 +407,6 @@ export function productAppBlocksInvalid(theme: StorefrontThemeDocument, byKey: R
 /** The field ids of an app block's settings start with this (`theme-product-app-app-2`). */
 export const productAppBlockFieldPrefix = (id: string) => `theme-product-app-${id}`;
 
-/** The control that shows an API issue on an app block's setting (`blocks.product.apps.1.values.title`). */
-export function productAppBlockFieldForPath(path: string, theme: StorefrontThemeDocument): string | undefined {
-  const match = /^(?:theme\.)?blocks\.product\.apps\.(\d+)\.values\.([^.]+)/.exec(path);
-  const block = match ? productAppBlocks(theme)[Number(match[1])] : undefined;
-  return block ? `${productAppBlockFieldPrefix(block.id)}-${match![2]}` : undefined;
-}
-
-/** Product page modules a merchant turns on or off on the Theme page (the rest follow the template). */
-export const OPTIONAL_PRODUCT_MODULES = ["frequently-bought-together", "compare-similar", "policies", "recently-viewed"] as const satisfies readonly StorefrontProductModule[];
 const PRODUCT_MODULE_ORDER = Object.keys(STOREFRONT_PRODUCT_MODULES) as StorefrontProductModule[];
 
 /** The module list with `module` on or off; a module turned on joins at its registry place among the others. */

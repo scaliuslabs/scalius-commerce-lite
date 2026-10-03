@@ -148,6 +148,7 @@ function isPublicCachePath(pathname: string): boolean {
     // A product's review pages (noindex, but a public page like any other).
     /^\/products\/[^/]+\/reviews\/?$/.test(pathname) ||
     // The category index and the header's whole menu panels (a partial).
+    /^\/pages\/[a-z0-9]+(?:-[a-z0-9]+)*\/?$/.test(pathname) ||
     /^\/(?:categories|navigation\/panels)\/?$/.test(pathname) ||
     /^\/search\/?$/.test(pathname) ||
     /^\/blog(?:\/[^/]+)?\/?$/.test(pathname) ||
@@ -173,6 +174,7 @@ function isPublicCachePath(pathname: string): boolean {
 export function isLayoutBatchedPagePath(pathname: string): boolean {
   return (
     pathname === "/" ||
+    /^\/pages\/[a-z0-9]+(?:-[a-z0-9]+)*\/?$/.test(pathname) ||
     /^\/(?:products|categories|brands|collections)\/[^/]+\/?$/.test(pathname) ||
     /^\/(?:categories|navigation\/panels)\/?$/.test(pathname) ||
     /^\/(?:search|cart|checkout)\/?$/.test(pathname) ||

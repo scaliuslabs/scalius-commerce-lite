@@ -158,7 +158,7 @@ adminProductDigitalAssetRoutes.openapi(createRoute({
     responses: {
         201: {
             description: "Digital item added",
-            content: { "application/json": { schema: successEnvelope(z.object({ asset: digitalAssetSchema, upload: uploadSessionSchema.nullable() })) } },
+            content: { "application/json": { schema: successEnvelope(z.object({ asset: digitalAssetSchema, upload: z.union([uploadSessionSchema, z.null()]) })) } },
         },
         ...assetErrorResponses,
     },

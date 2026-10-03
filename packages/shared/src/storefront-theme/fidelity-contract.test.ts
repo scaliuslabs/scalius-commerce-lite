@@ -394,8 +394,8 @@ describe("resolver on true store shapes (AUDIT.md sections 3.3 and 8)", () => {
     expect(resolveStorefrontTheme(storefrontTemplateTheme("spec-catalogue"), LIVE_SMALL).blocks.listing.filters.shown).toBe(true);
   });
 
-  it("is version 6 and reads nothing older", () => {
-    expect(STOREFRONT_THEME_DOCUMENT_VERSION).toBe(6);
+  it("is version 7 and writes no older document", () => {
+    expect(STOREFRONT_THEME_DOCUMENT_VERSION).toBe(7);
     const theme = storefrontTemplateTheme("department-mall");
     expect(storefrontThemeDocumentSchema.safeParse({ ...theme, version: 5 }).success).toBe(false);
     const oldLayout = structuredClone(theme);

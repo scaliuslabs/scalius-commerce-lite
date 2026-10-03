@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   isSafeThemePreviewContinuation,
   isSafeThemePreviewPath,
-} from "./ThemePreviewAction";
+} from "./theme-preview";
 
 describe("theme preview handoff", () => {
   const continuation = {
@@ -15,6 +15,8 @@ describe("theme preview handoff", () => {
     expect(isSafeThemePreviewPath("/search?q=keyboard")).toBe(true);
     expect(isSafeThemePreviewPath("/categories/keyboard")).toBe(true);
     expect(isSafeThemePreviewPath("/products/keyboard")).toBe(true);
+    expect(isSafeThemePreviewPath("/pages/eid-offers")).toBe(true);
+    expect(isSafeThemePreviewPath("/pages/../checkout")).toBe(false);
     expect(isSafeThemePreviewPath("//attacker.example/")).toBe(false);
     expect(isSafeThemePreviewPath("/checkout")).toBe(false);
     expect(isSafeThemePreviewPath("/products/../checkout")).toBe(false);

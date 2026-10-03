@@ -120,7 +120,21 @@ export const DASHBOARD_CONTENT_OPERATIONS = {
   "dashboard.navigation.products_preview_count": { limits: { response: 16_384 } },
   "dashboard.navigation.publications_list": {},
   "dashboard.navigation.resources_search": {},
-  "dashboard.theme.draft_save": { revision: "required" },
+  // Theme: commands answer revisions only; whole documents reach agents as a JSON artifact.
+  "dashboard.theme.editor_get": {
+    exposure: "excluded",
+    reason: "The editor's opening bundle (both documents, image previews, app surfaces); agents read workspace_get and document_get.",
+  },
+  "dashboard.theme.workspace_get": { limits: { response: 16_384 } },
+  "dashboard.theme.document_get": {
+    batch: "forbidden",
+    artifact: { mediaTypes: ["application/json"], disposition: "inline", filenamePolicy: "content-disposition", maxArtifactBytes: 1024 * 1024, delivery: "authenticated-handle" },
+  },
+  "dashboard.theme.versions_list": { limits: { request: 16_384, response: 65_536 } },
+  "dashboard.theme.draft_save": { revision: "required", limits: { response: 4096 } },
+  "dashboard.theme.page_draft_update": { revision: "required", limits: { response: 4096 } },
+  "dashboard.theme.version_restore": { revision: "required", limits: { response: 4096 } },
+  "dashboard.theme.draft_discard": { risk: "destructive", revision: "required", limits: { response: 4096 } },
   "dashboard.theme.preview_session_create": {
     exposure: "continuation",
     risk: "read",
@@ -134,8 +148,5 @@ export const DASHBOARD_CONTENT_OPERATIONS = {
       sensitiveFields: ["continuationCode"],
     },
   },
-  "dashboard.theme.publish": { revision: "required" },
-  "dashboard.theme.rollback": { revision: "required" },
-  "dashboard.theme.versions_list": {},
-  "dashboard.theme.workspace_get": {},
+  "dashboard.theme.publish": { revision: "required", limits: { response: 4096 } },
 } satisfies Record<string, OperationRegistryEntry>;

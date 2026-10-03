@@ -13,6 +13,7 @@ import RichContent from "@/components/RichContent.astro";
 import CatalogDescription from "./CatalogDescription.astro";
 import CatalogListing from "./CatalogListing.astro";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import { THEME_EDITOR_MARKS } from "@scalius/shared/theme-editor-bridge";
 import { catalogCountText } from "@/lib/catalog-paging";
 import { hasRenderableHtmlContent } from "@scalius/shared/html-sanitize";
 
@@ -45,7 +46,7 @@ interface Props {
 }
 
 const { kind, listing, hero, content, data = {} } = Astro.props;
-const { resolved } = await currentRequestTheme(Astro.locals);
+const { resolved, preview } = await currentRequestTheme(Astro.locals);
 const toolbar = new Set(resolved.blocks.listing.toolbar);
 const banner = toolbar.has("category-banner") ? hero.banner : null;
 const countLabel = hero.countLabel === undefined
@@ -62,7 +63,7 @@ const SURFACE_CLASS: Record<typeof surface, string> = { page: "bg-background", m
 const GUTTER_CLASS: Record<typeof gutter, string> = { inset: "px-4 lg:px-8", flush: "px-2 lg:px-0" };
 ---
 
-<div class:list={["min-h-screen", SURFACE_CLASS[surface]]} {...data}>
+<div class:list={["min-h-screen", SURFACE_CLASS[surface]]} {...data} data-theme-section-id={preview ? THEME_EDITOR_MARKS.listing : undefined}>
   <div class:list={["mx-auto max-w-7xl pb-8 pt-1 sm:px-6", GUTTER_CLASS[gutter]]}>
     {banner && (
       <img

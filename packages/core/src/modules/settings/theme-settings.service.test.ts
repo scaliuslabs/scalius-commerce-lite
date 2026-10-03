@@ -6,23 +6,36 @@ import {
   createSqliteD1Database,
   createSqliteTursoDatabase,
 } from "@scalius/database/testing/sqlite-d1";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import * as ids from "nanoid";
+
+vi.mock("nanoid", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("nanoid")>();
+  return { ...actual, nanoid: vi.fn(actual.nanoid) };
+});
 
 import {
   createThemePreviewSession,
+  discardThemeDraft,
+  restoreThemeVersion,
+  saveThemePageDraft,
   exchangeThemePreviewContinuation,
   getThemeSettings,
+  getThemeVersion,
   getThemeWorkspace,
   listThemeVersions,
   publishThemeDraft,
   resolveThemePreviewSession,
-  rollbackThemeSettings,
   saveThemeDraft,
+  THEME_DOCUMENT_MAX_BYTES,
   THEME_VERSION_HISTORY_LIMIT,
 } from "./site-settings.service";
 import {
   DEFAULT_STOREFRONT_THEME,
+  compareThemeDocuments,
   storefrontTemplateTheme,
+  storefrontSectionDefault,
+  upgradeThemeDocument,
   type StorefrontThemeDocument,
 } from "@scalius/shared/storefront-theme";
 
@@ -37,9 +50,9 @@ const V1_THEME = JSON.stringify({
   layout: {
     header: "classic",
     footer: "columns",
-    productCard: { imageRatio: "square", hoverImage: false, quickBuy: false, badge: "top-left" },
+    productCard: { imageRatio: "square", hoverImage: false, quickBuy: false, badge: "image" },
     grid: { desktop: 4, mobile: 2 },
-    productPage: { gallery: "carousel", thumbnails: "below" },
+    productPage: { gallery: "beside", thumbnails: "below" },
     homepage: ["hero", "collections", "categories", "delivery"],
   },
 });
@@ -104,7 +117,7 @@ describe("versioned storefront theme settings", () => {
     expect(batchCalls).toBe(1);
   });
 
-  it("fails closed on dashboard reads when the published row is not a valid version 5 document", async () => {
+  it("fails closed on invalid authoritative theme documents", async () => {
     const unknownFont = structuredClone(DEFAULT_STOREFRONT_THEME) as unknown as {
       tokens: { typography: string };
     };
@@ -112,7 +125,7 @@ describe("versioned storefront theme settings", () => {
     const lowContrast = structuredClone(DEFAULT_STOREFRONT_THEME);
     lowContrast.tokens.colors.foreground = "#f5f5f5";
 
-    for (const stored of [V1_THEME, V3_THEME, JSON.stringify(unknownFont), JSON.stringify(lowContrast), "{not json"]) {
+    for (const stored of [JSON.stringify(unknownFont), JSON.stringify(lowContrast), "{not json"]) {
       sqlite.exec("DELETE FROM theme_settings");
       sqlite.prepare(`
         INSERT INTO theme_settings (id, colors, revision, created_at, updated_at)
@@ -128,20 +141,39 @@ describe("versioned storefront theme settings", () => {
     }
   });
 
-  it("fails closed when a stored draft or history row is not a valid version 5 document", async () => {
+  it("fails closed when a stored draft or history row is malformed", async () => {
     seedPublishedWorkspace();
-    sqlite.prepare("UPDATE theme_settings_drafts SET theme = ?").run(V3_THEME);
+    sqlite.prepare("UPDATE theme_settings_drafts SET theme = ?").run("{broken");
     await expect(getThemeWorkspace(db)).rejects.toMatchObject({ status: 503 });
     await expect(publishThemeDraft(db, 1, 1)).rejects.toMatchObject({ status: 503 });
 
-    sqlite.prepare("UPDATE theme_settings_versions SET theme = ?").run(V1_THEME);
+    sqlite.prepare("UPDATE theme_settings_versions SET theme = ?").run(JSON.stringify({ meta: { changes: [{ kind: "unknown" }], moreChanges: 0, note: null }, theme: DEFAULT_STOREFRONT_THEME }));
     await expect(listThemeVersions(db)).rejects.toMatchObject({ status: 503 });
+    sqlite.prepare("UPDATE theme_settings_versions SET theme = ?").run(JSON.stringify({ meta: { changes: [], moreChanges: 0, note: null }, theme: { version: 99 } }));
+    await expect(getThemeVersion(db, 1)).rejects.toMatchObject({ status: 503 });
     await expect(getThemeSettings(db)).resolves.toEqual({ theme: DEFAULT_STOREFRONT_THEME, revision: 1 });
+  });
+
+  it("upgrades older live, draft and version documents in memory without replacing stored merchant content", async () => {
+    for (const serialized of [V1_THEME, V3_THEME, V4_THEME]) {
+      const expected = upgradeThemeDocument(JSON.parse(serialized));
+      sqlite.exec("DELETE FROM theme_settings; DELETE FROM theme_settings_drafts; DELETE FROM theme_settings_versions");
+      sqlite.prepare("INSERT INTO theme_settings (id,colors,revision) VALUES ('default',?,1)").run(serialized);
+      sqlite.prepare("INSERT INTO theme_settings_drafts (id,theme,revision,base_published_revision) VALUES ('default',?,1,1)").run(serialized);
+      sqlite.prepare("INSERT INTO theme_settings_versions (id,published_revision,theme,source) VALUES ('old',1,?,'publish')").run(serialized);
+      expect((await getThemeWorkspace(db)).draft.theme).toEqual(expected);
+      expect((await getThemeSettings(db)).theme).toEqual(expected);
+      // A bare document is a version from before history metadata: no changes, no note.
+      expect(await listThemeVersions(db)).toMatchObject([{ revision: 1, changes: [], moreChanges: 0, note: null }]);
+      expect((await getThemeVersion(db, 1)).theme).toEqual(expected);
+      expect(sqlite.prepare("SELECT colors FROM theme_settings").get()).toEqual({ colors: serialized });
+    }
   });
 
   it("rejects invalid writes with the first issue message and stores nothing", async () => {
     const lowContrast = structuredClone(DEFAULT_STOREFRONT_THEME);
     lowContrast.tokens.colors.foreground = "#f5f5f5";
+    const pages = (home: unknown[]) => ({ ...DEFAULT_STOREFRONT_THEME, pages: { ...DEFAULT_STOREFRONT_THEME.pages, home } });
     const invalid: Array<{ theme: unknown; message: RegExp }> = [
       {
         theme: lowContrast,
@@ -150,27 +182,9 @@ describe("versioned storefront theme settings", () => {
       { theme: JSON.parse(V1_THEME), message: /./ },
       { theme: { ...DEFAULT_STOREFRONT_THEME, version: 3 }, message: /./ },
       { theme: JSON.parse(V3_THEME), message: /./ },
-      {
-        theme: {
-          ...DEFAULT_STOREFRONT_THEME,
-          pages: { home: [...DEFAULT_STOREFRONT_THEME.pages.home, { id: "promo", type: "video", version: 1, settings: {} }] },
-        },
-        message: /./,
-      },
-      {
-        theme: {
-          ...DEFAULT_STOREFRONT_THEME,
-          pages: { home: DEFAULT_STOREFRONT_THEME.pages.home.map((section) => ({ ...section, version: 2 })) },
-        },
-        message: /./,
-      },
-      {
-        theme: {
-          ...DEFAULT_STOREFRONT_THEME,
-          pages: { home: DEFAULT_STOREFRONT_THEME.pages.home.map((section) => ({ ...section, id: "same" })) },
-        },
-        message: /^Section ids must be unique\.$/,
-      },
+      { theme: pages([...DEFAULT_STOREFRONT_THEME.pages.home, { id: "promo", type: "video", version: 1, settings: {} }]), message: /./ },
+      { theme: pages(DEFAULT_STOREFRONT_THEME.pages.home.map((section) => ({ ...section, version: 2 }))), message: /./ },
+      { theme: pages(DEFAULT_STOREFRONT_THEME.pages.home.map((section) => ({ ...section, id: "same" }))), message: /^Section ids must be unique\.$/ },
     ];
 
     for (const { theme, message } of invalid) {
@@ -190,13 +204,30 @@ describe("versioned storefront theme settings", () => {
   it("publishes a first draft as revision one exactly once", async () => {
     const firstTheme = storefrontTemplateTheme("marketplace");
     await expect(saveThemeDraft(db, firstTheme, 0, 0)).resolves.toMatchObject({ revision: 1, basePublishedRevision: 0 });
+    await expect(saveThemeDraft(db, firstTheme, 0, 0)).rejects.toMatchObject({ status: 409 });
     await expect(publishThemeDraft(db, 0, 1)).resolves.toMatchObject({
-      published: { theme: firstTheme, revision: 1 },
-      draft: { theme: firstTheme, revision: 2, basePublishedRevision: 1 },
+      published: { revision: 1 },
+      draft: { revision: 2, basePublishedRevision: 1 },
+      draftDiffersFromLive: false,
     });
 
     await expect(publishThemeDraft(db, 0, 1)).rejects.toMatchObject({ status: 409, code: "CONFLICT" });
     await expect(getThemeSettings(db)).resolves.toEqual({ theme: firstTheme, revision: 1 });
+  });
+
+  it("bounds stored documents by UTF-8 bytes before any draft write", async () => {
+    const theme = structuredClone(DEFAULT_STOREFRONT_THEME);
+    theme.pages.landing["large-campaign"] = {
+      title: "Campaign", description: "",
+      sections: Array.from({ length: 9 }, (_, index) => ({
+        ...storefrontSectionDefault("faq", `faq-${index}`),
+        type: "faq" as const,
+        settings: { heading: "", items: Array.from({ length: 20 }, () => ({ question: "Offer?", answer: "বাংলা".repeat(200) })) },
+      })),
+    };
+    expect(JSON.stringify(theme).length).toBeLessThan(THEME_DOCUMENT_MAX_BYTES);
+    await expect(saveThemeDraft(db, theme, 0, 0)).rejects.toMatchObject({ status: 400, message: expect.stringContaining("too large") });
+    expect(sqlite.prepare("SELECT COUNT(*) AS count FROM theme_settings_drafts").get()).toEqual({ count: 0 });
   });
 
   it("keeps every draft based on the live revision, so a stale editor can only reload", async () => {
@@ -213,13 +244,16 @@ describe("versioned storefront theme settings", () => {
       .rejects.toMatchObject({ status: 409, code: "CONFLICT" });
     await expect(publishThemeDraft(db, 1, 1, "admin_a"))
       .rejects.toMatchObject({ status: 409, code: "CONFLICT" });
+    await expect(restoreThemeVersion(db, 1, 1, 1, "admin_a")).rejects.toMatchObject({ status: 409 });
+    await expect(discardThemeDraft(db, 3, 1, "admin_a")).rejects.toMatchObject({ status: 409 });
 
-    // A restore moves live and the draft together too.
-    await rollbackThemeSettings(db, 1, 2, 3, "admin_b");
+    // A restore changes only the draft and preserves live.
+    await restoreThemeVersion(db, 1, 3, 2, "admin_b");
     const workspace = await getThemeWorkspace(db);
     expect(workspace.draft.basePublishedRevision).toBe(workspace.published.revision);
-    expect(workspace.published.revision).toBe(3);
-    await expect(getThemeSettings(db)).resolves.toEqual({ theme: DEFAULT_STOREFRONT_THEME, revision: 3 });
+    expect(workspace.published.revision).toBe(2);
+    expect(workspace.draft.theme).toEqual(DEFAULT_STOREFRONT_THEME);
+    expect(workspace.draft.revision).toBe(4);
   });
 
   it("saves a durable draft with its own CAS authority", async () => {
@@ -240,6 +274,7 @@ describe("versioned storefront theme settings", () => {
     await expect(getThemeWorkspace(db)).resolves.toMatchObject({
       published: { theme: DEFAULT_STOREFRONT_THEME, revision: 1 },
       draft: { theme: draftTheme, revision: 2, basePublishedRevision: 1 },
+      draftDiffersFromLive: true,
     });
   });
 
@@ -250,46 +285,183 @@ describe("versioned storefront theme settings", () => {
 
     const published = await publishThemeDraft(db, 1, 2, "admin_1");
     expect(published).toMatchObject({
-      published: { theme: draftTheme, revision: 2 },
-      draft: { theme: draftTheme, revision: 3, basePublishedRevision: 2 },
+      published: { revision: 2 },
+      draft: { revision: 3, basePublishedRevision: 2 },
     });
     expect(await listThemeVersions(db)).toMatchObject([
-      {
-        revision: 2,
-        theme: draftTheme,
-        source: "publish",
-        sourceRevision: null,
-        publishedBy: "admin_1",
-      },
+      { revision: 2, source: "publish", sourceRevision: null, publishedBy: "admin_1" },
       { revision: 1, source: "migration" },
     ]);
+    expect((await listThemeVersions(db))[0]).not.toHaveProperty("theme");
+    expect((await getThemeVersion(db, 2)).theme).toEqual(draftTheme);
 
     await expect(publishThemeDraft(db, 1, 2, "admin_2"))
       .rejects.toMatchObject({ status: 409, code: "CONFLICT" });
-    await expect(getThemeSettings(db)).resolves.toEqual({
-      theme: draftTheme,
-      revision: 2,
-    });
+    await expect(getThemeSettings(db)).resolves.toEqual({ theme: draftTheme, revision: 2 });
+    await expect(getThemeWorkspace(db)).resolves.toMatchObject({ draft: { theme: draftTheme }, draftDiffersFromLive: false });
   });
 
-  it("restores history as a new immutable revision and synchronizes the draft", async () => {
+  it("restores history only to the draft and requires explicit publication", async () => {
     const originalTheme = storefrontTemplateTheme("rounded-tech");
     seedPublishedWorkspace({ theme: originalTheme });
     await saveThemeDraft(db, storefrontTemplateTheme("fashion-value"), 1, 1, "admin_1");
     await publishThemeDraft(db, 1, 2, "admin_1");
 
-    const restored = await rollbackThemeSettings(db, 1, 2, 3, "admin_2");
-    expect(restored).toMatchObject({
-      published: { theme: originalTheme, revision: 3 },
-      draft: { theme: originalTheme, revision: 4, basePublishedRevision: 3 },
+    const restored = await restoreThemeVersion(db, 1, 3, 2, "admin_2");
+    expect(restored).toMatchObject({ published: { revision: 2 }, draft: { revision: 4, basePublishedRevision: 2 }, draftDiffersFromLive: true });
+    expect((await getThemeSettings(db)).theme).toEqual(storefrontTemplateTheme("fashion-value"));
+    expect((await getThemeWorkspace(db)).draft.theme).toEqual(originalTheme);
+    expect(await listThemeVersions(db)).toHaveLength(2);
+    await publishThemeDraft(db, 2, 4, "admin_2");
+    expect((await listThemeVersions(db))[0]).toMatchObject({ revision: 3, source: "publish", sourceRevision: null, publishedBy: "admin_2" });
+    expect((await getThemeVersion(db, 3)).theme).toEqual(originalTheme);
+    await expect(restoreThemeVersion(db, 99, 5, 3)).rejects.toMatchObject({ status: 404 });
+  });
+
+  it("refuses a version naming images deleted since, with how many, and restores it without them when asked", async () => {
+    sqlite.exec(`INSERT INTO media (id, filename, kind, object_key, size, mime_type, status) VALUES
+      ('media_logo', 'logo.png', 'image', 'media/logo.png', 1, 'image/png', 'ready'),
+      ('media_slide', 'slide.jpg', 'image', 'media/slide.jpg', 1, 'image/jpeg', 'ready'),
+      ('media_kept', 'kept.jpg', 'image', 'media/kept.jpg', 1, 'image/jpeg', 'ready')`);
+    const theme = structuredClone(DEFAULT_STOREFRONT_THEME);
+    theme.brand.logo = "media_logo";
+    const heroIndex = theme.pages.home.findIndex((section) => section.type === "hero");
+    const slide = { image: "media_slide", focalPoint: { x: 50, y: 50 }, alt: "Eid", link: null };
+    theme.pages.home[heroIndex] = { ...theme.pages.home[heroIndex]!, settings: { ...theme.pages.home[heroIndex]!.settings, slides: [slide, { ...slide, image: "media_kept" }] } } as never;
+    seedPublishedWorkspace();
+    await saveThemeDraft(db, theme, 1, 1, "admin_1");
+    await publishThemeDraft(db, 1, 2, "admin_1");
+    await saveThemeDraft(db, DEFAULT_STOREFRONT_THEME, 3, 2, "admin_1");
+    // Both images leave Files after version 2 was published.
+    sqlite.exec(`UPDATE media SET status = 'deleted', trashed_at = unixepoch(), deleted_at = unixepoch() WHERE id IN ('media_logo', 'media_slide')`);
+
+    await expect(restoreThemeVersion(db, 2, 4, 2, "admin_2")).rejects.toMatchObject({
+      status: 400, code: "THEME_VERSION_IMAGES_MISSING", details: { missingImages: 2 },
     });
-    expect((await listThemeVersions(db))[0]).toMatchObject({
-      revision: 3,
-      source: "rollback",
-      sourceRevision: 1,
-      publishedBy: "admin_2",
-      theme: originalTheme,
-    });
+    expect((await getThemeWorkspace(db)).draft.revision).toBe(4);
+
+    const restored = await restoreThemeVersion(db, 2, 4, 2, "admin_2", { withoutMissingImages: true });
+    expect(restored).toMatchObject({ draft: { revision: 5 }, draftDiffersFromLive: true });
+    const draft = (await getThemeWorkspace(db)).draft.theme;
+    expect(draft.brand.logo).toBeNull();
+    expect(draft.pages.home[heroIndex]!.settings).toMatchObject({ slides: [{ image: "media_kept" }] });
+    // The published version itself is unchanged.
+    expect((await getThemeVersion(db, 2)).theme.brand.logo).toBe("media_logo");
+  });
+
+  it("records what changed, the merchant's note and the author on every publish", async () => {
+    seedPublishedWorkspace();
+    sqlite.prepare("INSERT INTO user (id, name, email) VALUES ('staff_1', 'ফারহানা', 'farhana@example.test')").run();
+    const theme = structuredClone(DEFAULT_STOREFRONT_THEME);
+    const [first, second] = theme.pages.home;
+    if (!first || !second) throw new Error("Need two default sections.");
+    theme.pages.home = [second, { ...first, hidden: true }, { ...first, id: "campaign" }];
+    await saveThemeDraft(db, theme, 1, 1, "staff_1");
+    const published = await publishThemeDraft(db, 1, 2, "staff_1", "  Eid launch  ");
+    expect(published.lastPublished).toMatchObject({ revision: 2, publishedBy: "staff_1", publishedByName: "ফারহানা" });
+    expect(published.draftDiffersFromLive).toBe(false);
+    const [version] = await listThemeVersions(db);
+    expect(version).toMatchObject({ revision: 2, note: "Eid launch", publishedByName: "ফারহানা", moreChanges: 0 });
+    expect(version!.changes).toContainEqual({ kind: "section-added", page: "home", sectionId: "campaign", sectionType: first.type });
+    expect(version!.changes).toContainEqual({ kind: "section-changed", page: "home", sectionId: first.id, sectionType: first.type });
+    expect(version!.changes).toContainEqual({ kind: "sections-reordered", page: "home" });
+    expect((await getThemeVersion(db, 2)).theme).toEqual(theme);
+    expect((await getThemeWorkspace(db)).lastPublished).toEqual(published.lastPublished);
+    await expect(publishThemeDraft(db, 2, 3, "staff_1", "x".repeat(501))).rejects.toMatchObject({ status: 400 });
+  });
+
+  it("keeps a bounded change list and counts the rest", async () => {
+    seedPublishedWorkspace();
+    const theme = structuredClone(DEFAULT_STOREFRONT_THEME);
+    theme.pages.landing = Object.fromEntries(Array.from({ length: 20 }, (_, index) => [`page-${index}`, {
+      title: `Page ${index}`, description: "", sections: [],
+    }]));
+    theme.pages.home = Array.from({ length: 24 }, (_, index) => storefrontSectionDefault("faq", `faq-${index}`));
+    const total = compareThemeDocuments(DEFAULT_STOREFRONT_THEME, theme).length;
+    expect(total).toBeGreaterThan(44);
+    await saveThemeDraft(db, theme, 1, 1);
+    await publishThemeDraft(db, 1, 2);
+    const [version] = await listThemeVersions(db);
+    expect(version!.changes).toHaveLength(20);
+    expect(version!.moreChanges).toBe(total - 20);
+  });
+
+  it("pages the history back without documents", async () => {
+    seedPublishedWorkspace();
+    let draft = 1;
+    for (let live = 1; live <= 12; live += 1) {
+      const theme = storefrontTemplateTheme(live % 2 ? "boutique" : "marketplace");
+      draft = (await saveThemeDraft(db, theme, draft, live)).revision;
+      draft = (await publishThemeDraft(db, live, draft)).draft.revision;
+    }
+    const first = await listThemeVersions(db);
+    expect(first.map((version) => version.revision)).toEqual([13, 12, 11, 10, 9]);
+    const next = await listThemeVersions(db, { beforeRevision: 4, limit: 50 });
+    expect(await listThemeVersions(db, { beforeRevision: 9 })).toHaveLength(5);
+    expect(next.map((version) => version.revision)).toEqual([3, 2, 1]);
+  });
+
+  it("discards to live with a fresh revision and rejects stale restore, discard and save", async () => {
+    seedPublishedWorkspace();
+    await saveThemeDraft(db, storefrontTemplateTheme("boutique"), 1, 1);
+    expect((await getThemeWorkspace(db)).draftDiffersFromLive).toBe(true);
+    const discarded = await discardThemeDraft(db, 2, 1, "staff_2");
+    expect(discarded).toMatchObject({ published: { revision: 1 }, draft: { revision: 3, basePublishedRevision: 1 }, draftDiffersFromLive: false });
+    expect((await getThemeWorkspace(db)).draft.theme).toEqual(DEFAULT_STOREFRONT_THEME);
+    await expect(discardThemeDraft(db, 2, 1)).rejects.toMatchObject({ status: 409 });
+    await expect(restoreThemeVersion(db, 1, 2, 1)).rejects.toMatchObject({ status: 409 });
+    await expect(saveThemeDraft(db, storefrontTemplateTheme("marketplace"), 2, 1)).rejects.toMatchObject({ status: 409 });
+    expect(await listThemeVersions(db)).toHaveLength(1);
+  });
+
+  it("discards and restores before any draft exists by creating it", async () => {
+    seedPublishedWorkspace();
+    sqlite.exec("DELETE FROM theme_settings_drafts");
+    await expect(discardThemeDraft(db, 0, 1)).resolves.toMatchObject({ draft: { revision: 1, basePublishedRevision: 1 } });
+    sqlite.exec("DELETE FROM theme_settings_drafts");
+    await expect(restoreThemeVersion(db, 1, 0, 1)).resolves.toMatchObject({ draft: { revision: 1 } });
+  });
+
+  it("edits a landing page or the homepage through the same CAS and preserves the rest of the theme", async () => {
+    seedPublishedWorkspace();
+    const page = { title: "Eid campaign", description: "Gifts", sections: structuredClone(DEFAULT_STOREFRONT_THEME.pages.home) };
+    const saved = await saveThemePageDraft(db, { page: "landing", slug: "eid-offers", value: page }, 1, 1, "staff_1");
+    expect(saved.theme.pages.landing["eid-offers"]).toEqual(page);
+    expect(saved.theme.tokens).toEqual(DEFAULT_STOREFRONT_THEME.tokens);
+    await expect(saveThemePageDraft(db, { page: "landing", slug: "another", value: page }, 1, 1, "staff_2")).rejects.toMatchObject({ status: 409 });
+    expect((await getThemeSettings(db)).theme.pages.landing).toEqual({});
+    await saveThemePageDraft(db, { page: "landing", slug: "eid-offers", value: null }, 2, 1, "staff_1");
+    expect((await getThemeWorkspace(db)).draft.theme.pages.landing).toEqual({});
+    await saveThemePageDraft(db, { page: "home", value: [] }, 3, 1, "staff_1");
+    expect((await getThemeWorkspace(db)).draft.theme.pages.home).toEqual([]);
+  });
+
+  it("previews an immutable history version while draft edits advance and fails closed after retention deletes it", async () => {
+    seedPublishedWorkspace();
+    await saveThemeDraft(db, storefrontTemplateTheme("boutique"), 1, 1);
+    const preview = await createThemePreviewSession(db, 2, "staff_1", 1);
+    const { token } = await exchangeThemePreviewContinuation(db, preview.continuationId);
+    expect(preview.continuationId).toHaveLength(52);
+    expect(token).toHaveLength(52);
+    await saveThemeDraft(db, storefrontTemplateTheme("marketplace"), 2, 1);
+    expect((await resolveThemePreviewSession(db, token))?.theme).toEqual(DEFAULT_STOREFRONT_THEME);
+    const forged = token.replace("V0000000001", "V0000000002");
+    expect(await resolveThemePreviewSession(db, forged)).toBeNull();
+    sqlite.exec("DELETE FROM theme_settings_versions");
+    expect(await resolveThemePreviewSession(db, token)).toBeNull();
+  });
+
+  it("keeps draft previews distinct even when random bytes resemble a historical version selector", async () => {
+    seedPublishedWorkspace();
+    const draft = storefrontTemplateTheme("marketplace");
+    await saveThemeDraft(db, draft, 1, 1);
+    const random = vi.mocked(ids.nanoid).mockImplementation((size = 21) => `V0000000001_${"a".repeat(36)}`.slice(0, size));
+    try {
+      const preview = await createThemePreviewSession(db, 2);
+      const { token } = await exchangeThemePreviewContinuation(db, preview.continuationId);
+      expect(token).toHaveLength(52);
+      expect((await resolveThemePreviewSession(db, token))?.theme).toEqual(draft);
+    } finally { random.mockRestore(); }
   });
 
   it("stores only token hashes and no theme, exchanges a continuation once, and follows the latest saved draft", async () => {
@@ -343,7 +515,7 @@ describe("versioned storefront theme settings", () => {
     seedPublishedWorkspace();
     const preview = await createThemePreviewSession(db, 1, "admin_1");
     const { token } = await exchangeThemePreviewContinuation(db, preview.continuationId);
-    sqlite.prepare("UPDATE theme_settings_drafts SET theme = ?").run(V3_THEME);
+    sqlite.prepare("UPDATE theme_settings_drafts SET theme = ?").run("{broken");
     await expect(resolveThemePreviewSession(db, token)).rejects.toMatchObject({ status: 503 });
   });
 
@@ -411,9 +583,10 @@ describe.each(["d1", "turso"] as const)("theme history retention on %s", (provid
     expect(afterPublish).toHaveLength(THEME_VERSION_HISTORY_LIMIT);
     expect(afterPublish.at(-1)).toBe(live + 1);
     expect(afterPublish[0]).toBe(live + 1 - THEME_VERSION_HISTORY_LIMIT);
-    expect(await listThemeVersions(db, THEME_VERSION_HISTORY_LIMIT)).toHaveLength(THEME_VERSION_HISTORY_LIMIT);
 
-    await rollbackThemeSettings(db, live, live + 1, 3);
+    await restoreThemeVersion(db, live, 3, live + 1);
+    expect(versionRevisions()).toEqual(afterPublish);
+    await publishThemeDraft(db, live + 1, 4);
     const afterRestore = versionRevisions();
     expect(afterRestore).toHaveLength(THEME_VERSION_HISTORY_LIMIT);
     expect(afterRestore.at(-1)).toBe(live + 2);
@@ -496,7 +669,7 @@ describe("theme document resets (0093 to version 5, 0106 to version 6)", () => {
 
   it("keeps a version 6 published theme through 0106 and drops only its older history", async () => {
     const currentTheme = storefrontTemplateTheme("boutique");
-    const serialized = JSON.stringify(currentTheme);
+    const serialized = JSON.stringify({ ...currentTheme, version: 6, pages: { home: currentTheme.pages.home, homeMode: currentTheme.pages.homeMode } });
     const sqlite = createMigratedSqlite({ beforeMigration: "0106_" });
     sqlite.prepare("INSERT INTO theme_settings (id, colors, revision, created_at, updated_at) VALUES ('default', ?, 3, 1, 1)").run(serialized);
     sqlite.prepare(`
@@ -516,8 +689,9 @@ describe("theme document resets (0093 to version 5, 0106 to version 6)", () => {
         draft: { theme: currentTheme, revision: 4, basePublishedRevision: 3 },
       });
       await expect(listThemeVersions(db)).resolves.toEqual([
-        expect.objectContaining({ id: "themev_current", revision: 3, theme: currentTheme }),
+        expect.objectContaining({ id: "themev_current", revision: 3 }),
       ]);
+      await expect(getThemeVersion(db, 3)).resolves.toMatchObject({ theme: currentTheme });
     } finally {
       sqlite.close();
     }

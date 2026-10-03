@@ -21,7 +21,7 @@ import { Button } from "~/components/ui/button";
 import { apiData } from "~/lib/api";
 import { useMessages } from "~/i18n";
 import { themeEditorMessages } from "~/i18n/theme-editor";
-import { isSafeThemePreviewContinuation } from "../ThemePreviewAction";
+import { isSafeThemePreviewContinuation } from "../theme-preview";
 
 export type PreviewDevice = "desktop" | "tablet" | "phone";
 
@@ -49,9 +49,11 @@ interface Session {
   attempt: number;
 }
 
-export function PreviewFrame({ draftRevision, device, names, selectedId, onSelect, controller }: {
+export function PreviewFrame({ draftRevision, sourceRevision, previewPath = "/", device, names, selectedId, onSelect, controller }: {
   /** The saved draft revision the session opens on (it then follows every save). */
   draftRevision: number;
+  sourceRevision?: number;
+  previewPath?: string;
   device: PreviewDevice;
   /** Section names by id, for the outlines' labels. */
   names: Readonly<Record<string, string>>;
@@ -68,26 +70,32 @@ export function PreviewFrame({ draftRevision, device, names, selectedId, onSelec
   const helloTimer = useRef(0);
   /** The session's one-time code until the relay accepts it. */
   const pendingFields = useRef<{ continuationCode: string; path: string; device: string } | null>(null);
-  const latest = useRef({ names, selectedId, onSelect, draftRevision });
-  latest.current = { names, selectedId, onSelect, draftRevision };
+  const latest = useRef({ names, selectedId, onSelect, draftRevision, sourceRevision, previewPath });
+  latest.current = { names, selectedId, onSelect, draftRevision, sourceRevision, previewPath };
+  /** The newest session request: an older one answering later (a page switched meanwhile) is dropped. */
+  const opening = useRef(0);
 
   // A session: the storefront origin from Platform settings, then a
   // one-time continuation the frame's embed relay redeems.
   const open = useCallback(async () => {
+    const ticket = ++opening.current;
     connected.current = false;
     window.clearTimeout(helloTimer.current);
     setPhase("connecting");
     try {
       const { storefrontUrl } = await apiData(getApiV1Platform());
       const origin = normalizeStorefrontOrigin(storefrontUrl);
+      if (ticket !== opening.current) return;
       if (!origin) {
         setPhase("no-url");
         return;
       }
+      const { draftRevision: revision, sourceRevision: source, previewPath: page } = latest.current;
       const result = await apiData(postApiV1AdminSettingsThemePreviewSession({
-        body: { expectedDraftRevision: latest.current.draftRevision, path: "/", device: "full" },
+        body: { expectedDraftRevision: revision, ...(source === undefined ? {} : { sourceRevision: source }), path: page, device: "full" },
       }));
-      if (!isSafeThemePreviewContinuation(result.continuation, origin, "/", "full")) throw new Error("Unsafe continuation");
+      if (ticket !== opening.current) return;
+      if (!isSafeThemePreviewContinuation(result.continuation, origin, page, "full")) throw new Error("Unsafe continuation");
       pendingFields.current = result.continuation.fields;
       setSession((current) => ({
         origin,
@@ -95,7 +103,7 @@ export function PreviewFrame({ draftRevision, device, names, selectedId, onSelec
         attempt: (current?.attempt ?? 0) + 1,
       }));
     } catch {
-      setPhase("failed");
+      if (ticket === opening.current) setPhase("failed");
     }
   }, []);
 
@@ -120,12 +128,7 @@ export function PreviewFrame({ draftRevision, device, names, selectedId, onSelec
 
   useImperativeHandle(controller, () => ({ send }), [send]);
 
-  const started = useRef(false);
-  useEffect(() => {
-    if (started.current) return;
-    started.current = true;
-    void open();
-  }, [open]);
+  useEffect(() => { void open(); }, [open, sourceRevision, previewPath]);
 
   // Messages from the frame: the relay's handshake, then the bridge's.
   useEffect(() => {
@@ -192,11 +195,12 @@ export function PreviewFrame({ draftRevision, device, names, selectedId, onSelec
   }, [selectedId, send, phase]);
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-2">
-      {path !== "/" && phase === "ready" ? (
+    <div className="flex min-h-0 flex-1 flex-col gap-2">
+      {path !== previewPath.split("?")[0] && phase === "ready" ? (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-card px-3 py-1.5 shadow-card">
           <p className="min-w-0 truncate text-body text-muted-foreground">{t("viewingPath", { path })}</p>
-          <Button type="button" variant="outline" size="sm" onClick={() => send({ type: "go-home" })}>
+          {/* A link followed in the preview: back to the page being edited. */}
+          <Button type="button" variant="outline" size="sm" onClick={() => void open()}>
             {t("backToHome")}
           </Button>
         </div>

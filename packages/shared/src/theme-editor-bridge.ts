@@ -99,6 +99,28 @@ export function readThemeEditorMessage(data: unknown): ThemeEditorMessage | null
   }
 }
 
+/**
+ * Preview marks for page parts that are not sections, so the editor selects
+ * them from the preview like sections: every page's header, announcement bar
+ * and footer; a product page's main area (gallery and buy box), each module
+ * below it and its app blocks; a listing's results and its filters. They
+ * follow the section id rule and no section type is named like them.
+ */
+export const THEME_EDITOR_MARKS = {
+  header: "header",
+  announcement: "announcement",
+  footer: "footer",
+  productMain: "product-main",
+  productApps: "product-apps",
+  listing: "listing",
+  listingFilters: "listing-filters",
+} as const;
+
+/** The mark of one product page module (`module-reviews`). */
+export function themeEditorModuleMark(module: string): string {
+  return `module-${module}`;
+}
+
 /** An http(s) origin exactly as `URL.origin` writes it, or "" for anything else. */
 export function themeEditorOrigin(value: unknown): string {
   if (typeof value !== "string" || !value.trim()) return "";

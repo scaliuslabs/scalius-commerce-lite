@@ -95,6 +95,7 @@ function section<const Type extends string, Settings extends z.ZodType>(spec: {
       id: sectionIdSchema,
       type: z.literal(spec.type),
       version: z.literal(1),
+      hidden: z.boolean().optional(),
       settings: spec.settings,
     }).strict(),
   };
@@ -390,6 +391,7 @@ export const storefrontAppSectionSchema = z.object({
   id: sectionIdSchema,
   type: z.literal("app"),
   version: z.literal(1),
+  hidden: z.boolean().optional(),
   settings: z.object({ app: storefrontAppKeySchema, values: storefrontAppValuesSchema }).strict(),
 }).strict();
 export type StorefrontAppSection = z.infer<typeof storefrontAppSectionSchema>;

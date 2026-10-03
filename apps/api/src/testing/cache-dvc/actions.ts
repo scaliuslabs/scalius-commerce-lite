@@ -19,6 +19,7 @@ import { bulkUpdateProducts, deleteProduct, restoreProduct } from "@scalius/core
 import { adjustStock } from "@scalius/core/modules/inventory";
 import { moveCategory } from "@scalius/core/modules/categories";
 import { refreshProductRecommendations, refreshProductSalesStats } from "@scalius/core/modules/catalog";
+import { getThemeWorkspace, publishThemeDraft, saveThemeDraft, saveThemePageDraft } from "@scalius/core/modules/settings";
 import type { Rng } from "./rng";
 
 export interface CuratedAction {
@@ -43,6 +44,36 @@ function productClaim(sqlite: DatabaseSync, id: string): { id: string; expectedA
 }
 
 export const CURATED_ACTIONS: readonly CuratedAction[] = [
+  {
+    name: "theme-page-draft-publish",
+    weight: 2,
+    async run({ db, rng }) {
+      // A landing page edit (its own page) or a product page edit (the
+      // document's product modules), saved to the draft and sometimes published.
+      const workspace = await getThemeWorkspace(db);
+      const { revision, basePublishedRevision } = workspace.draft;
+      let saved: { revision: number };
+      let what: string;
+      if (rng.chance(0.5)) {
+        const page = structuredClone(workspace.draft.theme.pages.landing.eid);
+        if (!page) return null;
+        page.title = page.title.endsWith("!") ? page.title.slice(0, -1) : `${page.title}!`;
+        page.sections.reverse();
+        saved = await saveThemePageDraft(db, { page: "landing", slug: "eid", value: page }, revision, basePublishedRevision);
+        what = "landing";
+      } else {
+        const theme = structuredClone(workspace.draft.theme);
+        theme.blocks.product = { ...theme.blocks.product, below: [...theme.blocks.product.below].reverse() };
+        saved = await saveThemeDraft(db, theme, revision, basePublishedRevision);
+        what = "product modules";
+      }
+      if (rng.chance(0.5)) {
+        await publishThemeDraft(db, workspace.published.revision, saved.revision);
+        return `publishThemeDraft ${what}`;
+      }
+      return `saveThemeDraft ${what}`;
+    },
+  },
   {
     name: "adjust-stock",
     weight: 6,

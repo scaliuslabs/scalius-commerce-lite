@@ -9,6 +9,7 @@ import {
   AGENT_WORKFLOW_CATALOG_VERSION,
   CURATED_AGENT_WORKFLOW_CARDS,
   DAILY_OPERATING_SNAPSHOT_WORKFLOW,
+  DRAFT_LANDING_PAGE_WORKFLOW,
   OPTIONED_PRODUCT_WORKFLOW,
   THIRTY_DAY_BOOKED_OPERATIONS_BRIEF_WORKFLOW,
   buildAgentWorkflowCatalog,
@@ -67,8 +68,9 @@ describe("agent workflow catalog", () => {
       "catalog.optioned-product.v1",
       "operations.daily-snapshot.v1",
       "operations.thirty-day-booked-brief.v1",
+      "theme.draft-landing-page.v1",
     ]);
-    expect(catalog.routes).toHaveLength(68);
+    expect(catalog.routes).toHaveLength(70);
     expect(catalog.controls).toHaveLength(30);
     for (const route of catalog.routes) {
       expect(Buffer.byteLength(JSON.stringify(route)), route.id).toBeLessThanOrEqual(2 * 1024);
@@ -1240,6 +1242,7 @@ describe("agent workflow catalog", () => {
       OPTIONED_PRODUCT_WORKFLOW,
       DAILY_OPERATING_SNAPSHOT_WORKFLOW,
       THIRTY_DAY_BOOKED_OPERATIONS_BRIEF_WORKFLOW,
+      DRAFT_LANDING_PAGE_WORKFLOW,
     ]);
   });
 });
