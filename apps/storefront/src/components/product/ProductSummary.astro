@@ -38,6 +38,8 @@ interface Props {
   currencySymbol?: string;
   currencyDecimalPlaces?: number;
   currencyCode?: string;
+  /** The store's price increment (server renders have no page globals). */
+  priceIncrementMinor?: number;
   initialVariant?: ProductVariant | null;
   initialUnavailableVariant?: ProductVariant | null;
   quickBuyNotice?: string | null;
@@ -62,6 +64,7 @@ const {
   currencySymbol = DEFAULT_CURRENCY.symbol,
   currencyDecimalPlaces = DEFAULT_CURRENCY.decimalPlaces,
   currencyCode = DEFAULT_CURRENCY.code,
+  priceIncrementMinor,
   initialVariant = null,
   initialUnavailableVariant = null,
   quickBuyNotice = null,
@@ -154,6 +157,7 @@ const productPricing: ProductPricing = {
   discountAmount: product.discountAmount,
   currencyDecimalPlaces,
   currencyCode,
+  priceIncrementMinor,
 };
 const pricePresentation = getBuyerVariantPricePresentation(productPricing, pricingVariants);
 // "From" only when the buyer's choices really are priced differently.
@@ -181,6 +185,7 @@ const variantsJson = serializeJsonForInlineScript(variants.map((variant) => {
     product.discountAmount,
     currencyDecimalPlaces,
     currencyCode,
+    priceIncrementMinor,
   );
   return {
     id: variant.id,
@@ -348,6 +353,7 @@ function optionAriaLabel(
               product.discountAmount,
               currencyDecimalPlaces,
               currencyCode,
+              priceIncrementMinor,
             )] as const] : [];
           }));
           return (

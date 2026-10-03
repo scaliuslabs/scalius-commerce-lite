@@ -232,6 +232,7 @@ async function quickBuy({
         discountAmount: product.discountAmount,
         currencyDecimalPlaces: layoutData?.currency?.decimalPlaces,
         currencyCode: layoutData?.currency?.code,
+        priceIncrementMinor: layoutData?.currency?.priceIncrementMinor,
       },
       {
         price: itemToAdd.price,

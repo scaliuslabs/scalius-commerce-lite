@@ -58,7 +58,7 @@ import { COD_METHOD, paymentMethodRows, type PaymentMethodRow } from "./payment-
 import { OfficialProviderMark, PROVIDER_MARKS, type ProviderMarkId } from "./provider-marks";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
 import { ConfirmDialog } from "../shared/ConfirmDialog";
-import { useWholeCashAmounts } from "../shared/MoneyInput";
+import { useWholeUnitPrices } from "../shared/MoneyInput";
 import { SettingsCard, SettingsDialog, SettingsField, SettingsCardLoading, useCloseSettingsDialog } from "./SettingsPage";
 
 /** Saved secrets come back masked; sending the mask back keeps them. */
@@ -627,7 +627,7 @@ export function PaymentOptionsCard() {
   const canEdit = useCanEditPayments();
   const methods = useQuery(paymentMethodsQuery);
   const { codEnabled, online } = usableMethods(methods.data);
-  const wholeTaka = useWholeCashAmounts();
+  const wholeTaka = useWholeUnitPrices();
   const issuesFor = (draft: CheckoutFlow) =>
     getCheckoutFlowPreviewIssues({
       checkoutMode: draft.checkoutMode,

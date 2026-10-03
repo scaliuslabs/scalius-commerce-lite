@@ -126,6 +126,8 @@ export interface CurrencyData {
   symbol: string;
   /** ISO 4217 decimal places (0 for JPY, 3 for KWD). */
   decimalPlaces: number;
+  /** The store's price increment in minor units (a BDT store's default: 100, whole taka). */
+  priceIncrementMinor?: number;
 }
 
 export interface CategoryNavigationNode {

@@ -233,6 +233,8 @@ export function ManualFulfillmentDialog({ order, kind = "ship", open, onOpenChan
                   <Label htmlFor="fulfill-amount">{t("fulfill.amount")}</Label>
                   <MoneyInput
                     currencyCode={order.currencyCode ?? ""}
+                    // What the rider collects: cash, on the cash-on-delivery increment.
+                    cashOnDelivery
                     id="fulfill-amount"
                     value={shipmentAmount}
                     aria-invalid={Boolean(errors.amount) || undefined}

@@ -15,6 +15,13 @@ import {
   SUPPORTED_CURRENCY_CODES,
   normalizeSupportedCurrencyCode,
 } from "@scalius/shared/currency";
+import {
+  cashOnDeliveryIncrementMinor,
+  defaultPriceIncrementMinor,
+  isWholeUnitIncrement,
+  priceIncrementChoices,
+  resolvePriceIncrementMinor,
+} from "@scalius/shared/currency-policy";
 import { normalizePublicMediaUrl } from "@scalius/shared/media-url";
 import { mediaImageUrl } from "@scalius/shared/media-variants";
 import {
@@ -28,6 +35,7 @@ import { Label } from "~/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Skeleton } from "~/components/ui/skeleton";
+import { Switch } from "~/components/ui/switch";
 import { Textarea } from "~/components/ui/textarea";
 import { useHasPermission } from "~/contexts/PermissionContext";
 import { useSettingsForm } from "~/hooks/use-settings-form";
@@ -586,10 +594,11 @@ function CurrencyFields() {
         body: normalizeCurrencySettingsInput({
           currencyCode: draft.currencyCode,
           currencySymbol: draft.currencySymbol,
+          priceIncrementMinor: draft.priceIncrementMinor,
           expectedRevision,
         }),
       })),
-    defaultValues: { currencyCode: "BDT", currencySymbol: "৳", currencyCodeLocked: false, revision: 0 },
+    defaultValues: { currencyCode: "BDT", currencySymbol: "৳", priceIncrementMinor: 100, currencyCodeLocked: false, revision: 0 },
     errorMessage: common("saveFailed"),
     canEdit: useCanEditStore(),
   });
@@ -619,7 +628,15 @@ function CurrencyFields() {
           triggerClassName="w-full"
           onValueChange={(code) => {
             const supported = normalizeSupportedCurrencyCode(code);
-            if (supported) setValues((draft) => ({ ...draft, currencyCode: supported, currencySymbol: currencySymbol(supported) }));
+            if (supported) {
+              setValues((draft) => ({
+                ...draft,
+                currencyCode: supported,
+                currencySymbol: currencySymbol(supported),
+                // A new currency starts from its own default (whole taka for BDT).
+                priceIncrementMinor: defaultPriceIncrementMinor(supported),
+              }));
+            }
           }}
         />
       </SettingsField>
@@ -631,7 +648,43 @@ function CurrencyFields() {
           onChange={(event) => setValue("currencySymbol", event.target.value)}
         />
       </SettingsField>
+      <WholePricesField
+        currencyCode={values.currencyCode}
+        priceIncrementMinor={values.priceIncrementMinor}
+        onChange={(priceIncrementMinor) => setValue("priceIncrementMinor", priceIncrementMinor)}
+      />
     </>
+  );
+}
+
+/**
+ * The store's price increment (MARKETS-DESIGN D1): whole units or minor
+ * units. Only a currency with decimals has the choice. Cash on delivery in
+ * BDT collects whole taka whatever is chosen here, so a taka store that
+ * prices in paisa is told what that means for COD.
+ */
+function WholePricesField({ currencyCode, priceIncrementMinor, onChange }: {
+  currencyCode: string;
+  priceIncrementMinor: number;
+  onChange: (priceIncrementMinor: number) => void;
+}) {
+  const t = useMessages(storeSettingsMessages);
+  const choices = priceIncrementChoices(currencyCode);
+  if (choices.length < 2) return null;
+  const whole = isWholeUnitIncrement(currencyCode, resolvePriceIncrementMinor(currencyCode, priceIncrementMinor));
+  const takaCash = cashOnDeliveryIncrementMinor(currencyCode) > 1 && !whole;
+  return (
+    <label className="flex min-h-11 items-center justify-between gap-4 text-body">
+      <span>
+        <span className="block font-medium">{t("wholePricesLabel")}</span>
+        <span className="block text-muted-foreground">{t("wholePricesHelp")}</span>
+        {takaCash ? <span className="block text-muted-foreground">{t("wholePricesCod")}</span> : null}
+      </span>
+      <Switch
+        checked={whole}
+        onCheckedChange={(on) => onChange(on ? choices[choices.length - 1]! : choices[0]!)}
+      />
+    </label>
   );
 }
 

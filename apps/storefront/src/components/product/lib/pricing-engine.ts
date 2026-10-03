@@ -2,7 +2,8 @@
 /**
  * Product page pricing, using the exact integer rule checkout charges
  * (`discountedPriceMinor`): a SKU's own price and discount win over the
- * product's, and in BDT percentage prices round to whole taka.
+ * product's, and percentage prices round to the store's price increment
+ * (a BDT store's default: whole taka).
  */
 
 import {
@@ -10,6 +11,7 @@ import {
   formatMoney,
   getCurrencyCode,
   getDecimalPlaces,
+  getPriceIncrementMinor,
 } from "@/lib/currency";
 import { isVariantAvailable } from "@/lib/product-sellable-variants";
 import {
@@ -29,6 +31,11 @@ export interface ProductPricing {
   currencyDecimalPlaces?: number;
   /** Store currency; defaults to the page currency (or BDT on the server). */
   currencyCode?: string;
+  /**
+   * The store's price increment (layout `currency.priceIncrementMinor`);
+   * defaults to the page's. Server renders pass it: they have no page globals.
+   */
+  priceIncrementMinor?: number;
 }
 
 export interface VariantPricing {
@@ -61,13 +68,16 @@ export interface BuyerVariantPricePresentation {
   pricing: PriceCalculationResult;
 }
 
-function currencyOf(pricing: ProductPricing): { code: string; places: number } {
+function currencyOf(pricing: ProductPricing): { code: string; places: number; increment: number } {
   const code = pricing.currencyCode || getCurrencyCode() || DEFAULT_CURRENCY.code;
   const explicit = pricing.currencyDecimalPlaces;
   const places = Number.isInteger(explicit) && explicit! >= 0 && explicit! <= 3
     ? explicit!
     : getDecimalPlaces(code);
-  return { code, places };
+  const increment = Number.isSafeInteger(pricing.priceIncrementMinor) && pricing.priceIncrementMinor! >= 1
+    ? pricing.priceIncrementMinor!
+    : getPriceIncrementMinor(code);
+  return { code, places, increment };
 }
 
 function hasValidDiscount(
@@ -97,7 +107,7 @@ export function calculateVariantPrice(
   productPricing: ProductPricing,
   variantPricing: VariantPricing | null,
 ): PriceCalculationResult {
-  const { code, places } = currencyOf(productPricing);
+  const { places, increment } = currencyOf(productPricing);
   const rawBase = variantPricing?.price ?? productPricing.basePrice;
   const discount = variantPricing && hasValidDiscount(
     variantPricing.discountType,
@@ -115,7 +125,7 @@ export function calculateVariantPrice(
         discount.discountType,
         percentToBps(discount.discountPercentage),
         discountMinor,
-        code,
+        increment,
       );
   const originalPrice = fromMinor(baseMinor ?? 0, places);
   const finalPrice = fromMinor(finalMinor, places);
@@ -185,6 +195,7 @@ export function getVariantDiscountedPrice(
   productDiscountAmount: number | null | undefined,
   currencyDecimalPlaces?: number,
   currencyCode?: string,
+  priceIncrementMinor?: number,
 ): number {
   return calculateVariantPrice(
     {
@@ -194,6 +205,7 @@ export function getVariantDiscountedPrice(
       discountAmount: productDiscountAmount,
       currencyDecimalPlaces,
       currencyCode,
+      priceIncrementMinor,
     },
     {
       price: variantPrice,

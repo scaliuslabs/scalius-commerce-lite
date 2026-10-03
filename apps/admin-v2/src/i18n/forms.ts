@@ -22,6 +22,7 @@ export const formMessages = defineMessages({
     phoneCountriesLoading: "Loading phone countries…",
     phoneCountriesRetry: "Couldn't load phone countries. Retry",
     wholeTaka: "Taka amounts are whole numbers.",
+    wholeUnits: "This store prices in whole amounts. Leave out the decimals.",
   },
   bn: {
     nameLength: "৩ থেকে ১০০ অক্ষর লিখুন।",
@@ -43,5 +44,6 @@ export const formMessages = defineMessages({
     phoneCountriesLoading: "ফোনের দেশগুলো লোড হচ্ছে…",
     phoneCountriesRetry: "ফোনের দেশগুলো লোড হয়নি। আবার চেষ্টা করুন",
     wholeTaka: "টাকার পরিমাণ পূর্ণ সংখ্যায় দিন, পয়সা নয়।",
+    wholeUnits: "এই স্টোরে দাম পূর্ণ সংখ্যায় হয়। দশমিক বাদ দিন।",
   },
 });

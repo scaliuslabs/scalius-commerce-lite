@@ -1,5 +1,10 @@
 import * as React from "react";
-import { requiresWholeCashAmounts } from "@scalius/shared/money";
+import {
+  cashOnDeliveryIncrementMinor,
+  defaultPriceIncrementMinor,
+  isWholeUnitIncrement,
+  resolvePriceIncrementMinor,
+} from "@scalius/shared/currency-policy";
 import { cn } from "@scalius/shared/utils";
 import { NumberInput } from "~/components/ui/number-input";
 import { useCurrency } from "~/hooks/use-currency";
@@ -11,13 +16,16 @@ type MoneyInputProps = Omit<React.ComponentProps<typeof NumberInput>, "integer" 
   currencyCode: string;
   /** Shown inside the field before the amount (the currency symbol, "৳"), for fields without a label that says it. */
   prefix?: string;
+  /**
+   * Cash a rider or the counter collects: on the cash-on-delivery increment
+   * (whole taka in BDT) whatever the store's price increment is.
+   */
+  cashOnDelivery?: boolean;
 };
 
-/**
- * An amount of money. Taka amounts are whole numbers, so in BDT the field
- * takes no decimal point and says why; other currencies keep their minor units.
- */
-export const MoneyInput = React.forwardRef<HTMLInputElement, MoneyInputProps>(({ currencyCode, prefix, className, ...props }, ref) => {
+type MoneyFieldProps = Omit<MoneyInputProps, "cashOnDelivery"> & { whole: boolean };
+
+const MoneyField = React.forwardRef<HTMLInputElement, MoneyFieldProps>(({ currencyCode, prefix, className, whole, ...props }, ref) => {
   const t = useMessages(formMessages);
   const input = (
     <NumberInput
@@ -25,7 +33,7 @@ export const MoneyInput = React.forwardRef<HTMLInputElement, MoneyInputProps>(({
       {...props}
       // eslint-disable-next-line shadcn/no-restyle -- room for the currency symbol inside the field
       className={cn(prefix && "pl-7", className)}
-      wholeUnitsMessage={requiresWholeCashAmounts(currencyCode) ? t("wholeTaka") : undefined}
+      wholeUnitsMessage={whole ? t(currencyCode.trim().toUpperCase() === "BDT" ? "wholeTaka" : "wholeUnits") : undefined}
     />
   );
   if (!prefix) return input;
@@ -38,10 +46,42 @@ export const MoneyInput = React.forwardRef<HTMLInputElement, MoneyInputProps>(({
     </div>
   );
 });
+MoneyField.displayName = "MoneyField";
+
+/**
+ * Whether amounts in `currencyCode` are whole units: the store's price
+ * increment (Settings → Store details; a BDT store's default is whole taka)
+ * for its own currency, else that currency's default.
+ */
+function useWholeUnits(currencyCode: string): boolean {
+  const { code, priceIncrementMinor } = useCurrency();
+  const amountCode = currencyCode.trim().toUpperCase();
+  const increment = amountCode === code
+    ? resolvePriceIncrementMinor(code, priceIncrementMinor)
+    : defaultPriceIncrementMinor(amountCode);
+  return isWholeUnitIncrement(amountCode, increment);
+}
+
+const PriceMoneyInput = React.forwardRef<HTMLInputElement, Omit<MoneyInputProps, "cashOnDelivery">>((props, ref) => (
+  <MoneyField ref={ref} {...props} whole={useWholeUnits(props.currencyCode)} />
+));
+PriceMoneyInput.displayName = "PriceMoneyInput";
+
+/**
+ * An amount of money. While the store prices in whole units (a BDT store's
+ * default: whole taka) the field takes no decimal point and says why; a store
+ * that prices in paisa or cents keeps its minor units. Cash on delivery
+ * (`cashOnDelivery`) follows its own increment.
+ */
+export const MoneyInput = React.forwardRef<HTMLInputElement, MoneyInputProps>(({ cashOnDelivery, ...props }, ref) => {
+  if (!cashOnDelivery) return <PriceMoneyInput ref={ref} {...props} />;
+  const code = props.currencyCode.trim().toUpperCase();
+  return <MoneyField ref={ref} {...props} whole={isWholeUnitIncrement(code, cashOnDeliveryIncrementMinor(code))} />;
+});
 MoneyInput.displayName = "MoneyInput";
 
-/** True when the store currency is paid in whole units only (BDT: whole taka). */
-export function useWholeCashAmounts(): boolean {
+/** True when the store prices in whole units (Settings → Store details; a BDT store's default). */
+export function useWholeUnitPrices(): boolean {
   const { code } = useCurrency();
-  return requiresWholeCashAmounts(code);
+  return useWholeUnits(code);
 }

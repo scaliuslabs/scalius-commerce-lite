@@ -35,7 +35,7 @@ import type { Product } from "@/lib/api/types";
 
 const context = {
   baseUrl: "https://storefront.example.test",
-  currency: { code: "BDT", decimalPlaces: 2 },
+  currency: { code: "BDT", decimalPlaces: 2, priceIncrementMinor: 100 },
 };
 
 function productFixture(): Product {

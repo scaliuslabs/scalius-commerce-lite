@@ -164,7 +164,7 @@ export function DiscountEditor({ type, discount }: { type: DiscountType; discoun
 
 function EditorPage({ type, discount }: { type: DiscountType; discount?: DiscountRecord }) {
   const t = useMessages(discountsMessages);
-  const { symbol, code: currencyCode, fmt } = useCurrency();
+  const { symbol, code: currencyCode, fmt, priceIncrementMinor } = useCurrency();
   const { hasPermission } = usePermissions();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -190,7 +190,7 @@ function EditorPage({ type, discount }: { type: DiscountType; discount?: Discoun
   const canSave = hasPermission(discount ? ADMIN_PERMISSIONS.DISCOUNTS_EDIT : ADMIN_PERMISSIONS.DISCOUNTS_CREATE);
   const canToggle = hasPermission(ADMIN_PERMISSIONS.DISCOUNTS_TOGGLE_STATUS);
   const canDelete = hasPermission(ADMIN_PERMISSIONS.DISCOUNTS_DELETE);
-  const errors = validateDraft(draft, currencyCode);
+  const errors = validateDraft(draft, currencyCode, undefined, priceIncrementMinor);
   const dirty = JSON.stringify(draft) !== JSON.stringify(baseline);
   const busy = Boolean(scope?.busy) || activeMutation.isPending || deleteMutation.isPending;
   const errorVars = {
@@ -220,7 +220,7 @@ function EditorPage({ type, discount }: { type: DiscountType; discount?: Discoun
   };
   const { data: allDiscounts = [] } = useQuery(discountsQueryOptions());
   const preview = combinationPreview(draft, allDiscounts, discount?.id);
-  const summary = summarizeDraft(draft, currencyCode, format, preview.filter((item) => item.stacks).length);
+  const summary = summarizeDraft(draft, currencyCode, format, preview.filter((item) => item.stacks).length, priceIncrementMinor);
   // Each product's highest price buyers pay: an amount above all of them makes every item free.
   const prices = draft.appliesTo.ids.map((id) => appliesItems.get(id)?.priceRange?.to);
   const aboveEveryPrice = exceedsEveryPrice(

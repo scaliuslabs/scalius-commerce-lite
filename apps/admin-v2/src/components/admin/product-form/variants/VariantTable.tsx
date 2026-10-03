@@ -21,7 +21,7 @@ import { MoneyInput } from "@/components/admin/shared/MoneyInput";
 import { IdText } from "~/components/admin/data-table/cells";
 import { DataTableRowActions, type ExtraAction } from "~/components/admin/data-table/DataTableRowActions";
 import { cn } from "@scalius/shared/utils";
-import { requiresWholeCashAmounts } from "@scalius/shared/money";
+import { isWholeUnitIncrement, resolvePriceIncrementMinor } from "@scalius/shared/currency-policy";
 import { useCurrency } from "@/hooks/use-currency";
 import { formatNumber, useMessages } from "~/i18n";
 import { productMessages } from "~/i18n/products";
@@ -165,11 +165,11 @@ export function VariantTable(props: VariantTableProps) {
   const r = useMessages(resourceMessages);
   const navigate = useNavigate();
   const currency = useCurrency();
-  const { code, symbol, fmt, salePrice } = currency;
+  const { code, symbol, fmt, salePrice, priceIncrementMinor } = currency;
   const money = React.useMemo(() => ({
     code, symbol, fmt, salePrice,
-    whole: (amount: number) => (requiresWholeCashAmounts(code) ? `${symbol}${formatNumber(Math.round(amount))}` : fmt(amount)),
-  }) as Money, [code, symbol, fmt, salePrice]);
+    whole: (amount: number) => (isWholeUnitIncrement(code, resolvePriceIncrementMinor(code, priceIncrementMinor)) ? `${symbol}${formatNumber(Math.round(amount))}` : fmt(amount)),
+  }) as Money, [code, symbol, fmt, salePrice, priceIncrementMinor]);
 
   // The product kind decides the columns: a gift card tracks no quantity (and has no cost per item).
   const kindRules = useProductKindRules();

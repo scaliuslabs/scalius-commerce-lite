@@ -98,6 +98,7 @@ import {
 } from "@scalius/shared/product-condition";
 import { resolveCatalogDiscoveryImageUrl } from "@scalius/shared/catalog-discovery-media";
 import { DEFAULT_CURRENCY, getDecimalPlaces } from "@scalius/shared/currency";
+import { resolvePriceIncrementMinor } from "@scalius/shared/currency-policy";
 import { roundPriceToPrecision } from "@scalius/shared/price-utils";
 import { htmlToPlainText } from "@scalius/shared/html-sanitize";
 import RichTextStyles from "@/components/RichTextStyles.astro";
@@ -220,6 +221,8 @@ const currencyDecimalPlaces =
   configuredCurrencyDecimalPlaces <= 6
     ? configuredCurrencyDecimalPlaces
     : getDecimalPlaces(currencyCode);
+// Server renders have no page globals: prices use the store's increment explicitly.
+const currencyPriceIncrement = resolvePriceIncrementMinor(currencyCode, layoutData.currency?.priceIncrementMinor);
 const formatMetadataPrice = (price: number) =>
   roundPriceToPrecision(price, currencyDecimalPlaces).toFixed(
     currencyDecimalPlaces,
@@ -258,6 +261,8 @@ const buyerPricePresentation = getBuyerVariantPricePresentation(
     discountPercentage: product.discountPercentage,
     discountAmount: product.discountAmount,
     currencyDecimalPlaces,
+    currencyCode,
+    priceIncrementMinor: currencyPriceIncrement,
   },
   buyerPricingVariants,
 );
@@ -448,6 +453,8 @@ function getVariantSchemaPrice(
     product.discountPercentage,
     product.discountAmount,
     currencyDecimalPlaces,
+    currencyCode,
+    currencyPriceIncrement,
   );
 }
 
@@ -760,6 +767,7 @@ const productCategoryAnalytics = productCategory
           currencySymbol={currencySymbol}
           currencyCode={currencyCode}
           currencyDecimalPlaces={currencyDecimalPlaces}
+          priceIncrementMinor={currencyPriceIncrement}
           initialVariant={queryVariantSelection?.variant}
           initialUnavailableVariant={unavailableQueryVariantSelection?.variant}
           quickBuyNotice={quickBuyNotice}

@@ -40,6 +40,7 @@ import {
   resolveStoreSocialLinks,
 } from "@/lib/store-identity";
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
+import { resolvePriceIncrementMinor } from "@scalius/shared/currency-policy";
 import {
   buildStorefrontThemeTokens,
 } from "@scalius/shared/storefront-theme";
@@ -245,6 +246,8 @@ const currencySymbol = layoutData?.currency?.symbol ?? DEFAULT_CURRENCY.symbol;
 const currencyCode = layoutData?.currency?.code ?? DEFAULT_CURRENCY.code;
 const currencyDecimalPlaces =
   layoutData?.currency?.decimalPlaces ?? DEFAULT_CURRENCY.decimalPlaces;
+// The store's price increment: client pricing rounds percentage prices to it as checkout does.
+const currencyPriceIncrement = resolvePriceIncrementMinor(currencyCode, layoutData?.currency?.priceIncrementMinor);
 
 // CSS comes only from shared enum constants and schema-validated hex colours
 // (plus the fluid grid steps derived from the density constants, widened for
@@ -331,6 +334,7 @@ const runtimeGlobalsScript = [
   `window.__CURRENCY_SYMBOL__=${serializeJsonForInlineScript(currencySymbol)};`,
   `window.__CURRENCY_CODE__=${serializeJsonForInlineScript(currencyCode)};`,
   `window.__CURRENCY_DECIMAL_PLACES__=${serializeJsonForInlineScript(currencyDecimalPlaces)};`,
+  `window.__CURRENCY_PRICE_INCREMENT__=${serializeJsonForInlineScript(currencyPriceIncrement)};`,
   `window.__META_CAPI_BROWSER_EVENTS_ENABLED__=${serializeJsonForInlineScript(!isThemePreview && analytics && layoutData?.metaCapi?.browserEventsEnabled === true)};`,
   `window.__TIKTOK_PIXEL_ENABLED__=${serializeJsonForInlineScript(tiktokPixelEnabled)};`,
 ].join("");

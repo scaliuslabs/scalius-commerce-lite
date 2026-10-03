@@ -4,7 +4,7 @@
  * the discounts catalog) and the live summary. Pure, so it is unit tested.
  */
 import { getDecimalPlaces } from "@scalius/shared/currency";
-import { requiresWholeCashAmounts } from "@scalius/shared/money";
+import { defaultPriceIncrementMinor, isWholeUnitIncrement } from "@scalius/shared/currency-policy";
 
 import type { DiscountMessageKey } from "~/i18n/discounts";
 import type { DiscountInput, DiscountRecord } from "~/lib/api-query-options/discounts";
@@ -123,20 +123,31 @@ export function latinDigits(value: string): string {
     .replace(/(?<=\d),(?=\d)/gu, "");
 }
 
-/** Why an amount can't be saved, or null when it can. */
-export function amountError(value: string, currencyCode: string): DiscountMessageKey | null {
+/**
+ * Why an amount can't be saved, or null when it can. A store that prices in
+ * whole units (Settings → Store details; a BDT store's default) takes no
+ * fraction; one that prices in paisa or cents takes its minor units.
+ */
+export function amountError(
+  value: string,
+  currencyCode: string,
+  priceIncrementMinor = defaultPriceIncrementMinor(currencyCode),
+): DiscountMessageKey | null {
   const precision = getDecimalPlaces(currencyCode);
   const match = /^(\d+)(?:\.(\d+))?$/u.exec(latinDigits(value).trim());
   if (!match) return "errorAmount";
   if ((match[2]?.length ?? 0) > precision) return precision === 0 ? "errorWholeAmount" : "errorDecimals";
-  if (requiresWholeCashAmounts(currencyCode) && /[1-9]/u.test(match[2] ?? "")) return "errorWholeTaka";
+  if (isWholeUnitIncrement(currencyCode, priceIncrementMinor) && /[1-9]/u.test(match[2] ?? "")) {
+    return currencyCode.trim().toUpperCase() === "BDT" ? "errorWholeTaka" : "errorWholeAmount";
+  }
   const major = Number(`${match[1]}.${match[2] ?? "0"}`);
   if (major <= 0) return "errorAmount";
   return major > MAX_AMOUNT_MAJOR ? "errorAmountMax" : null;
 }
 
 export function majorToMinor(value: string, currencyCode: string): number | null {
-  if (amountError(value, currencyCode)) return null;
+  // The format only: `validateDraft` already held the amount to the store's increment.
+  if (amountError(value, currencyCode, 1)) return null;
   const precision = getDecimalPlaces(currencyCode);
   const [whole, fraction = ""] = latinDigits(value).trim().split(".");
   return Number(whole) * 10 ** precision + Number(fraction.padEnd(precision, "0") || "0");
@@ -287,6 +298,8 @@ export function validateDraft(
   draft: DiscountDraft,
   currencyCode: string,
   nowSeconds = Math.floor(Date.now() / 1_000),
+  /** The store's price increment (`useCurrency`); defaults to the currency's. */
+  priceIncrementMinor = defaultPriceIncrementMinor(currencyCode),
 ): DraftErrors {
   const errors: DraftErrors = {};
   const set = (field: keyof DiscountDraft, error: DiscountMessageKey | null) => {
@@ -303,14 +316,14 @@ export function validateDraft(
   if (draft.type === "products" || draft.type === "order") {
     set("value", draft.valueKind === "percentage"
       ? percentToBasisPoints(draft.value) === null ? "errorPercent" : null
-      : amountError(draft.value, currencyCode));
+      : amountError(draft.value, currencyCode, priceIncrementMinor));
   }
   if (draft.type === "products" && draft.appliesTo.ids.length === 0) errors.appliesTo = "errorPickItems";
   if (bundlesShipping(draft) && draft.freeShippingMinimum.trim()) {
-    set("freeShippingMinimum", amountError(draft.freeShippingMinimum, currencyCode));
+    set("freeShippingMinimum", amountError(draft.freeShippingMinimum, currencyCode, priceIncrementMinor));
   }
   if (draft.type === "buy_get") {
-    set("buyValue", draft.buyKind === "quantity" ? quantityError(draft.buyValue) : amountError(draft.buyValue, currencyCode));
+    set("buyValue", draft.buyKind === "quantity" ? quantityError(draft.buyValue) : amountError(draft.buyValue, currencyCode, priceIncrementMinor));
     if (draft.buyScope.ids.length === 0) errors.buyScope = "errorPickItems";
     set("getQuantity", quantityError(draft.getQuantity));
     if (draft.getScope.ids.length === 0) errors.getScope = "errorPickItems";
@@ -318,7 +331,7 @@ export function validateDraft(
     if (draft.limitUsesPerOrder) set("usesPerOrder", quantityError(draft.usesPerOrder));
   } else if (draft.minimum !== "none") {
     set("minimumValue", draft.minimum === "amount"
-      ? amountError(draft.minimumValue, currencyCode)
+      ? amountError(draft.minimumValue, currencyCode, priceIncrementMinor)
       : quantityError(draft.minimumValue));
   }
   if (draft.method === "code" && draft.limitTotal) {
@@ -540,10 +553,12 @@ export function summarizeDraft(
   currencyCode: string,
   format: SummaryFormat,
   stacksWithOthers = 0,
+  /** The store's price increment: an amount off it reads as not yet entered. */
+  priceIncrementMinor = defaultPriceIncrementMinor(currencyCode),
 ): SummaryLine[] {
   const lines: SummaryLine[] = [];
   const clean = (value: string) => latinDigits(value).trim();
-  const amount = (value: string) => (amountError(value, currencyCode) ? null : format.money(clean(value)));
+  const amount = (value: string) => (amountError(value, currencyCode, priceIncrementMinor) ? null : format.money(clean(value)));
   const percent = (value: string) => (percentToBasisPoints(value) === null ? null : `${format.number(clean(value))}%`);
   const count = (value: string, max?: number) => (quantityError(value, max) ? null : format.number(clean(value)));
   const value = draft.valueKind === "percentage" ? percent(draft.value) : amount(draft.value);

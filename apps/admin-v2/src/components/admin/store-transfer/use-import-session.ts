@@ -109,7 +109,8 @@ const BATCH_SIZE: Record<Plannable["kind"], number> = {
   inventory: INVENTORY_IMPORT_BATCH_DEFAULT,
 };
 
-export function useImportSession(kind: ImportKind, currencyCode: string) {
+/** `priceIncrementMinor`: the store's (Settings → Store details); imported prices are multiples of it. */
+export function useImportSession(kind: ImportKind, currencyCode: string, priceIncrementMinor: number) {
   const [fileState, setFileState] = useState<FileState>({ status: "empty" });
   const [options, setOptions] = useState<Omit<PlanOptions, "kind" | "currency">>({
     // As in Shopify, an import adds what is new and leaves the store's own records alone until asked.
@@ -124,7 +125,10 @@ export function useImportSession(kind: ImportKind, currencyCode: string) {
   const previewAbort = useRef<AbortController | null>(null);
   const runAbort = useRef<AbortController | null>(null);
   const runId = useRef(newImportRunId());
-  const currency = useMemo(() => ({ code: currencyCode, decimalPlaces: getDecimalPlaces(currencyCode) }), [currencyCode]);
+  const currency = useMemo(
+    () => ({ code: currencyCode, decimalPlaces: getDecimalPlaces(currencyCode), priceIncrementMinor }),
+    [currencyCode, priceIncrementMinor],
+  );
 
   const plan = useMemo<ImportPlan | null>(() => {
     if (fileState.status !== "ready") return null;

@@ -71,9 +71,9 @@ function ModeChoice<T extends string>({ value, onChange, options, label }: {
 export function ImportDialog({ kind, open, onOpenChange }: { kind: ImportKind; open: boolean; onOpenChange: (open: boolean) => void }) {
   const t = useMessages(storeTransferMessages);
   const r = useMessages(resourceMessages);
-  const { code: currencyCode } = useCurrency();
+  const { code: currencyCode, priceIncrementMinor } = useCurrency();
   const queryClient = useQueryClient();
-  const session = useImportSession(kind, currencyCode);
+  const session = useImportSession(kind, currencyCode, priceIncrementMinor);
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
   const { fileState, plan, preview, run } = session;

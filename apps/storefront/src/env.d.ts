@@ -118,6 +118,7 @@ interface Window {
   __CURRENCY_SYMBOL__?: string;
   __CURRENCY_CODE__?: string;
   __CURRENCY_DECIMAL_PLACES__?: number;
+  __CURRENCY_PRICE_INCREMENT__?: number;
   __META_CAPI_BROWSER_EVENTS_ENABLED__?: boolean;
   __TIKTOK_PIXEL_ENABLED__?: boolean;
   __BUILD_ID__?: string;

@@ -2,23 +2,23 @@ import { useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { currencySettingsQueryOptions } from "~/lib/api-query-options/currency";
 import { getDecimalPlaces } from "@scalius/shared/currency";
+import { resolvePriceIncrementMinor } from "@scalius/shared/currency-policy";
 import { discountedPriceMinor, fromMinor, percentToBps, toMinor } from "@scalius/shared/money";
 import { formatNumber, useLocale } from "~/i18n";
 
 const DEFAULT_SYMBOL = "৳";
 const DEFAULT_CODE = "BDT";
 
-/** Store currency plus a money formatter for the dashboard language. */
+/** Store currency, its price increment, and a money formatter for the dashboard language. */
 export function useCurrency() {
   const { data } = useQuery(currencySettingsQueryOptions());
   const locale = useLocale();
+  const settings = data as Record<string, unknown> | undefined;
 
-  const symbol =
-    (data as Record<string, unknown> | undefined)?.currencySymbol as string ??
-    DEFAULT_SYMBOL;
-  const code =
-    (data as Record<string, unknown> | undefined)?.currencyCode as string ??
-    DEFAULT_CODE;
+  const symbol = settings?.currencySymbol as string ?? DEFAULT_SYMBOL;
+  const code = settings?.currencyCode as string ?? DEFAULT_CODE;
+  // Settings → Store details: whole units or minor units (a BDT store's default: whole taka).
+  const priceIncrementMinor = resolvePriceIncrementMinor(code, settings?.priceIncrementMinor);
 
   const fmt = useCallback(
     (price: number | string) => {
@@ -47,7 +47,7 @@ export function useCurrency() {
           discount.discountType ?? "percentage",
           percentToBps(discount.discountPercentage ?? 0),
           toMinor(discount.discountAmount ?? 0, digits),
-          code,
+          priceIncrementMinor,
         );
         return sale < priceMinor ? fromMinor(sale, digits) : null;
       } catch {
@@ -55,8 +55,8 @@ export function useCurrency() {
         return null;
       }
     },
-    [code],
+    [code, priceIncrementMinor],
   );
 
-  return { symbol, code, fmt, formatPrice: fmt, salePrice };
+  return { symbol, code, priceIncrementMinor, fmt, formatPrice: fmt, salePrice };
 }

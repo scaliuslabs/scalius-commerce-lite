@@ -1,5 +1,6 @@
 import { getVariantDiscountedPrice } from "@/components/product/lib/pricing-engine";
 import { roundPriceToPrecision } from "@scalius/shared/price-utils";
+import { resolvePriceIncrementMinor } from "@scalius/shared/currency-policy";
 import { getFeedProducts, type FeedProductPage } from "@/lib/api/products";
 import { getLayoutData, type CurrencyData } from "@/lib/api/storefront";
 import type { Product, ProductVariant } from "@/lib/api/types";
@@ -92,7 +93,7 @@ interface UcpProduct {
 
 interface UcpCatalogContext {
   baseUrl: string;
-  currency: Required<Pick<CurrencyData, "code" | "decimalPlaces">>;
+  currency: Required<Pick<CurrencyData, "code" | "decimalPlaces" | "priceIncrementMinor">>;
 }
 
 interface LookupInput {
@@ -293,8 +294,10 @@ export async function getUcpCatalogContext(): Promise<UcpCatalogContext | null> 
   const decimalPlaces = Number.isInteger(layout.currency?.decimalPlaces)
     ? layout.currency!.decimalPlaces!
     : DEFAULT_CURRENCY.decimalPlaces;
+  // UCP prices are what checkout charges: at the store's increment.
+  const priceIncrementMinor = resolvePriceIncrementMinor(code, layout.currency?.priceIncrementMinor);
 
-  return { baseUrl, currency: { code, decimalPlaces } };
+  return { baseUrl, currency: { code, decimalPlaces, priceIncrementMinor } };
 }
 
 export function validateUcpRequest(
@@ -602,6 +605,7 @@ function variantPrices(
     product.discountAmount,
     context.currency.decimalPlaces,
     context.currency.code,
+    context.currency.priceIncrementMinor,
   );
 
   return {

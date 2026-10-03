@@ -23,7 +23,7 @@ export interface CheckoutFlowPreviewOptions {
     codEnabled: boolean;
     activeOnlineMethodCount: number;
     sslCommerzEnabled: boolean;
-    /** The store currency is paid in whole units (BDT): the advance has no paisa. */
+    /** The store prices in whole units (a BDT store's default): the advance has no paisa. */
     wholeTaka?: boolean;
 }
 

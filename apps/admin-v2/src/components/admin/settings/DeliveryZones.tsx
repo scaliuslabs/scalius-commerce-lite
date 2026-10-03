@@ -12,7 +12,7 @@ import { Switch } from "~/components/ui/switch";
 import { Textarea } from "~/components/ui/textarea";
 import { useHasPermission } from "~/contexts/PermissionContext";
 import { useCurrency } from "~/hooks/use-currency";
-import { useWholeCashAmounts } from "~/components/admin/shared/MoneyInput";
+import { useWholeUnitPrices } from "~/components/admin/shared/MoneyInput";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { AdminApiResponseError } from "~/lib/admin-api-error";
 import { apiClient, apiData } from "~/lib/api";
@@ -122,7 +122,8 @@ function feeOf(rate: RateDraft): number | null {
 
 /**
  * What's wrong with each field of a charge, or nothing. `wholeTaka`: the
- * store currency is paid in whole units, so a charge or threshold has no paisa.
+ * store prices in whole units (Settings → Store details; a BDT store's
+ * default), so a charge or threshold has no paisa.
  */
 export function rateErrors(
   rate: RateDraft,
@@ -178,7 +179,7 @@ function RatesEditor({
 }) {
   const t = useMessages(shippingMessages);
   const { symbol } = useCurrency();
-  const wholeTaka = useWholeCashAmounts();
+  const wholeTaka = useWholeUnitPrices();
   const update = (index: number, patch: Partial<RateDraft>) =>
     onChange(rates.map((rate, i) => (i === index ? { ...rate, ...patch } : rate)));
   return (
@@ -504,7 +505,7 @@ function ZoneForm({ zone, zones }: { zone: Zone | null; zones: Zone[] }) {
   const common = useMessages(settingsMessages);
   const refresh = useRefreshZones();
   const onConflict = useConflictReload();
-  const wholeTaka = useWholeCashAmounts();
+  const wholeTaka = useWholeUnitPrices();
   const [saved] = useState(() => ({
     name: zone?.name ?? "",
     places: zone?.locations ?? [],
@@ -579,7 +580,7 @@ function ZoneForm({ zone, zones }: { zone: Zone | null; zones: Zone[] }) {
 
 function EverywhereElseForm({ everywhereElse }: { everywhereElse: DeliveryZones["everywhereElse"] }) {
   const refresh = useRefreshZones();
-  const wholeTaka = useWholeCashAmounts();
+  const wholeTaka = useWholeUnitPrices();
   const onConflict = useConflictReload();
   const [saved] = useState(() => everywhereElse.rates.map(toDraft));
   const [rates, setRates] = useState(saved);

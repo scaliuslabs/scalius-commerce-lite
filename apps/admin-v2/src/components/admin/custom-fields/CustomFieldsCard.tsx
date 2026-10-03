@@ -18,6 +18,7 @@ import {
   type CustomFieldOwnerType,
 } from "@scalius/shared/custom-fields";
 import { DEFAULT_CURRENCY, getDecimalPlaces } from "@scalius/shared/currency";
+import { resolvePriceIncrementMinor } from "@scalius/shared/currency-policy";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
 import {
   SaveConflict,
@@ -84,8 +85,14 @@ interface EditorProps {
 export function CustomFieldsEditor({ ownerType, ownerId, canEdit }: EditorProps) {
   const t = useMessages(customFieldMessages);
   const queryClient = useQueryClient();
-  const currencyCode = useCurrency().code ?? DEFAULT_CURRENCY.code;
-  const context = useMemo<CustomFieldCodecContext>(() => ({ decimalPlaces: getDecimalPlaces(currencyCode), currencyCode }), [currencyCode]);
+  const currency = useCurrency();
+  const currencyCode = currency.code ?? DEFAULT_CURRENCY.code;
+  const priceIncrementMinor = resolvePriceIncrementMinor(currencyCode, currency.priceIncrementMinor);
+  // Money values are checked against the store's price increment, as the server does.
+  const context = useMemo<CustomFieldCodecContext>(
+    () => ({ decimalPlaces: getDecimalPlaces(currencyCode), currencyCode, priceIncrementMinor }),
+    [currencyCode, priceIncrementMinor],
+  );
   const problemText = useCustomFieldProblemText();
   const { data, isError, refetch } = useQuery(customFieldValuesQueryOptions(ownerType, ownerId));
   const fields = data?.fields;

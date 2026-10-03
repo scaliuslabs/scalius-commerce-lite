@@ -12,6 +12,7 @@ import { getLayoutData, getSeoSettings, getShippingMethods } from "@/lib/api";
 import type { ShippingMethod } from "@/lib/api/types";
 import { splitDeliveryRates } from "@/lib/delivery-facts";
 import { formatCatalogFeedAmount } from "@scalius/shared/catalog-feed-money";
+import { resolvePriceIncrementMinor } from "@scalius/shared/currency-policy";
 import { setRuntimeImageCdnPolicy } from "@/lib/api/runtime";
 import { resolveMediaUrl } from "@/lib/media-url";
 import { getBaseUrl, xmlDataUnavailableResponse } from "@/lib/sitemap-utils";
@@ -89,6 +90,7 @@ function toCatalogFeedRows(
   products: Product[],
   baseUrl: string,
   currencyCode: string,
+  priceIncrementMinor: number,
   feedsPolicy: SeoDiscoverySettings["feeds"],
   variantStrategy = getFeedVariantStrategy(feedsPolicy),
 ): CatalogFeedRow[] {
@@ -96,6 +98,7 @@ function toCatalogFeedRows(
     products,
     storefrontBaseUrl: baseUrl,
     currencyCode,
+    priceIncrementMinor,
     policy: {
       variantStrategy,
       includeUnavailableProducts: feedsPolicy.includeUnavailableProducts,
@@ -256,6 +259,7 @@ async function readFeedItemWindow({
   limit,
   baseUrl,
   currencyCode,
+  priceIncrementMinor,
   feedsPolicy,
   feedVariantStrategy,
 }: {
@@ -263,6 +267,7 @@ async function readFeedItemWindow({
   limit: number;
   baseUrl: string;
   currencyCode: string;
+  priceIncrementMinor: number;
   feedsPolicy: SeoDiscoverySettings["feeds"];
   feedVariantStrategy: ReturnType<typeof getFeedVariantStrategy>;
 }): Promise<FeedItemWindowResult> {
@@ -281,6 +286,7 @@ async function readFeedItemWindow({
       response.data,
       baseUrl,
       currencyCode,
+      priceIncrementMinor,
       feedsPolicy,
       feedVariantStrategy,
     ));
@@ -361,12 +367,15 @@ export function createCatalogFeedGet(format: CatalogFeedFormat): APIRoute {
       }
       setRuntimeImageCdnPolicy(layoutData.media);
       const currencyCode = layoutData.currency?.code ?? "BDT";
+      // Feed prices are what checkout charges: at the store's increment.
+      const priceIncrementMinor = resolvePriceIncrementMinor(currencyCode, layoutData.currency?.priceIncrementMinor);
 
       const feedWindow = await readFeedItemWindow({
         cursor,
         limit,
         baseUrl,
         currencyCode,
+        priceIncrementMinor,
         feedsPolicy,
         feedVariantStrategy,
       });

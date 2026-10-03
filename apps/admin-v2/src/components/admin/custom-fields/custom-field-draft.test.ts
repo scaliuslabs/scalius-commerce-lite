@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { checkDraft, draftFromValue, localDateTime, sameDraft, valueFromDraft } from "./custom-field-draft";
 
-const BDT = { decimalPlaces: 2, currencyCode: "BDT" } as const;
+const BDT = { decimalPlaces: 2, currencyCode: "BDT", priceIncrementMinor: 100 } as const;
 const none = { min: null, max: null, regex: null, choices: null };
 
 describe("custom field drafts", () => {

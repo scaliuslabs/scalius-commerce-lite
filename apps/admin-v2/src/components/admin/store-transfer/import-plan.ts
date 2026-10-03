@@ -23,7 +23,8 @@ export interface PlanOptions {
   extraOptions: ExtraOptionStrategy;
   roundPrices: boolean;
   categorySource: "auto" | "type" | "product_category";
-  currency: { code: string; decimalPlaces: number };
+  /** The store currency at its price increment. */
+  currency: { code: string; decimalPlaces: number; priceIncrementMinor: number };
   allowedPhoneCountries?: readonly string[];
 }
 
