@@ -4,6 +4,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
 import { useDirtyDialogClose } from "~/components/admin/shared/use-dirty-dialog-close";
+import { useSubmitOnce } from "~/components/admin/shared/use-submit-once";
 import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "~/components/ui/dialog";
@@ -84,6 +85,7 @@ export function LocationDialog({ location, open, onOpenChange }: {
   const [draft, setDraft] = useState<Draft>(() => draftOf(location));
   const [errors, setErrors] = useState<Errors>({});
   const save = useSaveInventoryLocation();
+  const submitOnce = useSubmitOnce();
   const reset = save.reset;
 
   useEffect(() => {
@@ -102,7 +104,6 @@ export function LocationDialog({ location, open, onOpenChange }: {
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (save.isPending) return;
     const result = locationBody(draft);
     if ("errors" in result) {
       setErrors(result.errors);
@@ -110,15 +111,12 @@ export function LocationDialog({ location, open, onOpenChange }: {
       if (first) document.getElementById(`inventory-location-${first}`)?.focus();
       return;
     }
-    save.mutate(
-      { id: location?.id ?? null, version: location?.version ?? null, body: result.body },
-      {
-        onSuccess: () => {
-          toast.success(t(location ? "saved" : "created"));
-          onOpenChange(false);
-        },
-      },
-    );
+    // One request at a time: a double click must not create the location twice.
+    submitOnce(async () => {
+      await save.mutateAsync({ id: location?.id ?? null, version: location?.version ?? null, body: result.body });
+      toast.success(t(location ? "saved" : "created"));
+      onOpenChange(false);
+    });
   };
 
   // A 409 is either a code another location uses (shown at the field) or a stale version.

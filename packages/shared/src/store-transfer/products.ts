@@ -58,7 +58,7 @@ export const productImportVariantSchema = z.object({
   price: money,
   /** The pre-sale price; above `price` it becomes a fixed discount of the difference. */
   compareAtPrice: money.nullable(),
-  /** Unit cost (reported until SKU costs exist). */
+  /** Cost per item (what the merchant pays for one unit), stored on the SKU. */
   cost: money.nullable(),
   /** On-hand quantity at the default location; null when the file has none. */
   stock: z.number().int().min(0).max(MAX_SKU_STOCK).nullable(),

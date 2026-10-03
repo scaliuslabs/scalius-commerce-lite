@@ -20,6 +20,7 @@ import {
     products,
 } from "@scalius/database/schema";
 import { and, eq, getTableColumns, inArray, isNull, not, sql } from "drizzle-orm";
+import type { BatchItem } from "drizzle-orm/batch";
 import { nanoid } from "nanoid";
 import {
     MAX_PRODUCT_OPTION_AXES,
@@ -49,6 +50,7 @@ import {
 import { buildStockMovementClaim } from "../inventory/stock-movement-claims";
 import { getDefaultInventoryLocation, readVariantStockAwayFromDefault } from "../inventory/locations";
 import { editableFulfillmentKindSchema } from "./customization-schema";
+import { unitCostAmountSchema } from "../inventory/unit-costs";
 
 const optionValueInputSchema = z.object({
     id: z.string().trim().min(1),
@@ -268,7 +270,18 @@ function validateOptionMatrix(
     });
 }
 
+/** A new product's SKUs may start with a cost per item (later edits use PUT /inventory/costs). */
+const createMatrixVariantInputSchema = matrixVariantInputSchema.extend({
+    cost: unitCostAmountSchema.nullable().optional()
+        .describe("Cost per item in major units of the store currency. Omit or null for none."),
+});
+
 export const createProductOptionMatrixSchema = productOptionMatrixBaseSchema
+    .extend({ variants: z.array(createMatrixVariantInputSchema).min(1).max(MAX_PRODUCT_OPTION_COMBINATIONS) })
+    .superRefine(validateOptionMatrix);
+
+/** The matrix a product save carries with its details (no expected revision of its own). */
+export const productOptionMatrixBodySchema = productOptionMatrixBaseSchema
     .superRefine(validateOptionMatrix);
 
 export const productOptionMatrixSchema = productOptionMatrixBaseSchema
@@ -324,9 +337,12 @@ export function orderSelectedOptionValueIds(
     });
 }
 
+/** A product image association's media status, as SKU image checks read it. */
+export type SkuImageStatus = "ready" | "trashed" | "deleting" | "deleted";
+
 export function assertVariantImageOwnership(
     imageId: string | null,
-    attachedSkuImages: ReadonlyMap<string, { status: "ready" | "trashed" | "deleting" | "deleted" }>,
+    attachedSkuImages: ReadonlyMap<string, { status: SkuImageStatus }>,
     retainedImageId: string | null = null,
 ): void {
     if (!imageId) return;
@@ -401,6 +417,9 @@ type StockAllocationVariant = {
 /**
  * Converting a tracked simple SKU to an option matrix is a stock allocation,
  * not a stock creation or deletion. Existing optioned products are unaffected.
+ * A simple SKU with nothing on hand has nothing to allocate: its new
+ * combinations start with the quantities typed, each booked as an initial
+ * stocktake (as a combination added to an optioned product is).
  */
 export function assertOptionMatrixStockAllocation(
     currentVariants: readonly StockAllocationVariant[],
@@ -415,7 +434,7 @@ export function assertOptionMatrixStockAllocation(
             "Release reserved or preorder stock before converting this product to options.",
         );
     }
-    if (!defaultSku.trackInventory) return;
+    if (!defaultSku.trackInventory || defaultSku.stock === 0) return;
 
     const allocated = nextVariants.reduce(
         (total, variant) => total + (variant.trackInventory ? variant.stock : 0),
@@ -456,7 +475,10 @@ export async function assertSimpleConversionStockAtDefaultLocation(
     );
 }
 
-/** Preserve physical stock when a topology edit replaces old combinations. */
+/**
+ * Preserve physical stock when a topology edit replaces old combinations
+ * (replaced combinations with nothing on hand leave nothing to move).
+ */
 export function assertOptionMatrixReplacementStockAllocation(
     retiringVariants: readonly Pick<StockAllocationVariant, "stock" | "trackInventory">[],
     creatingVariants: readonly Pick<StockAllocationVariant, "stock" | "trackInventory">[],
@@ -466,6 +488,7 @@ export function assertOptionMatrixReplacementStockAllocation(
         (total, variant) => total + (variant.trackInventory ? variant.stock : 0),
         0,
     );
+    if (retiringStock === 0) return;
     const creatingStock = creatingVariants.reduce(
         (total, variant) => total + (variant.trackInventory ? variant.stock : 0),
         0,
@@ -477,29 +500,52 @@ export function assertOptionMatrixReplacementStockAllocation(
     }
 }
 
-export async function saveProductOptionMatrix(
+/** The options and SKUs of one matrix save, without the revision it saves against. */
+export type ProductOptionMatrixBody = z.infer<typeof productOptionMatrixBodySchema>;
+
+export type ProductOptionMatrixPlan = {
+    /** The matrix's writes, for one guarded product aggregate batch. */
+    statements: BatchItem<"sqlite">[];
+    /** SKUs whose stock this save changes or revives (low-stock alerts are reconciled after the batch). */
+    changedStockVariantIds: string[];
+    /** Each submitted row's SKU id after the save (a draft row's new id). */
+    variantIds: Map<string, string>;
+};
+
+/**
+ * Checks a matrix save against the product as stored and returns its writes
+ * without writing anything. Every refusal (a taken SKU, stock that must be
+ * allocated, a row that no longer exists) happens here, so a caller can put
+ * these statements in the same batch as the rest of one Save and keep the
+ * Save all-or-nothing.
+ */
+export async function planProductOptionMatrix(
     db: Database,
     productId: string,
-    rawInput: unknown,
-    adminUserId?: string,
-): Promise<{ aggregateRevision: number }> {
-    const input = parseProductOptionMatrix(rawInput);
-    const [product, currency] = await Promise.all([db.select({ id: products.id, isActive: products.isActive })
-        .from(products)
-        .where(and(eq(products.id, productId), isNull(products.deletedAt)))
-        .get(), readStoreCurrency(db)]);
-    if (!product) throw new NotFoundError("Product not found");
-    if (product.isActive) {
+    input: ProductOptionMatrixBody,
+    context: {
+        /** The product's status after this save: an active product's variants need a price. */
+        isActive: boolean;
+        adminUserId?: string;
+        /** Where the matrix sits in the request body (`optionMatrix.`), for the field a refusal names. */
+        fieldPrefix?: string;
+        /** The product's image associations after this save, when the same batch changes them. */
+        attachedImages?: ReadonlyMap<string, { status: SkuImageStatus }>;
+    },
+): Promise<ProductOptionMatrixPlan> {
+    const { adminUserId, fieldPrefix = "" } = context;
+    const currency = await readStoreCurrency(db);
+    if (context.isActive) {
         const unpriced = input.variants.findIndex((variant) => variant.price <= 0);
         if (unpriced >= 0) {
             throw new ValidationError("Enter a price above 0 for every variant of an active product.", {
-                field: `variants.${unpriced}.price`,
+                field: `${fieldPrefix}variants.${unpriced}.price`,
             });
         }
     }
     await assertSkusFree(
         db,
-        input.variants.map((variant, index) => ({ sku: variant.sku, field: `variants.${index}.sku` })),
+        input.variants.map((variant, index) => ({ sku: variant.sku, field: `${fieldPrefix}variants.${index}.sku` })),
         productId,
     );
 
@@ -535,7 +581,8 @@ export async function saveProductOptionMatrix(
     const definitionById = new Map(existingDefinitions.map((definition) => [definition.id, definition]));
     const valueById = new Map(existingValues.map((value) => [value.id, value]));
     const activeVariantById = new Map(existingVariants.map((variant) => [variant.id, variant]));
-    const attachedSkuImages = new Map(productImageRows.map((image) => [image.id, { status: image.status }]));
+    const attachedSkuImages: ReadonlyMap<string, { status: SkuImageStatus }> = context.attachedImages
+        ?? new Map(productImageRows.map((image) => [image.id, { status: image.status }]));
     const definitionIdMap = new Map<string, string>();
     const valueIdMap = new Map<string, string>();
 
@@ -725,7 +772,7 @@ export async function saveProductOptionMatrix(
         await assertSimpleConversionStockAtDefaultLocation(db, defaultSku.id);
     }
 
-    const statements = [];
+    const statements: BatchItem<"sqlite">[] = [];
     const submittedDefinitionIds = new Set<string>();
     const submittedValueIds = new Set<string>();
 
@@ -1030,32 +1077,64 @@ export async function saveProductOptionMatrix(
             )));
     }
 
+    return {
+        statements,
+        changedStockVariantIds,
+        variantIds: new Map(input.variants.map((variant, index) => [variant.id, normalizedVariants[index]!.id])),
+    };
+}
+
+const OPTION_MATRIX_CHANGED_MESSAGE = "This product changed while you were editing. Reload the latest matrix and try again.";
+
+/**
+ * The refusal one of the matrix batch's own guards raised (stock or SKU rows
+ * changed after the plan read them), or null when the error is not theirs.
+ */
+export function optionMatrixBatchConflict(error: unknown): ConflictError | null {
+    if (isBatchGuardError(error, "OPTION_MATRIX_STOCK_CONFLICT")) {
+        return new ConflictError(STOCK_CHANGED_MESSAGE);
+    }
+    if (
+        isBatchGuardError(error, "OPTION_MATRIX_RESTORE_CONFLICT")
+        || isBatchGuardError(error, "OPTION_MATRIX_RETIRE_CONFLICT")
+        || isBatchGuardError(error, "OPTION_MATRIX_DEFAULT_RETIRE_CONFLICT")
+    ) {
+        return new ConflictError(OPTION_MATRIX_CHANGED_MESSAGE);
+    }
+    return null;
+}
+
+export async function saveProductOptionMatrix(
+    db: Database,
+    productId: string,
+    rawInput: unknown,
+    adminUserId?: string,
+): Promise<{ aggregateRevision: number }> {
+    const { expectedAggregateRevision, ...input } = parseProductOptionMatrix(rawInput);
+    const product = await db.select({ id: products.id, isActive: products.isActive })
+        .from(products)
+        .where(and(eq(products.id, productId), isNull(products.deletedAt)))
+        .get();
+    if (!product) throw new NotFoundError("Product not found");
+    const plan = await planProductOptionMatrix(db, productId, input, { isActive: product.isActive, adminUserId });
+
     let result;
     try {
         result = await executeProductAggregateMutationBatch(
             db,
             productId,
-            input.expectedAggregateRevision,
-            statements,
+            expectedAggregateRevision,
+            plan.statements,
         );
     } catch (error) {
+        const conflict = optionMatrixBatchConflict(error);
+        if (conflict) throw conflict;
         const message = error instanceof Error ? error.message : String(error);
-        if (isBatchGuardError(error, "OPTION_MATRIX_STOCK_CONFLICT")) {
-            throw new ConflictError(STOCK_CHANGED_MESSAGE);
-        }
-        if (
-            isBatchGuardError(error, "OPTION_MATRIX_RESTORE_CONFLICT")
-            || isBatchGuardError(error, "OPTION_MATRIX_RETIRE_CONFLICT")
-            || isBatchGuardError(error, "OPTION_MATRIX_DEFAULT_RETIRE_CONFLICT")
-            || isProductAggregateRevisionConflict(error)
-            || /constraint|unique/i.test(message)
-        ) {
-            throw new ConflictError(
-                "This product changed while you were editing. Reload the latest matrix and try again.",
-            );
+        if (isProductAggregateRevisionConflict(error) || /constraint|unique/i.test(message)) {
+            throw new ConflictError(OPTION_MATRIX_CHANGED_MESSAGE);
         }
         throw error;
     }
-    await reconcileVariantLowStockAlerts(db, changedStockVariantIds);
+    await reconcileVariantLowStockAlerts(db, plan.changedStockVariantIds);
     return { aggregateRevision: result.aggregateRevision };
 }

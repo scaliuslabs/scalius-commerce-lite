@@ -1,0 +1,28 @@
+---
+// A live theme preview, shown to the merchant whose browser holds it (see
+// lib/theme-preview-bar.ts). Exiting clears the preview cookie and returns to
+// the published storefront; it works without JavaScript.
+import type { ThemePreviewBarCopy } from "@/lib/theme-preview-bar";
+
+interface Props {
+  copy: ThemePreviewBarCopy;
+}
+
+const { copy } = Astro.props;
+---
+
+<div
+  role="status"
+  data-theme-preview-bar
+  class="relative z-[60] flex flex-wrap items-center justify-center gap-x-3 gap-y-1 bg-black px-4 py-2 text-sm text-white"
+>
+  <span class="font-medium">{copy.label}</span>
+  <form method="post" action="/theme-preview/exit">
+    <button
+      type="submit"
+      class="min-h-9 rounded-md border border-white/50 px-3 font-semibold hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+    >
+      {copy.exit}
+    </button>
+  </form>
+</div>

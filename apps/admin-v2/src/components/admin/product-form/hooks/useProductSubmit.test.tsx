@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => ({
   onAggregateRevisionChange: vi.fn(),
   onRevisionConflict: vi.fn(),
   onVariantIssue: vi.fn(),
+  onCompositionSaved: vi.fn(),
   formatted: vi.fn(),
 }));
 /** The fields the merchant changed in the form under test. */
@@ -68,6 +69,8 @@ vi.mock("sonner", () => ({
 
 import { useProductSubmit } from "./useProductSubmit";
 import type { ProductFormValues } from "../types";
+import { SkuCostProvider, type SkuCostStore } from "../sku-costs";
+import type { ProductCreateComposition } from "../variants/option-matrix-editor-model";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -170,6 +173,92 @@ describe("useProductSubmit", () => {
     expect(mocks.onAggregateRevisionChange).toHaveBeenCalledWith(5);
   });
 
+  it("saves the changed variants in the product's own write, then lets the variant editor settle", async () => {
+    renderHarness({ isEdit: true, aggregateRevision: 4 });
+    const composition = {
+      optionMatrix: {
+        options: [{ id: "draft_option", name: "Colour", standardMapping: "color" as const, values: [{ id: "draft_red", value: "Red" }] }],
+        variants: [{
+          id: "draft_row", selectedOptionValueIds: ["draft_red"], imageId: null, sku: "EID-RED", price: 900, stock: 1,
+          trackInventory: true, weight: null, barcode: null, barcodeType: null, discountType: "percentage" as const,
+          discountPercentage: 0, discountAmount: null,
+        }],
+      },
+    };
+    mocks.serverMutation.mockResolvedValueOnce({ aggregateRevision: 5 });
+
+    await expect(requireResult(result).submit(productValues(), 4, composition)).resolves.toBe(5);
+    // One request: the details and the variants, under one revision.
+    expect(mocks.serverMutation).toHaveBeenCalledTimes(1);
+    expect(mocks.serverMutation).toHaveBeenCalledWith({
+      path: { id: "prod_one" },
+      body: expect.objectContaining({ expectedAggregateRevision: 4, optionMatrix: composition.optionMatrix }),
+    });
+    expect(mocks.onCompositionSaved).toHaveBeenCalledWith(5);
+  });
+
+  it("sends the page's sections and changed costs in the same write, then marks the costs saved", async () => {
+    const changes = [{ variantId: "var_one", cost: 450, expectedCost: 400 }];
+    const costs = costStore({ changes: () => changes });
+    act(() => {
+      root.render(<HookHarness isEdit aggregateRevision={4} onResult={(next) => (result = next)} costs={costs} />);
+    });
+    mocks.serverMutation.mockResolvedValueOnce({ aggregateRevision: 5 });
+    const blocks = [{ placement: "tabs" as const, type: "faq", version: 1, settings: { heading: "", items: [] } }];
+
+    await expect(requireResult(result).submit(productValues(), 4, { contentBlocks: blocks as never, bundles: [], emiEligible: false })).resolves.toBe(5);
+
+    expect(mocks.serverMutation).toHaveBeenCalledTimes(1);
+    expect(mocks.serverMutation.mock.calls[0]![0].body).toMatchObject({
+      expectedAggregateRevision: 4,
+      contentBlocks: blocks,
+      bundles: [],
+      emiEligible: false,
+      skuCosts: changes,
+    });
+    expect(costs.settle).toHaveBeenCalledWith(changes, "prod_one");
+    // No variant draft went: the variant editor has nothing to settle.
+    expect(mocks.onCompositionSaved).not.toHaveBeenCalled();
+  });
+
+  it("creates a product with its typed costs on its SKUs, in the one create request", async () => {
+    const costs = costStore({ costOf: (key) => (key === "draft_red" ? 300 : null) });
+    const variant = (id: string) => ({
+      id, selectedOptionValueIds: [`v_${id}`], imageId: null, sku: id.toUpperCase(), price: 900, stock: 0, trackInventory: true,
+      weight: null, barcode: null, barcodeType: null, discountType: "percentage" as const, discountPercentage: 0, discountAmount: null,
+    });
+    const createComposition = {
+      optionMatrix: {
+        options: [{ id: "o", name: "Colour", standardMapping: "color" as const, values: [{ id: "v_draft_red", value: "Red" }, { id: "v_draft_blue", value: "Blue" }] }],
+        variants: [variant("draft_red"), variant("draft_blue")],
+      },
+    };
+    act(() => {
+      root.render(<HookHarness isEdit={false} onResult={(next) => (result = next)} costs={costs} createComposition={createComposition} />);
+    });
+    mocks.serverMutation.mockResolvedValueOnce({ id: "prod_new", aggregateRevision: 1 });
+
+    await requireResult(result).submit(productValues());
+
+    expect(mocks.serverMutation).toHaveBeenCalledTimes(1);
+    const sentVariants = mocks.serverMutation.mock.calls[0]![0].body.optionMatrix.variants;
+    expect(sentVariants[0]).toMatchObject({ id: "draft_red", cost: 300 });
+    expect(sentVariants[1]).not.toHaveProperty("cost");
+    expect(costs.save).not.toHaveBeenCalled();
+  });
+
+  it("leaves the variant draft unsaved when the save that carried it is refused", async () => {
+    renderHarness({ isEdit: true, aggregateRevision: 4 });
+    mocks.serverMutation.mockRejectedValueOnce(new AdminApiResponseError(
+      "Allocate exactly 5 on-hand units across the new combinations. Currently allocated: 3.", 400, "VALIDATION_ERROR",
+    ));
+
+    await expect(requireResult(result).submit(productValues(), 4, { defaultSku: { sku: "EID-1", trackInventory: true, weight: null, barcode: null, barcodeType: null } }))
+      .rejects.toMatchObject({ name: "SaveNotCompleted" });
+    expect(mocks.onCompositionSaved).not.toHaveBeenCalled();
+    expect(mocks.formReset).not.toHaveBeenCalled();
+  });
+
   it("keeps the draft on a revision conflict and explains it for the save banner", async () => {
     const conflict = { expectedRevision: 6, currentRevision: 7 };
     renderHarness({ isEdit: true, aggregateRevision: 6 });
@@ -264,11 +353,19 @@ describe("useProductSubmit", () => {
   }
 });
 
-function HookHarness({ isEdit, aggregateRevision, onResult }: {
+interface HarnessProps {
   isEdit: boolean;
   aggregateRevision?: number;
   onResult: (result: ReturnType<typeof useProductSubmit>) => void;
-}) {
+  createComposition?: ProductCreateComposition;
+}
+
+/** The hook under test, inside the page's cost store when one is given. */
+function HookHarness({ costs, ...props }: HarnessProps & { costs?: SkuCostStore }) {
+  return costs ? <SkuCostProvider store={costs}><SubmitHarness {...props} /></SkuCostProvider> : <SubmitHarness {...props} />;
+}
+
+function SubmitHarness({ isEdit, aggregateRevision, onResult, createComposition }: HarnessProps) {
   const form = {
     getValues: vi.fn(() => productValues()),
     reset: mocks.formReset,
@@ -284,9 +381,28 @@ function HookHarness({ isEdit, aggregateRevision, onResult }: {
     onAggregateRevisionChange: mocks.onAggregateRevisionChange,
     onRevisionConflict: mocks.onRevisionConflict,
     onVariantIssue: mocks.onVariantIssue,
+    onCompositionSaved: mocks.onCompositionSaved,
+    createComposition,
     form,
   }));
   return null;
+}
+
+function costStore(overrides: Partial<SkuCostStore> = {}): SkuCostStore {
+  return {
+    simpleKey: "new-simple-sku",
+    costOf: () => null,
+    setCosts: vi.fn(),
+    isDirty: () => false,
+    problemOf: () => null,
+    rows: { current: [] },
+    changes: () => [],
+    settle: vi.fn(),
+    save: vi.fn(),
+    reset: vi.fn(),
+    sync: vi.fn(),
+    ...overrides,
+  };
 }
 
 function requireResult(result: ReturnType<typeof useProductSubmit> | null): ReturnType<typeof useProductSubmit> {

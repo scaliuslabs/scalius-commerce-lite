@@ -63939,6 +63939,10 @@ export type PostApiV1AdminProductsData = {
                  * physical: shipped or picked up. digital: delivered as files or licence keys after payment. service: performed, nothing delivered (no address needed).
                  */
                 fulfillmentKind?: 'physical' | 'digital' | 'service';
+                /**
+                 * Cost per item in major units of the store currency. Omit or null for none.
+                 */
+                cost?: number | null;
             }>;
         };
         /**
@@ -63967,6 +63971,10 @@ export type PostApiV1AdminProductsData = {
              * physical: shipped or picked up. digital: delivered as files or licence keys after payment. service: performed, nothing delivered (no address needed).
              */
             fulfillmentKind?: 'physical' | 'digital' | 'service';
+            /**
+             * Cost per item in major units of the store currency. Omit or null for none.
+             */
+            cost?: number | null;
         };
     };
     path?: never;
@@ -65682,6 +65690,118 @@ export type PutApiV1AdminProductsByIdData = {
         id: string;
         expectedAggregateRevision: number;
         acknowledgedSkuImageRemovalIds?: Array<string>;
+        /**
+         * The complete option matrix, saved in the same write as the product. Omit to keep the options and SKUs.
+         */
+        optionMatrix?: {
+            options: Array<{
+                id: string;
+                name: string;
+                standardMapping: 'size' | 'color' | 'material' | 'pattern' | 'none';
+                values: Array<{
+                    id: string;
+                    value: string;
+                }>;
+            }>;
+            variants: Array<{
+                id: string;
+                selectedOptionValueIds: Array<string>;
+                imageId: string | null;
+                sku: string;
+                price: number;
+                /**
+                 * On-hand quantity. New rows default to 0; omit on saved rows to keep the current quantity.
+                 */
+                stock?: number;
+                /**
+                 * The SKU stockVersion the new quantity was based on. Required with stock.
+                 */
+                expectedStockVersion?: number;
+                trackInventory: boolean;
+                /**
+                 * Weight in grams.
+                 */
+                weight: number | null;
+                barcode: string | null;
+                barcodeType: 'ean13' | 'upc' | 'isbn' | 'gtin' | 'code128' | 'custom' | null;
+                discountType: 'percentage' | 'flat';
+                discountPercentage: number | null;
+                discountAmount: number | null;
+                /**
+                 * physical: shipped or picked up. digital: delivered as files or licence keys after payment. service: performed, nothing delivered (no address needed).
+                 */
+                fulfillmentKind?: 'physical' | 'digital' | 'service';
+            }>;
+        };
+        /**
+         * Edits to the hidden SKU of a product without options, saved in the same write. Not allowed with optionMatrix.
+         */
+        defaultSku?: {
+            sku: string;
+            trackInventory: boolean;
+            /**
+             * New on-hand quantity. Omit to keep the current quantity.
+             */
+            stock?: number;
+            /**
+             * The SKU stockVersion the new quantity was based on. Required with stock.
+             */
+            expectedStockVersion?: number;
+            barcode: string | null;
+            barcodeType: 'ean13' | 'upc' | 'isbn' | 'gtin' | 'code128' | 'custom' | null;
+            /**
+             * Weight in grams.
+             */
+            weight: number | null;
+        };
+        /**
+         * A product page template id from the theme, or null for the theme's default. Omit to keep.
+         */
+        pageTemplate?: string | null;
+        /**
+         * Shows the store's EMI line on the product page. Omit to keep.
+         */
+        emiEligible?: boolean;
+        /**
+         * Every editable content block, in page order within each placement, as dashboard.products.update_section takes them. Omit to keep.
+         */
+        contentBlocks?: Array<{
+            id: string;
+            placement: 'tabs' | 'after-buy-box' | 'after-description' | 'before-reviews';
+            keep: true;
+        } | {
+            id?: string;
+            placement: 'tabs' | 'after-buy-box' | 'after-description' | 'before-reviews';
+            type: string;
+            version: number;
+            settings: {
+                [key: string]: unknown;
+            };
+        }>;
+        /**
+         * Every quantity-bundle tier in display order; an empty list removes them. Omit to keep.
+         */
+        bundles?: Array<{
+            quantity: number;
+            discountType: 'percentage';
+            discountPercentage: number;
+            label: string | null;
+            isActive: boolean;
+        } | {
+            quantity: number;
+            discountType: 'fixed_price';
+            price: number;
+            label: string | null;
+            isActive: boolean;
+        }>;
+        /**
+         * Changed costs per item. A new optionMatrix row is named by its draft id. Each names the cost it replaces; omit to keep.
+         */
+        skuCosts?: Array<{
+            variantId: string;
+            cost: number | null;
+            expectedCost: number | null;
+        }>;
     };
     path: {
         id: string;

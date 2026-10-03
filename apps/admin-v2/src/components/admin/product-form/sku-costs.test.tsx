@@ -110,6 +110,33 @@ describe("useSkuCostDraft", () => {
     expect(store.costOf("var_a")).toBe(120.5);
   });
 
+  it("hands its changed costs to the product's one write (a new variant by its draft id), then shows them as saved", async () => {
+    await render([variant("var_a", "MUG-S", 100), variant("var_b", "MUG-M", 80)]);
+    store.rows.current = [
+      { key: "var_a", sku: "MUG-S", isDefault: false },
+      { key: "var_b", sku: "MUG-M", isDefault: false },
+      { key: "draft_row_l", sku: "MUG-L", isDefault: false },
+    ];
+    act(() => {
+      store.setCosts(["var_a"], 120.5);
+      store.setCosts(["var_b"], 80);
+      store.setCosts(["draft_row_l"], 95);
+    });
+    const changes = store.changes();
+    expect(changes).toEqual([
+      { variantId: "var_a", cost: 120.5, expectedCost: 100 },
+      { variantId: "draft_row_l", cost: 95, expectedCost: null },
+    ]);
+    // Nothing is sent on its own.
+    expect(mocks.putCosts).not.toHaveBeenCalled();
+
+    act(() => store.settle(changes, "prod_1"));
+
+    expect(store.isDirty(["var_a", "var_b", "draft_row_l"])).toBe(false);
+    expect(store.costOf("var_a")).toBe(120.5);
+    expect(store.changes()).toEqual([]);
+  });
+
   it("refuses a cost changed elsewhere, shows the latest one and says so", async () => {
     mocks.putCosts.mockRejectedValue(new AdminApiResponseError("A SKU's cost changed", 409, "CONFLICT"));
     mocks.getProduct.mockResolvedValue({ id: "prod_1", variants: [variant("var_a", "MUG-S", 111), variant("var_b", "MUG-M", 80)] });

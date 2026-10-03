@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { Check, Copy, TriangleAlert } from "lucide-react";
 import { GIFT_CARD_LIMITS } from "@scalius/core/modules/gift-cards/browser";
 import { MoneyInput } from "~/components/admin/shared/MoneyInput";
+import { useSubmitOnce } from "~/components/admin/shared/use-submit-once";
 import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import {
@@ -61,6 +62,7 @@ export function IssueGiftCardDialog({ open, onOpenChange }: {
   const [copied, setCopied] = useState<"idle" | "copied" | "failed">("idle");
   const requestKey = useRef("");
   const mutation = useIssueGiftCard();
+  const submitOnce = useSubmitOnce();
   const issued = mutation.data;
   const reset = mutation.reset;
   // A field the API refused shows at that field, in the API's words.
@@ -98,7 +100,6 @@ export function IssueGiftCardDialog({ open, onOpenChange }: {
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (mutation.isPending) return;
     const next = validateIssueDraft(draft, currencyCode);
     setErrors(next);
     const first = (["amount", "expiry", "contact", "notify"] as const).find((field) => next[field]);
@@ -106,7 +107,8 @@ export function IssueGiftCardDialog({ open, onOpenChange }: {
       document.getElementById(`gift-card-${first}`)?.focus();
       return;
     }
-    mutation.mutate(issueRequestBody(draft, requestKey.current));
+    // One request at a time (the request key also makes a repeat return the same card).
+    submitOnce(() => mutation.mutateAsync(issueRequestBody(draft, requestKey.current)));
   };
 
   const copy = async (code: string) => {
