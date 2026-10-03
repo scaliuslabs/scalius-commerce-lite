@@ -104,4 +104,31 @@ describe("NumberInput", () => {
     act(() => input.dispatchEvent(new FocusEvent("focusout", { bubbles: true })));
     expect(input.value).toBe("1234");
   });
+
+  it("tells the form why a fraction is refused, before it reports the refused value", () => {
+    const calls: string[] = [];
+    function Probe() {
+      const [value, setValue] = useState<number | null>(60);
+      return (
+        <NumberInput
+          aria-label="Price"
+          value={value}
+          wholeUnitsMessage="Taka amounts are whole numbers."
+          onRefusal={(reason) => calls.push(`reason:${reason}`)}
+          onValueChange={(next) => { calls.push(`value:${next}`); setValue(next); }}
+        />
+      );
+    }
+    act(() => root.render(<Probe />));
+    const input = host.querySelector("input")!;
+    act(() => type(input, "1234.50"));
+    act(() => type(input, "12a"));
+    act(() => type(input, "1234"));
+    expect(calls).toEqual([
+      "reason:Taka amounts are whole numbers.", "value:NaN",
+      // Still NaN: no new value, but the reason changed.
+      "reason:null",
+      "reason:null", "value:1234",
+    ]);
+  });
 });

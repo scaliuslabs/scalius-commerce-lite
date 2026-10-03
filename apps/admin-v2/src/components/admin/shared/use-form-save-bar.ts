@@ -1,7 +1,8 @@
-import type { FieldValues, Path, PathValue, UseFormReturn } from "react-hook-form";
+import * as React from "react";
+import type { FieldErrors, FieldValues, Path, PathValue, UseFormReturn } from "react-hook-form";
 import { translate } from "~/i18n";
 import { resourceMessages } from "~/i18n/resource";
-import { SaveNotCompleted, useSaveBar } from "./SaveBar";
+import { SaveNotCompleted, useSaveBar, useSaveScope } from "./SaveBar";
 
 export { SaveNotCompleted };
 
@@ -49,6 +50,30 @@ export function rebaseForm<T extends FieldValues, C, R extends FieldValues>(
     // Marks the edits dirty again (reset cleared the list) and puts saved values in place.
     if (!same(next, current[key]) || !same(next, saved[key])) form.setValue(key, next, { shouldDirty: true });
   }
+}
+
+/**
+ * The save banner's line for each field a failed save found invalid. Call the
+ * returned function with the failed submit's errors for the lines to throw in
+ * a `SaveNotCompleted`; once a field is valid again (fixed, or reset) its line
+ * comes off the banner, which closes with its last line.
+ */
+export function useFieldErrorLines<T extends FieldValues, C, R extends FieldValues>(form: UseFormReturn<T, C, R>) {
+  const resolveErrors = useSaveScope()?.resolveErrors;
+  const shown = React.useRef(new Map<string, string>());
+  // Read while rendering so the form keeps telling this hook when its errors change.
+  const invalid = Object.keys(form.formState.errors).join(",");
+  React.useEffect(() => {
+    const invalidFields = invalid.split(",");
+    const fixed = [...shown.current].filter(([field]) => !invalidFields.includes(field));
+    if (fixed.length === 0) return;
+    for (const [field] of fixed) shown.current.delete(field);
+    resolveErrors?.(fixed.map(([, line]) => line));
+  }, [invalid, resolveErrors]);
+  return React.useCallback((errors: FieldErrors<T>, describe: (field: keyof T & string) => string): string[] => {
+    shown.current = new Map((Object.keys(errors) as Array<keyof T & string>).map((field) => [field, describe(field)]));
+    return [...shown.current.values()];
+  }, []);
 }
 
 /**

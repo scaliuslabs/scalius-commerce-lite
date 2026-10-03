@@ -90,7 +90,8 @@ vi.mock("lucide-react", () => ({
 
 // No shipping-rate access in these tests: the delivery method picker stays hidden.
 vi.mock("@tanstack/react-query", () => ({ useQuery: () => ({ data: undefined }) }));
-vi.mock("react-hook-form", () => ({ useWatch: () => ["", "", null, null] }));
+// MoneyInput looks for its form (none here) to say why it refused a fraction.
+vi.mock("react-hook-form", () => ({ useWatch: () => ["", "", null, null], useFormContext: () => null }));
 vi.mock("~/contexts/PermissionContext", () => ({
   usePermissions: () => ({ hasPermission: () => false }),
 }));

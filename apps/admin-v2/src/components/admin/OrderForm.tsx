@@ -1,10 +1,11 @@
 import React, { useEffect } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm, useWatch } from "react-hook-form";
+import { useWatch } from "react-hook-form";
 import { useQuery } from "@tanstack/react-query";
 import type { FieldErrors } from "react-hook-form";
 import { useNavigate } from "@tanstack/react-router";
 import { toast } from "~/lib/toast";
+import { useFormWithRefusals } from "~/lib/input-refusals";
 import { Form } from "@/components/ui/form";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -230,7 +231,7 @@ function OrderEditor({
   const createRequestKey = React.useRef<string | null>(
     isEdit ? null : getOrCreateAdminOrderRequestKey(),
   );
-  const form = useForm<OrderFormInput, unknown, OrderFormValues>({
+  const form = useFormWithRefusals<OrderFormInput, unknown, OrderFormValues>({
     resolver: zodResolver(orderFormSchema),
     // Fields validate when the merchant leaves them, then as they fix them.
     mode: "onTouched",

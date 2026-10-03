@@ -31,6 +31,13 @@ type NumberInputProps = Omit<React.ComponentProps<"input">, "value" | "onChange"
    * save it, and shows this message at the field. "1234.00" means 1234.
    */
   wholeUnitsMessage?: string;
+  /**
+   * Why the typed text is refused, told before `onValueChange` reports `NaN`:
+   * `wholeUnitsMessage` for a fraction, `null` for anything else (a valid
+   * number, empty, or text that isn't a number). A form shows it in place of
+   * its generic "not a number" error.
+   */
+  onRefusal?: (reason: string | null) => void;
 };
 
 function hasFraction(number: number | null): boolean {
@@ -50,7 +57,7 @@ function understood(text: string, wholeUnitsMessage: string | undefined): number
  * nothing).
  */
 export const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
-  ({ value, onValueChange, integer = false, wholeUnitsMessage, onBlur, ...props }, ref) => {
+  ({ value, onValueChange, integer = false, wholeUnitsMessage, onRefusal, onBlur, ...props }, ref) => {
     const shown = value === null || value === undefined || Number.isNaN(value) ? "" : String(value);
     const [text, setText] = React.useState(shown);
     // Follow outside changes (discard, bulk edit) unless the text already means that number.
@@ -77,6 +84,8 @@ export const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
           } else {
             input.setCustomValidity("");
           }
+          // The reason first: a form that validates on this change already knows it.
+          onRefusal?.(fractional ? wholeUnitsMessage! : null);
           if (!sameNumber(number, value ?? null)) onValueChange(number);
         }}
         onBlur={(event) => {

@@ -10,8 +10,9 @@ import { NumberInput } from "~/components/ui/number-input";
 import { useCurrency } from "~/hooks/use-currency";
 import { useMessages } from "~/i18n";
 import { formMessages } from "~/i18n/forms";
+import { useRefusalReporter } from "~/lib/input-refusals";
 
-type MoneyInputProps = Omit<React.ComponentProps<typeof NumberInput>, "integer" | "wholeUnitsMessage"> & {
+type MoneyInputProps = Omit<React.ComponentProps<typeof NumberInput>, "integer" | "wholeUnitsMessage" | "onRefusal"> & {
   /** The amount's currency: the store's for catalog prices, the order's for refunds and charges. */
   currencyCode: string;
   /** Shown inside the field before the amount (the currency symbol, "৳"), for fields without a label that says it. */
@@ -27,10 +28,13 @@ type MoneyFieldProps = Omit<MoneyInputProps, "cashOnDelivery"> & { whole: boolea
 
 const MoneyField = React.forwardRef<HTMLInputElement, MoneyFieldProps>(({ currencyCode, prefix, className, whole, ...props }, ref) => {
   const t = useMessages(formMessages);
+  // In a form built with `useFormWithRefusals`, the field `name` (as in the form) gets the fraction's reason as its error.
+  const onRefusal = useRefusalReporter(props.name);
   const input = (
     <NumberInput
       ref={ref}
       {...props}
+      onRefusal={onRefusal}
       // eslint-disable-next-line shadcn/no-restyle -- room for the currency symbol inside the field
       className={cn(prefix && "pl-7", className)}
       wholeUnitsMessage={whole ? t(currencyCode.trim().toUpperCase() === "BDT" ? "wholeTaka" : "wholeUnits") : undefined}
@@ -71,7 +75,9 @@ PriceMoneyInput.displayName = "PriceMoneyInput";
  * An amount of money. While the store prices in whole units (a BDT store's
  * default: whole taka) the field takes no decimal point and says why; a store
  * that prices in paisa or cents keeps its minor units. Cash on delivery
- * (`cashOnDelivery`) follows its own increment.
+ * (`cashOnDelivery`) follows its own increment. In a react-hook-form form made
+ * with `useFormWithRefusals`, pass the field's `name`: a refused fraction then
+ * reads "Taka amounts are whole numbers." as the field's error, not "enter a number".
  */
 export const MoneyInput = React.forwardRef<HTMLInputElement, MoneyInputProps>(({ cashOnDelivery, ...props }, ref) => {
   if (!cashOnDelivery) return <PriceMoneyInput ref={ref} {...props} />;

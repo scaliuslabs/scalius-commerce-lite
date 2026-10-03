@@ -99,6 +99,11 @@ export interface SaveScopeState {
   /** Saves every dirty entry; false when any failed (their edits are kept). */
   saveAll: () => Promise<boolean>;
   discardAll: () => void;
+  /**
+   * The merchant fixed what these banner lines said: takes them off (the
+   * banner closes with its last line). Lines are matched as the save threw them.
+   */
+  resolveErrors: (lines: string[]) => void;
 }
 
 interface SaveRegistry {
@@ -209,6 +214,12 @@ export function SaveScope({
       return { ...previous, fieldErrors: rest };
     });
   }, []);
+  const resolveErrors = useCallback((lines: string[]) => {
+    setFailure((previous) => {
+      const errors = previous.errors.filter((line) => !lines.includes(line));
+      return errors.length === previous.errors.length ? previous : { ...previous, errors };
+    });
+  }, []);
   const reloadConflicts = useCallback(async () => {
     const reloaded = failure.conflicts;
     await Promise.all(reloaded.map((conflict) => conflict.reload()));
@@ -302,6 +313,7 @@ export function SaveScope({
       }
       setFailure((previous) => ({ ...NO_FAILURE, attempt: previous.attempt }));
     },
+    resolveErrors,
   };
 
   return (

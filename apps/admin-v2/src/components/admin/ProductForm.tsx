@@ -1,6 +1,6 @@
 import React from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm, useWatch, type FieldErrors, type UseFormReturn } from "react-hook-form";
+import { useWatch, type UseFormReturn } from "react-hook-form";
 import { Link } from "@tanstack/react-router";
 import { ChevronDown } from "lucide-react";
 import { ErrorBoundary } from "./ErrorBoundary";
@@ -24,6 +24,8 @@ import {
   AlertDialogTitle,
 } from "../ui/alert-dialog";
 import { ConfirmDialog } from "./shared/ConfirmDialog";
+import { useFieldErrorLines } from "./shared/use-form-save-bar";
+import { useFormWithRefusals } from "~/lib/input-refusals";
 import {
   SaveBarProvider,
   SaveErrorBanner,
@@ -201,7 +203,7 @@ function ProductEditor({
   // The old Additional sections tabs were saved as blocks: this save removes the originals.
   const tabsMoved = React.useRef(false);
 
-  const form = useForm<ProductFormValues>({
+  const form = useFormWithRefusals<ProductFormValues>({
     resolver: zodResolver(productFormSchema),
     // Check a field when the merchant leaves it, not while they type.
     mode: "onBlur",
@@ -287,12 +289,8 @@ function ProductEditor({
     if (variantPrices) form.resetField("price", { defaultValue: variantPrices.min });
   }, [form, variantPrices]);
 
-  /** One line per field that failed the page's own checks, for the save banner. */
-  const describeInvalid = (errors: FieldErrors<ProductFormValues>) =>
-    (Object.keys(errors) as Array<keyof ProductFormValues>).map((field) => {
-      const message = errors[field]?.message;
-      return `${productFieldLabel(field)}: ${typeof message === "string" ? message : s("fixErrors")}`;
-    });
+  /** One line per field that failed the page's own checks, for the save banner; a fixed field's line comes off. */
+  const invalidLines = useFieldErrorLines(form);
 
   const save = async () => {
     if (revisionConflict) {
@@ -305,16 +303,19 @@ function ProductEditor({
     const sectionProblems = pending.flatMap((handle) => handle.problems ?? []);
     // A Save is one write of the whole page (fields, variants, sections, costs): every part
     // is checked first, and all of it saves or none of it does.
-    let invalid: FieldErrors<ProductFormValues> = {};
+    let fieldLines: string[] = [];
     let values = await new Promise<ProductFormValues | null>((resolve) => {
       void form.handleSubmit(resolve, (errors) => {
-        invalid = errors;
+        fieldLines = invalidLines(errors, (field) => {
+          const message = errors[field]?.message;
+          return `${productFieldLabel(field)}: ${typeof message === "string" ? message : s("fixErrors")}`;
+        });
         resolve(null);
       })();
     });
     if (!values || matrixBlocks || sectionProblems.length > 0) {
       if (matrixBlocks) matrixRef.current?.reveal();
-      const lines = [...describeInvalid(invalid), ...(matrixBlocks ? [optionMatrixIssue] : []), ...sectionProblems];
+      const lines = [...fieldLines, ...(matrixBlocks ? [optionMatrixIssue] : []), ...sectionProblems];
       throw new SaveNotCompleted(lines[0], lines);
     }
     const composition = isEdit && optionMatrixDirty ? matrixRef.current?.composition() ?? null : null;
