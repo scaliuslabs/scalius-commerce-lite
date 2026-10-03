@@ -2,7 +2,11 @@
 // a staff consent record, and saved segments. Each returns the API payload;
 // screens refresh the queries they show.
 import {
+  deleteApiV1AdminCustomersByIdAddressesByAddressId,
   deleteApiV1AdminCustomersSegmentsBySegmentId,
+  postApiV1AdminCustomersByIdAddresses,
+  postApiV1AdminCustomersByIdAddressesByAddressIdDefault,
+  putApiV1AdminCustomersByIdAddressesByAddressId,
   postApiV1AdminCustomersSegments,
   postApiV1AdminCustomersTagsBulk,
   putApiV1AdminCustomersByIdMarketing,
@@ -37,3 +41,19 @@ export const updateCustomerSegment = (segmentId: string, expectedRevision: numbe
 /** Refused (409) while a discount is limited to the segment. */
 export const deleteCustomerSegment = (segmentId: string) =>
   apiData(deleteApiV1AdminCustomersSegmentsBySegmentId({ path: { segmentId } }));
+
+export type CustomerAddressBody = ApiBody<typeof postApiV1AdminCustomersByIdAddresses>;
+
+/** The address book: a write resolves with the saved address (a delete with nothing). */
+export const createCustomerAddress = (id: string, body: CustomerAddressBody) =>
+  apiData(postApiV1AdminCustomersByIdAddresses({ path: { id }, body }));
+
+export const updateCustomerAddress = (id: string, addressId: string, body: CustomerAddressBody) =>
+  apiData(putApiV1AdminCustomersByIdAddressesByAddressId({ path: { id, addressId }, body }));
+
+export const setDefaultCustomerAddress = (id: string, addressId: string) =>
+  apiData(postApiV1AdminCustomersByIdAddressesByAddressIdDefault({ path: { id, addressId } }));
+
+/** When the default goes, the most recently changed other address becomes the default. */
+export const deleteCustomerAddress = (id: string, addressId: string) =>
+  apiData(deleteApiV1AdminCustomersByIdAddressesByAddressId({ path: { id, addressId } }));

@@ -1,19 +1,27 @@
 import { useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { postApiV1AdminCustomers, putApiV1AdminCustomersById } from "@scalius/api-client/sdk";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "../ui/form";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Input } from "../ui/input";
-import { Textarea } from "../ui/textarea";
-import { LocationSelector } from "./LocationSelector";
 import { CustomerActivity } from "./CustomerActivity";
+import { AddressFields, SkipAddressValidation, useAddressErrors } from "./address/AddressFields";
+import {
+  addressDraftInput,
+  emptyAddressDraft,
+  isAddressDraftEmpty,
+  readAddressProblems,
+  type AddressProblem,
+} from "./address/address-draft";
+import { CustomerAddressesCard } from "./customers/CustomerAddressesCard";
 import { FormContainer } from "@/components/admin/shared/FormContainer";
 import { AdminPhoneInput } from "@/components/admin/shared/AdminPhoneInput";
 import { apiData, type ApiBody, type ApiResult } from "@/lib/api";
 import { customerFormSchema, type CustomerFormValues } from "@/lib/customer-form-schema";
+import type { CustomerDto } from "@/lib/api-query-options/customers";
 import { useEntityFormSubmit } from "@/hooks/use-entity-form-submit";
 import { queryKeys } from "@/lib/query-keys";
 import { usePermissions } from "@/contexts/PermissionContext";
@@ -35,7 +43,11 @@ interface CustomerFormProps {
    * The saved record being edited: titles the page (a guest record by its
    * phone), says if it's in Trash and carries its tags.
    */
-  record?: CustomerTitleInput & TrashedCustomer & { deletedAt: unknown; tags?: readonly string[] };
+  record?: CustomerTitleInput & TrashedCustomer & {
+    deletedAt: unknown;
+    tags?: readonly string[];
+    addresses?: CustomerDto["addresses"];
+  };
 }
 
 /** Under the phone field after a save: links the customer that already uses the number. */
@@ -58,16 +70,23 @@ function toCustomerInput(values: CustomerFormValues): ApiBody<typeof postApiV1Ad
     name: values.name,
     email: values.email,
     phone: values.phone,
-    address: values.address,
-    city: values.city,
-    zone: values.zone,
-    area: values.area,
+  };
+}
+
+/** A new customer: the contact and, when one was entered, the first address. */
+function toNewCustomerInput(values: CustomerFormValues): ApiBody<typeof postApiV1AdminCustomers> {
+  const address = values.address && !isAddressDraftEmpty(values.address) ? values.address : null;
+  return {
+    ...toCustomerInput(values),
+    address: address
+      ? { ...addressDraftInput(address), ...(values.skipAddressValidation ? { skipValidation: true } : {}) }
+      : null,
   };
 }
 
 /**
- * The one customer page: contact and address on the side, orders and the
- * change log in the main column. Viewing needs customers.view; saving needs
+ * The one customer page: contact and the address book on the side, orders
+ * and the change log in the main column. Viewing needs customers.view; saving needs
  * customers.edit (or .create for a new customer); orders need view_history.
  */
 export function CustomerForm({ defaultValues, isEdit = false, record }: CustomerFormProps) {
@@ -80,6 +99,7 @@ export function CustomerForm({ defaultValues, isEdit = false, record }: Customer
   const canSave = !trashed && (isEdit ? hasPermission(PERMISSIONS.CUSTOMERS_EDIT) : canCreate);
   const canViewHistory = isEdit && hasPermission(PERMISSIONS.CUSTOMERS_VIEW_HISTORY);
   const [phoneConflict, setPhoneConflict] = useState<CustomerPhoneConflict | null>(null);
+  const [addressProblems, setAddressProblems] = useState<AddressProblem[] | null>(null);
   const form = useForm<CustomerFormValues>({
     resolver: zodResolver(customerFormSchema),
     mode: "onChange",
@@ -87,21 +107,19 @@ export function CustomerForm({ defaultValues, isEdit = false, record }: Customer
       name: "",
       email: null,
       phone: "",
-      address: null,
-      city: null,
-      zone: null,
-      area: null,
-      cityName: "",
-      zoneName: "",
-      areaName: "",
+      ...(isEdit ? {} : { address: emptyAddressDraft() }),
       ...defaultValues,
     },
   });
 
+  const address = useWatch({ control: form.control, name: "address" });
+  const skipAddressValidation = useWatch({ control: form.control, name: "skipAddressValidation" }) ?? false;
+  const addressErrors = useAddressErrors(addressProblems, address?.countryCode ?? "BD");
+
   const { isSubmitting, handleSubmit: submitEntity } = useEntityFormSubmit<CustomerFormValues>({
     isEdit,
     entityId: defaultValues?.id,
-    createFn: (data) => apiData(postApiV1AdminCustomers({ body: toCustomerInput(data) })),
+    createFn: (data) => apiData(postApiV1AdminCustomers({ body: toNewCustomerInput(data) })),
     updateFn: (data) => apiData(putApiV1AdminCustomersById({ path: { id: data.id }, body: toCustomerInput(data) })),
     invalidateKeys: [queryKeys.customers.all, queryKeys.dashboard.all],
     onSuccess: (result) => {
@@ -111,6 +129,11 @@ export function CustomerForm({ defaultValues, isEdit = false, record }: Customer
       }
     },
     onError: (error) => {
+      const refused = readAddressProblems(error);
+      if (refused) {
+        setAddressProblems(refused);
+        return t("addressInvalid");
+      }
       const conflict = readCustomerPhoneConflict(error);
       if (!conflict) return undefined;
       setPhoneConflict(conflict);
@@ -182,30 +205,32 @@ export function CustomerForm({ defaultValues, isEdit = false, record }: Customer
           />
         </CardContent>
       </Card>
-      <Card>
-        <CardHeader>
-          <CardTitle>{t("address")}</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <FormField
-            control={form.control}
-            name="address"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>{t("addressLine")}</FormLabel>
-                <FormControl>
-                  <Textarea rows={2} {...field} value={field.value || ""} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <LocationSelector />
-          <input type="hidden" {...form.register("cityName")} />
-          <input type="hidden" {...form.register("zoneName")} />
-          <input type="hidden" {...form.register("areaName")} />
-        </CardContent>
-      </Card>
+      {isEdit && defaultValues?.id ? (
+        <CustomerAddressesCard customerId={defaultValues.id} addresses={record?.addresses ?? []} canEdit={canSave} />
+      ) : address ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>{t("firstAddress")}</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-body text-muted-foreground">{t("firstAddressHelp")}</p>
+            <AddressFields
+              idPrefix="new-customer-address"
+              value={address}
+              onChange={(next) => form.setValue("address", next, { shouldDirty: true })}
+              errors={addressErrors}
+              showRecipient
+            />
+            {addressProblems ? (
+              <SkipAddressValidation
+                id="new-customer-address-skip"
+                checked={skipAddressValidation}
+                onCheckedChange={(checked) => form.setValue("skipAddressValidation", checked, { shouldDirty: true })}
+              />
+            ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
       {isEdit && defaultValues?.id && !trashed ? (
         <>
           <CustomerMarketingCard customerId={defaultValues.id} canEdit={canSave} />

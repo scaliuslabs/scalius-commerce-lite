@@ -23,6 +23,8 @@ import {
   getProviderReadinessMessage,
   resolveProviderReadiness,
 } from "~/components/admin/delivery-providers/provider-readiness";
+import { couriersForCountry } from "~/lib/courier-countries";
+import { countryName } from "~/lib/country-name";
 import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions";
 import { useHydrated } from "~/hooks/use-hydrated";
 import { formatNumber, useMessages } from "~/i18n";
@@ -390,7 +392,8 @@ export function BookCourier({ order, focusRequest, guard }: {
   const triggerRef = useRef<HTMLButtonElement>(null);
   const [providerId, setProviderId] = useState("");
   const mutation = useCreateOrderShipment();
-  const providers = order.deliveryProviders ?? [];
+  // Couriers that don't deliver to the order's country are left out, with the reason.
+  const { served: providers, elsewhere } = couriersForCountry(order.deliveryProviders ?? [], order.shippingCountryCode);
   const selected = providers.find((provider) => provider.id === providerId);
   const readiness = selected ? resolveProviderReadiness(selected) : null;
   const noneReady = providers.length > 0 && providers.every((provider) => !resolveProviderReadiness(provider).canCreateShipment);
@@ -414,8 +417,16 @@ export function BookCourier({ order, focusRequest, guard }: {
   }, [focusRequest]);
 
   if (read.status === "loading" || read.status === "unavailable") return notice;
+  const leftOut = elsewhere.length > 0 ? (
+    <p className="text-muted-foreground">
+      {t("shipments.couriersElsewhere", {
+        country: countryName(order.shippingCountryCode || "BD"),
+        couriers: elsewhere.map((provider) => provider.name).join(", "),
+      })}
+    </p>
+  ) : null;
   if (providers.length === 0) {
-    return (
+    return leftOut ?? (
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-muted-foreground">{t("shipments.noCouriers")}</p>
         <Button asChild variant="link" size="sm">
@@ -458,6 +469,7 @@ export function BookCourier({ order, focusRequest, guard }: {
         </Button>
       </div>
       {blocker ? <p className="text-muted-foreground">{blocker}</p> : null}
+      {leftOut}
       {missingArea ? <p className="text-muted-foreground">{t("shipments.needsArea")}</p> : null}
       {mutation.isError ? <p role="alert" className="text-destructive">{orderErrorMessage(mutation.error)}</p> : null}
     </div>

@@ -17,6 +17,7 @@ import { Label } from "~/components/ui/label";
 import { Textarea } from "~/components/ui/textarea";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { deliveryProvidersQueryOptions, type DeliveryProviderRecord } from "~/lib/api-query-options/delivery";
+import { courierServesCountry } from "~/lib/courier-countries";
 import {
   getProviderReadinessMessage,
   resolveProviderReadiness,
@@ -43,12 +44,17 @@ interface BulkOrdersDialogProps {
   onRun: (eligible: OrderListItem[], extras: BulkRunExtras) => void;
 }
 
-function CourierPicker({ value, onChange, disabled }: { value: string; onChange: (id: string) => void; disabled: boolean }) {
-  const t = useMessages(orderListMessages);
-  const { data: providers = [], isLoading } = useQuery({
+function useCouriers(enabled = true) {
+  return useQuery({
     ...deliveryProvidersQueryOptions(),
+    enabled,
     select: (data) => (Array.isArray(data) ? (data as DeliveryProviderRecord[]) : []),
   });
+}
+
+function CourierPicker({ value, onChange, disabled }: { value: string; onChange: (id: string) => void; disabled: boolean }) {
+  const t = useMessages(orderListMessages);
+  const { data: providers = [], isLoading } = useCouriers();
   const selected = providers.find((provider) => provider.id === value);
   const readiness = selected ? resolveProviderReadiness(selected) : null;
   const ready = providers.filter((provider) => resolveProviderReadiness(provider).canCreateShipment);
@@ -115,7 +121,16 @@ export function BulkOrdersDialog({
   }, [action]);
 
   const current = action ?? "confirm";
-  const plan = orders ? planOrderBulkAction(orders, current) : null;
+  const basePlan = orders ? planOrderBulkAction(orders, current) : null;
+  // Booking skips the orders shipping where the chosen courier doesn't deliver (it would refuse them).
+  const { data: couriers = [] } = useCouriers(current === "ship");
+  const courier = current === "ship" ? couriers.find((provider) => provider.id === providerId) : undefined;
+  const outsideCourier = courier && basePlan
+    ? basePlan.eligible.filter((order) => !courierServesCountry(courier.countries, order.shippingCountryCode))
+    : [];
+  const plan = basePlan && outsideCourier.length > 0
+    ? { ...basePlan, eligible: basePlan.eligible.filter((order) => !outsideCourier.includes(order)) }
+    : basePlan;
   const eligibleCount = plan?.eligible.length ?? 0;
   const numberOf = (orderId: string) => {
     const order = orders?.find((candidate) => candidate.id === orderId);
@@ -188,6 +203,11 @@ export function BulkOrdersDialog({
         ) : null}
         {current === "ship" && action !== null ? (
           <CourierPicker value={providerId} onChange={setProviderId} disabled={running} />
+        ) : null}
+        {courier && outsideCourier.length > 0 ? (
+          <p className="text-body text-muted-foreground">
+            {t(outsideCourier.length === 1 ? "skipCourierCountryOne" : "skipCourierCountry", { count: outsideCourier.length, courier: courier.name })}
+          </p>
         ) : null}
 
         {outcome && outcome.failures.length > 0 ? (

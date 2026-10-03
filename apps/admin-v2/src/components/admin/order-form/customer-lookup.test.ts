@@ -6,13 +6,16 @@ const saved: SavedCustomer = {
   name: "Rahim Uddin",
   email: "rahim@example.com",
   phone: "+8801712345678",
-  address: "House 12, Road 5, Dhanmondi",
-  city: "city_dhaka",
-  zone: "zone_dhanmondi",
-  area: null,
+  defaultAddress: {
+    countryCode: "BD",
+    line1: "House 12, Road 5, Dhanmondi",
+    city: "city_dhaka",
+    zone: "zone_dhanmondi",
+    area: null,
+  },
   totalOrders: 3,
 };
-const empty = { customerName: "", customerEmail: null, shippingAddress: "", city: "", zone: "", area: null };
+const empty = { customerName: "", customerEmail: null, shippingCountryCode: "BD", shippingAddress: "", city: "", zone: "", area: null };
 
 describe("phone numbers typed on the order form", () => {
   it("reads a Bangladesh mobile in any spacing, prefix or Bangla digits", () => {
@@ -63,5 +66,28 @@ describe("returning customer", () => {
 
   it("skips a saved city that is no longer a delivery city", () => {
     expect(customerFill(saved, empty, new Set(["city_ctg"]))).not.toHaveProperty("city");
+  });
+
+  it("fills another country's default address whole, only into an address not started", () => {
+    const abroad: SavedCustomer = {
+      ...saved,
+      defaultAddress: { countryCode: "US", line1: "1 Infinite Loop", line2: null, locality: "Cupertino", adminArea: "CA", postalCode: "95014" },
+    };
+    expect(customerFill(abroad, empty, new Set())).toEqual({
+      customerName: "Rahim Uddin",
+      customerEmail: "rahim@example.com",
+      shippingCountryCode: "US",
+      shippingAddress: "1 Infinite Loop",
+      shippingAddressLine2: "",
+      shippingDependentLocality: "",
+      shippingLocality: "Cupertino",
+      shippingAdminArea: "CA",
+      shippingPostalCode: "95014",
+    });
+    expect(customerFill(abroad, { ...empty, shippingAddress: "Typed already" }, new Set()))
+      .toEqual({ customerName: "Rahim Uddin", customerEmail: "rahim@example.com" });
+    // A Bangladesh address doesn't fill a form set to another country.
+    expect(customerFill(saved, { ...empty, shippingCountryCode: "IN" }, new Set(["city_dhaka"])))
+      .toEqual({ customerName: "Rahim Uddin", customerEmail: "rahim@example.com" });
   });
 });

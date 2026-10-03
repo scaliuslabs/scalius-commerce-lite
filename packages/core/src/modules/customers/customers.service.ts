@@ -217,9 +217,14 @@ export async function listCustomers(
             phone: customers.phone,
             defaultCountryCode: defaultAddress.countryCode,
             defaultLine1: defaultAddress.line1,
+            defaultLine2: defaultAddress.line2,
+            defaultDependentLocality: defaultAddress.dependentLocality,
             defaultLocality: defaultAddress.locality,
             defaultAdminArea: defaultAddress.adminArea,
             defaultPostalCode: defaultAddress.postalCode,
+            defaultCity: defaultAddress.city,
+            defaultZone: defaultAddress.zone,
+            defaultArea: defaultAddress.area,
             defaultCityName: defaultAddress.cityName,
             defaultZoneName: defaultAddress.zoneName,
             defaultAreaName: defaultAddress.areaName,
@@ -254,26 +259,31 @@ export async function listCustomers(
     if (positionWhere) statements.push(countProbe(positionWhere));
     const batchResult = await db.batch(statements as unknown as Parameters<Database["batch"]>[0]) as unknown as [
         { count: number }[],
-        { id: string; name: string; email: string | null; phone: string; defaultCountryCode: string | null; defaultLine1: string | null; defaultLocality: string | null; defaultAdminArea: string | null; defaultPostalCode: string | null; defaultCityName: string | null; defaultZoneName: string | null; defaultAreaName: string | null; accountClaimedAt: number | null; origin: string; latestOrderName: string | null; totalOrders: number; totalSpentMinor: number; spendDecimalPlaces: number; lastOrderAt: number | null; createdAt: number; updatedAt: number; keysetValue: number | string | null }[],
+        { id: string; name: string; email: string | null; phone: string; defaultCountryCode: string | null; defaultLine1: string | null; defaultLine2: string | null; defaultDependentLocality: string | null; defaultLocality: string | null; defaultAdminArea: string | null; defaultPostalCode: string | null; defaultCity: string | null; defaultZone: string | null; defaultArea: string | null; defaultCityName: string | null; defaultZoneName: string | null; defaultAreaName: string | null; accountClaimedAt: number | null; origin: string; latestOrderName: string | null; totalOrders: number; totalSpentMinor: number; spendDecimalPlaces: number; lastOrderAt: number | null; createdAt: number; updatedAt: number; keysetValue: number | string | null }[],
         { count: number }[]?,
     ];
     const { rows: results, pageInfo, pageStart } = plan.finish(batchResult[1], batchResult[2]?.[0]?.count);
 
     const formattedCustomers = results.map(({
         totalSpentMinor, spendDecimalPlaces, origin, keysetValue: _keysetValue,
-        defaultCountryCode, defaultLine1, defaultLocality, defaultAdminArea, defaultPostalCode,
-        defaultCityName, defaultZoneName, defaultAreaName,
+        defaultCountryCode, defaultLine1, defaultLine2, defaultDependentLocality, defaultLocality, defaultAdminArea, defaultPostalCode,
+        defaultCity, defaultZone, defaultArea, defaultCityName, defaultZoneName, defaultAreaName,
         ...c
     }) => ({
         ...c,
-        /** The default address, in brief, for the list's location column. */
+        /** The default address (a staff order prefills it from the customer found by phone). */
         defaultAddress: defaultCountryCode
             ? {
                 countryCode: defaultCountryCode,
                 line1: defaultLine1,
+                line2: defaultLine2,
+                dependentLocality: defaultDependentLocality,
                 locality: defaultLocality,
                 adminArea: defaultAdminArea,
                 postalCode: defaultPostalCode,
+                city: defaultCity,
+                zone: defaultZone,
+                area: defaultArea,
                 cityName: defaultCityName,
                 zoneName: defaultZoneName,
                 areaName: defaultAreaName,

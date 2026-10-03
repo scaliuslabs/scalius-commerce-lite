@@ -128,11 +128,25 @@ export const orderFormSchema = z.object({
     return z.NEVER;
   }),
   customerEmail: z.email(msg("emailInvalid")).nullable(),
+  /**
+   * The shipping country (MARKETS-DESIGN D7): Bangladesh uses the street
+   * address and City → Thana → Area; another country the fields its rules
+   * use (the API checks them).
+   */
+  shippingCountryCode: z.string().length(2).optional(),
   /** Asked only when something ships (see `orderNeedsAddress`); checked below. */
   shippingAddress: z
     .string()
     .trim()
     .max(500, msg("addressTooLong")),
+  shippingAddressLine2: z.string().optional(),
+  shippingDependentLocality: z.string().optional(),
+  shippingLocality: z.string().optional(),
+  shippingAdminArea: z.string().optional(),
+  shippingPostalCode: z.string().optional(),
+  shippingCompany: z.string().optional(),
+  /** Keep an address the API refused, marked (shown once it refused). */
+  skipAddressValidation: z.boolean().optional(),
   city: z.string(),
   zone: z.string(),
   area: z.string().nullable(),
@@ -205,6 +219,11 @@ export const orderFormSchema = z.object({
   // A pickup order or one with nothing physical has no delivery address (Wave A §2.7).
   if (!orderNeedsAddress(values)) return;
   const address = values.shippingAddress.trim();
+  if (values.shippingCountryCode && values.shippingCountryCode !== "BD") {
+    // Another country's rules are checked by the API; the first line is always asked.
+    if (!address) context.addIssue({ code: "custom", path: ["shippingAddress"], message: translate(orderFormMessages, "addressRequired") });
+    return;
+  }
   if (address.length < 10) {
     context.addIssue({
       code: "custom",

@@ -20573,9 +20573,14 @@ export type PostApiV1AdminCustomersSegmentsPreviewResponses = {
                 defaultAddress: {
                     countryCode: string;
                     line1: string | null;
+                    line2: string | null;
+                    dependentLocality: string | null;
                     locality: string | null;
                     adminArea: string | null;
                     postalCode: string | null;
+                    city: string | null;
+                    zone: string | null;
+                    area: string | null;
                     cityName: string | null;
                     zoneName: string | null;
                     areaName: string | null;
@@ -21122,9 +21127,14 @@ export type GetApiV1AdminCustomersResponses = {
                 defaultAddress: {
                     countryCode: string;
                     line1: string | null;
+                    line2: string | null;
+                    dependentLocality: string | null;
                     locality: string | null;
                     adminArea: string | null;
                     postalCode: string | null;
+                    city: string | null;
+                    zone: string | null;
+                    area: string | null;
                     cityName: string | null;
                     zoneName: string | null;
                     areaName: string | null;

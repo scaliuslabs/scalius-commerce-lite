@@ -1,7 +1,7 @@
 import React, { useEffect } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useWatch } from "react-hook-form";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { FieldErrors } from "react-hook-form";
 import { useNavigate } from "@tanstack/react-router";
 import { toast } from "~/lib/toast";
@@ -47,7 +47,7 @@ import {
   type OrderFormProps,
 } from "./order-form/types";
 import { OrderFormProvider } from "./order-form/OrderFormContext";
-import { CustomerInfoSection, ORDER_LOCATION_IDS } from "./order-form/CustomerInfoSection";
+import { CustomerInfoSection, ORDER_ADDRESS_IDS } from "./order-form/CustomerInfoSection";
 import { SalesChannelSection } from "./order-form/SalesChannelSection";
 import { OrderItemsSection } from "./order-form/OrderItemsSection";
 import { SummarySection } from "./order-form/SummarySection";
@@ -84,6 +84,11 @@ import { orderFormMessages } from "@/i18n/order-form";
 import { orderDetailMessages } from "@/i18n/order-detail";
 import { resourceMessages } from "@/i18n/resource";
 import { matchesShortcut } from "./layout/shortcuts";
+import { addressProblemMessages } from "./address/AddressFields";
+import { readAddressProblems, type AddressProblem } from "./address/address-draft";
+import { addressMessages } from "@/i18n/address";
+import { locationMessages } from "@/i18n/location";
+import { addressRulesQueryOptions } from "@/lib/api-query-options/address-rules";
 
 type CreateOrderInput = ApiBody<typeof postApiV1AdminOrders>;
 type ManualOrderAmendmentInput = { id: string } &
@@ -97,7 +102,13 @@ const FIELD_ORDER = [
   "customerName",
   "customerPhone",
   "customerEmail",
+  "shippingCountryCode",
   "shippingAddress",
+  "shippingAddressLine2",
+  "shippingDependentLocality",
+  "shippingLocality",
+  "shippingAdminArea",
+  "shippingPostalCode",
   "city",
   "zone",
   "area",
@@ -105,10 +116,34 @@ const FIELD_ORDER = [
   "sourceName",
 ] as const;
 
-/** No address is sent for a pickup order or one with nothing physical (the server stores none). */
+const orNull = (value: string | undefined) => value?.trim() || null;
+
+/**
+ * No address is sent for a pickup order or one with nothing physical (the
+ * server stores none). A Bangladesh address sends its street line and
+ * City/Thana/Area ids, as before; another country its canonical fields.
+ */
 function toOrderAddressInput(values: OrderFormValues) {
   if (!orderNeedsAddress(values)) {
     return { shippingAddress: null, city: null, zone: null, area: null, areaName: null };
+  }
+  const skip = values.skipAddressValidation ? { skipAddressValidation: true } : {};
+  const country = values.shippingCountryCode || "BD";
+  if (country !== "BD") {
+    return {
+      shippingCountryCode: country,
+      shippingAddress: values.shippingAddress,
+      shippingAddressLine2: orNull(values.shippingAddressLine2),
+      shippingDependentLocality: orNull(values.shippingDependentLocality),
+      shippingLocality: orNull(values.shippingLocality),
+      shippingAdminArea: orNull(values.shippingAdminArea),
+      shippingPostalCode: orNull(values.shippingPostalCode),
+      shippingCompany: orNull(values.shippingCompany),
+      city: null,
+      zone: null,
+      area: null,
+      ...skip,
+    };
   }
   return {
     shippingAddress: values.shippingAddress,
@@ -118,6 +153,7 @@ function toOrderAddressInput(values: OrderFormValues) {
     cityName: values.cityName ?? undefined,
     zoneName: values.zoneName ?? undefined,
     areaName: values.areaName ?? null,
+    ...skip,
   };
 }
 
@@ -217,6 +253,11 @@ function OrderEditor({
   const submitLock = React.useRef(false);
   // After a successful save the form only navigates away; nothing refetches.
   const [completed, setCompleted] = React.useState(false);
+  // The API refused the address once: staff may then keep it, marked.
+  const [addressRefused, setAddressRefused] = React.useState(false);
+  const addressText = useMessages(addressMessages);
+  const placeText = useMessages(locationMessages);
+  const queryClient = useQueryClient();
   // The save bar's Save waits here until the review dialog is confirmed or cancelled.
   const confirmation = React.useRef<{ resolve: () => void; reject: (error: unknown) => void } | null>(null);
   // The dialog stays mounted; the last amendment is kept while it animates closed.
@@ -268,6 +309,7 @@ function OrderEditor({
     quoteDiscount,
     quoteMethodId,
     quoteMethodKind,
+    quoteCountry,
   ] = useWatch({
     control: form.control,
     name: [
@@ -279,8 +321,11 @@ function OrderEditor({
       "discountAmount",
       "shippingMethodId",
       "shippingMethodKind",
+      "shippingCountryCode",
     ],
   });
+  // Bangladesh is taxed by City/Thana/Area; another country by its country (until tax regions).
+  const abroad = Boolean(quoteCountry && quoteCountry !== "BD");
   const needsAddress = orderNeedsAddress({ items: quoteItems, shippingMethodKind: quoteMethodKind });
   const localTotals = React.useMemo(() => {
     const subtotal = quoteItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
@@ -291,9 +336,10 @@ function OrderEditor({
   const quoteInput = React.useMemo(
     () => ({
       // A pickup or no-delivery order is taxed without a destination (store-wide rates only).
-      city: needsAddress ? quoteCity : null,
-      zone: needsAddress ? quoteZone : null,
-      area: needsAddress ? quoteArea : null,
+      ...(needsAddress && abroad ? { shippingCountryCode: quoteCountry } : {}),
+      city: needsAddress && !abroad ? quoteCity : null,
+      zone: needsAddress && !abroad ? quoteZone : null,
+      area: needsAddress && !abroad ? quoteArea : null,
       // Kept lines carry their order line id so they keep their original price.
       items: quoteItems.map((item) => ({
         orderItemId: item.orderItemId,
@@ -306,7 +352,7 @@ function OrderEditor({
       discountAmount: quoteDiscount == null ? null : Number(quoteDiscount),
       ...(quoteMethodId ? { shippingMethodId: quoteMethodId } : {}),
     }),
-    [needsAddress, quoteArea, quoteCity, quoteDiscount, quoteItems, quoteMethodId, quoteShipping, quoteZone],
+    [abroad, needsAddress, quoteArea, quoteCity, quoteCountry, quoteDiscount, quoteItems, quoteMethodId, quoteShipping, quoteZone],
   );
   const currencyDecimalPlaces = getDecimalPlaces(currencyCode);
   const localDiscountLimit = React.useMemo(
@@ -316,7 +362,7 @@ function OrderEditor({
   const debouncedQuoteInput = useDebounce(quoteInput, 350);
   const quoteInputIsCurrent =
     JSON.stringify(quoteInput) === JSON.stringify(debouncedQuoteInput);
-  const hasQuotePrerequisites = (!needsAddress || Boolean(quoteInput.city && quoteInput.zone))
+  const hasQuotePrerequisites = (!needsAddress || abroad || Boolean(quoteInput.city && quoteInput.zone))
     && quoteInput.items.length > 0
     && quoteInput.items.every((item) => Boolean(item.variantId) && item.quantity >= 1 && item.quantity <= 99)
     && quoteInput.shippingCharge >= 0
@@ -393,7 +439,10 @@ function OrderEditor({
     const prefill = takeOrderPrefill();
     if (!prefill) return;
     const set = { shouldDirty: true };
-    for (const name of ["customerName", "customerPhone", "shippingAddress", "city", "zone"] as const) {
+    for (const name of [
+      "customerName", "customerPhone", "shippingCountryCode", "shippingAddress", "shippingAddressLine2",
+      "shippingDependentLocality", "shippingLocality", "shippingAdminArea", "shippingPostalCode", "city", "zone",
+    ] as const) {
       if (prefill[name]) form.setValue(name, prefill[name], set);
     }
     if (prefill.customerEmail) form.setValue("customerEmail", prefill.customerEmail, set);
@@ -422,8 +471,26 @@ function OrderEditor({
     const line = Array.isArray(errors.items) ? errors.items.findIndex((item) => item?.quantity) : -1;
     if (first === "items" && line >= 0) document.getElementById(orderLineQuantityId(line))?.focus();
     else if (first === "items") document.getElementById(PRODUCT_SEARCH_INPUT_ID)?.focus();
-    else if (first === "city" || first === "zone" || first === "area") document.getElementById(ORDER_LOCATION_IDS[first])?.focus();
+    else if (first && first in ORDER_ADDRESS_IDS) document.getElementById(ORDER_ADDRESS_IDS[first as keyof typeof ORDER_ADDRESS_IDS])?.focus();
     else if (first) form.setFocus(first);
+  };
+
+  /** The API's refusal of the address, on its fields (worded with the country's labels). */
+  const showAddressProblems = (problems: AddressProblem[], countryCode: string) => {
+    const rules = countryCode === "BD" ? null : queryClient.getQueryData(addressRulesQueryOptions(countryCode).queryKey) ?? null;
+    const messages = addressProblemMessages(problems, rules, addressText, placeText);
+    const names = {
+      countryCode: "shippingCountryCode", line1: "shippingAddress", line2: "shippingAddressLine2",
+      dependentLocality: "shippingDependentLocality", locality: "shippingLocality", adminArea: "shippingAdminArea",
+      postalCode: "shippingPostalCode", company: "shippingCompany", city: "city", zone: "zone", area: "area",
+    } as const;
+    for (const [field, message] of Object.entries(messages)) {
+      const name = names[field as keyof typeof names];
+      if (name && message) form.setError(name, { type: "server", message });
+    }
+    setAddressRefused(true);
+    const first = FIELD_ORDER.find((name) => name in ORDER_ADDRESS_IDS && form.getFieldState(name).error);
+    if (first) document.getElementById(ORDER_ADDRESS_IDS[first as keyof typeof ORDER_ADDRESS_IDS])?.focus();
   };
 
   /** Resolves once the order is saved; rejects (keeping the edits) when it isn't. */
@@ -500,6 +567,11 @@ function OrderEditor({
           },
         });
         return;
+      }
+      const problems = result.outcome === "error" ? readAddressProblems(result.error) : null;
+      if (problems) {
+        showAddressProblems(problems, enrichedValues.shippingCountryCode || "BD");
+        throw new SaveNotCompleted(r("fixFields"));
       }
       throw new SaveNotCompleted(result.outcome === "wait"
         ? t("stillCreating")
@@ -612,6 +684,7 @@ function OrderEditor({
             amendShipsNothing={isEdit && amendShipsNothing}
             localTotals={localTotals}
             manualQuote={manualQuote}
+            addressRefused={addressRefused}
           >
             <div className="grid gap-4 lg:grid-cols-3">
               <div className="min-w-0 space-y-4 lg:col-span-2">

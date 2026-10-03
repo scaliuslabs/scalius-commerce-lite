@@ -11,6 +11,7 @@ import { postApiV1AdminFraudCheckerLookup } from "@scalius/api-client/sdk";
 import { apiData } from "@/lib/api";
 import { formatNumber, useMessages } from "~/i18n";
 import { orderListMessages } from "~/i18n/order-list";
+import { countryName } from "~/lib/country-name";
 
 type RiskLevel = NonNullable<FraudLookupData["riskLevel"]>;
 
@@ -30,17 +31,18 @@ function riskLevel(data: FraudLookupData): RiskLevel {
  * The customer's courier delivery history (delivered vs cancelled parcels).
  * Without a connected fraud check service (`configured: false`) it says how to connect one.
  */
-export function FraudCheckIndicator({ phone, trigger }: { phone: string; trigger: ReactNode }) {
+export function FraudCheckIndicator({ phone, countryCode, trigger }: { phone: string; countryCode: string | null; trigger: ReactNode }) {
   const t = useMessages(orderListMessages);
   const [open, setOpen] = useState(true);
   const { data, error, isFetching, refetch } = useQuery({
-    queryKey: ["fraud-checker", "lookup", phone],
-    queryFn: () => apiData(postApiV1AdminFraudCheckerLookup({ body: { phone } })),
+    queryKey: ["fraud-checker", "lookup", phone, countryCode],
+    queryFn: () => apiData(postApiV1AdminFraudCheckerLookup({ body: { phone, ...(countryCode ? { countryCode } : {}) } })),
     enabled: open,
     retry: false,
     staleTime: 5 * 60_000,
   });
   const notConnected = data?.configured === false;
+  const unsupported = data?.unsupportedCountry ?? null;
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -48,7 +50,7 @@ export function FraudCheckIndicator({ phone, trigger }: { phone: string; trigger
       <PopoverContent align="start" className="w-80 space-y-3">
         <div className="flex items-center justify-between gap-2">
           <p className="text-body font-medium">{t("deliveryHistory")}</p>
-          {!notConnected ? (
+          {!notConnected && !unsupported ? (
             <Button variant="ghost" size="sm" onClick={() => void refetch()} disabled={isFetching}>
               {isFetching ? <LoaderCircle className="h-4 w-4 animate-spin" /> : t("refresh")}
             </Button>
@@ -60,6 +62,13 @@ export function FraudCheckIndicator({ phone, trigger }: { phone: string; trigger
             <Link to="/admin/settings/integrations" className="text-link hover:underline">
               {t("fraudSettingsLink")}
             </Link>
+          </p>
+        ) : unsupported ? (
+          <p className="text-body text-muted-foreground">
+            {t("fraudCountryUnsupported", {
+              provider: unsupported.provider,
+              country: unsupported.countryCode ? countryName(unsupported.countryCode) : "?",
+            })}
           </p>
         ) : error ? (
           <p className="text-body text-destructive">{getServerFnError(error, t("historyFailed"))}</p>

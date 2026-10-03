@@ -190,7 +190,21 @@ export interface Order {
   customerEmail: string | null;
   /** A separate WhatsApp number; null means the phone. */
   customerWhatsapp?: string | null;
+  /** The first street line ("" when nothing ships). */
   shippingAddress: string;
+  /** The rest of the shipping snapshot (MARKETS-DESIGN D7); a Bangladesh order adds City/Thana/Area. */
+  shippingAddressLine2?: string | null;
+  shippingCountryCode?: string | null;
+  shippingDependentLocality?: string | null;
+  shippingLocality?: string | null;
+  shippingAdminArea?: string | null;
+  shippingPostalCode?: string | null;
+  shippingCompany?: string | null;
+  /** The recipient when not the contact (null: `customerName`, `customerPhone`). */
+  shippingName?: string | null;
+  shippingPhone?: string | null;
+  /** Staff saved it although it breaks its country's rules. */
+  shippingValidationSkipped?: boolean;
   city: string;
   zone: string;
   area: string | null;

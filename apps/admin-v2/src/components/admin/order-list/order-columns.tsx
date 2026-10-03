@@ -153,7 +153,7 @@ function CustomerCell({ order }: { order: OrderListItem }) {
         <Line text={order.customerName} className="font-medium" />
         <Line text={formatPhoneForDisplay(order.customerPhone)} className="font-mono text-muted-foreground" />
       </div>
-      <LazyFraudCheckIndicator phone={order.customerPhone} customerName={order.customerName} compact />
+      <LazyFraudCheckIndicator phone={order.customerPhone} customerName={order.customerName} countryCode={order.shippingCountryCode} compact />
     </div>
   );
 }

@@ -8,7 +8,9 @@ import { LazyFraudCheckIndicator } from "~/components/admin/order-list/LazyFraud
 import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions";
 import { useMessages } from "~/i18n";
 import { orderDetailMessages } from "~/i18n/order-detail";
-import { formatLocationParts } from "~/lib/location-presentation";
+import { formatShippingAddress } from "~/lib/location-presentation";
+import { countryName } from "~/lib/country-name";
+import { addressMessages } from "~/i18n/address";
 import { formatPhoneForDisplay } from "@scalius/shared/phone-input";
 import { customerContactLinks } from "./contact-links";
 import { formatOrderTimestamp, orderTimestampIso } from "./formatters";
@@ -104,7 +106,10 @@ export function OrderCustomerCard({ order }: { order: Order }) {
   const contact = customerContactLinks(order.customerPhone);
   // WhatsApp goes to the separate number the buyer gave, when there is one.
   const whatsappLink = order.customerWhatsapp ? customerContactLinks(order.customerWhatsapp).whatsapp : contact.whatsapp;
-  const address = formatLocationParts(order.shippingAddress, order.areaName, order.zoneName, order.cityName);
+  const a = useMessages(addressMessages);
+  const address = formatShippingAddress(order, countryName);
+  // The recipient when the order ships to someone other than its contact.
+  const recipient = [order.shippingName, order.shippingCompany].filter(Boolean).join(", ");
   const canEditDetails = actions.canEditOrders && order.editReadiness.details.allowed;
   const record = order.customerRecord ?? null;
   // An account or merchant-added customer named differently from this order: say so, so the mismatch is seen.
@@ -160,8 +165,13 @@ export function OrderCustomerCard({ order }: { order: Order }) {
           </div>
         </section>
         <section className="space-y-1 px-6 py-4">
-          <h2 className="font-semibold">{t("address.title")}</h2>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="font-semibold">{t("address.title")}</h2>
+            {order.shippingValidationSkipped ? <Badge variant="warning" title={a("notCheckedHelp")}>{a("notChecked")}</Badge> : null}
+          </div>
+          {recipient ? <p>{recipient}</p> : null}
           <p className="text-muted-foreground">{address || t("address.none")}</p>
+          {order.shippingPhone ? <p className="font-mono text-muted-foreground">{formatPhoneForDisplay(order.shippingPhone)}</p> : null}
           {order.shippingMethodName ? <p className="text-muted-foreground">{order.shippingMethodName}</p> : null}
         </section>
         {actions.canViewFraudCheck ? (
@@ -170,7 +180,7 @@ export function OrderCustomerCard({ order }: { order: Order }) {
               <h2 className="font-semibold">{t("fraud.title")}</h2>
               <p className="text-muted-foreground">{t("fraud.help")}</p>
             </div>
-            <LazyFraudCheckIndicator phone={order.customerPhone} customerName={order.customerName} />
+            <LazyFraudCheckIndicator phone={order.customerPhone} customerName={order.customerName} countryCode={order.shippingCountryCode} />
           </section>
         ) : null}
         {order.appRiskChecks.length > 0 || released.length > 0 ? <AppRiskChecks checks={order.appRiskChecks} released={released} /> : null}

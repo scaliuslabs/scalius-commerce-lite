@@ -26,13 +26,6 @@ function CustomerPage() {
         name: data.name,
         email: data.email,
         phone: data.phone,
-        address: data.address,
-        city: data.city,
-        zone: data.zone,
-        area: data.area,
-        cityName: data.cityName || "",
-        zoneName: data.zoneName || "",
-        areaName: data.areaName || "",
       }}
     />
   );

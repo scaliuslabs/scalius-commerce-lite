@@ -1,3 +1,4 @@
+import { couriersForCountry } from "~/lib/courier-countries";
 import { canProcessOrderCodAction } from "@scalius/shared/order-state";
 import { getAdminOrderStatusTransitions } from "~/lib/admin-order-status-policy";
 import type { OrderActionPermissions } from "~/lib/order-action-permissions";
@@ -101,7 +102,7 @@ export function resolveOrderPrimaryAction(
     if (!actions.canManageOrderShipments || !known || hasActiveShipment || order.fulfillmentStatus === "complete") {
       return null;
     }
-    return (order.deliveryProviders ?? []).length > 0 ? "bookCourier" : "sendOwnCourier";
+    return couriersForCountry(order.deliveryProviders ?? [], order.shippingCountryCode).served.length > 0 ? "bookCourier" : "sendOwnCourier";
   }
 
   if (actions.canManageOrderShipments && canHandOver(order)) {

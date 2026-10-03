@@ -17,7 +17,8 @@ import {
 } from "~/lib/order-tax-presentation";
 import { resolveDeliveryMethodPresentation } from "~/lib/delivery-method-presentation";
 import { summarizeOrderDiscounts } from "~/lib/order-discount-summary";
-import { formatLocationParts } from "~/lib/location-presentation";
+import { formatShippingAddress } from "~/lib/location-presentation";
+import { countryName } from "~/lib/country-name";
 import { taxLabelText } from "./OrderItemsCard";
 
 export type InvoiceDocument = ApiResult<typeof getApiV1AdminOrdersByIdInvoice>;
@@ -128,7 +129,7 @@ export function InvoiceSheet({ document }: { document: InvoiceDocument }) {
           {/* Local format, as the customer writes it: 01712345678. */}
           <p>{localPhone(order.customerPhone)}</p>
           {order.customerEmail ? <p>{order.customerEmail}</p> : null}
-          <p>{formatLocationParts(order.shippingAddress, order.areaName, order.zoneName, order.cityName)}</p>
+          <p>{formatShippingAddress(order, countryName)}</p>
         </div>
       </section>
 

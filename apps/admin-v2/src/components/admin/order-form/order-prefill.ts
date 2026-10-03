@@ -8,6 +8,13 @@ export interface OrderPrefill {
   customerPhone: string;
   customerEmail: string | null;
   shippingAddress: string;
+  /** Another country's address (absent: Bangladesh, with City/Thana/Area). */
+  shippingCountryCode?: string;
+  shippingAddressLine2?: string;
+  shippingDependentLocality?: string;
+  shippingLocality?: string;
+  shippingAdminArea?: string;
+  shippingPostalCode?: string;
   city: string;
   zone: string;
   area: string | null;
@@ -17,6 +24,20 @@ export interface OrderPrefill {
 }
 
 const text = (value: unknown) => (typeof value === "string" ? value.trim() : "");
+
+const FOREIGN_FIELDS = [
+  "shippingAddressLine2", "shippingDependentLocality", "shippingLocality", "shippingAdminArea", "shippingPostalCode",
+] as const;
+
+/** Another country's address fields, when the prefill has a country other than Bangladesh. */
+export function foreignAddress(value: Record<string, unknown>): Partial<OrderPrefill> {
+  const country = text(value.shippingCountryCode).toUpperCase();
+  if (!/^[A-Z]{2}$/.test(country) || country === "BD") return {};
+  return {
+    shippingCountryCode: country,
+    ...Object.fromEntries(FOREIGN_FIELDS.map((field) => [field, text(value[field])])),
+  };
+}
 
 /**
  * Takes the prefill out of session storage (it is removed even when it can't
@@ -60,6 +81,7 @@ export function takeOrderPrefill(): OrderPrefill | null {
     customerPhone: text(value.customerPhone),
     customerEmail: text(value.customerEmail) || null,
     shippingAddress: text(value.shippingAddress),
+    ...foreignAddress(value),
     city: text(value.city),
     zone: text(value.zone),
     area: text(value.area) || null,

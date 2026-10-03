@@ -18,6 +18,8 @@ interface OrderFormState {
   amendShipsNothing?: boolean;
   /** Edit only: the delivery method the order was placed with, shown even when the address no longer offers it. */
   savedShippingMethod?: { id: string; name: string; kind?: "delivery" | "pickup" | null } | null;
+  /** The API refused the address once: the delivery card offers keeping it, marked. */
+  addressRefused?: boolean;
   /** Totals from the form values, shown until a current server quote exists. */
   localTotals: {
     subtotal: number;

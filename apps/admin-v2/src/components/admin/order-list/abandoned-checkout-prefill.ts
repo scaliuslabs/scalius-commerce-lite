@@ -1,4 +1,5 @@
 import type { ParsedAbandonedCheckoutDisplay } from "~/lib/abandoned-checkout-display";
+import { foreignAddress } from "~/components/admin/order-form/order-prefill";
 
 /** sessionStorage key the create-order form reads (and removes) once on mount. */
 export const ORDER_PREFILL_KEY = "admin.orderPrefill";
@@ -8,6 +9,13 @@ export interface OrderPrefill {
   customerPhone: string;
   customerEmail: string | null;
   shippingAddress: string;
+  /** Another country's address (absent: Bangladesh, with City/Thana/Area). */
+  shippingCountryCode?: string;
+  shippingAddressLine2?: string;
+  shippingDependentLocality?: string;
+  shippingLocality?: string;
+  shippingAdminArea?: string;
+  shippingPostalCode?: string;
   city: string;
   zone: string;
   area: string | null;
@@ -52,6 +60,7 @@ export function buildOrderPrefill(
     customerPhone: customerInfo.phone ?? "",
     customerEmail: customerInfo.email?.trim() || null,
     shippingAddress: customerInfo.address?.trim() ?? "",
+    ...foreignAddress(data),
     city: text(data, "city"),
     zone: text(data, "zone"),
     area: text(data, "area") || null,

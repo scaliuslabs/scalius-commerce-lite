@@ -703,13 +703,19 @@ export const customerSummarySchema = z.object({
   name: z.string(),
   email: z.string().nullable(),
   phone: z.string(),
-  /** The default address in brief (the list's location column); null without one. */
+  /** The default address (a staff order prefills it); null without one. */
   defaultAddress: z.object({
     countryCode: z.string(),
     line1: z.string().nullable(),
+    line2: z.string().nullable(),
+    dependentLocality: z.string().nullable(),
     locality: z.string().nullable(),
     adminArea: z.string().nullable(),
     postalCode: z.string().nullable(),
+    /** Bangladesh adapter: delivery location ids and names. */
+    city: z.string().nullable(),
+    zone: z.string().nullable(),
+    area: z.string().nullable(),
     cityName: z.string().nullable(),
     zoneName: z.string().nullable(),
     areaName: z.string().nullable(),

@@ -30,29 +30,19 @@ const when = (value: string | number | null | undefined) => {
   return date ? formatDateTime(date, { dateStyle: "medium", timeStyle: "short" }) : "";
 };
 
-type Snapshot = Record<"name" | "phone" | "email" | "address" | "area" | "zone" | "city", string>;
+/** What a change-log entry records: the contact (addresses are in the address book). */
+type Snapshot = Record<"name" | "phone" | "email", string>;
 const FIELD_LABEL = {
   name: "fieldName",
   phone: "fieldPhone",
   email: "fieldEmail",
-  address: "fieldAddress",
-  area: "fieldArea",
-  zone: "fieldZone",
-  city: "fieldCity",
 } as const;
 
-function snapshot(change: {
-  name: string | null; phone: string | null; email: string | null; address: string | null;
-  area: string | null; areaName: string | null; zone: string | null; zoneName: string | null; city: string | null; cityName: string | null;
-}): Snapshot {
+function snapshot(change: { name: string | null; phone: string | null; email: string | null }): Snapshot {
   return {
     name: change.name ?? "",
     phone: change.phone ? formatPhoneForDisplay(change.phone) : "",
     email: change.email ?? "",
-    address: change.address ?? "",
-    area: change.areaName || change.area || "",
-    zone: change.zoneName || change.zone || "",
-    city: change.cityName || change.city || "",
   };
 }
 

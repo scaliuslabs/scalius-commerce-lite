@@ -42,14 +42,20 @@ function HistoryTrigger({
 }
 
 /** Shield button that loads the customer's courier delivery history on first click; hidden without access. */
-export function LazyFraudCheckIndicator({ phone, customerName, compact = false }: { phone: string; customerName: string; compact?: boolean }) {
+export function LazyFraudCheckIndicator({ phone, customerName, countryCode, compact = false }: {
+  phone: string;
+  customerName: string;
+  /** The order's shipping country: a checker that doesn't know buyers there isn't asked. */
+  countryCode?: string | null;
+  compact?: boolean;
+}) {
   const { canViewFraudCheck } = useOrderActionPermissions();
   const [shouldLoad, setShouldLoad] = useState(false);
   if (!canViewFraudCheck) return null;
   if (!shouldLoad) return <HistoryTrigger customerName={customerName} compact={compact} onActivate={() => setShouldLoad(true)} />;
   return (
     <Suspense fallback={<HistoryTrigger customerName={customerName} compact={compact} isLoading />}>
-      <FraudCheckIndicator phone={phone} trigger={<HistoryTrigger customerName={customerName} compact={compact} />} />
+      <FraudCheckIndicator phone={phone} countryCode={countryCode ?? null} trigger={<HistoryTrigger customerName={customerName} compact={compact} />} />
     </Suspense>
   );
 }

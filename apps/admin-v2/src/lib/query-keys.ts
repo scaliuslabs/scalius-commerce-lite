@@ -104,6 +104,13 @@ export const queryKeys = {
     shipments: (orderId: string) => ["orders", "shipments", orderId] as const,
   },
 
+  // ── Addresses ────────────────────────────────────────────────────
+  /** Address rules are code (libaddressinput): they change only with a release. */
+  addressRules: {
+    countries: () => ["address-rules", "countries"] as const,
+    country: (countryCode: string) => ["address-rules", "country", countryCode] as const,
+  },
+
   // ── Customers ────────────────────────────────────────────────────
   customers: {
     all: ["customers"] as const,

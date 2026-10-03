@@ -58,7 +58,16 @@ function EditOrderPage() {
       products,
       defaultValues: {
         ...saved,
+        shippingCountryCode: saved.shippingCountryCode ?? "BD",
         shippingAddress: saved.shippingAddress ?? "",
+        shippingAddressLine2: saved.shippingAddressLine2 ?? "",
+        shippingDependentLocality: saved.shippingDependentLocality ?? "",
+        shippingLocality: saved.shippingLocality ?? "",
+        shippingAdminArea: saved.shippingAdminArea ?? "",
+        shippingPostalCode: saved.shippingPostalCode ?? "",
+        shippingCompany: saved.shippingCompany ?? "",
+        // An address saved without its country's check stays so unless staff untick it.
+        skipAddressValidation: saved.shippingValidationSkipped ?? false,
         city: saved.city ?? "",
         zone: saved.zone ?? "",
         items: formItems(saved.items, products),

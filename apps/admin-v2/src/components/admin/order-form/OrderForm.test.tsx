@@ -60,7 +60,10 @@ vi.mock("./CustomerInfoSection", async () => {
       </>
     );
   }
-  return { CustomerInfoSection, ORDER_LOCATION_IDS: { city: "order-city", zone: "order-zone", area: "order-area" } };
+  return {
+    CustomerInfoSection,
+    ORDER_ADDRESS_IDS: { shippingAddress: "order-line1", city: "order-city", zone: "order-zone", area: "order-area" },
+  };
 });
 vi.mock("./ProductSearch", () => ({ PRODUCT_SEARCH_INPUT_ID: "order-product-search" }));
 

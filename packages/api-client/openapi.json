@@ -71003,6 +71003,14 @@
                                     "type": "string",
                                     "nullable": true
                                   },
+                                  "line2": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "dependentLocality": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
                                   "locality": {
                                     "type": "string",
                                     "nullable": true
@@ -71012,6 +71020,18 @@
                                     "nullable": true
                                   },
                                   "postalCode": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "city": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "zone": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "area": {
                                     "type": "string",
                                     "nullable": true
                                   },
@@ -71031,9 +71051,14 @@
                                 "required": [
                                   "countryCode",
                                   "line1",
+                                  "line2",
+                                  "dependentLocality",
                                   "locality",
                                   "adminArea",
                                   "postalCode",
+                                  "city",
+                                  "zone",
+                                  "area",
                                   "cityName",
                                   "zoneName",
                                   "areaName"
@@ -72847,6 +72872,14 @@
                                     "type": "string",
                                     "nullable": true
                                   },
+                                  "line2": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "dependentLocality": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
                                   "locality": {
                                     "type": "string",
                                     "nullable": true
@@ -72856,6 +72889,18 @@
                                     "nullable": true
                                   },
                                   "postalCode": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "city": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "zone": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "area": {
                                     "type": "string",
                                     "nullable": true
                                   },
@@ -72875,9 +72920,14 @@
                                 "required": [
                                   "countryCode",
                                   "line1",
+                                  "line2",
+                                  "dependentLocality",
                                   "locality",
                                   "adminArea",
                                   "postalCode",
+                                  "city",
+                                  "zone",
+                                  "area",
                                   "cityName",
                                   "zoneName",
                                   "areaName"

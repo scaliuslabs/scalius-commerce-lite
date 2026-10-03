@@ -1,13 +1,25 @@
 import { toE164Phone } from "./types";
 
+/** A saved address as the customer list reads it (the default address). */
+export interface SavedAddress {
+  countryCode: string;
+  line1: string | null;
+  line2?: string | null;
+  dependentLocality?: string | null;
+  locality?: string | null;
+  adminArea?: string | null;
+  postalCode?: string | null;
+  city?: string | null;
+  zone?: string | null;
+  area?: string | null;
+}
+
 export interface SavedCustomer {
   name: string;
   email: string | null;
   phone: string;
-  address: string | null;
-  city: string | null;
-  zone: string | null;
-  area: string | null;
+  /** The address book's default address. */
+  defaultAddress: SavedAddress | null;
   totalOrders: number;
   /** "guest": a checkout record keyed by phone that can hold several people's orders. */
   kind?: "account" | "guest" | "merchant";
@@ -23,7 +35,13 @@ export function isGuestRecord(customer: SavedCustomer): boolean {
 export interface CustomerFormFields {
   customerName: string;
   customerEmail: string | null;
+  shippingCountryCode: string;
   shippingAddress: string;
+  shippingAddressLine2?: string;
+  shippingDependentLocality?: string;
+  shippingLocality?: string;
+  shippingAdminArea?: string;
+  shippingPostalCode?: string;
   city: string;
   zone: string;
   area: string | null;
@@ -51,8 +69,9 @@ export function findCustomerByPhone<T extends SavedCustomer>(
 
 /**
  * Values to fill from a returning customer: only fields the merchant left
- * empty, and the saved address only when no city was picked yet and the
- * saved city is still a delivery city.
+ * empty. The default address fills an address the merchant hasn't started:
+ * in Bangladesh only while its city is still a delivery city (as before);
+ * in another country, the whole address with its country.
  *
  * A phone's guest record can hold different people's orders (a shared or
  * family phone), so for it only the latest order's name is suggested, as an
@@ -72,14 +91,31 @@ export function customerFill(
   }
   if (!current.customerName.trim() && customer.name.trim()) fill.customerName = customer.name.trim();
   if (!current.customerEmail && customer.email) fill.customerEmail = customer.email;
-  if (!current.shippingAddress.trim() && customer.address?.trim()) {
-    fill.shippingAddress = customer.address.trim();
+  const address = customer.defaultAddress;
+  if (!address) return fill;
+  if (address.countryCode !== "BD") {
+    // Another country's address is filled whole, only into an address not started.
+    if (current.shippingAddress.trim() || current.city) return fill;
+    return {
+      ...fill,
+      shippingCountryCode: address.countryCode,
+      shippingAddress: address.line1?.trim() ?? "",
+      shippingAddressLine2: address.line2 ?? "",
+      shippingDependentLocality: address.dependentLocality ?? "",
+      shippingLocality: address.locality ?? "",
+      shippingAdminArea: address.adminArea ?? "",
+      shippingPostalCode: address.postalCode ?? "",
+    };
   }
-  if (!current.city && customer.city && knownCityIds.has(customer.city)) {
-    fill.city = customer.city;
-    if (customer.zone) {
-      fill.zone = customer.zone;
-      fill.area = customer.area || null;
+  if (current.shippingCountryCode && current.shippingCountryCode !== "BD") return fill;
+  if (!current.shippingAddress.trim() && address.line1?.trim()) {
+    fill.shippingAddress = address.line1.trim();
+  }
+  if (!current.city && address.city && knownCityIds.has(address.city)) {
+    fill.city = address.city;
+    if (address.zone) {
+      fill.zone = address.zone;
+      fill.area = address.area || null;
     }
   }
   return fill;

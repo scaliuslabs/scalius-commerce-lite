@@ -6,7 +6,13 @@ interface OrderSide {
   customerName?: string;
   customerPhone?: string;
   customerEmail?: string | null;
+  shippingCountryCode?: string;
   shippingAddress?: string;
+  shippingAddressLine2?: string | null;
+  shippingDependentLocality?: string | null;
+  shippingLocality?: string | null;
+  shippingAdminArea?: string | null;
+  shippingPostalCode?: string | null;
   city?: string;
   zone?: string;
   area?: string | null;
@@ -61,7 +67,14 @@ export function describeAmendment(
     || !same(before.customerEmail, after.customerEmail)) {
     changes.push(t("changeCustomer"));
   }
-  if (!same(before.shippingAddress, after.shippingAddress)
+  const country = (side: OrderSide) => side.shippingCountryCode || "BD";
+  if (country(before) !== country(after)
+    || !same(before.shippingAddress, after.shippingAddress)
+    || !same(before.shippingAddressLine2, after.shippingAddressLine2)
+    || !same(before.shippingDependentLocality, after.shippingDependentLocality)
+    || !same(before.shippingLocality, after.shippingLocality)
+    || !same(before.shippingAdminArea, after.shippingAdminArea)
+    || !same(before.shippingPostalCode, after.shippingPostalCode)
     || !same(before.city, after.city)
     || !same(before.zone, after.zone)
     || !same(before.area, after.area)) {
