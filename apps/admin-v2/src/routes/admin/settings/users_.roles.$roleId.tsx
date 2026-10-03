@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { toast } from "sonner";
+import { toast } from "~/lib/toast";
 import {
   deleteApiV1AdminRbacRolesById,
   postApiV1AdminRbacRoles,
@@ -48,11 +48,7 @@ const NEW_ROLE = "new";
 export const Route = createFileRoute("/admin/settings/users_/roles/$roleId")({
   validateSearch: (search: Record<string, unknown>): { from?: string } =>
     typeof search.from === "string" ? { from: search.from } : {},
-  // The screen's query module comes with its own code, not the dashboard's first download.
-  loader: async ({ context: { queryClient } }) => {
-    const screens = await import("~/lib/api-query-options/settings-screens");
-    return queryClient.ensureQueryData(screens.rolesQuery).catch(() => undefined);
-  },
+  loader: ({ context: { queryClient } }) => queryClient.ensureQueryData(rolesQuery).catch(() => undefined),
   head: () => pageHead("roles"),
   errorComponent: RouteErrorComponent,
   component: RolePage,

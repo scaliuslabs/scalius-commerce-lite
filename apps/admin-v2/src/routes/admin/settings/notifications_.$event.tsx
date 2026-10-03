@@ -4,6 +4,7 @@ import { NotificationTemplateEditor } from "~/components/admin/settings/Notifica
 import { SettingsPage } from "~/components/admin/settings/SettingsPage";
 import { useHasPermission } from "~/contexts/PermissionContext";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
+import { customerRulesQuery, templatesQuery } from "~/lib/api-query-options/settings-screens";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { translate, useMessages } from "~/i18n";
 import { settingsNavMessages } from "~/i18n/settings";
@@ -13,14 +14,11 @@ import { notificationTemplateMessages } from "~/i18n/settings-notifications";
 
 // One customer message (e.g. "Order shipped", "Gift card received"), opened from Settings → Notifications.
 export const Route = createFileRoute("/admin/settings/notifications_/$event")({
-  // The screen's query module comes with its own code, not the dashboard's first download.
-  loader: async ({ context: { queryClient } }) => {
-    const screens = await import("~/lib/api-query-options/settings-screens");
-    return Promise.allSettled([
-      queryClient.ensureQueryData(screens.templatesQuery),
-      queryClient.ensureQueryData(screens.customerRulesQuery),
-    ]);
-  },
+  loader: ({ context: { queryClient } }) =>
+    Promise.allSettled([
+      queryClient.ensureQueryData(templatesQuery),
+      queryClient.ensureQueryData(customerRulesQuery),
+    ]),
   head: ({ params }) =>
     titleHead(
       isTemplatedNotificationType(params.event)

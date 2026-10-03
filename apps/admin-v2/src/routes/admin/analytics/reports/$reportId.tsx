@@ -1,12 +1,12 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import type { AnalyticsReportId } from "@scalius/shared/analytics-reports";
+import { isAnalyticsReportId, type AnalyticsReportId } from "@scalius/shared/analytics-reports";
 import { ReportPage, type ReportView } from "~/components/admin/analytics/ReportPage";
 import { useAnalyticsSelection } from "~/components/admin/analytics/AnalyticsToolbar";
 import { validateAnalyticsSearch, type AnalyticsSearch } from "~/components/admin/analytics/analytics-selection";
 import { AdminApiResponseError } from "~/lib/admin-api-error";
 import { RouteErrorComponent } from "~/lib/route-error";
 import { translate } from "~/i18n";
-import type { AnalyticsMessageKey } from "~/i18n/analytics";
+import { analyticsMessages, type AnalyticsMessageKey } from "~/i18n/analytics";
 import { titleHead } from "~/i18n/page-titles";
 
 type ReportSearch = AnalyticsSearch & ReportView;
@@ -23,13 +23,7 @@ function validateReportSearch(search: Record<string, unknown>): ReportSearch {
 export const Route = createFileRoute("/admin/analytics/reports/$reportId")({
   validateSearch: validateReportSearch,
   // Only catalogued reports exist; anything else is a page that doesn't exist (no request).
-  // The catalog and the report names come with the report page's own code (already
-  // on its way), never with the dashboard's first download.
-  loader: async ({ params }) => {
-    const [{ isAnalyticsReportId }, { analyticsMessages }] = await Promise.all([
-      import("@scalius/shared/analytics-reports"),
-      import("~/i18n/analytics"),
-    ]);
+  loader: ({ params }) => {
     if (!isAnalyticsReportId(params.reportId)) throw new AdminApiResponseError("Report not found", 404);
     return { title: translate(analyticsMessages, `report.${params.reportId}` as AnalyticsMessageKey) };
   },
