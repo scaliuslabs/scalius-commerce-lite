@@ -215,7 +215,8 @@ describe("product page structure from the theme's product blocks", () => {
       expect(html).not.toContain("Size guide app");
       expect(calls[2]!.pathname).toBe("/api/v1/storefront/theme-preview/product-apps/shirt");
       expect(response.headers.get("Cache-Control")).toContain("no-store");
-      expect(marks(document)).toEqual(["product-main", "module-description", "module-reviews", "product-apps"]);
+      // Every page's announcement bar, header and footer are marked too.
+      expect(marks(document)).toEqual(["announcement", "header", "product-main", "module-description", "module-reviews", "product-apps", "footer"]);
     }
     const failed = await render("product", live, { preview: productTheme(["description"]), previewAppsStatus: 503 });
     expect(failed.html).not.toContain("Size guide app");
@@ -231,7 +232,7 @@ describe("listing pages from the theme's listing blocks", () => {
       expect(live.document.querySelector('[data-theme-component="product-card"]')).not.toBeNull();
       expect(marks(live.document)).toEqual([]);
       const preview = await render(kind, theme, { preview: theme });
-      expect(marks(preview.document)[0]).toBe("listing");
+      expect(marks(preview.document)).toEqual(["announcement", "header", "listing", "listing-filters", "footer"]);
     });
   }
 

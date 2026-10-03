@@ -289,7 +289,7 @@ describe("theme landing pages", () => {
     const preview = campaign();
     const result = await renderPage(LandingPage, { document: fixedTheme(), preview }, { cookie: PREVIEW_COOKIE, url: "https://shop.test/pages/eid" });
     expect(result.response.status).toBe(200);
-    expect(marked(result.html)).toEqual(["campaign", "campaign-faq"]);
+    expect(marked(result.html)).toEqual(["announcement", "header", "campaign", "campaign-faq", "footer"]);
     expect(result.response.headers.get("Cache-Control")).toContain("no-store");
     const partial = await renderPage(SectionPage, { document: fixedTheme(), preview }, { cookie: PREVIEW_COOKIE, url: "https://shop.test/theme-preview/section?id=campaign&page=eid" });
     expect(partial.response.status).toBe(200);
@@ -323,7 +323,8 @@ describe("a theme preview of the homepage", () => {
 
     const preview = await renderPage(HomePage, { document: fixedTheme(), preview: fixedTheme() }, { cookie: PREVIEW_COOKIE });
     expect(preview.response.status).toBe(200);
-    expect(marked(preview.html)).toEqual(["hero", "usp", "rail", "banner-a", "banner-b", "story", "faq", "seo"]);
+    // The sections in order, between the header (with its announcement bar) and the footer.
+    expect(marked(preview.html)).toEqual(["announcement", "header", "hero", "usp", "rail", "banner-a", "banner-b", "story", "faq", "seo", "footer"]);
     expect(layoutOf(preview.html)).toBeDefined();
     // The bridge talks to the dashboard origin only; it names no token.
     expect(preview.html).toContain("scalius-theme-preview");

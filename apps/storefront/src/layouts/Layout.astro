@@ -30,7 +30,7 @@ import {
 import { serializeJsonForInlineScript } from "@/lib/safe-json";
 import { themePreviewBridgeScript } from "@/lib/theme-preview-bridge";
 import { showsThemePreviewBar, themePreviewBarCopy } from "@/lib/theme-preview-bar";
-import { themeEditorOrigin } from "@scalius/shared/theme-editor-bridge";
+import { THEME_EDITOR_MARKS, themeEditorOrigin } from "@scalius/shared/theme-editor-bridge";
 import {
   buildDocumentTitle,
   resolveStoreDisplayName,
@@ -494,7 +494,7 @@ if (!window.$RefreshReg$) {
 
     {
       !hideFooter && (
-        <div class="storefront-deferred-region">
+        <div class="storefront-deferred-region" data-theme-section-id={isThemePreview ? THEME_EDITOR_MARKS.footer : undefined}>
           <Footer
             menus={layoutData?.footerMenus ?? []}
             storeName={storeDisplayName}

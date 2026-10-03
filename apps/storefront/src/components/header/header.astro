@@ -29,6 +29,8 @@ import type {
   StorefrontNavigationRenderer,
 } from "@scalius/shared/storefront-theme";
 import { currentRequestTheme } from "@/lib/storefront-theme-context";
+import { THEME_EDITOR_MARKS } from "@scalius/shared/theme-editor-bridge";
+import ThemeEditorMark from "@/components/ThemeEditorMark.astro";
 import { headerCondense, headerGeometryStyle, headerSpec, type HeaderLogo } from "./header-variants";
 import {
   countNavigationLinks,
@@ -65,7 +67,7 @@ const {
   navigationStyle,
 } = Astro.props;
 
-const { resolved, layout: themeLayout, brand } = await currentRequestTheme(Astro.locals);
+const { resolved, layout: themeLayout, brand, preview } = await currentRequestTheme(Astro.locals);
 const { topBar, header, desktopNav, mobileNav, navigation } = resolved.blocks;
 
 // The theme's logo with the store name as its alt text (the text logo without one).
@@ -193,14 +195,18 @@ const geometryStyle = headerGeometryStyle(headerCondense(spec, { foldsMenuRow: c
 ---
 
 <header id="site-header" class="contents" style={geometryStyle} data-header-variant={header.variant} data-desktop-nav={desktopKind} data-mobile-nav-variant={mobileNav.variant} data-nav-source={navigation.source}>
-  <TopBar
-    variant={topBar.variant}
-    text={announcementText}
-    link={announcementLink}
-    storeName={logo.alt}
-    phone={storePhone}
-  />
+  <ThemeEditorMark id={preview && topBarShown ? THEME_EDITOR_MARKS.announcement : null}>
+    <TopBar
+      variant={topBar.variant}
+      text={announcementText}
+      link={announcementLink}
+      storeName={logo.alt}
+      phone={storePhone}
+    />
+  </ThemeEditorMark>
 
+  {/* The editor's preview marks the header's rows, not the drawers and phone tab bar it also holds. */}
+  <ThemeEditorMark id={preview ? THEME_EDITOR_MARKS.header : null}>
   <HeaderLayout
     logo={logo}
     phone={storePhone}
@@ -292,6 +298,7 @@ const geometryStyle = headerGeometryStyle(headerCondense(spec, { foldsMenuRow: c
       )
     }
   </HeaderLayout>
+  </ThemeEditorMark>
 
   <MobileMenu
     navigation={plan.drawer}
