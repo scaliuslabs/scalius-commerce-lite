@@ -59,48 +59,40 @@ same table, not settings.
 Phone collection is not a setting: checkout and customer identity always
 require it.
 
-## Theme history and page drafts
+## Theme: draft, publish and history
 
-The shared theme draft is the revision authority for home, landing, product,
-collection and search templates. Page edits use the same CAS as whole-document
-edits. Restore (including the compatibility `rollback` command) only replaces
-the draft; explicit publish is the only route to live. Discard rebases the draft
-to live and advances its revision, preventing stale editors from recreating
-discarded work.
+The theme is one document (`@scalius/shared/storefront-theme`) in three
+places: the live row (`theme_settings`), one shared draft
+(`theme_settings_drafts`) and immutable published versions
+(`theme_settings_versions`). Every write is one guarded provider batch:
 
-Every publish atomically writes live, synchronizes the draft, records author,
-time, change descriptors and an optional 500-character note, and prunes history
-to the latest **20 versions** in that same guarded provider batch. History JSON
-uses `{theme, publication:{summary, changes, note, publishedByName}}`; legacy
-bare-document snapshots remain readable. Live, draft and history reads upgrade
-older documents in memory; live/draft writes contain only the current document.
+- **Save, restore, discard** replace only the draft. The live revision and
+  the draft revision the caller read must both still hold; the draft revision
+  only grows, so a stale editor gets a 409 and must reload or overwrite.
+  Restore puts a published version in the draft (never live); discard puts
+  the live document back in the draft at a new revision.
+- **Publish** writes the live row, its version row (what changed since the
+  previous live document, at most 30 structured changes plus a count, and an
+  optional 500-character note), prunes history to the newest **20 versions**
+  and rebases the draft onto the new live revision, all in one batch.
+- A version row stores `{"meta": {changes, moreChanges, note}, "theme": …}`;
+  the history list reads only `meta` (`json_extract`) and the publisher's
+  name (joined from `user`), ten versions a page. Rows from before history
+  metadata hold the bare document and list with no changes.
+- Reads upgrade older documents in memory (`upgradeThemeDocument`); writes
+  store only the current version, at most 512 KiB.
 
-Draft previews follow saved edits. Version previews remain immutable: the
-existing 52-character bearer encodes `V<10-character base36 revision>_<36 random
-characters>` after its `tpc_`/`tpv_` prefix, and only its SHA-256 hash is stored.
-The selector survives one-time continuation exchange; modified bearers fail
-hash authorization, and pruned versions make their previews unavailable. Tokens
-stay in POST bodies and an HttpOnly cookie, never URLs.
+Previews: a draft preview follows saved edits; a version preview shows that
+version. The 52-character bearer is `tpc_`/`tpv_` plus `D` and 47 random
+characters (draft), or `V`, the revision in 10 base-36 digits, `_` and 36
+random characters (version). Only its SHA-256 is stored, so the revision
+cannot be changed without losing the session, and a pruned version stops
+previewing. Bearers travel in POST bodies and an HttpOnly cookie, never URLs.
 
-Agent operations expose draft save, one-page edits, version list/restore and
-discard under Settings view/edit RBAC. The curated `theme.draft-landing-page.v1`
-workflow reads the revision, saves only approved campaign content, and verifies
-the saved draft without publishing.
-
-The editor keeps its full JSON responses; stable agent operation IDs use sibling
-`/theme/agent/*` routes. Draft writes and workspace reads return revision receipts
-bounded to 4 KiB, while history pages return at most five metadata entries, three
-240-character summary lines each, and a revision cursor. No mutation stages an
-artifact. Theme documents are capped at 512 KiB UTF-8 on write; full document or
-single-page reads use the existing one-use authenticated JSON artifact transport
-(1 MiB cap), available to merchant MCP/CLI connections. Generic plugin principals
-cannot consume this read-only artifact operation.
-
-The landing workflow verifies approved page content through the read-risk POST
-`page-check`: it normalizes the submitted page with the current strict schema,
-compares it with the draft, and checks both draft and live revisions. It returns
-only bounded booleans and revisions, needs Settings view permission, and performs
-no writes or cache invalidations.
+Agents use the same operations (Settings view/edit RBAC): the compact
+workspace status, the full document as an authenticated JSON artifact,
+history, draft save, one-page edits (homepage or one landing page), restore,
+discard and publish. Every command answers revisions only.
 
 ## Platform origins
 

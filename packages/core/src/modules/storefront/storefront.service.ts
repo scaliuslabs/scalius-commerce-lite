@@ -181,10 +181,11 @@ export async function getHomepageData(
   db: Database,
   options: {
     requests?: HomeSectionRequests;
-    /** A landing page uses the same bounded section planner as home. */
+    /**
+     * A landing page (`pages.landing[slug]`): its sections through the same
+     * bounded planner instead of the homepage's, without the homepage SEO read.
+     */
     pageSlug?: string;
-    /** A CMS body only reads section resources after the merchant opts in. */
-    cmsOverride?: boolean;
     /**
      * Draws the page's app sections (the API's plugin host); runs beside the
      * second batch, so a homepage with app sections adds no wave before its
@@ -233,11 +234,11 @@ export async function getHomepageData(
   // An unreadable theme renders the default whole (as the layout read does).
   const theme = parseStoredStorefrontThemeDocument((themeResults as { value?: string }[])[0]?.value)
     ?? DEFAULT_STOREFRONT_THEME;
-  const candidate = options.pageSlug ? theme.pages.landing[options.pageSlug] ?? null : null;
-  const landing = candidate && (!options.cmsOverride || candidate.overrideCms) ? candidate : null;
+  const landing = options.pageSlug ? theme.pages.landing[options.pageSlug] ?? null : null;
   const requests = options.requests ?? (options.pageSlug
     ? homeSectionRequests(landing?.sections ?? [], { kind: "sections" })
     : homeSectionRequests(theme.pages.home, theme.pages.homeMode));
+  // A landing page depends on the collections its sections name; the homepage on any.
   if (options.pageSlug) deps.collections([
     ...requests.collectionIds,
     ...requests.lists.flatMap((list) => list.source.kind === "collection" ? [list.source.collectionId] : []),
@@ -355,8 +356,9 @@ export async function getHomepageData(
   };
 }
 
-// ── CMS page render data ────────────────────────────────────────────────────
+// ── Landing page render data ────────────────────────────────────────────────
 
+/** A published landing page and its sections' data; null when the live theme has no page at that slug. */
 export async function getLandingPageData(
   db: Database,
   slug: string,
@@ -366,18 +368,13 @@ export async function getLandingPageData(
   return data.landing ? { landing: data.landing, sections: data.sections } : null;
 }
 
-export async function getPageRenderData(
-  db: Database,
-  slug: string,
-  options: Pick<NonNullable<Parameters<typeof getHomepageData>[1]>, "renderApps"> = {},
-) {
-  const [page, landing] = await Promise.all([
-    getPublicPageBySlug(db, slug),
-    getHomepageData(db, { ...options, pageSlug: slug, cmsOverride: true }),
-  ]);
+// ── CMS page render data ────────────────────────────────────────────────────
+
+export async function getPageRenderData(db: Database, slug: string) {
+  const page = await getPublicPageBySlug(db, slug);
   if (!page) return null;
 
-  return { page, ...(landing.landing ? { template: { landing: landing.landing, sections: landing.sections } } : {}) };
+  return { page };
 }
 
 // ── Layout data ───────────────────────────────────────────────────────────────

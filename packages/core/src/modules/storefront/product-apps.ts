@@ -20,7 +20,7 @@ import { planPluginRenderStoreFacts, type PluginRenderStoreFacts } from "./app-r
 
 export interface ProductAppContext {
   product: { id: string; slug: string; categoryId: string | null; brandId: string | null };
-  /** The published theme's product app blocks, in the merchant's order. */
+  /** The theme's product app blocks, in the merchant's order. */
   blocks: StorefrontProductAppBlock[];
   installations: Map<string, PluginInstallation>;
   /** `ctx.store` for the apps that draw. */
@@ -30,7 +30,8 @@ export interface ProductAppContext {
 /**
  * Null when no public product has this slug (the part answers 404 and is
  * never stored). One batch whether or not the theme has app blocks: the
- * store facts ride along so drawing adds no round trip.
+ * store facts ride along so drawing adds no round trip. `previewTheme` (a
+ * private draft or version preview) replaces the published theme's blocks.
  */
 export async function readProductAppContext(db: Database, slug: string, previewTheme?: StorefrontThemeDocument): Promise<ProductAppContext | null> {
   deps.theme();
@@ -53,7 +54,7 @@ export async function readProductAppContext(db: Database, slug: string, previewT
   const theme = previewTheme ?? parseStoredStorefrontThemeDocument((themeRows as Array<{ value?: string }>)[0]?.value) ?? DEFAULT_STOREFRONT_THEME;
   return {
     product,
-    blocks: theme.pages.product.blocks.find((block) => block.id === "apps")?.hidden ? [] : theme.blocks.product.apps ?? [],
+    blocks: theme.blocks.product.apps ?? [],
     installations: activePluginInstallationsFromRows(pluginRows as PluginInstallationRow[]),
     store: await facts.resolve(results, 3),
   };
