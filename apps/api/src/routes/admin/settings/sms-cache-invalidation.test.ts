@@ -8,8 +8,8 @@ const mocks = vi.hoisted(() => ({
 
 }));
 
-vi.mock("@scalius/core/integrations/sms", () => ({
-  SMS_PROVIDER_IDS: ["bdbulksms"],
+vi.mock("@scalius/core/integrations/sms", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/integrations/sms")>()),
   getSmsSettings: mocks.getSmsSettings,
   saveSmsSettings: mocks.saveSmsSettings,
 }));

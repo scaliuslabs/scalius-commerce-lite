@@ -132,11 +132,19 @@ export const SETTINGS_ROUTE_PERMISSIONS: RoutePermissionMap = {
     GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
     POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
   },
+  // App providers are offered on the settings pages of their port: general
+  // (email, payments), notifications (SMS) and the courier fraud check.
   "/api/v1/admin/settings/providers": {
-    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+    GET: { anyOf: [PERMISSIONS.SETTINGS_GENERAL_VIEW, PERMISSIONS.SETTINGS_FRAUD_CHECKER_VIEW] },
   },
   "/api/v1/admin/settings/providers/*/test": {
-    POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
+    POST: {
+      anyOf: [
+        PERMISSIONS.SETTINGS_GENERAL_EDIT,
+        PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT,
+        PERMISSIONS.SETTINGS_FRAUD_CHECKER_EDIT,
+      ],
+    },
   },
   "/api/v1/admin/settings/sms": {
     GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },

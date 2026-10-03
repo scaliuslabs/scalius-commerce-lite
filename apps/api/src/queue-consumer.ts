@@ -53,6 +53,7 @@ import { sendEmail } from "@scalius/core/integrations/email";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { fromMinor } from "@scalius/shared/money";
 import { getActiveSmsProvider } from "@scalius/core/integrations/sms";
+import { detachedAppProviders } from "./plugins/providers/app-providers";
 import { getWhatsAppCloudApiSettings, sendWhatsAppTemplateMessage } from "@scalius/core/integrations/whatsapp";
 import {
   deriveCustomerAuthOtpDeliveryCode,
@@ -1390,6 +1391,8 @@ async function sendAuthOtpEmail(
     db,
     env: env as unknown as Record<string, unknown>,
     encryptionKey,
+    // An app sender runs on a detached context: queue work has no request.
+    appProviders: detachedAppProviders(env, db, encryptionKey),
   });
 
   const receiptResult: AuthOtpDeliveryReceiptResult = {
@@ -1403,7 +1406,7 @@ async function sendAuthOtpEmail(
       `OTP email delivery unavailable: ${result.rawStatus ?? result.provider}`,
       receiptResult,
       {
-        terminal: isAuthOtpNonRetryableStatus(result.rawStatus) || result.provider === "log",
+        terminal: result.retryable === false || isAuthOtpNonRetryableStatus(result.rawStatus) || result.provider === "log",
         blockProvider: {
           channel: "email",
           provider: "email",
@@ -1504,7 +1507,8 @@ async function sendAuthOtpSms(
   env: Env,
 ): Promise<AuthOtpDeliveryReceiptResult> {
   const encryptionKey = getCredentialEncryptionKey(env as unknown as Record<string, unknown>);
-  const smsProvider = await getActiveSmsProvider(db, encryptionKey);
+  // An app SMS provider runs on a detached context: queue work has no request.
+  const smsProvider = await getActiveSmsProvider(db, encryptionKey, detachedAppProviders(env, db, encryptionKey));
   if (!smsProvider) {
     throw createAuthOtpDeliveryError(
       "SMS OTP requested but no SMS provider is configured. Configure an SMS provider in Auth & Access settings.",
@@ -1522,7 +1526,7 @@ async function sendAuthOtpSms(
 
   const block = await getNotificationProviderBlock(db, {
     channel: "sms",
-    provider: smsProvider.name,
+    provider: smsProvider.id,
   }) ?? await getNotificationProviderBlock(db, {
     channel: "sms",
     provider: "sms",
@@ -1531,7 +1535,7 @@ async function sendAuthOtpSms(
     throw createAuthOtpDeliveryError(
       buildAuthOtpProviderBlockedReason(block.reason),
       {
-        provider: smsProvider.name,
+        provider: smsProvider.id,
         providerStatus: "provider_blocked_until_settings_save",
         rawResponse: block.reason,
       },
@@ -1539,27 +1543,27 @@ async function sendAuthOtpSms(
     );
   }
 
-  const result = await smsProvider.sendSms({
+  const result = await smsProvider.send({
     to: payload.identifier,  // Already E.164 from customers.phone
     message: message.sms,
     clientReference: createAuthOtpProviderClientReference(target),
-  });
+  }, {});
 
   const receiptResult: AuthOtpDeliveryReceiptResult = {
-    provider: smsProvider.name,
+    provider: smsProvider.id,
     providerMessageId: result.providerRef,
     providerStatus: result.rawStatus ?? (result.success ? "accepted" : "failed"),
   };
 
   if (!result.success) {
     throw createAuthOtpDeliveryError(
-      `SMS OTP delivery failed via ${smsProvider.name}: ${result.rawStatus ?? "unknown provider status"}`,
+      `SMS OTP delivery failed via ${smsProvider.id}: ${result.rawStatus ?? "unknown provider status"}`,
       receiptResult,
       {
         terminal: result.retryable === false || isAuthOtpNonRetryableStatus(result.rawStatus),
         blockProvider: {
           channel: "sms",
-          provider: smsProvider.name,
+          provider: smsProvider.id,
           reason: result.rawStatus ?? "sms_provider_non_retryable_failure",
         },
       },
@@ -1567,7 +1571,7 @@ async function sendAuthOtpSms(
   }
 
   console.log(
-    `[Queue] SMS OTP sent via ${smsProvider.name} delivery=${target.deliveryKey} recipientHashPrefix=${getAuthOtpRecipientHashPrefix(target.identifierHash)}, ref=${result.providerRef}`,
+    `[Queue] SMS OTP sent via ${smsProvider.id} delivery=${target.deliveryKey} recipientHashPrefix=${getAuthOtpRecipientHashPrefix(target.identifierHash)}, ref=${result.providerRef}`,
   );
   return receiptResult;
 }

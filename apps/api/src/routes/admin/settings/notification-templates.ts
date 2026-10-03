@@ -26,6 +26,7 @@ import { successEnvelope, errorResponses, conflictResponse } from "../../../sche
 import { getCredentialEncryptionKey } from "../../../utils/encryption-key";
 import { RateLimitError, ValidationError } from "../../../utils/api-error";
 import { isWithinRateLimit } from "../../../utils/rate-limit";
+import { requestAppProviders } from "../../../plugins/providers/app-providers";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -182,6 +183,7 @@ app.openapi(createRoute({
             db,
             env: c.env as unknown as Record<string, unknown>,
             encryptionKey,
+            appProviders: requestAppProviders(c),
         }).catch(() => null);
         if (!result?.success) {
             throw new ValidationError("Couldn't send the test email. Check the email sending setup under Sending.");
@@ -189,16 +191,16 @@ app.openapi(createRoute({
         return ok(c, { sentTo: user.email });
     }
 
-    const provider = await getActiveSmsProvider(db, encryptionKey);
+    const provider = await getActiveSmsProvider(db, encryptionKey, requestAppProviders(c));
     if (!provider) throw new ValidationError("Set up SMS under Sending before sending a test.");
     const message = renderSmsTemplate(input.event, store.language, input.body, sampleVariables(store.name ?? "", store.language));
-    const result = await provider.sendSms({ to: phone!, message })
+    const result = await provider.send({ to: phone!, message }, {})
         .catch(() => ({ success: false as const, rawStatus: "provider_error" }));
     if (!result.success) {
         // Masked: the provider status only, never the number or the message.
         const status = String(result.rawStatus ?? "unknown").replace(/\+?\d[\d\s().-]{6,}\d/g, "[number]").slice(0, 120);
-        console.warn(`[Notifications] Test SMS via ${provider.name} failed: ${status}`);
-        throw new ValidationError(`${provider.name} didn't accept the test SMS. Check the SMS setup under Sending.`);
+        console.warn(`[Notifications] Test SMS via ${provider.id} failed: ${status}`);
+        throw new ValidationError(`${provider.label} didn't accept the test SMS. Check the SMS setup under Sending.`);
     }
     return ok(c, { sentTo: `0${phone!.slice(4)}` });
 });

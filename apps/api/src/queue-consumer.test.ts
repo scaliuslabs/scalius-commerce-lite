@@ -1108,6 +1108,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
           CREDENTIAL_ENCRYPTION_KEY: "credential-key",
         },
         outboxId: undefined,
+        appProviders: expect.objectContaining({ resolve: expect.any(Function) }),
       },
     );
     expect(message.ack).toHaveBeenCalledTimes(1);
@@ -1444,6 +1445,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
         db,
         env,
         encryptionKey: otpDeliveryCredentialKey,
+        appProviders: expect.objectContaining({ resolve: expect.any(Function) }),
       },
     );
     expect(mocks.markAuthOtpDeliveryReceiptAccepted).toHaveBeenCalledWith(
@@ -1520,6 +1522,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
         db,
         env,
         encryptionKey: otpDeliveryCredentialKey,
+        appProviders: expect.objectContaining({ resolve: expect.any(Function) }),
       },
     );
     expect(db.tables).toEqual([orderPaymentRecoveryChallenges]);
@@ -1805,9 +1808,9 @@ describe("handleQueueBatch payment confirmation retries", () => {
 
   it("passes deterministic OTP client references to the active SMS provider", async () => {
     const smsProvider = {
-      name: "gennet",
-      validateConfig: vi.fn(() => null),
-      sendSms: vi.fn().mockResolvedValue({
+      id: "gennet",
+      label: "GenNet iSMS",
+      send: vi.fn().mockResolvedValue({
         success: true,
         providerRef: "sms_ref_1",
         rawStatus: "SUCCESS",
@@ -1827,11 +1830,11 @@ describe("handleQueueBatch payment confirmation retries", () => {
 
     await handleQueueBatch(createBatch([message]), {} as Env);
 
-    expect(smsProvider.sendSms).toHaveBeenCalledWith({
+    expect(smsProvider.send).toHaveBeenCalledWith({
       to: "+8801712345678",
       message: "654321 is your River & Loom code. It expires in 5 minutes. Don't share it.",
       clientReference: "otpclientref1",
-    });
+    }, {});
     expect(mocks.markAuthOtpDeliveryReceiptAccepted).toHaveBeenCalledWith(
       { id: "db" },
       expect.objectContaining({ id: "aor_1", claimId: "aorc_1" }),
@@ -1846,9 +1849,9 @@ describe("handleQueueBatch payment confirmation retries", () => {
 
   it("skips and blocks SMS OTP when provider credentials are rejected", async () => {
     const smsProvider = {
-      name: "smsnetbd",
-      validateConfig: vi.fn(() => null),
-      sendSms: vi.fn().mockResolvedValue({
+      id: "smsnetbd",
+      label: "SMS.net.bd",
+      send: vi.fn().mockResolvedValue({
         success: false,
         rawStatus: "error=405: Authorization required",
         retryable: false,
@@ -1868,7 +1871,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
 
     await handleQueueBatch(createBatch([message]), {} as Env);
 
-    expect(smsProvider.sendSms).toHaveBeenCalledTimes(1);
+    expect(smsProvider.send).toHaveBeenCalledTimes(1);
     expect(mocks.markNotificationProviderBlocked).toHaveBeenCalledWith(
       { id: "db" },
       {
@@ -1895,9 +1898,9 @@ describe("handleQueueBatch payment confirmation retries", () => {
 
   it("skips SMS OTP provider calls while provider is blocked until settings save", async () => {
     const smsProvider = {
-      name: "smsnetbd",
-      validateConfig: vi.fn(() => null),
-      sendSms: vi.fn(),
+      id: "smsnetbd",
+      label: "SMS.net.bd",
+      send: vi.fn(),
     };
     mocks.getActiveSmsProvider.mockResolvedValue(smsProvider);
     mocks.getNotificationProviderBlock.mockResolvedValueOnce({
@@ -1919,7 +1922,7 @@ describe("handleQueueBatch payment confirmation retries", () => {
 
     await handleQueueBatch(createBatch([message]), {} as Env);
 
-    expect(smsProvider.sendSms).not.toHaveBeenCalled();
+    expect(smsProvider.send).not.toHaveBeenCalled();
     expect(mocks.markNotificationProviderBlocked).not.toHaveBeenCalled();
     expect(mocks.markAuthOtpDeliveryReceiptSkipped).toHaveBeenCalledWith(
       { id: "db" },

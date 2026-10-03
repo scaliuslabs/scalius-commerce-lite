@@ -57,7 +57,7 @@ describe("notification template routes", () => {
         vi.clearAllMocks();
         transport.sendEmail.mockResolvedValue({ success: true, provider: "mailpit" });
         transport.sendSms.mockResolvedValue({ success: true, providerRef: "sms_1" });
-        transport.getActiveSmsProvider.mockResolvedValue({ name: "smsnetbd", sendSms: transport.sendSms });
+        transport.getActiveSmsProvider.mockResolvedValue({ id: "smsnetbd", label: "SMS.net.bd", send: transport.sendSms });
     });
 
     it("serves the defaults at revision 0, then stores only what the merchant changed", async () => {
@@ -233,7 +233,7 @@ describe("notification template routes", () => {
         expect(transport.sendSms).toHaveBeenCalledWith({
             to: "+8801712345678",
             message: "Rahim Uddin, অর্ডার #1001 পেয়েছি।",
-        });
+        }, {});
     });
 
     it("rejects a non-Bangladesh mobile number on the phone field", async () => {
