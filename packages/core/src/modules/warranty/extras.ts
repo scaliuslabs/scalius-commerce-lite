@@ -3,7 +3,7 @@
 // its tab count. Each read is bounded by one order (the order index) or by the
 // account-owner index on orders. The caller has already proven access.
 
-import type { Database } from "@scalius/database/client";
+import { chunkForD1, type Database } from "@scalius/database/client";
 import {
   media,
   orderItemWarranties,
@@ -59,8 +59,7 @@ type WarrantyRow = {
 /** The latest claim per warranty (an open one wins over closed ones). */
 async function latestClaims(db: Database, warrantyIds: readonly string[]): Promise<Map<string, LineWarrantyClaim>> {
   const claims = new Map<string, LineWarrantyClaim & { createdAt: number; open: boolean }>();
-  for (let index = 0; index < warrantyIds.length; index += 90) {
-    const chunk = warrantyIds.slice(index, index + 90);
+  for (const chunk of chunkForD1(warrantyIds)) {
     const rows = await db
       .select({
         id: warrantyClaims.id,

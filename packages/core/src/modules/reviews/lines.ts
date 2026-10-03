@@ -3,7 +3,7 @@
 // submit path trusts. Each is bounded by an order (≤ 90 ids per statement) or
 // by the account-owner index on orders.
 import { and, desc, eq, inArray, isNotNull, isNull, sql, type SQL } from "drizzle-orm";
-import type { Database } from "@scalius/database/client";
+import { chunkForD1, type Database } from "@scalius/database/client";
 import {
   media,
   orderItems,
@@ -26,7 +26,6 @@ import {
   type ReviewBuyer,
 } from "./shared";
 
-const ID_CHUNK = 90;
 /** The account's "to review" list shows at most this many lines. */
 export const REVIEWABLE_LINES_MAX = 50;
 
@@ -45,12 +44,6 @@ function unreviewedLineCondition(): SQL {
       AND live_review.reviewer_key = ${reviewerKeySql()}
       AND live_review.status IN ('pending', 'published')
   )`;
-}
-
-function chunks<T>(values: readonly T[], size = ID_CHUNK): T[][] {
-  const result: T[][] = [];
-  for (let index = 0; index < values.length; index += size) result.push(values.slice(index, index + size));
-  return result;
 }
 
 /**
@@ -78,7 +71,7 @@ export async function listLineReviewStates(
     reviewStatus: ReviewStatus | null;
   };
   const rows: LineRow[] = [];
-  for (const ids of chunks(input.orderItemIds)) {
+  for (const ids of chunkForD1(input.orderItemIds)) {
     rows.push(...await db
       .select({
         id: orderItems.id,
@@ -101,7 +94,7 @@ export async function listLineReviewStates(
   const reviewerKey = rows[0]!.reviewerKey;
   const productIds = [...new Set(rows.map((row) => row.productId))];
   const liveByProduct = new Map<string, { id: string; rating: number; status: ReviewStatus }>();
-  for (const ids of chunks(productIds)) {
+  for (const ids of chunkForD1(productIds)) {
     const live = await db
       .select({ id: productReviews.id, productId: productReviews.productId, rating: productReviews.rating, status: productReviews.status })
       .from(productReviews)

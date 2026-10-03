@@ -2,7 +2,7 @@
 
 import { putKvHint } from "@scalius/shared/kv-hints";
 import { eq, count, inArray } from "drizzle-orm";
-import type { Database } from "@scalius/database/client";
+import { chunkForD1, type Database } from "@scalius/database/client";
 import {
   permissions,
   roles,
@@ -293,8 +293,7 @@ async function seedRoles(db: Database): Promise<void> {
   const staleGrantIds = existingGrantRows
     .filter((grant) => !desiredGrants.has(`${grant.roleId}:${grant.permissionId}`))
     .map((grant) => grant.id);
-  for (let offset = 0; offset < staleGrantIds.length; offset += 90) {
-    const chunk = staleGrantIds.slice(offset, offset + 90);
+  for (const chunk of chunkForD1(staleGrantIds)) {
     if (chunk.length > 0) {
       await db.delete(rolePermissions).where(inArray(rolePermissions.id, chunk));
     }

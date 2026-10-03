@@ -1,11 +1,9 @@
 import { and, asc, count, eq, inArray } from "drizzle-orm";
-import type { Database } from "@scalius/database/client";
+import { D1_ID_CHUNK_SIZE, type Database } from "@scalius/database/client";
 import { giftCards, giftCardTransactions, orderPayments } from "@scalius/database/schema";
 import type { LineExtrasInput } from "../../utils/line-extras";
 import type { LineGiftCardExtra } from "./browser";
 import { maskGiftCardContact } from "./mask";
-
-const ITEM_ID_CHUNK = 90;
 
 /**
  * Gift cards each order line issued, keyed by order item id (`extras.giftCards`).
@@ -17,8 +15,8 @@ export async function listLineIssuedCards(
     input: LineExtrasInput,
 ): Promise<ReadonlyMap<string, readonly LineGiftCardExtra[]>> {
     const byItem = new Map<string, LineGiftCardExtra[]>();
-    for (let index = 0; index < input.orderItemIds.length; index += ITEM_ID_CHUNK) {
-        const chunk = input.orderItemIds.slice(index, index + ITEM_ID_CHUNK);
+    for (let index = 0; index < input.orderItemIds.length; index += D1_ID_CHUNK_SIZE) {
+        const chunk = input.orderItemIds.slice(index, index + D1_ID_CHUNK_SIZE);
         const rows = await db.select({
             id: giftCards.id,
             orderItemId: giftCards.sourceOrderItemId,

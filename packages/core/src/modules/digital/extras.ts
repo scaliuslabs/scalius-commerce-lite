@@ -1,11 +1,9 @@
-import type { Database } from "@scalius/database/client";
+import { D1_ID_CHUNK_SIZE, type Database } from "@scalius/database/client";
 import { digitalAssets, digitalEntitlements, digitalLicenceKeys, orders } from "@scalius/database/schema";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import type { LineExtrasInput } from "../../utils/line-extras";
 import type { LineDigitalExtra, LineDownloadExtra, LineLicenceKeyExtra } from "./browser";
 import { countBuyerDigitalEntitlements, DIGITAL_ACCESS_ENDED_ORDER_STATUSES } from "./downloads";
-
-const ID_CHUNK = 90;
 
 /**
  * Downloads and licence keys per order line, keyed by order item id
@@ -22,8 +20,8 @@ export async function listLineDeliveries(
     const itemIds = [...input.orderItemIds];
     // Read only for orders that delivered something digital.
     let accessEnded: boolean | undefined;
-    for (let offset = 0; offset < itemIds.length; offset += ID_CHUNK) {
-        const chunk = itemIds.slice(offset, offset + ID_CHUNK);
+    for (let offset = 0; offset < itemIds.length; offset += D1_ID_CHUNK_SIZE) {
+        const chunk = itemIds.slice(offset, offset + D1_ID_CHUNK_SIZE);
         const rows = await db.select({
             id: digitalEntitlements.id,
             orderItemId: digitalEntitlements.orderItemId,

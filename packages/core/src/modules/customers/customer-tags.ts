@@ -5,7 +5,7 @@
 // bulk request is one statement whatever its size.
 
 import type { Database } from "@scalius/database/client";
-import { safeBatch } from "@scalius/database/client";
+import { safeBatch, D1_ID_CHUNK_SIZE } from "@scalius/database/client";
 import { customerTagLinks, customers } from "@scalius/database/schema";
 import {
     CUSTOMER_TAGS_PER_CUSTOMER_MAX,
@@ -17,8 +17,6 @@ import { NotFoundError, ValidationError } from "@scalius/core/errors";
 
 /** Customers in one bulk tag request (the dashboard's "select all" cap). */
 export const CUSTOMER_TAG_BULK_MAX_CUSTOMERS = 500;
-const READ_CHUNK = 90;
-
 function requireTags(inputs: readonly string[], max: number): string[] {
     const { tags, invalid } = normalizeCustomerTags(inputs);
     if (invalid.length > 0) throw new ValidationError("A tag is 1 to 40 characters.", { invalid: invalid.slice(0, 5) });
@@ -48,10 +46,10 @@ export async function listCustomerTags(db: Database, customerId: string): Promis
 export async function listTagsForCustomers(db: Database, customerIds: readonly string[]): Promise<Map<string, string[]>> {
     const tags = new Map<string, string[]>();
     const ids = [...new Set(customerIds)];
-    for (let start = 0; start < ids.length; start += READ_CHUNK) {
+    for (let start = 0; start < ids.length; start += D1_ID_CHUNK_SIZE) {
         const rows = await db.select({ customerId: customerTagLinks.customerId, tag: customerTagLinks.tag })
             .from(customerTagLinks)
-            .where(inArray(customerTagLinks.customerId, ids.slice(start, start + READ_CHUNK)))
+            .where(inArray(customerTagLinks.customerId, ids.slice(start, start + D1_ID_CHUNK_SIZE)))
             .orderBy(asc(customerTagLinks.customerId), asc(customerTagLinks.tag));
         for (const row of rows) {
             const list = tags.get(row.customerId) ?? [];

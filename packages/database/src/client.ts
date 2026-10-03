@@ -110,7 +110,9 @@ export function getDatabaseProviderForClient(
 export { schema };
 export {
   buildBatchGuard,
+  chunkForD1,
   chunkRowsForD1,
+  D1_ID_CHUNK_SIZE,
   isBatchGuardError,
   safeBatch,
 } from "./batch-helper";

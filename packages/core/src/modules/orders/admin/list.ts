@@ -1,5 +1,5 @@
 // The dashboard order list: views, filters, search and export details.
-import { safeBatch, type Database } from "@scalius/database/client";
+import { chunkForD1, type Database, safeBatch } from "@scalius/database/client";
 import {
     orders,
     orderItems,
@@ -688,7 +688,7 @@ export async function loadOrderExportDetails(db: Database, orderIds: readonly st
             properties: string[];
         }>;
     }>();
-    for (const chunk of chunkIds(orderIds)) {
+    for (const chunk of chunkForD1(orderIds)) {
         const [orderRows, itemRows, shipmentRows] = await Promise.all([
             db.select({
                 id: orders.id,
@@ -756,8 +756,3 @@ export async function loadOrderExportDetails(db: Database, orderIds: readonly st
     return details;
 }
 
-function chunkIds(ids: readonly string[]): string[][] {
-    const chunks: string[][] = [];
-    for (let offset = 0; offset < ids.length; offset += 90) chunks.push(ids.slice(offset, offset + 90));
-    return chunks;
-}

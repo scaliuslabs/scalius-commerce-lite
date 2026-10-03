@@ -1,5 +1,5 @@
 import { products, productVariants } from "@scalius/database/schema";
-import type { Database } from "@scalius/database/client";
+import { chunkForD1, type Database, D1_ID_CHUNK_SIZE } from "@scalius/database/client";
 import type { SeoDiscoverySettings } from "@scalius/shared/seo-discovery";
 import {
     calculateCatalogFeedDiscountedAmount,
@@ -21,8 +21,6 @@ export const PRODUCT_FEED_DIAGNOSTIC_SCAN_LIMIT = 500;
 export const PRODUCT_FEED_DIAGNOSTIC_MAX_SCAN_LIMIT = 500;
 export const PRODUCT_FEED_DIAGNOSTIC_SAMPLE_LIMIT = 5;
 export const PRODUCT_FEED_DIAGNOSTIC_MAX_SAMPLE_LIMIT = 50;
-const PRODUCT_FEED_DIAGNOSTIC_ID_CHUNK_SIZE = 90;
-
 export const PRODUCT_FEED_DIAGNOSTIC_REASONS = [
     "feed_disabled",
     "storefront_url_unavailable",
@@ -126,14 +124,6 @@ type MutableReasonSummary = Omit<ProductFeedDiagnosticReasonSummary, "samples"> 
 function boundedInteger(value: number | undefined, fallback: number, max: number): number {
     if (!Number.isFinite(value) || value === undefined) return fallback;
     return Math.min(Math.max(Math.trunc(value), 1), max);
-}
-
-function chunkProductIds(productIds: string[]): string[][] {
-    const chunks: string[][] = [];
-    for (let index = 0; index < productIds.length; index += PRODUCT_FEED_DIAGNOSTIC_ID_CHUNK_SIZE) {
-        chunks.push(productIds.slice(index, index + PRODUCT_FEED_DIAGNOSTIC_ID_CHUNK_SIZE));
-    }
-    return chunks;
 }
 
 function createReasonSummaries(): Record<ProductFeedDiagnosticReason, MutableReasonSummary> {
@@ -534,7 +524,7 @@ export async function getProductFeedDiagnostics(
         discountAmountMinor: number;
         fulfillmentKind: string;
     }> = [];
-    for (const productIdChunk of chunkProductIds(productIds)) {
+    for (const productIdChunk of chunkForD1(productIds, D1_ID_CHUNK_SIZE)) {
         variantRows.push(...await db
             .select({
                 id: productVariants.id,

@@ -1,4 +1,4 @@
-import { safeBatch, type Database } from "@scalius/database/client";
+import { chunkForD1, type Database, safeBatch } from "@scalius/database/client";
 import {
     orderDiscountAllocations,
     promotionCodes,
@@ -79,14 +79,6 @@ export async function getPromotionUsageStats(
         customerRedemptionCount: Number(customerRows[0]?.customerRedemptionCount ?? 0),
         discountSpendMinor: Number(totalRows[0]?.discountSpendMinor ?? 0),
     };
-}
-
-function chunksOf<T>(values: T[], size: number): T[][] {
-    const chunks: T[][] = [];
-    for (let index = 0; index < values.length; index += size) {
-        chunks.push(values.slice(index, index + size));
-    }
-    return chunks;
 }
 
 function toEpochSeconds(value: Date | number | null): number | null {
@@ -308,13 +300,13 @@ function buildChildInsertStatements(
     input: PromotionRule,
 ): BatchItem<"sqlite">[] {
     const statements: BatchItem<"sqlite">[] = [];
-    for (const rows of chunksOf(buildCodeRows(promotionId, input), CHILD_INSERT_CHUNK_SIZE)) {
+    for (const rows of chunkForD1(buildCodeRows(promotionId, input), CHILD_INSERT_CHUNK_SIZE)) {
         if (rows.length > 0) statements.push(db.insert(promotionCodes).values(rows));
     }
-    for (const rows of chunksOf(buildConditionRows(promotionId, input), CHILD_INSERT_CHUNK_SIZE)) {
+    for (const rows of chunkForD1(buildConditionRows(promotionId, input), CHILD_INSERT_CHUNK_SIZE)) {
         if (rows.length > 0) statements.push(db.insert(promotionConditions).values(rows));
     }
-    for (const rows of chunksOf(
+    for (const rows of chunkForD1(
         input.effects.map((effect, position) => buildEffectInsertRow(promotionId, effect, position)),
         CHILD_INSERT_CHUNK_SIZE,
     )) {
@@ -537,10 +529,10 @@ export async function updatePromotionDraft(
         }).where(eq(promotions.id, promotionId)),
     ];
 
-    for (const rows of chunksOf(buildCodeRows(promotionId, input), CHILD_INSERT_CHUNK_SIZE)) {
+    for (const rows of chunkForD1(buildCodeRows(promotionId, input), CHILD_INSERT_CHUNK_SIZE)) {
         if (rows.length > 0) statements.push(db.insert(promotionCodes).values(rows));
     }
-    for (const rows of chunksOf(buildConditionRows(promotionId, input), CHILD_INSERT_CHUNK_SIZE)) {
+    for (const rows of chunkForD1(buildConditionRows(promotionId, input), CHILD_INSERT_CHUNK_SIZE)) {
         if (rows.length > 0) statements.push(db.insert(promotionConditions).values(rows));
     }
     statements.push(...buildSegmentLinkInserts(db, promotionId, input));

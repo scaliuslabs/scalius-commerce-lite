@@ -10,7 +10,7 @@
 import type { BatchItem } from "drizzle-orm/batch";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import type { Database } from "@scalius/database/client";
+import { chunkForD1, type Database } from "@scalius/database/client";
 import { giftCards, giftCardTransactions, orderPayments } from "@scalius/database/schema";
 import type { GiftCardTransactionKind } from "./browser";
 
@@ -269,8 +269,7 @@ export async function giftCardIdsForTenderPayments(
     orderPaymentIds: readonly string[],
 ): Promise<Map<string, string>> {
     const map = new Map<string, string>();
-    for (let index = 0; index < orderPaymentIds.length; index += 90) {
-        const chunk = orderPaymentIds.slice(index, index + 90);
+    for (const chunk of chunkForD1(orderPaymentIds)) {
         const rows = await db.select({ orderPaymentId: giftCardTransactions.orderPaymentId, giftCardId: giftCardTransactions.giftCardId })
             .from(giftCardTransactions)
             .where(and(inArray(giftCardTransactions.orderPaymentId, chunk), eq(giftCardTransactions.kind, "redeem")))

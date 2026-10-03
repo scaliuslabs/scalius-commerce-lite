@@ -32,7 +32,7 @@ import {
     products,
     productVariants,
 } from "@scalius/database/schema";
-import { safeBatch, type Database } from "@scalius/database/client";
+import { chunkForD1, type Database, safeBatch } from "@scalius/database/client";
 import type { BatchItem } from "drizzle-orm/batch";
 import { and, asc, eq, gt, isNull, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
@@ -63,12 +63,6 @@ export interface CatalogProjectionRefreshOptions {
 
 function uniqueIds(ids: readonly string[]): string[] {
     return [...new Set(ids.map((id) => id.trim()).filter((id) => id.length > 0))];
-}
-
-function chunks<T>(items: readonly T[], size: number): T[][] {
-    const out: T[][] = [];
-    for (let index = 0; index < items.length; index += size) out.push(items.slice(index, index + size));
-    return out;
 }
 
 /**
@@ -351,7 +345,7 @@ function refreshStatementsForIds(
     options: CatalogProjectionRefreshOptions,
 ): SQLiteBatchItem[] {
     const statements: SQLiteBatchItem[] = [];
-    for (const chunk of chunks(uniqueIds(ids), CATALOG_PROJECTION_PRODUCTS_PER_CALL)) {
+    for (const chunk of chunkForD1(uniqueIds(ids), CATALOG_PROJECTION_PRODUCTS_PER_CALL)) {
         const scope = idScope(kind, chunk);
         if (options.facets !== false) statements.push(...facetDiffRefreshStatements(db, scope));
         statements.push(buyerStateUpsert(db, scope));

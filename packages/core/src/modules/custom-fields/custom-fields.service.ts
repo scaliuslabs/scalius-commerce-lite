@@ -23,10 +23,11 @@ import {
 } from "@scalius/database/schema";
 import {
     buildBatchGuard,
+    chunkForD1,
     chunkRowsForD1,
+    type Database,
     isBatchGuardError,
     safeBatch,
-    type Database,
 } from "@scalius/database/client";
 import { and, asc, eq, inArray, sql, type SQL } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
@@ -72,14 +73,6 @@ export const CUSTOM_FIELD_REVISION_CONFLICT = "CUSTOM_FIELD_REVISION_CONFLICT";
 export const CUSTOM_FIELD_KEY_TAKEN = "CUSTOM_FIELD_KEY_TAKEN";
 export const CUSTOM_FIELD_NAMESPACE_FORBIDDEN = "CUSTOM_FIELD_NAMESPACE_FORBIDDEN";
 const GUARD_FAILED = "CUSTOM_FIELD_GUARD_FAILED";
-/** Ids one statement binds (D1 allows 100 bound parameters; keep room for the rest). */
-const ID_CHUNK = 90;
-
-function chunks<T>(items: readonly T[], size = ID_CHUNK): T[][] {
-    const result: T[][] = [];
-    for (let offset = 0; offset < items.length; offset += size) result.push(items.slice(offset, offset + size));
-    return result;
-}
 
 export class CustomFieldRevisionConflictError extends AppError {
     constructor(definitionId: string, expectedRevision: number, currentRevision: number | null) {
@@ -501,7 +494,7 @@ function referencesExist(target: CustomFieldReferenceTarget, ids: readonly strin
 
 async function missingReferences(db: Database, target: CustomFieldReferenceTarget, ids: readonly string[]): Promise<Set<string>> {
     const found = new Set<string>();
-    for (const chunk of chunks(ids)) {
+    for (const chunk of chunkForD1(ids)) {
         const rows = target === "product"
             ? await db.select({ id: products.id }).from(products).where(and(inArray(products.id, chunk), sql`${products.deletedAt} IS NULL`)).all()
             : target === "variant"
@@ -595,7 +588,7 @@ export async function readCustomFieldValuesForOwners(
     const unique = [...new Set(ownerIds.filter(Boolean))];
     const result = new Map<string, CustomFieldStoredValue[]>();
     if (unique.length === 0) return result;
-    const statements = chunks(unique).map((chunk) => db.select({
+    const statements = chunkForD1(unique).map((chunk) => db.select({
             ownerId: customFieldValues.ownerId,
             definitionId: customFieldDefinitions.id,
             namespace: customFieldDefinitions.namespace,
@@ -701,7 +694,7 @@ export async function setCustomFieldValues(
                     set: { value: sql`excluded.value`, updatedAt: sql`excluded.updated_at` },
                     setWhere: sql`${customFieldValues.value} <> excluded.value`,
                 })),
-            ...chunks(clears).map((chunk) => db.delete(customFieldValues)
+            ...chunkForD1(clears).map((chunk) => db.delete(customFieldValues)
                 .where(and(eq(customFieldValues.ownerId, ownerId), inArray(customFieldValues.definitionId, chunk)))),
         ];
         try {

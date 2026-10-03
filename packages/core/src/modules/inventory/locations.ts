@@ -7,7 +7,7 @@
 
 import { and, asc, desc, eq, inArray, isNull, ne, sql, type SQL } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import { safeBatch, type Database } from "@scalius/database/client";
+import { safeBatch, type Database, D1_ID_CHUNK_SIZE } from "@scalius/database/client";
 import {
     INVENTORY_LOCATION_KINDS,
     inventoryLevels,
@@ -28,9 +28,6 @@ export const INVENTORY_LOCATION_REQUIRED = "INVENTORY_LOCATION_REQUIRED";
 /** CHECK on `inventory_levels.on_hand`: a location would go below zero. */
 const LEVEL_NONNEGATIVE_CHECK = "inventory_levels_on_hand_nonnegative";
 const CODE_UNIQUE_INDEX = /inventory_locations_code_unique/i;
-/** D1 allows 100 bound parameters per statement; keep id lists well below. */
-const ID_CHUNK = 90;
-
 /** Order statuses after which nothing more ships from the order's location. */
 const CLOSED_ORDER_STATUSES = ["cancelled", "refunded", "returned", "delivered", "completed"] as const;
 
@@ -145,11 +142,11 @@ export async function selectActiveInventoryLocationIds(
 ): Promise<Set<string>> {
     const unique = [...new Set(locationIds)];
     const active = new Set<string>();
-    for (let index = 0; index < unique.length; index += ID_CHUNK) {
+    for (let index = 0; index < unique.length; index += D1_ID_CHUNK_SIZE) {
         const rows = await db.select({ id: inventoryLocations.id })
             .from(inventoryLocations)
             .where(and(
-                inArray(inventoryLocations.id, unique.slice(index, index + ID_CHUNK)),
+                inArray(inventoryLocations.id, unique.slice(index, index + D1_ID_CHUNK_SIZE)),
                 eq(inventoryLocations.status, "active"),
             ))
             .all();
@@ -166,12 +163,12 @@ export async function readLocationOnHand(
 ): Promise<Map<string, number>> {
     const unique = [...new Set(variantIds)];
     const onHand = new Map<string, number>(unique.map((id) => [id, 0]));
-    for (let index = 0; index < unique.length; index += ID_CHUNK) {
+    for (let index = 0; index < unique.length; index += D1_ID_CHUNK_SIZE) {
         const rows = await db.select({ variantId: inventoryLevels.variantId, onHand: inventoryLevels.onHand })
             .from(inventoryLevels)
             .where(and(
                 eq(inventoryLevels.locationId, locationId),
-                inArray(inventoryLevels.variantId, unique.slice(index, index + ID_CHUNK)),
+                inArray(inventoryLevels.variantId, unique.slice(index, index + D1_ID_CHUNK_SIZE)),
             ))
             .all();
         for (const row of rows) onHand.set(row.variantId, row.onHand);
@@ -203,7 +200,7 @@ export async function assertInventoryLocationCovers(
     if (short.length === 0) return;
     const skus = await db.select({ id: productVariants.id, sku: productVariants.sku })
         .from(productVariants)
-        .where(inArray(productVariants.id, short.slice(0, ID_CHUNK).map((row) => row.variantId)))
+        .where(inArray(productVariants.id, short.slice(0, D1_ID_CHUNK_SIZE).map((row) => row.variantId)))
         .all();
     const skuById = new Map(skus.map((row) => [row.id, row.sku]));
     const first = short[0]!;

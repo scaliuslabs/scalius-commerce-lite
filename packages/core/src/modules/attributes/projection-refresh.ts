@@ -28,12 +28,6 @@ export function jsonIdSet(ids: readonly string[]): SQL {
     return sql`(SELECT CAST(value AS TEXT) FROM json_each(${JSON.stringify(ids)}))`;
 }
 
-export function chunked<T>(items: readonly T[], size: number): T[][] {
-    const out: T[][] = [];
-    for (let index = 0; index < items.length; index += size) out.push(items.slice(index, index + size));
-    return out;
-}
-
 /** Bumps the aggregate revision of these products (their attribute values changed). */
 export function productRevisionBumpStatement(db: Database, productIds: readonly string[]): AttributeBatchItem {
     return db.update(products)

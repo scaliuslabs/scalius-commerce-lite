@@ -4,7 +4,7 @@
 // is the same with `-n`. Checkout then reserves stock as usual, so demand can
 // never exceed the keys still unassigned. Staff see `last4` only.
 import type { Database } from "@scalius/database/client";
-import { buildBatchGuard, chunkRowsForD1, isBatchGuardError } from "@scalius/database/client";
+import { buildBatchGuard, chunkForD1, chunkRowsForD1, isBatchGuardError, D1_ID_CHUNK_SIZE } from "@scalius/database/client";
 import {
     digitalAssets,
     digitalLicenceKeys,
@@ -26,15 +26,8 @@ import { executeInventoryOperation } from "../inventory";
 import { licenceKeyCrypto } from "./secrets";
 import { sha256Hex } from "@scalius/shared/hash";
 
-const ID_CHUNK = 90;
 /** id, asset_id, key_ciphertext, key_hash, key_last4, status, import_id, created_at (+ spare). */
 const KEY_INSERT_PARAMS = 10;
-
-function chunks<T>(values: readonly T[], size = ID_CHUNK): T[][] {
-    const result: T[][] = [];
-    for (let offset = 0; offset < values.length; offset += size) result.push(values.slice(offset, offset + size));
-    return result;
-}
 
 /** The pool and its variant, which must still be a live tracked SKU. */
 async function requirePool(db: Database, assetId: string) {
@@ -122,7 +115,7 @@ export async function importLicenceKeys(
     const cipher = await licenceKeyCrypto(input.credentialKey);
     const hashed = await Promise.all(parsed.keys.map(async (key) => ({ key, hash: await cipher.hash(key) })));
     const existing = new Set<string>();
-    for (const part of chunks(hashed.map((entry) => entry.hash))) {
+    for (const part of chunkForD1(hashed.map((entry) => entry.hash))) {
         const rows = await db.select({ hash: digitalLicenceKeys.keyHash }).from(digitalLicenceKeys)
             .where(and(eq(digitalLicenceKeys.assetId, input.assetId), inArray(digitalLicenceKeys.keyHash, part))).all();
         for (const row of rows) existing.add(row.hash);
@@ -194,7 +187,7 @@ export async function revokeLicenceKeys(
 ): Promise<{ revoked: number; variantId: string; previousStock: number; stock: number; replayed: boolean }> {
     const pool = await requirePool(db, input.assetId);
     const ids = [...new Set(input.keyIds)];
-    if (ids.length === 0 || ids.length > ID_CHUNK) throw new ValidationError(`Choose 1 to ${ID_CHUNK} keys.`);
+    if (ids.length === 0 || ids.length > D1_ID_CHUNK_SIZE) throw new ValidationError(`Choose 1 to ${D1_ID_CHUNK_SIZE} keys.`);
     const operationKey = `licence-revoke:${(await sha256Hex(`${input.assetId}\0${input.requestKey}`)).slice(0, 32)}`;
     const done = await db.select({ result: inventoryOperations.resultPayload }).from(inventoryOperations)
         .where(eq(inventoryOperations.operationKey, operationKey)).get();

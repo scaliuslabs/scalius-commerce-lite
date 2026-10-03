@@ -1,5 +1,5 @@
 import { categories, collections, pages, products } from "@scalius/database/schema";
-import { safeBatch, type Database } from "@scalius/database/client";
+import { chunkForD1, type Database, safeBatch } from "@scalius/database/client";
 import { inArray } from "drizzle-orm";
 import {
     getNavigationItemLabel,
@@ -40,12 +40,7 @@ function resourceKey(resourceType: NavigationResourceType, id: string): string {
 }
 
 export function chunkNavigationResourceIds(ids: readonly string[]): string[][] {
-    const uniqueIds = [...new Set(ids)];
-    const chunks: string[][] = [];
-    for (let index = 0; index < uniqueIds.length; index += NAVIGATION_RESOURCE_READ_CHUNK_SIZE) {
-        chunks.push(uniqueIds.slice(index, index + NAVIGATION_RESOURCE_READ_CHUNK_SIZE));
-    }
-    return chunks;
+    return chunkForD1([...new Set(ids)], NAVIGATION_RESOURCE_READ_CHUNK_SIZE);
 }
 
 function collectResourceIds(

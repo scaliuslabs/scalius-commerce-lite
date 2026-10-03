@@ -10,7 +10,7 @@
 // and the batches that could race a concurrent kind or stock change end with
 // one of the guards below, so a stale read never commits.
 import { digitalAssets, digitalLicenceKeys, productVariants } from "@scalius/database/schema";
-import { buildBatchGuard, type Database } from "@scalius/database/client";
+import { buildBatchGuard, type Database, D1_ID_CHUNK_SIZE } from "@scalius/database/client";
 import type { BatchItem } from "drizzle-orm/batch";
 import { and, eq, inArray, sql, type SQL } from "drizzle-orm";
 import { ValidationError } from "@scalius/core/errors";
@@ -34,8 +34,6 @@ export const DIGITAL_STOCK_CANT_SPLIT_MESSAGE =
 export const DIGITAL_STOCK_IS_KEYS_MARKER = "DIGITAL_STOCK_IS_KEYS";
 const DIGITAL_KIND_NEEDS_ZERO_STOCK_MARKER = "DIGITAL_KIND_NEEDS_ZERO_STOCK";
 const DIGITAL_KEY_POOL_NEEDS_TRACKING_MARKER = "DIGITAL_KEY_POOL_NEEDS_TRACKING";
-
-const ID_CHUNK = 90;
 
 export interface DigitalStockErrorDetails {
     reason: typeof DIGITAL_STOCK_IS_KEYS_REASON;
@@ -135,7 +133,7 @@ export function assertDigitalStockInput(value: Parameters<typeof digitalStockInp
 export async function readUnusedLicenceKeyCounts(db: Database, variantIds: readonly string[]): Promise<Map<string, number>> {
     const counts = new Map<string, number>();
     const unique = [...new Set(variantIds)];
-    for (let index = 0; index < unique.length; index += ID_CHUNK) {
+    for (let index = 0; index < unique.length; index += D1_ID_CHUNK_SIZE) {
         const rows = await db.select({
             variantId: digitalAssets.variantId,
             keys: sql<number>`count(${digitalLicenceKeys.id})`,
@@ -143,7 +141,7 @@ export async function readUnusedLicenceKeyCounts(db: Database, variantIds: reado
             .from(digitalAssets)
             .innerJoin(digitalLicenceKeys, eq(digitalLicenceKeys.assetId, digitalAssets.id))
             .where(and(
-                inArray(digitalAssets.variantId, unique.slice(index, index + ID_CHUNK)),
+                inArray(digitalAssets.variantId, unique.slice(index, index + D1_ID_CHUNK_SIZE)),
                 eq(digitalAssets.kind, "licence_keys"),
                 eq(digitalLicenceKeys.status, "available"),
             ))
@@ -158,11 +156,11 @@ export async function readUnusedLicenceKeyCounts(db: Database, variantIds: reado
 export async function readVariantsWithReadyKeyPool(db: Database, variantIds: readonly string[]): Promise<Set<string>> {
     const found = new Set<string>();
     const unique = [...new Set(variantIds)];
-    for (let index = 0; index < unique.length; index += ID_CHUNK) {
+    for (let index = 0; index < unique.length; index += D1_ID_CHUNK_SIZE) {
         const rows = await db.select({ variantId: digitalAssets.variantId })
             .from(digitalAssets)
             .where(and(
-                inArray(digitalAssets.variantId, unique.slice(index, index + ID_CHUNK)),
+                inArray(digitalAssets.variantId, unique.slice(index, index + D1_ID_CHUNK_SIZE)),
                 eq(digitalAssets.kind, "licence_keys"),
                 eq(digitalAssets.status, "ready"),
             ))
@@ -253,10 +251,10 @@ function unusedKeysOf(alias: string): SQL {
 export function buildDigitalKindChangeGuards(db: Database, variantIds: readonly string[]): BatchItem<"sqlite">[] {
     const guards: BatchItem<"sqlite">[] = [];
     const unique = [...new Set(variantIds)];
-    for (let index = 0; index < unique.length; index += ID_CHUNK) {
+    for (let index = 0; index < unique.length; index += D1_ID_CHUNK_SIZE) {
         guards.push(buildBatchGuard(db, sql`NOT EXISTS (
             SELECT 1 FROM ${productVariants} AS dsv
-            WHERE dsv.id IN (SELECT CAST(value AS TEXT) FROM json_each(${idsJson(unique.slice(index, index + ID_CHUNK))}))
+            WHERE dsv.id IN (SELECT CAST(value AS TEXT) FROM json_each(${idsJson(unique.slice(index, index + D1_ID_CHUNK_SIZE))}))
               AND dsv.fulfillment_kind = 'digital'
               AND dsv.stock <> 0
               AND dsv.stock <> ${unusedKeysOf("dsv")}
@@ -269,11 +267,11 @@ export function buildDigitalKindChangeGuards(db: Database, variantIds: readonly 
 export function buildDigitalTrackingGuards(db: Database, variantIds: readonly string[]): BatchItem<"sqlite">[] {
     const guards: BatchItem<"sqlite">[] = [];
     const unique = [...new Set(variantIds)];
-    for (let index = 0; index < unique.length; index += ID_CHUNK) {
+    for (let index = 0; index < unique.length; index += D1_ID_CHUNK_SIZE) {
         guards.push(buildBatchGuard(db, sql`NOT EXISTS (
             SELECT 1 FROM ${productVariants} AS dsv
             JOIN ${digitalAssets} AS dsa ON dsa.variant_id = dsv.id
-            WHERE dsv.id IN (SELECT CAST(value AS TEXT) FROM json_each(${idsJson(unique.slice(index, index + ID_CHUNK))}))
+            WHERE dsv.id IN (SELECT CAST(value AS TEXT) FROM json_each(${idsJson(unique.slice(index, index + D1_ID_CHUNK_SIZE))}))
               AND dsv.fulfillment_kind = 'digital'
               AND dsv.track_inventory = 0
               AND dsv.deleted_at IS NULL

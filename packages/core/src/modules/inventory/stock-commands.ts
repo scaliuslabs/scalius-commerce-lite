@@ -21,7 +21,7 @@
 
 import type { BatchItem } from "drizzle-orm/batch";
 import { and, eq, inArray, isNull, sql, type SQL } from "drizzle-orm";
-import { buildBatchGuard, isBatchGuardError, safeBatch, type Database } from "@scalius/database/client";
+import { buildBatchGuard, isBatchGuardError, safeBatch, type Database, D1_ID_CHUNK_SIZE } from "@scalius/database/client";
 import {
   inventoryCommands,
   inventoryMovements,
@@ -48,7 +48,6 @@ const BASE_BACKOFF_MS = 40;
 export const STOCK_COMMAND_MAX_LINES = 100;
 /** Lines per CAS guard statement: 4 bound values each, below D1's 100. */
 const GUARD_CHUNK = 20;
-const ID_CHUNK = 90;
 const CAS_MARKER = "STOCK_COMMAND_CAS";
 const SUBJECT_MARKER = "STOCK_COMMAND_SUBJECT_STALE";
 
@@ -190,7 +189,7 @@ export async function readStockCommandSkus(
 ): Promise<Map<string, StockCommandSkuState>> {
   const unique = [...new Set(variantIds)];
   const states = new Map<string, StockCommandSkuState>();
-  for (let index = 0; index < unique.length; index += ID_CHUNK) {
+  for (let index = 0; index < unique.length; index += D1_ID_CHUNK_SIZE) {
     const rows = await db.select({
       id: productVariants.id,
       sku: productVariants.sku,
@@ -204,7 +203,7 @@ export async function readStockCommandSkus(
       deletedAt: productVariants.deletedAt,
     })
       .from(productVariants)
-      .where(inArray(productVariants.id, unique.slice(index, index + ID_CHUNK)))
+      .where(inArray(productVariants.id, unique.slice(index, index + D1_ID_CHUNK_SIZE)))
       .all();
     for (const row of rows) states.set(row.id, row);
   }

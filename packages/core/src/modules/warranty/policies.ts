@@ -7,7 +7,7 @@
 // and checkout ignore archived policies); revisions are never deleted.
 
 import type { Database } from "@scalius/database/client";
-import { buildBatchGuard, isBatchGuardError, safeBatch } from "@scalius/database/client";
+import { buildBatchGuard, isBatchGuardError, safeBatch, chunkForD1 } from "@scalius/database/client";
 import { products, warrantyPolicies, warrantyPolicyRevisions } from "@scalius/database/schema";
 import {
   WARRANTY_LIMITS,
@@ -137,8 +137,7 @@ const policySelect = {
 /** Live products per policy (the partial index on `products.warranty_policy_id`). */
 async function productCounts(db: Database, policyIds: readonly string[]): Promise<Map<string, number>> {
   const counts = new Map<string, number>();
-  for (let index = 0; index < policyIds.length; index += 90) {
-    const chunk = policyIds.slice(index, index + 90);
+  for (const chunk of chunkForD1(policyIds)) {
     const rows = await db
       .select({ policyId: products.warrantyPolicyId, count: sql<number>`count(*)` })
       .from(products)

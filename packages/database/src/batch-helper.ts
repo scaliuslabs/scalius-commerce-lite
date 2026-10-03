@@ -94,6 +94,29 @@ function collectBatchErrorText(error: unknown, depth = 0): string {
 // inserts from their conservative per-row parameter count.
 const D1_SAFE_BOUND_PARAMETER_LIMIT = 99;
 
+/**
+ * The most ids one statement binds in an `IN (...)` list: room under D1's 100
+ * bound parameters for the rest of the statement.
+ */
+export const D1_ID_CHUNK_SIZE = 90;
+
+/**
+ * Consecutive slices of at most `size` values (default {@link D1_ID_CHUNK_SIZE}):
+ * the one way core splits id lists for bounded reads and rows for bounded
+ * writes. Callers run the slices' statements sequentially or in bounded waves.
+ */
+export function chunkForD1<T>(values: readonly T[], size: number = D1_ID_CHUNK_SIZE): T[][] {
+  if (!Number.isSafeInteger(size) || size < 1) {
+    throw new RangeError("chunk size must be a positive integer");
+  }
+  const chunks: T[][] = [];
+  for (let offset = 0; offset < values.length; offset += size) {
+    chunks.push(values.slice(offset, offset + size));
+  }
+  return chunks;
+}
+
+/** Rows of a multi-row insert, as many per statement as their bound parameters allow. */
 export function chunkRowsForD1<T>(
   rows: readonly T[],
   parametersPerRow: number,
@@ -101,14 +124,5 @@ export function chunkRowsForD1<T>(
   if (!Number.isSafeInteger(parametersPerRow) || parametersPerRow < 1) {
     throw new RangeError("parametersPerRow must be a positive integer");
   }
-
-  const rowsPerStatement = Math.max(
-    1,
-    Math.floor(D1_SAFE_BOUND_PARAMETER_LIMIT / parametersPerRow),
-  );
-  const chunks: T[][] = [];
-  for (let offset = 0; offset < rows.length; offset += rowsPerStatement) {
-    chunks.push(rows.slice(offset, offset + rowsPerStatement));
-  }
-  return chunks;
+  return chunkForD1(rows, Math.max(1, Math.floor(D1_SAFE_BOUND_PARAMETER_LIMIT / parametersPerRow)));
 }

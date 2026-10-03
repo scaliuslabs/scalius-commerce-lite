@@ -5,7 +5,7 @@ import { and, desc, eq, inArray, lt, or, sql, type SQL } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import { alias } from "drizzle-orm/sqlite-core";
 import type { Database } from "@scalius/database/client";
-import { safeBatch } from "@scalius/database/client";
+import { safeBatch, chunkForD1 } from "@scalius/database/client";
 import { customers, giftCards, giftCardTransactions, orders, user } from "@scalius/database/schema";
 import { ConflictError, NotFoundError, ValidationError } from "../../errors";
 import type { GiftCardSource, GiftCardStatus, GiftCardTransactionKind } from "./browser";
@@ -390,8 +390,7 @@ export async function updateGiftCardForStaff(
 /** Cards by id (for batched presentation, e.g. tender rows); ≤ 90 per query. */
 export async function listGiftCardLast4(db: Database, giftCardIds: readonly string[]): Promise<Map<string, string>> {
     const map = new Map<string, string>();
-    for (let index = 0; index < giftCardIds.length; index += 90) {
-        const chunk = giftCardIds.slice(index, index + 90);
+    for (const chunk of chunkForD1(giftCardIds)) {
         const rows = await db.select({ id: giftCards.id, last4: giftCards.codeLast4 })
             .from(giftCards).where(inArray(giftCards.id, chunk)).all();
         for (const row of rows) map.set(row.id, row.last4);

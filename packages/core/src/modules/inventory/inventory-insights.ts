@@ -12,7 +12,7 @@
 // in transit are valued separately.
 
 import { and, eq, inArray, sql, type SQL } from "drizzle-orm";
-import type { Database } from "@scalius/database/client";
+import { D1_ID_CHUNK_SIZE, type Database } from "@scalius/database/client";
 import {
   inventoryLevels,
   inventoryLocations,
@@ -24,8 +24,6 @@ import {
 } from "@scalius/database/schema";
 import { fromMinor } from "@scalius/shared/money";
 import { readStoreCurrency } from "../settings";
-
-const ID_CHUNK = 90;
 
 /**
  * Incoming units of the SKU in `variantId` (a column or value) as a scalar
@@ -75,8 +73,8 @@ export async function readIncomingStock(db: Database, variantIds: readonly strin
     }
     return entry;
   };
-  for (let index = 0; index < unique.length; index += ID_CHUNK) {
-    const chunk = unique.slice(index, index + ID_CHUNK);
+  for (let index = 0; index < unique.length; index += D1_ID_CHUNK_SIZE) {
+    const chunk = unique.slice(index, index + D1_ID_CHUNK_SIZE);
     const [orders, transfers] = await db.batch([
       db.select({
         variantId: purchaseOrderLines.variantId,

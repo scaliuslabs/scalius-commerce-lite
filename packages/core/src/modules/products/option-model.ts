@@ -1,4 +1,4 @@
-import type { Database } from "@scalius/database/client";
+import { chunkForD1, type Database } from "@scalius/database/client";
 import {
     productOptionDefinitions,
     productOptionValues,
@@ -86,14 +86,6 @@ export async function resolveSelectedOptionValueIds(
     };
 }
 
-function chunks<T>(values: readonly T[], size = 90): T[][] {
-    const result: T[][] = [];
-    for (let index = 0; index < values.length; index += size) {
-        result.push(values.slice(index, index + size));
-    }
-    return result;
-}
-
 export async function loadProductOptions(
     db: Database,
     productIds: readonly string[],
@@ -103,7 +95,7 @@ export async function loadProductOptions(
     const uniqueProductIds = [...new Set(productIds)];
     for (const productId of uniqueProductIds) result.set(productId, []);
 
-    for (const productIdChunk of chunks(uniqueProductIds)) {
+    for (const productIdChunk of chunkForD1(uniqueProductIds)) {
         const rows = await db
             .select({
                 productId: productOptionDefinitions.productId,
@@ -171,7 +163,7 @@ export async function loadVariantSelectedOptions(
     const uniqueVariantIds = [...new Set(variantIds)];
     for (const variantId of uniqueVariantIds) result.set(variantId, []);
 
-    for (const variantIdChunk of chunks(uniqueVariantIds)) {
+    for (const variantIdChunk of chunkForD1(uniqueVariantIds)) {
         const rows = await db
             .select({
                 variantId: productVariantOptionValues.variantId,

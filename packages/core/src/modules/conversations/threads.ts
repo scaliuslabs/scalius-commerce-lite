@@ -7,7 +7,7 @@
 // Never touches customers or orders contacts (C2), never mutates money,
 // stock, delivery or order status (C5). Logs carry ids only.
 
-import type { Database } from "@scalius/database/client";
+import { chunkForD1, type Database } from "@scalius/database/client";
 import {
   conversationAttachments,
   conversationMessages,
@@ -732,8 +732,7 @@ async function buyerUnreadCounts(db: Database, threadIds: readonly string[]): Pr
 async function orderNumbersById(db: Database, orderIds: readonly string[]): Promise<Map<string, string>> {
   const result = new Map<string, string>();
   const ids = [...new Set(orderIds)];
-  for (let index = 0; index < ids.length; index += 90) {
-    const chunk = ids.slice(index, index + 90);
+  for (const chunk of chunkForD1(ids)) {
     const rows = await db.select({ id: orders.id, orderNumber: orders.orderNumber }).from(orders)
       .where(inArray(orders.id, chunk)).all();
     for (const row of rows) result.set(row.id, formatOrderNumber(row.orderNumber, row.id));

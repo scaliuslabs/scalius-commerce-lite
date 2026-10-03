@@ -4,8 +4,9 @@ import { readStoreCurrency, toStoreMinor } from "../settings";
 import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
 import {
     buildBatchGuard,
-    isBatchGuardError,
+    chunkForD1,
     type Database,
+    isBatchGuardError,
 } from "@scalius/database/client";
 import {
     orderItems,
@@ -309,14 +310,6 @@ const CLOSED_ORDER_STATUSES = [
     OrderStatus.RETURNED,
     OrderStatus.REFUNDED,
 ];
-
-function chunk<T>(values: readonly T[], size: number): T[][] {
-    const chunks: T[][] = [];
-    for (let index = 0; index < values.length; index += size) {
-        chunks.push(values.slice(index, index + size));
-    }
-    return chunks;
-}
 
 function isDraftId(id: string): boolean {
     return id.startsWith("draft_") || id.startsWith("temp_") || id.startsWith("new_");
@@ -1078,7 +1071,7 @@ export async function planProductOptionMatrix(
         }
     }
 
-    for (const rows of chunk(assignmentRows, 25)) {
+    for (const rows of chunkForD1(assignmentRows, 25)) {
         statements.push(db.insert(productVariantOptionValues).values(rows));
     }
     for (const variant of retiringVariants) {

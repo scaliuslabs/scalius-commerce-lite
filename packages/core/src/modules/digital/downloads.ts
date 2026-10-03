@@ -8,7 +8,7 @@
 // without that cookie downloads nothing. Resuming within the window is free.
 //
 // Licence keys are revealed only by a POST, for the buyer who owns the line.
-import type { Database } from "@scalius/database/client";
+import { D1_ID_CHUNK_SIZE, type Database } from "@scalius/database/client";
 import {
     digitalAssets,
     digitalEntitlements,
@@ -36,8 +36,6 @@ const LIST_LIMIT = 100;
  */
 export const DIGITAL_ACCESS_ENDED_ORDER_STATUSES = ["cancelled", "refunded", "returned"] as const;
 const accessEndedSql = sql<number>`${sql.raw(`"orders"."status"`)} IN ('cancelled', 'refunded', 'returned')`;
-const ID_CHUNK = 90;
-
 function accessCondition(access: DigitalBuyerAccess): SQL {
     return access.kind === "customer"
         ? and(eq(orders.accountOwnerCustomerId, access.customerId), isNull(orders.deletedAt))!
@@ -122,10 +120,10 @@ export async function listBuyerDownloads(
     }
     const keyEntitlements = rows.filter((row) => row.kind === "licence_keys" && row.revokedAt === null).map((row) => row.entitlementId);
     const keysByEntitlement = new Map<string, BuyerLicenceKey[]>();
-    for (let offset = 0; offset < keyEntitlements.length; offset += ID_CHUNK) {
+    for (let offset = 0; offset < keyEntitlements.length; offset += D1_ID_CHUNK_SIZE) {
         const keys = await db.select({ id: digitalLicenceKeys.id, last4: digitalLicenceKeys.keyLast4, entitlementId: digitalLicenceKeys.entitlementId })
             .from(digitalLicenceKeys)
-            .where(and(inArray(digitalLicenceKeys.entitlementId, keyEntitlements.slice(offset, offset + ID_CHUNK)), eq(digitalLicenceKeys.status, "assigned")))
+            .where(and(inArray(digitalLicenceKeys.entitlementId, keyEntitlements.slice(offset, offset + D1_ID_CHUNK_SIZE)), eq(digitalLicenceKeys.status, "assigned")))
             .orderBy(digitalLicenceKeys.createdAt, digitalLicenceKeys.id)
             .all();
         for (const key of keys) {

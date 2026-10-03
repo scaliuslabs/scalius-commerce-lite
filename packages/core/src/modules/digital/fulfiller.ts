@@ -10,7 +10,7 @@
 //     quantity. Too few keys aborts the whole batch, ledger row included: the
 //     line stays owed and the sweep retries once keys are imported.
 import type { Database } from "@scalius/database/client";
-import { buildBatchGuard, chunkRowsForD1 } from "@scalius/database/client";
+import { buildBatchGuard, chunkRowsForD1, D1_ID_CHUNK_SIZE } from "@scalius/database/client";
 import { digitalAssets, digitalEntitlements, digitalLicenceKeys } from "@scalius/database/schema";
 import type { BatchItem } from "drizzle-orm/batch";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
@@ -45,8 +45,6 @@ export interface DigitalDeliveryPlan {
 
 /** id, order_id, order_item_id, asset_id, fulfillment_id, kind, quantity, download_limit, expires_at (+ spare). */
 const ENTITLEMENT_PARAMS = 11;
-const PRODUCT_CHUNK = 90;
-
 interface ReadyAsset {
     id: string;
     productId: string;
@@ -61,7 +59,7 @@ async function readReadyAssets(db: Database, productIds: readonly string[]): Pro
     const assets: ReadyAsset[] = [];
     const unique = [...new Set(productIds)];
     // Sequential chunks of at most 90 ids (the D1 parameter budget).
-    for (let offset = 0; offset < unique.length; offset += PRODUCT_CHUNK) {
+    for (let offset = 0; offset < unique.length; offset += D1_ID_CHUNK_SIZE) {
         const rows = await db.select({
             id: digitalAssets.id,
             productId: digitalAssets.productId,
@@ -73,7 +71,7 @@ async function readReadyAssets(db: Database, productIds: readonly string[]): Pro
                 THEN (SELECT count(*) FROM ${digitalLicenceKeys} k WHERE k.asset_id = "digital_assets"."id" AND k.status = 'available')
                 ELSE 0 END`,
         }).from(digitalAssets)
-            .where(and(inArray(digitalAssets.productId, unique.slice(offset, offset + PRODUCT_CHUNK)), eq(digitalAssets.status, "ready")))
+            .where(and(inArray(digitalAssets.productId, unique.slice(offset, offset + D1_ID_CHUNK_SIZE)), eq(digitalAssets.status, "ready")))
             .orderBy(asc(digitalAssets.sortOrder), asc(digitalAssets.createdAt), asc(digitalAssets.id))
             .all();
         for (const row of rows) assets.push({ ...row, available: Number(row.available) });
