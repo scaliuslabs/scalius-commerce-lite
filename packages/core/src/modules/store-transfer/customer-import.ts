@@ -6,7 +6,7 @@
 // Modes:
 // - create: new customers only; a matched customer is skipped.
 // - upsert: also fills what a matched customer is missing (a name that is
-//   still just the phone, an e-mail, an address) and adds tags. It never
+//   still just the phone, an e-mail, an empty address book) and adds tags. It never
 //   overwrites what the customer already has and never removes anything.
 //
 // Marketing consent is recorded only for a channel the file says yes to,
@@ -20,13 +20,14 @@
 
 import type { Database } from "@scalius/database/client";
 import { safeBatch } from "@scalius/database/client";
-import { customerHistory, customerTagLinks, customers } from "@scalius/database/schema";
+import { customerAddresses, customerHistory, customerTagLinks, customers } from "@scalius/database/schema";
 import { and, isNull, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { validateAndFormatPhone } from "@scalius/shared/customer-utils";
 import { CUSTOMER_TAGS_PER_CUSTOMER_MAX, type MarketingChannel } from "@scalius/shared/customer-marketing";
 import type { CustomerImportBatch, CustomerImportItem } from "@scalius/shared/store-transfer/customers";
 import { getAllowedCountries } from "../settings";
+import { customerAddressColumns, resolveAddressFromRows, type AddressValidationError } from "../customers";
 import {
   type ConsentChange,
   enqueueConsentNotifications,
@@ -74,7 +75,8 @@ type Existing = {
   name: string;
   email: string | null;
   phone: string;
-  address: string | null;
+  /** The customer has a saved address (an import fills an empty address book only). */
+  hasAddress: number;
   accountClaimedAt: unknown;
 };
 
@@ -95,7 +97,8 @@ async function readExisting(db: Database, items: readonly CustomerImportItem[]) 
     name: customers.name,
     email: customers.email,
     phone: customers.phone,
-    address: customers.address,
+    // Qualified: drizzle leaves a one-table select's columns bare, and a bare name binds inside the subquery first.
+    hasAddress: sql<number>`EXISTS (SELECT 1 FROM customer_addresses AS imported_book WHERE imported_book.customer_id = "customers"."id")`,
     accountClaimedAt: customers.accountClaimedAt,
   };
   const [phoneRows, emailRows] = await Promise.all([
@@ -142,6 +145,31 @@ function consentChanges(item: CustomerImportItem, actorId: string | null, record
   if (item.marketing.sms) changes.push({ ...author, channel: "sms", action: "subscribe", contact: item.phone });
   if (item.marketing.whatsapp) changes.push({ ...author, channel: "whatsapp", action: "subscribe", contact: item.phone });
   return { changes, skipped };
+}
+
+/**
+ * The default-address insert of an imported address. A file has no
+ * Bangladesh City/Thana ids, so an address that breaks its country's rules is
+ * kept, marked validation_skipped; a missing country is Bangladesh's.
+ */
+function importedAddressStatement(db: Database, customerId: string, address: CustomerImportItem["address"]) {
+  if (!address) return null;
+  let resolved;
+  try {
+    resolved = resolveAddressFromRows(address, [], { skipValidation: true });
+  } catch (error) {
+    // Only a value too long for its field (or an unknown country) is refused outright: leave the address out.
+    if ((error as AddressValidationError).issues) return null;
+    throw error;
+  }
+  return db.insert(customerAddresses).values({
+    id: `caddr_${nanoid()}`,
+    customerId,
+    isDefault: true,
+    ...customerAddressColumns(resolved),
+    createdAt: sql`unixepoch()`,
+    updatedAt: sql`unixepoch()`,
+  });
 }
 
 /** Adds tags (never removes), keeping the customer within the per-customer limit. */
@@ -199,15 +227,15 @@ export async function importCustomers(
         result.issues.push({ code: "already_exists", message: "A customer with this phone is already in the store." });
         continue;
       }
-      const updates: Partial<Pick<Existing, "name" | "email" | "address">> = {};
+      const updates: Partial<Pick<Existing, "name" | "email">> = {};
       const name = displayName(item);
       if ((!match.name.trim() || match.name === match.phone) && name !== match.phone) updates.name = name;
       if (!match.email && item.email && !emailConflict) updates.email = item.email;
-      if (!match.address && item.address) updates.address = item.address;
+      const addressStatement = Number(match.hasAddress) === 1 ? null : importedAddressStatement(db, match.id, item.address);
       const recordEmail = updates.email ?? match.email;
       const { changes, skipped } = consentChanges(item, actorId, recordEmail);
       result.issues.push(...skipped);
-      const hasChanges = Object.keys(updates).length > 0 || item.tags.length > 0 || changes.length > 0;
+      const hasChanges = Object.keys(updates).length > 0 || addressStatement !== null || item.tags.length > 0 || changes.length > 0;
       if (!hasChanges || batch.dryRun) {
         result.status = !hasChanges ? (batch.dryRun ? "would_skip" : "unchanged") : "would_update";
         result.subscribed = changes.map((change) => change.channel);
@@ -222,13 +250,13 @@ export async function importCustomers(
           name: updates.name ?? match.name,
           email: recordEmail,
           phone: match.phone,
-          address: updates.address ?? match.address,
           changeType: "updated",
           actor: "staff",
           actorId,
           createdAt: sql`unixepoch()`,
         }));
       }
+      if (addressStatement) statements.push(addressStatement);
       if (item.tags.length > 0) statements.push(tagStatement(db, match.id, item.tags));
       const consent = changes.length > 0
         ? await prepareConsentChanges(db, { customerId: match.id, changes, env: context.env, offset: statements.length })
@@ -255,7 +283,6 @@ export async function importCustomers(
         name,
         email: item.email,
         phone: item.phone,
-        address: item.address,
         origin: "merchant",
         totalOrders: 0,
         createdAt: sql`unixepoch()`,
@@ -267,13 +294,14 @@ export async function importCustomers(
         name,
         email: item.email,
         phone: item.phone,
-        address: item.address,
         changeType: "created",
         actor: "staff",
         actorId,
         createdAt: sql`unixepoch()`,
       }),
     ];
+    const addressStatement = importedAddressStatement(db, customerId, item.address);
+    if (addressStatement) statements.push(addressStatement);
     if (item.tags.length > 0) statements.push(tagStatement(db, customerId, item.tags));
     const consent = changes.length > 0
       ? await prepareConsentChanges(db, { customerId, changes, env: context.env, offset: statements.length })

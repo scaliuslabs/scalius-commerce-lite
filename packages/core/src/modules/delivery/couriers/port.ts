@@ -19,7 +19,7 @@
 
 import type { Database } from "@scalius/database/client";
 import type { DeliveryProviderRecord } from "@scalius/database/schema";
-import type { CourierShipmentInput, ProviderPort } from "@scalius/shared/plugins/providers";
+import type { CourierShipmentInput, ProviderCountries, ProviderPort } from "@scalius/shared/plugins/providers";
 import type { DeliveryProviderReadinessSummary } from "../provider-readiness";
 
 /** The saved delivery provider row a courier reads its setup from. */
@@ -64,6 +64,12 @@ export interface Courier<S = unknown> extends ProviderPort<"courier", CourierCal
   readonly id: string;
   /** Merchant-facing courier name. */
   readonly label: string;
+  /**
+   * The countries it delivers to (MARKETS-DESIGN step 3a). It is never
+   * offered for an order shipping elsewhere, and a booking for one is refused
+   * before anything is written.
+   */
+  readonly countries: ProviderCountries;
   /** Reads a row's setup: strictly, failing closed on unreadable or placeholder credentials. */
   setup(provider: CourierRow, encryptionKey: string | undefined): Promise<CourierSetup<S>>;
   /**

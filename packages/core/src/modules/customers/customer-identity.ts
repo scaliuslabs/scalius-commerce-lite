@@ -249,19 +249,12 @@ function carryMergedGuestFacts(db: Database, accountId: string, mergingGuestIds:
     ];
 }
 
-/** A snapshot of the customer's current details, for one change-log row. */
+/** A snapshot of the customer's current contact, for one change-log row (addresses live in the address book). */
 function customerSnapshot(owner: typeof customers | typeof account) {
     return {
         name: owner.name,
         email: owner.email,
         phone: owner.phone,
-        address: owner.address,
-        city: owner.city,
-        zone: owner.zone,
-        area: owner.area,
-        cityName: owner.cityName,
-        zoneName: owner.zoneName,
-        areaName: owner.areaName,
     };
 }
 

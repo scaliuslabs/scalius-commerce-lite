@@ -94,6 +94,8 @@ export interface ManualOrderAppInput {
   /** The chosen method; null for a custom charge or nothing physical. */
   deliveryMethod: ManualOrderAppDeliveryMethod | null;
   requiresShipping: boolean;
+  /** The shipping country (null when nothing ships); Bangladesh's City/Thana ids and names below. */
+  shippingCountryCode?: string | null;
   address: { city: string; zone: string; area: string | null } | null;
   locationNames: { cityName: string | null; zoneName: string | null };
 }
@@ -111,7 +113,7 @@ export interface ManualOrderAppOutcome {
 }
 
 /** What `order.risk` needs to see a committed manual order's cart. */
-export type ManualOrderAppCartInput = Pick<ManualOrderAppInput, "currency" | "lines" | "requiresShipping" | "locationNames" | "manualDiscountMinor">;
+export type ManualOrderAppCartInput = Pick<ManualOrderAppInput, "currency" | "lines" | "requiresShipping" | "shippingCountryCode" | "locationNames" | "manualDiscountMinor">;
 
 /**
  * The apps' checkout functions on a staff order, bound to the request's

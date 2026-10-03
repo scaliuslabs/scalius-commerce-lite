@@ -414,13 +414,17 @@ describe("customer import", () => {
     sqlite.prepare("INSERT INTO customers (id, name, phone, email, origin) VALUES ('cust_a', '+8801812345678', '+8801812345678', NULL, 'order')").run();
     sqlite.prepare("INSERT INTO customers (id, name, phone, email, origin) VALUES ('cust_b', 'Other', '+8801555000111', 'shared@example.com', 'merchant')").run();
     const items = [
-      { ref: "karim", phone: "+8801812345678", name: "Karim Ahmed", email: "karim@example.com", address: "Agrabad", tags: ["chattogram"], marketing: { email: true, sms: false, whatsapp: false }, consentEvidence: "Accepts Email Marketing = yes" },
+      { ref: "karim", phone: "+8801812345678", name: "Karim Ahmed", email: "karim@example.com", address: { countryCode: "BD", company: null, line1: "Agrabad", line2: null, locality: "Chattogram", adminArea: null, postalCode: null }, tags: ["chattogram"], marketing: { email: true, sms: false, whatsapp: false }, consentEvidence: "Accepts Email Marketing = yes" },
       { ref: "stranger", phone: "+8801999000111", name: "Stranger", email: "shared@example.com", address: null, tags: [], marketing: { email: false, sms: false, whatsapp: false }, consentEvidence: null },
     ];
     const response = await importCustomers(db, customerImportBatchSchema.parse({ mode: "upsert", items }), { actorId: "user_import", env: {} });
     expect(response.results.map((result) => result.status)).toEqual(["updated", "skipped"]);
     expect(response.results[1]!.issues[0]!.code).toBe("email_belongs_to_other_phone");
-    expect(one("SELECT name, email, address FROM customers WHERE id = 'cust_a'")).toEqual({ name: "Karim Ahmed", email: "karim@example.com", address: "Agrabad" });
+    expect(one("SELECT name, email FROM customers WHERE id = 'cust_a'")).toEqual({ name: "Karim Ahmed", email: "karim@example.com" });
+    // The empty address book gets the file's address as its default; a Bangladesh address from a
+    // file has no City/Thana ids, so it is kept marked validation_skipped.
+    expect(one("SELECT is_default, country_code, line1, locality, validation_skipped FROM customer_addresses WHERE customer_id = 'cust_a'"))
+      .toEqual({ is_default: 1, country_code: "BD", line1: "Agrabad", locality: "Chattogram", validation_skipped: 1 });
     expect(one("SELECT state, source FROM customer_marketing_consents WHERE customer_id = 'cust_a'")).toEqual({ state: "subscribed", source: "import" });
     expect(count("customers")).toBe(2);
   });

@@ -203,9 +203,23 @@ describe("app fraud checkers", () => {
     const check = vi.fn(async () => answer);
     const resolve = vi.fn(async () => ({ provider: { id: APP_ID, label: "Acme Radar", check }, issue: null }));
 
-    await expect(fraudLookup(appRow, "+8801700000000", { resolve } as never)).resolves.toEqual(answer);
+    await expect(fraudLookup(appRow, "+8801700000000", { resolve } as never)).resolves.toEqual({ status: "checked", check: answer });
     expect(resolve).toHaveBeenCalledWith("fraud", APP_ID);
     expect(check).toHaveBeenCalledWith({ phone: "+8801700000000" }, {});
+  });
+
+  it("never asks a checker about a buyer outside its countries (MARKETS-DESIGN step 3a)", async () => {
+    const check = vi.fn(async () => answer);
+    const bdOnly = { resolve: vi.fn(async () => ({ provider: { id: APP_ID, label: "Acme Radar", countries: ["BD"], check }, issue: null })) };
+    // The order ships to India: not asked, and the reason says so.
+    await expect(fraudLookup(appRow, "+8801700000000", bdOnly as never, { countryCode: "IN" }))
+      .resolves.toEqual({ status: "country_unsupported", provider: "Acme Radar", countryCode: "IN" });
+    // No order country: the phone's country decides.
+    await expect(fraudLookup(appRow, "+14155552671", bdOnly as never))
+      .resolves.toEqual({ status: "country_unsupported", provider: "Acme Radar", countryCode: "US" });
+    expect(check).not.toHaveBeenCalled();
+    await expect(fraudLookup(appRow, "+8801700000000", bdOnly as never, { countryCode: "BD" }))
+      .resolves.toEqual({ status: "checked", check: answer });
   });
 
   it("fails closed when the app is not ready or cannot run here, and keeps the app's own error", async () => {

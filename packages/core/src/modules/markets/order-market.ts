@@ -1,10 +1,9 @@
-// The market an order is placed in (MARKETS-DESIGN D4): the market selling to
-// its shipping country, else the backup market. Every order writer records it
+// The market an order is placed in (MARKETS-DESIGN D4, step 3a): the market
+// selling to its shipping country, else the backup market. Every order writer records it
 // in the order insert (`orders.market_id`), as the SQL twin below, so placing
 // an order reads nothing more than it did before markets.
 import { BACKUP_MARKET_ID } from "@scalius/database/schema";
 import {
-    DELIVERY_HIERARCHY_COUNTRY,
     MARKET_COUNTRY_PATTERN,
     resolveMarket,
     type MarketMatrix,
@@ -12,11 +11,11 @@ import {
 import { sql, type SQL } from "drizzle-orm";
 
 /**
- * The order's market id. Every address the storefront and the dashboard
- * collect is in Bangladesh's delivery hierarchy until country-aware
- * addresses (step 3), so that is the shipping country unless one is given.
+ * The order's market id: the market of its shipping country (the address
+ * snapshot's `shipping_country_code`), else the backup market. An order that
+ * ships nothing (pickup, digital) has no shipping country.
  */
-export function orderMarketId(matrix: MarketMatrix, shippingCountry: string | null = DELIVERY_HIERARCHY_COUNTRY): string {
+export function orderMarketId(matrix: MarketMatrix, shippingCountry: string | null): string {
     return resolveMarket(matrix, { surface: "checkout", shippingCountry }).market?.id ?? BACKUP_MARKET_ID;
 }
 
@@ -26,7 +25,7 @@ export function orderMarketId(matrix: MarketMatrix, shippingCountry: string | nu
  * exists). It binds no parameter (the order insert is near D1's 100), so the
  * country must be an ISO code; anything else resolves to the backup market.
  */
-export function orderMarketIdSql(shippingCountry: string | null = DELIVERY_HIERARCHY_COUNTRY): SQL<string> {
+export function orderMarketIdSql(shippingCountry: string | null): SQL<string> {
     const backup = sql.raw(`'${BACKUP_MARKET_ID}'`);
     if (!shippingCountry || !MARKET_COUNTRY_PATTERN.test(shippingCountry)) return sql<string>`${backup}`;
     return sql<string>`coalesce((

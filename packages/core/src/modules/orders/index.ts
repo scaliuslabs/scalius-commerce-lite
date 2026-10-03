@@ -3,6 +3,7 @@
 // (modules/checkout) and fulfilment hands them over (modules/fulfilment).
 export * from "./browser";
 export * from "./validation";
+export * from "./shipping-address";
 export * from "./admin/list";
 export * from "./admin/detail";
 export * from "./admin/quote";

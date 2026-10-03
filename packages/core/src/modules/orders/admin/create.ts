@@ -36,6 +36,7 @@ import {
 } from "./create-attempts";
 import { prepareManualOrderQuote } from "./quote";
 import { orderMarketIdSql } from "../../markets";
+import { orderShippingAddressColumns, orderShippingAddressInsertColumns, resolveOrderAddress } from "../shipping-address";
 import type { SQLiteBatchItem } from "./shared";
 import type { FunctionCart } from "@scalius/shared/plugins";
 import type { AppliedAppDiscount, ManualOrderAppFunctions } from "@scalius/shared/checkout-app-facts";
@@ -140,10 +141,17 @@ export async function createManualOrder(
             appCart,
             currency,
         } = manualQuote;
-        const shippingAddress = requiresShipping ? data.shippingAddress?.trim() ?? "" : null;
-        if (requiresShipping && !shippingAddress) {
+        if (requiresShipping && !data.shippingAddress?.trim()) {
             throw new ValidationError("Enter the delivery address, or choose a pickup method.");
         }
+        // The snapshot, checked by its country's rules (staff may skip them; it stays marked).
+        const shippingAddress = requiresShipping
+            ? resolveOrderAddress(
+                data,
+                address ? { ...address, cityName, zoneName, areaName } : null,
+                { skipValidation: data.skipAddressValidation === true },
+            )
+            : null;
         const initialPaymentState = computeOrderPaymentState({
             totalAmountMinor: taxQuote.totalMinor,
             paidAmountMinor: 0,
@@ -236,16 +244,14 @@ export async function createManualOrder(
 
     if (!existingCustomer) {
         customerId = "cust_" + nanoid();
+        // Its address book gets the order's address from the order insert
+        // (trigger orders_seed_customer_address).
         writeBatch.push(
             db.insert(customers).values({
                 id: customerId,
                 name: data.customerName,
                 phone: data.customerPhone,
                 email: data.customerEmail,
-                address: shippingAddress,
-                city: address?.city ?? null,
-                zone: address?.zone ?? null,
-                area: address?.area ?? null,
                 totalOrders: 1,
                 lastOrderAt: sql`unixepoch()`,
                 createdAt: sql`unixepoch()`,
@@ -259,10 +265,6 @@ export async function createManualOrder(
                 name: data.customerName,
                 email: data.customerEmail,
                 phone: data.customerPhone,
-                address: shippingAddress,
-                city: address?.city ?? null,
-                zone: address?.zone ?? null,
-                area: address?.area ?? null,
                 changeType: "created",
                 actor: "staff",
                 createdAt: sql`unixepoch()`,
@@ -299,13 +301,10 @@ export async function createManualOrder(
             customerName: data.customerName,
             customerPhone: data.customerPhone,
             customerEmail: data.customerEmail,
-            shippingAddress,
-            city: address?.city ?? null,
-            zone: address?.zone ?? null,
-            area: address?.area ?? null,
-            cityName,
-            zoneName,
-            areaName,
+            ...orderShippingAddressInsertColumns(orderShippingAddressColumns(shippingAddress, {
+                name: data.customerName,
+                phone: data.customerPhone,
+            })),
             requiresShipping,
             shippingMethodKind: deliveryMethodKind,
             pickupAddress: deliveryMethodKind === "pickup" ? shippingMethod?.pickupAddress ?? null : null,
@@ -343,8 +342,8 @@ export async function createManualOrder(
             paymentMethod: PaymentMethod.COD,
             fulfillmentStatus: FulfillmentStatus.PENDING,
             status: OrderStatus.CONFIRMED,
-            // The delivery address's country's market, else the backup market (MARKETS-DESIGN D4).
-            marketId: orderMarketIdSql(),
+            // The shipping country's market, else the backup market (MARKETS-DESIGN D4).
+            marketId: orderMarketIdSql(shippingAddress?.countryCode ?? null),
             customerId,
             inventoryAction: reservationEntries.length > 0 ? "reserved" : "none",
             // Staff-created; the source says where it came in (facebook, walk_in, …).
@@ -487,6 +486,7 @@ export async function createManualOrder(
                     currency: { code: currency.code, decimalPlaces: currency.decimalPlaces, priceIncrementMinor: currency.priceIncrementMinor },
                     lines: manualOrderAppLines(trackedItems, allocationLineIds),
                     requiresShipping,
+                    shippingCountryCode: shippingAddress?.countryCode ?? null,
                     locationNames: { cityName, zoneName },
                     manualDiscountMinor,
                 });

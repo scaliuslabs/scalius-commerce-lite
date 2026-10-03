@@ -109,6 +109,8 @@ async function pathaoLocations(
 export const pathaoCourier: Courier<PathaoSettings> = {
   id: "pathao",
   label: "Pathao",
+  // A Bangladesh courier: its booking API takes Bangladesh's City/Thana/Area.
+  countries: ["BD"],
 
   setup: (provider, encryptionKey) => readRowCourierSetup(provider, encryptionKey, (credentials, config) => ({
     credentials: credentials as PathaoCredentials,

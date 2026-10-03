@@ -50,7 +50,7 @@ import {
   selectDeliveryRateRowsByIds,
 } from "../delivery";
 import { createStorefrontTaxAuthorityReadPlan, type StorefrontTaxAuthoritySnapshot } from "../tax";
-import { backupPriceIncrementSql, storeCurrencyOf } from "../markets";
+import { backupPriceIncrementSql, sellingCountriesFromSql, sellingCountriesSql, storeCurrencyOf } from "../markets";
 
 /** Settings documents every checkout snapshot reads in its first statement. */
 const CHECKOUT_SETTINGS_DOCUMENTS = [
@@ -67,7 +67,9 @@ const CHECKOUT_SETTINGS_DOCUMENTS = [
 export interface StorefrontCheckoutAuthorityInput {
     items: StorefrontCartValidationItem[];
     inventoryPool?: string | null;
-    /** Needed only for a `delivery` rate. */
+    /** The shipping country (absent: Bangladesh). A `delivery` rate needs one its rates serve. */
+    shippingCountryCode?: string | null;
+    /** Needed only for a `delivery` rate (Bangladesh's City/Thana/Area). */
     city?: string | null;
     zone?: string | null;
     area?: string | null;
@@ -93,6 +95,8 @@ export interface StorefrontCheckoutAuthoritySnapshot {
     deliveryPreflight: StorefrontDeliveryPreflightResult;
     checkoutSettings: StorefrontCheckoutSettingsAuthority;
     allowedCountries: CustomerCountries;
+    /** The countries the active markets sell to, sorted: checkout ships only there. */
+    shippingCountries: string[];
     /** Settings → Customer accounts: which contact fields checkout collects. */
     contactFields: CheckoutContactFieldSettings;
     activePaymentMethods: PaymentMethodsConfig;
@@ -108,6 +112,8 @@ interface CheckoutSideEffectSettingsRow {
     hasActiveAdminPushTarget: number;
     /** The backup market's stored price increment (MARKETS-DESIGN D1), read in this row. */
     backupPriceIncrementMinor: number | null;
+    /** The countries the active markets sell to (comma-separated), read in this row. */
+    sellingCountries: string | null;
 }
 
 /**
@@ -218,6 +224,8 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
             )`,
             // The price increment every checkout prices at, in a row this read already runs.
             backupPriceIncrementMinor: backupPriceIncrementSql(),
+            // The countries checkout ships to, in the same row.
+            sellingCountries: sellingCountriesSql(),
         })
             .from(checkoutAuthority)
             .where(inArray(checkoutAuthority.id, ["default"]))
@@ -288,6 +296,7 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
             const staffEmailRecipients = (notificationsRead.value as { staffEmailRecipients?: unknown[] })
                 .staffEmailRecipients ?? [];
             const allowedCountries = countriesRead.value;
+            const shippingCountries = sellingCountriesFromSql(sideEffectSettings?.sellingCountries);
             let activePaymentMethods: PaymentMethodsConfig;
             try {
                 activePaymentMethods = await resolveActivePaymentMethodsFromRows(
@@ -344,6 +353,7 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
                     }
                     const deliveryPreflight = resolveStorefrontDeliveryPreflightFromRows(
                         {
+                            shippingCountryCode: input.shippingCountryCode,
                             city: input.city,
                             zone: input.zone,
                             area: input.area,
@@ -368,6 +378,7 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
                                 partialPaymentAmount: site.partialPaymentAmount,
                             },
                             allowedCountries,
+                            shippingCountries,
                             contactFields: {
                                 email: identityRead.value.email,
                                 whatsapp: identityRead.value.whatsapp,

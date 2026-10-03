@@ -382,6 +382,8 @@ function checker(
   return {
     id,
     label: getFraudCheckProviderDefinition(id).label,
+    // Bangladesh courier-history services: they know Bangladesh buyers only.
+    countries: ["BD"],
     async check({ phone }, { settings, signal }) {
       const response = await fetchWithTimeout(settings.apiUrl, { method: "POST", ...request(phone, settings) }, signal);
       return toFraudCheck(await readProviderJson(response), phone);

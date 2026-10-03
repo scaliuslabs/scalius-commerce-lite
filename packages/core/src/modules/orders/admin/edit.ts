@@ -1,13 +1,13 @@
 // Editing an order's customer and delivery details.
 import { safeBatch, type Database } from "@scalius/database/client";
-import { orders, customers, deliveryShipments, FulfillmentStatus } from "@scalius/database/schema";
+import { orders, customerAddresses, customers, deliveryShipments, FulfillmentStatus } from "@scalius/database/schema";
 import { sql, eq, inArray, isNull, and } from "drizzle-orm";
-import { guestRecordForPhone } from "../../customers";
+import { customerAddressColumns, guestRecordForPhone, resolveAddress } from "../../customers";
+import { orderAddressInput, orderShippingAddressColumns } from "../shipping-address";
 import { nanoid } from "nanoid";
 import type { UpdateOrderDetailsInput } from "../validation";
 import { NotFoundError, ConflictError, ValidationError } from "@scalius/core/errors";
 import { validateCustomerPhoneCountry } from "../../settings";
-import { resolveActiveDeliveryLocationNames } from "../../delivery";
 import { getOrderEditReadiness, orderEditLockMessage } from "./readiness";
 import { type SQLiteBatchItem, OPEN_ORDER_STATUSES, updateCustomerStatsService } from "./shared";
 
@@ -16,6 +16,16 @@ const ORDER_DETAIL_FIELDS = [
     "customerPhone",
     "customerEmail",
     "shippingAddress",
+    "shippingAddressLine2",
+    "shippingCountryCode",
+    "shippingDependentLocality",
+    "shippingLocality",
+    "shippingAdminArea",
+    "shippingPostalCode",
+    "shippingCompany",
+    "shippingName",
+    "shippingPhone",
+    "shippingValidationSkipped",
     "city",
     "zone",
     "area",
@@ -42,31 +52,31 @@ export async function updateOrderDetails(
     if (!readiness?.details.allowed) {
         throw new ConflictError(orderEditLockMessage(readiness?.details.reason ?? null));
     }
-    // Only an order that ships carries an address (Wave A §2.7).
+    // Only an order that ships carries an address (Wave A §2.7). Its market
+    // stays the one it was placed in; only the address snapshot changes.
     const ships = order.requiresShipping !== false;
-    const shippingAddress = ships ? data.shippingAddress?.trim() ?? "" : null;
-    const city = ships ? data.city?.trim() ?? "" : null;
-    const zone = ships ? data.zone?.trim() ?? "" : null;
-    if (ships && (!shippingAddress || !city || !zone)) {
+    const customerName = data.customerName.trim();
+    if (ships && !data.shippingAddress?.trim()) {
         throw new ValidationError("Enter the delivery address, city and thana.");
     }
+    const address = ships
+        ? await resolveAddress(db, orderAddressInput(data), { skipValidation: data.skipAddressValidation === true })
+        : null;
     const next = {
-        customerName: data.customerName.trim(),
+        customerName,
         customerPhone: data.customerPhone,
         customerEmail: data.customerEmail?.trim().toLowerCase() || null,
-        shippingAddress,
-        city,
-        zone,
-        area: ships ? data.area?.trim() || null : null,
+        // The recipient and phone stay the contact's unless they differed before.
+        ...orderShippingAddressColumns(
+            address && { ...address, name: order.shippingName, phone: order.shippingPhone },
+            { name: customerName, phone: data.customerPhone },
+        ),
     };
-    const changedFields = ORDER_DETAIL_FIELDS.filter((field) => (order[field] ?? null) !== next[field]);
+    const changedFields = ORDER_DETAIL_FIELDS.filter((field) => (order[field] ?? null) !== (next[field] ?? null));
     if (changedFields.length === 0) return { id: orderId, version: order.version, changedFields: [] };
     if (next.customerPhone !== order.customerPhone) {
         await validateCustomerPhoneCountry(db, next.customerPhone);
     }
-    const locationNames = ships && next.city && next.zone
-        ? await resolveActiveDeliveryLocationNames(db, { city: next.city, zone: next.zone, area: next.area })
-        : { cityName: null, zoneName: null, areaName: null };
 
     let customerId = order.customerId;
     let newCustomerId: string | null = null;
@@ -87,20 +97,25 @@ export async function updateOrderDetails(
             name: next.customerName,
             email: next.customerEmail,
             phone: next.customerPhone,
-            address: next.shippingAddress,
-            city: next.city,
-            zone: next.zone,
-            area: next.area,
-            ...locationNames,
             totalOrders: 1,
             lastOrderAt: sql`unixepoch()`,
             createdAt: sql`unixepoch()`,
             updatedAt: sql`unixepoch()`,
         }));
+        // The new record's address book starts with the order's address, as at checkout.
+        if (address) {
+            statements.push(db.insert(customerAddresses).values({
+                id: `caddr_${nanoid()}`,
+                customerId: newCustomerId,
+                isDefault: true,
+                ...customerAddressColumns(address),
+                createdAt: sql`unixepoch()`,
+                updatedAt: sql`unixepoch()`,
+            }));
+        }
     }
     statements.push(db.update(orders).set({
         ...next,
-        ...locationNames,
         customerId,
         version: resultingVersion,
         updatedAt: sql`unixepoch()`,

@@ -1,3 +1,5 @@
+import { countryDisplayName, usesDeliveryHierarchy } from "@scalius/shared/address";
+import { addressRulesFor, formatAddressLines } from "@scalius/shared/address-metadata";
 import type { Database } from "@scalius/database/client";
 import { deliveryShipments, orderDiscountAllocations, orders, orderItems } from "@scalius/database/schema";
 import { type OrderAppFactRow, resolveOrderAppFacts, selectOrderAppFactRows } from "../order-kernel";
@@ -38,12 +40,57 @@ export interface OrderMessageContext {
   facts: OrderEmailFacts;
 }
 
+/**
+ * The ship-to lines: the recipient, the phone and the address. A Bangladesh
+ * address reads as it always has (line, then "area, thana, city"); another
+ * country's prints in its own format, then the country name.
+ */
+function shippingAddressLines(order: {
+    customerName: string; customerPhone: string; shippingName: string | null; shippingPhone: string | null;
+    shippingAddress: string | null; shippingAddressLine2: string | null; shippingCountryCode: string | null;
+    shippingDependentLocality: string | null; shippingLocality: string | null; shippingAdminArea: string | null;
+    shippingPostalCode: string | null; shippingCompany: string | null;
+    areaName: string | null; zoneName: string | null; cityName: string | null;
+}): string[] {
+    const phone = order.shippingPhone ?? order.customerPhone;
+    const head = [order.shippingName ?? order.customerName, phone ? formatBdMobile(phone) : null];
+    const rules = usesDeliveryHierarchy(order.shippingCountryCode) ? null : addressRulesFor(order.shippingCountryCode);
+    const body = rules
+        ? [
+            ...formatAddressLines({
+                company: order.shippingCompany,
+                line1: order.shippingAddress,
+                line2: order.shippingAddressLine2,
+                dependentLocality: order.shippingDependentLocality,
+                locality: order.shippingLocality,
+                adminArea: order.shippingAdminArea,
+                postalCode: order.shippingPostalCode,
+            }, rules),
+            countryDisplayName(rules.countryCode),
+        ]
+        : [
+            order.shippingAddress,
+            order.shippingAddressLine2,
+            [order.areaName, order.zoneName, order.cityName].map((part) => part?.trim()).filter(Boolean).join(", "),
+        ];
+    return [...head, ...body].map((line) => line?.trim()).filter((line): line is string => Boolean(line));
+}
+
 // Read only persisted purchase facts, never today's catalog or an invoice issuance.
 async function readOrderFacts(db: Database, orderId: string) {
   const rows = db.select({ order: {
     customerName: orders.customerName,
     customerPhone: orders.customerPhone,
     shippingAddress: orders.shippingAddress,
+    shippingAddressLine2: orders.shippingAddressLine2,
+    shippingCountryCode: orders.shippingCountryCode,
+    shippingDependentLocality: orders.shippingDependentLocality,
+    shippingLocality: orders.shippingLocality,
+    shippingAdminArea: orders.shippingAdminArea,
+    shippingPostalCode: orders.shippingPostalCode,
+    shippingCompany: orders.shippingCompany,
+    shippingName: orders.shippingName,
+    shippingPhone: orders.shippingPhone,
     areaName: orders.areaName,
     zoneName: orders.zoneName,
     cityName: orders.cityName,
@@ -327,12 +374,7 @@ export async function readOrderMessageContext(input: OrderMessageInput, db: Data
         total: money(order.totalAmountMinor),
       } : null,
       payment,
-      address: [
-        order.customerName,
-        order.customerPhone ? formatBdMobile(order.customerPhone) : null,
-        order.shippingAddress,
-        [order.areaName, order.zoneName, order.cityName].map((part) => part?.trim()).filter(Boolean).join(", "),
-      ].map((line) => line?.trim()).filter((line): line is string => Boolean(line)),
+      address: shippingAddressLines(order),
       method: [order.shippingMethodName, order.shippingMethodDescription]
         .map((line) => line?.trim()).filter((line): line is string => Boolean(line)),
       origin,

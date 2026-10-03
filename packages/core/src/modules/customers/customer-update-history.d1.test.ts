@@ -24,13 +24,13 @@ describe("customer change history", () => {
       .where(eq(customerHistory.customerId, customerId));
 
   it("records a change only when a field actually changed", async () => {
-    const { id } = await createCustomer(db, { name: "Karim", phone: "+8801712345678", email: null, address: "Mirpur", city: null, zone: null, area: null });
+    const { id } = await createCustomer(db, { name: "Karim", phone: "+8801712345678", email: null, address: null });
 
     // Saving the same values again (the dashboard sends the whole form) adds nothing.
-    await updateCustomer(db, id, { name: "Karim", phone: "+8801712345678", email: null, address: "Mirpur" });
+    await updateCustomer(db, id, { name: "Karim", phone: "+8801712345678", email: null });
     expect(await entries(id)).toEqual([{ changeType: "created", name: "Karim" }]);
 
-    await updateCustomer(db, id, { name: "Karim Uddin", address: "Mirpur" });
+    await updateCustomer(db, id, { name: "Karim Uddin" });
     expect((await entries(id)).map((entry) => entry.changeType)).toEqual(["created", "updated"]);
     expect((await entries(id))[1]).toEqual({ changeType: "updated", name: "Karim Uddin" });
   });

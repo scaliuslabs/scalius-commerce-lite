@@ -43,6 +43,23 @@ export function marketMatrixSql(): SQL<string | null> {
     ) AS matrix_market)`;
 }
 
+/**
+ * The countries the active markets sell to, as one comma-separated scalar for
+ * a statement a read already runs (checkout's authority row): checkout ships
+ * only there (MARKETS-DESIGN step 3a). A market change advances the checkout
+ * authority fence, so the quote and the commit read the same list.
+ */
+export function sellingCountriesSql(): SQL<string | null> {
+    return sql<string | null>`(SELECT group_concat(selling_country.country_code, ',') FROM market_countries AS selling_country
+        INNER JOIN markets AS selling_market ON selling_market.id = selling_country.market_id
+        WHERE selling_market.status = 'active')`;
+}
+
+/** The sorted countries of a `sellingCountriesSql()` value. */
+export function sellingCountriesFromSql(value: unknown): string[] {
+    return list(value).sort();
+}
+
 interface MatrixEntry {
     id?: unknown;
     handle?: unknown;

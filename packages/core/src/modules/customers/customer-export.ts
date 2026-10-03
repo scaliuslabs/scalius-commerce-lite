@@ -4,10 +4,11 @@
 // every channel. Spreadsheet-safe cells; bounded by rows and bytes.
 
 import type { Database } from "@scalius/database/client";
-import { customerMarketingConsents, customerOrderStats, customers, orders } from "@scalius/database/schema";
+import { customerAddresses, customerMarketingConsents, customerOrderStats, customers, orders } from "@scalius/database/schema";
 import { MARKETING_CHANNELS, type MarketingChannel } from "@scalius/shared/customer-marketing";
 import { fromMinor } from "@scalius/shared/money";
 import { and, asc, eq, inArray, isNull, sql, type SQL } from "drizzle-orm";
+import { alias } from "drizzle-orm/sqlite-core";
 import { spreadsheetSafeCsvCell } from "@scalius/shared/spreadsheet-csv";
 import { customerKind } from "./customer-identity";
 import { currentMarketingContactSql } from "./customer-segments";
@@ -35,7 +36,11 @@ export const CUSTOMER_CSV_HEADERS = [
     "SMS marketing",
     "WhatsApp marketing",
     "Customer since",
+    "Country",
 ] as const;
+
+/** City, zone and country come from the default address (Bangladesh: city and thana; elsewhere: locality and region). */
+const defaultAddress = alias(customerAddresses, "export_default_address");
 
 function consentStatusSql(channel: MarketingChannel): SQL {
     return sql<string>`COALESCE((SELECT CASE WHEN ${customerMarketingConsents.contact} = ${currentMarketingContactSql(channel)} THEN ${customerMarketingConsents.state} ELSE 'not_subscribed' END
@@ -80,8 +85,9 @@ export async function buildCustomerCsvExport(
             email: customers.email,
             accountClaimedAt: customers.accountClaimedAt,
             origin: customers.origin,
-            cityName: customers.cityName,
-            zoneName: customers.zoneName,
+            cityName: sql<string | null>`COALESCE(${defaultAddress.cityName}, ${defaultAddress.locality})`,
+            zoneName: sql<string | null>`COALESCE(${defaultAddress.zoneName}, ${defaultAddress.adminArea})`,
+            countryCode: defaultAddress.countryCode,
             ordersCount: sql<number>`COALESCE(${customerOrderStats.ordersCount}, 0)`,
             totalSpentMinor: sql<number>`COALESCE(${customerOrderStats.totalSpentMinor}, 0)`,
             decimalPlaces: sql<number>`COALESCE((SELECT ${orders.currencyDecimalPlaces} FROM ${orders} WHERE ${orders.customerId} = ${customers.id} LIMIT 1), 2)`,
@@ -94,6 +100,7 @@ export async function buildCustomerCsvExport(
         })
             .from(customers)
             .leftJoin(customerOrderStats, eq(customerOrderStats.customerId, customers.id))
+            .leftJoin(defaultAddress, and(eq(defaultAddress.customerId, customers.id), eq(defaultAddress.isDefault, true)))
             .where(and(...conditions))
             .orderBy(asc(customers.id))
             .limit(Math.min(PAGE, maxRows - rowCount + 1));
@@ -122,6 +129,7 @@ export async function buildCustomerCsvExport(
                 statuses.sms,
                 statuses.whatsapp,
                 isoDate(row.createdAt),
+                row.countryCode ?? "",
             ].map(spreadsheetSafeCsvCell).join(",")}`;
             const bytes = encoder.encode(line).byteLength;
             if (byteLength + bytes > CUSTOMER_EXPORT_MAX_BYTES) {

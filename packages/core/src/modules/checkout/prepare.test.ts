@@ -6,6 +6,7 @@ import {
   createStorefrontOrder,
   createTrustedStorefrontCheckoutPolicySnapshot,
   validateStorefrontDeliveryPreflight,
+  resolveStorefrontShippingAddress,
 } from "./prepare";
 import { validateStorefrontCartItems } from "./cart-validation";
 import { calculateStorefrontTaxQuote } from "../tax";
@@ -1153,13 +1154,47 @@ describe("createStorefrontOrder shipping verification", () => {
   });
 });
 
+describe("createStorefrontOrder country-aware shipping (MARKETS-DESIGN step 3a)", () => {
+  it("gives a foreign address no delivery rate rather than a wrong fee", async () => {
+    await expect(placeOrder({
+      inputOverrides: {
+        shippingCountryCode: "IN",
+        shippingAddress: "12 MG Road",
+        shippingLocality: "Bengaluru",
+        shippingAdminArea: "Karnataka",
+        shippingPostalCode: "560001",
+        city: null,
+        zone: null,
+      },
+    })).rejects.toMatchObject({ details: { reason: "delivery_country_unavailable", countryCode: "IN" } });
+  });
+
+  it("ships only to a country an active market sells to", async () => {
+    // The delivery preflight's facts for a Bangladesh delivery rate.
+    const delivery = {
+      address: { countryCode: "BD", city: "city_1", zone: "zone_1", area: null },
+      cityName: "Dhaka",
+      zoneName: "Mirpur",
+      areaName: null,
+    };
+    const data = { shippingAddress: "House 1, Road 2" };
+    expect(resolveStorefrontShippingAddress(data, delivery, ["BD", "IN"])).toMatchObject({
+      countryCode: "BD", line1: "House 1, Road 2", locality: "Dhaka", dependentLocality: "Mirpur", city: "city_1",
+    });
+    expect(() => resolveStorefrontShippingAddress(data, delivery, ["IN"]))
+      .toThrow(expect.objectContaining({ details: { reason: "shipping_country_unavailable", countryCode: "BD" } }));
+    // The country's rules check the rest: a Bangladesh postal code is four digits.
+    expect(() => resolveStorefrontShippingAddress({ ...data, shippingPostalCode: "12345" }, delivery))
+      .toThrow("Check the postal code.");
+  });
+});
+
 describe("createStorefrontOrder delivery-location verification", () => {
   it("uses active D1 delivery-location names instead of caller-supplied names", async () => {
     const result = await placeOrder({
       inputOverrides: {
-        cityName: "Forged City",
-        zoneName: "Forged Zone",
-        areaName: "Forged Area",
+        shippingLocality: "Forged City",
+        shippingDependentLocality: "Forged Zone",
         area: "area_1",
       },
       locations: [
@@ -1172,6 +1207,13 @@ describe("createStorefrontOrder delivery-location verification", () => {
     expect(result.commitPayload.orderData.cityName).toBe("Dhaka");
     expect(result.commitPayload.orderData.zoneName).toBe("Mirpur");
     expect(result.commitPayload.orderData.areaName).toBe("Section 10");
+    // The Bangladesh adapter fills the canonical locality and thana from the same rows.
+    expect(result.commitPayload.orderData).toMatchObject({
+      shippingCountryCode: "BD",
+      shippingLocality: "Dhaka",
+      shippingDependentLocality: "Mirpur",
+      shippingAdminArea: null,
+    });
   });
 
   it("rejects unknown, inactive, or soft-deleted city selections", async () => {
@@ -1344,7 +1386,7 @@ describe("createStorefrontOrder prevalidated input trust", () => {
         undefined,
         {
           kind: "delivery",
-          address: { city: "city_1", zone: "zone_1", area: null },
+          address: { countryCode: "BD", city: "city_1", zone: "zone_1", area: null },
           pickup: null,
           fulfilment: {
             lineTypes: ["ship"],
@@ -1418,6 +1460,13 @@ describe("createStorefrontOrder prevalidated input trust", () => {
     expect(result.commitPayload.orderData.cityName).toBe("Dhaka");
     expect(result.commitPayload.orderData.zoneName).toBe("Mirpur");
     expect(result.commitPayload.orderData.areaName).toBe("Section 10");
+    // The Bangladesh adapter fills the canonical locality and thana from the same rows.
+    expect(result.commitPayload.orderData).toMatchObject({
+      shippingCountryCode: "BD",
+      shippingLocality: "Dhaka",
+      shippingDependentLocality: "Mirpur",
+      shippingAdminArea: null,
+    });
     expect(result.commitPayload.orderData.shippingAmountMinor).toBe(7_000);
     expect(orderDb.batch).not.toHaveBeenCalled();
   });

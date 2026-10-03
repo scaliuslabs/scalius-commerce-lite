@@ -7,8 +7,26 @@ import { phoneNumberSchema } from "@scalius/shared/customer-utils";
 import { LINE_PROPERTY_INPUT_LIMITS } from "@scalius/shared/line-properties";
 import { ORDER_CHANNEL_SOURCE_MAX_LENGTH } from "@scalius/shared/order-channel";
 import { normalizeOrderChannelSource } from "@scalius/shared/order-channel-source";
+import { ADDRESS_FIELD_MAX_LENGTH, usesDeliveryHierarchy } from "@scalius/shared/address";
 
 export const MAX_ORDER_LINE_ITEMS = 99;
+
+const addressText = (max: number) => z.string().trim().max(max).nullable().optional();
+
+/**
+ * Bangladesh's delivery line keeps its 10-character minimum (its City/Thana
+ * form's rule); another country's first line follows that country's rules.
+ * Applied to the final schemas, which are not extended further.
+ */
+export function refineDeliveryLine(
+    value: { shippingCountryCode?: string | null; shippingAddress?: string | null },
+    context: z.RefinementCtx,
+): void {
+    const line = value.shippingAddress;
+    if (line && line.length < 10 && usesDeliveryHierarchy(value.shippingCountryCode)) {
+        context.addIssue({ code: "custom", path: ["shippingAddress"], message: "Address must be at least 10 characters" });
+    }
+}
 
 const orderBaseContentSchema = z.object({
     customerName: z
@@ -18,15 +36,27 @@ const orderBaseContentSchema = z.object({
     customerPhone: phoneNumberSchema,
     customerEmail: z.email().nullable(),
     /**
-     * Required only when something ships (a physical line with a delivery
-     * method); pickup, service-only and digital orders carry none.
+     * The shipping address (MARKETS-DESIGN D7), required only when something
+     * ships (a physical line with a delivery method); pickup, service-only
+     * and digital orders carry none. `shippingCountryCode` absent means
+     * Bangladesh, whose City/Thana/Area ids (`city`, `zone`, `area`) stand in
+     * for the locality; another country sends what its rules require.
      */
+    shippingCountryCode: z.string().trim().min(2).max(2).nullable().optional(),
+    /** The first street line. */
     shippingAddress: z
         .string()
-        .min(10, "Address must be at least 10 characters")
         .max(500, "Address must be less than 500 characters")
         .nullable()
         .optional(),
+    shippingAddressLine2: addressText(ADDRESS_FIELD_MAX_LENGTH.line2),
+    shippingDependentLocality: addressText(ADDRESS_FIELD_MAX_LENGTH.dependentLocality),
+    shippingLocality: addressText(ADDRESS_FIELD_MAX_LENGTH.locality),
+    shippingAdminArea: addressText(ADDRESS_FIELD_MAX_LENGTH.adminArea),
+    shippingPostalCode: addressText(ADDRESS_FIELD_MAX_LENGTH.postalCode),
+    shippingCompany: addressText(ADDRESS_FIELD_MAX_LENGTH.company),
+    /** Staff only: keep an address that breaks its country's rules (stored marked). */
+    skipAddressValidation: z.boolean().optional(),
     city: z.string().min(1, "City is required").nullable().optional(),
     zone: z.string().min(1, "Zone is required").nullable().optional(),
     area: z.string().nullable().optional(),
@@ -98,7 +128,7 @@ export const createOrderSchema = sellableOrderContentSchema.extend({
      */
     shippingMethodId: z.string().trim().min(1).max(180).nullable().optional(),
     channelSource: orderChannelSourceInputSchema,
-});
+}).superRefine(refineDeliveryLine);
 
 export type CreateOrderInput = z.infer<typeof createOrderSchema>;
 
@@ -108,6 +138,7 @@ export type CreateOrderInput = z.infer<typeof createOrderSchema>;
  * destination, shipping, and order-level discount.
  */
 export const quoteManualOrderSchema = sellableOrderContentSchema.pick({
+    shippingCountryCode: true,
     city: true,
     zone: true,
     area: true,
@@ -142,7 +173,7 @@ export const confirmManualOrderAmendmentSchema = previewManualOrderAmendmentSche
         /^[a-f0-9]{64}$/,
         "A valid amendment quote fingerprint is required",
     ),
-});
+}).superRefine(refineDeliveryLine);
 
 export type PreviewManualOrderAmendmentInput = z.infer<typeof previewManualOrderAmendmentSchema>;
 export type ConfirmManualOrderAmendmentInput = z.infer<typeof confirmManualOrderAmendmentSchema>;
@@ -152,13 +183,21 @@ export const updateOrderDetailsSchema = orderBaseContentSchema.pick({
     customerName: true,
     customerPhone: true,
     customerEmail: true,
+    shippingCountryCode: true,
     shippingAddress: true,
+    shippingAddressLine2: true,
+    shippingDependentLocality: true,
+    shippingLocality: true,
+    shippingAdminArea: true,
+    shippingPostalCode: true,
+    shippingCompany: true,
+    skipAddressValidation: true,
     city: true,
     zone: true,
     area: true,
 }).extend({
     expectedVersion: z.number().int().min(1),
-});
+}).superRefine(refineDeliveryLine);
 
 export type UpdateOrderDetailsInput = z.infer<typeof updateOrderDetailsSchema>;
 

@@ -8,7 +8,7 @@
 //       id: "bkash", name: "bKash", chargeCurrencies: ["BDT"],
 //       operations: ["verifyReturn", "queryPayment", "refund", "refundStatus", "testConnection"],
 //     }],
-//     courier: [{ id: "redx", name: "RedX", operations: ["testConnection"] }],
+//     courier: [{ id: "redx", name: "RedX", countries: ["BD"], operations: ["testConnection"] }],
 //   }
 //
 // `operations` lists the port's optional operations the implementation has;
@@ -19,7 +19,7 @@
 
 import { z } from "zod";
 import { providerAmountCodecsSchema } from "./amount";
-import { providerCurrencySchema } from "./common";
+import { providerCountriesSchema, providerCurrencySchema } from "./common";
 import { PROVIDER_KINDS, PROVIDER_OPERATIONS, type ProviderKind } from "./kinds";
 import { paymentAmountLimitsSchema } from "./payment";
 
@@ -63,30 +63,41 @@ export const paymentProviderDescriptorSchema = z.object({
 
 export const courierProviderDescriptorSchema = z.object({
   ...base("courier"),
+  /** The countries it delivers to (default `any`); it is never offered for an order shipping elsewhere. */
+  countries: providerCountriesSchema.default("any"),
   /** The public tracking page, with `{trackingId}` where the tracking id goes. */
   trackingUrl: z.string().max(500).regex(/^https:\/\/[^\s]*\{trackingId\}[^\s]*$/, "Use an https URL containing {trackingId}.").optional(),
 }).strict();
 
 const plain = <K extends ProviderKind>(kind: K) => z.object(base(kind)).strict();
 
+/** A fraud checker looks up buyers of some countries (a courier-history service: its couriers' country). */
+export const fraudProviderDescriptorSchema = z.object({
+  ...base("fraud"),
+  /** The countries it knows buyers in (default `any`); it is never asked about an order shipping elsewhere. */
+  countries: providerCountriesSchema.default("any"),
+}).strict();
+
 const PROVIDER_DESCRIPTOR_SCHEMAS = {
   payment: paymentProviderDescriptorSchema,
   courier: courierProviderDescriptorSchema,
   sms: plain("sms"),
   email: plain("email"),
-  fraud: plain("fraud"),
+  fraud: fraudProviderDescriptorSchema,
   tax: plain("tax"),
 } as const satisfies Record<ProviderKind, z.ZodType>;
 
 export type PaymentProviderDescriptor = z.output<typeof paymentProviderDescriptorSchema>;
 export type CourierProviderDescriptor = z.output<typeof courierProviderDescriptorSchema>;
+export type FraudProviderDescriptor = z.output<typeof fraudProviderDescriptorSchema>;
 type PlainProviderDescriptor = z.output<ReturnType<typeof plain>>;
 
 /** One declared provider, flat, as the parsed manifest keeps it. */
 export type PluginProviderDeclaration =
   | ({ kind: "payment" } & PaymentProviderDescriptor)
   | ({ kind: "courier" } & CourierProviderDescriptor)
-  | ({ kind: "sms" | "email" | "fraud" | "tax" } & PlainProviderDescriptor);
+  | ({ kind: "fraud" } & FraudProviderDescriptor)
+  | ({ kind: "sms" | "email" | "tax" } & PlainProviderDescriptor);
 
 /**
  * The manifest's `providers`: grouped by port, as authors write it. The flat

@@ -18,7 +18,7 @@ import {
   type TaxDiscountAllocationInput,
   type TaxQuote,
 } from "../tax";
-import { DELIVERY_RATE_UNAVAILABLE_REASON, listDeliveryRatesForAddress } from "../delivery";
+import { DELIVERY_RATE_UNAVAILABLE_REASON, deliveryRatesServeCountry, listDeliveryRatesForAddress } from "../delivery";
 import { BUILT_IN_PAYMENT_PROVIDERS, COD_LABEL, type PaymentProviders } from "../payments";
 import { GIFT_CARD_PAYMENT_METHOD } from "../gift-cards";
 import type { StorefrontOrderCommitPayload, StorefrontOrderShippingMethodSnapshot } from "../orders";
@@ -52,7 +52,8 @@ export interface CheckoutPricingDelivery {
   cityName: string | null;
   zoneName: string | null;
   areaName: string | null;
-  address: { city: string; zone: string; area: string | null } | null;
+  /** A delivery rate's address (its country is one the rates serve); null for pickup or nothing physical. */
+  address: { countryCode?: string; city: string; zone: string; area: string | null } | null;
   fulfilment: { requiresShipping: boolean };
 }
 
@@ -69,8 +70,8 @@ export interface StorefrontCheckoutPricingInput {
   taxAuthority?: StorefrontTaxAuthoritySnapshot;
   apps?: CheckoutAppFunctions;
   channel: FunctionCart["channel"];
-  /** The buyer's location ids, to list the options a shipping-rates app may adjust. */
-  location?: { city?: string | null; zone?: string | null; area?: string | null } | null;
+  /** The buyer's country and location ids, to list the options a shipping-rates app may adjust. */
+  location?: { countryCode?: string | null; city?: string | null; zone?: string | null; area?: string | null } | null;
 }
 
 export interface StorefrontCheckoutPricing {
@@ -118,7 +119,9 @@ async function listRateOptions(
   input: StorefrontCheckoutPricingInput,
 ): Promise<CheckoutRateOption[]> {
   const delivery = input.delivery;
-  const city = delivery.address?.city ?? input.location?.city?.trim() ?? null;
+  // A country no delivery rate serves gets pickup options only (MARKETS-DESIGN step 3a).
+  const served = deliveryRatesServeCountry(delivery.address?.countryCode ?? input.location?.countryCode);
+  const city = served ? delivery.address?.city ?? input.location?.city?.trim() ?? null : null;
   const rows = await listDeliveryRatesForAddress(db, city
     ? {
       city,
@@ -582,7 +585,9 @@ export async function buildAppCartFromOrderPayload(
       properties: parseLineInputs(item.properties),
     })),
     facts,
-    destination: orderData.requiresShipping === false ? null : { city: orderData.cityName, zone: orderData.zoneName },
+    destination: orderData.requiresShipping === false
+      ? null
+      : { country: orderData.shippingCountryCode, city: orderData.cityName ?? orderData.shippingLocality, zone: orderData.zoneName },
     discountCodes: input.discountCodes,
   });
 }

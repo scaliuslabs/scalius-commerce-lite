@@ -2,13 +2,13 @@
 // All DB queries and business logic for the customers domain.
 
 import {
+    customerAddresses,
     customerMarketingConsents,
     customerOrderStats,
     customerTagLinks,
     customers,
     customerHistory,
     customerSessions,
-    deliveryLocations,
     orders,
 } from "@scalius/database/schema";
 import { sql, isNull, inArray, desc, eq, and, or, type SQL, type SQLWrapper } from "drizzle-orm";
@@ -37,19 +37,23 @@ import {
 import type { Database } from "@scalius/database/client";
 import { NotFoundError, ValidationError } from "@scalius/core/errors";
 import { validateCustomerPhoneCountry } from "../settings";
+import { customerAddressColumns, listCustomerAddresses, resolveAddress } from "./addresses";
 
 // Re-export schemas from the canonical validation module
 export {
+    addressInputSchema,
+    customerAddressInputSchema,
     createCustomerSchema,
     updateCustomerSchema,
+    type AddressInputBody,
+    type CustomerAddressInputBody,
     type CreateCustomerInput,
     type UpdateCustomerInput,
 } from "./customers.validation";
 import type { CreateCustomerInput, UpdateCustomerInput } from "./customers.validation";
 
-const customerCityLocation = alias(deliveryLocations, "customer_city_location");
-const customerZoneLocation = alias(deliveryLocations, "customer_zone_location");
-const customerAreaLocation = alias(deliveryLocations, "customer_area_location");
+/** The customer's default address (the address book's one default row). */
+const defaultAddress = alias(customerAddresses, "default_address");
 
 /**
  * Paid spend summed exactly in minor units. A store has one currency (it is
@@ -210,13 +214,14 @@ export async function listCustomers(
             name: customers.name,
             email: customers.email,
             phone: customers.phone,
-            address: customers.address,
-            city: customers.city,
-            zone: customers.zone,
-            area: customers.area,
-            cityName: sql<string | null>`COALESCE(${customerCityLocation.name}, ${customers.city})`,
-            zoneName: sql<string | null>`COALESCE(${customerZoneLocation.name}, ${customers.zone})`,
-            areaName: sql<string | null>`COALESCE(${customerAreaLocation.name}, ${customers.area})`,
+            defaultCountryCode: defaultAddress.countryCode,
+            defaultLine1: defaultAddress.line1,
+            defaultLocality: defaultAddress.locality,
+            defaultAdminArea: defaultAddress.adminArea,
+            defaultPostalCode: defaultAddress.postalCode,
+            defaultCityName: defaultAddress.cityName,
+            defaultZoneName: defaultAddress.zoneName,
+            defaultAreaName: defaultAddress.areaName,
             accountClaimedAt: sql<number | null>`CAST(${customers.accountClaimedAt} AS INTEGER)`,
             origin: customers.origin,
             latestOrderName: latestOrderNameSql(customers.id).as("latest_order_name"),
@@ -232,17 +237,9 @@ export async function listCustomers(
         })
         .from(customers)
         .leftJoin(customerOrderStats, eq(customerOrderStats.customerId, customers.id))
-        .leftJoin(customerCityLocation, and(
-            eq(customerCityLocation.id, customers.city),
-            isNull(customerCityLocation.deletedAt),
-        ))
-        .leftJoin(customerZoneLocation, and(
-            eq(customerZoneLocation.id, customers.zone),
-            isNull(customerZoneLocation.deletedAt),
-        ))
-        .leftJoin(customerAreaLocation, and(
-            eq(customerAreaLocation.id, customers.area),
-            isNull(customerAreaLocation.deletedAt),
+        .leftJoin(defaultAddress, and(
+            eq(defaultAddress.customerId, customers.id),
+            eq(defaultAddress.isDefault, true),
         ))
         .where(plan.pageWhere(whereClause))
         .limit(plan.fetchLimit)
@@ -256,13 +253,31 @@ export async function listCustomers(
     if (positionWhere) statements.push(countProbe(positionWhere));
     const batchResult = await db.batch(statements as unknown as Parameters<Database["batch"]>[0]) as unknown as [
         { count: number }[],
-        { id: string; name: string; email: string | null; phone: string; address: string | null; city: string | null; zone: string | null; area: string | null; cityName: string | null; zoneName: string | null; areaName: string | null; accountClaimedAt: number | null; origin: string; latestOrderName: string | null; totalOrders: number; totalSpentMinor: number; spendDecimalPlaces: number; lastOrderAt: number | null; createdAt: number; updatedAt: number; keysetValue: number | string | null }[],
+        { id: string; name: string; email: string | null; phone: string; defaultCountryCode: string | null; defaultLine1: string | null; defaultLocality: string | null; defaultAdminArea: string | null; defaultPostalCode: string | null; defaultCityName: string | null; defaultZoneName: string | null; defaultAreaName: string | null; accountClaimedAt: number | null; origin: string; latestOrderName: string | null; totalOrders: number; totalSpentMinor: number; spendDecimalPlaces: number; lastOrderAt: number | null; createdAt: number; updatedAt: number; keysetValue: number | string | null }[],
         { count: number }[]?,
     ];
     const { rows: results, pageInfo, pageStart } = plan.finish(batchResult[1], batchResult[2]?.[0]?.count);
 
-    const formattedCustomers = results.map(({ totalSpentMinor, spendDecimalPlaces, origin, keysetValue: _keysetValue, ...c }) => ({
+    const formattedCustomers = results.map(({
+        totalSpentMinor, spendDecimalPlaces, origin, keysetValue: _keysetValue,
+        defaultCountryCode, defaultLine1, defaultLocality, defaultAdminArea, defaultPostalCode,
+        defaultCityName, defaultZoneName, defaultAreaName,
+        ...c
+    }) => ({
         ...c,
+        /** The default address, in brief, for the list's location column. */
+        defaultAddress: defaultCountryCode
+            ? {
+                countryCode: defaultCountryCode,
+                line1: defaultLine1,
+                locality: defaultLocality,
+                adminArea: defaultAdminArea,
+                postalCode: defaultPostalCode,
+                cityName: defaultCityName,
+                zoneName: defaultZoneName,
+                areaName: defaultAreaName,
+            }
+            : null,
         kind: customerKind({ accountClaimedAt: c.accountClaimedAt, origin }),
         totalOrders: Number(c.totalOrders),
         totalSpent: paidSpendAmount({ totalSpentMinor: Number(totalSpentMinor), spendDecimalPlaces: Number(spendDecimalPlaces) }),
@@ -291,20 +306,10 @@ export async function createCustomer(
     await validateCustomerPhoneCountry(db, data.phone);
     const existing = await findActiveCustomerWithPhone(db, data.phone);
     if (existing) throw new ValidationError("Customer with this phone number already exists", { customer: existing });
-
-    const locationIds = [data.city, data.zone, data.area].filter(Boolean) as string[];
-    let cityName = null, zoneName = null, areaName = null;
-
-    if (locationIds.length > 0) {
-        const locs = await db
-            .select({ id: deliveryLocations.id, name: deliveryLocations.name })
-            .from(deliveryLocations)
-            .where(sql`${deliveryLocations.id} IN ${locationIds}`);
-        const locMap = new Map(locs.map((l) => [l.id, l.name]));
-        if (data.city) cityName = locMap.get(data.city) ?? null;
-        if (data.zone) zoneName = locMap.get(data.zone) ?? null;
-        if (data.area) areaName = locMap.get(data.area) ?? null;
-    }
+    // The first address (Shopify's new-customer form) is the default of the new address book.
+    const address = data.address
+        ? await resolveAddress(db, data.address, { skipValidation: data.address.skipValidation === true })
+        : null;
 
     const customerId = "cust_" + nanoid();
     await db.batch([
@@ -313,13 +318,6 @@ export async function createCustomer(
             name: data.name,
             email: data.email,
             phone: data.phone,
-            address: data.address,
-            city: data.city,
-            zone: data.zone,
-            area: data.area,
-            cityName,
-            zoneName,
-            areaName,
             origin: "merchant",
             totalOrders: 0,
             createdAt: sql`unixepoch()`,
@@ -331,18 +329,21 @@ export async function createCustomer(
             name: data.name,
             email: data.email,
             phone: data.phone,
-            address: data.address,
-            city: data.city,
-            zone: data.zone,
-            area: data.area,
-            cityName,
-            zoneName,
-            areaName,
             changeType: "created",
             actor: "staff",
             actorId,
             createdAt: sql`unixepoch()`,
         }),
+        ...(address
+            ? [db.insert(customerAddresses).values({
+                id: `caddr_${nanoid()}`,
+                customerId,
+                isDefault: true,
+                ...customerAddressColumns(address),
+                createdAt: sql`unixepoch()`,
+                updatedAt: sql`unixepoch()`,
+            })]
+            : []),
     ] as Parameters<Database["batch"]>[0]);
 
     return { id: customerId };
@@ -357,7 +358,7 @@ export async function getCustomerById(db: Database, id: string) {
  * its marketing consent status per channel (Customers & marketing).
  */
 export async function getCustomerDetail(db: Database, id: string) {
-    const [customer, spend, latest, tags, consentRows] = await Promise.all([
+    const [customer, spend, latest, tags, consentRows, addresses] = await Promise.all([
         getCustomerById(db, id),
         db.select(paidSpendProjection()).from(orders)
             .where(and(eq(orders.customerId, id), isNull(orders.deletedAt)))
@@ -370,6 +371,7 @@ export async function getCustomerDetail(db: Database, id: string) {
             contact: customerMarketingConsents.contact,
             updatedAt: customerMarketingConsents.updatedAt,
         }).from(customerMarketingConsents).where(eq(customerMarketingConsents.customerId, id)),
+        listCustomerAddresses(db, id),
     ]);
     if (!customer) return null;
     const mergedInto = customer.mergedIntoCustomerId
@@ -383,6 +385,8 @@ export async function getCustomerDetail(db: Database, id: string) {
         latestOrderName: latest?.name ?? null,
         totalSpent: spend ? paidSpendAmount(spend) : 0,
         tags,
+        /** The address book, the default first. */
+        addresses,
         /** What applies to the current address on each channel (consent covers one address). */
         marketing: MARKETING_CHANNELS.map((channel) => {
             const row = consentRows.find((candidate) => candidate.channel === channel);
@@ -412,31 +416,11 @@ export async function updateCustomer(
         }
     }
 
-    let cityName = existing.cityName, zoneName = existing.zoneName, areaName = existing.areaName;
-    const locationIds = [data.city ?? existing.city, data.zone ?? existing.zone, data.area ?? existing.area].filter(Boolean) as string[];
-
-    if ((data.city !== undefined || data.zone !== undefined || data.area !== undefined) && locationIds.length > 0) {
-        const locs = await db
-            .select({ id: deliveryLocations.id, name: deliveryLocations.name })
-            .from(deliveryLocations)
-            .where(inArray(deliveryLocations.id, locationIds));
-        const locMap = new Map(locs.map((l) => [l.id, l.name]));
-        if (data.city !== undefined) cityName = data.city ? locMap.get(data.city) ?? null : null;
-        if (data.zone !== undefined) zoneName = data.zone ? locMap.get(data.zone) ?? null : null;
-        if (data.area !== undefined) areaName = data.area ? locMap.get(data.area) ?? null : null;
-    }
-
+    // Addresses are edited in the address book (customer addresses), not here.
     const next = {
         name: data.name ?? existing.name,
         email: data.email !== undefined ? data.email : existing.email,
         phone: data.phone ?? existing.phone,
-        address: data.address !== undefined ? data.address : existing.address,
-        city: data.city !== undefined ? data.city : existing.city,
-        zone: data.zone !== undefined ? data.zone : existing.zone,
-        area: data.area !== undefined ? data.area : existing.area,
-        cityName,
-        zoneName,
-        areaName,
     };
     // A save that changes nothing writes nothing: no bumped timestamp, no empty "Updated" entry.
     if ((Object.keys(next) as Array<keyof typeof next>).every((key) => (next[key] ?? null) === (existing[key] ?? null))) return;
@@ -444,7 +428,7 @@ export async function updateCustomer(
     // Naming a checkout guest record in the dashboard makes it the merchant's customer.
     const origin = !existing.accountClaimedAt && next.name !== existing.name ? { origin: "merchant" as const } : {};
     await db.batch([
-        db.update(customers).set({ ...data, ...origin, cityName, zoneName, areaName, updatedAt: sql`unixepoch()` }).where(eq(customers.id, id)),
+        db.update(customers).set({ ...next, ...origin, updatedAt: sql`unixepoch()` }).where(eq(customers.id, id)),
         db.insert(customerHistory).values({
             id: "hist_" + nanoid(),
             customerId: id,
@@ -474,13 +458,6 @@ export async function deleteCustomer(db: Database, id: string, actorId: string |
             name: existing.name,
             email: existing.email,
             phone: existing.phone,
-            address: existing.address,
-            city: existing.city,
-            zone: existing.zone,
-            area: existing.area,
-            cityName: existing.cityName,
-            zoneName: existing.zoneName,
-            areaName: existing.areaName,
             changeType: "deleted",
             actor: "staff",
             actorId,
@@ -522,13 +499,6 @@ export async function restoreCustomer(db: Database, id: string, actorId: string 
             name: existing.name,
             email: existing.email,
             phone: existing.phone,
-            address: existing.address,
-            city: existing.city,
-            zone: existing.zone,
-            area: existing.area,
-            cityName: existing.cityName,
-            zoneName: existing.zoneName,
-            areaName: existing.areaName,
             changeType: "restored",
             actor: "staff",
             actorId,

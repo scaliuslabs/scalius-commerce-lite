@@ -72,7 +72,9 @@ function seedStore(sqlite: DatabaseSync, count: number, seed = 7): Facts[] {
     const pick = <T>(values: readonly T[]) => values[Math.floor(next() * values.length)]!;
     const facts: Facts[] = [];
     sqlite.exec(`INSERT INTO custom_field_definitions (id, owner_type, namespace, key, name, type) VALUES ('cfd_tier00001', 'customer', 'custom', 'tier', 'Tier', 'single_line_text')`);
-    const insertCustomer = sqlite.prepare(`INSERT INTO customers (id, name, phone, email, city, zone, origin, account_claimed_at, created_at, deleted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+    const insertCustomer = sqlite.prepare(`INSERT INTO customers (id, name, phone, email, origin, account_claimed_at, created_at, deleted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
+    // City and thana live on the default address of the address book (0113).
+    const insertAddress = sqlite.prepare(`INSERT INTO customer_addresses (id, customer_id, is_default, country_code, line1, city, zone) VALUES (?, ?, 1, 'BD', 'House', ?, ?)`);
     const insertOrder = sqlite.prepare(`INSERT INTO orders (id, customer_name, customer_phone, shipping_address, city, zone, status, customer_id, paid_amount_minor, created_at, deleted_at) VALUES (?, 'B', ?, 'House', 'c', 'z', ?, ?, ?, ?, ?)`);
     const insertTag = sqlite.prepare("INSERT INTO customer_tag_links (customer_id, tag) VALUES (?, ?)");
     const insertConsent = sqlite.prepare(`INSERT INTO customer_marketing_consents (customer_id, channel, state, contact, source, actor, subscribed_at, requested_at, confirmation_hash) VALUES (?, ?, ?, ?, 'admin', 'staff', ?, ?, ?)`);
@@ -97,7 +99,8 @@ function seedStore(sqlite: DatabaseSync, count: number, seed = 7): Facts[] {
             consents: new Map(),
             field: next() < 0.3 ? pick(["gold", "silver"]) : null,
         };
-        insertCustomer.run(id, `Customer ${index}`, phone, email, fact.city, fact.zone, kind === "merchant" ? "merchant" : kind === "account" ? "account" : "order", kind === "account" ? 1 : null, fact.createdAt, fact.deleted ? 1 : null);
+        insertCustomer.run(id, `Customer ${index}`, phone, email, kind === "merchant" ? "merchant" : kind === "account" ? "account" : "order", kind === "account" ? 1 : null, fact.createdAt, fact.deleted ? 1 : null);
+        if (fact.city || fact.zone) insertAddress.run(`caddr_${id}`, id, fact.city, fact.zone);
         const orderCount = Math.floor(next() * 5);
         for (let order = 0; order < orderCount; order += 1) {
             const entry = {
@@ -272,8 +275,10 @@ describe("customer segments", () => {
     it("stays bounded on a large store", async () => {
         sqlite.exec(`
             WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < ${CUSTOMER_SEGMENT_COUNT_CAP + 2_000})
-            INSERT INTO customers (id, name, phone, origin, city, created_at)
-            SELECT printf('cust_%07d', i), 'B', printf('+88017%08d', i), 'order', CASE WHEN i % 3 = 0 THEN 'loc_dhaka' ELSE 'loc_ctg' END, ${NOW} FROM n;
+            INSERT INTO customers (id, name, phone, origin, created_at)
+            SELECT printf('cust_%07d', i), 'B', printf('+88017%08d', i), 'order', ${NOW} FROM n;
+            INSERT INTO customer_addresses (id, customer_id, is_default, country_code, line1, city)
+            SELECT 'caddr_' || id, id, 1, 'BD', 'House', CASE WHEN CAST(substr(id, 6) AS INTEGER) % 3 = 0 THEN 'loc_dhaka' ELSE 'loc_ctg' END FROM customers WHERE id LIKE 'cust_%';
             INSERT INTO customer_tag_links (customer_id, tag) SELECT id, 'vip' FROM customers WHERE id LIKE 'cust_000%';
         `);
         const everyone = customerSegmentDefinitionSchema.parse({ conditions: [{ field: "orders_count", min: 0 }] });

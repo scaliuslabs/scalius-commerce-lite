@@ -335,18 +335,22 @@ function normalizeCheckoutRequestId(value: string): string {
 
 function normalizeCheckoutRequest(input: CreateStorefrontOrderInput): Record<string, unknown> {
   return {
-    version: 3,
+    // 4: the country-aware shipping address (MARKETS-DESIGN step 3a).
+    version: 4,
     expectedQuoteFingerprint: input.expectedQuoteFingerprint,
     customerName: input.customerName.trim(),
     customerPhone: input.customerPhone.trim(),
     customerEmail: input.customerEmail?.trim().toLowerCase() ?? null,
+    shippingCountryCode: input.shippingCountryCode?.trim().toUpperCase() || null,
     shippingAddress: input.shippingAddress?.trim() || null,
+    shippingAddressLine2: input.shippingAddressLine2?.trim() || null,
+    shippingDependentLocality: input.shippingDependentLocality?.trim() || null,
+    shippingLocality: input.shippingLocality?.trim() || null,
+    shippingAdminArea: input.shippingAdminArea?.trim() || null,
+    shippingPostalCode: input.shippingPostalCode?.trim() || null,
     city: input.city ?? null,
     zone: input.zone ?? null,
     area: input.area ?? null,
-    cityName: input.cityName ?? null,
-    zoneName: input.zoneName ?? null,
-    areaName: input.areaName ?? null,
     notes: input.notes ?? null,
     items: input.items.map((item) => ({
       productId: item.productId,

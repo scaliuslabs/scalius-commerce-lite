@@ -18,6 +18,9 @@ const baseOrder = {
     customerEmail: "buyer@example.com",
     city: "dhaka",
     cityName: "Dhaka",
+    shippingCountryCode: "BD",
+    shippingLocality: "Dhaka",
+    shippingPostalCode: null,
     currencyCode: "BDT",
     currencyDecimalPlaces: 2,
     totalAmountMinor: 150_000,
@@ -29,6 +32,16 @@ const baseOrder = {
 };
 
 describe("Meta Purchase outbox event building", () => {
+    it("names the shipping country and postal code (MARKETS-DESIGN step 3a)", () => {
+        const event = buildMetaPurchaseEvent({
+            order: { ...baseOrder, city: null, cityName: null, shippingCountryCode: "GB", shippingLocality: "London", shippingPostalCode: "EC1Y 8SY" },
+            items: [{ productId: "prod_1", variantId: "var_1", quantity: 1, unitPriceMinor: 50_000 }],
+            storefrontUrl: "https://shop.example/",
+            eventTime: 1_800_000_000,
+        });
+        expect(event.user_data).toMatchObject({ country: "gb", ct: "London", zp: "EC1Y 8SY" });
+    });
+
     it("uses the stable order event id", () => {
         expect(createMetaPurchaseEventId("order_1")).toBe("Purchase:order_1");
     });

@@ -1,4 +1,5 @@
 // The dashboard order detail read.
+import { orderShippingAddressSelection } from "../shipping-address";
 import type { Database } from "@scalius/database/client";
 import {
     orders,
@@ -103,13 +104,7 @@ async function getOrderDetailsOnce(
             pricesIncludeTax: orders.pricesIncludeTax,
             status: orders.status,
             notes: orders.notes,
-            shippingAddress: orders.shippingAddress,
-            city: orders.city,
-            zone: orders.zone,
-            area: orders.area,
-            cityName: orders.cityName,
-            zoneName: orders.zoneName,
-            areaName: orders.areaName,
+            ...orderShippingAddressSelection(orders),
             pickupAddress: orders.pickupAddress,
             pickupHours: orders.pickupHours,
             version: orders.version,

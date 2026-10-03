@@ -60,6 +60,7 @@ import {
 import { buildAppDiscountFactInserts } from "../order-kernel";
 import { appStorageCommitStatements, isAppStorageCommitConflict } from "../plugins";
 import { orderMarketIdSql } from "../markets";
+import { orderShippingAddressInsertColumns, orderShippingCountry } from "../orders";
 import { readCheckoutCopy } from "./store-copy";
 import type { StorefrontOrderCommitReads, SQLiteBatchItem } from "./reads";
 import {
@@ -347,13 +348,6 @@ function buildOrderWriteBatch(
                 name: od.customerName,
                 email: od.customerEmail,
                 phone: od.customerPhone,
-                address: od.shippingAddress,
-                city: od.city,
-                zone: od.zone,
-                area: od.area,
-                cityName: od.cityName,
-                zoneName: od.zoneName,
-                areaName: od.areaName,
                 totalOrders: 1,
                 lastOrderAt: sql`unixepoch()`,
                 createdAt: sql`unixepoch()`,
@@ -367,13 +361,6 @@ function buildOrderWriteBatch(
                 name: od.customerName,
                 email: od.customerEmail,
                 phone: od.customerPhone,
-                address: od.shippingAddress,
-                city: od.city,
-                zone: od.zone,
-                area: od.area,
-                cityName: od.cityName,
-                zoneName: od.zoneName,
-                areaName: od.areaName,
                 changeType: "created",
                 actor: "buyer",
                 createdAt: sql`unixepoch()`,
@@ -408,13 +395,9 @@ function buildOrderWriteBatch(
             customerPhone: od.customerPhone,
             customerEmail: od.customerEmail,
             customerWhatsapp: od.customerWhatsapp ?? null,
-            shippingAddress: od.shippingAddress,
-            city: od.city,
-            zone: od.zone,
-            area: od.area,
-            cityName: od.cityName,
-            zoneName: od.zoneName,
-            areaName: od.areaName,
+            // The address snapshot (a guest record's first one also seeds its
+            // address book: trigger orders_seed_customer_address).
+            ...orderShippingAddressInsertColumns(od),
             notes: od.notes,
             currencyCode: od.currencyCode,
             currencyDecimalPlaces: od.currencyDecimalPlaces,
@@ -455,7 +438,7 @@ function buildOrderWriteBatch(
             // The market of the shipping country, else the backup market, read
             // inside this insert (MARKETS-DESIGN D4); the authority fence covers
             // a market change between the quote and this commit.
-            marketId: orderMarketIdSql(),
+            marketId: orderMarketIdSql(orderShippingCountry(od)),
             createdAt: sql`unixepoch()`,
             updatedAt: sql`unixepoch()`,
         }),
@@ -783,6 +766,9 @@ function isStorefrontOrderPayloadEligibleForMetaPurchase(
         customerEmail: od.customerEmail,
         city: od.city,
         cityName: od.cityName,
+        shippingCountryCode: od.shippingCountryCode,
+        shippingLocality: od.shippingLocality,
+        shippingPostalCode: od.shippingPostalCode,
         currencyCode: od.currencyCode,
         currencyDecimalPlaces: od.currencyDecimalPlaces,
         totalAmountMinor: od.totalAmountMinor,

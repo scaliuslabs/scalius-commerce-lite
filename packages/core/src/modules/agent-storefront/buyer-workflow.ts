@@ -393,14 +393,14 @@ export async function submitAgentStorefrontCheckout(
     customerName: input.customerName.trim(),
     customerPhone: input.customerPhone,
     customerEmail: input.customerEmail?.trim().toLowerCase() ?? null,
-    // Address, city and zone are stored only when a line ships.
+    // The address is stored only when a line ships. A context's destination
+    // is a delivery rate's (Bangladesh's City/Thana/Area until shipping zones
+    // by country, step 3b), so the order's country is the destination's.
+    shippingCountryCode: delivery.address?.countryCode ?? null,
     shippingAddress: delivery.fulfilment.requiresShipping ? shippingAddress : null,
     city: delivery.address?.city ?? null,
     zone: delivery.address?.zone ?? null,
     area: delivery.address?.area ?? null,
-    cityName: delivery.cityName,
-    zoneName: delivery.zoneName,
-    areaName: delivery.areaName,
     notes: input.notes?.trim() || null,
     items: authority.cartValidation.items.map((item) => ({
       productId: item.productId,
@@ -460,6 +460,7 @@ export async function submitAgentStorefrontCheckout(
       orderCreatedNotificationEnabled: authority.sideEffects.orderCreatedNotification,
       metaPurchaseEnabled: authority.sideEffects.metaPurchase,
       contactFields: authority.contactFields,
+      shippingCountries: authority.shippingCountries,
     }),
     authority.taxAuthority,
     {},

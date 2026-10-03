@@ -10,6 +10,7 @@ import {
   parseQualifiedProviderId,
   providerErrorOf,
   providerOperationSchemas,
+  providerServesCountry,
   qualifiedProviderId,
 } from "../providers";
 import { PLUGIN_API_VERSION } from "../api-version";
@@ -183,9 +184,30 @@ describe("provider declarations", () => {
     if (!parsed.ok) return;
     expect(parsed.manifest.providers).toEqual([
       { kind: "payment", id: "wallet", name: "Wallet", flow: "hosted", chargeCurrencies: ["BDT"], operations: HOSTED_REFUNDS },
-      { kind: "courier", id: "parcel", name: "Parcel", operations: [], trackingUrl: "https://parcel.test/t/{trackingId}" },
+      { kind: "courier", id: "parcel", name: "Parcel", operations: [], trackingUrl: "https://parcel.test/t/{trackingId}", countries: "any" },
     ]);
     expect(pluginGrantRequest(parsed.manifest).providers).toEqual(["courier", "payment"]);
+  });
+
+  it("lets couriers and fraud checkers declare the countries they serve (MARKETS-DESIGN step 3a)", () => {
+    const parsed = parsePluginManifest({
+      ...manifest,
+      providers: {
+        courier: [{ id: "redx", name: "RedX", countries: ["BD"] }],
+        fraud: [{ id: "radar", name: "Radar", countries: ["BD", "IN"] }],
+      },
+    });
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.manifest.providers).toEqual([
+      { kind: "courier", id: "redx", name: "RedX", operations: [], countries: ["BD"] },
+      { kind: "fraud", id: "radar", name: "Radar", operations: [], countries: ["BD", "IN"] },
+    ]);
+    expect(parsePluginManifest({ ...manifest, providers: { courier: [{ id: "redx", name: "RedX", countries: ["bd"] }] } }).ok).toBe(false);
+    expect(providerServesCountry(["BD"], "BD")).toBe(true);
+    expect(providerServesCountry(["BD"], "IN")).toBe(false);
+    expect(providerServesCountry(["BD"], null)).toBe(false);
+    expect(providerServesCountry("any", null)).toBe(true);
   });
 
   it("re-parses a stored (parsed) manifest to the same providers", () => {

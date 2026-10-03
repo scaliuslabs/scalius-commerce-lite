@@ -22,6 +22,7 @@ import {
   updateCustomer,
 } from "./customers.service";
 import { getCustomerOrders } from "../orders/account-orders";
+import { createCustomerAddress } from "./addresses";
 import { linkVerifiedContactOrders } from "./customer-identity";
 import {
   buildCustomerAuthOtpStorageKey,
@@ -41,6 +42,7 @@ import {
   updateCustomerProfile,
   verifyOtp,
   type NewAccountDetails,
+  readCustomerProfile,
 } from "./customer-auth.service";
 
 const KEY = btoa("0123456789abcdef0123456789abcdef");
@@ -174,8 +176,11 @@ async function placeGuestOrder(contact: { phone: string; email: string | null; n
   return attempt.orderId;
 }
 
+// `address` and `zoneName` are the default address-book entry's line and thana.
 const customerRows = () => sqlite.prepare(
-  "SELECT id, name, email, phone, address, account_claimed_at IS NOT NULL AS claimed, email_verified_at IS NOT NULL AS email_verified, phone_verified_at IS NOT NULL AS phone_verified FROM customers ORDER BY account_claimed_at IS NULL, phone",
+  `SELECT c.id, c.name, c.email, c.phone, a.line1 AS address, c.account_claimed_at IS NOT NULL AS claimed, c.email_verified_at IS NOT NULL AS email_verified, c.phone_verified_at IS NOT NULL AS phone_verified
+   FROM customers c LEFT JOIN customer_addresses a ON a.customer_id = c.id AND a.is_default = 1
+   ORDER BY c.account_claimed_at IS NULL, c.phone`,
 ).all();
 const orderOwner = (orderId: string) =>
   sqlite.prepare("SELECT account_owner_customer_id AS owner FROM orders WHERE id = ?").get(orderId)?.owner ?? null;
@@ -183,7 +188,8 @@ const orderOwner = (orderId: string) =>
 const orderLinks = (orderId: string) =>
   sqlite.prepare("SELECT customer_id AS customerId, account_owner_customer_id AS owner FROM orders WHERE id = ?").get(orderId);
 const customerById = (id: string) =>
-  sqlite.prepare("SELECT id, name, email, phone, address, zone_name AS zoneName, account_claimed_at IS NOT NULL AS claimed FROM customers WHERE id = ?").get(id);
+  sqlite.prepare(`SELECT c.id, c.name, c.email, c.phone, a.line1 AS address, a.zone_name AS zoneName, c.account_claimed_at IS NOT NULL AS claimed
+    FROM customers c LEFT JOIN customer_addresses a ON a.customer_id = c.id AND a.is_default = 1 WHERE c.id = ?`).get(id);
 
 describe("unverified contacts never change identity (R2-BA-01, R2-MKT-02, R2-BA-04)", () => {
   const VICTIM_PHONE = "+8801799200009";
@@ -224,7 +230,7 @@ describe("unverified contacts never change identity (R2-BA-01, R2-MKT-02, R2-BA-
     const record = orderLinks(firstOrder)!.customerId as string;
     const historyBefore = Number(sqlite.prepare("SELECT COUNT(*) AS n FROM customer_history WHERE customer_id = ?").get(record)?.n);
 
-    sqlite.prepare("UPDATE customers SET address = 'House 9, Road 4', zone_name = 'Mirpur' WHERE id = ?").run(record);
+    sqlite.prepare("UPDATE customer_addresses SET line1 = 'House 9, Road 4', zone_name = 'Mirpur' WHERE customer_id = ? AND is_default = 1").run(record);
     const attack = await placeGuestOrder({ phone: VICTIM_PHONE, email: "r2mkt-buyer@example.com", name: "R2-MKT ক্রেতা Buyer" });
 
     expect(customerById(record)).toMatchObject({
@@ -443,7 +449,7 @@ describe("a shared phone never exposes or files one person's orders under anothe
     const order = await placeGuestOrder({ phone: SHARED_PHONE, email: null, name: "First Buyer" });
     const guestId = orderLinks(order)!.customerId as string;
     await placeGuestOrder({ phone: SHARED_PHONE, email: null, name: "Second Buyer" });
-    const merchant = await createCustomer(db, { name: "R3-ORD Owner রিনা", phone: OWN_PHONE, email: null, address: null, city: null, zone: null, area: null });
+    const merchant = await createCustomer(db, { name: "R3-ORD Owner রিনা", phone: OWN_PHONE, email: null, address: null });
     const impostor = await placeGuestOrder({ phone: OWN_PHONE, email: null, name: "R3-ORD Impostor" });
 
     const { customers: listed } = await listCustomers(db, { limit: 50 });
@@ -467,8 +473,8 @@ describe("merchant changes are attributed and reversible (R3-ORD-13, R3-ORD-17)"
   ).all(customerId);
 
   it("records the staff author, logs a restore from trash, and names the customer already using a phone", async () => {
-    const created = await createCustomer(db, { name: "Rina", phone: BUYER_PHONE, email: null, address: null, city: null, zone: null, area: null }, "staff_1");
-    await expect(createCustomer(db, { name: "Other", phone: BUYER_PHONE, email: null, address: null, city: null, zone: null, area: null }, "staff_1"))
+    const created = await createCustomer(db, { name: "Rina", phone: BUYER_PHONE, email: null, address: null }, "staff_1");
+    await expect(createCustomer(db, { name: "Other", phone: BUYER_PHONE, email: null, address: null }, "staff_1"))
       .rejects.toMatchObject({ details: { customer: { id: created.id, name: "Rina", kind: "merchant" } } });
 
     await updateCustomer(db, created.id, { name: "Rina Akter" }, "staff_2");
@@ -746,12 +752,16 @@ describe("sessions and profile", () => {
     `);
     const account = await createEmailAccount(BUYER_EMAIL, BUYER_PHONE);
     await expect(updateCustomerProfile(db, account.session, { name: "" })).rejects.toThrow("Enter your name.");
-    await expect(updateCustomerProfile(db, account.session, { city: "city_dhaka", zone: "zone_mirpur" }))
-      .rejects.toThrow("Enter your delivery address.");
-    const saved = await updateCustomerProfile(db, account.session, {
-      address: "House 1", city: "city_dhaka", zone: "zone_mirpur",
+    // The address book (MARKETS-DESIGN step 3a): a Bangladesh address needs its line, city and thana.
+    await expect(createCustomerAddress(db, account.session.customerId!, { countryCode: "BD", city: "city_dhaka", zone: "zone_mirpur" }))
+      .rejects.toThrow("Enter the address.");
+    await createCustomerAddress(db, account.session.customerId!, { countryCode: "BD", line1: "House 1", city: "city_dhaka", zone: "zone_mirpur" });
+    const saved = await readCustomerProfile(db, account.session);
+    expect(saved.customer).toMatchObject({
+      name: "Buyer Five",
+      defaultAddress: { countryCode: "BD", line1: "House 1", cityName: "Dhaka", zoneName: "Mirpur", locality: "Dhaka", dependentLocality: "Mirpur", isDefault: true },
+      profileComplete: true,
     });
-    expect(saved.customer).toMatchObject({ name: "Buyer Five", cityName: "Dhaka", zoneName: "Mirpur", profileComplete: true });
   });
 });
 

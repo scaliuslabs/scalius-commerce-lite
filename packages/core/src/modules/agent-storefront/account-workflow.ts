@@ -3,6 +3,7 @@ import {
   agentStorefrontContexts,
   agentStorefrontContinuations,
   agentStorefrontOrderGrants,
+  customerAddresses,
   customerSessions,
   customers,
   media,
@@ -13,7 +14,18 @@ import {
 } from "@scalius/database/schema";
 import { getCurrentPublicMediaUrl } from "@scalius/core/integrations/storage";
 import { publishedMediaObjectKey } from "../media-references";
-import { type CustomerSession, updateCustomerProfile } from "../customers";
+import {
+  type AddressInput,
+  type CustomerSession,
+  createCustomerAddress,
+  customerAddressFromRow,
+  deleteCustomerAddress,
+  listCustomerAddresses,
+  setDefaultCustomerAddress,
+  updateCustomerAddress,
+  updateCustomerProfile,
+} from "../customers";
+import { usesDeliveryHierarchy } from "@scalius/shared/address";
 import {
   getCustomerOrderDetailForOrder,
   getCustomerOrders,
@@ -21,6 +33,7 @@ import {
   getReceiptOrderSupportRequestStateForOrder,
   orderMoneyAmounts,
   orderMoneySelection,
+  orderShippingAddressSelection,
 } from "../orders";
 import { createCustomerOrderSupportRequest, createReceiptOrderSupportRequest } from "../conversations";
 import { and, desc, eq, gt, isNull, sql } from "drizzle-orm";
@@ -132,20 +145,17 @@ export async function claimAgentStorefrontContinuationBootstrap(
   };
 }
 
-function customerProfile(row: typeof customers.$inferSelect) {
-  const profileComplete = Boolean(row.address && row.city && row.zone);
+function customerProfile(row: typeof customers.$inferSelect, addressRow: typeof customerAddresses.$inferSelect | null) {
+  const defaultAddress = addressRow ? customerAddressFromRow(addressRow) : null;
+  // A default address checkout can prefill: a line and, in Bangladesh, its city and thana.
+  const profileComplete = Boolean(defaultAddress?.line1 && !defaultAddress.validationSkipped
+    && (!usesDeliveryHierarchy(defaultAddress.countryCode) || (defaultAddress.city && defaultAddress.zone)));
   return {
     customerId: row.id,
     name: row.name,
     email: row.email,
     phone: row.phone,
-    address: row.address,
-    city: row.city,
-    zone: row.zone,
-    area: row.area,
-    cityName: row.cityName,
-    zoneName: row.zoneName,
-    areaName: row.areaName,
+    defaultAddress,
     profileComplete,
   };
 }
@@ -155,9 +165,11 @@ async function liveContextCustomer(
   context: ContextRow,
 ): Promise<{ profile: ReturnType<typeof customerProfile>; session: CustomerSession } | null> {
   if (!context.customerSessionTokenHash) return null;
-  const row = await db.select({ session: customerSessions, customer: customers })
+  const row = await db.select({ session: customerSessions, customer: customers, address: customerAddresses })
     .from(customerSessions)
     .innerJoin(customers, eq(customerSessions.customerId, customers.id))
+    // The default address rides the session read (no extra statement).
+    .leftJoin(customerAddresses, and(eq(customerAddresses.customerId, customers.id), eq(customerAddresses.isDefault, true)))
     .where(and(
       eq(customerSessions.tokenHash, context.customerSessionTokenHash),
       isNull(customerSessions.revokedAt),
@@ -166,7 +178,7 @@ async function liveContextCustomer(
     ))
     .get();
   if (!row) return null;
-  const profile = customerProfile(row.customer);
+  const profile = customerProfile(row.customer, row.address);
   return {
     profile,
     session: {
@@ -175,13 +187,7 @@ async function liveContextCustomer(
       name: profile.name,
       ...(profile.phone ? { phone: profile.phone } : {}),
       customerId: profile.customerId,
-      address: profile.address,
-      city: profile.city,
-      zone: profile.zone,
-      area: profile.area,
-      cityName: profile.cityName,
-      zoneName: profile.zoneName,
-      areaName: profile.areaName,
+      defaultAddress: profile.defaultAddress,
       profileComplete: profile.profileComplete,
       createdAt: row.session.createdAt * 1_000,
       expiresAt: row.session.expiresAt * 1_000,
@@ -499,12 +505,52 @@ export async function updateAgentStorefrontCustomerProfile(
   db: Database,
   grantId: string,
   contextId: string,
-  updates: Record<string, string | undefined>,
+  updates: { name?: string },
 ) {
   const context = await loadOwnedActiveContext(db, grantId, contextId);
   const customer = await requireLiveContextCustomer(db, context);
   const result = await updateCustomerProfile(db, customer.session, updates);
   return result.customer;
+}
+
+/**
+ * The authorized customer's address book, as the account page offers it
+ * (MARKETS-DESIGN step 3a): list, add, edit, make default and remove. A buyer
+ * never skips an address's country rules.
+ */
+export type AgentStorefrontAddressBookAction =
+  | { action: "list" }
+  | { action: "create"; address: AddressInput & { isDefault?: boolean } }
+  | { action: "update"; addressId: string; address: AddressInput & { isDefault?: boolean } }
+  | { action: "set_default"; addressId: string }
+  | { action: "delete"; addressId: string };
+
+export async function manageAgentStorefrontCustomerAddresses(
+  db: Database,
+  grantId: string,
+  contextId: string,
+  request: AgentStorefrontAddressBookAction,
+) {
+  const context = await loadOwnedActiveContext(db, grantId, contextId);
+  const customer = await requireLiveContextCustomer(db, context);
+  const customerId = customer.profile.customerId;
+  switch (request.action) {
+    case "create":
+      await createCustomerAddress(db, customerId, request.address);
+      break;
+    case "update":
+      await updateCustomerAddress(db, customerId, request.addressId, request.address);
+      break;
+    case "set_default":
+      await setDefaultCustomerAddress(db, customerId, request.addressId);
+      break;
+    case "delete":
+      await deleteCustomerAddress(db, customerId, request.addressId);
+      break;
+    case "list":
+      break;
+  }
+  return { addresses: await listCustomerAddresses(db, customerId) };
 }
 
 export async function listAgentStorefrontCustomerOrders(
@@ -571,19 +617,13 @@ export async function getAgentStorefrontReceipt(
     id: orders.id,
     customerId: orders.customerId,
     customerName: orders.customerName,
-    shippingAddress: orders.shippingAddress,
+    ...orderShippingAddressSelection(orders),
     ...orderMoneySelection(orders),
     currencyCode: orders.currencyCode,
     subtotalAmountMinor: orders.subtotalAmountMinor,
     taxAmountMinor: orders.taxAmountMinor,
     taxLabel: orders.taxLabel,
     pricesIncludeTax: orders.pricesIncludeTax,
-    city: orders.city,
-    zone: orders.zone,
-    area: orders.area,
-    cityName: orders.cityName,
-    zoneName: orders.zoneName,
-    areaName: orders.areaName,
     status: orders.status,
     paymentMethod: orders.paymentMethod,
     paymentStatus: orders.paymentStatus,

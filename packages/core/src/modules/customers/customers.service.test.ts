@@ -84,13 +84,14 @@ const customerListRow = {
   name: "Buyer",
   email: null,
   phone: "+8801712345678",
-  address: null,
-  city: "city_nondeleted",
-  zone: "zone_deleted",
-  area: "area_missing",
-  cityName: "Dhaka",
-  zoneName: "zone_deleted",
-  areaName: "area_missing",
+  defaultCountryCode: "BD",
+  defaultLine1: "House 1",
+  defaultLocality: "Dhaka",
+  defaultAdminArea: null,
+  defaultPostalCode: null,
+  defaultCityName: "Dhaka",
+  defaultZoneName: "Mirpur",
+  defaultAreaName: null,
   accountClaimedAt: null,
   totalOrders: 2,
   totalSpentMinor: 25_000,
@@ -101,7 +102,7 @@ const customerListRow = {
 };
 
 describe("admin customer list location projection", () => {
-  it("resolves non-deleted location names and falls back for deleted or missing rows", async () => {
+  it("reads the default address of the address book in the list statement", async () => {
     const { db, batch, queries } = createListCustomersDb({
       count: 1,
       rows: [customerListRow],
@@ -113,34 +114,26 @@ describe("admin customer list location projection", () => {
     expect(batch.mock.calls[0]?.[0]).toHaveLength(2);
     expect(result.customers[0]).toMatchObject({
       totalSpent: 250,
-      city: "city_nondeleted",
-      cityName: "Dhaka",
-      zone: "zone_deleted",
-      zoneName: "zone_deleted",
-      area: "area_missing",
-      areaName: "area_missing",
+      defaultAddress: {
+        countryCode: "BD",
+        line1: "House 1",
+        locality: "Dhaka",
+        adminArea: null,
+        postalCode: null,
+        cityName: "Dhaka",
+        zoneName: "Mirpur",
+        areaName: null,
+      },
     });
+    expect(result.customers[0]).not.toHaveProperty("defaultLine1");
 
     const resultQuery = queries.find((query) => "latestOrderName" in query.fields)!;
-    expect(resultQuery.joins).toHaveLength(4);
+    // The order facts and the one default address: no per-location joins.
+    expect(resultQuery.joins).toHaveLength(2);
     const dialect = new SQLiteSyncDialect();
-    for (const [field, aliasName, idColumn] of [
-      ["cityName", "customer_city_location", "city"],
-      ["zoneName", "customer_zone_location", "zone"],
-      ["areaName", "customer_area_location", "area"],
-    ] as const) {
-      const projectionSql = dialect.sqlToQuery(resultQuery.fields[field] as never).sql.toLowerCase();
-      expect(projectionSql).toContain("coalesce");
-      expect(projectionSql).toContain(`"${aliasName}"."name"`);
-      expect(projectionSql).toContain(`"customers"."${idColumn}"`);
-    }
-
-    const locationJoinSql = resultQuery.joins.slice(1)
-      .map((condition) => dialect.sqlToQuery(condition as never).sql.toLowerCase())
-      .join(" ");
-    expect(locationJoinSql).toContain('"customer_city_location"."deleted_at" is null');
-    expect(locationJoinSql).toContain('"customer_zone_location"."deleted_at" is null');
-    expect(locationJoinSql).toContain('"customer_area_location"."deleted_at" is null');
+    const addressJoinSql = dialect.sqlToQuery(resultQuery.joins[1] as never).sql.toLowerCase();
+    expect(addressJoinSql).toContain('"default_address"."customer_id"');
+    expect(addressJoinSql).toContain('"default_address"."is_default"');
   });
 
   it("keeps the count and page window independent from paged location resolution", async () => {

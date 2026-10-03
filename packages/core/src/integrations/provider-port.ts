@@ -13,6 +13,7 @@
 import {
   PROVIDER_OPERATIONS,
   isQualifiedProviderId,
+  type ProviderCountries,
   type ProviderKind,
   type ProviderPort,
 } from "@scalius/shared/plugins/providers";
@@ -29,6 +30,8 @@ export type BoundProvider<K extends ProviderKind> = ProviderPort<K, ProviderCall
   readonly id: string;
   /** Merchant-facing name. */
   readonly label: string;
+  /** The countries it serves (a fraud checker's buyers); absent means any. */
+  readonly countries?: ProviderCountries;
 };
 
 /** A built-in call: the adapter's saved settings travel with the call. */
@@ -40,11 +43,14 @@ export interface SettingsCall<S> extends ProviderCall {
 export type BuiltInAdapter<K extends ProviderKind, S> = ProviderPort<K, SettingsCall<S>> & {
   readonly id: string;
   readonly label: string;
+  /** The countries it serves; absent means any. */
+  readonly countries?: ProviderCountries;
 };
 
 /** The adapter with its settings bound: the port the rest of core calls. */
 export function bindProvider<K extends ProviderKind, S>(kind: K, adapter: BuiltInAdapter<K, S>, settings: S): BoundProvider<K> {
   const bound: Record<string, unknown> = { id: adapter.id, label: adapter.label };
+  if (adapter.countries !== undefined) bound.countries = adapter.countries;
   const source = adapter as unknown as Record<string, unknown>;
   for (const operation of [...PROVIDER_OPERATIONS[kind].required, ...PROVIDER_OPERATIONS[kind].optional]) {
     const method = source[operation];

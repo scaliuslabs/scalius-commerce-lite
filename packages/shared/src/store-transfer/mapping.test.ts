@@ -202,7 +202,9 @@ describe("customer CSVs", () => {
     const [rahim, karim, nusrat] = result.items;
     expect(rahim).toMatchObject({ name: "রহিম উদ্দিন", email: "rahim@example.com", tags: ["vip", "dhaka"], marketing: { email: true, sms: true, whatsapp: false } });
     expect(rahim!.consentEvidence).toBe("Shopify customer export: Accepts Email Marketing = yes; Accepts SMS Marketing = yes");
-    expect(rahim!.address).toBe("House 12, Road 5, Dhaka, 1209, BD");
+    expect(rahim!.address).toEqual({
+      countryCode: "BD", company: null, line1: "House 12, Road 5", line2: null, locality: "Dhaka", adminArea: null, postalCode: "1209",
+    });
     expect(karim!.marketing).toEqual({ email: false, sms: false, whatsapp: false });
     // Consent to e-mail without an e-mail address is not consent to anything.
     expect(nusrat!.marketing.email).toBe(false);

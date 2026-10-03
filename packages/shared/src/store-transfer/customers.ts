@@ -8,6 +8,8 @@
 
 import { z } from "zod";
 import { validateAndFormatPhone } from "../customer-utils";
+import { ADDRESS_FIELD_MAX_LENGTH } from "../address";
+import { normalizeMarketCountry } from "../markets";
 import { normalizeCustomerTags, CUSTOMER_TAGS_PER_CUSTOMER_MAX } from "../customer-marketing";
 import type { ImportIssue, UnsupportedSummary } from "./issues";
 import { UnsupportedCollector } from "./issues";
@@ -27,7 +29,21 @@ export const customerImportItemSchema = z.object({
   /** E.164 (validated again by the server against the store's phone policy). */
   phone: z.string().trim().min(7).max(16).regex(/^\+\d{7,15}$/, "Use the international format (+8801XXXXXXXXX)."),
   email: z.email().max(254).nullable(),
-  address: z.string().trim().max(CUSTOMER_ADDRESS_MAX).nullable(),
+  /**
+   * The source's default address in canonical fields (MARKETS-DESIGN D7). It
+   * becomes the customer's default address; one that breaks its country's
+   * rules (a Bangladesh address has no City/Thana ids in a file) is kept,
+   * marked validation_skipped.
+   */
+  address: z.object({
+    countryCode: z.string().trim().length(2).nullable(),
+    company: z.string().trim().max(ADDRESS_FIELD_MAX_LENGTH.company).nullable(),
+    line1: z.string().trim().max(CUSTOMER_ADDRESS_MAX).nullable(),
+    line2: z.string().trim().max(ADDRESS_FIELD_MAX_LENGTH.line2).nullable(),
+    locality: z.string().trim().max(ADDRESS_FIELD_MAX_LENGTH.locality).nullable(),
+    adminArea: z.string().trim().max(ADDRESS_FIELD_MAX_LENGTH.adminArea).nullable(),
+    postalCode: z.string().trim().max(ADDRESS_FIELD_MAX_LENGTH.postalCode).nullable(),
+  }).strict().nullable(),
   tags: z.array(z.string().trim().min(1).max(40)).max(CUSTOMER_TAGS_PER_CUSTOMER_MAX).default([]),
   marketing: z.object({
     email: z.boolean().default(false),
@@ -80,9 +96,21 @@ export function importPhone(raw: string, allowedCountries?: readonly string[]): 
   }
 }
 
-function joinAddress(parts: readonly string[]): string | null {
-  const text = parts.map((part) => part.trim()).filter(Boolean).join(", ");
-  return text ? truncateText(text, CUSTOMER_ADDRESS_MAX) : null;
+type ImportAddress = NonNullable<CustomerImportItem["address"]>;
+
+/** A source address in canonical fields (truncated to their limits), or null when the row has none. */
+function importAddress(parts: Record<keyof ImportAddress, string>): ImportAddress | null {
+  const text = (value: string, max: number) => (value.trim() ? truncateText(value.trim(), max) : null);
+  const address: ImportAddress = {
+    countryCode: normalizeMarketCountry(parts.countryCode),
+    company: text(parts.company, ADDRESS_FIELD_MAX_LENGTH.company),
+    line1: text(parts.line1, CUSTOMER_ADDRESS_MAX),
+    line2: text(parts.line2, ADDRESS_FIELD_MAX_LENGTH.line2),
+    locality: text(parts.locality, ADDRESS_FIELD_MAX_LENGTH.locality),
+    adminArea: text(parts.adminArea, ADDRESS_FIELD_MAX_LENGTH.adminArea),
+    postalCode: text(parts.postalCode, ADDRESS_FIELD_MAX_LENGTH.postalCode),
+  };
+  return address.line1 || address.line2 || address.locality ? address : null;
 }
 
 /** "subscribed"/"yes"/TRUE is consent; everything else is not. */
@@ -111,7 +139,7 @@ export function mapCustomers(table: CsvTable, format: CustomerSourceFormat, opti
     let name = "";
     let phoneRaw = "";
     let email = "";
-    let address: string | null = null;
+    let address: CustomerImportItem["address"] = null;
     let tags: string[] = [];
     let note = "";
     const marketing = { email: false, sms: false, whatsapp: false };
@@ -122,15 +150,15 @@ export function mapCustomers(table: CsvTable, format: CustomerSourceFormat, opti
       last = get("Last Name");
       phoneRaw = get("Phone") || get("Default Address Phone", "Address Phone");
       email = get("Email");
-      address = joinAddress([
-        get("Default Address Company", "Company"),
-        get("Default Address Address1", "Address1"),
-        get("Default Address Address2", "Address2"),
-        get("Default Address City", "City"),
-        get("Default Address Province Code", "Province", "Province Code"),
-        get("Default Address Zip", "Zip"),
-        get("Default Address Country Code", "Country Code", "Country"),
-      ]);
+      address = importAddress({
+        company: get("Default Address Company", "Company"),
+        line1: get("Default Address Address1", "Address1"),
+        line2: get("Default Address Address2", "Address2"),
+        locality: get("Default Address City", "City"),
+        adminArea: get("Default Address Province Code", "Province", "Province Code"),
+        postalCode: get("Default Address Zip", "Zip"),
+        countryCode: get("Default Address Country Code", "Country Code", "Country"),
+      });
       tags = splitImportList(get("Tags"));
       note = get("Note");
       const emailColumn = columns.find("Accepts Email Marketing", "Accepts Marketing");
@@ -152,15 +180,15 @@ export function mapCustomers(table: CsvTable, format: CustomerSourceFormat, opti
       name = get("Name", "display_name", "Display Name");
       phoneRaw = get("billing_phone", "Billing Phone", "Phone", "shipping_phone", "Shipping Phone");
       email = get("billing_email", "Billing Email", "user_email", "Email");
-      address = joinAddress([
-        get("billing_company", "Billing Company"),
-        get("billing_address_1", "Billing Address 1", "Address 1"),
-        get("billing_address_2", "Billing Address 2", "Address 2"),
-        get("billing_city", "Billing City", "City"),
-        get("billing_state", "Billing State", "Region"),
-        get("billing_postcode", "Billing Postcode", "Postal Code"),
-        get("billing_country", "Billing Country", "Country / Region"),
-      ]);
+      address = importAddress({
+        company: get("billing_company", "Billing Company"),
+        line1: get("billing_address_1", "Billing Address 1", "Address 1"),
+        line2: get("billing_address_2", "Billing Address 2", "Address 2"),
+        locality: get("billing_city", "Billing City", "City"),
+        adminArea: get("billing_state", "Billing State", "Region"),
+        postalCode: get("billing_postcode", "Billing Postcode", "Postal Code"),
+        countryCode: get("billing_country", "Billing Country", "Country / Region"),
+      });
       const consentColumn = columns.find("Accepts Marketing", "accepts_marketing", "Newsletter", "newsletter_subscribed");
       if (consentColumn && consented(get(consentColumn))) {
         marketing.email = true;
@@ -174,7 +202,17 @@ export function mapCustomers(table: CsvTable, format: CustomerSourceFormat, opti
       name = get("Name");
       phoneRaw = get("Phone");
       email = get("Email");
-      address = joinAddress([get("Address"), get("City"), get("Zone")]);
+      // Our own export: City and Zone (Bangladesh: city and thana; elsewhere: locality and region) and Country.
+      const country = normalizeMarketCountry(get("Country"));
+      address = importAddress({
+        company: "",
+        line1: get("Address"),
+        line2: "",
+        locality: get("City"),
+        adminArea: country && country !== "BD" ? get("Zone") : "",
+        postalCode: "",
+        countryCode: get("Country"),
+      });
       tags = splitImportList(get("Tags"));
       for (const [channel, column] of [["email", "Email marketing"], ["sms", "SMS marketing"], ["whatsapp", "WhatsApp marketing"]] as const) {
         if (get(column).toLowerCase() === "subscribed") {

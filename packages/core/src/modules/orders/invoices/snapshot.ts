@@ -46,6 +46,16 @@ export interface InvoiceOrderSnapshot {
   customerEmail: string | null;
   customerId: string | null;
   shippingAddress: string | null;
+  /** The rest of the address snapshot (0113); absent on invoices issued before it (Bangladesh addresses). */
+  shippingAddressLine2?: string | null;
+  shippingCountryCode?: string | null;
+  shippingDependentLocality?: string | null;
+  shippingLocality?: string | null;
+  shippingAdminArea?: string | null;
+  shippingPostalCode?: string | null;
+  shippingCompany?: string | null;
+  shippingName?: string | null;
+  shippingPhone?: string | null;
   city: string | null;
   zone: string | null;
   area: string | null;
@@ -170,6 +180,15 @@ export function snapshotInvoiceOrder(
     customerEmail: order.customerEmail,
     customerId: order.customerId,
     shippingAddress: order.shippingAddress,
+    shippingAddressLine2: order.shippingAddressLine2 ?? null,
+    shippingCountryCode: order.shippingCountryCode ?? null,
+    shippingDependentLocality: order.shippingDependentLocality ?? null,
+    shippingLocality: order.shippingLocality ?? null,
+    shippingAdminArea: order.shippingAdminArea ?? null,
+    shippingPostalCode: order.shippingPostalCode ?? null,
+    shippingCompany: order.shippingCompany ?? null,
+    shippingName: order.shippingName ?? null,
+    shippingPhone: order.shippingPhone ?? null,
     city: order.city,
     zone: order.zone,
     area: order.area,

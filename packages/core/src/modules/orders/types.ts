@@ -158,6 +158,35 @@ export interface OrderEditReadiness {
     details: { allowed: boolean; reason: OrderEditLockReason | null };
 }
 
+/**
+ * An order's shipping-address snapshot (MARKETS-DESIGN D7, migration 0113) as
+ * stored on `orders` and as every order read returns it: the canonical fields
+ * beside Bangladesh's City/Thana/Area adapter. `shippingAddress` is the first
+ * street line. All null when nothing ships.
+ */
+export interface OrderShippingAddressFields {
+    shippingAddress: string | null;
+    shippingAddressLine2: string | null;
+    /** ISO 3166-1 alpha-2; it decides the order's market. */
+    shippingCountryCode: string | null;
+    shippingDependentLocality: string | null;
+    shippingLocality: string | null;
+    shippingAdminArea: string | null;
+    shippingPostalCode: string | null;
+    shippingCompany: string | null;
+    /** The recipient when not the order contact; null means `customerName`. */
+    shippingName: string | null;
+    /** The recipient's phone (E.164) when not the contact's; null means `customerPhone`. */
+    shippingPhone: string | null;
+    shippingValidationSkipped: boolean;
+    city: string | null;
+    zone: string | null;
+    area: string | null;
+    cityName: string | null;
+    zoneName: string | null;
+    areaName: string | null;
+}
+
 export interface OrderListItem {
     id: string;
     customerName: string;
@@ -177,6 +206,9 @@ export interface OrderListItem {
     /** Browser-loaded CAS token for archive/restore and other list mutations. */
     version: number;
     itemCount: number;
+    /** The shipping country (null when nothing ships); couriers and fraud checks are offered by it. */
+    shippingCountryCode: string | null;
+    shippingLocality: string | null;
     city: string | null;
     zone: string | null;
     area: string | null;
@@ -220,8 +252,18 @@ export interface OrderDetails extends OrderListItem {
      */
     fulfillmentLocation: { id: string; name: string; explicit: boolean } | null;
     notes: string | null;
-    /** Null when nothing ships (pickup, service-only or digital orders). */
+    /** Null when nothing ships (pickup, service-only or digital orders): the first street line. */
     shippingAddress: string | null;
+    shippingAddressLine2: string | null;
+    shippingDependentLocality: string | null;
+    shippingAdminArea: string | null;
+    shippingPostalCode: string | null;
+    shippingCompany: string | null;
+    /** The recipient when not the order contact (null: `customerName`). */
+    shippingName: string | null;
+    /** The recipient's phone when not the contact's (null: `customerPhone`). */
+    shippingPhone: string | null;
+    shippingValidationSkipped: boolean;
     customerId: string | null;
     pickup: OrderPickupView | null;
     /** Every fulfilment in the ledger, voided ones included. */
@@ -323,14 +365,22 @@ export interface CreateStorefrontOrderInput {
     customerEmail: string | null;
     /** A separate WhatsApp number, kept only when Customer accounts asks for one. */
     customerWhatsapp?: string | null;
-    /** Required only when a line ships (a `delivery` rate for physical items). */
+    /**
+     * The shipping address, required only when a line ships (a `delivery`
+     * rate for physical items): its country (absent: Bangladesh, whose form
+     * sends the City/Thana/Area ids instead of a locality), first and second
+     * line, and what the country's rules ask for.
+     */
+    shippingCountryCode?: string | null;
     shippingAddress?: string | null;
+    shippingAddressLine2?: string | null;
+    shippingDependentLocality?: string | null;
+    shippingLocality?: string | null;
+    shippingAdminArea?: string | null;
+    shippingPostalCode?: string | null;
     city?: string | null;
     zone?: string | null;
     area?: string | null;
-    cityName?: string | null;
-    zoneName?: string | null;
-    areaName?: string | null;
     notes: string | null;
     items: StorefrontOrderItem[];
     /** Discount codes the buyer applied; each must still apply at commit. */
@@ -433,20 +483,13 @@ export interface StorefrontOrderCommitPayload {
     };
     /** Verified storefront account owner. Guest checkout deliberately keeps this null. */
     existingCustomer: { id: string } | null;
-    orderData: {
+    /** The shipping-address snapshot (all null unless something ships) and the order's other facts. */
+    orderData: OrderShippingAddressFields & {
         id: string;
         customerName: string;
         customerPhone: string;
         customerEmail: string | null;
         customerWhatsapp?: string | null;
-        /** Null unless something ships. */
-        shippingAddress: string | null;
-        city: string | null;
-        zone: string | null;
-        area: string | null;
-        cityName: string | null;
-        zoneName: string | null;
-        areaName: string | null;
         notes: string | null;
         /** Null when nothing physical was bought (no delivery method). */
         shippingMethodId: string | null;

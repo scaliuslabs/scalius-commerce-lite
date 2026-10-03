@@ -291,3 +291,12 @@ export function formatAddressInline(
     options.countryName ? options.countryName(country) : country,
   ].filter((part): part is string => Boolean(part && part.trim())).join(", ");
 }
+
+/** A country's English name (`Intl.DisplayNames`), else its code. */
+export function countryDisplayName(code: string, locale = "en"): string {
+  try {
+    return new Intl.DisplayNames([locale, "en"], { type: "region" }).of(code) ?? code;
+  } catch {
+    return code;
+  }
+}

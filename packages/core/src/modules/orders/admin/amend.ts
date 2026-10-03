@@ -8,6 +8,7 @@ import {
     orderReturns,
     orderTaxSnapshots,
     orderItemTaxSnapshots,
+    customerAddresses,
     customers,
     customerHistory,
     deliveryShipments,
@@ -31,7 +32,8 @@ import {
     type ReservationEntry,
 } from "../../inventory";
 import { sql, eq, inArray, isNull, and } from "drizzle-orm";
-import { guestRecordForPhone } from "../../customers";
+import { customerAddressColumns, guestRecordForPhone, type ResolvedAddress } from "../../customers";
+import { orderShippingAddressColumns, resolveOrderAddress } from "../shipping-address";
 import { fromMinor } from "@scalius/shared/money";
 import { orderShopAmounts } from "@scalius/shared/money-chain";
 import { nanoid } from "nanoid";
@@ -46,7 +48,7 @@ import { validateCustomerPhoneCountry } from "../../settings";
 import type { TaxQuote } from "../../tax/browser";
 import { sha256Hex } from "@scalius/shared/hash";
 import { stableStringify } from "./create-attempts";
-import { type ManualOrderQuote, prepareManualOrderQuote } from "./quote";
+import { type ManualOrderQuote, type PreparedManualOrderQuote, prepareManualOrderQuote } from "./quote";
 import { getOrderEditReadiness, orderEditLockMessage } from "./readiness";
 import { type SQLiteBatchItem, updateCustomerStatsService } from "./shared";
 
@@ -79,7 +81,15 @@ function normalizeAmendmentRequest(
         customerName: data.customerName.trim(),
         customerPhone: data.customerPhone.trim(),
         customerEmail: data.customerEmail?.trim().toLowerCase() ?? null,
+        shippingCountryCode: data.shippingCountryCode?.trim().toUpperCase() || null,
         shippingAddress: data.shippingAddress?.trim() || null,
+        shippingAddressLine2: data.shippingAddressLine2?.trim() || null,
+        shippingDependentLocality: data.shippingDependentLocality?.trim() || null,
+        shippingLocality: data.shippingLocality?.trim() || null,
+        shippingAdminArea: data.shippingAdminArea?.trim() || null,
+        shippingPostalCode: data.shippingPostalCode?.trim() || null,
+        shippingCompany: data.shippingCompany?.trim() || null,
+        skipAddressValidation: data.skipAddressValidation === true,
         city: data.city ?? null,
         zone: data.zone ?? null,
         area: data.area ?? null,
@@ -173,14 +183,21 @@ function amendmentDeliveryMethodKind(order: {
     return order.requiresShipping ? "delivery" : null;
 }
 
+/**
+ * The amended order's address snapshot, checked by its country's rules
+ * (staff may skip them; it stays marked); none when nothing ships.
+ */
 function requireAmendmentAddress(
     data: PreviewManualOrderAmendmentInput,
-    prepared: { requiresShipping: boolean },
-): string | null {
+    prepared: Pick<PreparedManualOrderQuote, "requiresShipping" | "address" | "locationNames">,
+): ResolvedAddress | null {
     if (!prepared.requiresShipping) return null;
-    const address = data.shippingAddress?.trim();
-    if (!address) throw new ValidationError("Enter the delivery address.");
-    return address;
+    if (!data.shippingAddress?.trim()) throw new ValidationError("Enter the delivery address.");
+    return resolveOrderAddress(
+        data,
+        prepared.address ? { ...prepared.address, ...prepared.locationNames } : null,
+        { skipValidation: data.skipAddressValidation === true },
+    );
 }
 
 export async function previewManualOrderAmendment(
@@ -306,7 +323,6 @@ export async function confirmManualOrderAmendment(
         { fixedDeliveryMethodKind: amendmentDeliveryMethodKind(order) },
     );
     const shippingAddress = requireAmendmentAddress(data, prepared);
-    const destination = prepared.address;
     const currentQuoteFingerprint = await buildManualOrderAmendmentQuoteFingerprint(prepared.taxQuote);
     if (currentQuoteFingerprint !== data.quoteFingerprint) {
         throw new ConflictError(
@@ -439,31 +455,28 @@ export async function confirmManualOrderAmendment(
             name: data.customerName,
             email: data.customerEmail,
             phone: data.customerPhone,
-            address: shippingAddress,
-            city: destination?.city ?? null,
-            zone: destination?.zone ?? null,
-            area: destination?.area ?? null,
-            cityName: prepared.locationNames.cityName,
-            zoneName: prepared.locationNames.zoneName,
-            areaName: prepared.locationNames.areaName,
             totalOrders: 1,
             lastOrderAt: sql`unixepoch()`,
             createdAt: sql`unixepoch()`,
             updatedAt: sql`unixepoch()`,
         }));
+        // The new record's address book starts with the order's address, as at checkout.
+        if (shippingAddress) {
+            statements.push(db.insert(customerAddresses).values({
+                id: `caddr_${nanoid()}`,
+                customerId: newCustomerId,
+                isDefault: true,
+                ...customerAddressColumns(shippingAddress),
+                createdAt: sql`unixepoch()`,
+                updatedAt: sql`unixepoch()`,
+            }));
+        }
         statements.push(db.insert(customerHistory).values({
             id: `hist_${nanoid()}`,
             customerId: newCustomerId,
             name: data.customerName,
             email: data.customerEmail,
             phone: data.customerPhone,
-            address: shippingAddress,
-            city: destination?.city ?? null,
-            zone: destination?.zone ?? null,
-            area: destination?.area ?? null,
-            cityName: prepared.locationNames.cityName,
-            zoneName: prepared.locationNames.zoneName,
-            areaName: prepared.locationNames.areaName,
             changeType: "created",
                 actor: "staff",
             createdAt: sql`unixepoch()`,
@@ -487,13 +500,11 @@ export async function confirmManualOrderAmendment(
             customerName: data.customerName,
             customerPhone: data.customerPhone,
             customerEmail: data.customerEmail,
-            shippingAddress,
-            city: destination?.city ?? null,
-            zone: destination?.zone ?? null,
-            area: destination?.area ?? null,
-            cityName: prepared.locationNames.cityName,
-            zoneName: prepared.locationNames.zoneName,
-            areaName: prepared.locationNames.areaName,
+            // The recipient and phone stay the contact's unless they differed before.
+            ...orderShippingAddressColumns(
+                shippingAddress && { ...shippingAddress, name: order.shippingName, phone: order.shippingPhone },
+                { name: data.customerName, phone: data.customerPhone },
+            ),
             requiresShipping: prepared.requiresShipping,
             notes: data.notes,
             currencyCode: prepared.taxQuote.currencyCode,

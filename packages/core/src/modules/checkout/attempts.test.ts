@@ -217,9 +217,6 @@ function buildInput(overrides: Partial<CreateStorefrontOrderInput> = {}): Create
     city: "city_1",
     zone: "zone_1",
     area: null,
-    cityName: "Dhaka",
-    zoneName: "Mirpur",
-    areaName: null,
     notes: null,
     items: [{
       productId: "product_1",

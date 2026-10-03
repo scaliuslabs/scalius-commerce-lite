@@ -1,3 +1,5 @@
+import { countryDisplayName } from "@scalius/shared/address";
+import { formatOrderShippingAddress } from "../shipping-address";
 import type { InvoiceDocument, InvoiceOrderItemSnapshot } from "./snapshot";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { ServiceUnavailableError } from "../../../errors";
@@ -59,10 +61,9 @@ function itemProperties(
 export function renderPrintableInvoice(document: InvoiceDocument): string {
   const { order, businessInfo } = document;
   const decimals = order.currencyDecimalPlaces ?? 2;
-  const address = [order.shippingAddress, order.areaName ?? order.area, order.zoneName ?? order.zone, order.cityName ?? order.city]
-    .filter(Boolean)
-    .map(html)
-    .join(", ");
+  // A Bangladesh address reads as it always has (line, area, thana, city);
+  // another country's adds its region, postal code and country name.
+  const address = html(formatOrderShippingAddress(order, { countryName: countryDisplayName }));
   // Pickup and service-only orders carry no address (Wave A).
   const shipToHeading = address ? "Ship to" : order.shippingMethodName ? "Pickup" : "Delivery";
   const shipToText = address || (order.shippingMethodName ? html(order.shippingMethodName) : "No delivery needed");

@@ -20,6 +20,9 @@ import {
 import { discountedPriceMinor, fromMinor } from "@scalius/shared/money";
 import type { QuoteManualOrderInput } from "../validation";
 import { ValidationError } from "@scalius/core/errors";
+import { usesDeliveryHierarchy } from "@scalius/shared/address";
+import { addressRulesFor } from "@scalius/shared/address-metadata";
+import { DELIVERY_HIERARCHY_COUNTRY, normalizeMarketCountry } from "@scalius/shared/markets";
 import {
     BUILT_IN_PAYMENT_PROVIDERS,
     CASH_ON_DELIVERY_AMOUNT_REASON,
@@ -193,7 +196,7 @@ interface PreparedManualOrderLine extends AdminOrderItemWithInventory<ManualOrde
     baseUnitPriceMinor: number;
 }
 
-interface PreparedManualOrderQuote {
+export interface PreparedManualOrderQuote {
     /** The order's currency at the price increment staff amounts are entered in. */
     currency: OrderCurrencySnapshot & { priceIncrementMinor: number };
     locationNames: {
@@ -201,7 +204,9 @@ interface PreparedManualOrderQuote {
         zoneName: string | null;
         areaName: string | null;
     };
-    /** The destination stored and taxed; null when nothing ships. */
+    /** The shipping country; null when nothing ships. */
+    shippingCountryCode: string | null;
+    /** Bangladesh's City/Thana/Area destination, stored and taxed; null when nothing ships or outside Bangladesh. */
     address: { city: string; zone: string; area: string | null } | null;
     trackedItems: PreparedManualOrderLine[];
     allocationLineIds: string[];
@@ -361,8 +366,17 @@ export async function prepareManualOrderQuote(
     // Keep location validation first so a stale/cross-parent destination fails
     // before catalog or tax reads do unnecessary work. A pickup or
     // service-only order sends no address and skips it.
-    const submittedCity = data.city?.trim();
-    const submittedZone = data.zone?.trim();
+    // Outside Bangladesh there are no City/Thana ids: only store-wide tax
+    // applies and the staff-entered charge is the delivery fee.
+    const submittedCountry = data.shippingCountryCode?.trim()
+        ? normalizeMarketCountry(data.shippingCountryCode)
+        : DELIVERY_HIERARCHY_COUNTRY;
+    if (!submittedCountry || !addressRulesFor(submittedCountry)) {
+        throw new ValidationError("We can't take addresses in that country.", { reason: "address_invalid", issues: [{ field: "countryCode", code: "unknown_country" }] });
+    }
+    const inDeliveryHierarchy = usesDeliveryHierarchy(submittedCountry);
+    const submittedCity = inDeliveryHierarchy ? data.city?.trim() : undefined;
+    const submittedZone = inDeliveryHierarchy ? data.zone?.trim() : undefined;
     const submittedAddress = submittedCity && submittedZone
         ? { city: submittedCity, zone: submittedZone, area: data.area?.trim() || null }
         : null;
@@ -401,13 +415,14 @@ export async function prepareManualOrderQuote(
 
     let address: PreparedManualOrderQuote["address"] = null;
     let locationNames: PreparedManualOrderQuote["locationNames"] = { cityName: null, zoneName: null, areaName: null };
-    if (plan.requiresShipping) {
+    if (plan.requiresShipping && inDeliveryHierarchy) {
         if (!submittedAddress || !submittedLocationNames) {
             throw new ValidationError("Choose the delivery city and thana, or a pickup method.");
         }
         address = submittedAddress;
         locationNames = submittedLocationNames;
     }
+    const shippingCountryCode = plan.requiresShipping ? submittedCountry : null;
 
     const lineProperties = resolveManualOrderLineProperties(
         resolvedItems.map((item, index) => ({
@@ -440,6 +455,7 @@ export async function prepareManualOrderQuote(
         // A method picked for an order with nothing physical is not used.
         deliveryMethod: deliveryMethod && plan.deliveryMethodKind ? deliveryMethod : null,
         requiresShipping: plan.requiresShipping,
+        shippingCountryCode,
         address,
         locationNames,
     };
@@ -473,6 +489,7 @@ export async function prepareManualOrderQuote(
     return {
         currency,
         locationNames,
+        shippingCountryCode,
         address,
         trackedItems,
         allocationLineIds,

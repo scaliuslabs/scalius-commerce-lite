@@ -894,6 +894,8 @@ describe("delivery provider active-state authority", () => {
         totalAmountMinor: 18_000,
         paidAmountMinor: 3_000,
         balanceDueMinor: 15_000,
+        shippingAddress: "House 1, Road 2",
+        shippingCountryCode: "BD",
         city: "city_1",
         zone: "zone_1",
         area: null,
@@ -928,6 +930,35 @@ describe("delivery provider active-state authority", () => {
       }),
       expect.objectContaining({ settings: expect.anything() }),
     );
+  });
+
+  it("never books a courier outside its countries (MARKETS-DESIGN step 3a)", async () => {
+    const provider = await readyPathaoProvider();
+    const providerCreateShipment = vi.spyOn(pathaoCourier, "createShipment");
+    const { db, inserts } = createSequentialSelectDb([
+      [{
+        id: "order_1",
+        currencyDecimalPlaces: 2,
+        totalAmountMinor: 10_000,
+        paidAmountMinor: 0,
+        balanceDueMinor: 10_000,
+        customerName: "Tim",
+        customerPhone: "+14155552671",
+        shippingAddress: "1 Infinite Loop",
+        shippingCountryCode: "US",
+        shippingLocality: "Cupertino",
+        city: null,
+        zone: null,
+        area: null,
+      }],
+      [provider],
+    ]);
+
+    await expect(createShipment(db as never, "order_1", "provider_pathao", undefined, TEST_FINGERPRINT_KEY))
+      .resolves.toEqual({ success: false, message: "Pathao doesn't deliver to US. Ship this order another way." });
+    expect(providerCreateShipment).not.toHaveBeenCalled();
+    expect(inserts).toHaveLength(0);
+    expect(pathaoCourier.countries).toEqual(["BD"]);
   });
 
   it("does not create a shipment through an inactive provider", async () => {
@@ -1034,6 +1065,8 @@ describe("delivery provider active-state authority", () => {
         totalAmountMinor: 10_000,
         paidAmountMinor: 0,
         balanceDueMinor: 10_000,
+        shippingAddress: "House 1, Road 2",
+        shippingCountryCode: "BD",
         city: "city_1",
         zone: "zone_1",
         area: null,
@@ -1066,6 +1099,8 @@ describe("delivery provider active-state authority", () => {
         totalAmountMinor: 10_000,
         paidAmountMinor: 0,
         balanceDueMinor: 10_000,
+        shippingAddress: "House 1, Road 2",
+        shippingCountryCode: "BD",
         city: "city_1",
         zone: "zone_1",
         area: null,

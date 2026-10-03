@@ -16,6 +16,7 @@ import { alias } from "drizzle-orm/sqlite-core";
 import type { BatchItem } from "drizzle-orm/batch";
 import { nanoid } from "nanoid";
 import { deps } from "../../cache-deps";
+import { usesDeliveryHierarchy } from "@scalius/shared/address";
 import {
     buildBatchGuard,
     isBatchGuardError,
@@ -131,6 +132,33 @@ export interface ResolvedDeliveryRate {
  * reporting a failure.
  */
 export const DELIVERY_RATE_UNAVAILABLE_REASON = "delivery_rate_unavailable";
+
+/** `details.reason` when no delivery rate can serve the address's country. */
+export const DELIVERY_COUNTRY_UNAVAILABLE_REASON = "delivery_country_unavailable";
+
+/**
+ * Whether the store's delivery rates can price an address in this country
+ * (MARKETS-DESIGN step 3a). Delivery zones are made of Bangladesh's
+ * City/Thana/Area locations, and "Everywhere else" means everywhere else in
+ * Bangladesh, so only a Bangladesh address gets a delivery rate: a foreign
+ * address gets none rather than a wrong fee (pickup stays open to it).
+ *
+ * The seam for step 3b: shipping zones by country replace this check with
+ * the zone lookup of the address's country, and the storefront's twin
+ * (`deliveryReachesCountry` in apps/storefront/src/lib/checkout) follows.
+ */
+export function deliveryRatesServeCountry(countryCode: string | null | undefined): boolean {
+    return usesDeliveryHierarchy(countryCode);
+}
+
+/** Refuses a delivery rate for an address in a country no delivery rate serves. */
+export function assertDeliveryRatesServeCountry(countryCode: string | null | undefined): void {
+    if (deliveryRatesServeCountry(countryCode)) return;
+    throw new ValidationError(
+        "We can't deliver to this country yet. Choose pickup if it is offered, or a delivery address in a country we deliver to.",
+        { reason: DELIVERY_COUNTRY_UNAVAILABLE_REASON, countryCode: countryCode ?? null },
+    );
+}
 
 /**
  * Verifies the chosen rate is live, active, well formed and offered for the

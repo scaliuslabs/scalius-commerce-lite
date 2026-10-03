@@ -32,9 +32,12 @@ import {
 import { nanoid } from "nanoid";
 
 import { generateOrderId } from "@scalius/shared/order-utils";
+import { DELIVERY_HIERARCHY_COUNTRY, normalizeMarketCountry } from "@scalius/shared/markets";
+import { resolveAddressWithLocation, type ResolvedAddress } from "../customers";
 import { checkoutDocument } from "../settings";
 import { ValidationError } from "@scalius/core/errors";
 import {
+  orderShippingAddressColumns,
   type CreateStorefrontOrderCustomerIdentity,
   type CreateStorefrontOrderIdentity,
   type CreateStorefrontOrderInput,
@@ -60,6 +63,7 @@ import {
   type ActiveDeliveryLocationRow,
   type DeliveryRateKind,
   type DeliveryRateRow,
+  assertDeliveryRatesServeCountry,
   resolveActiveDeliveryLocationNamesFromRows,
   resolveAddressZoneId,
   resolveDeliveryRate,
@@ -68,6 +72,8 @@ import {
 } from "../delivery";
 
 export interface StorefrontDeliveryPreflightInput {
+    /** The address's country (absent: Bangladesh); a `delivery` rate needs one its rates serve. */
+    shippingCountryCode?: string | null;
     /** Needed only for a `delivery` rate; pickup and no-method carts omit it. */
     city?: string | null;
     zone?: string | null;
@@ -89,8 +95,8 @@ export interface StorefrontDeliveryPreflightResult {
     cityName: string | null;
     zoneName: string | null;
     areaName: string | null;
-    /** The address the order ships to; set only for a `delivery` rate. */
-    address: { city: string; zone: string; area: string | null } | null;
+    /** The address the order ships to; set only for a `delivery` rate (Bangladesh's delivery hierarchy). */
+    address: { countryCode: string; city: string; zone: string; area: string | null } | null;
     /** Where and when to collect; set only for a `pickup` rate. */
     pickup: { address: string | null; hours: string | null } | null;
     /** Every line's fulfilment type and the order-level consequences. */
@@ -99,6 +105,8 @@ export interface StorefrontDeliveryPreflightResult {
 
 export interface StorefrontCheckoutPolicySnapshot {
     partialPaymentEnabled: boolean;
+    /** The countries the active markets sell to (the authority read); a shipped order must go to one. */
+    shippingCountries?: readonly string[];
     /** Customer accounts contact fields from the checkout authority read. */
     contactFields?: CheckoutContactFieldSettings;
     authorityRevision?: number;
@@ -204,6 +212,9 @@ export function resolveStorefrontDeliveryPreflightFromRows(
         });
     }
 
+    // Only an address in a country the delivery rates serve gets a rate (step 3b: zones by country).
+    const countryCode = normalizeMarketCountry(data.shippingCountryCode) ?? DELIVERY_HIERARCHY_COUNTRY;
+    assertDeliveryRatesServeCountry(countryCode);
     const city = data.city?.trim();
     const zone = data.zone?.trim();
     if (!city || !zone) {
@@ -212,7 +223,7 @@ export function resolveStorefrontDeliveryPreflightFromRows(
             { reason: DELIVERY_ADDRESS_REQUIRED_REASON },
         );
     }
-    const address = { city, zone, area: data.area?.trim() || null };
+    const address = { countryCode, city, zone, area: data.area?.trim() || null };
     const locationNames = resolveActiveDeliveryLocationNamesFromRows(address, [...locationRows]);
     const rate = resolveDeliveryRate({
         rate: rateRow,
@@ -298,6 +309,60 @@ export function assertStorefrontLineFulfilment(
         throw new ValidationError("Some items in your cart need attention.", { itemIssues: issues });
     }
     return types;
+}
+
+/** `details.reason` when no active market sells to the shipping country. */
+export const SHIPPING_COUNTRY_UNAVAILABLE_REASON = "shipping_country_unavailable";
+
+/**
+ * The shipped order's address snapshot (MARKETS-DESIGN D7): Bangladesh's
+ * City/Thana/Area from the delivery preflight (which read and checked the
+ * locations) fills the locality and thana, and the country's rules check the
+ * rest. A buyer can never skip validation. `shippingCountries` (the authority
+ * read) are the countries the active markets sell to; another is refused.
+ */
+export function resolveStorefrontShippingAddress(
+    data: Pick<CreateStorefrontOrderInput,
+        "shippingCountryCode" | "shippingAddress" | "shippingAddressLine2" | "shippingDependentLocality"
+        | "shippingLocality" | "shippingAdminArea" | "shippingPostalCode">,
+    delivery: Pick<StorefrontDeliveryPreflightResult, "address" | "cityName" | "zoneName" | "areaName">,
+    shippingCountries?: readonly string[],
+): ResolvedAddress {
+    const destination = delivery.address;
+    if (!destination) {
+        throw new ValidationError(
+            "Enter the delivery address, city and thana, or choose pickup.",
+            { reason: DELIVERY_ADDRESS_REQUIRED_REASON },
+        );
+    }
+    if (shippingCountries && !shippingCountries.includes(destination.countryCode)) {
+        throw new ValidationError("We don't ship to this country.", {
+            reason: SHIPPING_COUNTRY_UNAVAILABLE_REASON,
+            countryCode: destination.countryCode,
+        });
+    }
+    return resolveAddressWithLocation(
+        {
+            countryCode: destination.countryCode,
+            line1: data.shippingAddress,
+            line2: data.shippingAddressLine2,
+            dependentLocality: data.shippingDependentLocality,
+            locality: data.shippingLocality,
+            adminArea: data.shippingAdminArea,
+            postalCode: data.shippingPostalCode,
+        },
+        {
+            location: {
+                city: destination.city,
+                zone: destination.zone,
+                area: destination.area,
+                cityName: delivery.cityName,
+                zoneName: delivery.zoneName,
+                areaName: delivery.areaName,
+            },
+            problems: [],
+        },
+    );
 }
 
 /** Refusal when a gift card leaves less than the gateway's minimum charge (§4.3). */
@@ -502,6 +567,7 @@ export async function createStorefrontOrder(
     const deliveryPreflight = prevalidatedDelivery ?? await validateStorefrontDeliveryPreflight(
         storefrontDb,
         {
+            shippingCountryCode: data.shippingCountryCode,
             city: data.city,
             zone: data.zone,
             area: data.area,
@@ -520,14 +586,17 @@ export async function createStorefrontOrder(
     };
     // With gift cards the method is settled once the amount due is known.
     if (giftCardHandles.length === 0) assertCashOnDeliveryFits(data.paymentMethod);
-    const shippingAddress = requiresShipping ? data.shippingAddress?.trim() ?? "" : null;
-    if (requiresShipping && !shippingAddress) {
+    if (requiresShipping && !data.shippingAddress?.trim()) {
         throw new ValidationError(
             "Enter the delivery address, city and thana, or choose pickup.",
             { reason: DELIVERY_ADDRESS_REQUIRED_REASON },
         );
     }
-    const shippingDestination = requiresShipping ? deliveryPreflight.address : null;
+    // The shipping-address snapshot, validated by its country's rules; the
+    // country must be one an active market sells to (MARKETS-DESIGN step 3a).
+    const shippingAddress = requiresShipping
+        ? resolveStorefrontShippingAddress(data, deliveryPreflight, checkoutPolicySnapshot?.shippingCountries)
+        : null;
 
     if (
         checkoutPolicySnapshot
@@ -589,7 +658,7 @@ export async function createStorefrontOrder(
         taxAuthority: taxAuthoritySnapshot,
         apps: appOptions.apps,
         channel: appOptions.channel ?? "online_store",
-        location: { city: data.city, zone: data.zone, area: data.area },
+        location: { countryCode: deliveryPreflight.address?.countryCode ?? null, city: data.city, zone: data.zone, area: data.area },
     });
     assertNoCheckoutRuleErrors(pricing.ruleErrors);
     assertDiscountCodesApplied(pricing.typedCodes);
@@ -670,13 +739,7 @@ export async function createStorefrontOrder(
             customerName: data.customerName,
             customerPhone: data.customerPhone,
             ...contact,
-            shippingAddress,
-            city: shippingDestination?.city ?? null,
-            zone: shippingDestination?.zone ?? null,
-            area: shippingDestination?.area ?? null,
-            cityName: deliveryPreflight.cityName,
-            zoneName: deliveryPreflight.zoneName,
-            areaName: deliveryPreflight.areaName,
+            ...orderShippingAddressColumns(shippingAddress, { name: data.customerName, phone: data.customerPhone }),
             notes: data.notes,
             shippingMethodId: shippingMethod?.id ?? null,
             shippingMethodName: shippingMethod?.name ?? null,

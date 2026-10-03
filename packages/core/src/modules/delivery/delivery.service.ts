@@ -4,6 +4,8 @@
 // here branches on which courier it is.
 import { deliveryProviders, deliveryShipments, orders, orderItems, products, ShipmentStatus, type Order } from "@scalius/database/schema";
 import { fromMinor } from "@scalius/shared/money";
+import { DELIVERY_HIERARCHY_COUNTRY } from "@scalius/shared/markets";
+import { providerServesCountry } from "@scalius/shared/plugins/providers";
 import {
   providerErrorOf,
   type CourierFind,
@@ -91,21 +93,34 @@ function mergeShipmentMetadata(
   return JSON.stringify({ ...parsed, ...next });
 }
 
-/** Where the parcel goes, from the saved order: the store's location ids and names. */
+/**
+ * Where the parcel goes, from the saved order's address snapshot: the
+ * recipient (the contact unless another was given), the street lines, the
+ * store's location ids and names (Bangladesh), the postal code and the
+ * country.
+ */
 function shipmentRecipient(order: Order): CourierShipmentInput["recipient"] {
   return {
-    name: order.customerName,
-    phone: order.customerPhone,
-    address: order.shippingAddress ?? "",
+    name: order.shippingName ?? order.customerName,
+    phone: order.shippingPhone ?? order.customerPhone,
+    address: [order.shippingAddress, order.shippingAddressLine2].filter(Boolean).join(", "),
     cityId: order.city ?? null,
     zoneId: order.zone ?? null,
     areaId: order.area ?? null,
-    cityName: order.cityName ?? null,
+    cityName: order.cityName ?? order.shippingLocality ?? null,
     zoneName: order.zoneName ?? null,
     areaName: order.areaName ?? null,
-    postalCode: null,
-    country: null,
+    postalCode: order.shippingPostalCode ?? null,
+    // Written before 0113 without a country, an address is Bangladesh's.
+    country: order.shippingCountryCode ?? (order.shippingAddress?.trim() ? DELIVERY_HIERARCHY_COUNTRY : null),
   };
+}
+
+/** Why a courier is not offered for an order shipping to `country` (merchant-facing). */
+export function courierCountryMessage(label: string, country: string | null): string {
+  return country
+    ? `${label} doesn't deliver to ${country}. Ship this order another way.`
+    : `${label} needs a delivery address.`;
 }
 
 /**
@@ -566,6 +581,10 @@ export async function createShipment(
   const { provider, courier, settings } = providerReadiness;
 
   const recipient = shipmentRecipient(order);
+  // A courier never books outside its countries (the order page hides it for such an order).
+  if (!providerServesCountry(courier.countries, recipient.country)) {
+    return { success: false, message: courierCountryMessage(courier.label, recipient.country) };
+  }
   const preflightFailure = await courier.preflight?.(recipient, db);
   if (preflightFailure) return { success: false, message: preflightFailure };
 

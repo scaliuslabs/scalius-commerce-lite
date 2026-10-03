@@ -7,6 +7,9 @@
 // app through the request's AppProviders. A manual tool on the order page:
 // it advises, it never blocks.
 
+import { normalizeMarketCountry } from "@scalius/shared/markets";
+import { parsePhoneNumberFromString } from "@scalius/shared/customer-utils";
+import { providerServesCountry } from "@scalius/shared/plugins/providers";
 import { settings } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import { eq, and, desc, sql } from "drizzle-orm";
@@ -316,6 +319,27 @@ export async function testFraudProvider(
 }
 
 /**
+ * What a lookup gives: the provider's check, or, when the buyer is in a
+ * country the provider does not know (MARKETS-DESIGN step 3a), no call at all
+ * and the reason. A Bangladesh courier-history service is never asked about
+ * a buyer elsewhere.
+ */
+export type FraudLookupResult =
+  | { status: "checked"; check: FraudCheck }
+  | { status: "country_unsupported"; provider: string; countryCode: string | null };
+
+/** The buyer's country: the order's shipping country, else the phone's. */
+function lookupCountry(phone: string, countryCode: string | null | undefined): string | null {
+  const given = normalizeMarketCountry(countryCode);
+  if (given) return given;
+  try {
+    return parsePhoneNumberFromString(phone)?.country ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Look a phone up with one saved checker. A provider's own merchant-facing
  * error (the port's ProviderError) is kept; anything else is masked.
  */
@@ -323,10 +347,15 @@ export async function fraudLookup(
   row: FraudCheckerProvider,
   phone: string,
   apps?: AppProviders,
-): Promise<FraudCheck> {
+  options: { countryCode?: string | null } = {},
+): Promise<FraudLookupResult> {
   const provider = await fraudProviderFor(row, apps);
+  const country = lookupCountry(phone, options.countryCode);
+  if (!providerServesCountry(provider.countries, country)) {
+    return { status: "country_unsupported", provider: provider.label, countryCode: country };
+  }
   try {
-    return await provider.check({ phone }, {});
+    return { status: "checked", check: await provider.check({ phone }, {}) };
   } catch (error: unknown) {
     const failure = providerErrorOf(error);
     throw new ServiceUnavailableError(failure ? failure.message : "Fraud check lookup failed");
@@ -334,14 +363,16 @@ export async function fraudLookup(
 }
 
 /**
- * Lookup fraud data using the first active provider
+ * Lookup fraud data using the first active provider. `countryCode` is the
+ * order's shipping country (else the phone's country is used).
  */
 export async function fraudLookupWithActiveProvider(
   db: Database,
   phone: string,
   encryptionKey?: string,
   apps?: AppProviders,
-): Promise<FraudCheck> {
+  options: { countryCode?: string | null } = {},
+): Promise<FraudLookupResult> {
   const providers = await getFraudProviders(db, encryptionKey);
   const activeProvider = providers.find((p) => p.isActive);
 
@@ -351,5 +382,5 @@ export async function fraudLookupWithActiveProvider(
     );
   }
 
-  return fraudLookup(activeProvider, phone, apps);
+  return fraudLookup(activeProvider, phone, apps, options);
 }

@@ -1,3 +1,4 @@
+import { usesDeliveryHierarchy } from "@scalius/shared/address";
 import { COMMERCE_UTC_OFFSET_SECONDS } from "@scalius/shared/commerce-time";
 import { formatPhoneForProvider } from "@scalius/shared/customer-utils";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
@@ -218,6 +219,13 @@ export interface OrderCsvRow {
   customerEmail: string | null;
   /** Null when nothing ships (pickup, service-only or digital orders). */
   shippingAddress: string | null;
+  /** The rest of the address snapshot (MARKETS-DESIGN D7). */
+  shippingAddressLine2?: string | null;
+  shippingCountryCode?: string | null;
+  shippingDependentLocality?: string | null;
+  shippingLocality?: string | null;
+  shippingAdminArea?: string | null;
+  shippingPostalCode?: string | null;
   /** False for pickup and orders with nothing physical; absent on older rows (ships). */
   requiresShipping?: boolean;
   /** The one delivery method's kind; null when the order needs none. */
@@ -264,16 +272,20 @@ function deliveryMethodLabel(order: OrderCsvRow): string {
 function orderColumns(order: OrderCsvRow): unknown[] {
   // Pickup and no-ship orders have no address; never print a stale one.
   const ships = order.requiresShipping !== false;
+  // Bangladesh fills Area, Thana and City from its delivery locations; another
+  // country its second line, dependent locality and locality (the region,
+  // postal code and country are the last three columns).
+  const bangladesh = usesDeliveryHierarchy(order.shippingCountryCode);
   return [
     formatOrderNumber(order.orderNumber, order.id),
     formatCommerceDateTime(order.createdAt),
     order.customerName,
     formatPhoneForProvider(order.customerPhone),
     order.customerEmail,
-    ships ? order.shippingAddress : "",
-    ships ? order.areaName : "",
-    ships ? order.zoneName : "",
-    ships ? order.cityName : "",
+    ships ? [order.shippingAddress, order.shippingAddressLine2].filter(Boolean).join(", ") : "",
+    ships ? (bangladesh ? order.areaName : order.shippingDependentLocality) : "",
+    ships && bangladesh ? order.zoneName : "",
+    ships ? (bangladesh ? order.cityName : order.shippingLocality) : "",
     deliveryMethodLabel(order),
     label(ORDER_STATUS_LABELS, order.status),
     paymentLabel(order),
@@ -327,6 +339,7 @@ export function createOrdersCsvArtifactBuilder(
     return createCsvArtifactBuilder<OrderCsvRow>([
       ...ORDER_HEADERS, "Product", "Variant", "Customisation", "Quantity", "Unit price", "Line total",
       "Delivery charge", "Discount", "Order total", "Paid", "Refunded", "Cash to collect",
+      ...ADDRESS_TAIL_HEADERS,
     ], (order) => (order.lines.length > 0 ? order.lines : [null]).map((line, index) => [
       ...orderColumns(order),
       line?.productName ?? "",
@@ -342,11 +355,13 @@ export function createOrdersCsvArtifactBuilder(
       index === 0 ? amountReceived(order) : "",
       index === 0 ? order.refundedAmount : "",
       index === 0 ? cashToCollect(order) : "",
+      ...addressTail(order),
     ]), maxBytes);
   }
   return createCsvArtifactBuilder<OrderCsvRow>([
     ...ORDER_HEADERS, "Items", "Item count", "Subtotal", "Delivery charge", "Discount",
     "Total", "Paid", "Refunded", "Cash to collect", "Cash on delivery", "Note",
+    ...ADDRESS_TAIL_HEADERS,
   ], (order) => [[
     ...orderColumns(order),
     order.lines.map(describeLine).join("; "),
@@ -362,7 +377,16 @@ export function createOrdersCsvArtifactBuilder(
       ? label(COD_STATUS_LABELS, order.codStatus)
       : "",
     order.notes,
+    ...addressTail(order),
   ]], maxBytes);
+}
+
+/** Region, postal code and country: appended last, so the earlier columns keep their places. */
+const ADDRESS_TAIL_HEADERS = ["Region", "Postal code", "Country"];
+
+function addressTail(order: OrderCsvRow): unknown[] {
+  if (order.requiresShipping === false || !order.shippingAddress) return ["", "", ""];
+  return [order.shippingAdminArea ?? "", order.shippingPostalCode ?? "", order.shippingCountryCode ?? "BD"];
 }
 
 function cashToCollect(order: OrderCsvRow): number | string {

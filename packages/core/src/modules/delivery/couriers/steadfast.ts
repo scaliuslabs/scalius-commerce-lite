@@ -48,6 +48,8 @@ function headers(credentials: SteadfastCredentials): HeadersInit {
 export const steadfastCourier: Courier<SteadfastSettings> = {
   id: "steadfast",
   label: "Steadfast",
+  // A Bangladesh courier: its booking API takes Bangladesh's City/Thana/Area.
+  countries: ["BD"],
 
   setup: (provider, encryptionKey) => readRowCourierSetup(provider, encryptionKey, (credentials, config) => ({
     credentials: credentials as SteadfastCredentials,

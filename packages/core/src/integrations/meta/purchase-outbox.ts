@@ -25,6 +25,9 @@ type PurchaseOrder = Pick<
     | "customerEmail"
     | "city"
     | "cityName"
+    | "shippingCountryCode"
+    | "shippingLocality"
+    | "shippingPostalCode"
     | "currencyCode"
     | "currencyDecimalPlaces"
     | "totalAmountMinor"
@@ -108,9 +111,11 @@ export function buildMetaPurchaseEvent(options: BuildMetaPurchaseEventOptions) {
     const { order, items } = options;
     const toAmount = (minor: number) => fromMinor(minor, order.currencyDecimalPlaces);
     const contentIds = items.map((item) => item.variantId || item.productId);
+    // The buyer's country is the order's shipping country (Bangladesh when
+    // nothing ships, as before country-aware addresses).
     const userData: Record<string, unknown> = {
         ph: order.customerPhone,
-        country: "bd",
+        country: (order.shippingCountryCode ?? "BD").toLowerCase(),
     };
 
     if (order.customerEmail) userData.em = order.customerEmail;
@@ -120,8 +125,9 @@ export function buildMetaPurchaseEvent(options: BuildMetaPurchaseEventOptions) {
     if (firstName) userData.fn = firstName;
     if (lastName) userData.ln = lastName;
 
-    const city = order.cityName || order.city;
+    const city = order.cityName || order.shippingLocality || order.city;
     if (city) userData.ct = city;
+    if (order.shippingPostalCode) userData.zp = order.shippingPostalCode;
 
     return {
         event_name: "Purchase",

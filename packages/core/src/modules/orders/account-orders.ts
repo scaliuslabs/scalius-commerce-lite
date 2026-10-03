@@ -5,6 +5,7 @@
 
 import {
     codTracking,
+    customerAddresses,
     customers,
     deliveryProviders,
     deliveryShipments,
@@ -25,7 +26,9 @@ import { fromMinor } from "@scalius/shared/money";
 import { NotFoundError, ValidationError } from "@scalius/core/errors";
 import { getCurrentPublicMediaUrl } from "../../integrations/storage";
 import { publishedMediaObjectKey } from "../media-references";
-import { paidSpendAmount, paidSpendProjection } from "../customers";
+import { customerAddressFromRow, paidSpendAmount, paidSpendProjection } from "../customers";
+import { orderShippingAddressSelection } from "./shipping-address";
+import type { OrderShippingAddressFields } from "./types";
 import { listOrderRefundAttempts, summarizeActiveRefundOperation } from "../payments";
 import { CUSTOMER_REQUEST_ACTION_COPY, getCustomerRequestIntro, getCustomerRequestPolicy } from "../settings";
 import { orderMoneyAmounts, orderMoneySelection } from "./money";
@@ -450,26 +453,21 @@ export async function getCustomerOrders(
     customerId: string,
     options: CustomerOrdersPageOptions = {},
 ) {
-    // Fetch full customer profile from DB
+    // The customer profile and its default address (one statement).
     const dbCustomer = await db
-        .select()
+        .select({ customer: customers, address: customerAddresses })
         .from(customers)
+        .leftJoin(customerAddresses, and(eq(customerAddresses.customerId, customers.id), eq(customerAddresses.isDefault, true)))
         .where(eq(customers.id, customerId))
         .get();
 
     const customerProfile = dbCustomer
         ? {
-            id: dbCustomer.id,
-            name: dbCustomer.name || "Customer",
-            email: dbCustomer.email || "",
-            phone: dbCustomer.phone || "",
-            address: dbCustomer.address,
-            city: dbCustomer.city,
-            zone: dbCustomer.zone,
-            area: dbCustomer.area,
-            cityName: dbCustomer.cityName,
-            zoneName: dbCustomer.zoneName,
-            areaName: dbCustomer.areaName,
+            id: dbCustomer.customer.id,
+            name: dbCustomer.customer.name || "Customer",
+            email: dbCustomer.customer.email || "",
+            phone: dbCustomer.customer.phone || "",
+            defaultAddress: dbCustomer.address ? customerAddressFromRow(dbCustomer.address) : null,
         }
         : null;
 
@@ -519,10 +517,7 @@ export async function getCustomerOrders(
             paymentMethod: orders.paymentMethod,
             fulfillmentStatus: orders.fulfillmentStatus,
             expectedDelivery: orders.expectedDelivery,
-            shippingAddress: orders.shippingAddress,
-            cityName: orders.cityName,
-            zoneName: orders.zoneName,
-            areaName: orders.areaName,
+            ...orderShippingAddressSelection(orders),
             requiresShipping: orders.requiresShipping,
             shippingMethodKind: orders.shippingMethodKind,
             notes: orders.notes,
@@ -562,15 +557,11 @@ export async function getCustomerOrders(
             paymentMethod: string;
             fulfillmentStatus: string;
             expectedDelivery: string | null;
-            shippingAddress: string | null;
-            cityName: string | null;
-            zoneName: string | null;
-            areaName: string | null;
             requiresShipping: boolean;
             shippingMethodKind: "delivery" | "pickup" | null;
             notes: string | null;
             createdAt: number | null;
-        }>,
+        } & OrderShippingAddressFields>,
     ];
 
     const customerOrders = customerOrdersWithLookahead.slice(0, orderListLimit);
@@ -759,13 +750,7 @@ export async function getCustomerOwnedOrderForDetail(
             expectedDelivery: orders.expectedDelivery,
             customerName: orders.customerName,
             customerPhone: orders.customerPhone,
-            shippingAddress: orders.shippingAddress,
-            city: orders.city,
-            zone: orders.zone,
-            area: orders.area,
-            cityName: orders.cityName,
-            zoneName: orders.zoneName,
-            areaName: orders.areaName,
+            ...orderShippingAddressSelection(orders),
             requiresShipping: orders.requiresShipping,
             shippingMethodKind: orders.shippingMethodKind,
             pickupAddress: orders.pickupAddress,
@@ -1191,6 +1176,15 @@ export async function getCustomerOrderDetailForOrder(
             customerName: order.customerName,
             customerPhone: order.customerPhone,
             shippingAddress: order.shippingAddress,
+            shippingAddressLine2: order.shippingAddressLine2,
+            shippingCountryCode: order.shippingCountryCode,
+            shippingDependentLocality: order.shippingDependentLocality,
+            shippingLocality: order.shippingLocality,
+            shippingAdminArea: order.shippingAdminArea,
+            shippingPostalCode: order.shippingPostalCode,
+            shippingCompany: order.shippingCompany,
+            shippingName: order.shippingName,
+            shippingPhone: order.shippingPhone,
             city: order.city,
             zone: order.zone,
             area: order.area,

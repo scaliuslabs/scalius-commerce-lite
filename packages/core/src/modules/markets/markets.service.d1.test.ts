@@ -156,8 +156,8 @@ describe("the presence matrix", () => {
 
     it("places an order in the shipping country's active market, else the backup market (the pure rule and its SQL twin agree)", async () => {
         const both = async (country?: string) => {
-            const [row] = await db.select({ id: orderMarketIdSql(country) }).from(sql`(SELECT 1 AS one) AS probe`);
-            const pure = orderMarketId(await readMarketMatrix(db), country);
+            const [row] = await db.select({ id: orderMarketIdSql(country ?? "BD") }).from(sql`(SELECT 1 AS one) AS probe`);
+            const pure = orderMarketId(await readMarketMatrix(db), country ?? "BD");
             expect(row!.id, country ?? "BD").toBe(pure);
             return pure;
         };
@@ -173,5 +173,9 @@ describe("the presence matrix", () => {
         expect(await both("LK")).toBe("mkt_backup");
         // Not an ISO code: the backup market, and nothing reaches the SQL.
         expect(await both("bd'--")).toBe("mkt_backup");
+        // An order that ships nothing has no shipping country: the backup market.
+        const [none] = await db.select({ id: orderMarketIdSql(null) }).from(sql`(SELECT 1 AS one) AS probe`);
+        expect(none!.id).toBe("mkt_backup");
+        expect(orderMarketId(await readMarketMatrix(db), null)).toBe("mkt_backup");
     });
 });

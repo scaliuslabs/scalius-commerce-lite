@@ -27,6 +27,7 @@
 // 9. Tax is calculated after every discount: the tax quote takes the
 //    platform and app allocations together.
 
+import { DELIVERY_HIERARCHY_COUNTRY } from "@scalius/shared/markets";
 import type { Database } from "@scalius/database/client";
 import { categoryClosure, collections, customers, orders, productVariants, products } from "@scalius/database/schema";
 import {
@@ -202,8 +203,11 @@ export function buildAppFunctionCart(input: {
   channel: FunctionCart["channel"];
   lines: readonly AppCartLineSource[];
   facts: AppFunctionCartFacts;
-  /** City and thana names; null when nothing ships (pickup, digital, service). */
-  destination: { city: string | null; zone: string | null } | null;
+  /**
+   * The shipping country (absent: Bangladesh) and its city and (in Bangladesh)
+   * thana names; null when nothing ships (pickup, digital, service).
+   */
+  destination: { country?: string | null; city: string | null; zone: string | null } | null;
   discountCodes: readonly string[];
 }): FunctionCart {
   const lines = input.lines.map((line) => {
@@ -236,10 +240,11 @@ export function buildAppFunctionCart(input: {
     lines,
     subtotalMinor: lines.reduce((total, line) => total + line.lineTotalMinor, 0),
     customer: input.facts.customer,
-    // The delivery hierarchy is Bangladesh's city/thana; regions only, never an address.
-    destination: input.destination && (input.destination.city || input.destination.zone)
+    // Regions only, never an address: the country, its city and, in
+    // Bangladesh's delivery hierarchy, the thana.
+    destination: input.destination && (input.destination.city || input.destination.zone || input.destination.country)
       ? {
-        country: "BD",
+        country: input.destination.country ?? DELIVERY_HIERARCHY_COUNTRY,
         city: input.destination.city?.slice(0, 120) ?? null,
         zone: input.destination.zone?.slice(0, 120) ?? null,
       }

@@ -9,7 +9,7 @@
 // block anyone from signing in.
 
 import { nanoid } from "nanoid";
-import { customers, customerSessions, deliveryLocations, orders } from "@scalius/database/schema";
+import { customerAddresses, customers, customerSessions, orders } from "@scalius/database/schema";
 import { and, desc, eq, gt, inArray, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
 import { safeBatch, type Database } from "@scalius/database/client";
 import type { BatchItem } from "drizzle-orm/batch";
@@ -46,6 +46,8 @@ import type { EmailRuntimeContext } from "../../integrations/email";
 import type { AppProviders } from "../../integrations/provider-port";
 import { assertCustomerChannelReady, phoneCodeChannel } from "./customer-code-channels";
 import { customerAuthDocument, customerCountriesDocument, getAllowedCountries } from "../settings";
+import { formatAddressInline, usesDeliveryHierarchy } from "@scalius/shared/address";
+import { customerAddressFromRow, type CustomerAddress } from "./addresses";
 import { selectSettingsDocuments } from "../../settings-store";
 
 // ─────────────────────────────────────────
@@ -73,13 +75,8 @@ export interface CustomerSession {
     name: string;
     phone?: string;
     customerId?: string;
-    address?: string | null;
-    city?: string | null;
-    zone?: string | null;
-    area?: string | null;
-    cityName?: string | null;
-    zoneName?: string | null;
-    areaName?: string | null;
+    /** The address book's default address (checkout prefills it), or null. */
+    defaultAddress: CustomerAddress | null;
     profileComplete: boolean;
     createdAt: number;
     expiresAt: number;
@@ -315,55 +312,42 @@ export interface CustomerAuthProfile {
     email: string;
     phone?: string;
     customerId?: string;
-    address?: string | null;
-    city?: string | null;
-    zone?: string | null;
-    area?: string | null;
-    cityName?: string | null;
-    zoneName?: string | null;
-    areaName?: string | null;
-    /** A delivery address is saved (checkout can prefill it). Never required. */
+    /** The address book's default address (checkout prefills it), or null. */
+    defaultAddress: CustomerAddress | null;
+    /** A complete default delivery address is saved (checkout can prefill it). Never required. */
     profileComplete: boolean;
 }
 
-interface ResolvedCustomerLocation {
-    city: string | null;
-    zone: string | null;
-    area: string | null;
-    cityName: string | null;
-    zoneName: string | null;
-    areaName: string | null;
-}
+type CustomerAddressRowValue = typeof customerAddresses.$inferSelect;
 
 function normalizeOptionalProfileText(value: string | null | undefined): string | null {
     const trimmed = value?.trim();
     return trimmed ? trimmed : null;
 }
 
-function hasSavedDeliveryAddress(row: {
-    address?: string | null;
-    city?: string | null;
-    zone?: string | null;
-}): boolean {
-    return Boolean(row.address?.trim() && row.city?.trim() && row.zone?.trim());
+/** A default address checkout can prefill: a first line and, in Bangladesh, its city and thana. */
+function isCompleteDeliveryAddress(address: CustomerAddress | null): boolean {
+    if (!address?.line1?.trim() || address.validationSkipped) return false;
+    return usesDeliveryHierarchy(address.countryCode) ? Boolean(address.city && address.zone) : true;
 }
 
-function buildCustomerAuthProfile(row: CustomerRow): CustomerAuthProfile {
+function buildCustomerAuthProfile(row: CustomerRow, addressRow: CustomerAddressRowValue | null = null): CustomerAuthProfile {
+    const defaultAddress = addressRow ? customerAddressFromRow(addressRow) : null;
     return {
         name: row.name,
         email: row.email ?? "",
         phone: row.phone,
         customerId: row.id,
-        address: row.address ?? null,
-        city: row.city ?? null,
-        zone: row.zone ?? null,
-        area: row.area ?? null,
-        cityName: row.cityName ?? null,
-        zoneName: row.zoneName ?? null,
-        areaName: row.areaName ?? null,
-        profileComplete: hasSavedDeliveryAddress(row),
+        defaultAddress,
+        profileComplete: isCompleteDeliveryAddress(defaultAddress),
     };
 }
+
+/** The default address joined in the same statement as its customer. */
+const joinDefaultAddress = and(
+    eq(customerAddresses.customerId, customers.id),
+    eq(customerAddresses.isDefault, true),
+);
 
 async function getActiveCustomerById(db: Database, customerId: string): Promise<CustomerRow | null> {
     const row = await db
@@ -374,8 +358,22 @@ async function getActiveCustomerById(db: Database, customerId: string): Promise<
     return row ?? null;
 }
 
+/** The active customer and its default address, in one statement. */
+async function getActiveCustomerProfileRow(
+    db: Database,
+    customerId: string,
+): Promise<{ customer: CustomerRow; address: CustomerAddressRowValue | null } | null> {
+    const row = await db
+        .select({ customer: customers, address: customerAddresses })
+        .from(customers)
+        .leftJoin(customerAddresses, joinDefaultAddress)
+        .where(and(eq(customers.id, customerId), isNull(customers.deletedAt)))
+        .get();
+    return row ?? null;
+}
+
 type ProofOwner =
-    | { kind: "account"; row: CustomerRow }
+    | { kind: "account"; row: CustomerRow; address: CustomerAddressRowValue | null }
     | { kind: "deleted" }
     | { kind: "none" };
 
@@ -392,8 +390,9 @@ async function resolveProofOwner(
 ): Promise<ProofOwner> {
     if (method === "email") {
         const [verified] = await db
-            .select()
+            .select({ customer: customers, address: customerAddresses })
             .from(customers)
+            .leftJoin(customerAddresses, joinDefaultAddress)
             .where(and(
                 sql`lower(${customers.email}) = ${identifier}`,
                 isNotNull(customers.emailVerifiedAt),
@@ -402,85 +401,26 @@ async function resolveProofOwner(
             .orderBy(sql`${customers.deletedAt} IS NOT NULL`, desc(customers.lastAuthenticatedAt))
             .limit(1);
         if (!verified) return { kind: "none" };
-        return verified.deletedAt ? { kind: "deleted" } : { kind: "account", row: verified };
+        return verified.customer.deletedAt
+            ? { kind: "deleted" }
+            : { kind: "account", row: verified.customer, address: verified.address };
     }
 
     // A phone owns an account only once proven. Accounts that merely typed
     // this phone are not candidates, and neither is the phone's guest record:
     // it can hold several people's orders, so the buyer creates their own
     // account and the orders placed with the proven phone move into it.
-    const rows = await db.select().from(customers).where(and(
-        eq(customers.phone, identifier),
-        isNotNull(customers.phoneVerifiedAt),
-        isNotNull(customers.accountClaimedAt),
-    ));
-    const verified = rows.find((row) => !row.deletedAt);
-    if (verified) return { kind: "account", row: verified };
-    return rows.length > 0 ? { kind: "deleted" } : { kind: "none" };
-}
-
-async function resolveActiveCustomerLocation(
-    db: Database,
-    input: { city: string | null; zone: string | null; area: string | null },
-): Promise<ResolvedCustomerLocation> {
-    if (!input.city && !input.zone && !input.area) {
-        return {
-            city: null,
-            zone: null,
-            area: null,
-            cityName: null,
-            zoneName: null,
-            areaName: null,
-        };
-    }
-
-    if (!input.city || !input.zone) {
-        throw new ValidationError("City and zone are required to save a delivery profile.");
-    }
-
-    const locationIds = [input.city, input.zone, input.area].filter(
-        (id): id is string => typeof id === "string" && id.trim().length > 0,
-    );
-    const rows = await db
-        .select({
-            id: deliveryLocations.id,
-            name: deliveryLocations.name,
-            type: deliveryLocations.type,
-            parentId: deliveryLocations.parentId,
-            isActive: deliveryLocations.isActive,
-            deletedAt: deliveryLocations.deletedAt,
-        })
-        .from(deliveryLocations)
+    const rows = await db.select({ customer: customers, address: customerAddresses })
+        .from(customers)
+        .leftJoin(customerAddresses, joinDefaultAddress)
         .where(and(
-            inArray(deliveryLocations.id, locationIds),
-            eq(deliveryLocations.isActive, true),
-            isNull(deliveryLocations.deletedAt),
+            eq(customers.phone, identifier),
+            isNotNull(customers.phoneVerifiedAt),
+            isNotNull(customers.accountClaimedAt),
         ));
-
-    const locationMap = new Map(rows.map((row) => [row.id, row]));
-    const city = locationMap.get(input.city);
-    if (!city || city.type !== "city" || city.parentId !== null || city.isActive !== true || city.deletedAt != null) {
-        throw new ValidationError("Selected city is no longer available.");
-    }
-
-    const zone = locationMap.get(input.zone);
-    if (!zone || zone.type !== "zone" || zone.parentId !== city.id || zone.isActive !== true || zone.deletedAt != null) {
-        throw new ValidationError("Selected thana is no longer available for the chosen city.");
-    }
-
-    const area = input.area ? locationMap.get(input.area) : null;
-    if (input.area && (!area || area.type !== "area" || area.parentId !== zone.id || area.isActive !== true || area.deletedAt != null)) {
-        throw new ValidationError("Selected area is no longer available for the chosen thana.");
-    }
-
-    return {
-        city: city.id,
-        zone: zone.id,
-        area: area?.id ?? null,
-        cityName: city.name,
-        zoneName: zone.name,
-        areaName: area?.name ?? null,
-    };
+    const verified = rows.find((row) => !row.customer.deletedAt);
+    if (verified) return { kind: "account", row: verified.customer, address: verified.address };
+    return rows.length > 0 ? { kind: "deleted" } : { kind: "none" };
 }
 
 // ─────────────────────────────────────────
@@ -620,18 +560,21 @@ export async function verifyOtp(
     const authenticatedAt = new Date();
     const statements: SQLiteBatchItem[] = [];
     let row: CustomerRow;
+    let address: CustomerAddressRowValue | null;
     let isNewUser = false;
     if (owner.kind === "account") {
         row = markProven(owner.row, input.method, authenticatedAt);
+        address = owner.address;
         statements.push(db.update(customers).set(proofUpdate(input.method)).where(eq(customers.id, row.id)) as SQLiteBatchItem);
     } else {
         row = newAccount!.row;
+        address = newAccount!.address;
         isNewUser = true;
-        statements.push(newAccount!.write, signedUpHistory(db, { accountId: row.id, via: input.method }) as SQLiteBatchItem);
+        statements.push(...newAccount!.writes, signedUpHistory(db, { accountId: row.id, via: input.method }) as SQLiteBatchItem);
     }
 
-    const session = await createSessionForCustomer(db, row, input.sessionHashKey, statements);
-    return { status: "signed_in", session, customer: buildCustomerAuthProfile(row), isNewUser };
+    const session = await createSessionForCustomer(db, row, address, input.sessionHashKey, statements);
+    return { status: "signed_in", session, customer: buildCustomerAuthProfile(row, address), isNewUser };
 }
 
 /**
@@ -760,6 +703,16 @@ async function latestOrderForProvenContact(db: Database, method: "email" | "phon
             customerPhone: orders.customerPhone,
             customerEmail: orders.customerEmail,
             shippingAddress: orders.shippingAddress,
+            shippingAddressLine2: orders.shippingAddressLine2,
+            shippingCountryCode: orders.shippingCountryCode,
+            shippingDependentLocality: orders.shippingDependentLocality,
+            shippingLocality: orders.shippingLocality,
+            shippingAdminArea: orders.shippingAdminArea,
+            shippingPostalCode: orders.shippingPostalCode,
+            shippingCompany: orders.shippingCompany,
+            shippingName: orders.shippingName,
+            shippingPhone: orders.shippingPhone,
+            shippingValidationSkipped: orders.shippingValidationSkipped,
             city: orders.city,
             zone: orders.zone,
             area: orders.area,
@@ -779,6 +732,29 @@ async function latestOrderForProvenContact(db: Database, method: "email" | "phon
         .get() ?? null;
 }
 
+/**
+ * The order's address in one line. Bangladesh: "House 9, Mirpur" + Mirpur,
+ * Dhaka reads "House 9, Mirpur, Dhaka" (names already in the line are not
+ * repeated); elsewhere the canonical one-line form.
+ */
+function suggestedAddressText(order: NonNullable<LatestContactOrder>, line1: string): string {
+    if (!usesDeliveryHierarchy(order.shippingCountryCode)) {
+        return formatAddressInline({
+            countryCode: order.shippingCountryCode,
+            line1,
+            line2: order.shippingAddressLine2,
+            dependentLocality: order.shippingDependentLocality,
+            locality: order.shippingLocality,
+            adminArea: order.shippingAdminArea,
+            postalCode: order.shippingPostalCode,
+        });
+    }
+    return [order.areaName, order.zoneName, order.cityName].reduce<string>((text, part) => {
+        const value = part?.trim();
+        return value && !text.toLowerCase().includes(value.toLowerCase()) ? `${text}, ${value}` : text;
+    }, line1);
+}
+
 function suggestNewAccount(order: LatestContactOrder | null): NewAccountSuggestion | null {
     if (!order) return null;
     const address = order.shippingAddress?.trim();
@@ -789,11 +765,7 @@ function suggestNewAccount(order: LatestContactOrder | null): NewAccountSuggesti
         address: address
             ? {
                 orderNumber: order.orderNumber ?? null,
-                // "House 9, Mirpur" + Mirpur, Dhaka reads "House 9, Mirpur, Dhaka".
-                text: [order.areaName, order.zoneName, order.cityName].reduce<string>((text, part) => {
-                    const value = part?.trim();
-                    return value && !text.toLowerCase().includes(value.toLowerCase()) ? `${text}, ${value}` : text;
-                }, address),
+                text: suggestedAddressText(order, address),
             }
             : null,
     };
@@ -810,7 +782,7 @@ async function prepareNewAccount(
     identity: CustomerIdentitySettings,
     phoneCountryPolicy: PhoneCountryPolicy,
     latestOrder: LatestContactOrder | null,
-): Promise<{ row: CustomerRow; write: SQLiteBatchItem } | null> {
+): Promise<{ row: CustomerRow; address: CustomerAddressRowValue | null; writes: SQLiteBatchItem[] } | null> {
     if (!input.account) return null;
     const name = input.account.name?.trim();
     if (!name) throw new ValidationError("Enter your name.");
@@ -844,37 +816,52 @@ async function prepareNewAccount(
         email,
         phone,
         origin: "account",
-        // Asked for by the buyer, and read here from the order, never from the request.
-        ...(input.account.saveOrderAddress && latestOrder?.shippingAddress?.trim()
-            ? {
-                address: latestOrder.shippingAddress.trim(),
-                city: latestOrder.city,
-                zone: latestOrder.zone,
-                area: latestOrder.area,
-                cityName: latestOrder.cityName,
-                zoneName: latestOrder.zoneName,
-                areaName: latestOrder.areaName,
-            }
-            : {}),
         ...proof,
         createdAt: now,
         updatedAt: now,
     };
+    // Asked for by the buyer, and read here from the order, never from the request:
+    // the order's address becomes the new address book's default.
+    const orderLine = input.account.saveOrderAddress ? latestOrder?.shippingAddress?.trim() : null;
+    const address: CustomerAddressRowValue | null = orderLine && latestOrder
+        ? {
+            id: `caddr_${nanoid()}`,
+            customerId: values.id,
+            isDefault: true,
+            countryCode: latestOrder.shippingCountryCode ?? "BD",
+            name: latestOrder.shippingName,
+            company: latestOrder.shippingCompany,
+            line1: orderLine,
+            line2: latestOrder.shippingAddressLine2,
+            dependentLocality: latestOrder.shippingDependentLocality,
+            locality: latestOrder.shippingLocality,
+            adminArea: latestOrder.shippingAdminArea,
+            postalCode: latestOrder.shippingPostalCode,
+            phoneE164: latestOrder.shippingPhone,
+            phoneRaw: null,
+            city: latestOrder.city,
+            zone: latestOrder.zone,
+            area: latestOrder.area,
+            cityName: latestOrder.cityName,
+            zoneName: latestOrder.zoneName,
+            areaName: latestOrder.areaName,
+            validationSkipped: Boolean(latestOrder.shippingValidationSkipped),
+            createdAt: now,
+            updatedAt: now,
+        }
+        : null;
     return {
         row: {
-            address: null,
-            city: null,
-            zone: null,
-            area: null,
-            cityName: null,
-            zoneName: null,
-            areaName: null,
             totalOrders: 0,
             lastOrderAt: null,
             deletedAt: null,
             ...values,
         } as CustomerRow,
-        write: db.insert(customers).values(values) as SQLiteBatchItem,
+        address,
+        writes: [
+            db.insert(customers).values(values) as SQLiteBatchItem,
+            ...(address ? [db.insert(customerAddresses).values(address) as SQLiteBatchItem] : []),
+        ],
     };
 }
 
@@ -886,6 +873,7 @@ async function prepareNewAccount(
 async function createSessionForCustomer(
     db: Database,
     row: CustomerRow,
+    address: CustomerAddressRowValue | null,
     sessionHashKey: string | undefined,
     accountWrites: SQLiteBatchItem[],
 ): Promise<CustomerSession> {
@@ -925,7 +913,7 @@ async function createSessionForCustomer(
 
     return {
         token,
-        ...buildCustomerAuthProfile(row),
+        ...buildCustomerAuthProfile(row, address),
         createdAt: nowMs,
         expiresAt: expiresAt * 1000,
     };
@@ -946,9 +934,11 @@ export async function getCustomerBySession(
     const nowSeconds = Math.floor(Date.now() / 1000);
     const tokenHash = await hashCustomerSessionToken(sessionToken, sessionHashKey);
     const row = await db
-        .select({ session: customerSessions, customer: customers })
+        .select({ session: customerSessions, customer: customers, address: customerAddresses })
         .from(customerSessions)
         .innerJoin(customers, eq(customerSessions.customerId, customers.id))
+        // The default address rides the session read (no extra statement).
+        .leftJoin(customerAddresses, joinDefaultAddress)
         .where(and(
             eq(customerSessions.tokenHash, tokenHash),
             isNull(customerSessions.revokedAt),
@@ -960,7 +950,7 @@ export async function getCustomerBySession(
     if (!row) return null;
     return {
         token: sessionToken,
-        ...buildCustomerAuthProfile(row.customer),
+        ...buildCustomerAuthProfile(row.customer, row.address),
         createdAt: row.session.createdAt * 1000,
         expiresAt: row.session.expiresAt * 1000,
     };
@@ -987,12 +977,13 @@ export async function deleteCustomerSession(
 }
 
 /**
- * Updates a customer profile and returns a fresh session projection from D1.
+ * Updates a customer's name and returns a fresh session projection from D1.
+ * Addresses are the address book's (`createCustomerAddress` and friends).
  */
 export async function updateCustomerProfile(
     db: Database,
     session: CustomerSession,
-    updates: Record<string, string | undefined>,
+    updates: { name?: string },
 ): Promise<{ session: CustomerSession; customer: CustomerAuthProfile }> {
     if (!session.customerId) {
         throw new UnauthorizedError("Customer profile is incomplete. Please log in again.");
@@ -1018,43 +1009,24 @@ export async function updateCustomerProfile(
         throw new ValidationError("Enter your name.");
     }
 
-    const nextAddress = updates.address !== undefined
-        ? normalizeOptionalProfileText(updates.address)
-        : existing.address;
-    const nextLocationInput = {
-        city: updates.city !== undefined ? normalizeOptionalProfileText(updates.city) : existing.city,
-        zone: updates.zone !== undefined ? normalizeOptionalProfileText(updates.zone) : existing.zone,
-        area: updates.area !== undefined ? normalizeOptionalProfileText(updates.area) : existing.area,
-    };
-    if (!nextAddress && (nextLocationInput.city || nextLocationInput.zone)) {
-        throw new ValidationError("Enter your delivery address.");
-    }
-    const resolvedLocation = await resolveActiveCustomerLocation(db, nextLocationInput);
-
-    const dbUpdates: Record<string, unknown> = {
-        name: nextName,
-        address: nextAddress,
-        city: resolvedLocation.city,
-        zone: resolvedLocation.zone,
-        area: resolvedLocation.area,
-        cityName: resolvedLocation.cityName,
-        zoneName: resolvedLocation.zoneName,
-        areaName: resolvedLocation.areaName,
-        updatedAt: sql`unixepoch()`,
-    };
-
     await db
         .update(customers)
-        .set(dbUpdates)
+        .set({ name: nextName, updatedAt: sql`unixepoch()` })
         .where(and(eq(customers.id, session.customerId), isNull(customers.deletedAt)));
 
-    const customer = await getActiveCustomerById(db, session.customerId);
+    return readCustomerProfile(db, session);
+}
 
-    if (!customer) {
+/** The signed-in customer's fresh profile (one statement, the default address joined). */
+export async function readCustomerProfile(
+    db: Database,
+    session: CustomerSession,
+): Promise<{ session: CustomerSession; customer: CustomerAuthProfile }> {
+    const row = session.customerId ? await getActiveCustomerProfileRow(db, session.customerId) : null;
+    if (!row) {
         throw new UnauthorizedError("Customer profile is no longer available. Please log in again.");
     }
-
-    const authProfile = buildCustomerAuthProfile(customer);
+    const authProfile = buildCustomerAuthProfile(row.customer, row.address);
     return { session: { ...session, ...authProfile }, customer: authProfile };
 }
 

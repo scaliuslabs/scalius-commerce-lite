@@ -457,6 +457,8 @@ export async function listOrders(db: Database, options: {
             createdAt: sql<number>`CAST(${orders.createdAt} AS INTEGER)`,
             updatedAt: sql<number>`CAST(${orders.updatedAt} AS INTEGER)`,
             version: orders.version,
+            shippingCountryCode: orders.shippingCountryCode,
+            shippingLocality: orders.shippingLocality,
             city: orders.city,
             zone: orders.zone,
             area: orders.area,
@@ -499,6 +501,7 @@ export async function listOrders(db: Database, options: {
         subtotalAmountMinor: number;
         status: string; paymentStatus: string; paymentMethod: string | null; fulfillmentStatus: string;
         createdAt: number; updatedAt: number; version: number;
+        shippingCountryCode: string | null; shippingLocality: string | null;
         city: string | null; zone: string | null; area: string | null;
         cityName: string | null; zoneName: string | null; areaName: string | null;
         shipmentClaimId: string | null; shipmentClaimExpiresAt: Date | number | string | null;
@@ -674,6 +677,10 @@ export async function listOrders(db: Database, options: {
 export async function loadOrderExportDetails(db: Database, orderIds: readonly string[]) {
     const details = new Map<string, {
         shippingAddress: string | null;
+        shippingAddressLine2: string | null;
+        shippingDependentLocality: string | null;
+        shippingAdminArea: string | null;
+        shippingPostalCode: string | null;
         notes: string | null;
         /** Every parcel's courier and tracking, in the order they left. */
         courierName: string | null;
@@ -693,6 +700,10 @@ export async function loadOrderExportDetails(db: Database, orderIds: readonly st
             db.select({
                 id: orders.id,
                 shippingAddress: orders.shippingAddress,
+                shippingAddressLine2: orders.shippingAddressLine2,
+                shippingDependentLocality: orders.shippingDependentLocality,
+                shippingAdminArea: orders.shippingAdminArea,
+                shippingPostalCode: orders.shippingPostalCode,
                 notes: orders.notes,
                 currencyCode: orders.currencyCode,
                 currencyDecimalPlaces: orders.currencyDecimalPlaces,
@@ -734,6 +745,10 @@ export async function loadOrderExportDetails(db: Database, orderIds: readonly st
             const parcel = parcels.get(row.id);
             details.set(row.id, {
                 shippingAddress: row.shippingAddress,
+                shippingAddressLine2: row.shippingAddressLine2,
+                shippingDependentLocality: row.shippingDependentLocality,
+                shippingAdminArea: row.shippingAdminArea,
+                shippingPostalCode: row.shippingPostalCode,
                 notes: row.notes,
                 courierName: parcel?.couriers.size ? [...parcel.couriers].join("; ") : null,
                 trackingId: parcel?.tracking.size ? [...parcel.tracking].join("; ") : null,

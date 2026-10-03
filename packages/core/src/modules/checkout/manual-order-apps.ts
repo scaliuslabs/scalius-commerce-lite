@@ -104,7 +104,7 @@ function manualDiscountAllocation(lines: readonly ManualOrderAppLine[], discount
     }).allocation;
 }
 
-type CartSource = Pick<ManualOrderAppInput, "currency" | "lines" | "requiresShipping" | "locationNames">;
+type CartSource = Pick<ManualOrderAppInput, "currency" | "lines" | "requiresShipping" | "shippingCountryCode" | "locationNames">;
 
 function loadCartFacts(db: Database, input: CartSource) {
     return loadAppFunctionCartFacts(db, {
@@ -136,7 +136,7 @@ function cartOf(
         })),
         facts,
         destination: input.requiresShipping
-            ? { city: input.locationNames.cityName, zone: input.locationNames.zoneName }
+            ? { country: input.shippingCountryCode ?? null, city: input.locationNames.cityName, zone: input.locationNames.zoneName }
             : null,
         discountCodes: [],
     });

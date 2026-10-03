@@ -95,10 +95,10 @@ export function segmentConditionSql(condition: CustomerSegmentCondition, context
             return dateFilterSql(sql`CAST(${customers.createdAt} AS INTEGER)`, condition.filter, context);
         case "city":
         case "zone": {
-            const column = condition.field === "city" ? customers.city : customers.zone;
-            return condition.op === "in"
-                ? sql`${column} IN ${jsonList(condition.ids)}`
-                : sql`(${column} IS NULL OR ${column} NOT IN ${jsonList(condition.ids)})`;
+            // The default address's delivery location (Shopify's customer_cities reads the default address).
+            const column = sql.raw(condition.field === "city" ? "segment_address.city" : "segment_address.zone");
+            const located = sql`SELECT 1 FROM customer_addresses AS segment_address WHERE segment_address.customer_id = ${QUALIFIED.id} AND segment_address.is_default = 1 AND ${column} IN ${jsonList(condition.ids)}`;
+            return condition.op === "in" ? sql`EXISTS (${located})` : sql`NOT EXISTS (${located})`;
         }
         case "tags": {
             const matching = sql`SELECT 1 FROM customer_tag_links AS segment_tag WHERE segment_tag.customer_id = ${QUALIFIED.id} AND segment_tag.tag IN ${jsonList(condition.tags)}`;

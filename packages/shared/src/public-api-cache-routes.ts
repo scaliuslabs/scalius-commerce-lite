@@ -53,6 +53,8 @@ export const PUBLIC_API_CACHE_ROUTES: readonly PublicApiCacheRoute[] = [
   { path: "/api/v1/checkout-languages/active", exact: true, isEligible: (url) => url.searchParams.size === 0, market: { invariant: STORE_WIDE_COPY } },
   { path: "/api/v1/shipping-methods", market: { invariant: STORE_WIDE_DELIVERY } },
   { path: "/api/v1/locations", market: { invariant: STORE_WIDE_DELIVERY } },
+  // One country's address rules (libaddressinput): code, not data, the same for every market.
+  { path: "/api/v1/address-rules", isEligible: (url) => url.searchParams.size === 0, market: { invariant: "Address rules are code (libaddressinput metadata), the same in every market." } },
   { path: "/api/v1/attributes", market: { invariant: SAME_CATALOGUE } },
   { path: "/api/v1/pages", market: { invariant: SAME_CATALOGUE } },
   { path: "/api/v1/articles", market: { invariant: SAME_CATALOGUE } },
