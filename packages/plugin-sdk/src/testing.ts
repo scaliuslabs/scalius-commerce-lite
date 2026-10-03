@@ -7,6 +7,7 @@
 // callbacks you pass; messages are recorded, not sent.
 
 import {
+  isPluginHostAllowed,
   parsePluginManifest,
   pluginHandlerInventory,
   pluginSettingDefaults,
@@ -142,16 +143,19 @@ export function createPluginTestHarness(module: unknown, options: PluginTestHarn
     kvList: async (prefix) => [...kv.keys()].filter((key) => key.startsWith(prefix ?? "")).sort(),
     httpFetch: async (url, init) => {
       let host = "";
+      let port = "";
       try {
         const parsedUrl = new URL(url);
         if (parsedUrl.protocol !== "https:") refuse("http.not_allowed", "The URL must start with https://.");
         host = parsedUrl.hostname;
+        port = parsedUrl.port;
       } catch (error) {
         if (error instanceof Error && error.message.startsWith("[")) throw error;
         refuse("http.not_allowed", "Enter a full URL.");
       }
-      const allowed = manifest.allowedHosts.some((pattern) => pattern.startsWith("*.") ? host.endsWith(pattern.slice(1)) : host === pattern);
-      if (!allowed) refuse("http.not_allowed", `${host} is not in the plugin's allowedHosts.`);
+      if (!isPluginHostAllowed(host, manifest.allowedHosts, port)) {
+        refuse("http.not_allowed", `${port ? `${host}:${port}` : host} is not in the plugin's allowedHosts.`);
+      }
       if (!options.fetch) refuse("http.failed", `The request to ${host} failed.`);
       const response = await options.fetch(url, copy(init));
       return { status: response.status, headers: response.headers ?? {}, body: response.body };

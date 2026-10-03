@@ -72,6 +72,8 @@ describe("plugin manifest", () => {
     ["an unknown event", { events: ["order.exploded"] }, "events.0"],
     ["an IP host", { allowedHosts: ["10.0.0.1"] }, "allowedHosts.0"],
     ["localhost", { allowedHosts: ["localhost"] }, "allowedHosts.0"],
+    ["a wildcard with a port", { allowedHosts: ["*.acme.example:8443"] }, "allowedHosts.0"],
+    ["a port out of range", { allowedHosts: ["api.acme.example:70000"] }, "allowedHosts.0"],
     ["an http script", { storefront: { scripts: [{ src: "http://cdn.acme.example/w.js" }] } }, "storefront.scripts.0.src"],
     ["a page whose route is missing", { admin: { pages: [{ id: "p", title: "P", route: "nope" }] } }, "admin.pages.0.route"],
     ["a section on an admin route", { storefront: { sections: [{ type: "s", name: "S", route: "dashboard" }] } }, "storefront.sections.0.route"],

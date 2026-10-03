@@ -73,6 +73,16 @@ describe("plugin bridge", () => {
     expect(isPluginHostAllowed("api.acme.example.evil.com", allowed)).toBe(false);
   });
 
+  it("reaches a non-default port only through its exact host:port entry", () => {
+    const allowed = ["api.acme.example", "sandbox.acme.example:10061", "*.cdn.acme.example"];
+    expect(isPluginHostAllowed("sandbox.acme.example", allowed, "10061")).toBe(true);
+    expect(isPluginHostAllowed("sandbox.acme.example", allowed, "10062")).toBe(false);
+    expect(isPluginHostAllowed("sandbox.acme.example", allowed)).toBe(false);
+    expect(isPluginHostAllowed("api.acme.example", allowed, "8443")).toBe(false);
+    expect(isPluginHostAllowed("img.cdn.acme.example", allowed, "8443")).toBe(false);
+    expect(isPluginHostAllowed("api.acme.example", allowed, "443")).toBe(true);
+  });
+
   it("fetches an allowed https host and returns status, headers and text", async () => {
     fetchMock.mockResolvedValueOnce(new Response("pong", { status: 200, headers: { "X-Ok": "1", "Set-Cookie": "a=b" } }));
     const result = await host.httpFetch("https://api.acme.example/ping", { method: "POST", headers: { Authorization: "Bearer t" }, body: "{}" });
@@ -89,7 +99,7 @@ describe("plugin bridge", () => {
     ["an IPv4-mapped IPv6 literal", "https://[::ffff:127.0.0.1]/"],
     ["localhost", "https://localhost/"],
     ["embedded credentials", "https://user:pass@api.acme.example/"],
-    ["a non-default port", "https://api.acme.example:8443/"],
+    ["a non-default port without its host:port entry", "https://api.acme.example:8443/"],
     ["a wildcard apex", "https://cdn.acme.example/"],
   ])("refuses %s before any request", async (_label, url) => {
     const bridge = createInProcessBridge(host);

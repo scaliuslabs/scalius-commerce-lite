@@ -16,6 +16,7 @@ import type {
 } from "@scalius/plugin-sdk";
 import { PluginError, type PluginCollectionDeclaration, type PluginStorageQueryResult } from "@scalius/core/modules/plugins";
 import { checkOutboundUrl, describeOutboundUrlIssue } from "@scalius/shared/outbound-url";
+import { isPluginHostAllowed } from "@scalius/shared/plugins/manifest";
 import { pluginWithinRateLimit } from "./authority";
 
 /** What the host lets one installation do, derived from its manifest and approved grant. */
@@ -102,15 +103,7 @@ const HTTP_METHODS = new Set(["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"]);
 const FORBIDDEN_REQUEST_HEADERS = /^(?:host|content-length|connection|keep-alive|transfer-encoding|upgrade|te|trailer|proxy-.*|cf-.*|x-forwarded-.*|x-real-ip|forwarded|via)$/i;
 const CREDENTIAL_HEADERS = /^(?:authorization|cookie|proxy-authorization)$/i;
 
-/** Exact hosts or one leading `*.` label; a wildcard matches subdomains only. */
-export function isPluginHostAllowed(hostname: string, allowedHosts: readonly string[]): boolean {
-  const host = hostname.toLowerCase().replace(/\.$/, "");
-  return allowedHosts.some((pattern) => {
-    const allowed = pattern.toLowerCase();
-    if (allowed.startsWith("*.")) return host.endsWith(allowed.slice(1)) && host.length > allowed.length - 1;
-    return host === allowed;
-  });
-}
+export { isPluginHostAllowed };
 
 function fail(code: ConstructorParameters<typeof PluginError>[0], message: string): never {
   throw new PluginError(code, message);
@@ -336,13 +329,16 @@ export class PluginBridgeHost implements PluginBridgeApi {
     });
   }
 
-  /** https, public, default port, and an allowed host; checked again on every redirect hop. */
+  /**
+   * https, public, an allowed host, and the default port unless the
+   * manifest names that exact `host:port`; checked again on every redirect hop.
+   */
   private checkTarget(value: string): URL {
     const checked = checkOutboundUrl(value);
     if (!checked.ok) fail("http.not_allowed", describeOutboundUrlIssue(checked.issue));
-    if (checked.url.port !== "") fail("http.not_allowed", "Outbound requests use the default https port.");
-    if (!isPluginHostAllowed(checked.url.hostname, this.props.authority.allowedHosts)) {
-      fail("http.not_allowed", `${checked.url.hostname} is not in the plugin's allowedHosts.`);
+    if (!isPluginHostAllowed(checked.url.hostname, this.props.authority.allowedHosts, checked.url.port)) {
+      const target = checked.url.port ? `${checked.url.hostname}:${checked.url.port}` : checked.url.hostname;
+      fail("http.not_allowed", `${target} is not in the plugin's allowedHosts.`);
     }
     return checked.url;
   }
