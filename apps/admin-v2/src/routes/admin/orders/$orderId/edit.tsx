@@ -13,6 +13,7 @@ import {
 } from "~/components/ui/card";
 import { orderFormDataQueryOptions, orderQueryOptions } from "~/lib/api-query-options/orders";
 import { useMessages } from "~/i18n";
+import { orderEditLockMessages } from "~/i18n/order-edit-locks";
 import { orderFormMessages } from "~/i18n/order-form";
 import { OrderFormRouteError } from "../-OrderFormRouteError";
 import { orderEditState, savedDeliveryMethod } from "../-order-form-route-state";
@@ -46,6 +47,7 @@ function EditOrderPage() {
   const { orderId } = Route.useParams();
   const data = Route.useLoaderData();
   const t = useMessages(orderFormMessages);
+  const locks = useMessages(orderEditLockMessages);
   const orderLabel = formatOrderNumber(data.order.orderNumber, orderId);
   const edit = orderEditState(data.editReadiness);
   // Saved lines with what each SKU is and its frozen buyer inputs; products with the inputs they ask.
@@ -84,7 +86,7 @@ function EditOrderPage() {
       <Card>
         <CardHeader>
           <CardTitle>{t("lockedTitle")}</CardTitle>
-          <CardDescription>{t(edit.message)}</CardDescription>
+          <CardDescription>{locks(edit.message)}</CardDescription>
           {edit.canEditDetails ? <CardDescription>{t("detailsStillEditable")}</CardDescription> : null}
         </CardHeader>
         <CardContent>

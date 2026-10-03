@@ -556,6 +556,8 @@ describe("app actions", () => {
     await render(<AppActionsMenu target="customer" id="c1" />);
     await openMenu("More actions");
     await click(menuItem("Forget customer"));
+    // The confirm loads the first time an action asks.
+    await vi.waitFor(() => expect(document.querySelector('[role="alertdialog"]')).not.toBeNull());
     const dialog = document.querySelector<HTMLElement>('[role="alertdialog"]')!;
     expect(dialog.textContent).toContain("Forget customer?");
     expect(fetchMock).not.toHaveBeenCalled();

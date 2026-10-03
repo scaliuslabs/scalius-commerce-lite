@@ -8,7 +8,7 @@
 import { useState, type CSSProperties } from "react";
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { toast } from "sonner";
+import { toast } from "~/lib/toast";
 import {
   postApiV1AdminSettingsThemeDraft,
   postApiV1AdminSettingsThemePublish,

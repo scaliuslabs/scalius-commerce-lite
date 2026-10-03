@@ -22,21 +22,13 @@ import { resourceMessages } from "~/i18n/resource";
 import { orderErrorMessage, useCreateFulfillment } from "~/lib/api-mutations/orders";
 import { formatSavedMajorAmount, resolveSavedOrderMoneySummary } from "~/lib/order-tax-presentation";
 import { clampQuantity, getOrderItemName } from "./order-returns/shared";
-import { canHandOver, counterCashDue, lineFulfillmentType, unfulfilledUnits } from "./fulfilment-groups";
+import { counterCashDue, lineFulfillmentType, unfulfilledUnits, type ManualFulfillmentKind } from "./fulfilment-groups";
 import { formatCurrencyAmount } from "./formatters";
 import { LineProperties } from "./LineProperties";
-import type { Order, OrderItem } from "./types";
+import type { Order } from "./types";
 
-export type ManualFulfillmentKind = "ship" | "pickup" | "service";
-
-/** Units of a line not handed to a courier yet (ship lines only). */
-export function remainingToSend(item: OrderItem): number {
-  return lineFulfillmentType(item) === "ship" ? unfulfilledUnits(item) : 0;
-}
-
-export function canSendWithOwnCourier(order: Order): boolean {
-  return canHandOver(order) && order.items.some((item) => remainingToSend(item) > 0);
-}
+// The helpers the page decides with live in fulfilment-groups.ts: this dialog loads on demand.
+export { canSendWithOwnCourier, remainingToSend, type ManualFulfillmentKind } from "./fulfilment-groups";
 
 type FieldErrors = Partial<Record<"items" | "trackingUrl" | "amount", string>>;
 

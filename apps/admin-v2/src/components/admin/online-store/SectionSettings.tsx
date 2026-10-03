@@ -6,7 +6,7 @@
  */
 import type { CSSProperties } from "react";
 import { ArrowDown, ArrowUp, ImageIcon, Plus, Trash2 } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "~/lib/toast";
 import { HERO_SLIDE_PRESENTATION, getHeroSlideObjectPosition, type HeroSlideViewport } from "@scalius/shared/hero-slider";
 import { mediaImageUrl } from "@scalius/shared/media-variants";
 import {

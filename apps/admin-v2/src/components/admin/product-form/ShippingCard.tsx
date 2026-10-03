@@ -1,6 +1,8 @@
 import { useWatch, type UseFormReturn } from "react-hook-form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { FormControl, FormField, FormItem, FormLabel } from "@/components/ui/form";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { Switch } from "@/components/ui/switch";
 import { useMessages } from "~/i18n";
 import { giftCardProductMessages } from "~/i18n/gift-card-product";
 import { productMessages } from "~/i18n/products";
@@ -16,37 +18,40 @@ const HELP = {
 } as const;
 
 /**
- * Shopify's "Physical product" switch as a select (Wave A §8.1): what the
- * product is decides whether an order ships, is picked up, or needs no
- * delivery at all. With options, each variant can differ (a Fulfilment
- * column in the variant table). Digital files and licence keys are added in
- * the Digital delivery card. A kind that forces the fulfilment (a gift card
- * is always digital) shows it instead of the select.
+ * Shopify's Shipping card: whether the product is physical (Shopify's
+ * "Physical product" switch, here a select because Scalius also sells
+ * downloads and services, or each variant its own), then what only a parcel
+ * needs: its weight (a product without options; variants carry their own in
+ * the table) and free delivery. A gift card is always digital: the card says
+ * so instead of offering the select.
  */
-export function FulfilmentCard({ form, hasOptions }: {
+export function ShippingCard({ form, hasOptions, weightSlot }: {
   form: UseFormReturn<ProductFormValues>;
   /** The product has options, so "set per variant" makes sense. */
   hasOptions: boolean;
+  /** Where the variant editor draws a product's weight (see editor-slots.ts). */
+  weightSlot?: (element: HTMLDivElement | null) => void;
 }) {
   const t = useMessages(productMessages);
   const g = useMessages(giftCardProductMessages);
-  const { forcedFulfillmentKind } = useProductKindRules();
+  const { forcedFulfillmentKind, showShipping } = useProductKindRules();
   const mode = useWatch({ control: form.control, name: "fulfillmentKind" }) ?? "physical";
   const single: ProductFulfilmentMode[] = ["physical", "digital", "service"];
   const choices: ProductFulfilmentMode[] = hasOptions || mode === "mixed" ? [...single, "mixed"] : single;
+  const ships = showShipping && (mode === "physical" || mode === "mixed");
   return (
-    <Card>
+    <Card id="product-shipping" className="scroll-mt-4">
       <CardHeader>
-        <CardTitle>{t("fulfilment")}</CardTitle>
+        <CardTitle>{t("shipping")}</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-2">
+      <CardContent className="space-y-4">
         {forcedFulfillmentKind ? (
-          <>
+          <div className="space-y-1">
             <p className="text-body font-medium">{t(`fulfilmentMode.${forcedFulfillmentKind}`)}</p>
             <p className="text-body text-muted-foreground">{g("fulfilmentForced")}</p>
-          </>
+          </div>
         ) : (
-          <>
+          <div className="space-y-1">
             <SearchableSelect
               id="product-fulfilment"
               ariaLabel={t("fulfilment")}
@@ -60,8 +65,25 @@ export function FulfilmentCard({ form, hasOptions }: {
               options={choices.map((choice) => ({ value: choice, label: t(`fulfilmentMode.${choice}`) }))}
             />
             <p id="product-fulfilment-help" className="text-body text-muted-foreground">{t(HELP[mode])}</p>
-          </>
+          </div>
         )}
+        <div ref={weightSlot} className="empty:hidden" />
+        {ships ? (
+          <div className="border-t pt-4">
+            <FormField
+              control={form.control}
+              name="freeDelivery"
+              render={({ field }) => (
+                <FormItem className="flex items-center justify-between">
+                  <FormLabel>{t("freeDelivery")}</FormLabel>
+                  <FormControl>
+                    <Switch checked={field.value} onCheckedChange={field.onChange} />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
+          </div>
+        ) : null}
       </CardContent>
     </Card>
   );

@@ -95,9 +95,11 @@ export async function marketingConsentTextVersion(surface: string, text: string)
 
 export const MARKETING_CONSENT_LABEL_MAX = 200;
 
-const consentLabel = z.string().trim().min(1).max(MARKETING_CONSENT_LABEL_MAX);
+// Schemas are built inside pure IIFEs: a bundle that only reads this module's
+// constants (the dashboard's customer list) leaves them, and zod, out.
+const consentLabel = /* @__PURE__ */ (() => z.string().trim().min(1).max(MARKETING_CONSENT_LABEL_MAX))();
 
-export const marketingConsentSettingsSchema = z.object({
+export const marketingConsentSettingsSchema = /* @__PURE__ */ (() => z.object({
   /** The checkout checkbox: always unchecked by default and never required. */
   checkout: z.object({
     enabled: z.boolean(),
@@ -108,7 +110,7 @@ export const marketingConsentSettingsSchema = z.object({
   }).strict(),
   /** E-mail subscriptions from the storefront wait for a confirmation link. */
   emailDoubleOptIn: z.boolean(),
-}).strict();
+}).strict())();
 
 export type MarketingConsentSettings = z.infer<typeof marketingConsentSettingsSchema>;
 
@@ -160,14 +162,14 @@ export function normalizeCustomerTags(inputs: readonly string[]): { tags: string
   return { tags, invalid };
 }
 
-export const customerTagSchema = z.string().max(200).transform((value, context) => {
+export const customerTagSchema = /* @__PURE__ */ (() => z.string().max(200).transform((value, context) => {
   const tag = normalizeCustomerTag(value);
   if (tag === null) {
     context.addIssue({ code: "custom", message: `A tag is 1 to ${CUSTOMER_TAG_MAX_LENGTH} characters.` });
     return z.NEVER;
   }
   return tag;
-});
+}))();
 
 // ── Segments ──────────────────────────────────────────────────────────────
 
@@ -178,9 +180,9 @@ export const CUSTOMER_SEGMENT_DAYS_MAX = 3650;
 /** Live counts stop here and read "100,000+" (each count is one bounded query). */
 export const CUSTOMER_SEGMENT_COUNT_CAP = 100_000;
 
-const dateKey = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use a YYYY-MM-DD date.");
-const days = z.number().int().min(1).max(CUSTOMER_SEGMENT_DAYS_MAX);
-const locationId = z.string().trim().min(1).max(128);
+const dateKey = /* @__PURE__ */ (() => z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use a YYYY-MM-DD date."))();
+const days = /* @__PURE__ */ (() => z.number().int().min(1).max(CUSTOMER_SEGMENT_DAYS_MAX))();
+const locationId = /* @__PURE__ */ (() => z.string().trim().min(1).max(128))();
 
 /**
  * A date filter: relative (`within_last` / `not_within_last` N days) or
@@ -188,12 +190,12 @@ const locationId = z.string().trim().min(1).max(128);
  * A customer without the date (never ordered) never matches a date filter;
  * "never ordered" is `orders_count` with `max: 0`.
  */
-const dateFilter = z.discriminatedUnion("op", [
+const dateFilter = /* @__PURE__ */ (() => z.discriminatedUnion("op", [
   z.object({ op: z.literal("within_last"), days }).strict(),
   z.object({ op: z.literal("not_within_last"), days }).strict(),
   z.object({ op: z.literal("on_or_after"), date: dateKey }).strict(),
   z.object({ op: z.literal("before"), date: dateKey }).strict(),
-]);
+]))();
 
 const MONEY_MINOR_MAX = 1_000_000_000_000;
 
@@ -230,13 +232,13 @@ function conditionSchema(money: z.ZodNumber) {
 }
 
 /** Segment conditions as stored (money in integer minor units). */
-export const customerSegmentConditionSchema = conditionSchema(z.number().int().min(0).max(MONEY_MINOR_MAX));
+export const customerSegmentConditionSchema = /* @__PURE__ */ (() => conditionSchema(z.number().int().min(0).max(MONEY_MINOR_MAX)))();
 
 /**
  * Segment conditions in the HTTP contract: money in decimal major units
  * (converted once at the edge with the store currency, `mapSegmentMoney`).
  */
-export const customerSegmentConditionInputSchema = conditionSchema(z.number().min(0).max(MONEY_MINOR_MAX));
+export const customerSegmentConditionInputSchema = /* @__PURE__ */ (() => conditionSchema(z.number().min(0).max(MONEY_MINOR_MAX)))();
 
 export type CustomerSegmentCondition = z.infer<typeof customerSegmentConditionSchema>;
 export type CustomerSegmentField = CustomerSegmentCondition["field"];
@@ -265,9 +267,9 @@ function definitionSchema<T extends z.ZodType>(condition: T) {
   }).strict();
 }
 
-export const customerSegmentDefinitionSchema = definitionSchema(customerSegmentConditionSchema);
+export const customerSegmentDefinitionSchema = /* @__PURE__ */ (() => definitionSchema(customerSegmentConditionSchema))();
 /** The definition as the HTTP contract carries it (money in major units). */
-export const customerSegmentDefinitionInputSchema = definitionSchema(customerSegmentConditionInputSchema);
+export const customerSegmentDefinitionInputSchema = /* @__PURE__ */ (() => definitionSchema(customerSegmentConditionInputSchema))();
 
 export type CustomerSegmentDefinition = z.infer<typeof customerSegmentDefinitionSchema>;
 export type CustomerSegmentDefinitionInput = z.infer<typeof customerSegmentDefinitionInputSchema>;
@@ -301,7 +303,7 @@ export function canonicalSegmentDefinitionJson(definition: CustomerSegmentDefini
 
 export const NEWSLETTER_HONEYPOT_FIELD = "company_website";
 
-export const newsletterSubscribeSchema = z.object({
+export const newsletterSubscribeSchema = /* @__PURE__ */ (() => z.object({
   phone: z.string().trim().min(6).max(32),
   email: z.string().trim().max(254).optional().transform((value) => (value ? value : undefined)),
   /** Subscribe this number to WhatsApp messages too (the section offers it). */
@@ -310,7 +312,7 @@ export const newsletterSubscribeSchema = z.object({
   language: z.string().trim().max(16).optional(),
   /** The exact consent text the form showed, for the consent record. */
   consentText: z.string().trim().min(1).max(MARKETING_CONSENT_TEXT_MAX).optional(),
-}).strict();
+}).strict())();
 
 export type NewsletterSubscribeInput = z.infer<typeof newsletterSubscribeSchema>;
 

@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { toast } from "sonner";
+import { toast } from "~/lib/toast";
 import {
   deleteApiV1AdminRbacRolesById,
   postApiV1AdminRbacRoles,

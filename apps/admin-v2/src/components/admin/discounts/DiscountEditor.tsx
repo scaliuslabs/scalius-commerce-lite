@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useMemo, useState, type ReactNode } from "react";
-import { toast } from "sonner";
+import { toast } from "~/lib/toast";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 
 import { DiscountStatusBadge } from "./DiscountStatusBadge";

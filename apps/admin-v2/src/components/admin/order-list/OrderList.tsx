@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { toast } from "sonner";
+import { toast } from "~/lib/toast";
 import { Archive, Blocks, CircleCheck, Download, MoreHorizontal, Printer, Send, ShoppingBag, Truck } from "lucide-react";
 import { getApiV1AdminOrders } from "@scalius/api-client/sdk";
 import type { OrderListItem } from "@scalius/core/modules/orders/browser";
@@ -16,7 +16,8 @@ import { useServerTable } from "~/components/admin/data-table/useServerTable";
 import type { Row } from "~/components/admin/data-table/table-config";
 import { SelectionSheet } from "~/components/admin/shared/SelectionSheet";
 import { APP_BULK_ACTION_MAX_IDS, appActionKey, useAppActionRunner } from "~/components/admin/apps/ui/AppActions";
-import { appUiMessages } from "~/i18n/app-ui";
+import { appActionMessages } from "~/i18n/app-actions";
+import { useOpenedOnce } from "~/hooks/use-opened-once";
 import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions";
 import { apiData } from "~/lib/api";
 import { getServerFnError } from "~/lib/api-helpers";
@@ -27,9 +28,6 @@ import { useListSearch } from "~/lib/list-search";
 import { translate, useLocale, useMessages } from "~/i18n";
 import { resourceMessages } from "~/i18n/resource";
 import { orderListMessages } from "~/i18n/order-list";
-import { BulkOrdersDialog } from "./BulkOrdersDialog";
-import { OrderRowCancelDialog } from "./CancelOrderDialog";
-import { ExportOrdersDialog } from "./ExportOrdersDialog";
 import { getOrderColumns } from "./order-columns";
 import { getOrderRefreshPause, planOrderBulkAction, type OrderBulkAction } from "./order-bulk-actions";
 import { useOrderExportDialog } from "./order-export";
@@ -46,6 +44,13 @@ import { OrderListToolbar } from "./OrderListToolbar";
 import { OrderMobileCard } from "./OrderMobileCard";
 import { useOrderActions, type OrderSelection } from "./use-order-actions";
 import { useOrderAutoRefresh } from "./use-order-auto-refresh";
+
+// The dialogs load the first time they open: the cancel confirmation (the
+// order page's restock and reason copy) when Cancelled is chosen from a row's
+// status menu, the bulk preview from the bulk bar, export from its button.
+const OrderRowCancelDialog = lazy(() => import("./CancelOrderDialog").then((module) => ({ default: module.OrderRowCancelDialog })));
+const BulkOrdersDialog = lazy(() => import("./BulkOrdersDialog").then((module) => ({ default: module.BulkOrdersDialog })));
+const ExportOrdersDialog = lazy(() => import("./ExportOrdersDialog").then((module) => ({ default: module.ExportOrdersDialog })));
 
 const selectOrders = createDataSelector<OrderListItem>("orders");
 /** "Archive all matching orders" loads at most this many orders to act on. */
@@ -87,7 +92,7 @@ export function OrderList({
   const actions = useOrderActions(orderActions, selection);
   const { archive, restore, changeStatus, updatingStatusIds } = actions;
   const appActions = useAppActionRunner("order", true);
-  const appCopy = useMessages(appUiMessages);
+  const appCopy = useMessages(appActionMessages);
 
   const columns = useMemo(
     () =>
@@ -284,6 +289,9 @@ export function OrderList({
     onChange({ ...CLEARED_ORDER_FILTERS, ...orderSearchSortUpdates("", term, search.sort), view: undefined });
   };
   const cancelOrder = actions.cancelOrder;
+  const cancelLoaded = useOpenedOnce(cancelOrder !== null);
+  const bulkLoaded = useOpenedOnce(actions.dialog !== null);
+  const exportLoaded = useOpenedOnce(exportDialog.open);
 
   return (
     <>
@@ -354,40 +362,52 @@ export function OrderList({
       </SelectionSheet>
       {appActions.dialogs}
 
-      <OrderRowCancelDialog
-        order={cancelOrder}
-        pending={cancelOrder !== null && actions.updatingStatusIds.has(cancelOrder.id)}
-        onOpenChange={(open) => {
-          if (!open) actions.setCancelOrder(null);
-        }}
-        onConfirm={(order, reason) => actions.changeStatus(order, "cancelled", { confirmed: true, reason })}
-      />
+      {cancelLoaded ? (
+        <Suspense fallback={null}>
+          <OrderRowCancelDialog
+            order={cancelOrder}
+            pending={cancelOrder !== null && actions.updatingStatusIds.has(cancelOrder.id)}
+            onOpenChange={(open) => {
+              if (!open) actions.setCancelOrder(null);
+            }}
+            onConfirm={(order, reason) => actions.changeStatus(order, "cancelled", { confirmed: true, reason })}
+          />
+        </Suspense>
+      ) : null}
 
-      <BulkOrdersDialog
-        action={actions.dialog?.action ?? null}
-        orders={actions.dialog?.orders ?? null}
-        selectedCount={actions.dialog?.orders && !allSelected ? actions.dialog.orders.length : selectedCount}
-        note={allSelected && (totalIsCapped || pagination.total > ALL_MATCHING_LIMIT)
-          ? t("allMatchingCapped", { count: ALL_MATCHING_LIMIT })
-          : undefined}
-        running={actions.running}
-        outcome={actions.outcome}
-        onOpenChange={(open) => {
-          if (!open) actions.closeBulk();
-        }}
-        onRun={actions.runBulk}
-      />
+      {bulkLoaded ? (
+        <Suspense fallback={null}>
+          <BulkOrdersDialog
+            action={actions.dialog?.action ?? null}
+            orders={actions.dialog?.orders ?? null}
+            selectedCount={actions.dialog?.orders && !allSelected ? actions.dialog.orders.length : selectedCount}
+            note={allSelected && (totalIsCapped || pagination.total > ALL_MATCHING_LIMIT)
+              ? t("allMatchingCapped", { count: ALL_MATCHING_LIMIT })
+              : undefined}
+            running={actions.running}
+            outcome={actions.outcome}
+            onOpenChange={(open) => {
+              if (!open) actions.closeBulk();
+            }}
+            onRun={actions.runBulk}
+          />
+        </Suspense>
+      ) : null}
 
-      <ExportOrdersDialog
-        open={exportDialog.open}
-        onOpenChange={exportDialog.setOpen}
-        filters={filters}
-        pageIds={pageRows.map((row) => row.original.id)}
-        selectedIds={selectedIds}
-        allSelected={allSelected}
-        total={pagination.total}
-        totalIsCapped={totalIsCapped}
-      />
+      {exportLoaded ? (
+        <Suspense fallback={null}>
+          <ExportOrdersDialog
+            open={exportDialog.open}
+            onOpenChange={exportDialog.setOpen}
+            filters={filters}
+            pageIds={pageRows.map((row) => row.original.id)}
+            selectedIds={selectedIds}
+            allSelected={allSelected}
+            total={pagination.total}
+            totalIsCapped={totalIsCapped}
+          />
+        </Suspense>
+      ) : null}
     </>
   );
 }

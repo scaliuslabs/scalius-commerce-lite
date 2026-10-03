@@ -1,10 +1,11 @@
-import { useMemo, useState } from "react";
+import { lazy, Suspense, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { useHydrated } from "~/hooks/use-hydrated";
 import { useCurrency } from "~/hooks/use-currency";
 import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions";
+import { useOpenedOnce } from "~/hooks/use-opened-once";
 import { useMessages } from "~/i18n";
 import { orderDetailMessages } from "~/i18n/order-detail";
 import { resourceMessages } from "~/i18n/resource";
@@ -16,11 +17,14 @@ import {
   type OrderReturnDto,
 } from "~/lib/order-return-workflow";
 import type { Order } from "./types";
-import { ApproveReturnDialog } from "./order-returns/ApproveReturnDialog";
-import { CancelReturnDialog } from "./order-returns/CancelReturnDialog";
-import { CreateReturnDialog } from "./order-returns/CreateReturnDialog";
+import { hasReturnsCard } from "./card-rules";
 import { OrderReturnRow, type ReturnDialogAction } from "./order-returns/OrderReturnRow";
-import { ReceiveReturnDialog } from "./order-returns/ReceiveReturnDialog";
+
+// The return dialogs load the first time one is opened.
+const ApproveReturnDialog = lazy(() => import("./order-returns/ApproveReturnDialog").then((module) => ({ default: module.ApproveReturnDialog })));
+const CancelReturnDialog = lazy(() => import("./order-returns/CancelReturnDialog").then((module) => ({ default: module.CancelReturnDialog })));
+const CreateReturnDialog = lazy(() => import("./order-returns/CreateReturnDialog").then((module) => ({ default: module.CreateReturnDialog })));
+const ReceiveReturnDialog = lazy(() => import("./order-returns/ReceiveReturnDialog").then((module) => ({ default: module.ReceiveReturnDialog })));
 
 type DialogType = "create" | ReturnDialogAction["type"];
 const EMPTY_RETURNS: readonly OrderReturnDto[] = [];
@@ -35,6 +39,7 @@ export function OrderReturnsCard({ order, onRefund }: { order: Order; onRefund: 
   const actions = useOrderActionPermissions();
   const canManage = actions.canChangeOrderStatus;
   const [dialog, setDialog] = useState<DialogType | null>(null);
+  const dialogsLoaded = useOpenedOnce(dialog !== null);
   // The return a dialog acts on; kept after closing so the dialog can animate out.
   const [target, setTarget] = useState<OrderReturnDto | null>(null);
   const targetKey = target ? `${target.id}:${target.version}` : "none";
@@ -51,6 +56,8 @@ export function OrderReturnsCard({ order, onRefund }: { order: Order; onRefund: 
   const refundOwed = Math.min(order.refundDue, Number(order.paidAmount ?? 0));
   const canRefundOwed = actions.canRefundOrders && refundOwed > 0 && !order.activeRefundOperation?.active;
   const close = (open: boolean) => !open && setDialog(null);
+  // Before delivery there is nothing to return: the card stays off the page (card-rules.ts).
+  if (!hasReturnsCard(order, returns.length)) return null;
 
   return (
     <Card>
@@ -100,10 +107,14 @@ export function OrderReturnsCard({ order, onRefund }: { order: Order; onRefund: 
         ) : null}
       </CardContent>
 
-      <CreateReturnDialog order={order} returns={returns} open={dialog === "create"} onOpenChange={close} />
-      <ApproveReturnDialog key={`approve:${targetKey}`} orderReturn={target} itemsById={itemsById} open={dialog === "approve"} onOpenChange={close} />
-      <ReceiveReturnDialog key={`receive:${targetKey}`} orderReturn={target} itemsById={itemsById} open={dialog === "receive"} onOpenChange={close} />
-      <CancelReturnDialog key={`cancel:${targetKey}`} orderReturn={target} open={dialog === "cancel"} onOpenChange={close} />
+      {dialogsLoaded ? (
+        <Suspense fallback={null}>
+          <CreateReturnDialog order={order} returns={returns} open={dialog === "create"} onOpenChange={close} />
+          <ApproveReturnDialog key={`approve:${targetKey}`} orderReturn={target} itemsById={itemsById} open={dialog === "approve"} onOpenChange={close} />
+          <ReceiveReturnDialog key={`receive:${targetKey}`} orderReturn={target} itemsById={itemsById} open={dialog === "receive"} onOpenChange={close} />
+          <CancelReturnDialog key={`cancel:${targetKey}`} orderReturn={target} open={dialog === "cancel"} onOpenChange={close} />
+        </Suspense>
+      ) : null}
     </Card>
   );
 }

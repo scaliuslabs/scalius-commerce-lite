@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { toast } from "sonner";
+import { toast } from "~/lib/toast";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { patchApiV1AdminInventoryAlerts, putApiV1AdminInventoryDefaultAlertLevel } from "@scalius/api-client/sdk";
 import type { ColumnDef, Row } from "~/components/admin/data-table/table-config";

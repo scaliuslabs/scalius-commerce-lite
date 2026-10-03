@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
-import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { useCurrency } from "~/hooks/use-currency";
 import type { OrderReturnDto } from "~/lib/order-return-workflow";
 import { useMessages } from "~/i18n";
@@ -54,11 +53,12 @@ export function returnedQuantities(returns: readonly Pick<OrderReturnDto, "lines
 }
 
 /**
- * The order's money, as in Shopify: the lines (on the fulfilment cards) at
- * their full price add up to the subtotal; every discount, the delivery and
- * the tax are here.
+ * The order's money, as in Shopify's Payment card: the lines (on the
+ * fulfilment cards) at their full price add up to the subtotal; every
+ * discount, the delivery and the tax follow, then the total. Rows of the
+ * Payment card's list (`<dl>`), which goes on with what was paid.
  */
-export function OrderSummaryCard({ order }: { order: Order }) {
+export function OrderSummaryRows({ order }: { order: Order }) {
   const t = useMessages(orderDetailMessages);
   const { fmt } = useCurrency();
   const saved = resolveSavedOrderMoneySummary(order);
@@ -123,27 +123,20 @@ export function OrderSummaryCard({ order }: { order: Order }) {
   ];
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{t("summary.title")}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <dl className="space-y-1.5 text-body tabular-nums">
-          {summary.map((row, index) => (
-            <div key={index} className="flex justify-between gap-4">
-              <dt className="min-w-0 text-muted-foreground">
-                {row.label}
-                {row.detail ? <span className="block">{row.detail}</span> : null}
-              </dt>
-              <dd className="shrink-0">{row.value}</dd>
-            </div>
-          ))}
-          <div className="flex justify-between gap-4 border-t pt-2 font-semibold">
-            <dt>{t("summary.total")}</dt>
-            <dd>{saved ? minor(saved.totalMinor) : fmt(order.totalAmount)}</dd>
-          </div>
-        </dl>
-      </CardContent>
-    </Card>
+    <>
+      {summary.map((row, index) => (
+        <div key={index} className="flex justify-between gap-4">
+          <dt className="min-w-0 text-muted-foreground">
+            {row.label}
+            {row.detail ? <span className="block">{row.detail}</span> : null}
+          </dt>
+          <dd className="shrink-0">{row.value}</dd>
+        </div>
+      ))}
+      <div className="flex justify-between gap-4 border-t pt-1 font-semibold">
+        <dt>{t("summary.total")}</dt>
+        <dd>{saved ? minor(saved.totalMinor) : fmt(order.totalAmount)}</dd>
+      </div>
+    </>
   );
 }

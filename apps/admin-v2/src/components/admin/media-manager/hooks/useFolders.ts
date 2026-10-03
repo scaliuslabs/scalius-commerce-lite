@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { toast } from "sonner";
+import { toast } from "~/lib/toast";
 import { mediaText as t } from "~/i18n/media";
 import { MediaApiClient } from "../api";
 import type { MediaFolder } from "../types";

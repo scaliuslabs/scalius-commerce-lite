@@ -29,8 +29,6 @@ export const giftCardKeys = {
   detail: (id: string) => ["gift-cards", "detail", id] as const,
 };
 
-export const GIFT_CARD_PAGE_SIZE = 25;
-
 /** One keyset page, newest first. `q` is sent to the API only, never put in the page URL. */
 export const giftCardsQueryOptions = (query: GiftCardListQuery) =>
   queryOptions({

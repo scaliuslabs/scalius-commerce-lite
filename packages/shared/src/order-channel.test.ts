@@ -6,8 +6,8 @@ import {
   isNormalizedOrderChannelSource,
   isOrderChannel,
   isOrderChannelSourcePreset,
-  normalizeOrderChannelSource,
 } from "./order-channel";
+import { normalizeOrderChannelSource } from "./order-channel-source";
 
 describe("order channel vocabulary", () => {
   it("names the five creating surfaces and nothing else", () => {

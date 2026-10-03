@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { CircleAlert, ListTree, Plus } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "~/lib/toast";
 import {
   deleteApiV1AdminNavigationMenusByMenuId,
   deleteApiV1AdminNavigationMenusByMenuIdItemsByItemId,

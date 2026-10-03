@@ -118,9 +118,10 @@ class ItemError extends Error {
 function issueFromError(error: unknown): ProductImportIssue {
   if (error instanceof ItemError) return error.issue;
   if (error instanceof AppError) {
-    const details = error.details as { field?: unknown } | undefined;
+    const details = error.details as { field?: unknown; reason?: unknown } | undefined;
     return {
-      code: error.code.toLowerCase(),
+      // A rule's own reason when it names one (e.g. digital_stock_is_keys).
+      code: typeof details?.reason === "string" && details.reason ? details.reason : error.code.toLowerCase(),
       message: error.message,
       ...(typeof details?.field === "string" ? { field: details.field } : {}),
     };
@@ -368,8 +369,10 @@ function zodIssues(error: { issues: ReadonlyArray<{ message: string; path: Reado
   return error.issues.map((issue) => {
     const path = issue.path.map(String);
     const variantIndex = path[0] === "optionMatrix" && path[1] === "variants" ? Number(path[2]) : undefined;
+    // A rule that names its reason (e.g. digital_stock_is_keys) keeps it as the code.
+    const reason = (issue as { params?: { reason?: unknown } }).params?.reason;
     return {
-      code: "invalid",
+      code: typeof reason === "string" && reason ? reason : "invalid",
       message: issue.message,
       field: path.join("."),
       ...(variantIndex !== undefined && Number.isInteger(variantIndex) && variantIndex < item.variants.length ? { variantIndex } : {}),

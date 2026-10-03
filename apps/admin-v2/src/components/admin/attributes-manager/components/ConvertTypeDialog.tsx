@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
+import { toast } from "~/lib/toast";
 import { postApiV1AdminAttributesByIdConvertType } from "@scalius/api-client/sdk";
 import {
   ATTRIBUTE_UNIT_MAX_LENGTH,

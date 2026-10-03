@@ -9,6 +9,7 @@ import { OpenAPIHono } from "@hono/zod-openapi";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Database } from "@scalius/database/client";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
+import { DIGITAL_STOCK_IS_KEYS_MESSAGE, DIGITAL_STOCK_IS_KEYS_REASON } from "@scalius/core/modules/products";
 
 import { errorResponseFromError } from "../../utils/api-response";
 import { adminProductsRoutes } from "./products";
@@ -304,6 +305,60 @@ describe("PUT /products/{id} with the hidden SKU of a product without options", 
     const refused = await call("PUT", "/products/prod_copy", details({ defaultSku: simple({ stock: 6, expectedStockVersion: 7 }) }));
 
     expect(refused.status).toBe(409);
+    expect(snapshot()).toEqual(before);
+  });
+});
+
+describe("PUT /products/{id} with a digital SKU, whose stock is its licence keys", () => {
+  const digitalRule = { code: "VALIDATION_ERROR", message: DIGITAL_STOCK_IS_KEYS_MESSAGE, details: { reason: DIGITAL_STOCK_IS_KEYS_REASON } };
+
+  it("refuses the hidden SKU's quantity inside a combined save and changes nothing", async () => {
+    sqlite.exec("UPDATE product_variants SET fulfillment_kind = 'digital' WHERE id = 'var_default'");
+    const before = snapshot();
+
+    const refused = await call("PUT", "/products/prod_copy", details({
+      ...sections(),
+      defaultSku: { sku: "EID-KEYS", trackInventory: true, weight: null, barcode: null, barcodeType: null, stock: 5, expectedStockVersion: 1 },
+      skuCosts: [{ variantId: "var_default", cost: 450, expectedCost: 400 }],
+    }));
+
+    expect(refused.status).toBe(400);
+    expect(refused.body.error).toMatchObject(digitalRule);
+    expect(snapshot()).toEqual(before);
+  });
+
+  it("refuses an option SKU's quantity inside a combined save and changes nothing", async () => {
+    // Red and Blue licence-key SKUs, saved without a quantity.
+    const digital = (row: ReturnType<typeof variant>) => ({ ...row, fulfillmentKind: "digital" });
+    const matrix = colours({ stock: 0 }, { stock: 0 });
+    const created = await call("PUT", "/products/prod_copy", details({
+      optionMatrix: { ...matrix, variants: matrix.variants.map(digital) },
+    }));
+    expect(created.status).toBe(200);
+    const option = sqlite.prepare("SELECT id, name, standard_mapping FROM product_option_definitions WHERE product_id = 'prod_copy' AND deleted_at IS NULL").get() as { id: string; name: string; standard_mapping: string };
+    const values = sqlite.prepare("SELECT id, value FROM product_option_values WHERE option_definition_id = ? AND deleted_at IS NULL ORDER BY position").all(option.id) as Array<{ id: string; value: string }>;
+    const skus = sqlite.prepare(`SELECT v.id, v.sku, v.stock_version, o.option_value_id FROM product_variants v
+      JOIN product_variant_option_values o ON o.variant_id = v.id
+      WHERE v.product_id = 'prod_copy' AND v.deleted_at IS NULL ORDER BY v.sku`).all() as Array<{ id: string; sku: string; stock_version: number; option_value_id: string }>;
+    const revision = (sqlite.prepare("SELECT aggregate_revision FROM products WHERE id = 'prod_copy'").get() as { aggregate_revision: number }).aggregate_revision;
+    const before = snapshot();
+
+    // The same Save also renames the product, adds blocks and a bundle and sets a cost.
+    const refused = await call("PUT", "/products/prod_copy", details({
+      ...sections(),
+      expectedAggregateRevision: revision,
+      optionMatrix: {
+        options: [{ id: option.id, name: option.name, standardMapping: option.standard_mapping, values: values.map(({ id, value }) => ({ id, value })) }],
+        variants: skus.map((sku) => ({
+          ...variant(sku.id, sku.option_value_id, sku.sku, sku.sku === "EID-RED" ? 4 : 0),
+          expectedStockVersion: sku.stock_version,
+        })),
+      },
+      skuCosts: [{ variantId: skus[0]!.id, cost: 450, expectedCost: null }],
+    }));
+
+    expect(refused.status).toBe(400);
+    expect(refused.body.error).toMatchObject(digitalRule);
     expect(snapshot()).toEqual(before);
   });
 });

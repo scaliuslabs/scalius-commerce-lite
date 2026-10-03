@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { toast } from "sonner";
+import { toast } from "~/lib/toast";
 import { GIFT_CARD_LIMITS } from "@scalius/core/modules/gift-cards/browser";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
 import { MoneyInput } from "~/components/admin/shared/MoneyInput";

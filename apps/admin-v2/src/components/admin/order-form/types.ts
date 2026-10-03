@@ -2,14 +2,11 @@ import { z } from "zod";
 import { validateAndFormatPhone } from "@scalius/shared/customer-utils";
 import { translate } from "~/i18n";
 import { orderFormMessages, type OrderFormMessageKey } from "~/i18n/order-form";
-import type { BuyerPriceRange } from "~/lib/format-utils";
+import type { BuyerPriceRange } from "~/lib/price-range";
 import type { FulfillmentKind } from "@scalius/shared/fulfilment";
 import type { CustomizationSchema, LinePropertyInput, ResolvedLineProperty } from "@scalius/shared/line-properties";
-import {
-  ORDER_CHANNEL_SOURCE_MAX_LENGTH,
-  ORDER_CHANNEL_SOURCE_PRESETS,
-  normalizeOrderChannelSource,
-} from "@scalius/shared/order-channel";
+import { ORDER_CHANNEL_SOURCE_MAX_LENGTH, ORDER_CHANNEL_SOURCE_PRESETS } from "@scalius/shared/order-channel";
+import { normalizeOrderChannelSource } from "@scalius/shared/order-channel-source";
 import { orderNeedsAddress } from "./order-line-properties";
 
 export interface Product {

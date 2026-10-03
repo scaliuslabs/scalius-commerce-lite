@@ -81,6 +81,11 @@ import {
     rethrowGiftCardProductRuleViolation,
 } from "../gift-card-rules";
 import {
+    assertDigitalStockInput,
+    planDigitalSkuWrites,
+    rethrowDigitalStockRuleViolation,
+} from "../digital-stock-rules";
+import {
     toStoredCustomizationSchema,
     type CustomizationSchemaInput,
     type CustomizationView,
@@ -438,6 +443,8 @@ export async function createProduct(
     db: Database,
     data: CreateProductInput,
 ): Promise<{ id: string; aggregateRevision: number }> {
+    // A digital SKU's stock is its licence keys (the schema refuses this too).
+    assertDigitalStockInput(data);
     if (data.slug) {
         const existingProduct = await db
             .select({ id: products.id })
@@ -1094,7 +1101,9 @@ export async function updateProduct(
             discountAmountMinor: productVariants.discountAmountMinor,
             fulfillmentKind: productVariants.fulfillmentKind,
             trackInventory: productVariants.trackInventory,
+            stock: productVariants.stock,
             reservedStock: productVariants.reservedStock,
+            sku: productVariants.sku,
             imageId: productVariants.imageId,
         })
         .from(productVariants)
@@ -1103,6 +1112,17 @@ export async function updateProduct(
     // untracked in this batch; discounts and open reservations are refused.
     const isGiftCard = data.isGiftCard ?? existingProduct.isGiftCard === true;
     if (isGiftCard) assertGiftCardUpdateAllowed(data, activeVariants);
+    // The Shipping card's kind: a SKU turns digital only without stock (its
+    // stock becomes its licence keys). Gift cards keep their own rules.
+    const fulfillmentKind = data.fulfillmentKind;
+    const digitalKindGuards = !isGiftCard && fulfillmentKind !== undefined
+        ? await planDigitalSkuWrites(db, activeVariants.map((variant) => ({
+            variantId: variant.id,
+            sku: variant.sku,
+            before: { kind: variant.fulfillmentKind, stock: variant.stock, trackInventory: variant.trackInventory },
+            after: { kind: fulfillmentKind, stock: variant.stock, trackInventory: variant.trackInventory },
+        })))
+        : [];
     const mediaPlan = await validateProductMediaPlan(db, id, data.media, true);
     const submittedMediaIds = new Set(mediaPlan.rows.map((row) => row.id));
     const removedAssociationIds = mediaPlan.existingRows
@@ -1260,6 +1280,8 @@ export async function updateProduct(
                 isNull(productVariants.deletedAt),
                 sql`${productVariants.fulfillmentKind} <> ${data.fulfillmentKind}`,
             )));
+        // SKUs that turned digital still hold no stock at commit.
+        batchOps.push(...digitalKindGuards);
     }
 
     // Unchanged details leave the revision to the aggregate bump (which also re-derives the price).
@@ -1274,6 +1296,7 @@ export async function updateProduct(
         saved = readProductAggregateRevisionResult(results[revisionIndex]);
     } catch (error) {
         rethrowGiftCardProductRuleViolation(error);
+        rethrowDigitalStockRuleViolation(error);
         rethrowProductSaveCompositionError(error);
         return rethrowProductAggregateRevisionConflictIfStale(
             db,

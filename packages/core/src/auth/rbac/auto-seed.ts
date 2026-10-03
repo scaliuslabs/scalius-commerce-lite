@@ -8,7 +8,8 @@ import {
   roles,
   rolePermissions,
 } from "@scalius/database/schema";
-import { PERMISSIONS, getAllPermissions } from "./permissions";
+import { PERMISSIONS } from "./permissions";
+import { getAllPermissions } from "./permission-metadata";
 
 // A versioned KV marker avoids database reads across isolates and must expire or
 // be purged after an intentional manual database reset. Do not retain an

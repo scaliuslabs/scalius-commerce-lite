@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { orderFormMessages } from "~/i18n/order-form";
+import { orderEditLockMessages } from "~/i18n/order-edit-locks";
 import { editLockMessageKey, orderEditState, savedDeliveryMethod } from "./-order-form-route-state";
 import { formItems } from "~/components/admin/order-form/order-form-data";
 
@@ -28,8 +28,8 @@ describe("edit order state", () => {
     ]) {
       const key = editLockMessageKey(reason);
       expect(key).not.toBe("lockUnknown");
-      expect(orderFormMessages.en[key]).not.toMatch(/snapshot|immutable|_/);
-      expect(orderFormMessages.bn[key]).toBeTruthy();
+      expect(orderEditLockMessages.en[key]).not.toMatch(/snapshot|immutable|_/);
+      expect(orderEditLockMessages.bn[key]).toBeTruthy();
     }
     expect(editLockMessageKey("something_new")).toBe("lockUnknown");
     expect(editLockMessageKey(null)).toBe("lockUnknown");

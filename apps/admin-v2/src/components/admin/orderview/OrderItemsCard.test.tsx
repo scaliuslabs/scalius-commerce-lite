@@ -6,7 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { orderDetailMessages } from "~/i18n/order-detail";
 import type { Order } from "./types";
-import { OrderSummaryCard } from "./OrderItemsCard";
+import { OrderSummaryRows } from "./OrderItemsCard";
 
 vi.mock("@tanstack/react-router", () => ({
   Link: ({ to, params, children, className }: { to: string; params?: Record<string, string>; children: ReactNode; className?: string }) => (
@@ -51,7 +51,7 @@ const withDeliveryCode = {
 /** Reads "৳2,400.00" / "−৳285.00" as a number. */
 const amountIn = (text: string) => Number(/−?৳[\d,]+\.\d{2}$/.exec(text)?.[0].replace(/[৳,]/g, "").replace("−", "-") ?? Number.NaN);
 
-describe("OrderSummaryCard", () => {
+describe("OrderSummaryRows (the Payment card's money)", () => {
   let host: HTMLDivElement;
   let root: Root;
   let client: QueryClient;
@@ -73,7 +73,7 @@ describe("OrderSummaryCard", () => {
     client.setQueryData(["returns", "ord_1"], { returns });
     await act(async () => root.render(
       <QueryClientProvider client={client}>
-        <OrderSummaryCard order={shown} />
+        <dl><OrderSummaryRows order={shown} /></dl>
       </QueryClientProvider>,
     ));
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });

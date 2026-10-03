@@ -107,7 +107,8 @@ describe("ResourceListPage", () => {
     await act(async () => first!.click());
     await act(async () => button("Move to trash")!.click());
     expect(run).not.toHaveBeenCalled();
-    expect(document.body.textContent).toContain("Move 1 to trash?");
+    // The confirmation loads the first time it is asked for.
+    await vi.waitFor(() => expect(document.body.textContent).toContain("Move 1 to trash?"));
 
     const confirm = [...document.querySelectorAll('[role="alertdialog"] button')].find(
       (element) => element.textContent?.trim() === "Move to trash",

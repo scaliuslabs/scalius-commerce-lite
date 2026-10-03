@@ -12,7 +12,7 @@ import { unixToDate } from "@scalius/shared/timestamps";
 import { apiData } from "~/lib/api";
 import { queryKeys } from "~/lib/query-keys";
 import { getPagePublicationMode, isPageLive } from "~/lib/page-publication";
-import type { PageListItem } from "~/lib/api-query-options/pages";
+import { contentListQuery, type PageListItem } from "~/lib/api-query-options/pages";
 import { useStorefrontUrl } from "~/hooks/use-storefront-url";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { Button } from "~/components/ui/button";
@@ -22,7 +22,7 @@ import { StatusBadge } from "~/components/admin/resource/StatusBadge";
 import { DateText, sortHeader } from "~/components/admin/resource/columns";
 import { formatDateTime, useMessages } from "~/i18n";
 import { contentMessages } from "~/i18n/content";
-import { contentListName, contentListQuery, type ContentType, type validatePageSearch } from "./page-list-state";
+import { contentListName, type ContentType, type validatePageSearch } from "./page-list-state";
 import { useListSearch } from "~/lib/list-search";
 
 const INVALIDATE = [queryKeys.pages.all];

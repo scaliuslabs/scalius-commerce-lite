@@ -21,6 +21,7 @@ import { productContentBlockInputListSchema } from "./content-blocks";
 import { productBundleTierInputListSchema } from "./bundles";
 import { MAX_PRODUCT_MEDIA_ASSOCIATIONS } from "./media";
 import { addGiftCardInputIssues } from "./gift-card-rules";
+import { DIGITAL_STOCK_IS_KEYS_REASON, digitalStockInputIssues } from "./digital-stock-rules";
 
 const canonicalPathSchema = z
     .string()
@@ -244,6 +245,12 @@ export const createProductSchema = productBaseSchema
         });
     })
     .superRefine(addGiftCardInputIssues)
+    // A digital SKU's stock is its licence keys: it is created without a quantity.
+    .superRefine((value, context) => {
+        for (const issue of digitalStockInputIssues(value)) {
+            context.addIssue({ code: "custom", path: issue.path, message: issue.message, params: { reason: DIGITAL_STOCK_IS_KEYS_REASON } });
+        }
+    })
     .refine((value) => !(value.optionMatrix && value.defaultSku), {
         message: "Send either optionMatrix or defaultSku, not both.",
         path: ["defaultSku"],

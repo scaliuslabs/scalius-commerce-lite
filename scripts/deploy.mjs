@@ -1010,6 +1010,11 @@ export function getDistSecretCommands(targets) {
       ? [{
           cmd: "node scripts/check-api-bundle.mjs --dist apps/api/dist",
           label: "Verify the API Worker (with bundled plugins) fits the Workers script size limit",
+        }, {
+          // The dashboard ships inside the API Worker; its first-render budgets
+          // regressed unnoticed while this ran only by hand.
+          cmd: "node scripts/admin-perf-check.mjs",
+          label: "Verify every dashboard route renders within its bundle budget",
         }]
       : []),
   ];

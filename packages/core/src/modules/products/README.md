@@ -98,6 +98,7 @@ Storefront category ([slug].astro)
 | `content-blocks.ts` | The `content_blocks` section (bounded list, `content_block` chunk read, replace with keep-by-id; strict `@scalius/shared/product-content-blocks` schemas, sanitised rich-text HTML, ready media checked and guarded in the batch) and the product page's one ordered block read. Tabs mirrored from `product_rich_content` (0090 triggers, id `pcb_<row id>`) are read-only here and keep their legacy ids on the page until the contract step drops that table. |
 | `bundles.ts` | The `bundles` section (quantity tiers, whole taka, no gift cards) and the active-tier reads the product page and checkout price from. |
 | `emi.ts` | The product page's "EMI on card payment, from X/month" line from the `emi` settings document; informational only. |
+| `digital-stock-rules.ts` | A digital SKU's stock is its licence keys: every manual path (create, product/variant/option-matrix saves, inventory adjust and count, scanner, CSV import, purchase orders, transfers) refuses to change it with one `ValidationError` (`details.reason = "digital_stock_is_keys"`, `details.field` where there is one). A SKU turns digital only with no stock (or exactly its unused keys), and a digital SKU with a ready key pool keeps tracking. Batch guards keep it true against a racing kind or stock change. Key import/revoke and order flows still move the stock; gift cards keep their own rules (`gift-card-rules.ts`). Tests: `digital-stock.d1.test.ts` (here, `inventory/`, `store-transfer/digital-stock-import`). |
 
 ## API Endpoints
 

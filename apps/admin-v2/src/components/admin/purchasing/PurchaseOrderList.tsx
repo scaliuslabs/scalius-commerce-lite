@@ -53,7 +53,7 @@ export function PurchaseOrderList({ tab, supplierId, onTabChange, onSupplierChan
         <Link
           to="/admin/inventory/purchase-orders/$purchaseOrderId"
           params={{ purchaseOrderId: row.original.id }}
-          className="whitespace-nowrap font-medium hover:underline"
+          className="whitespace-nowrap font-mono font-medium hover:underline"
         >
           {row.original.displayNumber}
         </Link>
@@ -64,14 +64,14 @@ export function PurchaseOrderList({ tab, supplierId, onTabChange, onSupplierChan
       header: t("colSupplier"),
       meta: { mobile: "secondary", priority: 80, minWidth: 160 },
       cell: ({ row }) => row.original.supplier
-        ? <span className="line-clamp-2 break-words">{row.original.supplier.name}</span>
+        ? <span className="block truncate" title={row.original.supplier.name}>{row.original.supplier.name}</span>
         : <span className="text-muted-foreground">{t("noSupplier")}</span>,
     },
     ...(severalLocations ? [{
       id: "destination",
       header: t("colDestination"),
       meta: { priority: 40, minWidth: 140 },
-      cell: ({ row }) => <span className="truncate">{row.original.destination.name}</span>,
+      cell: ({ row }) => <span className="block truncate" title={row.original.destination.name}>{row.original.destination.name}</span>,
     } satisfies ColumnDef<PurchaseOrderSummary, unknown>] : []),
     {
       id: "status",

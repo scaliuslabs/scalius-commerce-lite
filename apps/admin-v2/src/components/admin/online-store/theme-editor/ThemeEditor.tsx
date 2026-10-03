@@ -20,7 +20,7 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "r
 import { useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { ArrowLeft, ExternalLink, History, Laptop, Monitor, MoreHorizontal, Redo2, Smartphone, Trash2, Undo2 } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "~/lib/toast";
 import {
   postApiV1AdminSettingsThemeDiscard,
   postApiV1AdminSettingsThemeDraft,

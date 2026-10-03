@@ -9,7 +9,7 @@ export interface ProductKindRules {
   giftCard: boolean;
   /** Free delivery: nothing ships for a gift card. */
   showShipping: boolean;
-  /** Package weight: never for a gift card or a service. */
+  /** Package weight: only for what is packed (never a gift card, a download or a service). */
   showWeight: boolean;
   /** Product and variant discounts: a gift card is worth its price, so it is never discounted. */
   showDiscount: boolean;
@@ -17,6 +17,8 @@ export interface ProductKindRules {
   showInventory: boolean;
   /** The fulfilment kind every SKU must have, or null when the merchant chooses (the Fulfilment select). */
   forcedFulfillmentKind: "digital" | null;
+  /** The product's Fulfilment select (a gift card is digital). */
+  fulfilmentMode: ProductFulfilmentMode;
 }
 
 export function productKindRules(values: {
@@ -28,15 +30,27 @@ export function productKindRules(values: {
   return {
     giftCard,
     showShipping: !giftCard,
-    showWeight: !giftCard && kind !== "service",
+    showWeight: kind === "physical" || kind === "mixed",
     showDiscount: !giftCard,
     showInventory: !giftCard,
     forcedFulfillmentKind: giftCard ? "digital" : null,
+    fulfilmentMode: kind,
   };
 }
 
 /** A physical product with nothing hidden: what the editor shows without a provider. */
 export const DEFAULT_PRODUCT_KIND_RULES: ProductKindRules = productKindRules({});
+
+/**
+ * A digital SKU (not a gift card's): its quantity is never typed in. With
+ * tracking on it is the licence keys imported; off, downloads are unlimited
+ * (packages/core/src/modules/digital/README.md, "Pool = stock").
+ */
+export function isDigitalSku(rules: ProductKindRules, sku: { fulfillmentKind?: string | null }): boolean {
+  if (rules.giftCard) return false;
+  if (rules.fulfilmentMode === "mixed") return sku.fulfillmentKind === "digital";
+  return rules.fulfilmentMode === "digital";
+}
 
 type ConstrainableSku = {
   trackInventory: boolean;
@@ -49,16 +63,18 @@ type ConstrainableSku = {
 
 /**
  * A SKU as the kind allows it to be saved: a gift card's SKU is untracked,
- * undiscounted and digital (the API refuses anything else). `keepStock` keeps
- * a saved SKU's recorded quantity so a save never writes stock; new rows start
- * at 0. Returns the same object when nothing changes, so memoised rows keep
- * their identity.
+ * undiscounted and digital (the API refuses anything else), and a digital
+ * SKU carries no typed quantity. `keepStock` keeps a saved SKU's recorded
+ * quantity so a save never writes stock; new rows start at 0. Returns the
+ * same object when nothing changes, so memoised rows keep their identity.
  */
 export function constrainSkuForKind<T extends ConstrainableSku>(sku: T, rules: ProductKindRules, keepStock = false): T {
   const patch: Partial<ConstrainableSku> = {};
   if (!rules.showInventory) {
     if (sku.trackInventory) patch.trackInventory = false;
-    if (!keepStock && sku.stock !== undefined && sku.stock !== 0) patch.stock = 0;
+  }
+  if ((!rules.showInventory || isDigitalSku(rules, sku)) && !keepStock && sku.stock !== undefined && sku.stock !== 0) {
+    patch.stock = 0;
   }
   if (!rules.showDiscount) {
     if (sku.discountType !== undefined && sku.discountType !== "percentage") patch.discountType = "percentage";

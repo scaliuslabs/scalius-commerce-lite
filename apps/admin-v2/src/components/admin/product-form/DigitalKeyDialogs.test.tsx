@@ -43,13 +43,17 @@ describe("digital delivery", () => {
   });
   const button = (label: string) => [...document.querySelectorAll("button")].find((element) => element.textContent === label);
 
-  it("stays away from physical products and gift cards", async () => {
+  it("is listed closed on physical products and stays away from gift cards", async () => {
     function Harness({ values }: { values: Partial<ProductFormValues> }) {
       const form = useForm<ProductFormValues>({ defaultValues: values as ProductFormValues });
       return <DigitalDeliveryCard form={form} productId="prod_1" readOnly={false} />;
     }
     await act(async () => root.render(<Harness values={{ fulfillmentKind: "physical", isGiftCard: false }} />));
-    expect(host.innerHTML).toBe("");
+    // Always findable by title, closed, saying what it is for; nothing digital is loaded.
+    expect(host.textContent).toContain(en.title);
+    expect(host.textContent).toContain(en.notDigital);
+    expect(host.querySelector('button[aria-expanded="false"]')).not.toBeNull();
+    expect(sdk.createAsset).not.toHaveBeenCalled();
     await act(async () => root.render(<Harness key="gift" values={{ fulfillmentKind: "digital", isGiftCard: true }} />));
     expect(host.innerHTML).toBe("");
   });

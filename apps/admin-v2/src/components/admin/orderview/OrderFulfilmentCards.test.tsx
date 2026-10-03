@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { orderDetailMessages } from "~/i18n/order-detail";
 import type { Order, OrderFulfillment, OrderItem } from "./types";
 import { OrderFulfilmentCards } from "./OrderFulfilmentCards";
-import { fulfilledGroups, unfulfilledGroups } from "./fulfilment-groups";
+import { fulfilledGroups, returnedByGroup, unfulfilledGroups } from "./fulfilment-groups";
 
 const mocks = vi.hoisted(() => ({
   canManage: true,
@@ -95,6 +95,30 @@ describe("fulfilment groups", () => {
   });
 });
 
+describe("returned units per hand-over", () => {
+  const two = (quantities: number[]) => fulfilledGroups(order({
+    items: [line("k1", "Kurta", { quantity: quantities.reduce((sum, value) => sum + value, 0), fulfilledQuantity: quantities.reduce((sum, value) => sum + value, 0) })],
+    fulfillments: quantities.map((quantity, index) => riderParcel({
+      id: `ful_${index}`,
+      createdAt: `2026-09-25T0${index}:00:00.000Z`,
+      lines: [{ orderItemId: "k1", quantity }],
+    })),
+  }));
+
+  it.each([
+    { parcels: [1, 1], returned: 0, expected: [0, 0] },
+    { parcels: [1, 1], returned: 1, expected: [1, 0] },
+    { parcels: [1, 1], returned: 2, expected: [1, 1] },
+    { parcels: [2, 3], returned: 4, expected: [2, 2] },
+    { parcels: [2, 3], returned: 9, expected: [2, 3] },
+  ])("parcels $parcels with $returned returned show $expected (oldest first, never double-counted)", ({ parcels, returned, expected }) => {
+    const groups = two(parcels);
+    const shown = returnedByGroup(groups, new Map([["k1", returned]])).map((map) => map.get("k1") ?? 0);
+    expect(shown).toEqual(expected);
+    expect(shown.reduce((sum, value) => sum + value, 0)).toBe(Math.min(returned, parcels.reduce((sum, value) => sum + value, 0)));
+  });
+});
+
 describe("OrderFulfilmentCards", () => {
   let host: HTMLDivElement;
   let root: Root;
@@ -142,6 +166,25 @@ describe("OrderFulfilmentCards", () => {
     expect(ship.textContent).toContain("Fit: Slim (+৳100.00)");
     await act(async () => button(ship, en["fulfill.submit"])!.click());
     expect(mocks.dialogs).toContain("ship");
+  });
+
+  it("shows a returned unit once, on the oldest parcel that held it, when a line went out in two parcels", async () => {
+    // Two units, sent as two one-unit parcels; one unit came back (the return names the line, not the parcel).
+    client.setQueryData(["returns", "ord_1"], {
+      returns: [{ id: "ret_1", lines: [{ orderItemId: "k1", receivedQuantity: 1 }] }],
+    });
+    await render(order({
+      status: "delivered",
+      items: [line("k1", "Kurta", { quantity: 2, fulfilledQuantity: 2 })],
+      fulfillments: [
+        riderParcel({ id: "ful_late", createdAt: "2026-09-25T10:00:00.000Z" }),
+        riderParcel({ id: "ful_early", createdAt: "2026-09-25T08:00:00.000Z" }),
+      ],
+    }));
+    const cards = [...host.querySelectorAll<HTMLElement>('[data-testid="fulfilled-ship"]')];
+    expect(cards).toHaveLength(2);
+    const returnedLine = en["items.returned"].replace("{count}", "1");
+    expect(cards.map((element) => element.textContent?.includes(returnedLine))).toEqual([true, false]);
   });
 
   describe("fulfilment location", () => {

@@ -14,6 +14,7 @@ import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { apiData } from "~/lib/api";
 import { marketingConsentQuery } from "~/lib/api-query-options/settings-screens";
 import { useMessages } from "~/i18n";
+import { customerMarketingMessages } from "~/i18n/customer-marketing";
 import { customersMessages } from "~/i18n/customers";
 import { settingsMessages } from "~/i18n/settings";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
@@ -46,7 +47,8 @@ function toggleChannel(channels: readonly MarketingChannel[], channel: Marketing
  * One settings document, saved at the revision it was loaded at.
  */
 export function MarketingConsentCard() {
-  const t = useMessages(customersMessages);
+  const t = useMessages(customerMarketingMessages);
+  const c = useMessages(customersMessages);
   const common = useMessages(settingsMessages);
   const canEdit = useHasPermission(ADMIN_PERMISSIONS.SETTINGS_GENERAL_EDIT);
   const { values, setValue, isLoadError, refetch } = useSettingsForm<Values, Values & { revision: number }, number>({
@@ -112,7 +114,7 @@ export function MarketingConsentCard() {
                   disabled={!canEdit || (on && checkout.channels.length === 1)}
                   onCheckedChange={() => set({ ...settings, checkout: { ...checkout, channels: toggleChannel(checkout.channels, channel) } })}
                 />
-                {t(`channel.${channel}`)}
+                {c(`channel.${channel}`)}
               </label>
             );
           })}

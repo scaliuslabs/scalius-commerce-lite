@@ -13,7 +13,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { CircleAlert, Loader2, MessageCircleWarning } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "~/lib/toast";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { getServerFnError } from "~/lib/api-helpers";
 import { Button } from "~/components/ui/button";

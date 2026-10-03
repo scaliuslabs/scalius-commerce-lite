@@ -1,6 +1,6 @@
 import React from "react";
 import { useInfiniteQuery, useMutation } from "@tanstack/react-query";
-import { toast } from "sonner";
+import { toast } from "~/lib/toast";
 import {
   getApiV1AdminDigitalAssetsByIdLicenceKeys,
   postApiV1AdminDigitalAssetsByIdLicenceKeys,

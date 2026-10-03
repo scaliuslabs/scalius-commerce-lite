@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, Laptop, MonitorSmartphone, Smartphone, Tablet } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "~/lib/toast";
 import { deleteApiV1AdminAuthSessions, deleteApiV1AdminAuthSessionsByCommandId } from "@scalius/api-client/sdk";
 import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Badge } from "~/components/ui/badge";

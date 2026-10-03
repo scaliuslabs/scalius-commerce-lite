@@ -11,8 +11,6 @@
 // slug of at most 64 characters: where a dashboard order came in (facebook,
 // whatsapp, walk_in, …), or a plugin/app id for `app` orders.
 
-import { toHandle } from "./handle";
-
 export const ORDER_CHANNELS = ["online_store", "admin", "pos", "agent", "app"] as const;
 export type OrderChannel = (typeof ORDER_CHANNELS)[number];
 
@@ -23,7 +21,7 @@ export const ORDER_CHANNEL_SOURCE_PATTERN = /^[a-z0-9]+(?:_[a-z0-9]+)*$/;
 /**
  * The sources the dashboard offers for a staff-created order: the common
  * Bangladesh order channels. Anything else is typed as free text and
- * normalized with {@link normalizeOrderChannelSource}.
+ * normalized with `normalizeOrderChannelSource` (order-channel-source.ts).
  */
 export const ORDER_CHANNEL_SOURCE_PRESETS = [
   "facebook",
@@ -40,21 +38,6 @@ export function isOrderChannel(value: unknown): value is OrderChannel {
 
 export function isOrderChannelSourcePreset(value: unknown): value is OrderChannelSourcePreset {
   return typeof value === "string" && (ORDER_CHANNEL_SOURCE_PRESETS as readonly string[]).includes(value);
-}
-
-/**
- * Normalizes a free-text source label to the stored slug: Bangla is
- * transliterated ("ফেসবুক পেজ" → "fesbuk_pej"), Latin accents are folded,
- * everything else becomes a single `_`, and the result is at most 64
- * characters. Returns null when nothing readable is left.
- */
-export function normalizeOrderChannelSource(value: unknown): string | null {
-  if (typeof value !== "string") return null;
-  const slug = toHandle(value)
-    .replace(/-/g, "_")
-    .slice(0, ORDER_CHANNEL_SOURCE_MAX_LENGTH)
-    .replace(/_+$/, "");
-  return slug.length > 0 ? slug : null;
 }
 
 /** True when a stored value is already a normalized source slug. */

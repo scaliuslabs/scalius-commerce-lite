@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "@tanstack/react-router";
 import { AlertCircle, Copy, Download, Mail, Smartphone } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "~/lib/toast";
 import { postApiV1AdminAuth2FaMethod, postApiV1AdminAuth2FaMethodChallenge } from "@scalius/api-client/sdk";
 import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Badge } from "~/components/ui/badge";

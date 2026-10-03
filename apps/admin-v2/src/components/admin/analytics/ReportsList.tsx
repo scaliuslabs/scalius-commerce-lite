@@ -7,11 +7,13 @@ import {
   ANALYTICS_REPORT_CATEGORIES,
   type AnalyticsReportCategory,
 } from "@scalius/shared/analytics-reports";
+import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
 import { PageHeader } from "~/components/admin/resource/PageHeader";
 import { useMessages } from "~/i18n";
 import { analyticsMessages, type AnalyticsMessageKey } from "~/i18n/analytics";
+import { resourceMessages } from "~/i18n/resource";
 import { analyticsReportCatalogQueryOptions } from "~/lib/api-query-options/analytics";
 import type { AnalyticsSearch } from "./analytics-selection";
 
@@ -22,6 +24,7 @@ import type { AnalyticsSearch } from "./analytics-selection";
  */
 export function ReportsList({ search }: { search: AnalyticsSearch }) {
   const t = useMessages(analyticsMessages);
+  const r = useMessages(resourceMessages);
   const [query, setQuery] = useState("");
   const catalog = useQuery(analyticsReportCatalogQueryOptions());
   const availability = new Map(catalog.data?.reports.map((report) => [report.id, report]) ?? []);
@@ -52,7 +55,11 @@ export function ReportsList({ search }: { search: AnalyticsSearch }) {
         <Card>
           <CardHeader>
             <CardTitle>{t("noReportsMatch")}</CardTitle>
+            <p className="text-body text-muted-foreground">{r("noResultsHint")}</p>
           </CardHeader>
+          <CardContent>
+            <Button type="button" variant="outline" onClick={() => setQuery("")}>{r("clearSearch")}</Button>
+          </CardContent>
         </Card>
       ) : (
         <div className="grid items-start gap-4 lg:grid-cols-2">

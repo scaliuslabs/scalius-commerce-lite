@@ -106,6 +106,11 @@ describe("VariantsTab incoming stock and unit cost", () => {
     await act(async () => select.click());
     const editCost = Array.from(host.querySelectorAll("button")).find((button) => button.textContent === t("editCost"))!;
     await act(async () => editCost.click());
+    // The dialog's code loads on the first Edit cost.
+    await act(async () => {
+      await import("./BulkCostDialog");
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
 
     const dialog = document.querySelector('[role="dialog"]')!;
     expect(dialog.textContent).toContain(t("costDialogTitle"));
