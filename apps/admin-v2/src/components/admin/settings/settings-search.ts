@@ -27,6 +27,7 @@ export const SETTINGS_CARDS = [
   { page: "taxes", card: "taxRates" },
   { page: "taxes", card: "taxOverrides" },
   { page: "locations", card: "inventoryLocations" },
+  { page: "markets", card: "markets" },
   { page: "customerAccounts", card: "customerFields" },
   { page: "customerAccounts", card: "customerSignIn" },
   { page: "customerAccounts", card: "marketingConsent" },

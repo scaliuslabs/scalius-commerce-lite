@@ -17,7 +17,7 @@ export function useCurrency() {
 
   const symbol = settings?.currencySymbol as string ?? DEFAULT_SYMBOL;
   const code = settings?.currencyCode as string ?? DEFAULT_CODE;
-  // Settings → Store details: whole units or minor units (a BDT store's default: whole taka).
+  // The backup market's price increment (Settings → Markets): whole units or minor units.
   const priceIncrementMinor = resolvePriceIncrementMinor(code, settings?.priceIncrementMinor);
 
   const fmt = useCallback(

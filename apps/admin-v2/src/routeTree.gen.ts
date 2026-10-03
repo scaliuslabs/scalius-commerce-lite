@@ -68,6 +68,7 @@ import { Route as AdminSettingsCustomerAccountsRouteImport } from './routes/admi
 import { Route as AdminSettingsImportExportRouteImport } from './routes/admin/settings/import-export'
 import { Route as AdminSettingsIntegrationsRouteImport } from './routes/admin/settings/integrations'
 import { Route as AdminSettingsLocationsRouteImport } from './routes/admin/settings/locations'
+import { Route as AdminSettingsMarketsRouteImport } from './routes/admin/settings/markets'
 import { Route as AdminSettingsNotificationsRouteImport } from './routes/admin/settings/notifications'
 import { Route as AdminSettingsPaymentsRouteImport } from './routes/admin/settings/payments'
 import { Route as AdminSettingsPoliciesRouteImport } from './routes/admin/settings/policies'
@@ -100,6 +101,7 @@ import { Route as AdminOrdersListIndexRouteImport } from './routes/admin/orders/
 import { Route as AdminOrdersListAbandonedRouteImport } from './routes/admin/orders/_list/abandoned'
 import { Route as AdminPagesPageIdEditRouteImport } from './routes/admin/pages/$pageId/edit'
 import { Route as AdminProductsProductIdEditRouteImport } from './routes/admin/products/$productId/edit'
+import { Route as AdminSettingsMarketsMarketIdRouteImport } from './routes/admin/settings/markets_.$marketId'
 import { Route as AdminSettingsNotificationsEventRouteImport } from './routes/admin/settings/notifications_.$event'
 import { Route as AdminSettingsPoliciesWarrantyRouteImport } from './routes/admin/settings/policies_.warranty'
 import { Route as AdminSettingsShippingAreasRouteImport } from './routes/admin/settings/shipping_.areas'
@@ -416,6 +418,11 @@ const AdminSettingsLocationsRoute = AdminSettingsLocationsRouteImport.update({
   path: '/locations',
   getParentRoute: () => AdminSettingsRouteRoute,
 } as any)
+const AdminSettingsMarketsRoute = AdminSettingsMarketsRouteImport.update({
+  id: '/markets',
+  path: '/markets',
+  getParentRoute: () => AdminSettingsRouteRoute,
+} as any)
 const AdminSettingsNotificationsRoute =
   AdminSettingsNotificationsRouteImport.update({
     id: '/notifications',
@@ -596,6 +603,12 @@ const AdminProductsProductIdEditRoute =
     path: '/products/$productId/edit',
     getParentRoute: () => AdminRoute,
   } as any)
+const AdminSettingsMarketsMarketIdRoute =
+  AdminSettingsMarketsMarketIdRouteImport.update({
+    id: '/markets_/$marketId',
+    path: '/markets/$marketId',
+    getParentRoute: () => AdminSettingsRouteRoute,
+  } as any)
 const AdminSettingsNotificationsEventRoute =
   AdminSettingsNotificationsEventRouteImport.update({
     id: '/notifications_/$event',
@@ -719,6 +732,7 @@ export interface FileRoutesByFullPath {
   '/admin/settings/import-export': typeof AdminSettingsImportExportRoute
   '/admin/settings/integrations': typeof AdminSettingsIntegrationsRoute
   '/admin/settings/locations': typeof AdminSettingsLocationsRoute
+  '/admin/settings/markets': typeof AdminSettingsMarketsRoute
   '/admin/settings/notifications': typeof AdminSettingsNotificationsRoute
   '/admin/settings/payments': typeof AdminSettingsPaymentsRoute
   '/admin/settings/policies': typeof AdminSettingsPoliciesRoute
@@ -759,6 +773,7 @@ export interface FileRoutesByFullPath {
   '/admin/orders/abandoned': typeof AdminOrdersListAbandonedRouteWithChildren
   '/admin/pages/$pageId/edit': typeof AdminPagesPageIdEditRoute
   '/admin/products/$productId/edit': typeof AdminProductsProductIdEditRoute
+  '/admin/settings/markets/$marketId': typeof AdminSettingsMarketsMarketIdRoute
   '/admin/settings/notifications/$event': typeof AdminSettingsNotificationsEventRoute
   '/admin/settings/policies/warranty': typeof AdminSettingsPoliciesWarrantyRoute
   '/admin/settings/shipping/areas': typeof AdminSettingsShippingAreasRoute
@@ -822,6 +837,7 @@ export interface FileRoutesByTo {
   '/admin/settings/import-export': typeof AdminSettingsImportExportRoute
   '/admin/settings/integrations': typeof AdminSettingsIntegrationsRoute
   '/admin/settings/locations': typeof AdminSettingsLocationsRoute
+  '/admin/settings/markets': typeof AdminSettingsMarketsRoute
   '/admin/settings/notifications': typeof AdminSettingsNotificationsRoute
   '/admin/settings/payments': typeof AdminSettingsPaymentsRoute
   '/admin/settings/policies': typeof AdminSettingsPoliciesRoute
@@ -862,6 +878,7 @@ export interface FileRoutesByTo {
   '/admin/orders/abandoned': typeof AdminOrdersListAbandonedRouteWithChildren
   '/admin/pages/$pageId/edit': typeof AdminPagesPageIdEditRoute
   '/admin/products/$productId/edit': typeof AdminProductsProductIdEditRoute
+  '/admin/settings/markets/$marketId': typeof AdminSettingsMarketsMarketIdRoute
   '/admin/settings/notifications/$event': typeof AdminSettingsNotificationsEventRoute
   '/admin/settings/policies/warranty': typeof AdminSettingsPoliciesWarrantyRoute
   '/admin/settings/shipping/areas': typeof AdminSettingsShippingAreasRoute
@@ -929,6 +946,7 @@ export interface FileRoutesById {
   '/admin/settings/import-export': typeof AdminSettingsImportExportRoute
   '/admin/settings/integrations': typeof AdminSettingsIntegrationsRoute
   '/admin/settings/locations': typeof AdminSettingsLocationsRoute
+  '/admin/settings/markets': typeof AdminSettingsMarketsRoute
   '/admin/settings/notifications': typeof AdminSettingsNotificationsRoute
   '/admin/settings/payments': typeof AdminSettingsPaymentsRoute
   '/admin/settings/policies': typeof AdminSettingsPoliciesRoute
@@ -969,6 +987,7 @@ export interface FileRoutesById {
   '/admin/orders/_list/abandoned': typeof AdminOrdersListAbandonedRouteWithChildren
   '/admin/pages/$pageId/edit': typeof AdminPagesPageIdEditRoute
   '/admin/products/$productId/edit': typeof AdminProductsProductIdEditRoute
+  '/admin/settings/markets_/$marketId': typeof AdminSettingsMarketsMarketIdRoute
   '/admin/settings/notifications_/$event': typeof AdminSettingsNotificationsEventRoute
   '/admin/settings/policies_/warranty': typeof AdminSettingsPoliciesWarrantyRoute
   '/admin/settings/shipping_/areas': typeof AdminSettingsShippingAreasRoute
@@ -1037,6 +1056,7 @@ export interface FileRouteTypes {
     | '/admin/settings/import-export'
     | '/admin/settings/integrations'
     | '/admin/settings/locations'
+    | '/admin/settings/markets'
     | '/admin/settings/notifications'
     | '/admin/settings/payments'
     | '/admin/settings/policies'
@@ -1077,6 +1097,7 @@ export interface FileRouteTypes {
     | '/admin/orders/abandoned'
     | '/admin/pages/$pageId/edit'
     | '/admin/products/$productId/edit'
+    | '/admin/settings/markets/$marketId'
     | '/admin/settings/notifications/$event'
     | '/admin/settings/policies/warranty'
     | '/admin/settings/shipping/areas'
@@ -1140,6 +1161,7 @@ export interface FileRouteTypes {
     | '/admin/settings/import-export'
     | '/admin/settings/integrations'
     | '/admin/settings/locations'
+    | '/admin/settings/markets'
     | '/admin/settings/notifications'
     | '/admin/settings/payments'
     | '/admin/settings/policies'
@@ -1180,6 +1202,7 @@ export interface FileRouteTypes {
     | '/admin/orders/abandoned'
     | '/admin/pages/$pageId/edit'
     | '/admin/products/$productId/edit'
+    | '/admin/settings/markets/$marketId'
     | '/admin/settings/notifications/$event'
     | '/admin/settings/policies/warranty'
     | '/admin/settings/shipping/areas'
@@ -1246,6 +1269,7 @@ export interface FileRouteTypes {
     | '/admin/settings/import-export'
     | '/admin/settings/integrations'
     | '/admin/settings/locations'
+    | '/admin/settings/markets'
     | '/admin/settings/notifications'
     | '/admin/settings/payments'
     | '/admin/settings/policies'
@@ -1286,6 +1310,7 @@ export interface FileRouteTypes {
     | '/admin/orders/_list/abandoned'
     | '/admin/pages/$pageId/edit'
     | '/admin/products/$productId/edit'
+    | '/admin/settings/markets_/$marketId'
     | '/admin/settings/notifications_/$event'
     | '/admin/settings/policies_/warranty'
     | '/admin/settings/shipping_/areas'
@@ -1734,6 +1759,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminSettingsLocationsRouteImport
       parentRoute: typeof AdminSettingsRouteRoute
     }
+    '/admin/settings/markets': {
+      id: '/admin/settings/markets'
+      path: '/markets'
+      fullPath: '/admin/settings/markets'
+      preLoaderRoute: typeof AdminSettingsMarketsRouteImport
+      parentRoute: typeof AdminSettingsRouteRoute
+    }
     '/admin/settings/notifications': {
       id: '/admin/settings/notifications'
       path: '/notifications'
@@ -1958,6 +1990,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminProductsProductIdEditRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/settings/markets_/$marketId': {
+      id: '/admin/settings/markets_/$marketId'
+      path: '/markets/$marketId'
+      fullPath: '/admin/settings/markets/$marketId'
+      preLoaderRoute: typeof AdminSettingsMarketsMarketIdRouteImport
+      parentRoute: typeof AdminSettingsRouteRoute
+    }
     '/admin/settings/notifications_/$event': {
       id: '/admin/settings/notifications_/$event'
       path: '/notifications/$event'
@@ -2060,6 +2099,7 @@ interface AdminSettingsRouteRouteChildren {
   AdminSettingsImportExportRoute: typeof AdminSettingsImportExportRoute
   AdminSettingsIntegrationsRoute: typeof AdminSettingsIntegrationsRoute
   AdminSettingsLocationsRoute: typeof AdminSettingsLocationsRoute
+  AdminSettingsMarketsRoute: typeof AdminSettingsMarketsRoute
   AdminSettingsNotificationsRoute: typeof AdminSettingsNotificationsRoute
   AdminSettingsPaymentsRoute: typeof AdminSettingsPaymentsRoute
   AdminSettingsPoliciesRoute: typeof AdminSettingsPoliciesRoute
@@ -2069,6 +2109,7 @@ interface AdminSettingsRouteRouteChildren {
   AdminSettingsUsersRoute: typeof AdminSettingsUsersRoute
   AdminSettingsWebhooksRoute: typeof AdminSettingsWebhooksRoute
   AdminSettingsIndexRoute: typeof AdminSettingsIndexRoute
+  AdminSettingsMarketsMarketIdRoute: typeof AdminSettingsMarketsMarketIdRoute
   AdminSettingsNotificationsEventRoute: typeof AdminSettingsNotificationsEventRoute
   AdminSettingsPoliciesWarrantyRoute: typeof AdminSettingsPoliciesWarrantyRoute
   AdminSettingsShippingAreasRoute: typeof AdminSettingsShippingAreasRoute
@@ -2086,6 +2127,7 @@ const AdminSettingsRouteRouteChildren: AdminSettingsRouteRouteChildren = {
   AdminSettingsImportExportRoute: AdminSettingsImportExportRoute,
   AdminSettingsIntegrationsRoute: AdminSettingsIntegrationsRoute,
   AdminSettingsLocationsRoute: AdminSettingsLocationsRoute,
+  AdminSettingsMarketsRoute: AdminSettingsMarketsRoute,
   AdminSettingsNotificationsRoute: AdminSettingsNotificationsRoute,
   AdminSettingsPaymentsRoute: AdminSettingsPaymentsRoute,
   AdminSettingsPoliciesRoute: AdminSettingsPoliciesRoute,
@@ -2095,6 +2137,7 @@ const AdminSettingsRouteRouteChildren: AdminSettingsRouteRouteChildren = {
   AdminSettingsUsersRoute: AdminSettingsUsersRoute,
   AdminSettingsWebhooksRoute: AdminSettingsWebhooksRoute,
   AdminSettingsIndexRoute: AdminSettingsIndexRoute,
+  AdminSettingsMarketsMarketIdRoute: AdminSettingsMarketsMarketIdRoute,
   AdminSettingsNotificationsEventRoute: AdminSettingsNotificationsEventRoute,
   AdminSettingsPoliciesWarrantyRoute: AdminSettingsPoliciesWarrantyRoute,
   AdminSettingsShippingAreasRoute: AdminSettingsShippingAreasRoute,

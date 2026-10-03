@@ -80,9 +80,6 @@ export const storeSettingsMessages = defineMessages({
     currencySearch: "Search currencies",
     currencyNone: "No currency found.",
     currencySymbol: "Currency symbol",
-    wholePricesLabel: "Prices in whole amounts",
-    wholePricesHelp: "Prices, discounts and delivery charges take no decimals, and discounted prices round to whole amounts.",
-    wholePricesCod: "Cash on delivery still collects whole taka, so an order whose total has paisa can't be paid on delivery.",
     loadCurrency: "Store currency",
 
     countriesTitle: "Customer countries",
@@ -176,9 +173,6 @@ export const storeSettingsMessages = defineMessages({
     currencySearch: "কারেন্সি খুঁজুন",
     currencyNone: "কোনো কারেন্সি পাওয়া যায়নি।",
     currencySymbol: "কারেন্সির চিহ্ন",
-    wholePricesLabel: "পূর্ণ সংখ্যায় দাম",
-    wholePricesHelp: "দাম, ডিসকাউন্ট ও ডেলিভারি চার্জে দশমিক থাকবে না, আর ডিসকাউন্টের পরের দামও পূর্ণ সংখ্যায় হবে।",
-    wholePricesCod: "ক্যাশ অন ডেলিভারিতে তবুও পূর্ণ টাকা নেওয়া হয়, তাই যে অর্ডারের মোটে পয়সা আছে তা ডেলিভারিতে পরিশোধ করা যাবে না।",
     loadCurrency: "স্টোরের কারেন্সি",
 
     countriesTitle: "কাস্টমারের দেশ",

@@ -514,6 +514,15 @@ describe("page permissions", () => {
     ]) expect(can(viewer, path), path).toBe(false);
   });
 
+  it("opens Markets and one market to store-settings staff only", () => {
+    for (const path of ["/admin/settings/markets", "/admin/settings/markets/mkt_backup"]) {
+      expect(can([PERMISSIONS.SETTINGS_GENERAL_VIEW], path), path).toBe(true);
+      expect(can([PERMISSIONS.INVENTORY_VIEW], path), path).toBe(false);
+      expect(can([PERMISSIONS.PRODUCTS_VIEW], path), path).toBe(false);
+    }
+    expect(can([PERMISSIONS.SETTINGS_GENERAL_VIEW], "/admin/settings/markets/mkt_backup/x")).toBe(false);
+  });
+
   it("opens Locations to inventory or store-settings staff and purchasing to inventory staff", () => {
     expect(can([PERMISSIONS.INVENTORY_VIEW], "/admin/settings/locations")).toBe(true);
     expect(can([PERMISSIONS.SETTINGS_GENERAL_VIEW], "/admin/settings/locations")).toBe(true);

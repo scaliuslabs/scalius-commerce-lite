@@ -155,6 +155,8 @@ const PAGE_PERMISSION_MAP: Record<string, PagePermissionConfig> = {
   "/admin/settings/locations": {
     anyOf: [PERMISSIONS.INVENTORY_VIEW, PERMISSIONS.SETTINGS_GENERAL_VIEW],
   },
+  // Markets: countries, web presences and the price increment (store settings).
+  "/admin/settings/markets": { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
   "/admin/settings/notifications": {
     anyOf: [
       PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT,
@@ -283,6 +285,12 @@ const DYNAMIC_PAGE_PERMISSIONS: Array<{
   {
     pattern: /^\/admin\/articles\/[^/]+\/edit$/,
     config: { permission: PERMISSIONS.PAGES_VIEW },
+  },
+
+  // One market (saving still needs settings.general.edit).
+  {
+    pattern: /^\/admin\/settings\/markets\/[^/]+$/,
+    config: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
   },
 
   // Staff and roles: one page each, opened from Settings → Users.
