@@ -508,6 +508,8 @@ export type ProductOptionMatrixPlan = {
     statements: BatchItem<"sqlite">[];
     /** SKUs whose stock this save changes or revives (low-stock alerts are reconciled after the batch). */
     changedStockVariantIds: string[];
+    /** Each submitted row's SKU id after the save (a draft row's new id). */
+    variantIds: Map<string, string>;
 };
 
 /**
@@ -1075,7 +1077,11 @@ export async function planProductOptionMatrix(
             )));
     }
 
-    return { statements, changedStockVariantIds };
+    return {
+        statements,
+        changedStockVariantIds,
+        variantIds: new Map(input.variants.map((variant, index) => [variant.id, normalizedVariants[index]!.id])),
+    };
 }
 
 const OPTION_MATRIX_CHANGED_MESSAGE = "This product changed while you were editing. Reload the latest matrix and try again.";

@@ -807,7 +807,7 @@ const updateProductRoute = createRoute({
     operationId: "dashboard.products.update",
     tags: ["Admin - Products"],
     summary: "Update a product",
-    description: "Replaces the product's details under expectedAggregateRevision. Send optionMatrix (the complete options and SKUs, as dashboard.product_options.save_matrix takes them) or defaultSku (the hidden SKU of a product without options) to save them in the same write: a refused save changes nothing.",
+    description: "Replaces the product's details under expectedAggregateRevision; unchanged details are not rewritten. Everything else an editor Save changed goes in the same write: optionMatrix (the complete options and SKUs, as dashboard.product_options.save_matrix takes them) or defaultSku (the hidden SKU of a product without options), contentBlocks, bundles, pageTemplate, emiEligible and skuCosts (each naming the cost it replaces; a new optionMatrix row by its draft id). All of it is checked before anything is written: a refused save changes nothing.",
     request: {
         params: z.object({ id: z.string() }),
         body: { content: { "application/json": { schema: updateProductSchema } } }

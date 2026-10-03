@@ -24,7 +24,7 @@ import {
 import { DEFAULT_PRODUCT_CONDITION } from "@scalius/shared/product-condition";
 import { nanoid } from "nanoid";
 import { AppError, NotFoundError, ConflictError, ValidationError } from "@scalius/core/errors";
-import { safeBatch, type Database } from "@scalius/database/client";
+import { buildBatchGuard, isBatchGuardError, safeBatch, type Database } from "@scalius/database/client";
 import type { BatchItem } from "drizzle-orm/batch";
 import { defaultProductSkuValues } from "../public-eligibility";
 import { catalogPriceColumns } from "../money";
@@ -32,6 +32,7 @@ import { storeCurrencyCodeSql, storeCurrencyFromCode, storeDecimalPlacesFromCode
 import { readStoreCurrency, toStoreMinor } from "../../settings/store-money";
 import { percentToBps } from "@scalius/shared/money";
 import {
+    buildProductAggregateRevisionBump,
     buildProductAggregateRevisionGuard,
     executeProductAggregateMutationBatch,
     isProductAggregateRevisionConflict,
@@ -67,8 +68,13 @@ import {
 import { insertWithDerivedHandle } from "../../../utils/derived-handle";
 import { MAX_PRODUCT_MEDIA_ASSOCIATIONS, PRODUCT_MEDIA_REORDER_OFFSET } from "../media";
 import { getProductDetails } from "./read";
-import { buildProductContentBlockCopyStatements } from "../content-blocks";
-import { buildProductBundleCopyStatements } from "../bundles";
+import {
+    PRODUCT_CONTENT_BLOCK_MEDIA_GUARD,
+    PRODUCT_CONTENT_BLOCK_MEDIA_UNAVAILABLE_MESSAGE,
+    buildProductContentBlockCopyStatements,
+    buildProductContentBlockReplaceStatements,
+} from "../content-blocks";
+import { buildProductBundleCopyStatements, buildProductBundleReplaceStatements } from "../bundles";
 import {
     GIFT_CARD_PRODUCT_RULES_MESSAGE,
     buildGiftCardProductRulesGuard,
@@ -703,10 +709,10 @@ type ProductSavePlan = {
 };
 
 /**
- * The product's current aggregate revision when saving `data` would change
- * nothing it writes (product columns, the default SKU, SKU fulfilment kinds,
- * media, attribute values, rich content), else null. A stale revision or a
- * trashed product is null too, so the guarded batch reports the conflict.
+ * The product's current aggregate revision when saving `data`'s details would
+ * change nothing they write (product columns, the default SKU, SKU fulfilment
+ * kinds, media, attribute values, rich content), else null. A stale revision
+ * or a trashed product is null too, so the guarded batch reports the conflict.
  */
 async function unchangedProductSaveRevision(
     db: Database,
@@ -751,6 +757,8 @@ async function unchangedProductSaveRevision(
             discountAmountMinor: products.discountAmountMinor,
             freeDelivery: products.freeDelivery,
             customizationSchema: products.customizationSchema,
+            pageTemplate: products.pageTemplate,
+            emiEligible: products.emiEligible,
         }).from(products).where(eq(products.id, id)),
         db.select({
             id: productMedia.id,
@@ -801,6 +809,8 @@ async function unchangedProductSaveRevision(
         discountAmountMinor: discountType === "flat" ? (plan.productPrice.discountAmountMinor ?? 0) : 0,
         freeDelivery: data.freeDelivery,
         customizationSchema: plan.customizationSchema,
+        pageTemplate: data.pageTemplate,
+        emiEligible: data.emiEligible,
     };
     const stored = current as unknown as Record<string, unknown>;
     for (const [column, value] of Object.entries(expected)) {
@@ -863,6 +873,8 @@ function assertGiftCardUpdateAllowed(
 type ProductSaveComposition = {
     statements: SQLiteBatchItem[];
     changedStockVariantIds: string[];
+    /** The SKUs the product sells after the save, by the id the request named them with. */
+    variantIds: Map<string, string>;
 };
 
 /**
@@ -910,11 +922,95 @@ async function planProductSaveComposition(
     return {
         statements: plan.statements,
         changedStockVariantIds: plan.movementIndex === null ? [] : [defaultSku.id],
+        variantIds: new Map([[defaultSku.id, defaultSku.id]]),
     };
 }
 
-/** A refusal raised inside the batch by the options and SKUs it saved. */
+/**
+ * The page's own sections a Save changed (content blocks, quantity bundles),
+ * checked and turned into writes for the product's batch.
+ */
+async function planProductSaveSections(
+    db: Database,
+    id: string,
+    data: UpdateProductInput,
+    isGiftCard: boolean,
+): Promise<SQLiteBatchItem[]> {
+    const statements: SQLiteBatchItem[] = [];
+    if (data.contentBlocks) {
+        statements.push(...await buildProductContentBlockReplaceStatements(db, id, data.contentBlocks) ?? []);
+    }
+    if (data.bundles) {
+        if (isGiftCard && data.bundles.length > 0) {
+            throw new ValidationError("Gift cards are sold at their value, so they can't have quantity bundles.", { field: "bundles" });
+        }
+        statements.push(...await buildProductBundleReplaceStatements(db, id, data.bundles) ?? []);
+    }
+    return statements;
+}
+
+const SKU_COST_CHANGED_GUARD = "PRODUCT_SAVE_SKU_COST_CHANGED";
+
+/**
+ * The costs per item a Save changed, as two statements for the product's
+ * batch (bounded parameters whatever the SKU count): a guard that every SKU
+ * still has the cost the editor showed, then the update. A new option row is
+ * named by its draft id and gets its new id here. Null when none changed.
+ */
+function planProductSaveCosts(
+    db: Database,
+    id: string,
+    data: UpdateProductInput,
+    context: {
+        currency: { decimalPlaces: number };
+        /** The SKUs the product sells after the save, by the request's id; the live SKUs when the save leaves them alone. */
+        variantIds: ReadonlyMap<string, string>;
+    },
+): SQLiteBatchItem[] {
+    if (!data.skuCosts || data.skuCosts.length === 0) return [];
+    const seen = new Set<string>();
+    const changes = data.skuCosts.map((item, index) => {
+        const variantId = context.variantIds.get(item.variantId);
+        if (!variantId) {
+            throw new ValidationError("A SKU in this change no longer exists. Reload and try again.", { field: `skuCosts.${index}.variantId` });
+        }
+        if (seen.has(variantId)) throw new ValidationError("Each SKU's cost appears once.", { field: `skuCosts.${index}.variantId` });
+        seen.add(variantId);
+        return {
+            id: variantId,
+            cost: item.cost === null ? null : unitCostToMinor(item.cost, context.currency),
+            expected: item.expectedCost === null ? null : unitCostToMinor(item.expectedCost, context.currency),
+        };
+    });
+    const payload = JSON.stringify(changes);
+    return [
+        buildBatchGuard(db, sql`NOT EXISTS (
+            SELECT 1 FROM json_each(${payload}) AS change
+            LEFT JOIN ${productVariants} ON ${productVariants.id} = json_extract(change.value, '$.id')
+              AND ${productVariants.productId} = ${id}
+              AND ${productVariants.deletedAt} IS NULL
+            WHERE ${productVariants.id} IS NULL
+               OR NOT (${productVariants.costMinor} IS json_extract(change.value, '$.expected'))
+        )`, SKU_COST_CHANGED_GUARD),
+        db.update(productVariants).set({
+            costMinor: sql`(SELECT json_extract(change.value, '$.cost') FROM json_each(${payload}) AS change
+                WHERE json_extract(change.value, '$.id') = ${productVariants.id})`,
+            updatedAt: sql`unixepoch()`,
+        }).where(and(
+            eq(productVariants.productId, id),
+            sql`${productVariants.id} IN (SELECT json_extract(value, '$.id') FROM json_each(${payload}))`,
+        )),
+    ];
+}
+
+/** A refusal raised inside the batch by the sections, options, SKUs or costs it saved. */
 function rethrowProductSaveCompositionError(error: unknown): void {
+    if (isBatchGuardError(error, PRODUCT_CONTENT_BLOCK_MEDIA_GUARD)) {
+        throw new ValidationError(PRODUCT_CONTENT_BLOCK_MEDIA_UNAVAILABLE_MESSAGE, { field: "contentBlocks" });
+    }
+    if (isBatchGuardError(error, SKU_COST_CHANGED_GUARD)) {
+        throw new ConflictError("A SKU's cost changed since you opened it. Reload and try again.");
+    }
     const matrixConflict = optionMatrixBatchConflict(error);
     if (matrixConflict) throw matrixConflict;
     if (isVariantEditBatchConflict(error)) throw new ConflictError(STOCK_CHANGED_MESSAGE);
@@ -928,8 +1024,10 @@ function rethrowProductSaveCompositionError(error: unknown): void {
 /**
  * Updates an existing product, replacing ordered media, rich content, and attributes.
  * Validates that the product exists and the slug is not taken by another product.
- * The editor's options and SKUs (`optionMatrix` / `defaultSku`) save in the same
- * guarded batch, so one Save is all-or-nothing.
+ * Everything else an editor Save changed (options and SKUs, content blocks,
+ * quantity bundles, page template, EMI, costs per item) is checked first and
+ * written in the same guarded batch, so one Save is all-or-nothing. Product
+ * details that did not change are not rewritten.
  */
 export async function updateProduct(
     db: Database,
@@ -1021,12 +1119,17 @@ export async function updateProduct(
         throw new ValidationError("Product SKU data is invalid: only one default SKU is allowed, and every non-default SKU must include at least one customer option.");
     }
 
-    // Every check of the options and SKUs runs before anything is written.
+    // Every check of everything the Save sends runs before anything is written.
     const composition = await planProductSaveComposition(db, id, data, { priceMinor, activeVariants, mediaPlan, adminUserId });
+    const sectionStatements = await planProductSaveSections(db, id, data, isGiftCard);
+    const costStatements = planProductSaveCosts(db, id, data, {
+        currency,
+        variantIds: composition?.variantIds ?? new Map(activeVariants.map((variant) => [variant.id, variant.id])),
+    });
 
-    // A save that changes nothing writes nothing: no revision bump, no
-    // updated_at, no row rewritten (so no cache dependency advances).
-    const unchangedRevision = composition ? null : await unchangedProductSaveRevision(db, id, data, {
+    // Details that change nothing write nothing (no row rewritten, so no cache
+    // dependency advances); a save that changes nothing at all bumps nothing.
+    const unchangedRevision = await unchangedProductSaveRevision(db, id, data, {
         priceMinor,
         productPrice,
         customizationSchema,
@@ -1036,11 +1139,20 @@ export async function updateProduct(
         mediaPlan,
         clearSkuImageIds,
     });
-    if (unchangedRevision !== null) return { aggregateRevision: unchangedRevision };
+    const detailsChanged = unchangedRevision === null;
+    if (!detailsChanged && !composition && sectionStatements.length === 0 && costStatements.length === 0) {
+        return { aggregateRevision: unchangedRevision };
+    }
 
     // Drizzle D1 batch() requires specific tuple types
     const batchOps: unknown[] = [
         buildProductAggregateRevisionGuard(db, id, data.expectedAggregateRevision),
+        // Sections first, as when they saved on their own (moved tabs become blocks before the tabs go).
+        ...sectionStatements,
+    ];
+    // Where the statement that bumps (and returns) the revision sits.
+    let revisionIndex = -1;
+    if (detailsChanged) revisionIndex = batchOps.push(
         db.update(products)
             .set({
                 name: data.name,
@@ -1066,19 +1178,23 @@ export async function updateProduct(
                 freeDelivery: data.freeDelivery,
                 ...(data.isGiftCard !== undefined ? { isGiftCard: data.isGiftCard } : {}),
                 ...(customizationSchema !== undefined ? { customizationSchema } : {}),
+                // Omitted keeps the template and the EMI line.
+                ...(data.pageTemplate !== undefined ? { pageTemplate: data.pageTemplate } : {}),
+                ...(data.emiEligible !== undefined ? { emiEligible: data.emiEligible } : {}),
                 aggregateRevision: sql`${products.aggregateRevision} + 1`,
                 updatedAt: sql`unixepoch()`,
             })
             .where(eq(products.id, id))
             .returning({ aggregateRevision: products.aggregateRevision }),
+    ) - 1;
+    if (detailsChanged) batchOps.push(
         ...buildProductMediaUpdateStatements(db, id, mediaPlan, clearSkuImageIds),
         db.delete(productAttributeValues).where(eq(productAttributeValues.productId, id)),
         db.delete(productRichContent).where(eq(productRichContent.productId, id)),
-    ];
+        ...attributeRows.statements,
+    );
 
-    batchOps.push(...attributeRows.statements);
-
-    if (contentToInsert.length > 0) {
+    if (detailsChanged && contentToInsert.length > 0) {
         for (let index = 0; index < contentToInsert.length; index += PRODUCT_AGGREGATE_INSERT_CHUNK) {
             batchOps.push(db.insert(productRichContent).values(
                 contentToInsert.slice(index, index + PRODUCT_AGGREGATE_INSERT_CHUNK),
@@ -1088,7 +1204,7 @@ export async function updateProduct(
 
     if (data.isActive && activeVariants.length === 0) {
         // Options sent with this save are the product's SKUs; otherwise it sells one hidden SKU.
-        if (!data.optionMatrix) {
+        if (detailsChanged && !data.optionMatrix) {
             batchOps.push(db.insert(productVariants).values({
                 ...defaultVariantValues(id, priceMinor),
                 fulfillmentKind: isGiftCard ? "digital" : data.fulfillmentKind ?? "physical",
@@ -1098,7 +1214,7 @@ export async function updateProduct(
         throw new ValidationError("Product SKU data is invalid: only one default SKU is allowed, and every non-default SKU must include at least one customer option.");
     }
 
-    if (isSimpleDefaultSkuSet(activeVariants)) {
+    if (detailsChanged && isSimpleDefaultSkuSet(activeVariants)) {
         batchOps.push(
             db
                 .update(productVariants)
@@ -1116,12 +1232,13 @@ export async function updateProduct(
     if (composition) {
         batchOps.push(...composition.statements);
         // An optioned product's price is its cheapest SKU's, as the SKUs this batch saved leave it.
-        if (data.optionMatrix) {
+        if (data.optionMatrix && detailsChanged) {
             batchOps.push(db.update(products)
                 .set({ priceMinor: productPriceMinorSql(id, sql`${products.priceMinor}`) })
                 .where(eq(products.id, id)));
         }
     }
+    batchOps.push(...costStatements);
 
     // The Shipping card's kind applies to every live SKU. Checkout refuses a
     // digital line until it is deliverable, so accepting the kind is safe.
@@ -1145,6 +1262,8 @@ export async function updateProduct(
             )));
     }
 
+    // Unchanged details leave the revision to the aggregate bump (which also re-derives the price).
+    if (!detailsChanged) revisionIndex = batchOps.push(buildProductAggregateRevisionBump(db, id)) - 1;
     batchOps.push(buildGiftCardProductRulesGuard(db, id));
     // The catalogue projections read this batch's own writes.
     batchOps.push(...catalogProjectionRefreshStatements(db, [id]));
@@ -1152,10 +1271,10 @@ export async function updateProduct(
     let saved: ProductAggregateRevisionResult;
     try {
         const results = await safeBatch(db, batchOps as never) as unknown[];
-        saved = readProductAggregateRevisionResult(results[1]);
+        saved = readProductAggregateRevisionResult(results[revisionIndex]);
     } catch (error) {
         rethrowGiftCardProductRuleViolation(error);
-        if (composition) rethrowProductSaveCompositionError(error);
+        rethrowProductSaveCompositionError(error);
         return rethrowProductAggregateRevisionConflictIfStale(
             db,
             id,

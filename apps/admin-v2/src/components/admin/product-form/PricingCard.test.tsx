@@ -29,6 +29,8 @@ function costStore(cost: number | null) {
     isDirty: () => false,
     problemOf: () => null,
     rows: { current: [] },
+    changes: () => [],
+    settle: vi.fn(),
     save: vi.fn(),
     reset: vi.fn(),
     sync: vi.fn(),

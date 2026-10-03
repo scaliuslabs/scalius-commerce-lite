@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { nanoid } from "nanoid";
 import { Plus, Trash2 } from "lucide-react";
@@ -15,7 +15,7 @@ import { useCurrency } from "@/hooks/use-currency";
 import { useMessages } from "~/i18n";
 import { productMerchandisingMessages } from "~/i18n/product-merchandising";
 import { CollapsibleCard } from "../CollapsibleCard";
-import { productBundlesQueryOptions, saveProductSection, type BundleItem } from "./section-api";
+import { productBundlesQueryOptions, type BundleItem } from "./section-api";
 import { useProductSection } from "./product-sections";
 import { useSectionDraft } from "./use-section-draft";
 
@@ -51,6 +51,8 @@ export default function BundlesCard({ productId, readOnly }: { productId: string
   const { data } = useQuery(productBundlesQueryOptions(productId));
   const loaded = useMemo(() => data?.items.map(fromItem), [data]);
   const { draft, setDraft, dirty, markSaved, prepareRebase } = useSectionDraft(loaded);
+  // The tiers the last Save sent: saved once that write succeeds.
+  const sent = useRef<typeof draft | null>(null);
   const tiers = useMemo(() => draft ?? [], [draft]);
 
   const problems = useMemo(() => {
@@ -84,21 +86,20 @@ export default function BundlesCard({ productId, readOnly }: { productId: string
       const latest = await queryClient.fetchQuery(productBundlesQueryOptions(productId));
       return () => prepareRebase(latest.items.map(fromItem));
     },
-    save: async (revision) => {
-      const sent = tiers;
-      const next = await saveProductSection(productId, {
-        section: "bundles",
-        expectedAggregateRevision: revision,
-        tiers: sent.map((tier) => {
+    changes: () => {
+      sent.current = tiers;
+      return {
+        bundles: tiers.map((tier) => {
           const label = tier.label.trim() || null;
           return tier.discountType === "percentage"
             ? { quantity: tier.quantity!, discountType: "percentage" as const, discountPercentage: tier.discountPercentage!, label, isActive: tier.isActive }
             : { quantity: tier.quantity!, discountType: "fixed_price" as const, price: tier.price!, label, isActive: tier.isActive };
         }),
-      });
-      markSaved(sent);
+      };
+    },
+    saved: () => {
+      if (sent.current) markSaved(sent.current);
       void queryClient.invalidateQueries({ queryKey: productBundlesQueryOptions(productId).queryKey });
-      return next;
     },
   });
 

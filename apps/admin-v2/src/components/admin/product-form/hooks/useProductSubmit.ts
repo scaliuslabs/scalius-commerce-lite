@@ -22,6 +22,8 @@ import {
 } from "~/lib/admin-api-error";
 import { SaveNotCompleted, copyValues, rebaseForm } from "../../shared/use-form-save-bar";
 import type { ProductCreateComposition, ProductUpdateComposition } from "../variants/option-matrix-editor-model";
+import type { ProductSectionChanges } from "../merchandising/product-sections";
+import type { UpdateProductInput } from "~/lib/api-query-options/products";
 import { useSkuCosts } from "../sku-costs";
 import { queryKeys } from "~/lib/query-keys";
 import { translate } from "~/i18n";
@@ -63,9 +65,12 @@ interface ProductMutationVariables {
   acknowledgedSkuImageRemovalIds?: string[];
   /** The revision to save against when sections saved first in this save; the page's otherwise. */
   expectedAggregateRevision?: number;
-  /** The variant draft this Save changed: it goes in the same write, so all of it saves or none. */
-  composition?: ProductUpdateComposition | null;
+  /** Everything else this Save changed: it goes in the same write, so all of it saves or none. */
+  composition?: ProductSaveParts | null;
 }
+
+/** What a product Save sends besides its fields: the variant draft and the page's sections (costs are added here). */
+export type ProductSaveParts = ProductUpdateComposition & ProductSectionChanges & Pick<UpdateProductInput, "skuCosts">;
 
 /** SKU conflicts name the product that owns the SKU (`SKU_TAKEN`, 409). */
 export function readSkuTaken(error: unknown): { path: string; message: string } | null {
@@ -96,12 +101,12 @@ export function useProductSubmit({
 }: UseProductSubmitOptions) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  // A new product's typed costs (the page's cost store; edits save costs with the variants).
+  // The page's typed costs: they go in the product's own write.
   const costs = useSkuCosts();
   const [mediaRemovalConflict, setMediaRemovalConflict] = useState<ProductMediaSkuReferenceConflict | null>(null);
   const [pendingValues, setPendingValues] = useState<ProductFormValues | null>(null);
-  // The variant draft of the save that the photo-removal question paused, sent again with it.
-  const pendingComposition = useRef<ProductUpdateComposition | null>(null);
+  // What else the save that the photo-removal question paused carried, sent again with it.
+  const pendingComposition = useRef<ProductSaveParts | null>(null);
   // The form as the save sent it: it becomes the saved values, and edits typed meanwhile stay unsaved.
   const sent = useRef<ProductFormValues | null>(null);
   const markSaved = () => {
@@ -129,17 +134,8 @@ export function useProductSubmit({
       }
       // Only an address the merchant typed is sent; otherwise the server makes one from the title.
       const slug = values.slugEdited && values.slug ? values.slug : undefined;
-      const created = await apiData(postApiV1AdminProducts({ body: { ...formattedValues, slug, ...createComposition } }));
-      // Costs per item go once the SKUs exist. The product is saved either way, so a failed
-      // cost save must not fail this one (a second Save would add the product twice).
-      if (costs) {
-        try {
-          await costs.save(String(created.id));
-        } catch {
-          toast.error(t("costsNotSavedAfterCreate"), { duration: 10_000 });
-        }
-      }
-      return created;
+      // Typed costs per item go with the new SKUs, in the same create.
+      return apiData(postApiV1AdminProducts({ body: { ...formattedValues, slug, ...withCreateCosts(createComposition) } }));
     },
     onSuccess: async (result, { values }) => {
       setMediaRemovalConflict(null);
@@ -171,6 +167,27 @@ export function useProductSubmit({
       }
     },
   });
+
+  /** A new product's SKUs with the costs typed for them (by the simple SKU's key, or each variant's draft id). */
+  const withCreateCosts = (composition: ProductCreateComposition | null | undefined): ProductCreateComposition => {
+    if (!composition) return {};
+    if (!costs) return composition;
+    if (composition.defaultSku) {
+      const cost = costs.costOf(costs.simpleKey);
+      return cost === null ? composition : { ...composition, defaultSku: { ...composition.defaultSku, cost } };
+    }
+    if (!composition.optionMatrix) return composition;
+    return {
+      ...composition,
+      optionMatrix: {
+        ...composition.optionMatrix,
+        variants: composition.optionMatrix.variants.map((variant) => {
+          const cost = costs.costOf(variant.id);
+          return cost === null ? variant : { ...variant, cost };
+        }),
+      },
+    };
+  };
 
   /** Turns a rejected save into field messages plus the banner's lines. */
   const explain = (error: unknown, values: ProductFormValues): never => {
@@ -208,8 +225,11 @@ export function useProductSubmit({
   const submit = async (
     values: ProductFormValues,
     expectedAggregateRevision?: number,
-    composition: ProductUpdateComposition | null = null,
+    parts: ProductSaveParts | null = null,
   ): Promise<number> => {
+    // Changed costs per item go in the same write (a new product's go with its SKUs).
+    const skuCosts = (isEdit ? costs?.changes() ?? [] : []).map((item) => ({ ...item, expectedCost: item.expectedCost ?? null }));
+    const composition: ProductSaveParts | null = skuCosts.length > 0 ? { ...parts, skuCosts } : parts;
     let revision: number;
     try {
       sent.current = copyValues(form.getValues());
@@ -218,8 +238,15 @@ export function useProductSubmit({
     } catch (error) {
       return explain(error, values);
     }
-    if (composition) await onCompositionSaved?.(revision);
+    await afterPartsSaved(composition, revision);
     return revision;
+  };
+
+  /** After the write: the costs it sent are saved, then the variant editor settles its draft. */
+  const afterPartsSaved = async (composition: ProductSaveParts | null, revision: number) => {
+    const entityId = productId ?? "";
+    if (composition?.skuCosts?.length && costs) costs.settle(composition.skuCosts, entityId);
+    if (composition?.optionMatrix || composition?.defaultSku) await onCompositionSaved?.(revision);
   };
 
   const confirmMediaRemoval = async () => {
@@ -232,7 +259,7 @@ export function useProductSubmit({
         acknowledgedSkuImageRemovalIds: mediaRemovalConflict.affectedAssociationIds,
         composition,
       });
-      if (composition) await onCompositionSaved?.(result.aggregateRevision);
+      await afterPartsSaved(composition, result.aggregateRevision);
       toast.success(t("productSaved"));
     } catch (error) {
       try {

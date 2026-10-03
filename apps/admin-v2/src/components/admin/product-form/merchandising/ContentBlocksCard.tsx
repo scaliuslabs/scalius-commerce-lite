@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { nanoid } from "nanoid";
 import { ArrowDown, ArrowUp, ChevronDown, Plus, Trash2 } from "lucide-react";
@@ -28,8 +28,8 @@ import { useMessages } from "~/i18n";
 import { productMerchandisingMessages } from "~/i18n/product-merchandising";
 import { CollapsibleCard } from "../CollapsibleCard";
 import { BlockSettingsEditor, type BlockMediaPreview } from "./block-editors";
-import { productContentBlocksQueryOptions, saveProductSection, type ContentBlockItem } from "./section-api";
-import { useProductSection } from "./product-sections";
+import { productContentBlocksQueryOptions, type ContentBlockItem } from "./section-api";
+import { useProductSection, type ProductSectionChanges } from "./product-sections";
 import { useSectionDraft } from "./use-section-draft";
 
 interface BlockDraft {
@@ -86,6 +86,8 @@ export default function ContentBlocksCard({ productId, readOnly, onTabsMoved }: 
   const { data } = useQuery(productContentBlocksQueryOptions(productId));
   const loaded = useMemo<Draft | undefined>(() => (data ? { blocks: data.items.map(fromItem) } : undefined), [data]);
   const { draft, setDraft, saved, dirty, markSaved, prepareRebase } = useSectionDraft(loaded);
+  // The blocks the last Save sent: saved once that write succeeds.
+  const sent = useRef<BlockDraft[] | null>(null);
   const blocks = useMemo(() => draft?.blocks ?? [], [draft]);
   const [open, setOpen] = useState<string | null>(null);
   const [chosenMedia, setChosenMedia] = useState<BlockMediaPreview[]>([]);
@@ -115,14 +117,13 @@ export default function ContentBlocksCard({ productId, readOnly, onTabsMoved }: 
       const latest = await queryClient.fetchQuery(productContentBlocksQueryOptions(productId));
       return () => prepareRebase({ blocks: latest.items.map(fromItem) });
     },
-    save: async (revision) => {
-      const sent = blocks;
+    changes: () => {
+      sent.current = blocks;
       const before = new Map((saved?.blocks ?? []).map((block) => [block.key, block]));
-      const hadLegacy = (saved?.blocks ?? []).some((block) => block.legacy);
-      const next = await saveProductSection(productId, {
-        section: "content_blocks",
-        expectedAggregateRevision: revision,
-        blocks: sent.map((block) => {
+      // The old tabs become blocks in this write, which also removes the originals.
+      if ((saved?.blocks ?? []).some((block) => block.legacy)) onTabsMoved();
+      return {
+        contentBlocks: blocks.map((block) => {
           const stored = block.id ? before.get(block.key) : undefined;
           // A saved block whose settings didn't change is kept as stored (moved without resending it).
           if (block.id && stored && JSON.stringify(stored.settings) === JSON.stringify(block.settings)) {
@@ -134,14 +135,13 @@ export default function ContentBlocksCard({ productId, readOnly, onTabsMoved }: 
             type: block.type,
             version: block.version,
             settings: block.settings,
-          };
+          } as NonNullable<ProductSectionChanges["contentBlocks"]>[number];
         }),
-      });
-      // The old tabs now live as blocks; the product save removes the originals.
-      if (hadLegacy) onTabsMoved();
-      markSaved({ blocks: sent });
+      };
+    },
+    saved: () => {
+      if (sent.current) markSaved({ blocks: sent.current });
       void queryClient.invalidateQueries({ queryKey: productContentBlocksQueryOptions(productId).queryKey });
-      return next;
     },
   });
 

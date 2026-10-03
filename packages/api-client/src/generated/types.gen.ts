@@ -65754,6 +65754,54 @@ export type PutApiV1AdminProductsByIdData = {
              */
             weight: number | null;
         };
+        /**
+         * A product page template id from the theme, or null for the theme's default. Omit to keep.
+         */
+        pageTemplate?: string | null;
+        /**
+         * Shows the store's EMI line on the product page. Omit to keep.
+         */
+        emiEligible?: boolean;
+        /**
+         * Every editable content block, in page order within each placement, as dashboard.products.update_section takes them. Omit to keep.
+         */
+        contentBlocks?: Array<{
+            id: string;
+            placement: 'tabs' | 'after-buy-box' | 'after-description' | 'before-reviews';
+            keep: true;
+        } | {
+            id?: string;
+            placement: 'tabs' | 'after-buy-box' | 'after-description' | 'before-reviews';
+            type: string;
+            version: number;
+            settings: {
+                [key: string]: unknown;
+            };
+        }>;
+        /**
+         * Every quantity-bundle tier in display order; an empty list removes them. Omit to keep.
+         */
+        bundles?: Array<{
+            quantity: number;
+            discountType: 'percentage';
+            discountPercentage: number;
+            label: string | null;
+            isActive: boolean;
+        } | {
+            quantity: number;
+            discountType: 'fixed_price';
+            price: number;
+            label: string | null;
+            isActive: boolean;
+        }>;
+        /**
+         * Changed costs per item. A new optionMatrix row is named by its draft id. Each names the cost it replaces; omit to keep.
+         */
+        skuCosts?: Array<{
+            variantId: string;
+            cost: number | null;
+            expectedCost: number | null;
+        }>;
     };
     path: {
         id: string;

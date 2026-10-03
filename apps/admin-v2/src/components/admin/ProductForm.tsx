@@ -71,9 +71,7 @@ import { useMessages } from "~/i18n";
 import { productMessages } from "~/i18n/products";
 import { resourceMessages } from "~/i18n/resource";
 import { saveBarMessages } from "~/i18n/save-bar";
-import { readProductRevisionConflict, type ProductRevisionConflict } from "@/lib/admin-api-error";
-import { readApiFieldIssues } from "@/lib/api-field-errors";
-import { getServerFnError } from "@/lib/api-helpers";
+import type { ProductRevisionConflict } from "@/lib/admin-api-error";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query-keys";
 import type {
@@ -299,63 +297,33 @@ function ProductEditor({
     const matrixBlocks = optionMatrixIssue && (!isEdit || optionMatrixDirty);
     const pending = isEdit ? sections.dirtyHandles() : [];
     const sectionProblems = pending.flatMap((handle) => handle.problems ?? []);
-    let values: ProductFormValues | null = null;
-    if (!isEdit || productFormDirty) {
-      let invalid: FieldErrors<ProductFormValues> = {};
-      values = await new Promise<ProductFormValues | null>((resolve) => {
-        void form.handleSubmit(resolve, (errors) => {
-          invalid = errors;
-          resolve(null);
-        })();
-      });
-      if (!values || matrixBlocks || sectionProblems.length > 0) {
-        if (matrixBlocks) matrixRef.current?.reveal();
-        const lines = [...describeInvalid(invalid), ...(matrixBlocks ? [optionMatrixIssue] : []), ...sectionProblems];
-        throw new SaveNotCompleted(lines[0], lines);
-      }
-    } else if (sectionProblems.length > 0) {
-      throw new SaveNotCompleted(sectionProblems[0], sectionProblems);
+    // A Save is one write of the whole page (fields, variants, sections, costs): every part
+    // is checked first, and all of it saves or none of it does.
+    let invalid: FieldErrors<ProductFormValues> = {};
+    let values = await new Promise<ProductFormValues | null>((resolve) => {
+      void form.handleSubmit(resolve, (errors) => {
+        invalid = errors;
+        resolve(null);
+      })();
+    });
+    if (!values || matrixBlocks || sectionProblems.length > 0) {
+      if (matrixBlocks) matrixRef.current?.reveal();
+      const lines = [...describeInvalid(invalid), ...(matrixBlocks ? [optionMatrixIssue] : []), ...sectionProblems];
+      throw new SaveNotCompleted(lines[0], lines);
     }
-    // Changed variants go in the product's own write, so details, options and SKUs save
-    // together or not at all; checked here, before any section is written.
-    const composition = isEdit && values && optionMatrixDirty ? matrixRef.current?.composition() ?? null : null;
-    let revision = aggregateRevision;
-    for (const handle of pending) {
-      if (!revision) break;
-      try {
-        revision = await handle.save(revision);
-      } catch (error) {
-        throw explainSectionError(handle.label, error);
-      }
-      onAggregateRevisionChange?.(revision);
-    }
+    const composition = isEdit && optionMatrixDirty ? matrixRef.current?.composition() ?? null : null;
+    const sectionChanges = Object.assign({}, ...pending.map((handle) => handle.changes()));
+    // Moved tabs become blocks in this write, which also removes the originals.
     if (tabsMoved.current) {
       form.setValue("additionalInfo", [], { shouldDirty: true });
-      values = { ...(values ?? form.getValues()), additionalInfo: [] };
+      values = { ...values, additionalInfo: [] };
     }
-    if (values) {
-      revision = await submit(values, revision, composition);
-      if (tabsMoved.current) {
-        tabsMoved.current = false;
-        void queryClient.invalidateQueries({ queryKey: [...queryKeys.products.detail(productId ?? ""), "section"] });
-      }
+    await submit(values, aggregateRevision, { ...composition, ...sectionChanges });
+    for (const handle of pending) handle.saved();
+    if (tabsMoved.current) {
+      tabsMoved.current = false;
+      void queryClient.invalidateQueries({ queryKey: [...queryKeys.products.detail(productId ?? ""), "section"] });
     }
-    // Variants alone (or typed costs) save on their own.
-    if (isEdit && optionMatrixDirty && !composition) await matrixRef.current?.save(revision);
-  };
-
-  /** A section's rejected save, in the banner (a newer version opens the conflict dialog). */
-  const explainSectionError = (label: string, error: unknown): Error => {
-    const conflict = readProductRevisionConflict(error);
-    if (conflict) {
-      onRevisionConflict?.(conflict);
-      return new SaveNotCompleted(t("changedElsewhere"));
-    }
-    const issues = readApiFieldIssues(error);
-    const lines = issues
-      ? issues.map((issue) => `${label}: ${issue.message}`)
-      : [`${label}: ${getServerFnError(error)}`];
-    return new SaveNotCompleted(lines[0], lines);
   };
 
   useSaveBar({

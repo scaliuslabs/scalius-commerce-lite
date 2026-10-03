@@ -1,7 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 import {
   getApiV1AdminProductsByIdSectionsBySection,
-  patchApiV1AdminProductsByIdSectionsBySection,
+  type patchApiV1AdminProductsByIdSectionsBySection,
 } from "@scalius/api-client/sdk";
 import { apiData, type ApiBody, type ApiResult } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
@@ -68,12 +68,3 @@ export const productContentBlocksQueryOptions = (productId: string) =>
     },
     staleTime: 0,
   });
-
-/** Writes one section under the product revision; resolves with the new revision. */
-export async function saveProductSection(productId: string, body: SectionPatch): Promise<number> {
-  const result = await apiData(patchApiV1AdminProductsByIdSectionsBySection({
-    path: { id: productId, section: body.section },
-    body,
-  }));
-  return (result as { aggregateRevision: number }).aggregateRevision;
-}

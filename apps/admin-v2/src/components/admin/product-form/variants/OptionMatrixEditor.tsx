@@ -644,9 +644,9 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
       return compositionBody();
     },
     compositionSaved: async (revision) => {
-      const sendCosts = costs !== null && costsDirty;
+      // The write carried the typed costs too; the page reloads the variants.
       await settle(revision);
-      await finishSave(true, sendCosts);
+      onSaved?.();
     },
     reveal,
     showServerIssue,

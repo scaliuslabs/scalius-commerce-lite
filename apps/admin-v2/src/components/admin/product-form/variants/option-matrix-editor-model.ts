@@ -105,14 +105,17 @@ export function getSimpleSkuIssue(draft: SimpleSkuDraft, committed: number, skuR
 }
 
 export interface OptionMatrixEditorHandle {
-  /** Saves the variant draft; rejects (after marking the field) when it can't. */
+  /**
+   * Saves the variant draft (and typed costs) on its own; rejects (after marking the field)
+   * when it can't. The product page instead sends `composition()` in its one write.
+   */
   save: (expectedAggregateRevision?: number) => Promise<void>;
   /**
    * The changed draft for the product's own save to carry (one write, all or nothing),
    * or null when it is unchanged. Rejects (after marking the field) when it can't be saved.
    */
   composition: () => ProductUpdateComposition | null;
-  /** After the product save that carried `composition()`: settles the draft and sends typed costs. */
+  /** After the product write that carried `composition()` (and the costs): settles the draft. */
   compositionSaved: (aggregateRevision: number) => Promise<void>;
   /** Shows the draft's problem at its field (row expanded, page turned) for a Save that was refused. */
   reveal: () => void;

@@ -1,7 +1,9 @@
-// One product Save is one write: the details, options and SKUs the editor
+// One product Save is one write: the details, options, SKUs, content blocks,
+// quantity bundles, page template, EMI line and costs per item the editor
 // changed go in a single PUT /products/{id} and one guarded batch, so a save
-// the server refuses (stock allocation, a taken SKU, a stale revision) leaves
-// the product exactly as it was.
+// the server refuses (stock allocation, a taken SKU, a stale revision, a
+// section's own rule, a cost or file that changed meanwhile) leaves the
+// product exactly as it was.
 import type { DatabaseSync } from "node:sqlite";
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -13,9 +15,17 @@ import { adminProductsRoutes } from "./products";
 
 let sqlite: DatabaseSync;
 let db: Database;
+/** Runs against the database just before the next batch (a change that lands meanwhile). */
+let raceNextBatch: ((sqlite: DatabaseSync) => void) | undefined;
 
 beforeEach(() => {
-  ({ sqlite, db } = createSqliteD1Database());
+  ({ sqlite, db } = createSqliteD1Database({
+    beforeBatch(sqlite) {
+      const race = raceNextBatch;
+      raceNextBatch = undefined;
+      race?.(sqlite);
+    },
+  }));
   sqlite.exec(`
     INSERT INTO products (id, name, price_minor, slug, is_active, aggregate_revision)
       VALUES ('prod_copy', 'Panjabi (copy)', 123400, 'panjabi-copy', 0, 3);
@@ -24,6 +34,9 @@ beforeEach(() => {
     INSERT INTO products (id, name, price_minor, slug, is_active) VALUES ('prod_other', 'Kurta', 50000, 'kurta', 1);
     INSERT INTO product_variants (id, product_id, sku, price_minor, stock, reserved_stock, is_default, track_inventory)
       VALUES ('var_other', 'prod_other', 'KURTA-RED', 50000, 4, 0, 1, 1);
+    INSERT INTO media (id, filename, kind, object_key, size, mime_type, status, alt_text, width, height)
+      VALUES ('med_photo', 'panjabi.jpg', 'image', 'media/panjabi.jpg', 1, 'image/jpeg', 'ready', 'Panjabi', 800, 600);
+    UPDATE product_variants SET cost_minor = 40000 WHERE id = 'var_default';
   `);
 });
 afterEach(() => sqlite.close());
@@ -99,12 +112,26 @@ const colours = (red: { sku?: string; stock?: number } = {}, blue: { sku?: strin
 
 function snapshot() {
   return {
-    product: sqlite.prepare("SELECT name, price_minor, aggregate_revision FROM products WHERE id = 'prod_copy'").get(),
-    variants: sqlite.prepare("SELECT id, sku, stock, deleted_at IS NOT NULL AS retired FROM product_variants WHERE product_id = 'prod_copy' ORDER BY sku").all(),
+    product: sqlite.prepare("SELECT name, price_minor, aggregate_revision, page_template, emi_eligible FROM products WHERE id = 'prod_copy'").get(),
+    variants: sqlite.prepare("SELECT id, sku, stock, cost_minor, deleted_at IS NOT NULL AS retired FROM product_variants WHERE product_id = 'prod_copy' ORDER BY sku").all(),
     options: sqlite.prepare("SELECT count(*) AS n FROM product_option_definitions WHERE product_id = 'prod_copy'").get(),
     movements: sqlite.prepare("SELECT count(*) AS n FROM inventory_movements").get(),
+    blocks: sqlite.prepare("SELECT type, placement, settings FROM product_content_blocks WHERE product_id = 'prod_copy' ORDER BY placement, position").all(),
+    bundles: sqlite.prepare("SELECT quantity, discount_bps FROM product_bundles WHERE product_id = 'prod_copy' ORDER BY quantity").all(),
   };
 }
+
+/** Everything else on the editor's page a merchant may change in the same Save. */
+const sections = (overrides: Record<string, unknown> = {}) => ({
+  contentBlocks: [
+    { placement: "tabs", type: "faq", version: 1, settings: { heading: "", items: [{ question: "Cotton?", answer: "Yes" }] } },
+    { placement: "after-buy-box", type: "image-with-text", version: 1, settings: { heading: "Woven", body: "", mediaId: "med_photo", imageSide: "start", cta: null } },
+  ],
+  bundles: [{ quantity: 2, discountType: "percentage", discountPercentage: 10, label: "Pair", isActive: true }],
+  pageTemplate: null,
+  emiEligible: false,
+  ...overrides,
+});
 
 describe("PUT /products/{id} with the editor's variants", () => {
   it("saves the title, price, options and variant quantities of a product with no stock in one revision", async () => {
@@ -114,7 +141,7 @@ describe("PUT /products/{id} with the editor's variants", () => {
     expect(saved.status).toBe(200);
     expect(saved.body.data).toEqual({ aggregateRevision: 4 });
     const after = snapshot();
-    expect(after.product).toEqual({ name: "Eid Panjabi", price_minor: 90000, aggregate_revision: 4 });
+    expect(after.product).toMatchObject({ name: "Eid Panjabi", price_minor: 90000, aggregate_revision: 4 });
     expect(after.variants).toEqual([
       expect.objectContaining({ sku: "EID-BLUE", stock: 2, retired: 0 }),
       expect.objectContaining({ sku: "EID-RED", stock: 1, retired: 0 }),
@@ -164,6 +191,83 @@ describe("PUT /products/{id} with the editor's variants", () => {
 
     expect(refused.status).toBe(400);
     expect(snapshot()).toEqual(before);
+  });
+});
+
+describe("PUT /products/{id} with the page's sections and costs", () => {
+  it("saves details, variants, content blocks, bundles, EMI and costs (new rows by draft id) in one revision", async () => {
+    const saved = await call("PUT", "/products/prod_copy", details({
+      optionMatrix: colours(),
+      ...sections(),
+      skuCosts: [{ variantId: "draft_red", cost: 420.5, expectedCost: null }, { variantId: "draft_blue", cost: 430, expectedCost: null }],
+    }));
+
+    expect(saved.status).toBe(200);
+    expect(saved.body.data).toEqual({ aggregateRevision: 4 });
+    const after = snapshot();
+    expect(after.product).toMatchObject({ name: "Eid Panjabi", price_minor: 90000, aggregate_revision: 4, emi_eligible: 0 });
+    expect(after.variants).toEqual([
+      expect.objectContaining({ sku: "EID-BLUE", stock: 2, cost_minor: 43000, retired: 0 }),
+      expect.objectContaining({ sku: "EID-RED", stock: 1, cost_minor: 42050, retired: 0 }),
+      expect.objectContaining({ id: "var_default", retired: 1 }),
+    ]);
+    expect(after.blocks.map((block) => (block as { type: string }).type)).toEqual(["image-with-text", "faq"]);
+    expect(after.bundles).toEqual([{ quantity: 2, discount_bps: 1000 }]);
+  });
+
+  it("saves sections alone without rewriting unchanged details, still under the revision", async () => {
+    const unchanged = details({ name: "Panjabi (copy)", price: 1234 });
+
+    const saved = await call("PUT", "/products/prod_copy", { ...unchanged, bundles: sections().bundles, skuCosts: [{ variantId: "var_default", cost: 450, expectedCost: 400 }] });
+
+    expect(saved.status).toBe(200);
+    expect(snapshot()).toMatchObject({
+      product: { name: "Panjabi (copy)", price_minor: 123400, aggregate_revision: 4 },
+      variants: [{ id: "var_default", cost_minor: 45000 }],
+      bundles: [{ quantity: 2, discount_bps: 1000 }],
+    });
+    // The hidden SKU's price was not rewritten (details unchanged); only its cost moved.
+    expect(sqlite.prepare("SELECT price_minor FROM product_variants WHERE id = 'var_default'").get()).toEqual({ price_minor: 123400 });
+
+    // The same Save again changes nothing at all: no revision bump.
+    const again = await call("PUT", "/products/prod_copy", { ...unchanged, expectedAggregateRevision: 4 });
+    expect(again.body.data).toEqual({ aggregateRevision: 4 });
+  });
+
+  it.each([
+    ["a content block the section refuses", { contentBlocks: [{ placement: "tabs", type: "faq", version: 1, settings: { heading: "", items: [] } }] }, 400],
+    ["a content block file that is unavailable", { contentBlocks: [{ placement: "after-buy-box", type: "image-with-text", version: 1, settings: { heading: "", body: "", mediaId: "med_gone", imageSide: "start", cta: null } }] }, 400],
+    ["quantity bundles the section refuses", { bundles: [{ quantity: 2, discountType: "percentage", discountPercentage: 10, label: null, isActive: true }, { quantity: 2, discountType: "percentage", discountPercentage: 20, label: null, isActive: true }] }, 400],
+    ["a cost for a SKU that is not this product's", { skuCosts: [{ variantId: "var_other", cost: 10, expectedCost: null }] }, 400],
+    ["a cost that changed since the editor showed it", { skuCosts: [{ variantId: "var_default", cost: 450, expectedCost: 399 }] }, 409],
+  ])("changes nothing when the Save carries %s", async (_label, part, status) => {
+    const before = snapshot();
+
+    const refused = await call("PUT", "/products/prod_copy", details({ ...sections(), ...part }));
+
+    expect(refused.status).toBe(status);
+    expect(snapshot()).toEqual(before);
+  });
+
+  it("changes nothing when a content block's file is trashed while the Save is on its way", async () => {
+    const before = snapshot();
+    raceNextBatch = (sqlite) => sqlite.exec("UPDATE media SET status = 'trashed', trashed_at = unixepoch() WHERE id = 'med_photo'");
+
+    const refused = await call("PUT", "/products/prod_copy", details({ optionMatrix: colours(), ...sections() }));
+
+    expect(refused.status).toBe(400);
+    expect(refused.body.error.details).toMatchObject({ field: "contentBlocks" });
+    expect(snapshot()).toEqual({ ...before });
+  });
+
+  it("changes nothing when a receipt moves a cost while the Save is on its way", async () => {
+    const before = snapshot();
+    raceNextBatch = (sqlite) => sqlite.exec("UPDATE product_variants SET cost_minor = 41000 WHERE id = 'var_default'");
+
+    const refused = await call("PUT", "/products/prod_copy", details({ ...sections(), skuCosts: [{ variantId: "var_default", cost: 450, expectedCost: 400 }] }));
+
+    expect(refused.status).toBe(409);
+    expect(snapshot()).toEqual({ ...before, variants: [expect.objectContaining({ id: "var_default", cost_minor: 41000 })] });
   });
 });
 

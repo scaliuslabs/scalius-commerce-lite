@@ -1,8 +1,12 @@
 import { createContext, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import type { UpdateProductInput } from "~/lib/api-query-options/products";
+
+/** What a section adds to the product's one write (only what changed). */
+export type ProductSectionChanges = Partial<Pick<UpdateProductInput, "contentBlocks" | "bundles" | "pageTemplate" | "emiEligible">>;
 
 /**
- * A product editor section saved on its own (content blocks, bundles,
- * template): the page saves it in turn under the product revision.
+ * A product editor section with its own draft (content blocks, bundles,
+ * template): the page's Save sends its changes in the product's one write.
  */
 export interface ProductSectionHandle {
   /** Names the section in the save banner. */
@@ -12,8 +16,10 @@ export interface ProductSectionHandle {
   problems: string[] | null;
   /** Reads fresh state and checks overlap; applies it only after the whole page passes. */
   prepareRebase: () => Promise<() => (() => void) | null>;
-  /** Saves against `revision`; resolves with the product's new revision. */
-  save: (revision: number) => Promise<number>;
+  /** The draft's changes for this Save's write (the draft sent becomes the saved one on `saved`). */
+  changes: () => ProductSectionChanges;
+  /** After the write that carried `changes()`: what it sent is saved. */
+  saved: () => void;
 }
 
 interface Registry {

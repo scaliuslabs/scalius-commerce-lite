@@ -15,6 +15,10 @@ import { catalogMoneySchema, expectedStockVersionSchema, skuStockSchema, skuWeig
 import { customizationSchemaInputSchema, editableFulfillmentKindSchema } from "./customization-schema";
 import { createProductOptionMatrixSchema, productOptionMatrixBodySchema } from "./option-matrix";
 import { unitCostAmountSchema } from "../inventory/unit-costs";
+import { templateAssignmentSchema } from "@scalius/shared/catalog-tree";
+import { MAX_PRODUCT_OPTION_COMBINATIONS } from "@scalius/shared/product-options";
+import { productContentBlockInputListSchema } from "./content-blocks";
+import { productBundleTierInputListSchema } from "./bundles";
 import { MAX_PRODUCT_MEDIA_ASSOCIATIONS } from "./media";
 import { addGiftCardInputIssues } from "./gift-card-rules";
 
@@ -260,6 +264,14 @@ const defaultSkuUpdateSchema = z.object({
     path: ["expectedStockVersion"],
 });
 
+/** A SKU's new cost per item, with the cost the editor showed (a receipt that moved it since refuses the save). */
+const skuCostChangeSchema = z.object({
+    /** A saved SKU's id, or a new row's id in this save's optionMatrix. */
+    variantId: z.string().trim().min(1).max(100),
+    cost: unitCostAmountSchema.nullable(),
+    expectedCost: unitCostAmountSchema.nullable(),
+});
+
 /** Schema for updating an existing product (PUT /api/products/[id]) */
 export const updateProductSchema = productBaseSchema
     .extend({
@@ -275,6 +287,16 @@ export const updateProductSchema = productBaseSchema
             .describe("The complete option matrix, saved in the same write as the product. Omit to keep the options and SKUs."),
         defaultSku: defaultSkuUpdateSchema.optional()
             .describe("Edits to the hidden SKU of a product without options, saved in the same write. Not allowed with optionMatrix."),
+        pageTemplate: templateAssignmentSchema.optional()
+            .describe("A product page template id from the theme, or null for the theme's default. Omit to keep."),
+        emiEligible: z.boolean().optional()
+            .describe("Shows the store's EMI line on the product page. Omit to keep."),
+        contentBlocks: productContentBlockInputListSchema.optional()
+            .describe("Every editable content block, in page order within each placement, as dashboard.products.update_section takes them. Omit to keep."),
+        bundles: productBundleTierInputListSchema.optional()
+            .describe("Every quantity-bundle tier in display order; an empty list removes them. Omit to keep."),
+        skuCosts: z.array(skuCostChangeSchema).max(MAX_PRODUCT_OPTION_COMBINATIONS).optional()
+            .describe("Changed costs per item. A new optionMatrix row is named by its draft id. Each names the cost it replaces; omit to keep."),
     })
     .superRefine(requireCanonicalProductHandle)
     .superRefine(requireSellablePrice)
