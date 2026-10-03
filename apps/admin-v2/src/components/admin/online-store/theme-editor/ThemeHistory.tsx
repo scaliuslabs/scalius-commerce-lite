@@ -14,6 +14,7 @@ import {
   type StorefrontThemeDocument,
   type ThemeDocumentChange,
 } from "@scalius/shared/storefront-theme";
+import { StatusBadge } from "~/components/admin/resource/StatusBadge";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "~/components/ui/sheet";
@@ -97,7 +98,7 @@ function VersionItem({ version, live, draft, previewing, busy, sectionName, onPr
     <li className="space-y-2 border-b border-border px-4 py-4 last:border-b-0" data-theme-version={version.revision}>
       <div className="flex flex-wrap items-center gap-2">
         <h3 className="text-heading-sm">{t("version", { revision: version.revision })}</h3>
-        {live ? <Badge variant="success">{t("live")}</Badge> : null}
+        {live ? <StatusBadge status="active">{t("live")}</StatusBadge> : null}
         {previewing ? <Badge variant="info">{t("previewingShort")}</Badge> : null}
       </div>
       <p className="text-body text-muted-foreground">

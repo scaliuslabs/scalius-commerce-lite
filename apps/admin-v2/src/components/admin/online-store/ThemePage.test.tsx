@@ -13,6 +13,7 @@ import {
 } from "@scalius/shared/storefront-theme";
 import { themeWorkspaceQueryOptions, type ThemeWorkspaceDocument } from "~/lib/api-query-options/online-store";
 import { AdminApiResponseError } from "~/lib/admin-api-error";
+import { PermissionProvider } from "~/contexts/PermissionContext";
 import { ThemePage } from "./ThemePage";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -74,7 +75,7 @@ function workspaceOf(draft: StorefrontThemeDocument, options: { published?: Stor
   } as unknown as ThemeWorkspaceDocument;
 }
 
-function render(workspace: ThemeWorkspaceDocument) {
+function render(workspace: ThemeWorkspaceDocument, permissions = ["settings.general.view", "settings.general.edit"]) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   queryClient.setQueryData(themeWorkspaceQueryOptions().queryKey, workspace);
   // A refetch after a save reads the same workspace unless a test says otherwise.
@@ -82,9 +83,11 @@ function render(workspace: ThemeWorkspaceDocument) {
   act(() => {
     root.render(
       <QueryClientProvider client={queryClient}>
-        <Suspense fallback={null}>
-          <ThemePage />
-        </Suspense>
+        <PermissionProvider permissions={permissions}>
+          <Suspense fallback={null}>
+            <ThemePage />
+          </Suspense>
+        </PermissionProvider>
       </QueryClientProvider>,
     );
   });
@@ -211,6 +214,16 @@ describe("themes page", () => {
     await act(async () => confirm("Replace").click());
     expect(toasts.error).toHaveBeenCalledTimes(1);
     expect(api.workspace).toHaveBeenCalled();
+  });
+
+  it("lets staff who may only view settings see and preview the theme, not publish or restyle it", () => {
+    render(workspaceOf(DEFAULT_STOREFRONT_THEME, { published: storefrontTemplateTheme("boutique") }), ["settings.general.view"]);
+    expect(current().textContent).toContain("Unpublished changes");
+    expect(button("Publish theme")).toBeUndefined();
+    expect(button("Preview")).toBeDefined();
+    act(() => radio("Fashion value").click());
+    expect(document.querySelector("[role=alertdialog]")).toBeNull();
+    expect(container.textContent).toContain("You can view this theme but not change it.");
   });
 
   it("previews the saved draft's homepage in a new tab", async () => {

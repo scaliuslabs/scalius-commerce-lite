@@ -14,6 +14,7 @@ import {
   type StorefrontSectionType,
   type StorefrontThemeDocument,
 } from "@scalius/shared/storefront-theme";
+import { PermissionProvider } from "~/contexts/PermissionContext";
 import { setLocale } from "~/i18n";
 import { AdminApiResponseError } from "~/lib/admin-api-error";
 import type { ThemeWorkspaceDocument } from "~/lib/api-query-options/online-store";
@@ -148,13 +149,17 @@ function workspaceOf(draft: StorefrontThemeDocument, options: {
 
 function render(theme: StorefrontThemeDocument = themeWith(HOME), options: Parameters<typeof workspaceOf>[1] & {
   refetch?: () => Promise<{ data?: ThemeWorkspaceDocument }>;
+  /** Staff permissions; editing needs settings.general.edit. */
+  permissions?: string[];
 } = {}) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   const workspace = workspaceOf(theme, options);
   act(() => {
     root.render(
       <QueryClientProvider client={queryClient}>
-        <ThemeEditor workspace={workspace} refetch={options.refetch ?? (async () => ({ data: workspace }))} />
+        <PermissionProvider permissions={options.permissions ?? ["settings.general.view", "settings.general.edit"]}>
+          <ThemeEditor workspace={workspace} refetch={options.refetch ?? (async () => ({ data: workspace }))} />
+        </PermissionProvider>
       </QueryClientProvider>,
     );
   });
@@ -433,6 +438,20 @@ describe("theme editor: settings and saving", () => {
     openMenu("More actions");
     act(() => menuItem("Preview").click());
     expect(preview.open).toHaveBeenCalledWith(1, "/", "full", undefined);
+  });
+
+  it("lets staff who may only view settings browse the theme without changing it", async () => {
+    render(themeWith(HOME), { permissions: ["settings.general.view"] });
+    expect(status()).toBe("You can view this theme but not change it.");
+    expect(button("Publish")).toBeUndefined();
+    expect(button("Add section")).toBeUndefined();
+    expect(container.querySelector('button[aria-label="Reorder New honey"]')).toBeNull();
+    act(() => selectButton("rail").click());
+    expect(container.querySelector<HTMLFieldSetElement>("[data-settings-panel] fieldset")?.disabled).toBe(true);
+    type(field("theme-section-rail-title"), "Mine");
+    // The settings stay as saved: nothing is sent.
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    expect(api.draft).not.toHaveBeenCalled();
   });
 
   it("switches the preview to a 390px phone", () => {

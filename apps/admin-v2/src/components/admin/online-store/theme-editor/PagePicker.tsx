@@ -38,7 +38,8 @@ export function PagePicker({ theme, page, onPage, onCreate }: {
   theme: Theme;
   page: EditorPage;
   onPage: (page: EditorPage) => void;
-  onCreate: () => void;
+  /** Absent for staff who may only view the theme. */
+  onCreate?: () => void;
 }) {
   const t = useMessages(themeEditorMessages);
   const name = usePageName();
@@ -75,15 +76,17 @@ export function PagePicker({ theme, page, onPage, onCreate }: {
             <CommandSeparator />
             <CommandGroup heading={t("landingPages")}>
               {landing.map(([slug, value]) => item({ kind: "landing", slug }, value.title, `/pages/${slug}`))}
-              <CommandItem
-                value={t("newLanding")}
-                disabled={landing.length >= STOREFRONT_MAX_LANDING_PAGES}
-                onSelect={() => { setOpen(false); onCreate(); }}
-                className="cursor-pointer"
-              >
-                <Plus className="size-4" aria-hidden="true" />
-                <span>{landing.length >= STOREFRONT_MAX_LANDING_PAGES ? t("landingLimit") : t("newLanding")}</span>
-              </CommandItem>
+              {onCreate ? (
+                <CommandItem
+                  value={t("newLanding")}
+                  disabled={landing.length >= STOREFRONT_MAX_LANDING_PAGES}
+                  onSelect={() => { setOpen(false); onCreate(); }}
+                  className="cursor-pointer"
+                >
+                  <Plus className="size-4" aria-hidden="true" />
+                  <span>{landing.length >= STOREFRONT_MAX_LANDING_PAGES ? t("landingLimit") : t("newLanding")}</span>
+                </CommandItem>
+              ) : null}
             </CommandGroup>
           </CommandList>
         </Command>

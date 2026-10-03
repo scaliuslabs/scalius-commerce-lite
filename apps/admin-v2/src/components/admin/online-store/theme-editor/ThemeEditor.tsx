@@ -47,7 +47,9 @@ import {
 import { cn } from "@scalius/shared/utils";
 import { Alert, AlertDescription } from "~/components/ui/alert";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "~/components/ui/alert-dialog";
-import { Badge } from "~/components/ui/badge";
+import { StatusBadge } from "~/components/admin/resource/StatusBadge";
+import { useHasPermission } from "~/contexts/PermissionContext";
+import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { Button } from "~/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "~/components/ui/dropdown-menu";
 import { Label } from "~/components/ui/label";
@@ -225,6 +227,8 @@ export function ThemeEditor({ workspace, refetch }: {
   const [tab, setTab] = useState<"sections" | "theme">("sections");
   const [selected, setSelected] = useState<string | null>(null);
   const wide = useMediaQuery("(min-width: 1280px)");
+  // Staff who may view settings but not edit them browse the theme read-only.
+  const canEdit = useHasPermission(ADMIN_PERMISSIONS.SETTINGS_GENERAL_EDIT);
   const preview = useRef<PreviewController>(null);
   const appSections = useMemo(() => appSectionsByKey(workspace.apps), [workspace.apps]);
   const appBlocks = useMemo(() => appBlocksByKey(workspace.apps), [workspace.apps]);
@@ -241,8 +245,9 @@ export function ThemeEditor({ workspace, refetch }: {
     dispatchHistory(action);
   }, []);
   const setDraft: SetTheme = useCallback((next) => {
+    if (!canEdit) return;
     dispatch({ type: "edit", update: (current) => (typeof next === "function" ? next(current) : next), at: Date.now() });
-  }, [dispatch]);
+  }, [dispatch, canEdit]);
 
   const sections = pageSections(theme, page);
   const allSections = useMemo(
@@ -288,15 +293,15 @@ export function ThemeEditor({ workspace, refetch }: {
 
   // Edits save themselves a moment after the last one.
   useEffect(() => {
-    if (!dirty || invalid || saving || conflict || failedHere || draftAction) return;
+    if (!canEdit || !dirty || invalid || saving || conflict || failedHere || draftAction) return;
     const timer = window.setTimeout(() => void save(), AUTOSAVE_DELAY_MS);
     return () => window.clearTimeout(timer);
-  }, [theme, dirty, invalid, saving, conflict, failedHere, draftAction, save]);
+  }, [theme, canEdit, dirty, invalid, saving, conflict, failedHere, draftAction, save]);
 
   // A store without a draft gets one, so the preview has a draft to render.
   useEffect(() => {
-    if (saved.revision === 0 && !saving && !conflict && !failure) void save();
-  }, [saved.revision, saving, conflict, failure, save]);
+    if (canEdit && saved.revision === 0 && !saving && !conflict && !failure) void save();
+  }, [canEdit, saved.revision, saving, conflict, failure, save]);
 
   /** The server's workspace again (after a conflict, a restore or a discard); `keepEdits` overwrites it with ours next. */
   const reload = async (keepEdits = false) => {
@@ -503,7 +508,8 @@ export function ThemeEditor({ workspace, refetch }: {
 
   // ── Status ───────────────────────────────────────────────────────────────
   const hasUnpublishedDraft = dirty || (saved.revision > 0 && !same(saved.theme, published.theme));
-  const status = conflict ? t("statusConflict")
+  const status = !canEdit ? t("readOnly")
+    : conflict ? t("statusConflict")
     : saving ? t("statusSaving")
       : failedHere ? (failure?.message ?? t("statusFailed"))
         : invalid && dirty ? t("statusInvalid")
@@ -567,7 +573,7 @@ export function ThemeEditor({ workspace, refetch }: {
       closeLabel={wide ? "close" : "back"}
       onClose={() => setSelected(null)}
     >
-      {settingsContent}
+      <fieldset disabled={!canEdit} className="min-w-0 space-y-4">{settingsContent}</fieldset>
     </SettingsPanel>
   ) : null;
 
@@ -590,6 +596,7 @@ export function ThemeEditor({ workspace, refetch }: {
           onChange={(next) => setResources((current) => ({ ...current, [resourceKind]: next }))}
         />
       ) : null}
+      readOnly={!canEdit}
       sections={sections ? {
         rows,
         note: homeIsProduct ? t("homeIsProduct") : undefined,
@@ -630,7 +637,7 @@ export function ThemeEditor({ workspace, refetch }: {
         <div className="min-w-0 flex-1 basis-40">
           <h1 className="flex items-center gap-2 text-heading-sm">
             <span className="truncate">{t("title")}</span>
-            <Badge variant={hasUnpublishedDraft ? "attention" : "success"}>{hasUnpublishedDraft ? t("notPublished") : t("live")}</Badge>
+            <StatusBadge status={hasUnpublishedDraft ? "draft" : "active"}>{hasUnpublishedDraft ? t("notPublished") : t("live")}</StatusBadge>
           </h1>
           <p role="status" aria-live="polite" className={cn("truncate text-body", statusTone)}>
             {status}
@@ -646,7 +653,7 @@ export function ThemeEditor({ workspace, refetch }: {
           </p>
         </div>
         <div className="order-last flex w-full justify-center md:order-none md:w-auto">
-          <PagePicker theme={theme} page={page} onPage={setPage} onCreate={() => setCreatingLanding(true)} />
+          <PagePicker theme={theme} page={page} onPage={setPage} onCreate={canEdit ? () => setCreatingLanding(true) : undefined} />
         </div>
         <div className="ml-auto flex items-center gap-1">
           <div role="group" aria-label={t("device")} className="hidden items-center gap-0.5 rounded-lg bg-muted p-0.5 md:flex">
@@ -679,17 +686,21 @@ export function ThemeEditor({ workspace, refetch }: {
                 <ExternalLink aria-hidden="true" />{t("preview")}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem variant="destructive" disabled={busy || !hasUnpublishedDraft} onSelect={() => setConfirmDiscard(true)}>
+              <DropdownMenuItem variant="destructive" disabled={!canEdit || busy || !hasUnpublishedDraft} onSelect={() => setConfirmDiscard(true)}>
                 {t("discard")}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <Button type="button" variant="outline" disabled={!dirty || invalid || conflict || draftAction} loading={saving} onClick={() => void save()}>
-            {dirty ? t("save") : t("saved")}
-          </Button>
-          <Button type="button" disabled={dirty || saving || !hasUnpublishedDraft || conflict || draftAction || invalid} loading={publishing} onClick={() => setConfirmPublish(true)}>
-            {t("publish")}
-          </Button>
+          {canEdit ? (
+            <>
+              <Button type="button" variant="outline" disabled={!dirty || invalid || conflict || draftAction} loading={saving} onClick={() => void save()}>
+                {dirty ? t("save") : t("saved")}
+              </Button>
+              <Button type="button" disabled={dirty || saving || !hasUnpublishedDraft || conflict || draftAction || invalid} loading={publishing} onClick={() => setConfirmPublish(true)}>
+                {t("publish")}
+              </Button>
+            </>
+          ) : null}
         </div>
       </header>
 
@@ -781,7 +792,7 @@ export function ThemeEditor({ workspace, refetch }: {
         draft={theme}
         liveRevision={published.revision}
         previewRevision={previewRevision}
-        busy={busy}
+        busy={busy || !canEdit}
         sectionName={sectionName}
         onPreview={(revision) => {
           setPreviewRevision(revision);

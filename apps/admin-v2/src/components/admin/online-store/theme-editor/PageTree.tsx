@@ -82,7 +82,7 @@ export interface SectionTree {
   note?: string;
 }
 
-export function PageTree({ theme, page, pageName, selected, onSelect, onHover, sections, resource, hasAppBlocks, setDraft }: {
+export function PageTree({ theme, page, pageName, selected, onSelect, onHover, sections, resource, hasAppBlocks, readOnly = false, setDraft }: {
   theme: Theme;
   page: EditorPage;
   /** The template group's heading (the page's name). */
@@ -96,6 +96,8 @@ export function PageTree({ theme, page, pageName, selected, onSelect, onHover, s
   resource: ReactNode;
   /** Product pages: whether there are app blocks to place. */
   hasAppBlocks: boolean;
+  /** Staff who may only view the theme: rows select, nothing moves, hides or is added. */
+  readOnly?: boolean;
   setDraft: (update: (theme: Theme) => Theme) => void;
 }) {
   const t = useMessages(themeEditorMessages);
@@ -103,6 +105,7 @@ export function PageTree({ theme, page, pageName, selected, onSelect, onHover, s
     <PartRow key={id} id={id} icon={icon} name={name} note={note} selected={selected === id} onSelect={onSelect} onHover={onHover} />
   );
   const below = theme.blocks.product.below;
+  const fixed = (rows: TreeRow[]) => (readOnly ? rows.map((row) => ({ ...row, fixed: true })) : rows);
   const moduleRows: TreeRow[] = [
     ...below.map((module) => ({ id: moduleId(module), name: t(`module_${module}`) })),
     ...PRODUCT_MODULES.filter((module) => !below.includes(module))
@@ -129,30 +132,30 @@ export function PageTree({ theme, page, pageName, selected, onSelect, onHover, s
             {sections.note ? <p role="status" className="px-3 py-1 text-body text-muted-foreground">{sections.note}</p> : null}
             {sections.rows.length === 0 ? <p className="px-3 py-1 text-body text-muted-foreground">{t("noSections")}</p> : null}
             <SectionList
-              rows={sections.rows}
+              rows={fixed(sections.rows)}
               label={pageName}
               selectedId={selected}
               onSelect={onSelect}
               onHover={onHover}
               onMove={sections.onMove}
-              onDuplicate={sections.onDuplicate}
-              onRemove={sections.onRemove}
-              onToggle={sections.onToggle}
+              onDuplicate={readOnly ? undefined : sections.onDuplicate}
+              onRemove={readOnly ? undefined : sections.onRemove}
+              onToggle={readOnly ? undefined : sections.onToggle}
             />
-            <div className="px-1 pt-1">{sections.footer}</div>
+            {readOnly ? null : <div className="px-1 pt-1">{sections.footer}</div>}
           </>
         ) : null}
         {page.kind === "product" ? (
           <>
             {part(EDITOR_PARTS.productMain, ShoppingBag, t("productMain"))}
             <SectionList
-              rows={moduleRows}
+              rows={fixed(moduleRows)}
               label={t("productModules")}
               selectedId={selected}
               onSelect={onSelect}
               onHover={onHover}
               onMove={(id, to) => setBelow((current) => moveSectionTo(current, current.indexOf(moduleOf(id)), to))}
-              onToggle={(id) => setBelow((current) => toggleProductModule(current, moduleOf(id), !current.includes(moduleOf(id))))}
+              onToggle={readOnly ? undefined : (id) => setBelow((current) => toggleProductModule(current, moduleOf(id), !current.includes(moduleOf(id))))}
             />
             {hasAppBlocks ? part(EDITOR_PARTS.productApps, Puzzle, t("appBlocks")) : null}
           </>

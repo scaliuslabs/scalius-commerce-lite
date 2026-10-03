@@ -19,8 +19,10 @@ import type {
   StorefrontTemplateId,
   StorefrontThemeDocument,
 } from "@scalius/shared/storefront-theme";
-import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import { StatusBadge } from "~/components/admin/resource/StatusBadge";
+import { useHasPermission } from "~/contexts/PermissionContext";
+import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
 import { formatDateTime, useMessages } from "~/i18n";
 import { onlineStoreMessages } from "~/i18n/online-store";
@@ -119,6 +121,8 @@ function ThemeOverview({ workspace, refetch }: {
   const editor = useMessages(themeEditorMessages);
   const queryClient = useQueryClient();
   const openPreview = useOpenThemePreview();
+  // Staff who may view settings but not edit them see the theme, preview it and open the editor read-only.
+  const canEdit = useHasPermission(ADMIN_PERMISSIONS.SETTINGS_GENERAL_EDIT);
   const storeShape = workspace.storeShape as StoreShape;
   const draft = workspace.draft.theme as Theme;
   const [pendingTemplate, setPendingTemplate] = useState<StorefrontTemplateId | null>(null);
@@ -184,7 +188,7 @@ function ThemeOverview({ workspace, refetch }: {
             <div className="space-y-1">
               <p className="flex flex-wrap items-center gap-2 text-heading-md">
                 {selected ? option(`template_${selected}`) : t("templateCustomBasedOn", { name: option(`template_${draft.template}`) })}
-                <Badge variant={changed ? "attention" : "success"}>{changed ? editor("notPublished") : editor("live")}</Badge>
+                <StatusBadge status={changed ? "draft" : "active"}>{changed ? editor("notPublished") : editor("live")}</StatusBadge>
               </p>
               <p className="text-body text-muted-foreground">
                 {changed ? t("themeDraftNotLive") : t("themeLive")}
@@ -205,7 +209,7 @@ function ThemeOverview({ workspace, refetch }: {
               <Button type="button" variant="outline" disabled={workspace.draft.revision < 1 || busy !== null} loading={busy === "preview"} onClick={() => void preview()}>
                 {editor("preview")}
               </Button>
-              {changed ? (
+              {changed && canEdit ? (
                 <Button type="button" variant="outline" disabled={busy !== null} loading={busy === "publish"} onClick={() => setConfirmPublish(true)}>
                   {t("themePublish")}
                 </Button>
@@ -216,7 +220,7 @@ function ThemeOverview({ workspace, refetch }: {
         </div>
       </SectionCard>
 
-      <SectionCard title={t("themeTemplates")} description={editor("templatesHelp")}>
+      <SectionCard title={t("themeTemplates")} description={editor(canEdit ? "templatesHelp" : "readOnly")}>
         <VisualChoice
           label={t("themeTemplates")}
           value={selected}
@@ -227,7 +231,7 @@ function ThemeOverview({ workspace, refetch }: {
             help: option(`template_${template.id}Help`),
             sketch: <TemplatePreview theme={template.theme} layout={resolveThemeForStore(template.theme, storeShape).layout} />,
           }))}
-          onChange={(id) => { if (id !== selected && busy === null) setPendingTemplate(id); }}
+          onChange={(id) => { if (canEdit && id !== selected && busy === null) setPendingTemplate(id); }}
         />
       </SectionCard>
 
