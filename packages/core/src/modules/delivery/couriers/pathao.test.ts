@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { PathaoProvider } from "./pathao";
+import type { CourierShipmentInput } from "@scalius/shared/plugins/providers";
+import { pathaoCourier } from "./pathao";
 
 const credentials = {
   baseUrl: "https://courier.invalid",
@@ -14,32 +15,43 @@ const config = {
   defaultItemType: 2,
   defaultItemWeight: 0.5,
 };
-const order = {
-  id: "order_1",
-  customerName: "Customer",
-  customerPhone: "+8801700000000",
-  shippingAddress: "Address",
-  city: "city_1",
-  zone: "zone_1",
-  area: null,
-  totalAmount: 100,
-  paidAmount: 0,
-  balanceDue: 100,
-};
+const booking = (codAmountMinor: number): CourierShipmentInput => ({
+  idempotencyKey: "shp_1",
+  orderId: "order_1",
+  recipient: {
+    name: "Customer",
+    phone: "+8801700000000",
+    address: "Address",
+    cityId: "city_1",
+    zoneId: "zone_1",
+    areaId: null,
+    cityName: null,
+    zoneName: null,
+    areaName: null,
+    postalCode: null,
+    country: null,
+  },
+  codAmountMinor,
+  currency: "BDT",
+  decimalPlaces: 2,
+  note: null,
+  itemCount: null,
+  itemDescription: null,
+  options: { deliveryType: null, itemType: null, itemWeightKg: null },
+});
+const call = (db: unknown) => ({ settings: { credentials, config }, signal: new AbortController().signal, db: db as never });
 
 afterEach(() => vi.unstubAllGlobals());
 
-describe("PathaoProvider COD amount", () => {
+describe("Pathao COD amount", () => {
   it("rejects fractional taka before any provider or location call", async () => {
     const fetchMock = vi.fn();
     const db = { select: vi.fn() };
     vi.stubGlobal("fetch", fetchMock);
 
-    const result = await new PathaoProvider(credentials, config, db as never)
-      .createShipment(order as never, { codAmount: 5570.8 });
-
-    expect(result).toEqual({
-      success: false,
+    await expect(pathaoCourier.createShipment(booking(557_080), call(db))).rejects.toMatchObject({
+      category: "declined",
+      uncertain: false,
       message: "Pathao requires a whole-taka COD amount. Use another courier for this balance.",
     });
     expect(fetchMock).not.toHaveBeenCalled();
@@ -64,15 +76,17 @@ describe("PathaoProvider COD amount", () => {
       expect(JSON.parse(String(init?.body))).toMatchObject({ amount_to_collect: codAmount });
       return Response.json({
         code: 200,
-        data: { consignment_id: `consignment_${codAmount}`, order_status: "Pending" },
+        data: { consignment_id: `consignment_${codAmount}`, order_status: "Pending", delivery_fee: 60 },
       });
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const result = await new PathaoProvider(credentials, config, db as never)
-      .createShipment(order as never, { codAmount });
-
-    expect(result.success).toBe(true);
+    await expect(pathaoCourier.createShipment(booking(codAmount * 100), call(db))).resolves.toMatchObject({
+      externalId: `consignment_${codAmount}`,
+      status: "pending",
+      rawStatus: "Pending",
+      chargeMinor: 6_000,
+    });
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });

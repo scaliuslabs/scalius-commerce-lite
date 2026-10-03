@@ -41,7 +41,7 @@ Pathao requires a non-negative whole-taka COD value. **Observed in Pathao Sandbo
 
 The adapter accepts success only when HTTP/provider success includes a non-empty consignment ID and order status. HTTP 400/401/403/404/422 with a matching provider code is an explicit rejection. Network/read failures, server responses, malformed JSON, missing identity, and unrecognized results are unknown outcomes. Creation is not automatically retried.
 
-Owning code/tests: [`providers/pathao.ts`](../../packages/core/src/modules/delivery/providers/pathao.ts), [`providers/pathao.test.ts`](../../packages/core/src/modules/delivery/providers/pathao.test.ts), [`pathao-location-import.ts`](../../packages/core/src/modules/delivery/pathao-location-import.ts), and [`delivery.create-outcome.d1.test.ts`](../../packages/core/src/modules/delivery/delivery.create-outcome.d1.test.ts).
+Owning code/tests: [`couriers/pathao.ts`](../../packages/core/src/modules/delivery/couriers/pathao.ts), [`couriers/pathao.test.ts`](../../packages/core/src/modules/delivery/couriers/pathao.test.ts), [`pathao-location-import.ts`](../../packages/core/src/modules/delivery/pathao-location-import.ts), and [`delivery.create-outcome.d1.test.ts`](../../packages/core/src/modules/delivery/delivery.create-outcome.d1.test.ts).
 
 ## Status and recovery
 

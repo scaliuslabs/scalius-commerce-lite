@@ -14,16 +14,13 @@ export interface ShipmentResult {
   };
 }
 
-export interface ShipmentStatus {
-  status: string;
-  rawStatus: string;
-  updatedAt: Date;
-  metadata?: Record<string, unknown>;
-}
-
 export type MerchantOrderShipmentLookup =
   | {
     confirmed: true;
+    /** The courier that confirmed the booking, merchant-facing. */
+    courier: string;
+    /** The booking id, when the courier's lookup returns it. */
+    externalId: string | null;
     status: string;
     rawStatus: string;
   }
@@ -119,13 +116,13 @@ export interface SteadfastConfig {
   defaultCodAmount: number;
 }
 
-// Provider-agnostic shipment options
+/**
+ * Staff choices on the booking form. Money, item count and contents always
+ * come from the saved order, never from the caller.
+ */
 export interface ShipmentOptions {
   deliveryType?: number;
   itemType?: number;
   itemWeight?: number;
-  codAmount?: number;
   note?: string;
-  itemCount?: number;
-  itemDescription?: string;
 }
