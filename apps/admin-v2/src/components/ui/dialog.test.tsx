@@ -87,7 +87,7 @@ describe("modal top anchor", () => {
     await render(<Harness extra />);
     expect(document.body.textContent).toContain("A chip row appeared");
     expect(top()).toBe("max(1rem, 250px)");
-    // No observer and no re-measure: the position was decided once.
+    // No re-measure: the position was decided once.
     expect(measured).toBe(before);
   });
 
@@ -108,6 +108,37 @@ describe("modal top anchor", () => {
     panelHeight = 700;
     await act(async () => document.querySelector<HTMLButtonElement>("button:not([class])")!.click());
     expect(top()).toBe("max(1rem, 250px)");
+  });
+
+  it("lifts the panel, never lowers it, when loaded content outgrows the room below its top", async () => {
+    const watchers: Array<() => void> = [];
+    vi.stubGlobal("ResizeObserver", class {
+      constructor(callback: () => void) { watchers.push(callback); }
+      observe() {}
+      disconnect() {}
+    });
+    const box = { scroll: 300, client: 300 };
+    vi.spyOn(HTMLElement.prototype, "scrollHeight", "get").mockImplementation(function (this: HTMLElement) { return this.matches(PANEL) ? box.scroll : 0; });
+    vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockImplementation(function (this: HTMLElement) { return this.matches(PANEL) ? box.client : 0; });
+    await render(<Harness />);
+    expect(top()).toBe("max(1rem, 250px)");
+    const changed = () => act(() => { for (const watcher of watchers) watcher(); });
+    // A list loads: 620px of content, but the cap from a 250px top leaves 534px.
+    box.scroll = 620;
+    box.client = 534;
+    changed();
+    expect(top()).toBe("max(1rem, 90px)");
+    // It shrinks again: the panel stays where it is.
+    box.scroll = 400;
+    box.client = 400;
+    changed();
+    expect(top()).toBe("max(1rem, 90px)");
+    // Content that fits under the pinned top never moves it.
+    box.scroll = 500;
+    box.client = 500;
+    changed();
+    expect(top()).toBe("max(1rem, 90px)");
+    vi.unstubAllGlobals();
   });
 
   it("measures again on every open", async () => {

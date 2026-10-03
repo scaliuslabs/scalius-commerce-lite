@@ -38,10 +38,13 @@ const CENTRED_MODAL = "(min-width: 40rem)";
  * height cap (`modalClassName`) keeps its bottom 1rem above the screen's, and
  * the panel scrolls inside. Content that changes height (a filtered list, a
  * chip row, an error line) therefore never moves the dialog or the buttons in
- * it. A new open measures again. Only a window resize re-anchors, because the
- * old position may no longer fit. There is no observer: one measurement per
- * open and one per resize, and nothing animates, so reduced motion has nothing
- * to switch off. A phone's bottom sheet is left alone.
+ * it. One exception: content that outgrows the room below the pinned top (a
+ * dialog that opened on a spinner, then loaded a list) lifts the panel just
+ * enough to show it, never lowers it, so it never scrolls with room to spare
+ * above and never jitters. A new open measures again; a window resize
+ * re-anchors, because the old position may no longer fit. Nothing animates,
+ * so reduced motion has nothing to switch off. A phone's bottom sheet is left
+ * alone.
  *
  * Returns the ref for the Radix content, which also forwards the caller's ref.
  */
@@ -51,17 +54,45 @@ export function useModalTopAnchor<T extends HTMLElement>(forwardedRef: React.For
   React.useLayoutEffect(() => {
     const panel = panelRef.current;
     if (!panel || !enabled) return;
+    let pinnedTop: number | null = null;
+    const pin = (top: number) => {
+      pinnedTop = Math.round(top);
+      panel.style.setProperty("--dialog-top", `max(1rem, ${pinnedTop}px)`);
+    };
     const anchor = () => {
+      pinnedTop = null;
       panel.removeAttribute("data-anchored");
       panel.style.removeProperty("--dialog-top");
       if (!window.matchMedia(CENTRED_MODAL).matches) return;
-      const top = Math.round((window.innerHeight - panel.getBoundingClientRect().height) / 2);
-      panel.style.setProperty("--dialog-top", `max(1rem, ${top}px)`);
+      pin((window.innerHeight - panel.getBoundingClientRect().height) / 2);
       panel.setAttribute("data-anchored", "");
     };
+    // Up only: a lifted panel has more room, so it never comes back down.
+    const makeRoom = () => {
+      if (pinnedTop === null || panel.scrollHeight <= panel.clientHeight) return;
+      const centred = (window.innerHeight - panel.scrollHeight) / 2;
+      if (centred < pinnedTop) pin(centred);
+    };
+    // The panel's own box stops growing at the cap, so watch what is inside it.
+    const sizes = typeof ResizeObserver === "function" ? new ResizeObserver(makeRoom) : null;
+    const watchChildren = () => {
+      for (const child of Array.from(panel.children)) sizes?.observe(child);
+    };
+    const children = typeof MutationObserver === "function"
+      ? new MutationObserver(() => {
+        watchChildren();
+        makeRoom();
+      })
+      : null;
     anchor();
+    watchChildren();
+    children?.observe(panel, { childList: true });
     window.addEventListener("resize", anchor);
-    return () => window.removeEventListener("resize", anchor);
+    return () => {
+      window.removeEventListener("resize", anchor);
+      sizes?.disconnect();
+      children?.disconnect();
+    };
   }, [enabled]);
   return panelRef;
 }
