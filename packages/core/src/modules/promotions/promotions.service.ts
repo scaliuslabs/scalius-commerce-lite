@@ -14,6 +14,7 @@ import type { BatchItem } from "drizzle-orm/batch";
 import { nanoid } from "nanoid";
 
 import { customerSegmentMembership, readSegmentDefinitions } from "../customers";
+import { priceIncrementForCurrency, readStoreCurrency } from "../settings";
 import {
     evaluatePromotionCandidates,
     promotionCandidateSchema,
@@ -26,6 +27,7 @@ import {
 } from "./promotions.revision";
 import {
     createPromotionDraftSchema,
+    promotionAmountIssues,
     updatePromotionDraftSchema,
     type CreatePromotionDraftInput,
     type PromotionRule,
@@ -316,11 +318,19 @@ function buildChildInsertStatements(
     return statements;
 }
 
+/** Every amount of the rule is on its currency's price increment (the store's for the store currency). */
+async function assertPromotionAmountsOnIncrement(db: Database, rule: PromotionRule): Promise<void> {
+    const store = await readStoreCurrency(db);
+    const issues = promotionAmountIssues(rule, (currencyCode) => priceIncrementForCurrency(store, currencyCode));
+    if (issues.length > 0) throw new ValidationError(issues[0]!.message, { issues });
+}
+
 export async function createPromotionDraft(
     db: Database,
     rawInput: CreatePromotionDraftInput,
 ): Promise<{ id: string; revision: number; status: "draft" }> {
     const input = createPromotionDraftSchema.parse(rawInput);
+    await assertPromotionAmountsOnIncrement(db, input);
     await assertCodeIdentitiesAvailable(db, input.codes.map(({ code }) => code));
     await assertCustomerSegmentsUsable(db, input.customerSegmentIds);
 
@@ -483,6 +493,7 @@ export async function updatePromotionDraft(
     rawInput: UpdatePromotionDraftInput,
 ): Promise<{ id: string; revision: number; status: PromotionStatus }> {
     const input = updatePromotionDraftSchema.parse(rawInput);
+    await assertPromotionAmountsOnIncrement(db, input);
     const current = await getPromotionAggregate(db, promotionId);
     if (!current) throw new NotFoundError("Promotion not found");
     if (current.status === "archived") {
@@ -615,8 +626,19 @@ export async function previewPersistedPromotion(
         matchCustomerSegments(db, input.customerId, promotion.customerSegmentIds),
     ]);
     const assumedActive = promotion.status !== "active";
+    // A preview without an increment prices like checkout: at the store's.
+    const cart = input.cart && typeof input.cart === "object" && !("priceIncrementMinor" in input.cart)
+        && typeof (input.cart as { currencyCode?: unknown }).currencyCode === "string"
+        ? {
+            ...input.cart,
+            priceIncrementMinor: priceIncrementForCurrency(
+                await readStoreCurrency(db),
+                (input.cart as { currencyCode: string }).currencyCode,
+            ),
+        }
+        : input.cart;
     const result = evaluatePromotionCandidates({
-        cart: input.cart,
+        cart,
         candidates: [{
             ...promotion,
             ...usage,

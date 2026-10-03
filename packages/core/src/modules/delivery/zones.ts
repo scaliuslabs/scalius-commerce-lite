@@ -28,7 +28,7 @@ import {
     deliveryZones,
     shippingMethods,
 } from "@scalius/database/schema";
-import { fromMinor, isWholeCashAmountMinor, toMinor, WHOLE_TAKA_MESSAGE } from "@scalius/shared/money";
+import { fromMinor, isIncrementMultipleMinor, priceIncrementMessage, toMinor } from "@scalius/shared/money";
 import type { StoreCurrency } from "../settings";
 import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
 import { defineSettingsDocument, SettingsRevisionConflictError } from "../../settings-store";
@@ -366,9 +366,10 @@ function amountToMinor(value: number, currency: StoreCurrency, path: Issue["path
     const minor = toMinor(value, currency.decimalPlaces);
     if (fromMinor(minor, currency.decimalPlaces) !== value) {
         issues.push({ path, message: `Use up to ${currency.decimalPlaces} decimal places.` });
-    } else if (!isWholeCashAmountMinor(minor, currency.code)) {
-        // Riders collect whole taka: a BDT delivery charge or threshold has no paisa.
-        issues.push({ path, message: WHOLE_TAKA_MESSAGE });
+    } else if (!isIncrementMultipleMinor(minor, currency.priceIncrementMinor)) {
+        // A delivery charge or threshold is a price: on the store's increment
+        // (a BDT store's default, whole taka, is also what riders collect).
+        issues.push({ path, message: priceIncrementMessage(currency.code, currency.priceIncrementMinor) });
     }
     return minor;
 }

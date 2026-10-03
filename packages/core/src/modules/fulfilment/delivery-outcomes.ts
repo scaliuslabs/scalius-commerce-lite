@@ -1,5 +1,4 @@
 // Delivery outcomes: delivered, and COD collected, failed or returned.
-import { toStoreMinor } from "../settings";
 import type { Database } from "@scalius/database/client";
 import {
     orders,
@@ -14,6 +13,7 @@ import {
   recordCODCollection,
   recordCODFailure,
   resolveOrderCurrencySnapshot,
+  toCashOnDeliveryMinor,
   validateCODCollectionDetails,
 } from "../payments";
 import {
@@ -70,7 +70,7 @@ export async function processCodAction(db: Database, orderId: string, body: Reco
             if (typeof requestedAmount !== "number" || !Number.isFinite(requestedAmount) || requestedAmount <= 0) {
                 throw new ValidationError("COD collected amount must be a positive finite number.");
             }
-            const requestedAmountMinor = toStoreMinor(requestedAmount, currency);
+            const requestedAmountMinor = toCashOnDeliveryMinor(requestedAmount, currency);
             const existingCodCollection = await getRecordedCodCollection(db, orderId, currency);
             const collection = existingCodCollection
                 ? null

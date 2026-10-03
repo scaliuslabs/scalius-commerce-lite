@@ -110,6 +110,7 @@
     "promotions -> customers",
     "promotions -> order-kernel",
     "promotions -> products",
+    "promotions -> settings",
     "promotions -> tax",
     "reviews -> media-references",
     "reviews -> notifications",

@@ -8,6 +8,7 @@
 import type { Database } from "@scalius/database/client";
 import type { FunctionCart } from "@scalius/shared/plugins";
 import { fromMinor } from "@scalius/shared/money";
+import type { PricingCurrency } from "@scalius/shared/currency-policy";
 import { ValidationError } from "@scalius/core/errors";
 import { quoteStorefrontDiscount, type StorefrontDiscountQuote } from "../promotions";
 import {
@@ -63,7 +64,8 @@ export interface StorefrontCheckoutPricingInput {
   /** The signed-in account whose segments may unlock segment-limited promotions (never a guest). */
   segmentCustomerId?: string | null;
   customerPhone?: string | null;
-  currency: { code: string; decimalPlaces: number };
+  /** The checkout currency at the store's price increment: every derived amount rounds to it. */
+  currency: PricingCurrency;
   taxAuthority?: StorefrontTaxAuthoritySnapshot;
   apps?: CheckoutAppFunctions;
   channel: FunctionCart["channel"];
@@ -168,6 +170,7 @@ export async function priceStorefrontCheckout(
       customerPhone: input.customerPhone,
       cart: {
         currencyCode: currency.code,
+        priceIncrementMinor: currency.priceIncrementMinor,
         lines: cartValidation.items.map((item, position) => ({
           id: lineIds[position]!,
           productId: item.productId,
@@ -252,7 +255,7 @@ export async function priceStorefrontCheckout(
     );
 
     if (rates.length > 0 && shippingMethod) {
-      const adjusted = applyAppShippingRateOperations(rateOptions, rates, currency.code, apps);
+      const adjusted = applyAppShippingRateOperations(rateOptions, rates, currency.priceIncrementMinor, apps);
       if (adjusted.changed) {
         shippingRates = adjusted.rates;
         const chosen = adjusted.rates.find((rate) => rate.rateId === shippingMethod!.id);
@@ -282,6 +285,7 @@ export async function priceStorefrontCheckout(
       const platformLines = new Map((platform.allocation?.lines ?? []).map((line) => [line.lineId, line.amountMinor]));
       const resolution = resolveAppDiscounts({
         currencyCode: currency.code,
+        priceIncrementMinor: currency.priceIncrementMinor,
         lines: cartValidation.items.map((item, position) => ({
           lineId: lineIds[position]!,
           grossMinor: item.unitPriceMinor * item.quantity,
@@ -429,7 +433,7 @@ export async function previewStorefrontAppDiscounts(
   db: Database,
   input: {
     apps: CheckoutAppFunctions | undefined;
-    currency: { code: string; decimalPlaces: number };
+    currency: PricingCurrency;
     lines: ReadonlyArray<{ lineId: string; productId: string; variantId: string; unitPriceMinor: number; quantity: number; giftCard?: boolean }>;
     platformAllocation: TaxDiscountAllocationInput | undefined;
     shippingMinor: number;
@@ -465,6 +469,7 @@ export async function previewStorefrontAppDiscounts(
   if (!cart) return null;
   return resolveAppDiscounts({
     currencyCode: input.currency.code,
+    priceIncrementMinor: input.currency.priceIncrementMinor,
     lines: input.lines.map((line) => ({
       lineId: line.lineId,
       grossMinor: line.unitPriceMinor * line.quantity,

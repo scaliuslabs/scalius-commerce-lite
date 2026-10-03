@@ -43,7 +43,12 @@ import { fromMinor } from "@scalius/shared/money";
 import { listProductBuyGetOffers } from "../promotions";
 import { maskPublicBuyerAvailability } from "@scalius/shared/buyer-availability";
 import type { Database } from "@scalius/database/client";
-import { storeCurrencyCodeSql, storeCurrencyFromCode, storeDecimalPlacesFromCode } from "../settings";
+import {
+    storeCurrencyCodeSql,
+    storeCurrencyFromSql,
+    storeDecimalPlacesFromCode,
+    storePriceIncrementSql,
+} from "../settings";
 import { publicCategoryConditions } from "../categories";
 import { publicBrandJoinCondition } from "../brands";
 import { productPageReviews, reviewStatsSelection } from "./product-reviews";
@@ -109,6 +114,7 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
             buyerFromMinor: productBuyerState.fromMinor,
             storeEmiSettings: storeEmiSettingsSql(),
             storeCurrencyCode: storeCurrencyCodeSql(),
+            storePriceIncrementMinor: storePriceIncrementSql(),
             deletedAt: sql<number | null>`CAST(${products.deletedAt} AS INTEGER)`,
             createdAt: sql<number>`CAST(${products.createdAt} AS INTEGER)`,
             category: {
@@ -174,6 +180,7 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
         category,
         brand,
         storeCurrencyCode,
+        storePriceIncrementMinor,
         customizationSchema: storedCustomization,
         pageTemplate,
         emiEligible,
@@ -200,6 +207,7 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
     if (productBrandId) deps.brand(productBrandId);
     else deps.anyBrand();
     const decimalPlaces = storeDecimalPlacesFromCode(storeCurrencyCode);
+    const storeCurrency = storeCurrencyFromSql(storeCurrencyCode, storePriceIncrementMinor);
     const customization = readStoredCustomization(storedCustomization, decimalPlaces, { giftCard: product.isGiftCard === true });
     const mediaMapPromise = loadProductMediaProjections(db, [product.id]);
 
@@ -265,7 +273,7 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
 
         contentPromise.then((data) => ({ type: "content", data })),
 
-        listProductBuyGetOffers(db, product.id, storeCurrencyFromCode(storeCurrencyCode))
+        listProductBuyGetOffers(db, product.id, storeCurrency)
             .then((offers) => ({
                 type: "offers",
                 data: offers.map(({ buyAmountMinor, basisPoints, ...offer }) => ({
@@ -339,7 +347,6 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
     const content = results.find((r) => r.type === "content")!.data as Awaited<typeof contentPromise>;
     // The classic page's tabs: every rich-text block in `tabs` (legacy tabs keep their ids).
     const additionalInfo = content.blocks.tabs;
-    const currencyCode = storeCurrencyFromCode(storeCurrencyCode);
     const recommendations = results.find((r) => r.type === "recommendations")!.data as ProductRecommendations;
     const attributes = (results.find((r) => r.type === "attributes")?.data as unknown[]) || [];
     const offers = (results.find((r) => r.type === "offers")?.data as unknown[]) || [];
@@ -408,7 +415,7 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
             requiresCustomization: customization.requiresCustomization,
             // A malformed schema is a product error: checkout refuses the product.
             customizationUnavailable: customization.invalid,
-            discountedPrice: catalogDiscountedPrice(product, storeCurrencyFromCode(storeCurrencyCode)),
+            discountedPrice: catalogDiscountedPrice(product, storeCurrency.code, storeCurrency.priceIncrementMinor),
             attributes,
             additionalInfo,
             offers,
@@ -439,7 +446,7 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
                 emiEligible: emiEligible === true,
                 priceMinor: buyerFromMinor ?? null,
                 settings: parseStoredEmiSettings(storeEmiSettings),
-                currencyCode,
+                priceIncrementMinor: storeCurrency.priceIncrementMinor,
                 decimalPlaces,
             }),
         },

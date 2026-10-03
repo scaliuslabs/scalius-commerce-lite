@@ -30,7 +30,7 @@ function createTaxDb(): Database {
 describe("calculateStorefrontTaxQuote request currency authority", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.getCurrencyConfig.mockResolvedValue({ code: "JPY", decimalPlaces: 0 });
+    mocks.getCurrencyConfig.mockResolvedValue({ code: "JPY", decimalPlaces: 0, priceIncrementMinor: 1 });
   });
 
   it("uses the supplied KWD authority without re-reading mutable currency settings", async () => {
@@ -46,7 +46,7 @@ describe("calculateStorefrontTaxQuote request currency authority", () => {
       }],
       shippingMinor: 1,
       discountMinor: 0,
-      currency: { code: "KWD", decimalPlaces: 3 },
+      currency: { code: "KWD", decimalPlaces: 3, priceIncrementMinor: 1 },
     });
 
     expect(mocks.getCurrencyConfig).not.toHaveBeenCalled();

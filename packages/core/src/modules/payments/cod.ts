@@ -26,7 +26,8 @@ import type {
   RecordCODFailureParams,
 } from "./types";
 import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
-import { fromMinor } from "@scalius/shared/money";
+import { cashOnDeliveryIncrementMinor } from "@scalius/shared/currency-policy";
+import { fromMinor, PriceIncrementError, toIncrementMinor } from "@scalius/shared/money";
 import { computePaymentStateAfterPayment } from "./payment-state";
 import { assertOrderPaymentCurrency, resolveOrderCurrencySnapshot } from "./order-currency";
 
@@ -64,6 +65,20 @@ function formatOrderMoney(amountMinor: number, currency: { code: string; decimal
   const digits = Number.isInteger(amount) ? 0 : currency.decimalPlaces;
   const number = amount.toLocaleString("en-IN", { minimumFractionDigits: digits, maximumFractionDigits: digits });
   return currency.code === "BDT" ? `৳${number}` : `${currency.code} ${number}`;
+}
+
+/**
+ * Cash a rider or the counter collected, or a parcel's amount to collect,
+ * entered in decimal major units: minor units on the cash increment cash on
+ * delivery collects (`cashOnDeliveryIncrementMinor`: whole taka in BDT).
+ */
+export function toCashOnDeliveryMinor(amount: number, currency: { code: string; decimalPlaces: number }): number {
+  try {
+    return toIncrementMinor(amount, currency.decimalPlaces, cashOnDeliveryIncrementMinor(currency.code), currency.code);
+  } catch (error) {
+    if (error instanceof PriceIncrementError) throw new ValidationError(error.message);
+    throw error;
+  }
 }
 
 export function validateCODCollectionDetails(

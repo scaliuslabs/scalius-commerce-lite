@@ -2,9 +2,8 @@
 // products exist). Reads convert them to the decimal HTTP contract here.
 
 import type { Database } from "@scalius/database/client";
-import { bpsToPercent, cashRoundingMinor, discountedPriceMinor, fromMinor, percentToBps, toMinor } from "@scalius/shared/money";
+import { bpsToPercent, discountedPriceMinor, fromMinor, percentToBps, toMinor } from "@scalius/shared/money";
 import { sql, type SQL } from "drizzle-orm";
-import { settings } from "@scalius/database/schema";
 import {
     DEFAULT_CURRENCY,
     getDecimalPlaces,
@@ -12,16 +11,15 @@ import {
     SUPPORTED_CURRENCY_CODES,
 } from "@scalius/shared/currency";
 import {
-  currencyDocument,
   getCurrencyConfig,
+  STORE_PRICE_INCREMENTS,
   type StoreCurrency,
   storeCurrencyCodeSql,
   storeCurrencyFromCode,
   storeDecimalPlacesFromCode,
+  storePriceIncrementSql,
   toStoreMinor,
 } from "../settings";
-import { SETTINGS_DOCUMENT_ROW_KEY } from "../../settings-store";
-import { deps } from "../../cache-deps";
 import type { BuyerCatalogPricingProjection } from "./buyer-projection";
 
 export interface CatalogPriceMinor {
@@ -71,41 +69,29 @@ export function presentCatalogPrice<T extends CatalogPriceMinor & { costMinor?: 
     };
 }
 
-export function catalogDiscountedPrice(row: CatalogPriceMinor, currencyCode: string): number {
+/** The buyer price of a catalog row at the store's price increment, in major units. */
+export function catalogDiscountedPrice(row: CatalogPriceMinor, currencyCode: string, priceIncrementMinor: number): number {
     return fromMinor(
-        discountedPriceMinor(row.priceMinor, row.discountType, row.discountBps, row.discountAmountMinor, currencyCode),
+        discountedPriceMinor(row.priceMinor, row.discountType, row.discountBps, row.discountAmountMinor, priceIncrementMinor),
         getDecimalPlaces(currencyCode),
     );
 }
 
-// Mirrors `cashRoundingMinor` for the store currency (missing/unsupported = the default, BDT).
-const NON_CASH_ROUNDED_CODES = SUPPORTED_CURRENCY_CODES
-    .filter((code) => cashRoundingMinor(code) === 1)
-    .map((code) => `'${code}'`)
-    .join(", ");
-
-const DEFAULT_CASH_ROUNDING = cashRoundingMinor(DEFAULT_CURRENCY.code);
-
-/**
- * The store currency's cash rounding unit (1 or 100) as one scalar subquery.
- * Its constants are inlined, so it binds no parameters: catalog reads repeat
- * the price expression and D1 allows at most 100 bound parameters.
- */
-function storeCashRoundingSql(): SQL<number> {
-    deps.settings(currencyDocument.key, SETTINGS_DOCUMENT_ROW_KEY);
-    const code = sql`upper(trim(coalesce(CASE WHEN json_valid(${settings.value}) THEN json_extract(${settings.value}, '$.currencyCode') END, '')))`;
-    return sql<number>`coalesce((
-        SELECT CASE WHEN ${code} IN (${sql.raw(NON_CASH_ROUNDED_CODES)}) THEN 1 ELSE ${sql.raw(String(DEFAULT_CASH_ROUNDING))} END
-        FROM ${settings}
-        WHERE ${settings.category} = ${sql.raw(`'${currencyDocument.key}'`)} AND ${settings.key} = ${sql.raw(`'${SETTINGS_DOCUMENT_ROW_KEY}'`)}
-    ), ${sql.raw(String(DEFAULT_CASH_ROUNDING))})`;
+/** `(kept + increment × 5000) / (increment × 10000) × increment` for every increment the store can have. */
+function roundedPercentagePriceSql(kept: SQL): SQL<number> {
+    const branches = STORE_PRICE_INCREMENTS.filter((increment) => increment > 1).map((increment) =>
+        sql` WHEN ${sql.raw(String(increment))} THEN ((${kept} + ${sql.raw(String(increment * 5_000))}) / ${sql.raw(String(increment * 10_000))}) * ${sql.raw(String(increment))}`);
+    return sql<number>`CASE ${storePriceIncrementSql()}${sql.join(branches, sql.raw(""))}
+                ELSE (${kept} + 5000) / 10000
+            END`;
 }
 
 /**
  * SQL twin of `discountedPriceMinor`: a SKU's own discount wins over the
  * product discount; percentage prices round half-up in integer arithmetic to
- * the store currency's cash rounding unit (whole taka for BDT), never above
- * the SKU price. The percentage branch appears once so the currency lookup does.
+ * the store's price increment (a BDT store's default: whole taka), never
+ * above the SKU price. The percentage branch appears once so the settings
+ * lookup does.
  */
 export function effectivePriceMinorSql(sku: {
     priceMinor: SQL;
@@ -127,10 +113,7 @@ export function effectivePriceMinorSql(sku: {
         WHEN NOT ${skuPercentage} AND ${product.discountType} = 'flat' AND ${product.discountAmountMinor} > 0
             THEN MAX(${price} - ${product.discountAmountMinor}, 0)
         WHEN ${skuPercentage} OR (${product.discountType} = 'percentage' AND ${product.discountBps} > 0)
-            THEN MIN(${price}, CASE ${storeCashRoundingSql()}
-                WHEN 100 THEN ((${kept} + 500000) / 1000000) * 100
-                ELSE (${kept} + 5000) / 10000
-            END)
+            THEN MIN(${price}, ${roundedPercentagePriceSql(kept)})
         ELSE ${price}
     END`;
 }

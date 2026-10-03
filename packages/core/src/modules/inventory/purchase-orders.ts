@@ -466,7 +466,8 @@ type PlannedLine = { variantId: string; quantity: number; unitCostMinor: number 
 async function planLines(
   db: Database,
   lines: ReadonlyArray<z.output<typeof purchaseOrderLineInputSchema>>,
-  currency: StoreCurrency,
+  /** Costs are not prices: only the exponent matters. */
+  currency: Pick<StoreCurrency, "code" | "decimalPlaces">,
 ): Promise<PlannedLine[]> {
   if (lines.length > PURCHASE_ORDER_MAX_LINES) {
     throw new ValidationError(`A purchase order holds at most ${PURCHASE_ORDER_MAX_LINES} SKUs.`);

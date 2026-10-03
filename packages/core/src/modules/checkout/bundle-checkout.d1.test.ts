@@ -100,7 +100,7 @@ describe("quantity bundles at checkout", () => {
             authority.cartValidation,
             authority.deliveryPreflight,
             undefined,
-            { code: "BDT", decimalPlaces: 2 },
+            { code: "BDT", decimalPlaces: 2, priceIncrementMinor: 100 },
             createTrustedStorefrontCheckoutPolicySnapshot({
                 partialPaymentEnabled: false,
                 authorityRevision: authority.authorityRevision,
@@ -131,7 +131,7 @@ describe("quantity bundles at checkout", () => {
         const discount = await quoteStorefrontDiscount(db, {
             codes,
             customerPhone: "+8801712345678",
-            cart: { currencyCode: "BDT", lines, shippingAmountMinor: 6000 },
+            cart: { currencyCode: "BDT", priceIncrementMinor: 100, lines, shippingAmountMinor: 6000 },
         });
         const bundle = resolveBundlePromotionInterplay(
             cart.items.map((item, index) => ({ lineId: lines[index]!.id, unitPriceMinor: item.unitPriceMinor, quantity: item.quantity, bundleDiscountMinor: item.bundleDiscountMinor ?? 0 })),
@@ -142,7 +142,7 @@ describe("quantity bundles at checkout", () => {
             lines: lines.map((each) => ({ lineId: each.id, productId: each.productId, variantId: each.variantId, unitPriceMinor: each.unitPriceMinor, quantity: each.quantity, taxClassId: null })),
             shippingMinor: 6000,
             promotionDiscountAllocation: bundle.allocation,
-            currency: { code: "BDT", decimalPlaces: 2 },
+            currency: { code: "BDT", decimalPlaces: 2, priceIncrementMinor: 100 },
         });
         return Object.assign(quote, { rejectedCodes: bundle.discount.rejectedCodes, bundleDiscountMinor: bundle.bundleDiscountMinor });
     }
@@ -221,7 +221,7 @@ describe("quantity bundles at checkout", () => {
             { productId: "p_honey", baseUnitPriceMinor: 90_000, quantity: 1 },
             { productId: "p_ghee", baseUnitPriceMinor: 120_000, quantity: 3 },
         ];
-        const preview = await previewStorefrontBundleSavings(db, lines, "BDT");
+        const preview = await previewStorefrontBundleSavings(db, lines, 100);
         expect(lines.map((line) => preview.lineSavings.get(line) ?? 0)).toEqual([9_000, 9_000, 0]);
         expect(preview.bundles).toEqual([expect.objectContaining({ productId: "p_honey", quantity: 2, label: "Pair", savingMinor: 18_000 })]);
         const cart = await validateStorefrontCartItems(db, [line("p_honey", "v_honey", 1, 900), line("p_honey", "v_honey", 1, 900)], { currencyCode: "BDT" });

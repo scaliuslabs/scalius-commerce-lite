@@ -147,7 +147,7 @@ const iso = (seconds: number | null | undefined) =>
 
 export async function readCustomFieldCodecContext(db: Database): Promise<CustomFieldCodecContext> {
     const currency = await readStoreCurrency(db);
-    return { decimalPlaces: currency.decimalPlaces, currencyCode: currency.code };
+    return { decimalPlaces: currency.decimalPlaces, currencyCode: currency.code, priceIncrementMinor: currency.priceIncrementMinor };
 }
 
 const definitionColumns = {

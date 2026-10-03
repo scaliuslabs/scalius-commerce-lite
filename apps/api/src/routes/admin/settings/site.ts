@@ -43,6 +43,7 @@ import {
   currencyDocument,
   customerCountriesDocument,
   mediaDocument,
+  priceIncrementOf,
   seoDocument,
 } from "@scalius/core/modules/settings";
 import { platformDocument } from "@scalius/core/modules/platform";
@@ -55,6 +56,7 @@ import {
 } from "@scalius/core/modules/catalog";
 
 import { ok } from "../../../utils/api-response";
+import { enqueueCatalogProjectionRebuild } from "../../../utils/catalog-jobs";
 import {
   successEnvelope,
   errorResponses,
@@ -89,9 +91,14 @@ const supportedCurrencyCodeSchema = z.preprocess(
   }),
 );
 
+const priceIncrementMinorSchema = z.number().int().positive().max(1_000).openapi({
+  description: "The store's price increment in minor units of the currency: every price is a multiple of it and derived amounts round to it. 1 is the minor unit (paisa, cents); 10^decimals is whole units (a BDT store's default: 100, whole taka).",
+});
+
 const currencySettingsSchema = z.object({
   currencyCode: z.enum(SUPPORTED_CURRENCY_CODES),
   currencySymbol: z.string().max(CURRENCY_SYMBOL_MAX_LENGTH),
+  priceIncrementMinor: priceIncrementMinorSchema,
   currencyCodeLocked: z.boolean(),
   revision: revisionSchema,
 });
@@ -118,9 +125,10 @@ app.openapi(getCurrencyRoute, async (c) => {
   const { value: result, revision } = await readSettingsForEdit(db, currencyDocument);
   const currencyCodeLocked = await isCurrencyCodeLocked(db);
   return ok(c, {
-    ...result,
+    currencyCode: result.currencyCode,
     revision,
     currencySymbol: result.currencySymbol.slice(0, CURRENCY_SYMBOL_MAX_LENGTH),
+    priceIncrementMinor: priceIncrementOf(result),
     currencyCodeLocked,
   });
 });
@@ -129,6 +137,8 @@ const saveCurrencySchema = z.object({
   expectedRevision: revisionSchema,
   currencyCode: supportedCurrencyCodeSchema.optional(),
   currencySymbol: z.string().max(CURRENCY_SYMBOL_MAX_LENGTH).optional(),
+  /** Omitted keeps the saved increment (reset to the currency's default when the currency changes). */
+  priceIncrementMinor: priceIncrementMinorSchema.optional(),
 });
 
 const saveCurrencyRoute = createRoute({
@@ -155,7 +165,15 @@ const saveCurrencyRoute = createRoute({
 
 app.openapi(saveCurrencyRoute, async (c) => {
   const { expectedRevision, ...body } = c.req.valid("json");
-  const { revision } = await saveCurrencySettings(c.get("db"), body, { expectedRevision });
+  const { revision, priceIncrementChanged } = await saveCurrencySettings(c.get("db"), body, { expectedRevision });
+  if (priceIncrementChanged) {
+    // Every stored card price follows the increment: rebuild the catalogue
+    // projections off the request path (as for the store alert level); the
+    // database triggers advance the dependencies whose prices change.
+    await enqueueCatalogProjectionRebuild(c.env.JOBS_QUEUE).catch((error: unknown) => {
+      console.warn("[settings] projection rebuild enqueue failed", error instanceof Error ? error.name : "unknown");
+    });
+  }
 
   return ok(c, { message: "Currency settings saved successfully", revision });
 });
@@ -1036,6 +1054,7 @@ app.openapi(getSeoFeedDiagnosticsRoute, async (c) => {
     sampleLimitPerReason: query.sampleLimit,
     storefrontBaseUrl: c.env.STOREFRONT_URL,
     currencyCode: currency.currencyCode,
+    priceIncrementMinor: priceIncrementOf(currency),
   });
   return ok(c, projectProductFeedDiagnostics(diagnostics));
 });

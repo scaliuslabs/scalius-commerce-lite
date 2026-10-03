@@ -16,7 +16,7 @@ import {
     updateEverywhereElseRates,
 } from "./zones";
 
-const BDT = { code: "BDT", decimalPlaces: 2 };
+const BDT = { code: "BDT", decimalPlaces: 2, priceIncrementMinor: 100 };
 
 /** Dhaka (Mirpur → Pallabi, Savar) and Chattogram (Agrabad). */
 function seedLocations() {
@@ -192,7 +192,7 @@ describe("delivery zone editing", () => {
             name: "Inside Dhaka",
             locationIds: ["dhaka"],
             rates: [rate("Inside Dhaka", 60.5)],
-        }, { code: "USD", decimalPlaces: 2 })).resolves.toBeTruthy();
+        }, { code: "USD", decimalPlaces: 2, priceIncrementMinor: 1 })).resolves.toBeTruthy();
     });
 
     it("keeps a location in at most one zone", async () => {

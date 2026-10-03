@@ -100,7 +100,7 @@ afterEach(() => {
 describe("store migration over the API", () => {
   it("imports the Shopify fixture with its images, then exports and re-imports inventory unchanged", async () => {
     const { app, sqlite, post, storage } = createApp();
-    const mapped = mapShopifyProducts(parseImportText(fixture("shopify-products.csv")).table, { currency: { code: "BDT", decimalPlaces: 2 } });
+    const mapped = mapShopifyProducts(parseImportText(fixture("shopify-products.csv")).table, { currency: { code: "BDT", decimalPlaces: 2, priceIncrementMinor: 100 } });
     expect(mapped.items).toHaveLength(6); // The broken-price lamp stays out.
 
     // Dry run: every product would be created; the write sends the items as they are.

@@ -166,7 +166,7 @@ describe("checkout app functions (real schema, bundled and test apps)", () => {
       delivery: read.deliveryPreflight,
       discountCodes: data.discountCodes,
       customerPhone: data.customerPhone,
-      currency: { code: "BDT", decimalPlaces: 2 },
+      currency: { code: "BDT", decimalPlaces: 2, priceIncrementMinor: 100 },
       taxAuthority: read.taxAuthority,
       apps: appFunctions,
       channel: "online_store",
@@ -181,7 +181,7 @@ describe("checkout app functions (real schema, bundled and test apps)", () => {
     const result = await createStorefrontOrder(
       db, data, "https://shop.test/api/v1/orders",
       { orderId: attempt.orderId, checkoutToken: attempt.checkoutToken },
-      read.cartValidation, read.deliveryPreflight, undefined, { code: "BDT", decimalPlaces: 2 },
+      read.cartValidation, read.deliveryPreflight, undefined, { code: "BDT", decimalPlaces: 2, priceIncrementMinor: 100 },
       createTrustedStorefrontCheckoutPolicySnapshot({
         partialPaymentEnabled: false, authorityRevision: read.authorityRevision,
         orderCreatedNotificationEnabled: false, metaPurchaseEnabled: false,

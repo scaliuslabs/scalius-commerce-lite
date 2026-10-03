@@ -58,7 +58,8 @@ type InventoryLabelPricingFacts = {
  */
 export function calculateInventoryLabelEffectivePriceMinor(
     facts: InventoryLabelPricingFacts,
-    currencyCode: string,
+    /** The store's price increment. */
+    priceIncrementMinor: number,
 ): number {
     const hasVariantDiscount =
         (facts.variantDiscountType === "percentage" && facts.variantDiscountBps > 0)
@@ -69,7 +70,7 @@ export function calculateInventoryLabelEffectivePriceMinor(
         hasVariantDiscount ? facts.variantDiscountType : facts.productDiscountType,
         hasVariantDiscount ? facts.variantDiscountBps : facts.productDiscountBps,
         hasVariantDiscount ? facts.variantDiscountAmountMinor : facts.productDiscountAmountMinor,
-        currencyCode,
+        priceIncrementMinor,
     );
 }
 
@@ -353,7 +354,7 @@ export async function getInventoryLabelVariants(
         .all();
 
     const rowById = new Map(rows.map((row) => [row.id, row]));
-    const { code: currencyCode, decimalPlaces } = await currencyRead;
+    const { decimalPlaces, priceIncrementMinor } = await currencyRead;
     return {
         variants: variantIds.flatMap((id) => {
             const row = rowById.get(id);
@@ -371,7 +372,7 @@ export async function getInventoryLabelVariants(
             return [{
                 ...variant,
                 price: fromMinor(priceMinor, decimalPlaces),
-                effectivePrice: fromMinor(calculateInventoryLabelEffectivePriceMinor(row, currencyCode), decimalPlaces),
+                effectivePrice: fromMinor(calculateInventoryLabelEffectivePriceMinor(row, priceIncrementMinor), decimalPlaces),
             }];
         }),
         missingVariantIds: variantIds.filter((id) => !rowById.has(id)),

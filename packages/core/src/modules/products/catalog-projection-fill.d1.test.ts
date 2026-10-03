@@ -3,8 +3,11 @@
 // builders as every write's refresh (scripts/catalog-projection-fill.ts):
 // the checked-in files must equal that output, and applying the migration to
 // a store that has products must give exactly what the rebuild gives.
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+
+import { CURRENT_DATABASE_SCHEMA_MIGRATIONS } from "@scalius/database/schema-contract";
 
 import {
     compiledMigrationSql,
@@ -55,10 +58,18 @@ const BUYER_STATE = `SELECT product_id, is_public, category_id, brand_id, produc
 const FACETS = "SELECT * FROM product_facet_values ORDER BY owner_id, facet_key";
 
 describe("0091_catalogue_projection_fill", () => {
-    it("is exactly the output of the projection builders, for D1/Turso and PostgreSQL", () => {
-        const rendered = renderCatalogProjectionFillMigration();
-        expect(readFileSync(CATALOG_PROJECTION_FILL_PATHS.sqlite, "utf8")).toBe(rendered.sqlite);
-        expect(readFileSync(CATALOG_PROJECTION_FILL_PATHS.postgres, "utf8")).toBe(rendered.postgres);
+    // 0091 was the builders' output when it shipped and is immutable now (its
+    // source digest is in every store's ledger). The builders have since
+    // learned the store's price increment (Markets step 1); for a store that
+    // never set one, they fill exactly what 0091 filled (the test below).
+    it("is the recorded migration, unchanged, for D1/Turso and PostgreSQL", () => {
+        const recorded = CURRENT_DATABASE_SCHEMA_MIGRATIONS.find(({ version }) => version === CATALOG_PROJECTION_FILL_MIGRATION.version)!;
+        const sqlite = readFileSync(CATALOG_PROJECTION_FILL_PATHS.sqlite, "utf8").split("--> statement-breakpoint\n");
+        const statements = sqlite.slice(0, -1).map((statement) => statement.trim());
+        expect(createHash("sha256").update(`${statements.join("\n--> statement-breakpoint\n")}\n`).digest("hex"))
+            .toBe(recorded.sourceSha256);
+        expect(sqlite.at(-1)).toContain(`'${recorded.sourceSha256}'`);
+        expect(readFileSync(CATALOG_PROJECTION_FILL_PATHS.postgres, "utf8")).toContain(`'${recorded.sourceSha256}'`);
     });
 
     it.each(["d1", "turso"] as const)("fills an existing %s store exactly as the rebuild does", async (provider) => {

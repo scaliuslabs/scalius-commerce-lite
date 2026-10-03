@@ -17,6 +17,7 @@ import {
   customerCountriesDocument,
   metaConversionsDocument,
   paymentMethodsDocument,
+  priceIncrementOf,
   sslcommerzDocument,
   stripeDocument,
 } from "../settings";
@@ -319,6 +320,7 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
                         {
                             inventoryPool: input.inventoryPool,
                             currencyCode: currency.currencyCode,
+                            priceIncrementMinor: priceIncrementOf(currency),
                         },
                         productRows,
                         variantRows,

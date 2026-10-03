@@ -12,6 +12,7 @@ import type {
     TaxSettingsDefinition,
 } from "./types";
 import { getDecimalPlaces, normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
+import { isPriceIncrementMinor, type PricingCurrency } from "@scalius/shared/currency-policy";
 import { ValidationError } from "@scalius/core/errors";
 
 const DISABLED_TAX_SETTINGS: TaxSettingsDefinition = {
@@ -147,7 +148,8 @@ export interface StorefrontTaxQuoteInput {
     discountMinor?: number;
     /** Exact allocation of the applied storefront discount. */
     promotionDiscountAllocation?: TaxDiscountAllocationInput;
-    currency?: { code: string; decimalPlaces: number };
+    /** The checkout's currency authority; absent reads the store currency. */
+    currency?: PricingCurrency;
 }
 
 export async function calculateStorefrontTaxQuote(
@@ -160,7 +162,8 @@ export async function calculateStorefrontTaxQuote(
         input.currency &&
         (
             !suppliedCurrencyCode ||
-            input.currency.decimalPlaces !== getDecimalPlaces(suppliedCurrencyCode)
+            input.currency.decimalPlaces !== getDecimalPlaces(suppliedCurrencyCode) ||
+            !isPriceIncrementMinor(suppliedCurrencyCode, input.currency.priceIncrementMinor)
         )
     ) {
         throw new ValidationError("Checkout currency authority is invalid. Please retry checkout.");
@@ -169,6 +172,7 @@ export async function calculateStorefrontTaxQuote(
         ? Promise.resolve({
             code: suppliedCurrencyCode,
             decimalPlaces: input.currency.decimalPlaces,
+            priceIncrementMinor: input.currency.priceIncrementMinor,
             symbol: suppliedCurrencyCode,
         })
         : getCurrencyConfig(db);
@@ -214,6 +218,7 @@ export async function calculateStorefrontTaxQuote(
     return calculateTaxQuote({
         currencyCode: currency.code,
         decimalPlaces: currency.decimalPlaces,
+        priceIncrementMinor: currency.priceIncrementMinor,
         settings: authority.settings,
         classes: authority.classes,
         rates: authority.rates,

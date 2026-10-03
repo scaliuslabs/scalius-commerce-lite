@@ -123,6 +123,11 @@ export interface TaxQuote {
 export interface CalculateTaxQuoteInput {
     currencyCode: string;
     decimalPlaces: number;
+    /**
+     * The market's price increment: tax rounds half-up to it, so a total on
+     * the increment stays on it (a BDT store's default: whole taka).
+     */
+    priceIncrementMinor: number;
     settings: TaxSettingsDefinition;
     classes: TaxClassDefinition[];
     rates: TaxRateDefinition[];

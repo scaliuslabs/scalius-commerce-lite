@@ -91,7 +91,7 @@ describe("segment-limited promotions at checkout", () => {
             authority.cartValidation,
             authority.deliveryPreflight,
             customerIdentity,
-            { code: "BDT", decimalPlaces: 2 },
+            { code: "BDT", decimalPlaces: 2, priceIncrementMinor: 100 },
             createTrustedStorefrontCheckoutPolicySnapshot({
                 partialPaymentEnabled: false,
                 authorityRevision: authority.authorityRevision,

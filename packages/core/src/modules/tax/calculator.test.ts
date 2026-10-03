@@ -31,11 +31,12 @@ function rate(overrides: Partial<TaxRateDefinition> = {}): TaxRateDefinition {
     };
 }
 
-// Minor-unit precision is exercised in USD; BDT cash rounding has its own tests.
+// Minor-unit precision is exercised in USD; whole-taka rounding has its own tests.
 function input(overrides: Partial<CalculateTaxQuoteInput> = {}): CalculateTaxQuoteInput {
     return {
         currencyCode: "USD",
         decimalPlaces: 2,
+        priceIncrementMinor: 1,
         settings: {
             enabled: true,
             pricesIncludeTax: false,
@@ -115,7 +116,7 @@ describe("calculateTaxQuote", () => {
     });
 
     it("rounds BDT tax to whole taka so a COD total is whole taka", () => {
-        const bdt = (overrides: Partial<CalculateTaxQuoteInput>) => calculateTaxQuote(input({ currencyCode: "BDT", ...overrides }));
+        const bdt = (overrides: Partial<CalculateTaxQuoteInput>) => calculateTaxQuote(input({ currencyCode: "BDT", priceIncrementMinor: 100, ...overrides }));
         // 15% of ৳3,208.53 would be ৳481.28; it is ৳481.
         const exclusive = bdt({ lines: [{ ...input().lines[0]!, unitPriceMinor: 320_853 }] });
         expect(exclusive.taxMinor).toBe(48_100);

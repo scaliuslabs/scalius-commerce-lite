@@ -8,6 +8,8 @@ type CheckoutLine = Omit<PromotionEvaluationCart["lines"][number], "collectionId
 
 export interface StorefrontDiscountCart {
     currencyCode: string;
+    /** The store's price increment percentage savings round to (`PricingCurrency`). */
+    priceIncrementMinor: number;
     lines: CheckoutLine[];
     shippingAmountMinor: number;
 }

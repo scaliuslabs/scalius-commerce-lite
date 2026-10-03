@@ -47,6 +47,7 @@ function openStore(provider: "d1" | "turso"): Database {
 
 const cart: StorefrontDiscountCart = {
     currencyCode: "BDT",
+    priceIncrementMinor: 100,
     lines: [
         { id: "cart:0:var_tee", productId: "prod_tee", variantId: "var_tee", unitPriceMinor: 50_000, quantity: 2 },
         { id: "cart:1:var_cap", productId: "prod_cap", variantId: "var_cap", unitPriceMinor: 20_000, quantity: 1 },
@@ -247,7 +248,7 @@ describe.each(["d1", "turso"] as const)("storefront discount path (%s)", (provid
                 })),
                 shippingMinor: 6_000,
                 promotionDiscountAllocation: discount.taxAllocation,
-                currency: { code: "BDT", decimalPlaces: 2 },
+                currency: { code: "BDT", decimalPlaces: 2, priceIncrementMinor: 100 },
             });
             return buildStorefrontCheckoutQuoteFingerprint(tax, shippingMethod);
         };
@@ -380,7 +381,7 @@ describe.each(["d1", "turso"] as const)("storefront discount path (%s)", (provid
         await live(db, { name: "Shoes gift", effects: buyGet({ collectionIds: ["col_shoes"] }) });
         await live(db, { name: "Secret", codes: [{ code: "SECRET" }], effects: buyGet({ productIds: ["prod_tee"] }) });
 
-        const tee = await listProductBuyGetOffers(db, "prod_tee", "BDT", NOW);
+        const tee = await listProductBuyGetOffers(db, "prod_tee", { code: "BDT", priceIncrementMinor: 100 }, NOW);
         expect(tee).toEqual([expect.objectContaining({
             title: "Two tees, free cap",
             role: "buy",
@@ -390,9 +391,9 @@ describe.each(["d1", "turso"] as const)("storefront discount path (%s)", (provid
             endsAtEpochSeconds: NOW + 86_400,
             products: [expect.objectContaining({ id: "prod_cap" })],
         })]);
-        expect((await listProductBuyGetOffers(db, "prod_boot", "BDT", NOW)).map(({ title }) => title)).toEqual(["Shoes gift"]);
+        expect((await listProductBuyGetOffers(db, "prod_boot", { code: "BDT", priceIncrementMinor: 100 }, NOW)).map(({ title }) => title)).toEqual(["Shoes gift"]);
         // The cap page names what to buy; an offer bought by collection names no product, so it stays off.
-        expect(await listProductBuyGetOffers(db, "prod_cap", "BDT", NOW)).toEqual([expect.objectContaining({
+        expect(await listProductBuyGetOffers(db, "prod_cap", { code: "BDT", priceIncrementMinor: 100 }, NOW)).toEqual([expect.objectContaining({
             title: "Two tees, free cap",
             role: "get",
             products: [expect.objectContaining({ id: "prod_tee" })],

@@ -145,6 +145,8 @@ export interface ExecuteProductFeedRowPreviewInput {
   limit?: number;
   storefrontBaseUrl?: string | null;
   currencyCode: string;
+  /** The store's price increment: feed prices are what checkout charges. */
+  priceIncrementMinor: number;
   feedsPolicy: SeoDiscoverySettings["feeds"];
   mediaPolicy: ProductFeedRowPreviewMediaPolicy;
   environmentCdnUrl?: string | null;
@@ -828,6 +830,7 @@ export async function executeProductFeedRowPreview(
     products: [product],
     storefrontBaseUrl,
     currencyCode: input.currencyCode,
+    priceIncrementMinor: input.priceIncrementMinor,
     policy: {
       variantStrategy: input.feedsPolicy.variantStrategy,
       includeUnavailableProducts:

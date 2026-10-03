@@ -12,7 +12,7 @@ import { phoneNumberSchema } from "@scalius/shared/customer-utils";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { getCustomerBySession } from "@scalius/core/modules/customers";
 import { fromMinor } from "@scalius/shared/money";
-import { getCurrencySettings } from "@scalius/core/modules/settings";
+import { getCurrencySettings, priceIncrementOf } from "@scalius/core/modules/settings";
 import { buildStorefrontCheckoutQuoteFingerprint } from "@scalius/core/modules/checkout/browser";
 import {
     assertNoCheckoutRuleErrors,
@@ -228,6 +228,7 @@ app.openapi(taxQuoteRoute, async (c) => {
   const cartValidation = await validateStorefrontCartItems(db, data.items, {
     inventoryPool: data.inventoryPool,
     currencyCode: currency.currencyCode,
+    priceIncrementMinor: priceIncrementOf(currency),
   });
   if (!cartValidation.valid) {
     throw new ValidationError("Some items in your cart need attention.", {
@@ -250,7 +251,11 @@ app.openapi(taxQuoteRoute, async (c) => {
     customerId: sessionCustomer?.customerId ?? null,
     segmentCustomerId: sessionCustomer?.customerId ?? null,
     customerPhone: data.customerPhone,
-    currency: { code: currency.currencyCode, decimalPlaces: getDecimalPlaces(currency.currencyCode) },
+    currency: {
+      code: currency.currencyCode,
+      decimalPlaces: getDecimalPlaces(currency.currencyCode),
+      priceIncrementMinor: priceIncrementOf(currency),
+    },
     apps,
     channel: "online_store",
     location: { city: data.city, zone: data.zone, area: data.area },

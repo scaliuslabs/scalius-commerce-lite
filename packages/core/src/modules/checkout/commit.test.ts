@@ -443,6 +443,7 @@ describe("commitStorefrontOrderPayload discount trigger failures", () => {
       promotion: {
         cart: {
           currencyCode: "BDT",
+          priceIncrementMinor: 100,
           lines: [{
             id: "cart:0:variant_1",
             productId: "prod_1",

@@ -39,6 +39,7 @@ import {
   mediaDocument,
   metaConversionsDocument,
   policiesDocument,
+  priceIncrementOf,
   securityDocument,
   seoDocument,
 } from "../settings";
@@ -591,6 +592,8 @@ export async function getLayoutData(
     code: currency.value.currencyCode,
     symbol: currency.value.currencySymbol,
     decimalPlaces: getDecimalPlaces(currency.value.currencyCode),
+    // Product pages price SKUs with the rule checkout charges, at this increment.
+    priceIncrementMinor: priceIncrementOf(currency.value),
   };
   // The storefront renders a stored theme whole or the default whole, never a mix.
   const themeRow = (themeResults as { value?: string }[])[0];

@@ -470,7 +470,7 @@ export async function createManualOrder(
                 if (appCart) return Promise.resolve(appCart);
                 if (!options.apps) return Promise.reject(new Error("No app functions were given for this order."));
                 return options.apps.orderCart({
-                    currency: { code: currency.code, decimalPlaces: currency.decimalPlaces },
+                    currency: { code: currency.code, decimalPlaces: currency.decimalPlaces, priceIncrementMinor: currency.priceIncrementMinor },
                     lines: manualOrderAppLines(trackedItems, allocationLineIds),
                     requiresShipping,
                     locationNames: { cityName, zoneName },

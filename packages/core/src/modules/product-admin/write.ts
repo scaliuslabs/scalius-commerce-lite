@@ -53,8 +53,8 @@ import {
 import {
   readStoreCurrency,
   storeCurrencyCodeSql,
-  storeCurrencyFromCode,
-  storeDecimalPlacesFromCode,
+  storeCurrencyFromSql,
+  storePriceIncrementSql,
   toStoreMinor,
 } from "../settings";
 import { percentToBps } from "@scalius/shared/money";
@@ -1041,7 +1041,12 @@ export async function updateProduct(
     adminUserId?: string,
 ): Promise<ProductAggregateRevisionResult> {
     const existingProduct = await db
-        .select({ id: products.id, isGiftCard: products.isGiftCard, storeCurrencyCode: storeCurrencyCodeSql() })
+        .select({
+            id: products.id,
+            isGiftCard: products.isGiftCard,
+            storeCurrencyCode: storeCurrencyCodeSql(),
+            storePriceIncrementMinor: storePriceIncrementSql(),
+        })
         .from(products)
         .where(eq(products.id, id))
         .get();
@@ -1069,8 +1074,7 @@ export async function updateProduct(
     const attributeRows = await prepareProductAttributeValueRows(db, id, data.attributes ?? []);
     await assertLiveBrand(db, data.brandId);
     await assertLiveWarrantyPolicy(db, data.warrantyPolicyId);
-    const decimalPlaces = storeDecimalPlacesFromCode(existingProduct.storeCurrencyCode);
-    const currency = { code: storeCurrencyFromCode(existingProduct.storeCurrencyCode), decimalPlaces };
+    const currency = storeCurrencyFromSql(existingProduct.storeCurrencyCode, existingProduct.storePriceIncrementMinor);
     const productPrice = catalogPriceColumns(data, currency);
     const priceMinor = toStoreMinor(data.price, currency);
     // Omitted keeps the stored buyer inputs; null removes them.

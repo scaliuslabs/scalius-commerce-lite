@@ -25,7 +25,12 @@ import {
   type CheckoutAppFunctions,
   type StorefrontCartItemIssue,
 } from "@scalius/core/modules/checkout";
-import { getCurrencySettings } from "@scalius/core/modules/settings";
+import {
+  getCurrencySettings,
+  priceIncrementForCurrency,
+  priceIncrementOf,
+  readStoreCurrency,
+} from "@scalius/core/modules/settings";
 import { assertDiscountCodesApplied, quoteStorefrontDiscount } from "@scalius/core/modules/promotions";
 import { buildStorefrontTaxAllocationLineId } from "@scalius/core/modules/tax";
 import { BUILT_IN_PAYMENT_PROVIDERS, getActivePaymentMethods, type PaymentProviders } from "../payments";
@@ -440,6 +445,7 @@ export async function mutateAgentStorefrontCart(
     const currency = await getCurrencySettings(db);
     const proposedValidation = await validateStorefrontCartItems(db, proposedIdentity, {
       currencyCode: currency.currencyCode,
+      priceIncrementMinor: priceIncrementOf(currency),
     });
     if (!proposedValidation.valid) {
       throw new ValidationError("The proposed storefront cart is not currently valid.", {
@@ -577,6 +583,7 @@ async function loadAgentStorefrontCart(
   const currency = await getCurrencySettings(db);
   const validation = await validateStorefrontCartItems(db, identityLines, {
     currencyCode: currency.currencyCode,
+    priceIncrementMinor: priceIncrementOf(currency),
   });
 
   // Same rule as storefront checkout: a physical line needs one method (a
@@ -694,7 +701,7 @@ async function quoteAgentStorefrontDiscount(
     customerId: signedInCustomerId,
     segmentCustomerId: signedInCustomerId,
     customerPhone: customerPhone?.trim() || await getLiveContextCustomerPhone(db, row),
-    cart: { currencyCode: currency.currencyCode, lines, shippingAmountMinor: shippingMinor },
+    cart: { currencyCode: currency.currencyCode, priceIncrementMinor: priceIncrementOf(currency), lines, shippingAmountMinor: shippingMinor },
   });
   const unknownCode = quote.rejectedCodes.some((rejection) => rejection.reason === "not_found");
   if (!code || !unknownCode || !apps.points.has("checkout.discounts")) {
@@ -712,7 +719,11 @@ async function quoteAgentStorefrontDiscount(
   );
   const preview = await previewStorefrontAppDiscounts(db, {
     apps,
-    currency: { code: currency.currencyCode, decimalPlaces: getDecimalPlaces(currency.currencyCode) },
+    currency: {
+      code: currency.currencyCode,
+      decimalPlaces: getDecimalPlaces(currency.currencyCode),
+      priceIncrementMinor: priceIncrementOf(currency),
+    },
     lines: lines.map((line) => ({
       lineId: line.id,
       productId: line.productId,
@@ -837,7 +848,11 @@ export async function quoteAgentStorefrontCheckout(
     discountCodes: discountCode ? [discountCode] : [],
     customerId,
     customerPhone,
-    currency: { code: projection.currencyCode, decimalPlaces: projection.decimalPlaces },
+    currency: {
+      code: projection.currencyCode,
+      decimalPlaces: projection.decimalPlaces,
+      priceIncrementMinor: priceIncrementForCurrency(await readStoreCurrency(db), projection.currencyCode),
+    },
     apps,
     channel: "agent",
     // Submit lists delivery options from the order's own address (none for pickup), so the quote does too.

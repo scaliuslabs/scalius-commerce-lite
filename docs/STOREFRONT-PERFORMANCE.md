@@ -708,11 +708,14 @@ authoritative.
 
 Nothing ever reads them empty. Migration `0091_catalogue_projection_fill` fills
 both for every product in the release that adds their readers (about 3 s at
-30k products; the migration applies before the new Worker goes live). It is
+30k products; the migration applies before the new Worker goes live). It was
 generated from `catalogProjectionFillStatements`, the same builders the writes
-use (`packages/core/scripts/catalog-projection-fill.ts --write`), and a test
-keeps the checked-in D1/Turso file and its PostgreSQL sidecar equal to that
-output and equal to the rebuild on a seeded store. The demo-store seed ends
+use (`packages/core/scripts/catalog-projection-fill.ts`), and is immutable
+now: a test keeps the checked-in D1/Turso file and its PostgreSQL sidecar at
+their recorded ledger digest and proves the current builders (which since
+read the store's price increment) still fill a seeded store exactly as it
+did. Changing the price increment in Settings → Store details queues the same
+full rebuild as the store alert level. The demo-store seed ends
 with the same statements. Writes the previous API version commits between the
 migration and the new Worker going live do not refresh them, so the first cron
 tick of every new API version (`CF_VERSION_METADATA`, KV hint

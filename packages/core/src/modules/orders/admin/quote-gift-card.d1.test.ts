@@ -10,7 +10,7 @@ import { buildStorefrontTaxAllocationLineId, calculateStorefrontTaxQuote } from 
 import { calculateManualOrderMoney, manualOrderTaxLines } from "./quote";
 import type { OrderCurrencySnapshot } from "../../payments/order-currency";
 
-const BDT: OrderCurrencySnapshot = { code: "BDT", decimalPlaces: 2 };
+const BDT: OrderCurrencySnapshot & { priceIncrementMinor: number } = { code: "BDT", decimalPlaces: 2, priceIncrementMinor: 100 };
 
 describe("manual orders: gift-card lines", () => {
     let sqlite: DatabaseSync;
@@ -44,7 +44,7 @@ describe("manual orders: gift-card lines", () => {
             lines: manualOrderTaxLines(items, lineIds),
             shippingMinor: money.shippingAmountMinor,
             discountMinor: money.discountAmountMinor,
-            currency: { code: "BDT", decimalPlaces: 2 },
+            currency: { code: "BDT", decimalPlaces: 2, priceIncrementMinor: 100 },
         });
         expect(quote.lines.map((line) => [line.productId, line.discountMinor, line.taxClassId, line.taxMinor])).toEqual([
             ["p_mug", 10_000, "tax_standard", 2_000],

@@ -3,7 +3,7 @@
 // Allocates a refund across the order's captured payments, claims it locally,
 // then dispatches each allocation through its gateway adapter (gateways/port.ts).
 
-import { readGiftCardSettings, toStoreMinor } from "../settings";
+import { orderPricePolicy, readGiftCardSettings, readStoreCurrency, toStoreMinor } from "../settings";
 import { eq, sql, desc, and, inArray } from "drizzle-orm";
 import {
     orders,
@@ -1420,7 +1420,8 @@ export async function processRefund(
     }
     const refundAmount = params.amount === undefined
         ? paidAmount
-        : toStoreMinor(params.amount, currency);
+        // A merchant-entered refund is on the store's price increment (in the order's currency).
+        : toStoreMinor(params.amount, orderPricePolicy(currency, await readStoreCurrency(db)));
 
     if (refundAmount <= 0) {
         throw new ValidationError("Refund amount must be greater than zero");

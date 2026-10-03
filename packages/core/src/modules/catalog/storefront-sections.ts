@@ -26,7 +26,12 @@ import {
     productVariants,
     products,
 } from "@scalius/database/schema";
-import { storeCurrencyCodeSql, storeCurrencyFromCode, storeDecimalPlacesFromCode } from "../settings";
+import {
+    storeCurrencyCodeSql,
+    storeCurrencyFromSql,
+    storeDecimalPlacesFromCode,
+    storePriceIncrementSql,
+} from "../settings";
 import { maskPublicBuyerAvailability } from "@scalius/shared/buyer-availability";
 import { and, asc, count, eq, isNull, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
@@ -292,6 +297,7 @@ async function readPublicProductIdentity(db: Database, slug: string) {
         discountAmountMinor: products.discountAmountMinor,
         freeDelivery: products.freeDelivery,
         storeCurrencyCode: storeCurrencyCodeSql(),
+        storePriceIncrementMinor: storePriceIncrementSql(),
         createdAt: sql<number>`CAST(${products.createdAt} AS INTEGER)`,
         category: {
             id: categories.id,
@@ -411,6 +417,7 @@ async function readSummary(
     ).get(identity.id) ?? [];
     const primaryImage = resolveProductImageRepresentation(mediaProjection);
     const price = presentCatalogPrice(identity, decimalPlaces);
+    const storeCurrency = storeCurrencyFromSql(identity.storeCurrencyCode, identity.storePriceIncrementMinor);
     return {
         section: "summary" as const,
         product: {
@@ -425,7 +432,7 @@ async function readSummary(
             discountType: identity.discountType || "percentage",
             discountPercentage: price.discountPercentage,
             discountAmount: price.discountAmount,
-            discountedPrice: catalogDiscountedPrice(identity, storeCurrencyFromCode(identity.storeCurrencyCode)),
+            discountedPrice: catalogDiscountedPrice(identity, storeCurrency.code, storeCurrency.priceIncrementMinor),
             freeDelivery: identity.freeDelivery || false,
             hasVariants: Number(counts?.variants ?? 0) > 1,
             imageUrl: primaryImage?.url ?? null,

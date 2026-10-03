@@ -1,16 +1,16 @@
 /**
- * Generates migration 0091_catalogue_projection_fill (D1/Turso SQL and its
- * PostgreSQL sidecar) from `catalogProjectionFillStatements`, the same
- * statement builders every product, SKU and stock write appends to its batch.
- * The checked-in files must equal this output
- * (catalog-projection-fill.d1.test.ts), so the fill never becomes a second
- * copy of the projection rules.
- *
- *   pnpm --filter @scalius/core exec tsx scripts/catalog-projection-fill.ts --write
+ * Renders the catalogue projection fill from `catalogProjectionFillStatements`,
+ * the same statement builders every product, SKU and stock write appends to
+ * its batch. Migration 0091_catalogue_projection_fill (D1/Turso SQL and its
+ * PostgreSQL sidecar) was this output when it shipped; it is immutable now
+ * (its digest is in every store's ledger) and the builders have since learned
+ * the store's price increment. catalog-projection-fill.d1.test.ts keeps the
+ * shipped files at their recorded digest and proves the current builders
+ * still fill a store exactly as 0091 did. There is no write mode: a released
+ * migration is never regenerated.
  */
 import { createHash } from "node:crypto";
-import { writeFileSync } from "node:fs";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 import { drizzle } from "drizzle-orm/sqlite-proxy";
 import * as schema from "../../database/src/schema";
 import type { Database } from "../../database/src/types";
@@ -100,14 +100,3 @@ export const CATALOG_PROJECTION_FILL_PATHS = {
     sqlite: fileURLToPath(new URL(`../../database/migrations/${CATALOG_PROJECTION_FILL_MIGRATION.name}.sql`, import.meta.url)),
     postgres: fileURLToPath(new URL(`../../database/migrations/postgres/${CATALOG_PROJECTION_FILL_MIGRATION.name}.sql`, import.meta.url)),
 };
-
-if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
-    if (!process.argv.includes("--write")) {
-        console.error("Usage: tsx scripts/catalog-projection-fill.ts --write");
-        process.exit(1);
-    }
-    const rendered = renderCatalogProjectionFillMigration();
-    writeFileSync(CATALOG_PROJECTION_FILL_PATHS.sqlite, rendered.sqlite);
-    writeFileSync(CATALOG_PROJECTION_FILL_PATHS.postgres, rendered.postgres);
-    console.log(`Wrote ${CATALOG_PROJECTION_FILL_MIGRATION.name} (D1/Turso and PostgreSQL).`);
-}

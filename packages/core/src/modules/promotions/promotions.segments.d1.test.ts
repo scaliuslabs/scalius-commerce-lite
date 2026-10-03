@@ -57,6 +57,7 @@ function openStore(provider: "d1" | "turso"): Database {
 
 const cart: StorefrontDiscountCart = {
     currencyCode: "BDT",
+    priceIncrementMinor: 100,
     lines: [
         { id: "cart:0:var_tee", productId: "prod_tee", variantId: "var_tee", unitPriceMinor: 50_000, quantity: 2 },
         { id: "cart:1:var_cap", productId: "prod_cap", variantId: "var_cap", unitPriceMinor: 20_000, quantity: 1 },
@@ -245,12 +246,12 @@ describe.each(["d1", "turso"] as const)("promotions limited to customer segments
         const limited = await live(db, {
             name: "VIP tee gift", customerSegmentIds: [vip], endsAtEpochSeconds: NOW + 86_400, effects: [buyTeeGetCap],
         });
-        expect(await listProductBuyGetOffers(db, "prod_tee", "BDT", NOW)).toEqual([]);
+        expect(await listProductBuyGetOffers(db, "prod_tee", { code: "BDT", priceIncrementMinor: 100 }, NOW)).toEqual([]);
         // A member still gets it at checkout.
         expect(applied(await quote(db, [], signedIn("cust_vip")))).toEqual(["VIP tee gift"]);
 
         const open = await live(db, { name: "Tee gift", endsAtEpochSeconds: NOW + 86_400, effects: [buyTeeGetCap] });
-        expect((await listProductBuyGetOffers(db, "prod_tee", "BDT", NOW)).map(({ title }) => title)).toEqual(["Tee gift"]);
+        expect((await listProductBuyGetOffers(db, "prod_tee", { code: "BDT", priceIncrementMinor: 100 }, NOW)).map(({ title }) => title)).toEqual(["Tee gift"]);
 
         const plan = planHomePromotions(db, [limited.id, open.id], NOW * 1_000);
         const rows = await plan.statements[0]!;

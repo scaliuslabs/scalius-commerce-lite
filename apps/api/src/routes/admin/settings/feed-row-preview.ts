@@ -14,6 +14,7 @@ import {
   getCurrencySettings,
   getMediaOptimizationSettings,
   getSeoSettings,
+  priceIncrementOf,
 } from "@scalius/core/modules/settings";
 import { ok } from "../../../utils/api-response";
 import {
@@ -226,7 +227,7 @@ app.openapi(
     const seo = await getSeoSettings(db);
     const currency = seo.discovery.feeds.productCatalogEnabled
       ? await getCurrencySettings(db)
-      : { currencyCode: "BDT" };
+      : { currencyCode: "BDT" as const };
     const media = seo.discovery.feeds.productCatalogEnabled
       ? await getMediaOptimizationSettings(db)
       : { canonicalCdnUrl: "", canonicalHostAliases: [] };
@@ -239,6 +240,7 @@ app.openapi(
       limit: query.limit,
       storefrontBaseUrl: c.env.STOREFRONT_URL,
       currencyCode: currency.currencyCode,
+      priceIncrementMinor: priceIncrementOf(currency),
       feedsPolicy: seo.discovery.feeds,
       mediaPolicy: media,
       environmentCdnUrl: c.env.CDN_DOMAIN_URL,

@@ -21,7 +21,7 @@ export function effectivePrice(stored: StoredPricing, currency: StoreCurrency): 
     stored.discountType === "flat" ? "flat" : "percentage",
     percentToBps(stored.discountPercentage),
     toMinor(stored.discountAmount ?? 0, currency.decimalPlaces),
-    currency.code,
+    currency.priceIncrementMinor,
   );
   return fromMinor(minor, currency.decimalPlaces);
 }

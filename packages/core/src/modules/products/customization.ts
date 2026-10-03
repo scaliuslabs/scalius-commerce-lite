@@ -22,8 +22,8 @@ export * from "./customization-schema";
 
 /**
  * Converts the decimal HTTP schema into the stored column value, validating
- * every limit and the store's cash step (whole taka in BDT). Null means no
- * buyer inputs.
+ * every limit and the store's price increment (a BDT store's default: whole
+ * taka). Null means no buyer inputs.
  */
 export function toStoredCustomizationSchema(
     input: CustomizationSchemaInput | null,

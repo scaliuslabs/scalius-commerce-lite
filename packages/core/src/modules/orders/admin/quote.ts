@@ -3,8 +3,11 @@ import type { Database } from "@scalius/database/client";
 import { products, productVariants, shippingMethods } from "@scalius/database/schema";
 import {
   getCurrencySettings,
+  orderPricePolicy,
+  priceIncrementOf,
   storeCurrencyCodeSql,
-  storeCurrencyFromCode,
+  storeCurrencyFromSql,
+  storePriceIncrementSql,
   toStoreMinor,
 } from "../../settings";
 import { and, sql, eq, inArray, isNull } from "drizzle-orm";
@@ -192,7 +195,8 @@ interface PreparedManualOrderLine extends AdminOrderItemWithInventory<ManualOrde
 }
 
 interface PreparedManualOrderQuote {
-    currency: OrderCurrencySnapshot;
+    /** The order's currency at the price increment staff amounts are entered in. */
+    currency: OrderCurrencySnapshot & { priceIncrementMinor: number };
     locationNames: {
         cityName: string | null;
         zoneName: string | null;
@@ -351,9 +355,11 @@ export async function prepareManualOrderQuote(
     retainedLines?: ReadonlyMap<string, RetainedManualOrderLine>,
     options: ManualOrderQuoteOptions = {},
 ): Promise<PreparedManualOrderQuote> {
-    const currency = currencyOverride ?? createOrderCurrencySnapshot(
-        (await getCurrencySettings(db)).currencyCode,
-    );
+    // Amounts staff enter are on the store's price increment (a BDT store's
+    // default: whole taka); an amended order keeps its own currency.
+    const settings = await getCurrencySettings(db);
+    const store = { code: settings.currencyCode, priceIncrementMinor: priceIncrementOf(settings) };
+    const currency = orderPricePolicy(currencyOverride ?? createOrderCurrencySnapshot(settings.currencyCode), store);
     // Keep location validation first so a stale/cross-parent destination fails
     // before catalog or tax reads do unnecessary work. A pickup or
     // service-only order sends no address and skips it.
@@ -429,7 +435,7 @@ export async function prepareManualOrderQuote(
     );
     // The staff discount, then the apps (injected `apps`), then tax. No app: no read, no call.
     const appInput: ManualOrderAppInput = {
-        currency: { code: currency.code, decimalPlaces: currency.decimalPlaces },
+        currency: { code: currency.code, decimalPlaces: currency.decimalPlaces, priceIncrementMinor: currency.priceIncrementMinor },
         lines: manualOrderAppLines(trackedItems, allocationLineIds),
         manualDiscountMinor: money.discountAmountMinor,
         shippingMinor: money.shippingAmountMinor,
@@ -457,6 +463,7 @@ export async function prepareManualOrderQuote(
         currency: {
             code: currency.code,
             decimalPlaces: currency.decimalPlaces,
+            priceIncrementMinor: currency.priceIncrementMinor,
         },
     });
 
@@ -554,6 +561,7 @@ export async function resolveAdminOrderItemInventory<T extends AdminOrderSkuItem
             productDiscountBps: products.discountBps,
             productDiscountAmountMinor: products.discountAmountMinor,
             storeCurrencyCode: storeCurrencyCodeSql(),
+            storePriceIncrementMinor: storePriceIncrementSql(),
             variantPriceMinor: productVariants.priceMinor,
             variantDiscountType: productVariants.discountType,
             variantDiscountBps: productVariants.discountBps,
@@ -626,20 +634,21 @@ export async function resolveAdminOrderItemInventory<T extends AdminOrderSkuItem
         const variantHasDiscount =
             (sku.variantDiscountType === "percentage" && sku.variantDiscountBps > 0)
             || (sku.variantDiscountType === "flat" && sku.variantDiscountAmountMinor > 0);
+        const { priceIncrementMinor } = storeCurrencyFromSql(sku.storeCurrencyCode, sku.storePriceIncrementMinor);
         const catalogUnitPriceMinor = variantHasDiscount
             ? discountedPriceMinor(
                 sku.variantPriceMinor,
                 sku.variantDiscountType,
                 sku.variantDiscountBps,
                 sku.variantDiscountAmountMinor,
-                storeCurrencyFromCode(sku.storeCurrencyCode),
+                priceIncrementMinor,
             )
             : discountedPriceMinor(
                 sku.variantPriceMinor,
                 sku.productDiscountType,
                 sku.productDiscountBps,
                 sku.productDiscountAmountMinor,
-                storeCurrencyFromCode(sku.storeCurrencyCode),
+                priceIncrementMinor,
             );
 
         resolvedItems.push({

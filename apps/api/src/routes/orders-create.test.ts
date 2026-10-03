@@ -567,6 +567,8 @@ describe("cart validation preflight", () => {
         {
           inventoryPool: "regular",
           currencyCode,
+          // JPY and KWD price in their minor unit by default.
+          priceIncrementMinor: 1,
         },
       );
     },
@@ -1003,13 +1005,13 @@ describe("authoritative tax quote", () => {
       expect(mocks.validateStorefrontCartItems).toHaveBeenCalledWith(
         expect.anything(),
         expect.any(Array),
-        { inventoryPool: "regular", currencyCode },
+        { inventoryPool: "regular", currencyCode, priceIncrementMinor: 1 },
       );
       expect(mocks.calculateStorefrontTaxQuote).toHaveBeenCalledWith(
         expect.anything(),
         expect.objectContaining({
           lines: [expect.objectContaining({ unitPriceMinor, quantity: 2 })],
-          currency: { code: currencyCode, decimalPlaces },
+          currency: { code: currencyCode, decimalPlaces, priceIncrementMinor: 1 },
         }),
       );
     },
@@ -1647,7 +1649,7 @@ describe("create order commit/KV ordering", () => {
           zoneName: "Mirpur",
         }),
         undefined,
-        { code: "BDT", decimalPlaces: 2 },
+        { code: "BDT", decimalPlaces: 2, priceIncrementMinor: 100 },
         expect.objectContaining({ partialPaymentEnabled: false }),
         expect.objectContaining({ classes: [], rates: [] }),
         { masterSecret: expect.toBeOneOf([null, expect.any(String)]) },
@@ -2387,7 +2389,7 @@ describe("create order commit/KV ordering", () => {
         customerId: "customer_signed_in",
         source: "authenticated",
       },
-      { code: "BDT", decimalPlaces: 2 },
+      { code: "BDT", decimalPlaces: 2, priceIncrementMinor: 100 },
       expect.objectContaining({ partialPaymentEnabled: false }),
       expect.objectContaining({ classes: [], rates: [] }),
       { masterSecret: expect.toBeOneOf([null, expect.any(String)]) },

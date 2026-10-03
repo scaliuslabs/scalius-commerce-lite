@@ -1,6 +1,7 @@
 import { products, productVariants } from "@scalius/database/schema";
 import { chunkForD1, type Database, D1_ID_CHUNK_SIZE } from "@scalius/database/client";
 import type { SeoDiscoverySettings } from "@scalius/shared/seo-discovery";
+import { defaultPriceIncrementMinor } from "@scalius/shared/currency-policy";
 import {
     calculateCatalogFeedDiscountedAmount,
     isPositiveCatalogFeedAmount,
@@ -114,6 +115,8 @@ export interface ProductFeedDiagnosticScanInput {
     sampleLimitPerReason: number;
     storefrontBaseUrl?: string | null;
     currencyCode?: string;
+    /** The store's price increment (feed prices are what checkout charges); absent, the currency's default. */
+    priceIncrementMinor?: number;
 }
 
 type MutableReasonSummary = Omit<ProductFeedDiagnosticReasonSummary, "samples"> & {
@@ -218,6 +221,7 @@ function hasSavedDiscount(value: {
 function getProductFeedPricing(
     product: ProductFeedDiagnosticScanProduct,
     currencyCode: string,
+    priceIncrementMinor: number,
 ) {
     return {
         basePrice: product.price,
@@ -227,6 +231,7 @@ function getProductFeedPricing(
             product.discountPercentage,
             product.discountAmount,
             currencyCode,
+            priceIncrementMinor,
         ),
     };
 }
@@ -235,6 +240,7 @@ function getVariantFeedPricing(
     product: ProductFeedDiagnosticScanProduct,
     variant: ProductFeedDiagnosticScanVariant,
     currencyCode: string,
+    priceIncrementMinor: number,
 ): { basePrice: number; feedPrice: number } {
     const basePrice = variant.price ?? product.price;
     const discount = hasSavedDiscount(variant) ? variant : product;
@@ -246,6 +252,7 @@ function getVariantFeedPricing(
             discount.discountPercentage,
             discount.discountAmount,
             currencyCode,
+            priceIncrementMinor,
         ),
     };
 }
@@ -286,6 +293,7 @@ export function buildProductFeedDiagnosticsFromScan({
     sampleLimitPerReason,
     storefrontBaseUrl,
     currencyCode = "BDT",
+    priceIncrementMinor = defaultPriceIncrementMinor(currencyCode),
 }: ProductFeedDiagnosticScanInput): ProductFeedDiagnosticsReport {
     const summaries = createReasonSummaries();
     const productsWithIssues = new Set<string>();
@@ -359,7 +367,7 @@ export function buildProductFeedDiagnosticsFromScan({
 
         if (feedsPolicy.variantStrategy === "products" || topology.mode === "simple") {
             if (!hasPositiveFeedPricing(
-                getProductFeedPricing(product, currencyCode),
+                getProductFeedPricing(product, currencyCode, priceIncrementMinor),
                 currencyCode,
             )) {
                 recordIssue(product, "non_positive_price", 1);
@@ -388,7 +396,7 @@ export function buildProductFeedDiagnosticsFromScan({
 
         for (const variant of topology.variants) {
             if (!hasPositiveFeedPricing(
-                getVariantFeedPricing(product, variant, currencyCode),
+                getVariantFeedPricing(product, variant, currencyCode, priceIncrementMinor),
                 currencyCode,
             )) {
                 recordIssue(product, "non_positive_price", 1);
@@ -441,6 +449,7 @@ export async function getProductFeedDiagnostics(
         sampleLimitPerReason?: number;
         storefrontBaseUrl?: string | null;
         currencyCode?: string;
+        priceIncrementMinor?: number;
     } = {},
 ): Promise<ProductFeedDiagnosticsReport> {
     const scanLimit = boundedInteger(
@@ -506,6 +515,7 @@ export async function getProductFeedDiagnostics(
             sampleLimitPerReason,
             storefrontBaseUrl: options.storefrontBaseUrl,
             currencyCode: options.currencyCode,
+            priceIncrementMinor: options.priceIncrementMinor,
         });
     }
 
@@ -588,5 +598,6 @@ export async function getProductFeedDiagnostics(
         sampleLimitPerReason,
         storefrontBaseUrl: options.storefrontBaseUrl,
         currencyCode: options.currencyCode,
+        priceIncrementMinor: options.priceIncrementMinor,
     });
 }

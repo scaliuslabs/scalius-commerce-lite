@@ -22,8 +22,12 @@ import { and, asc, desc, eq, ne, notInArray, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { isFulfillmentType, type FulfillmentType } from "@scalius/shared/fulfilment";
 import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
-import { toStoreMinor } from "../settings";
-import { recordCODCollection, resolveOrderCurrencySnapshot, validateCODCollectionDetails } from "../payments";
+import {
+    recordCODCollection,
+    resolveOrderCurrencySnapshot,
+    toCashOnDeliveryMinor,
+    validateCODCollectionDetails,
+} from "../payments";
 import {
   assertNoActivePaymentSessionAttempt,
   assertNoActiveRefundAttempt,
@@ -416,7 +420,7 @@ export async function recordOrderFulfilment(
         }
         const normalized = validateCODCollectionDetails(order, {
             collectedBy: input.collectedBy?.trim() || "Store counter",
-            collectedAmountMinor: toStoreMinor(input.cashReceived, currency),
+            collectedAmountMinor: toCashOnDeliveryMinor(input.cashReceived, currency),
         });
         cashCollection = {
             collectedBy: normalized.collectedBy,
@@ -478,7 +482,7 @@ export async function recordOrderFulfilment(
             status: ShipmentStatus.IN_TRANSIT,
             rawStatus: ShipmentStatus.IN_TRANSIT,
             note: input.parcel?.note?.trim() || null,
-            shipmentAmountMinor: shipmentAmount == null ? null : toStoreMinor(shipmentAmount, currency),
+            shipmentAmountMinor: shipmentAmount == null ? null : toCashOnDeliveryMinor(shipmentAmount, currency),
             isFinalShipment: shipLinesDone,
             metadata: JSON.stringify({ requestKey }),
             createdAt: sql`unixepoch()`,

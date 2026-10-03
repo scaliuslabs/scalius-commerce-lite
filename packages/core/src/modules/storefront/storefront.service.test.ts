@@ -72,12 +72,14 @@ describe("storefront layout data", () => {
     ["JPY", "¥", 0],
     ["KWD", "KD", 3],
     ["BDT", "৳", 2],
-  ])("carries the ISO 4217 decimal places of %s", async (code, symbol, decimalPlaces) => {
+  ])("carries the ISO 4217 decimal places of %s and the store's price increment", async (code, symbol, decimalPlaces) => {
     const { sqlite, db } = createSqliteD1Database();
     sqlite.exec(`INSERT INTO settings (id, key, value, category, type)
       VALUES ('set_currency', 'document', '${JSON.stringify({ currencyCode: code, currencySymbol: symbol })}', 'currency', 'json')`);
 
-    expect((await getLayoutData(db)).currency).toEqual({ code, symbol, decimalPlaces });
+    // A BDT store prices in whole taka by default; every other currency in its minor unit.
+    const priceIncrementMinor = code === "BDT" ? 100 : 1;
+    expect((await getLayoutData(db)).currency).toEqual({ code, symbol, decimalPlaces, priceIncrementMinor });
   });
 
   it("renders the published theme whole, or the default whole when the row is unreadable", async () => {

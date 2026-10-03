@@ -196,13 +196,13 @@ describe("checkout app functions on the agent and admin channels", () => {
     });
     const quote = await priceStorefrontCheckout(db, {
       cartValidation: read.cartValidation, delivery: read.deliveryPreflight, discountCodes: [], customerPhone: PHONE,
-      currency: { code: "BDT", decimalPlaces: 2 }, taxAuthority: read.taxAuthority, apps: runner, channel: "online_store",
+      currency: { code: "BDT", decimalPlaces: 2, priceIncrementMinor: 100 }, taxAuthority: read.taxAuthority, apps: runner, channel: "online_store",
       location: { city: data.city, zone: data.zone, area: data.area },
     });
     const attempt = createAtomicCheckoutAttempt(await buildCheckoutAttemptIdentity(data));
     const result = await createStorefrontOrder(
       db, data, "https://shop.test/api/v1/orders", { orderId: attempt.orderId, checkoutToken: attempt.checkoutToken },
-      read.cartValidation, read.deliveryPreflight, undefined, { code: "BDT", decimalPlaces: 2 },
+      read.cartValidation, read.deliveryPreflight, undefined, { code: "BDT", decimalPlaces: 2, priceIncrementMinor: 100 },
       createTrustedStorefrontCheckoutPolicySnapshot({
         partialPaymentEnabled: false, authorityRevision: read.authorityRevision,
         orderCreatedNotificationEnabled: false, metaPurchaseEnabled: false,

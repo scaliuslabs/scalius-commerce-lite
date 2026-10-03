@@ -22,6 +22,7 @@ describe("buyer currency config", () => {
             code: "JPY",
             symbol: "¥",
             decimalPlaces: 0,
+            priceIncrementMinor: 1,
         });
     });
 
@@ -35,6 +36,7 @@ describe("buyer currency config", () => {
             code: "BDT",
             symbol: "৳",
             decimalPlaces: 2,
+            priceIncrementMinor: 100,
         });
     });
 });

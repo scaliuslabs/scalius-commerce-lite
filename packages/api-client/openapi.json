@@ -21046,12 +21046,19 @@
                               "type": "integer",
                               "minimum": 0,
                               "maximum": 3
+                            },
+                            "priceIncrementMinor": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "exclusiveMinimum": true,
+                              "maximum": 1000
                             }
                           },
                           "required": [
                             "code",
                             "symbol",
-                            "decimalPlaces"
+                            "decimalPlaces",
+                            "priceIncrementMinor"
                           ]
                         },
                         "theme": {
@@ -76238,6 +76245,11 @@
                         "type": "string",
                         "pattern": "^[A-Z]{3}$/u"
                       },
+                      "priceIncrementMinor": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 10000
+                      },
                       "lines": {
                         "type": "array",
                         "items": {
@@ -104257,6 +104269,13 @@
                           "type": "string",
                           "maxLength": 16
                         },
+                        "priceIncrementMinor": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "exclusiveMinimum": true,
+                          "maximum": 1000,
+                          "description": "The store's price increment in minor units of the currency: every price is a multiple of it and derived amounts round to it. 1 is the minor unit (paisa, cents); 10^decimals is whole units (a BDT store's default: 100, whole taka)."
+                        },
                         "currencyCodeLocked": {
                           "type": "boolean"
                         },
@@ -104268,6 +104287,7 @@
                       "required": [
                         "currencyCode",
                         "currencySymbol",
+                        "priceIncrementMinor",
                         "currencyCodeLocked",
                         "revision"
                       ]
@@ -104649,6 +104669,13 @@
                   "currencySymbol": {
                     "type": "string",
                     "maxLength": 16
+                  },
+                  "priceIncrementMinor": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "exclusiveMinimum": true,
+                    "maximum": 1000,
+                    "description": "The store's price increment in minor units of the currency: every price is a multiple of it and derived amounts round to it. 1 is the minor unit (paisa, cents); 10^decimals is whole units (a BDT store's default: 100, whole taka)."
                   }
                 },
                 "required": [

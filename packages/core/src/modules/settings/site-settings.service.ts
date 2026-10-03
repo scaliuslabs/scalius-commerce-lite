@@ -33,6 +33,7 @@ import {
   ValidationError,
 } from "@scalius/core/errors";
 import { normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
+import { isPriceIncrementMinor } from "@scalius/shared/currency-policy";
 import {
   DEFAULT_STOREFRONT_THEME,
   THEME_VERSION_CHANGES_MAX,
@@ -54,6 +55,7 @@ import {
   customerCountriesDocument,
   mediaDocument,
   normalizeMediaHost,
+  priceIncrementOf,
   seoDocument,
   type CurrencySettings,
   type CustomerCountries,
@@ -107,6 +109,8 @@ export async function saveCurrencySettings(
   data: {
     currencyCode?: string;
     currencySymbol?: string;
+    /** The default market's price increment; omitted keeps the saved one (reset when the currency changes). */
+    priceIncrementMinor?: number;
   },
   options: SettingsSaveOptions = {},
 ) {
@@ -127,7 +131,25 @@ export async function saveCurrencySettings(
     throw new ConflictError(CURRENCY_CHANGE_CONFLICT_MESSAGE);
   }
 
-  return currencyDocument.write(db, { currencyCode, currencySymbol }, {}, options);
+  // Saved prices are never rewritten: a store that moves to whole units keeps
+  // any amount with minor units until it is edited.
+  const priceIncrementMinor = data.priceIncrementMinor
+    ?? (currencyCode === current.currencyCode ? current.priceIncrementMinor : undefined);
+  if (priceIncrementMinor !== undefined && !isPriceIncrementMinor(currencyCode, priceIncrementMinor)) {
+    throw new ValidationError(`Choose how ${currencyCode} prices are entered: in minor units or whole units.`);
+  }
+
+  // The whole document is written, so an increment left out (a new currency)
+  // is gone rather than kept from the old currency.
+  const saved = await currencyDocument.write(
+    db,
+    { currencyCode, currencySymbol, ...(priceIncrementMinor === undefined ? {} : { priceIncrementMinor }) },
+    {},
+    { ...options, replace: true },
+  );
+  // Catalogue projections store percentage prices at the increment: a change
+  // needs their rebuild (the caller queues it, as for the store alert level).
+  return { ...saved, priceIncrementChanged: priceIncrementOf(saved.value) !== priceIncrementOf(current) };
 }
 // ─────────────────────────────────────────
 // Theme

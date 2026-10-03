@@ -237,7 +237,7 @@ export async function applyManualOrderAppFunctions(
     let shippingMinor = input.shippingMinor;
     let deliveryMethod = chosenMethod;
     if (rates.length > 0 && chosenMethod) {
-        const adjusted = applyAppShippingRateOperations(rateOptions, rates, input.currency.code, apps);
+        const adjusted = applyAppShippingRateOperations(rateOptions, rates, input.currency.priceIncrementMinor, apps);
         if (adjusted.changed) {
             const chosen = adjusted.rates.find((rate) => rate.rateId === chosenMethod.id);
             if (!chosen) {
@@ -284,6 +284,7 @@ export async function applyManualOrderAppFunctions(
     const resolution = discounts.length > 0
         ? resolveAppDiscounts({
             currencyCode: input.currency.code,
+            priceIncrementMinor: input.currency.priceIncrementMinor,
             lines: input.lines.map((line) => ({
                 lineId: line.lineId,
                 grossMinor: line.unitPriceMinor * line.quantity,

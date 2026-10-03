@@ -122,7 +122,7 @@ describe("Wave A checkout", () => {
             authority.cartValidation,
             authority.deliveryPreflight,
             undefined,
-            { code: "BDT", decimalPlaces: 2 },
+            { code: "BDT", decimalPlaces: 2, priceIncrementMinor: 100 },
             createTrustedStorefrontCheckoutPolicySnapshot({
                 partialPaymentEnabled: false,
                 authorityRevision: authority.authorityRevision,

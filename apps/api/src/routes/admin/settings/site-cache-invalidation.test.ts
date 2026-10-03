@@ -617,6 +617,7 @@ describe("site settings write behavior", () => {
         sampleLimitPerReason: 2,
         storefrontBaseUrl: "https://storefront.example.com",
         currencyCode: "BDT",
+        priceIncrementMinor: 100,
       },
     );
   });

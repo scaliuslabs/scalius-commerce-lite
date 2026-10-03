@@ -4,6 +4,7 @@
 import type { Database } from "@scalius/database/client";
 import { resolveCheckoutContact, type CheckoutContactFieldSettings } from "./contact-fields";
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
+import { defaultPriceIncrementMinor, type PricingCurrency } from "@scalius/shared/currency-policy";
 import { fromMinor } from "@scalius/shared/money";
 import {
   buildStorefrontTaxAllocationLineId,
@@ -430,9 +431,11 @@ export async function createStorefrontOrder(
     prevalidatedCart?: StorefrontCartValidationResult,
     prevalidatedDelivery?: StorefrontDeliveryPreflightResult,
     customerIdentity?: CreateStorefrontOrderCustomerIdentity,
-    requestCurrency: { code: string; decimalPlaces: number } = {
+    /** The store currency at its price increment (direct callers: the default store's). */
+    requestCurrency: PricingCurrency = {
         code: DEFAULT_CURRENCY.code,
         decimalPlaces: DEFAULT_CURRENCY.decimalPlaces,
+        priceIncrementMinor: defaultPriceIncrementMinor(DEFAULT_CURRENCY.code),
     },
     checkoutPolicySnapshot?: StorefrontCheckoutPolicySnapshot,
     taxAuthoritySnapshot?: StorefrontTaxAuthoritySnapshot,
@@ -470,7 +473,11 @@ export async function createStorefrontOrder(
             variantLabel: item.variantLabel,
             properties: item.properties,
         })),
-        { inventoryPool: data.inventoryPool },
+        {
+            inventoryPool: data.inventoryPool,
+            currencyCode: requestCurrency.code,
+            priceIncrementMinor: requestCurrency.priceIncrementMinor,
+        },
     );
 
     if (!cartValidation.valid) {

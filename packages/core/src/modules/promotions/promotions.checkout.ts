@@ -437,6 +437,7 @@ async function loadOfferProducts(
     db: Database,
     productIds: readonly string[],
     currencyCode: string,
+    priceIncrementMinor: number,
 ): Promise<Map<string, DiscountOfferProduct>> {
     const result = new Map<string, DiscountOfferProduct>();
     if (productIds.length === 0) return result;
@@ -482,7 +483,7 @@ async function loadOfferProducts(
                     discount.discountType,
                     discount.discountBps,
                     discount.discountAmountMinor,
-                    currencyCode,
+                    priceIncrementMinor,
                 ), decimalPlaces)
                 : null,
         });
@@ -665,7 +666,7 @@ export async function quoteStorefrontDiscount(
     const offerProducts = await loadOfferProducts(db, [...new Set([
         ...offerDrafts.flatMap(({ productIds }) => productIds),
         ...rejected.flatMap(({ offer }) => offer?.productIds ?? []),
-    ])], currencyCode);
+    ])], currencyCode, input.cart.priceIncrementMinor);
     const finishOffer = ({ productIds, ...offer }: OfferDraft): StorefrontDiscountOffer => ({
         ...offer,
         products: productIds.flatMap((id) => {
@@ -745,6 +746,7 @@ export async function quoteStorefrontDiscount(
         snapshot: {
             cart: {
                 currencyCode,
+                priceIncrementMinor: input.cart.priceIncrementMinor,
                 lines: input.cart.lines.map(({ id, productId, variantId, unitPriceMinor, quantity }) => ({
                     id, productId, variantId, unitPriceMinor, quantity,
                 })),
@@ -787,7 +789,8 @@ export interface ProductBuyGetOffer {
 export async function listProductBuyGetOffers(
     db: Database,
     productId: string,
-    currencyCode: string,
+    /** The store currency at its price increment (offer prices are what checkout charges). */
+    currency: { code: string; priceIncrementMinor: number },
     evaluatedAtEpochSeconds = Math.floor(Date.now() / 1_000),
 ): Promise<ProductBuyGetOffer[]> {
     // Cached product pages: any automatic promotion's rows, limits and
@@ -796,7 +799,7 @@ export async function listProductBuyGetOffers(
     const loaded = await loadCandidates(
         db,
         [],
-        { cart: { currencyCode, lines: [], shippingAmountMinor: 0 } },
+        { cart: { currencyCode: currency.code, priceIncrementMinor: currency.priceIncrementMinor, lines: [], shippingAmountMinor: 0 } },
         evaluatedAtEpochSeconds,
         { declareTransition: true },
     );
@@ -826,7 +829,12 @@ export async function listProductBuyGetOffers(
             productIds: (buys ? effect.config.productIds ?? [] : buy.productIds ?? []).slice(0, MAX_OFFER_PRODUCTS),
         }];
     }).slice(0, 3);
-    const offerProducts = await loadOfferProducts(db, [...new Set(drafts.flatMap(({ productIds }) => productIds))], currencyCode);
+    const offerProducts = await loadOfferProducts(
+        db,
+        [...new Set(drafts.flatMap(({ productIds }) => productIds))],
+        currency.code,
+        currency.priceIncrementMinor,
+    );
     return drafts.map(({ productIds, ...offer }) => ({
         ...offer,
         products: productIds.flatMap((id) => {

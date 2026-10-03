@@ -129,6 +129,7 @@ app.openapi(validateDiscountRoute, async (c) => {
     shippingKnown: shippingCost !== undefined,
     cart: {
       currencyCode: currency.code,
+      priceIncrementMinor: currency.priceIncrementMinor,
       lines: lines.map(({ item, index, variantId }) => ({
         id: `cart:${index}:${variantId}`,
         productId: item.id,
@@ -143,7 +144,7 @@ app.openapi(validateDiscountRoute, async (c) => {
   });
   // The same rule as the tax quote and the order: promotions or bundles,
   // whichever saves more (checkout/bundle-discounts.ts).
-  const bundleSavings = await previewStorefrontBundleSavings(db, cartLines, currency.code);
+  const bundleSavings = await previewStorefrontBundleSavings(db, cartLines, currency.priceIncrementMinor);
   const interplay = resolveBundlePromotionInterplay(
     cartLines.map((line) => ({
       lineId: line.id,
@@ -161,7 +162,7 @@ app.openapi(validateDiscountRoute, async (c) => {
       db,
       registrations,
     }),
-    currency: { code: currency.code, decimalPlaces: currency.decimalPlaces },
+    currency: { code: currency.code, decimalPlaces: currency.decimalPlaces, priceIncrementMinor: currency.priceIncrementMinor },
     lines: lines.map(({ item, index, variantId }) => ({
       lineId: `cart:${index}:${variantId}`,
       productId: item.id,

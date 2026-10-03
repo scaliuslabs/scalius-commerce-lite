@@ -39,7 +39,9 @@ vi.mock("../delivery/delivery.service", () => ({
   markShipmentReconciliationRequired: mocks.markShipmentReconciliationRequired,
 }));
 
-vi.mock("../payments/cod", () => ({
+vi.mock("../payments/cod", async (importOriginal) => ({
+  // The real cash conversion (`toCashOnDeliveryMinor`); the writes are mocked.
+  ...(await importOriginal<typeof import("../payments/cod")>()),
   markCODReturned: mocks.markCODReturned,
   recordCODCollection: mocks.recordCODCollection,
   recordCODFailure: mocks.recordCODFailure,

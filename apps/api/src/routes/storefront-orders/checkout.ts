@@ -9,6 +9,7 @@ import { readMasterSecret } from "@scalius/shared/runtime-secrets";
 import { GIFT_CARD_PAYMENT_METHOD } from "@scalius/core/modules/gift-cards";
 import { recordCheckoutMarketingConsent } from "@scalius/core/modules/customer-marketing";
 import { getDecimalPlaces } from "@scalius/shared/currency";
+import { priceIncrementOf } from "@scalius/core/modules/settings";
 import { getCustomerBySession } from "@scalius/core/modules/customers";
 import { fromMinor } from "@scalius/shared/money";
 import type { CheckoutPaymentMethodId } from "@scalius/core/modules/checkout";
@@ -508,6 +509,7 @@ app.openapi(createOrderRoute, async (c) => {
       {
         code: currency.currencyCode,
         decimalPlaces: getDecimalPlaces(currency.currencyCode),
+        priceIncrementMinor: priceIncrementOf(currency),
       },
       createTrustedStorefrontCheckoutPolicySnapshot({
         partialPaymentEnabled: checkoutSettings.partialPaymentEnabled,

@@ -23,13 +23,20 @@ import {
   enqueueNotificationOutboxById,
   recordAndEnqueueNotification,
 } from "@scalius/core/modules/notifications";
-import { getCurrencySettings, readGiftCardSettings } from "@scalius/core/modules/settings";
+import {
+  getCurrencySettings,
+  priceIncrementForCurrency,
+  priceIncrementOf,
+  readGiftCardSettings,
+  readStoreCurrency,
+} from "@scalius/core/modules/settings";
 import { customers } from "@scalius/database/schema";
 import { and, eq, isNull } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import { formatGiftCardCode } from "@scalius/shared/gift-card-code";
 import { getDecimalPlaces } from "@scalius/shared/currency";
-import { fromMinor, isWholeCashAmountMinor, toMinor } from "@scalius/shared/money";
+import { isWholeUnitIncrement } from "@scalius/shared/currency-policy";
+import { fromMinor, isIncrementMultipleMinor, priceIncrementMessage, toMinor } from "@scalius/shared/money";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { ok, created } from "../../utils/api-response";
 import { ServiceUnavailableError, UnauthorizedError, ValidationError } from "../../utils/api-error";
@@ -127,11 +134,14 @@ function parseExpiry(value: string | null | undefined): number | null | undefine
   return seconds;
 }
 
-function amountToMinor(amount: number, currencyCode: string, label: string): number {
+/** A staff-entered amount, on the store's price increment (a BDT store's default: whole taka). */
+function amountToMinor(amount: number, currencyCode: string, priceIncrementMinor: number, label: string): number {
   const minor = toMinor(amount, getDecimalPlaces(currencyCode));
   if (!Number.isSafeInteger(minor)) throw new ValidationError(`${label} is not a valid amount.`);
-  if (!isWholeCashAmountMinor(Math.abs(minor), currencyCode)) {
-    throw new ValidationError(`${label} must be a whole amount in ${currencyCode}.`);
+  if (!isIncrementMultipleMinor(Math.abs(minor), priceIncrementMinor)) {
+    throw new ValidationError(isWholeUnitIncrement(currencyCode, priceIncrementMinor)
+      ? `${label} must be a whole amount in ${currencyCode}.`
+      : `${label}: ${priceIncrementMessage(currencyCode, priceIncrementMinor)}`);
   }
   return minor;
 }
@@ -317,7 +327,7 @@ app.openapi(createRoute({
   const actorUserId = staffId(c);
   const [currency, settings] = await Promise.all([getCurrencySettings(db), readGiftCardSettings(db)]);
   if (!settings.ok) throw new ServiceUnavailableError("Gift-card settings can't be read right now. Try again.");
-  const amountMinor = amountToMinor(body.amount, currency.currencyCode, "The amount");
+  const amountMinor = amountToMinor(body.amount, currency.currencyCode, priceIncrementOf(currency), "The amount");
   if (amountMinor <= 0) throw new ValidationError("The amount must be more than zero.");
   const expiresAt = body.expiresAt === undefined
     ? giftCardExpiryFromMonths(settings.value.defaultExpiryMonths)
@@ -387,8 +397,13 @@ app.openapi(createRoute({
   const db = c.get("db");
   const { giftCardId } = c.req.valid("param");
   const body = c.req.valid("json");
-  const card = await getStaffGiftCardSummary(db, giftCardId);
-  const amountMinor = amountToMinor(body.amount, card.currencyCode, "The adjustment");
+  const [card, store] = await Promise.all([getStaffGiftCardSummary(db, giftCardId), readStoreCurrency(db)]);
+  const amountMinor = amountToMinor(
+    body.amount,
+    card.currencyCode,
+    priceIncrementForCurrency(store, card.currencyCode),
+    "The adjustment",
+  );
   const summary = await adjustGiftCardBalance(db, {
     giftCardId,
     amountMinor,

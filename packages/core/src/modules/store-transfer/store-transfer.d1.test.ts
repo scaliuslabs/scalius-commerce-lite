@@ -38,7 +38,7 @@ let db: Database;
 let queries = 0;
 let maxParams = 0;
 
-const BDT = { code: "BDT", decimalPlaces: 2 };
+const BDT = { code: "BDT", decimalPlaces: 2, priceIncrementMinor: 100 };
 const fixture = (name: string) => readFileSync(new URL(`../../../../shared/src/store-transfer/fixtures/${name}`, import.meta.url), "utf8");
 const one = <T = Record<string, unknown>>(query: string, ...params: Array<string | number | null>) => sqlite.prepare(query).get(...params) as T;
 const all = <T = Record<string, unknown>>(query: string, ...params: Array<string | number | null>) => sqlite.prepare(query).all(...params) as T[];

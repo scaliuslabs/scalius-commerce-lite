@@ -13,11 +13,11 @@
 //    app id), each app's discounts in the order it returned them.
 // 3. Each discount is taken from what is left after everything before it, so
 //    no line and no delivery charge ever goes below zero.
-// 4. Percentage: of what is left, half-up to the currency's cash unit (BDT:
-//    whole taka). Fixed amount: floored to the cash unit. `maxAmountMinor`
-//    caps the discount's total (also floored to the cash unit).
+// 4. Percentage: of what is left, half-up to the market's price increment (a
+//    BDT store's default: whole taka). Fixed amount: floored to the increment.
+//    `maxAmountMinor` caps the discount's total (also floored to it).
 // 5. Targets: `order` spreads over every line that can take a discount by
-//    what is left on it (largest remainder, whole taka); `lines` over the
+//    what is left on it (largest remainder, in increments); `lines` over the
 //    listed lines the same way; `shipping` lowers the delivery charge only.
 // 6. Gift-card lines never take an app discount (a gift card is money).
 // 7. A code-driven discount (`code`) applies only when the buyer entered that
@@ -36,7 +36,7 @@ import {
   type PluginFunctionOutput,
   type PluginFunctionPoint,
 } from "@scalius/shared/plugins";
-import { cashRoundingMinor, percentOfMinor, roundToCashMinor } from "@scalius/shared/money";
+import { floorToIncrementMinor, percentOfMinor, roundToIncrementMinor } from "@scalius/shared/money";
 import { and, eq, isNull, sql, type AnyColumn, type SQL } from "drizzle-orm";
 import { collectionMembershipForConfig } from "../collections";
 import { allocateMinorAmount, type TaxDiscountAllocationInput } from "../tax";
@@ -323,23 +323,18 @@ function normalizeCode(code: string): string {
   return code.trim().toUpperCase();
 }
 
-function floorToCash(amountMinor: number, currencyCode: string): number {
-  const unit = cashRoundingMinor(currencyCode);
-  return unit <= 1 ? amountMinor : Math.floor(amountMinor / unit) * unit;
-}
-
 /** The discount's total on `baseMinor`, by the rounding and cap rules above. */
 function discountAmount(
   value: PluginFunctionOutput<"checkout.discounts">["discounts"][number]["value"],
   maxAmountMinor: number | undefined,
   baseMinor: number,
-  currencyCode: string,
+  incrementMinor: number,
 ): number {
   if (baseMinor <= 0) return 0;
   let amount = value.type === "percentage"
-    ? percentOfMinor(baseMinor, Math.min(10_000, Math.max(1, Math.round(value.percent * 100))), currencyCode)
-    : floorToCash(value.amountMinor, currencyCode);
-  if (maxAmountMinor !== undefined) amount = Math.min(amount, floorToCash(maxAmountMinor, currencyCode));
+    ? percentOfMinor(baseMinor, Math.min(10_000, Math.max(1, Math.round(value.percent * 100))), incrementMinor)
+    : floorToIncrementMinor(value.amountMinor, incrementMinor);
+  if (maxAmountMinor !== undefined) amount = Math.min(amount, floorToIncrementMinor(maxAmountMinor, incrementMinor));
   return Math.max(0, Math.min(amount, baseMinor));
 }
 
@@ -349,6 +344,8 @@ function discountAmount(
  */
 export function resolveAppDiscounts(input: {
   currencyCode: string;
+  /** The market's price increment: app discounts round to it like the platform's. */
+  priceIncrementMinor: number;
   lines: readonly AppDiscountLineInput[];
   /** The delivery charge before any discount. */
   shippingMinor: number;
@@ -383,7 +380,7 @@ export function resolveAppDiscounts(input: {
         target: discount.target.kind,
       } as const;
       if (discount.target.kind === "shipping") {
-        const amount = discountAmount(discount.value, discount.maxAmountMinor, shippingLeft, input.currencyCode);
+        const amount = discountAmount(discount.value, discount.maxAmountMinor, shippingLeft, input.priceIncrementMinor);
         if (code) claimed.add(code);
         if (amount <= 0) continue;
         shippingLeft -= amount;
@@ -405,10 +402,10 @@ export function resolveAppDiscounts(input: {
         .map((lineId) => ({ key: lineId, weightMinor: remaining.get(lineId) ?? 0 }))
         .filter((weight) => weight.weightMinor > 0);
       const baseMinor = weights.reduce((total, weight) => total + weight.weightMinor, 0);
-      const amount = discountAmount(discount.value, discount.maxAmountMinor, baseMinor, input.currencyCode);
+      const amount = discountAmount(discount.value, discount.maxAmountMinor, baseMinor, input.priceIncrementMinor);
       if (code) claimed.add(code);
       if (amount <= 0) continue;
-      const split = allocateMinorAmount(amount, weights, cashRoundingMinor(input.currencyCode));
+      const split = allocateMinorAmount(amount, weights, input.priceIncrementMinor);
       const lines = weights
         .map((weight) => ({ lineId: weight.key, amountMinor: Math.min(split.get(weight.key) ?? 0, weight.weightMinor) }))
         .filter((line) => line.amountMinor > 0);
@@ -454,13 +451,14 @@ export function combineDiscountAllocations(
  * order, each app's operations in order. Apps never add a rate (that is the
  * shipping provider port); an operation on a rate that is not offered is
  * skipped and logged. A hidden rate stays hidden. A price sets the rate's own
- * charge (cash-rounded); a rate the platform makes free stays free. Local
+ * charge (rounded to the price increment); a rate the platform makes free stays free. Local
  * pickup stays pickup, so cash-on-delivery rules are unchanged.
  */
 export function applyAppShippingRateOperations(
   rates: readonly CheckoutRateOption[],
   results: ReadonlyArray<CheckoutAppFunctionResult<"checkout.shipping_rates">>,
-  currencyCode: string,
+  /** The market's price increment an app's price rounds to. */
+  incrementMinor: number,
   apps?: Pick<CheckoutAppFunctions, "report">,
 ): { rates: CheckoutRateOption[]; changed: boolean } {
   let current = rates.map((rate) => ({ ...rate }));
@@ -495,7 +493,7 @@ export function applyAppShippingRateOperations(
         if (rate.name !== operation.name) changed = true;
         rate.name = operation.name;
       } else {
-        const price = roundToCashMinor(operation.amountMinor, currencyCode);
+        const price = roundToIncrementMinor(operation.amountMinor, incrementMinor);
         if (rate.baseAmountMinor !== price) changed = true;
         rate.baseAmountMinor = price;
         rate.amountMinor = rate.waived ? 0 : price;

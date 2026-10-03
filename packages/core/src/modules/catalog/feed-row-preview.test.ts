@@ -116,6 +116,7 @@ function previewInput(
     db,
     productId: "prod_feed_1",
     currencyCode: "BDT",
+    priceIncrementMinor: 100,
     storefrontBaseUrl: "https://shop.example.com",
     feedsPolicy: {
       productCatalogEnabled: true,

@@ -276,6 +276,8 @@ const layoutDataSchema = z.object({
     symbol: z.string(),
     /** ISO 4217 decimal places: prices on the wire are major units at this precision. */
     decimalPlaces: z.number().int().min(0).max(3),
+    /** The store's price increment in minor units: percentage prices round to it exactly as checkout charges. */
+    priceIncrementMinor: z.number().int().positive().max(1_000),
   }),
   theme: storefrontThemeDocumentApiSchema,
   /** The published theme's brand images (logo, footer logo, tab icon). A preview carries its draft's own. */

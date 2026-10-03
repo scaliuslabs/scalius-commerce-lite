@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
     createPromotionDraftSchema,
+    promotionAmountIssues,
     updatePromotionDraftSchema,
 } from "./promotions.validation";
 
@@ -115,8 +116,8 @@ describe("promotion draft validation", () => {
         }).success).toBe(true);
     });
 
-    it("refuses paisa in a taka discount, minimum or budget", () => {
-        const result = createPromotionDraftSchema.safeParse({
+    it("refuses paisa in a taka discount, minimum or budget while the store prices in whole taka", () => {
+        const rule = createPromotionDraftSchema.parse({
             ...validDraft(),
             maxDiscountSpendMinor: 50_050,
             budgetCurrencyCode: "BDT",
@@ -128,13 +129,15 @@ describe("promotion draft validation", () => {
                 config: { amountMinor: 4_050, currencyCode: "BDT" },
             }],
         });
-        expect(result.success).toBe(false);
-        const issues = result.success ? [] : result.error.issues
+        const wholeTaka = (code: string) => (code === "BDT" ? 100 : 1);
+        const issues = promotionAmountIssues(rule, wholeTaka)
             .filter((issue) => issue.message === "Taka amounts are whole numbers.")
             .map((issue) => issue.path.join("."));
         expect(issues.sort()).toEqual(["conditions.0.config.amountMinor", "effects.0.config.amountMinor", "maxDiscountSpendMinor"]);
+        // A store that prices in paisa takes them.
+        expect(promotionAmountIssues(rule, () => 1)).toEqual([]);
 
-        expect(createPromotionDraftSchema.safeParse({
+        const usd = createPromotionDraftSchema.parse({
             ...validDraft(),
             effects: [{
                 kind: "fixed_amount_off",
@@ -143,6 +146,7 @@ describe("promotion draft validation", () => {
                 config: { amountMinor: 4_050, currencyCode: "USD" },
             }],
             conditions: [],
-        }).error?.issues ?? []).toEqual([]);
+        });
+        expect(promotionAmountIssues(usd, wholeTaka)).toEqual([]);
     });
 });

@@ -402,6 +402,7 @@ describe("createStorefrontOrder tax discount parity", () => {
       segmentCustomerId: "customer_session_owner",
       cart: {
         currencyCode: "BDT",
+        priceIncrementMinor: 100,
         lines: [{
           id: "cart:0:var_standard",
           productId: "prod_standard",

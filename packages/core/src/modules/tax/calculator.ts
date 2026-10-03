@@ -1,4 +1,3 @@
-import { cashRoundingMinor } from "@scalius/shared/money";
 import { allocateMinorAmount, multiplyMinorByRate, roundToUnit } from "./money";
 import type {
     CalculateTaxQuoteInput,
@@ -93,7 +92,7 @@ function inclusiveTax(
         else high = mid - 1;
     }
 
-    // The included tax is shown in whole cash units (BDT: whole taka).
+    // The included tax is shown in whole increments (a BDT store's default: whole taka).
     const taxMinor = Math.min(grossMinor, roundToUnit(grossMinor - low, unitMinor));
     const taxableAmountMinor = grossMinor - taxMinor;
     const components = exclusiveComponents(taxableAmountMinor, rates, unitMinor);
@@ -127,6 +126,9 @@ function assertInput(input: CalculateTaxQuoteInput): void {
     if (!Number.isInteger(input.decimalPlaces) || input.decimalPlaces < 0 || input.decimalPlaces > 3) {
         throw new RangeError("Currency decimal places must be between 0 and 3.");
     }
+    if (!Number.isSafeInteger(input.priceIncrementMinor) || input.priceIncrementMinor < 1) {
+        throw new RangeError("The price increment must be a positive integer of minor units.");
+    }
     for (const line of input.lines) {
         if (!line.lineId || !line.productId || !line.variantId) throw new RangeError("Tax quote lines require stable ids.");
         if (!Number.isSafeInteger(line.unitPriceMinor) || line.unitPriceMinor < 0) throw new RangeError("Tax quote line price is invalid.");
@@ -155,7 +157,7 @@ function resolveDiscountAllocation(
             allocations: allocateMinorAmount(discountMinor, input.lines.map((line) => ({
                 key: `line:${line.lineId}`,
                 weightMinor: line.unitPriceMinor * line.quantity,
-            })), cashRoundingMinor(input.currencyCode)),
+            })), input.priceIncrementMinor),
         };
     }
 
@@ -210,8 +212,9 @@ export function calculateTaxQuote(input: CalculateTaxQuoteInput): TaxQuote {
         throw new RangeError("Tax quote total exceeds the safe integer range.");
     }
     const { discountMinor, allocations } = resolveDiscountAllocation(input, subtotalMinor);
-    // BDT is cash rounded: tax is whole taka, so a COD total is always whole taka.
-    const unitMinor = cashRoundingMinor(input.currencyCode);
+    // Tax rounds to the price increment, so a total on the increment stays on
+    // it (a BDT store's default, whole taka, keeps every COD total whole).
+    const unitMinor = input.priceIncrementMinor;
 
     const taxEnabled = input.settings.enabled === true;
     const lines = input.lines.map((line) => {

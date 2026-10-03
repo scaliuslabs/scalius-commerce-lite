@@ -31,7 +31,12 @@ import { unixToDate } from "@scalius/shared/utils";
 import { maskPublicBuyerAvailability } from "@scalius/shared/buyer-availability";
 import type { Database } from "@scalius/database/client";
 import { ValidationError } from "@scalius/core/errors";
-import { storeCurrencyCodeSql, storeCurrencyFromCode, storeDecimalPlacesFromCode } from "../settings";
+import {
+  storeCurrencyCodeSql,
+  storeCurrencyFromSql,
+  storeDecimalPlacesFromCode,
+  storePriceIncrementSql,
+} from "../settings";
 import { publicCategoryConditions } from "../categories";
 import { publicBrandJoinCondition } from "../brands";
 import { hasRequiredCustomization, parseStoredCustomizationSchema } from "@scalius/shared/line-properties";
@@ -402,6 +407,7 @@ export async function getStorefrontFeedProducts(
             createdAt: feedCreatedAt.as("createdAt"),
             updatedAt: sql<number>`CAST(${products.updatedAt} AS INTEGER)`.as("updatedAt"),
             storeCurrencyCode: storeCurrencyCodeSql(),
+            storePriceIncrementMinor: storePriceIncrementSql(),
         })
         .from(products)
         .leftJoin(brands, publicBrandJoinCondition(products.brandId))
@@ -456,7 +462,8 @@ export async function getStorefrontFeedProducts(
 
     const variantMap = feedVariants.variants;
 
-    const feedProducts: StorefrontFeedProduct[] = productsList.map(({ storeCurrencyCode, customizationSchema, brandId, brandName, brandSlug, ...productRow }) => {
+    const feedProducts: StorefrontFeedProduct[] = productsList.map(({ storeCurrencyCode, storePriceIncrementMinor, customizationSchema, brandId, brandName, brandSlug, ...productRow }) => {
+        const storeCurrency = storeCurrencyFromSql(storeCurrencyCode, storePriceIncrementMinor);
         const pricing = pricingByProduct.get(productRow.id);
         // The buyer projection counts every SKU. When a product also sells a
         // service, its feed availability comes from its physical SKUs only.
@@ -483,7 +490,7 @@ export async function getStorefrontFeedProducts(
             discountType: product.discountType,
             discountPercentage: price.discountPercentage,
             discountAmount: price.discountAmount,
-            discountedPrice: catalogDiscountedPrice(product, storeCurrencyFromCode(storeCurrencyCode)),
+            discountedPrice: catalogDiscountedPrice(product, storeCurrency.code, storeCurrency.priceIncrementMinor),
             freeDelivery: product.freeDelivery,
             categoryId: category?.id ?? null,
             excludeFromProductFeed: Boolean(product.excludeFromProductFeed),

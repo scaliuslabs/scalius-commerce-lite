@@ -106,7 +106,7 @@ export default {
         cartValidation: read.cartValidation,
         delivery: read.deliveryPreflight,
         discountCodes: data.discountCodes,
-        currency: { code: "BDT", decimalPlaces: 2 },
+        currency: { code: "BDT", decimalPlaces: 2, priceIncrementMinor: 100 },
         taxAuthority: read.taxAuthority,
         apps,
         channel: "online_store",

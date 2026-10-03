@@ -192,6 +192,7 @@ describe("storefront checkout authority at the atomic commit", () => {
       evaluatedAtEpochSeconds: databaseNow,
       cart: {
         currencyCode: "BDT",
+        priceIncrementMinor: 100,
         lines: [{ id: "cart:0:variant_1", productId: "prod_1", variantId: "variant_1", unitPriceMinor: 10_000, quantity: 2 }],
         shippingAmountMinor: 6_000,
       },
@@ -233,6 +234,7 @@ describe("storefront checkout authority at the atomic commit", () => {
       evaluatedAtEpochSeconds: databaseNow,
       cart: {
         currencyCode: "BDT",
+        priceIncrementMinor: 100,
         lines: [{ id: "cart:0:variant_1", productId: "prod_1", variantId: "variant_1", unitPriceMinor: 10_000, quantity: 2 }],
         shippingAmountMinor: 6_000,
       },

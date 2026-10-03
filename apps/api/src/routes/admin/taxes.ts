@@ -599,6 +599,7 @@ app.openapi(previewRoute, async (c) => {
   const quote = calculateTaxQuote({
     currencyCode: currency.code,
     decimalPlaces: currency.decimalPlaces,
+    priceIncrementMinor: currency.priceIncrementMinor,
     settings: {
       enabled: settings.enabled,
       pricesIncludeTax: settings.pricesIncludeTax,

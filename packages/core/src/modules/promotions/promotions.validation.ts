@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { isWholeCashAmountMinor, WHOLE_TAKA_MESSAGE } from "@scalius/shared/money";
+import { isIncrementMultipleMinor, priceIncrementMessage } from "@scalius/shared/money";
 
 import { checkPromotionRule, PROMOTION_CUSTOMER_SEGMENT_LIMIT, PROMOTION_SCOPE_LIMIT } from "./promotions.evaluator";
 
@@ -119,11 +119,26 @@ const promotionRuleShape = {
         .default([]),
 } as const;
 
-/** In BDT every amount (a fixed discount, a minimum, a Buy X amount, a budget) is whole taka. */
-function requireWholeCashAmounts(rule: Parameters<typeof checkPromotionRule>[0], context: z.RefinementCtx): void {
+export interface PromotionAmountIssue {
+    path: (string | number)[];
+    message: string;
+}
+
+/**
+ * Every amount a merchant enters (a fixed discount, a minimum, a Buy X
+ * amount, a budget) is a multiple of its currency's price increment (the
+ * store's for the store currency; a BDT store's default: whole taka).
+ */
+export function promotionAmountIssues(
+    rule: Parameters<typeof checkPromotionRule>[0],
+    priceIncrementFor: (currencyCode: string) => number,
+): PromotionAmountIssue[] {
+    const issues: PromotionAmountIssue[] = [];
     const check = (amountMinor: number | null | undefined, currencyCode: string | null | undefined, path: (string | number)[]) => {
-        if (amountMinor != null && currencyCode && !isWholeCashAmountMinor(amountMinor, currencyCode)) {
-            context.addIssue({ code: "custom", path, message: WHOLE_TAKA_MESSAGE });
+        if (amountMinor == null || !currencyCode) return;
+        const increment = priceIncrementFor(currencyCode);
+        if (!isIncrementMultipleMinor(amountMinor, increment)) {
+            issues.push({ path, message: priceIncrementMessage(currencyCode, increment) });
         }
     };
     rule.conditions.forEach((condition, index) => {
@@ -139,6 +154,7 @@ function requireWholeCashAmounts(rule: Parameters<typeof checkPromotionRule>[0],
         }
     });
     check(rule.maxDiscountSpendMinor, rule.budgetCurrencyCode, ["maxDiscountSpendMinor"]);
+    return issues;
 }
 
 function refinePromotionRule(
@@ -146,7 +162,6 @@ function refinePromotionRule(
     context: z.RefinementCtx,
 ): void {
     checkPromotionRule(rule, context);
-    requireWholeCashAmounts(rule, context);
     if (new Set(rule.customerSegmentIds).size !== rule.customerSegmentIds.length) {
         context.addIssue({ code: "custom", path: ["customerSegmentIds"], message: "Choose each customer segment once." });
     }

@@ -37,6 +37,7 @@ const LINES = [
 function resolve(results: Array<CheckoutAppFunctionResult<"checkout.discounts">>, overrides: Partial<Parameters<typeof resolveAppDiscounts>[0]> = {}) {
   return resolveAppDiscounts({
     currencyCode: "BDT",
+    priceIncrementMinor: 100,
     lines: LINES,
     shippingMinor: 6_000,
     platformShippingDiscountMinor: 0,
@@ -67,13 +68,14 @@ describe("app discount stacking", () => {
     expect(resolution.applied[0]).toMatchObject({ pluginId: "a.first", amountMinor: 50_000, lines: [{ lineId: "cart:1:v_b", amountMinor: 50_000 }] });
   });
 
-  it("honours a cap, floored to the cash unit, and rounds percentages half-up to whole taka", () => {
+  it("honours a cap, floored to the price increment, and rounds percentages half-up to it (whole taka by default)", () => {
     const capped = resolve([discounts("acme.cap", percentOff(50, { kind: "order" }, { maxAmountMinor: 5_050 }))]);
     expect(capped.applied[0]!.amountMinor).toBe(5_000);
     // 12.5% of 90,000 + 50,000 = 17,500 (whole taka already); 3.33% = 4,662 → 4,700 (half-up to 100 paisa).
     expect(resolve([discounts("acme.odd", percentOff(3.33))]).applied[0]!.amountMinor).toBe(4_700);
-    // USD keeps cents.
-    expect(resolve([discounts("acme.odd", percentOff(3.33))], { currencyCode: "USD" }).applied[0]!.amountMinor).toBe(4_662);
+    // USD keeps cents, and so does a BDT store that prices in paisa.
+    expect(resolve([discounts("acme.odd", percentOff(3.33))], { currencyCode: "USD", priceIncrementMinor: 1 }).applied[0]!.amountMinor).toBe(4_662);
+    expect(resolve([discounts("acme.odd", percentOff(3.33))], { priceIncrementMinor: 1 }).applied[0]!.amountMinor).toBe(4_662);
     // A fixed amount with paisa is floored to whole taka.
     expect(resolve([discounts("acme.fixed", fixedOff(1_299))]).applied[0]!.amountMinor).toBe(1_200);
   });
@@ -151,7 +153,7 @@ describe("app delivery and payment operations", () => {
         { op: "price", rateId: "m_new", amountMinor: 1 },
       ]),
       ops("b.second", [{ op: "rename", rateId: "m_exp", name: "Back" }, { op: "reorder", rateIds: ["m_pick", "m_std"] }]),
-    ], "BDT", { report });
+    ], 100, { report });
     expect(adjusted.changed).toBe(true);
     expect(adjusted.rates).toEqual([
       { rateId: "m_pick", name: "Pickup", kind: "pickup", amountMinor: 0, baseAmountMinor: 0, waived: false },
@@ -162,7 +164,7 @@ describe("app delivery and payment operations", () => {
   });
 
   it("reports no change when the operations change nothing", () => {
-    expect(applyAppShippingRateOperations(rates, [ops("a.noop", [{ op: "rename", rateId: "m_std", name: "Standard" }])], "BDT").changed).toBe(false);
+    expect(applyAppShippingRateOperations(rates, [ops("a.noop", [{ op: "rename", rateId: "m_std", name: "Standard" }])], 100).changed).toBe(false);
   });
 
   it("payment methods: hide, rename, reorder only what checkout allows", () => {

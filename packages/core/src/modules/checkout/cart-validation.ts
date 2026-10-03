@@ -2,6 +2,7 @@ import type { Database } from "@scalius/database/client";
 import { withGiftCardRecipientFields } from "@scalius/shared/gift-card-recipient";
 import { products, productVariants } from "@scalius/database/schema";
 import { DEFAULT_CURRENCY, getDecimalPlaces, normalizeSupportedCurrencyCode } from "@scalius/shared/currency";
+import { resolvePriceIncrementMinor } from "@scalius/shared/currency-policy";
 import { discountedPriceMinor, fromMinor, toMinor } from "@scalius/shared/money";
 import { NO_PROPERTIES_HASH } from "@scalius/shared/line-properties";
 import { and, eq, isNull, or, sql } from "drizzle-orm";
@@ -236,7 +237,7 @@ function displayVariantLabel(item: StorefrontCartValidationItem, variant?: Store
 function calculateUnitPriceMinor(
     product: StorefrontCartProductRow,
     variant: StorefrontCartVariantRow,
-    currencyCode: string,
+    priceIncrementMinor: number,
 ): number {
     const variantHasDiscount =
         (variant.discountType === "percentage" && variant.discountBps > 0) ||
@@ -247,7 +248,7 @@ function calculateUnitPriceMinor(
         discount.discountType,
         discount.discountBps,
         discount.discountAmountMinor,
-        currencyCode,
+        priceIncrementMinor,
     );
 }
 
@@ -368,6 +369,8 @@ export function resolveStorefrontCartValidationFromRows(
     options: {
         inventoryPool?: string | null;
         currencyCode?: string | null;
+        /** The store's price increment (`PricingCurrency`); absent, the currency's default. */
+        priceIncrementMinor?: number | null;
     },
     productRows: readonly StorefrontCartProductRow[],
     variantRows: readonly StorefrontCartVariantRow[],
@@ -379,6 +382,7 @@ export function resolveStorefrontCartValidationFromRows(
     // intentionally retain the historical BDT checkout authority fallback.
     const currencyCode = normalizeSupportedCurrencyCode(options.currencyCode) ?? DEFAULT_CURRENCY.code;
     const decimalPlaces = getDecimalPlaces(currencyCode);
+    const priceIncrementMinor = resolvePriceIncrementMinor(currencyCode, options.priceIncrementMinor);
 
     if (items.length === 0) {
         return markTrustedStorefrontCartValidationResult({
@@ -620,7 +624,7 @@ export function resolveStorefrontCartValidationFromRows(
             }
         }
 
-        const baseUnitPriceMinor = calculateUnitPriceMinor(product, variant, currencyCode);
+        const baseUnitPriceMinor = calculateUnitPriceMinor(product, variant, priceIncrementMinor);
         const propertiesPriceMinor = resolvedProperties.propertiesPriceMinor;
         const unitPriceMinor = baseUnitPriceMinor + propertiesPriceMinor;
         const submittedPriceMinor = typeof item.price === "number"
@@ -669,7 +673,7 @@ export function resolveStorefrontCartValidationFromRows(
         });
     });
 
-    const bundles = resolveCartBundleSavings(validatedItems, bundleRows, currencyCode);
+    const bundles = resolveCartBundleSavings(validatedItems, bundleRows, priceIncrementMinor);
 
     return markTrustedStorefrontCartValidationResult({
         valid: issues.length === 0,
@@ -691,12 +695,12 @@ export function resolveStorefrontCartValidationFromRows(
 function resolveCartBundleSavings(
     items: StorefrontCartValidatedItem[],
     bundleRows: readonly ProductBundleRow[],
-    currencyCode: string,
+    priceIncrementMinor: number,
 ): StorefrontCartBundleSaving[] {
     const { lineSavings, bundles } = bundleLineSavings(
         items.filter((item) => !item.isGiftCard),
         bundleRows,
-        currencyCode,
+        priceIncrementMinor,
     );
     for (const item of items) item.bundleDiscountMinor = lineSavings.get(item) ?? 0;
     return bundles;
@@ -716,7 +720,8 @@ export interface BundlePricedLine {
 export function bundleLineSavings<TLine extends BundlePricedLine>(
     lines: readonly TLine[],
     bundleRows: readonly ProductBundleRow[],
-    currencyCode: string,
+    /** The store's price increment. */
+    priceIncrementMinor: number,
 ): { lineSavings: Map<TLine, number>; bundles: StorefrontCartBundleSaving[] } {
     const lineSavings = new Map<TLine, number>();
     if (bundleRows.length === 0) return { lineSavings, bundles: [] };
@@ -733,7 +738,7 @@ export function bundleLineSavings<TLine extends BundlePricedLine>(
         const pricing = bundleGroupPricing(
             group.map((line, position) => ({ key: String(position), unitPriceMinor: line.baseUnitPriceMinor, quantity: line.quantity })),
             tiersByProduct.get(productId)!,
-            currencyCode,
+            priceIncrementMinor,
         );
         if (!pricing.tier || pricing.savingMinor === 0) continue;
         pricing.lineSavings.forEach((saving, position) => {
@@ -758,17 +763,18 @@ export function bundleLineSavings<TLine extends BundlePricedLine>(
 export async function previewStorefrontBundleSavings<TLine extends BundlePricedLine>(
     db: Database,
     lines: readonly TLine[],
-    currencyCode: string,
+    /** The store's price increment. */
+    priceIncrementMinor: number,
 ): Promise<{ lineSavings: Map<TLine, number>; bundles: StorefrontCartBundleSaving[] }> {
     const productIds = [...new Set(lines.map((line) => line.productId))];
     const bundleRows = productIds.length > 0 ? await selectActiveProductBundleRows(db, productIds) : [];
-    return bundleLineSavings(lines, (bundleRows ?? []) as ProductBundleRow[], currencyCode);
+    return bundleLineSavings(lines, (bundleRows ?? []) as ProductBundleRow[], priceIncrementMinor);
 }
 
 export async function validateStorefrontCartItems(
     db: Database,
     items: StorefrontCartValidationItem[],
-    options: { inventoryPool?: string | null; currencyCode?: string | null } = {},
+    options: { inventoryPool?: string | null; currencyCode?: string | null; priceIncrementMinor?: number | null } = {},
 ): Promise<StorefrontCartValidationResult> {
     if (items.length === 0 || items.some((item) => !isPersistedVariantId(item.variantId))) {
         return resolveStorefrontCartValidationFromRows(items, options, [], [], new Map());

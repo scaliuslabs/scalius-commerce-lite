@@ -8,6 +8,7 @@ import {
   normalizeSupportedCurrencyCode,
   type SupportedCurrencyCode,
 } from "@scalius/shared/currency";
+import { isPriceIncrementMinor, resolvePriceIncrementMinor } from "@scalius/shared/currency-policy";
 import {
   DEFAULT_CUSTOMER_IDENTITY,
   normalizeCustomerIdentitySettings,
@@ -212,6 +213,15 @@ export const businessDocument = defineSettingsDocument<BusinessInfo>({
 export interface CurrencySettings {
   currencyCode: SupportedCurrencyCode;
   currencySymbol: string;
+  /**
+   * The default market's price increment in minor units of `currencyCode`
+   * (MARKETS-DESIGN D1): every merchant-entered price is a multiple of it and
+   * every derived amount rounds to it. Absent means the currency's default
+   * (`defaultPriceIncrementMinor`: whole taka in BDT, minor units elsewhere);
+   * read it through `priceIncrementOf`. Markets step 2 moves it to
+   * `markets.price_increment_minor`.
+   */
+  priceIncrementMinor?: number;
 }
 
 const DEFAULT_CURRENCY_SETTINGS: CurrencySettings = {
@@ -219,23 +229,38 @@ const DEFAULT_CURRENCY_SETTINGS: CurrencySettings = {
   currencySymbol: "৳",
 };
 
-/** An unsupported stored code means the whole document falls back to BDT. */
+/**
+ * An unsupported stored code means the whole document falls back to BDT; an
+ * increment that is not a choice for the stored code is dropped (the
+ * currency's default applies).
+ */
 export const currencyDocument = defineSettingsDocument<CurrencySettings>({
   key: "currency",
   schema: z.preprocess(
     (value) => {
       const record = asRecord(value);
-      return normalizeSupportedCurrencyCode(record.currencyCode)
-        ? { ...record, currencyCode: normalizeSupportedCurrencyCode(record.currencyCode) }
-        : DEFAULT_CURRENCY_SETTINGS;
+      const currencyCode = normalizeSupportedCurrencyCode(record.currencyCode);
+      if (!currencyCode) return DEFAULT_CURRENCY_SETTINGS;
+      const { priceIncrementMinor, ...rest } = record;
+      return {
+        ...rest,
+        currencyCode,
+        ...(isPriceIncrementMinor(currencyCode, priceIncrementMinor) ? { priceIncrementMinor } : {}),
+      };
     },
     z.object({
       currencyCode: z.string().transform((code) => code as SupportedCurrencyCode),
       currencySymbol: z.string(),
+      priceIncrementMinor: z.number().int().positive().optional(),
     }),
   ) as unknown as z.ZodType<CurrencySettings>,
   defaults: DEFAULT_CURRENCY_SETTINGS,
 });
+
+/** The default market's price increment: the saved choice, else the currency's default. */
+export function priceIncrementOf(currency: Pick<CurrencySettings, "currencyCode" | "priceIncrementMinor">): number {
+  return resolvePriceIncrementMinor(currency.currencyCode, currency.priceIncrementMinor);
+}
 
 export interface CustomerCountries {
   allowedCountries: string[];

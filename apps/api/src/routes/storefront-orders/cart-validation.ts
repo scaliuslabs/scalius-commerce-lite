@@ -2,7 +2,7 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { InventoryPool } from "@scalius/database/schema";
 import { getDecimalPlaces } from "@scalius/shared/currency";
-import { getCurrencySettings } from "@scalius/core/modules/settings";
+import { getCurrencySettings, priceIncrementOf } from "@scalius/core/modules/settings";
 import { getActivePaymentMethods } from "@scalius/core/modules/payments";
 import {
   checkStorefrontCartRules,
@@ -265,6 +265,7 @@ app.openapi(cartValidationRoute, async (c) => {
   const result = await validateStorefrontCartItems(db, data.items, {
     inventoryPool: data.inventoryPool,
     currencyCode: currency.currencyCode,
+    priceIncrementMinor: priceIncrementOf(currency),
   });
   const propertiesHashes = await storefrontLinePropertiesHashes(result);
   const cartOnly = summarizeStorefrontCartFulfilment(result, null);

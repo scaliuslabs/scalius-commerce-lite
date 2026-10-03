@@ -142,7 +142,7 @@ export function createGiftCardCheckoutFixture(seedSql = ""): GiftCardCheckoutFix
             authority.cartValidation,
             authority.deliveryPreflight,
             undefined,
-            { code: "BDT", decimalPlaces: 2 },
+            { code: "BDT", decimalPlaces: 2, priceIncrementMinor: 100 },
             createTrustedStorefrontCheckoutPolicySnapshot({
                 partialPaymentEnabled: options.partialPaymentEnabled ?? false,
                 authorityRevision: authority.authorityRevision,

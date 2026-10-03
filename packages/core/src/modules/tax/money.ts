@@ -8,8 +8,8 @@ function assertMinorAmount(value: number, label: string): number {
 }
 
 /**
- * `amountMinor × rateBps`, rounded half-up to `unitMinor` (100 for BDT cash
- * rounding, so tax is whole taka; 1 keeps full minor-unit precision).
+ * `amountMinor × rateBps`, rounded half-up to `unitMinor` (the market's price
+ * increment: 100 keeps tax in whole taka; 1 keeps full minor-unit precision).
  */
 export function multiplyMinorByRate(amountMinor: number, rateBps: number, unitMinor = 1): number {
     assertMinorAmount(amountMinor, "Tax base");
@@ -42,7 +42,7 @@ export function allocateMinorAmount(
     weights: AllocationWeight[],
     unitMinor = 1,
 ): Map<string, number> {
-    // Whole cash units over whole-unit weights stay whole (BDT: no paisa per line).
+    // Whole increments over whole-increment weights stay whole (whole taka: no paisa per line).
     if (unitMinor > 1 && amountMinor % unitMinor === 0 && weights.every(({ weightMinor }) => weightMinor % unitMinor === 0)) {
         const units = allocateMinorAmount(
             amountMinor / unitMinor,

@@ -33,7 +33,7 @@ export function parseStoredEmiSettings(value: string | null | undefined): EmiSet
 export interface ProductEmiOffer {
     provider: string;
     months: number;
-    /** Rounded up to the cash unit, so `months × monthly` covers the bank's total. */
+    /** Rounded up to the price increment, so `months × monthly` covers the bank's total. */
     monthlyMinor: number;
     monthly: number;
 }
@@ -44,13 +44,14 @@ export function productEmiOffer(input: {
     /** The product's lowest buyer price (after catalog discounts), in minor units. */
     priceMinor: number | null;
     settings: EmiSettings;
-    currencyCode: string;
+    /** The market's price increment (`StoreCurrency.priceIncrementMinor`). */
+    priceIncrementMinor: number;
     decimalPlaces: number;
 }): ProductEmiOffer | null {
     if (!input.emiEligible || input.priceMinor === null || !Number.isSafeInteger(input.priceMinor) || input.priceMinor <= 0) {
         return null;
     }
-    const quote = lowestEmiQuote(input.priceMinor, input.settings, input.currencyCode);
+    const quote = lowestEmiQuote(input.priceMinor, input.settings, input.priceIncrementMinor);
     if (!quote) return null;
     return {
         provider: quote.provider,
