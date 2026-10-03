@@ -90,8 +90,6 @@ export const updatePurchaseOrderSchema = z.object({
 });
 export type UpdatePurchaseOrderInput = z.input<typeof updatePurchaseOrderSchema>;
 
-export const purchaseOrderRevisionSchema = z.object({ expectedRevision: z.number().int().min(1) });
-
 export const receivePurchaseOrderSchema = z.object({
   operationKey: inventoryOperationKeySchema,
   lines: z.array(z.object({

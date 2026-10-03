@@ -22,7 +22,6 @@ export {
   enforceAdminSetupRateLimit,
   adminPrincipalExists,
   claimAdminSetup,
-  assertAdminSetupClaimActive,
   completeAdminSetupClaimWithUserPromotion,
   markAdminSetupClaimCompleted,
   markAdminSetupClaimFailed,

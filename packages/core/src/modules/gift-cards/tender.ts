@@ -135,14 +135,6 @@ export async function checkGiftCardBalance(
     };
 }
 
-// ─────────────────────────────────────────
-// Handles → cards (quote, cart validation, commit)
-// ─────────────────────────────────────────
-
-export interface GiftCardTenderInputCard {
-    handle: string;
-}
-
 export interface ResolvedTenderCard {
     handle: string;
     giftCardId: string;

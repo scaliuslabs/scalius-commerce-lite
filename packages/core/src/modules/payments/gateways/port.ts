@@ -17,12 +17,8 @@ import type {
   PaymentEvent as PortPaymentEvent,
   PaymentFlow,
   PaymentRefundProbe,
-  PaymentRefundProbeInput,
-  PaymentSession,
   PaymentSessionInput,
   PaymentVerification,
-  PaymentQuery,
-  PaymentRefundInput,
   ProviderAmountCodecs,
   ProviderHttpRequest,
   ProviderPort,
@@ -52,7 +48,6 @@ export interface GatewayReadiness {
 /** Provider-imposed charge limits, in minor units of `currency`. */
 export type GatewayAmountLimits = PaymentAmountLimits;
 export type GatewaySessionInput = PaymentSessionInput;
-export type GatewaySession = PaymentSession;
 /**
  * A provider-authenticated fact about one payment, normalized for the kernel.
  * `eventType` + `eventId` identify the provider event for claim-once; the same
@@ -62,9 +57,6 @@ export type GatewaySession = PaymentSession;
 export type PaymentEvent = PortPaymentEvent;
 export type GatewayRequest = ProviderHttpRequest;
 export type GatewayVerification = PaymentVerification;
-export type GatewayPaymentQuery = PaymentQuery;
-export type GatewayRefundInput = PaymentRefundInput;
-export type GatewayRefundProbeInput = PaymentRefundProbeInput;
 export type GatewayRefundProbe = PaymentRefundProbe;
 export type GatewayProviderRefund = ProviderRefunds[number];
 

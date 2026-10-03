@@ -95,8 +95,6 @@ export const cancelTransferSchema = z.object({
 });
 export type CancelTransferInput = z.input<typeof cancelTransferSchema>;
 
-export const transferRevisionSchema = z.object({ expectedRevision: z.number().int().min(1) });
-
 export const listTransfersQuerySchema = z.object({
   q: z.string().trim().max(120).optional(),
   status: z.enum([...INVENTORY_TRANSFER_STATUSES, "open", "all"]).optional().default("all"),

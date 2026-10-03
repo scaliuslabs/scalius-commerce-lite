@@ -39,11 +39,6 @@ export function isCustomerAuthOtpChannel(value: unknown): value is CustomerAuthO
   return isOneOf(CUSTOMER_AUTH_OTP_CHANNELS, value);
 }
 
-/** The buyer's contact a channel sends to. */
-export function channelContactField(channel: CustomerAuthOtpChannel): "email" | "phone" | "whatsapp" {
-  return channel === "email" ? "email" : channel === "sms" ? "phone" : "whatsapp";
-}
-
 /** Email codes are requested with an email address; SMS and WhatsApp codes with a phone number. */
 export function channelRequestMethod(channel: CustomerAuthOtpChannel): CustomerAuthRequestMethod {
   return channel === "email" ? "email" : "phone";

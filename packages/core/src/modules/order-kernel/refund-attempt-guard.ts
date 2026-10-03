@@ -10,8 +10,6 @@ export const ACTIVE_REFUND_ATTEMPT_STATUSES = [
   "reconcile_required",
 ] as const;
 
-export type ActiveRefundAttemptStatus = (typeof ACTIVE_REFUND_ATTEMPT_STATUSES)[number];
-
 export const REFUND_IN_PROGRESS_MESSAGE =
   "A refund is already in progress for this order. Please wait and retry.";
 

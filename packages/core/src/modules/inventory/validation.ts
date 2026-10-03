@@ -5,55 +5,6 @@
 import { ValidationError } from "@scalius/core/errors";
 
 /**
- * Validate that stock value is non-negative.
- * Should be called on variant creation and stock adjustments.
- *
- * @throws ValidationError if stock < 0
- */
-export function validateStockNonNegative(stock: number, label = "stock"): void {
-  if (typeof stock !== "number" || !Number.isFinite(stock)) {
-    throw new ValidationError(`${label} must be a finite number`);
-  }
-  if (stock < 0) {
-    throw new ValidationError(`${label} must be >= 0, got ${stock}`);
-  }
-}
-
-/**
- * Validate that backorder limit is non-negative.
- * A value of 0 means "unlimited backorders".
- *
- * @throws ValidationError if backorderLimit < 0
- */
-export function validateBackorderLimit(backorderLimit: number): void {
-  if (typeof backorderLimit !== "number" || !Number.isFinite(backorderLimit)) {
-    throw new ValidationError("backorderLimit must be a finite number");
-  }
-  if (backorderLimit < 0) {
-    throw new ValidationError(
-      `backorderLimit must be >= 0 (0 = unlimited), got ${backorderLimit}`
-    );
-  }
-}
-
-/**
- * Validate that reservedStock does not exceed stock.
- * Catches logical inconsistencies before they persist.
- *
- * @throws ValidationError if reservedStock > stock
- */
-export function validateReservedStockConsistency(
-  stock: number,
-  reservedStock: number
-): void {
-  if (reservedStock > stock) {
-    throw new ValidationError(
-      `reservedStock (${reservedStock}) cannot exceed stock (${stock})`
-    );
-  }
-}
-
-/**
  * Validate that quantity is a positive integer.
  * Used for reservation, deduction, and release operations.
  *

@@ -7,10 +7,7 @@
 // The registry is a frozen constant: no request state, no mutation at runtime.
 import type { Database } from "@scalius/database/client";
 import type { BatchItem } from "drizzle-orm/batch";
-import {
-    FULFILLMENT_TYPES,
-    type FulfillmentType,
-} from "@scalius/shared/fulfilment";
+import { type FulfillmentType } from "@scalius/shared/fulfilment";
 import { digitalFulfiller } from "./auto/digital";
 import { giftCardFulfiller } from "./auto/gift-card";
 
@@ -76,15 +73,6 @@ export function hasFulfiller(
     registry: FulfillerRegistry = FULFILLER_REGISTRY,
 ): boolean {
     return registry[type] !== null;
-}
-
-/** The distinct types among `types` that nothing can fulfil, in registry order. */
-export function unavailableFulfilmentTypes(
-    types: readonly FulfillmentType[],
-    registry: FulfillerRegistry = FULFILLER_REGISTRY,
-): FulfillmentType[] {
-    const present = new Set(types);
-    return FULFILLMENT_TYPES.filter((type) => present.has(type) && !hasFulfiller(type, registry));
 }
 
 /** The automatic fulfiller for a type, when one is registered. */

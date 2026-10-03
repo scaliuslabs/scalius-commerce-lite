@@ -32,15 +32,6 @@ export interface GrantSelection {
   expiresInDays?: number;
 }
 
-export interface IssuedCredentialRecord {
-  id: string;
-  grantId: string;
-  kind: "pat" | "cli";
-  tokenHash: string;
-  tokenHint: string;
-  expiresAt: Date;
-}
-
 const RISK_RANK: Record<AgentRisk, number> = {
   read: 0,
   write: 1,

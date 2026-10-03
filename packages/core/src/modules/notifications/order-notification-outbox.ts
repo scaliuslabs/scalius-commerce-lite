@@ -13,7 +13,6 @@ import {
     claimNotificationOutboxForProcessing,
     createNotificationOutboxInsertValues,
     enqueueNotificationOutboxById,
-    flushPendingNotificationOutbox,
     markNotificationOutboxDeadLettered,
     markNotificationOutboxProcessingFailed,
     markNotificationOutboxSent,
@@ -183,9 +182,6 @@ export async function enqueueOrderNotificationOutboxById(options: {
 }): Promise<Omit<RecordAndEnqueueOrderNotificationResult, "dedupeKey" | "created">> {
     return await enqueueNotificationOutboxById(options);
 }
-
-/** Flushes every due outbox row, whatever its subject. */
-export const flushPendingOrderNotificationOutbox = flushPendingNotificationOutbox;
 
 export async function listOrderNotificationOutboxForOrder(
     db: Database,

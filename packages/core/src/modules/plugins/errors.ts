@@ -97,7 +97,3 @@ function asObject(value: unknown): Record<string, unknown> {
     ? value as Record<string, unknown>
     : { detail: value };
 }
-
-export function isPluginError(error: unknown): error is PluginError {
-  return error instanceof PluginError;
-}

@@ -11,7 +11,6 @@ export const DIGITAL_ASSET_KINDS = ["file", "licence_keys"] as const;
 export type DigitalAssetKind = (typeof DIGITAL_ASSET_KINDS)[number];
 
 export const DIGITAL_UPLOAD_STATUSES = ["uploading", "complete", "aborted"] as const;
-export type DigitalUploadStatus = (typeof DIGITAL_UPLOAD_STATUSES)[number];
 
 export const LICENCE_KEY_STATUSES = ["available", "assigned", "revoked"] as const;
 export type LicenceKeyStatus = (typeof LICENCE_KEY_STATUSES)[number];
@@ -25,7 +24,6 @@ export const DIGITAL_ACCESS_DAYS_MIN = 1;
 export const DIGITAL_ACCESS_DAYS_MAX = 3_650;
 
 export const DIGITAL_MAX_FILE_ASSETS_PER_VARIANT = 10;
-export const DIGITAL_MAX_KEY_POOLS_PER_VARIANT = 1;
 
 /**
  * R2 multipart geometry: fixed 50 MiB parts (the last may be shorter), at most
@@ -53,10 +51,6 @@ export const LICENCE_KEY_IMPORT_MAX_KEYS = 500;
 export const LICENCE_KEY_HASH_PURPOSE = "digital-licence-key-hash-v1";
 /** AES-GCM purpose for `digital_licence_keys.key_ciphertext` (key derived from `CREDENTIAL_ENCRYPTION_KEY`). */
 export const LICENCE_KEY_CIPHER_PURPOSE = "digital-licence-key-v1";
-
-export function isDigitalAssetKind(value: unknown): value is DigitalAssetKind {
-  return typeof value === "string" && (DIGITAL_ASSET_KINDS as readonly string[]).includes(value);
-}
 
 /** `null` (unlimited) or an integer 1–100. */
 export function isDigitalDownloadLimit(value: unknown): value is number | null {

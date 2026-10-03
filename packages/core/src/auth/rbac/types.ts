@@ -15,27 +15,6 @@ export interface PermissionMetadata {
   isSensitive: boolean;
 }
 
-// Role with its permissions for API responses
-export interface RoleWithPermissions {
-  id: string;
-  name: string;
-  displayName: string;
-  description: string | null;
-  isSystem: boolean;
-  permissions: PermissionName[];
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-// User permission override
-export interface UserPermissionOverride {
-  permissionId: string;
-  permissionName: PermissionName;
-  granted: boolean;
-  assignedBy: string | null;
-  createdAt: Date;
-}
-
 // User's complete permission context
 export interface UserPermissionContext {
   userId: string;
@@ -63,24 +42,6 @@ export interface PermissionCheckResult {
     | "user_grant"
     | "user_denial"
     | "no_permission";
-}
-
-// For API route protection
-export interface ProtectedRouteConfig {
-  permission: PermissionName;
-  // Optional: allow if user has any of these permissions
-  anyOf?: PermissionName[];
-  // Optional: require all of these permissions
-  allOf?: PermissionName[];
-}
-
-// For seeding/migration
-export interface SystemRole {
-  name: string;
-  displayName: string;
-  description: string;
-  isSystem: boolean;
-  permissions: PermissionName[];
 }
 
 // Permission categories for UI grouping

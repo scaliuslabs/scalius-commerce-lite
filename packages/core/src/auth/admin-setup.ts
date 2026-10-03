@@ -224,30 +224,6 @@ export async function claimAdminSetup(
   throw new ConflictError("Admin setup is already in progress. Please wait.");
 }
 
-export async function assertAdminSetupClaimActive(
-  db: Database,
-  claim: ClaimedAdminSetup,
-  options: SetupCoordinationOptions = {},
-): Promise<void> {
-  const nowSeconds = options.nowSeconds ?? currentUnixSeconds();
-  const row = await db
-    .select({ singletonKey: adminSetupClaims.singletonKey })
-    .from(adminSetupClaims)
-    .where(
-      and(
-        eq(adminSetupClaims.singletonKey, claim.singletonKey),
-        eq(adminSetupClaims.claimId, claim.claimId),
-        eq(adminSetupClaims.status, "processing"),
-        gt(adminSetupClaims.claimExpiresAt, nowSeconds),
-      ),
-    )
-    .get();
-
-  if (!row) {
-    throw new ConflictError("Admin setup claim expired or was replaced. Please retry setup.");
-  }
-}
-
 export async function markAdminSetupClaimCompleted(
   db: Database,
   claim: ClaimedAdminSetup,

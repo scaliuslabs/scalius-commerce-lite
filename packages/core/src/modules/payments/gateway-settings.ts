@@ -75,12 +75,6 @@ export type GatewaySettingsStoredRow = SettingsDocumentRow;
 async function readGatewayRows(db: Database): Promise<GatewaySettingsStoredRow[]> {
   return selectSettingsDocuments(db, [paymentMethodsDocument, stripeDocument, sslcommerzDocument]);
 }
-
-// ---------------------------------------------------------------------------
-// Stripe
-// ---------------------------------------------------------------------------
-
-const STRIPE_CATEGORY = stripeDocument.key;
 const STRIPE_PLACEHOLDER_VALUES = new Set([
   "dummy",
   "placeholder",
@@ -199,12 +193,6 @@ async function resolveStripeSettingsFromRows(
     credentialErrors: compactErrors([stored.secretErrors.secretKey, stored.secretErrors.webhookSecret]),
   };
 }
-
-// ---------------------------------------------------------------------------
-// SSLCommerz
-// ---------------------------------------------------------------------------
-
-const SSL_CATEGORY = sslcommerzDocument.key;
 const SSLCOMMERZ_STORED_SECRET_MARKER = "__stored__";
 const SSLCOMMERZ_PLACEHOLDER_VALUES = new Set([
   "dummy",
@@ -307,12 +295,6 @@ async function resolveSSLCommerzSettingsFromRows(
   };
 }
 
-// ---------------------------------------------------------------------------
-// Payment Methods Configuration (storefront-facing)
-// ---------------------------------------------------------------------------
-
-const PAYMENT_METHODS_CATEGORY = paymentMethodsDocument.key;
-
 export interface PaymentMethodsConfig {
   /** Which payment methods are enabled for the storefront: `cod`, built-in gateways, app providers. */
   enabledMethods: string[];
@@ -356,12 +338,6 @@ async function resolvePaymentMethodPreferences(
     hasExplicitEnabledMethods: enabledMethods !== null,
   };
 }
-
-export const STOREFRONT_GATEWAY_SETTING_CATEGORIES = [
-  PAYMENT_METHODS_CATEGORY,
-  STRIPE_CATEGORY,
-  SSL_CATEGORY,
-] as const;
 
 export interface PaymentGatewaySettingsSnapshot {
   preferences: PaymentMethodPreferences;

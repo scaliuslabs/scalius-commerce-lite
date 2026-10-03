@@ -14,7 +14,6 @@ import { UnsupportedCollector } from "./issues";
 import { ColumnIndex, isScientificNotation, parseImportBoolean, splitImportList, truncateText, type CsvTable } from "./values";
 
 export const CUSTOMER_IMPORT_MODES = ["create", "upsert"] as const;
-export type CustomerImportMode = (typeof CUSTOMER_IMPORT_MODES)[number];
 export const CUSTOMER_IMPORT_BATCH_MAX = 100;
 export const CUSTOMER_IMPORT_BATCH_DEFAULT = 50;
 export const CUSTOMER_NAME_MAX = 100;

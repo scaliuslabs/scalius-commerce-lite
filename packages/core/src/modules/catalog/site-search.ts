@@ -53,11 +53,6 @@ export type CategorySearchResult = {
   type: "category";
 };
 
-export type SearchResult =
-  | ProductSearchResult
-  | PageSearchResult
-  | CategorySearchResult;
-
 type SearchImageProjection = {
   mediaId: string;
   objectKey: string;

@@ -30,7 +30,7 @@ import { buildStorefrontPath } from "@scalius/shared/storefront-url";
 import { escapeHtml } from "@scalius/shared/html-escape";
 import { sanitizeHtml } from "@scalius/shared/html-sanitize";
 import { parseShortcodes } from "@scalius/shared/shortcodes";
-import { toISOString, fromUnixSeconds, nowUnixSeconds, unixToDate, formatDate } from "@scalius/shared/timestamps";
+import { toISOString, unixToDate, formatDate } from "@scalius/shared/timestamps";
 import { getStatusBadgeClass } from "@scalius/shared/status-badges";
 ```
 
@@ -42,7 +42,7 @@ import { getStatusBadgeClass } from "@scalius/shared/status-badges";
 | `status-badges.ts` | Tailwind CSS badge styling for all 11 order statuses (pending, processing, confirmed, shipped, delivered, completed, cancelled, returned, refunded, partially_refunded, incomplete) | `getStatusBadgeClass()` |
 | `currency.ts` | ISO 4217 currency formatting with `currency.js` precision | `CurrencyConfig`, `DEFAULT_CURRENCY`, `getDecimalPlaces()`, `getCurrencySymbol()`, `getCurrencyCode()`, `formatPrice()`, `formatPriceShort()` |
 | `money.ts` | Integer minor-unit money: the one decimal/minor boundary pair and exact catalog discount rounding | `toMinor()`, `fromMinor()`, `percentToBps()`, `bpsToPercent()`, `discountedPriceMinor()` |
-| `price-utils.ts` | Display rounding for decimal prices already converted from minor units | `roundPrice()`, `roundPriceToPrecision()`, `calculateDiscountedPriceAtPrecision()` |
+| `price-utils.ts` | Display rounding for decimal prices already converted from minor units | `roundPriceToPrecision()`, `calculateDiscountedPrice()` |
 | `media-variants.ts` | Pre-generated WebP rendition ladder and URL helpers | `mediaVariantWidths()`, `mediaImageUrl()`, `mediaImageSrcSet()`, `mediaOriginalUrl()` |
 | `media-url.ts` | Resolve bare R2 keys to full CDN URLs | `resolveMediaUrl()` |
 | `cors-helper.ts` | Dynamic credentialed CORS origin validation from exact first-party runtime URLs plus the extra origins a merchant lists in Platform settings (composed into `CORS_ALLOWED_ORIGINS` at Worker entry, never a literal env var); merchant CSP/KV domains are intentionally excluded | `getCorsOriginContext()` |
@@ -53,7 +53,7 @@ import { getStatusBadgeClass } from "@scalius/shared/status-badges";
 | `html-escape.ts` | HTML entity escaping for user values in templates | `escapeHtml()` -- escapes `&`, `<`, `>`, `"`, `'` |
 | `html-sanitize.ts` | Defense-in-depth XSS sanitizer for merchant-authored rich HTML | `sanitizeHtml()` -- strips executable/embedded tags, `on*` handlers, and dangerous URL schemes while preserving safe content structure |
 | `shortcodes.ts` | CMS shortcode parsing shared by storefront rendering and API cache invalidation | `parseShortcodes()`, `normalizeShortcodeAttributeQuotes()`, `ShortcodeMatch` |
-| `timestamps.ts` | Unix epoch seconds utilities, date formatting for display | `toISOString()`, `fromUnixSeconds()`, `nowUnixSeconds()`, `unixToDate()`, `formatDate()` |
+| `timestamps.ts` | Unix epoch seconds utilities, date formatting for display | `toISOString()`, `unixToDate()`, `formatDate()`, `formatDateShort()`, `formatRelativeDate()`, `formatDateVerbose()` |
 | `storefront-url.ts` | Storefront URL path construction | `buildStorefrontPath()` |
 
 ## Dependencies

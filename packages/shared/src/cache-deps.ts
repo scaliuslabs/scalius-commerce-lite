@@ -772,7 +772,6 @@ const PURCHASING = "Purchasing and transfer documents: staff-only; buyers never 
 /** No table uses age-based freshness; retained for recording API compatibility. */
 export const CACHE_DEP_SOFT_TABLES: readonly string[] = [];
 export type CacheDepSoftTable = never;
-export function isCacheDepSoftTable(_table: string): _table is CacheDepSoftTable { return false; }
 
 /** Tables a public read may touch (or that exist) without a key of their own, with the reason. */
 export const CACHE_DEP_EXEMPT_TABLES: Readonly<Record<string, string>> = {

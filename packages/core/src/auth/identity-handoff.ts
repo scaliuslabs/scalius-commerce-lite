@@ -31,7 +31,7 @@
 
 import { APIError, createAuthEndpoint } from "better-auth/api";
 import { setSessionCookie } from "better-auth/cookies";
-import { and, eq, gt, lt } from "drizzle-orm";
+import { and, eq, lt } from "drizzle-orm";
 import type { BetterAuthPlugin } from "better-auth";
 import type { BatchItem } from "drizzle-orm/batch";
 import { createRemoteJWKSet, customFetch, jwtVerify, SignJWT, type JWTPayload } from "jose";
@@ -571,18 +571,6 @@ export async function performIdentityRevocation(
     await recordHandoffOutcome(db, eventId, outcome, null).catch(() => undefined);
     throw error;
   }
-}
-
-/** Counts unexpired audit rows for a user; exposed for readiness/diagnostics. */
-export async function countRecentIdentityHandoffs(db: Database, userId: string, since: Date): Promise<number> {
-  const rows = await db
-    .select({ id: adminIdentityHandoffEvents.id })
-    .from(adminIdentityHandoffEvents)
-    .where(and(
-      eq(adminIdentityHandoffEvents.userId, userId),
-      gt(adminIdentityHandoffEvents.createdAt, Math.floor(since.getTime() / 1000)),
-    ));
-  return rows.length;
 }
 
 function toApiError(error: unknown): never {

@@ -56,10 +56,6 @@ export const updateCustomFieldDefinitionSchema = z.object({
     storefrontVisible: z.boolean().optional(),
 });
 
-export const deleteCustomFieldDefinitionSchema = z.object({
-    expectedRevision: expectedRevisionSchema,
-});
-
 export const reorderCustomFieldDefinitionsSchema = z.object({
     ownerType: customFieldOwnerTypeSchema,
     definitions: z.array(z.object({

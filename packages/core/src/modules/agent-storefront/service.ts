@@ -142,7 +142,6 @@ export interface AgentStorefrontCheckoutQuote {
   paymentMethods: Array<{ id: string; name: string }> | null;
 }
 
-
 /**
  * Agent carts are `{variantId, quantity}` and never carry buyer inputs, so a
  * product whose buyer inputs include a required field cannot be bought
@@ -983,15 +982,5 @@ export async function getAgentStorefrontContinuationStatus(
     expiresAt: row.expiresAt.toISOString(),
     result: parseSafeAgentStorefrontContinuationResult(row.safeResultJson),
     message,
-  };
-}
-
-export function getAgentStorefrontContextEpochSummary(view: AgentStorefrontContextView): {
-  expiresAt: number;
-  lastUsedAt: number;
-} {
-  return {
-    expiresAt: toEpochSeconds(new Date(view.expiresAt)),
-    lastUsedAt: toEpochSeconds(new Date(view.lastUsedAt)),
   };
 }

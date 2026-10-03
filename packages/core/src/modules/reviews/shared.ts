@@ -3,7 +3,7 @@
 // write uses (the same facts as the `product_reviews_line_eligible` trigger,
 // plus the 365-day window the trigger cannot express).
 import { nanoid } from "nanoid";
-import { and, eq, inArray, isNull, sql, type SQL } from "drizzle-orm";
+import { eq, inArray, isNull, sql, type SQL } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import {
   orderFulfillmentLines,
@@ -118,25 +118,4 @@ export function decodeCheckFlags(value: string | null): string[] {
   } catch {
     return [];
   }
-}
-
-/** The line's order and item, joined, for the line-level reads. */
-export function lineWithOrder(db: Database) {
-  return db
-    .select({
-      orderItemId: orderItems.id,
-      orderId: orders.id,
-      productId: orderItems.productId,
-      variantId: orderItems.variantId,
-      productName: orderItems.productName,
-      variantLabel: orderItems.variantLabel,
-      fulfillmentType: orderItems.fulfillmentType,
-      fulfilledQuantity: orderItems.fulfilledQuantity,
-      orderStatus: orders.status,
-      customerName: orders.customerName,
-      customerId: orders.customerId,
-      accountOwnerCustomerId: orders.accountOwnerCustomerId,
-    })
-    .from(orderItems)
-    .innerJoin(orders, and(eq(orders.id, orderItems.orderId), isNull(orders.deletedAt)));
 }

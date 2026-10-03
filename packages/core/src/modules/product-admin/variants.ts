@@ -18,7 +18,7 @@ import { nanoid } from "nanoid";
 import { z } from "zod";
 import { AppError, NotFoundError, ConflictError, ValidationError } from "@scalius/core/errors";
 import { buildStockMovementClaim, checkAndAlertLowStock } from "../inventory";
-import { fromMinor, percentToBps, toMinor } from "@scalius/shared/money";
+import { fromMinor, percentToBps } from "@scalius/shared/money";
 import {
   createVariantSchema,
   digitalStockError,
@@ -160,14 +160,6 @@ const ORDER_STATUSES_THAT_ALLOW_SKU_RETIREMENT = [
     OrderStatus.RETURNED,
     OrderStatus.REFUNDED,
 ];
-
-export function assertConsistentVariantOptionAxes(
-    variants: Array<{ selectedOptionValueIds?: readonly string[]; optionCombinationKey?: string | null }>,
-) {
-    if (variants.some((variant) => !hasCustomerOption(variant))) {
-        throw new ValidationError("Every option SKU must select one value for every active product option.");
-    }
-}
 
 type TransitionSku = {
     isDefault?: boolean;

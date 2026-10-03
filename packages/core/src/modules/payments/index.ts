@@ -38,7 +38,7 @@ export type {
   PaymentMethodsConfig,
 } from "./gateway-settings";
 
-export { initCODTracking, recordCODCollection, recordCODFailure, markCODReturned } from "./cod";
+export { recordCODCollection, recordCODFailure, markCODReturned } from "./cod";
 
 // --- Payment processing ---
 export { processPaymentConfirmed, processPaymentFailed, releaseOrderInventory } from "./process-payment";

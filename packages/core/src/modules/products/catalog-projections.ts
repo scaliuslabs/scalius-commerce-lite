@@ -49,10 +49,6 @@ export const CATALOG_PROJECTION_PRODUCTS_PER_CALL = 90;
 export const CATALOG_PROJECTION_REBUILD_DEFAULT_LIMIT = 900;
 export const CATALOG_PROJECTION_REBUILD_MAX_LIMIT = 2_700;
 
-export type CatalogProjectionScope =
-    | { productIds: readonly string[] }
-    | { skuIds: readonly string[] };
-
 export interface CatalogProjectionRefreshOptions {
     /**
      * Rewrite the facet rows too. Stock-only writes (reservations, releases,

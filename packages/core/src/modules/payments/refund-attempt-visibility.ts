@@ -44,8 +44,6 @@ function timestampToIso(timestamp: number | null | undefined): string | null {
   return new Date(timestamp * 1000).toISOString();
 }
 
-
-
 function copyForStatus(
   status: string,
   gateway: string,
@@ -247,15 +245,6 @@ function toOrderListActiveRefundOperation(
     lastProbeAt: operation.lastProbeAt,
     providerStatus: operation.providerStatus,
   };
-}
-
-export async function listActiveRefundOperationsForOrders(
-  db: Database,
-  orderIds: string[],
-): Promise<Map<string, ActiveRefundOperationView>> {
-  return resolveActiveRefundOperationsForOrders(
-    await selectActiveRefundAttemptRowsForOrders(db, orderIds),
-  );
 }
 
 export function selectActiveRefundAttemptRowsForOrders(

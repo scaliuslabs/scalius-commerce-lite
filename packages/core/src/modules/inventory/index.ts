@@ -3,7 +3,6 @@
 
 export {
   reserveStock,
-  reserveMultiple,
   reserveStockBatch,
   prepareStockReservationBatch,
   selectReservationVariantStates,
@@ -48,9 +47,6 @@ export type {
 } from "./ledger-v2";
 export type { ExpiryResult } from "./expiry";
 export {
-  validateStockNonNegative,
-  validateBackorderLimit,
-  validateReservedStockConsistency,
   validatePositiveQuantity,
   validateSignedStockAdjustment,
   validateAbsoluteStockCount,

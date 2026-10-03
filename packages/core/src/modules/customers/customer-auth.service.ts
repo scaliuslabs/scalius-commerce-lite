@@ -17,7 +17,6 @@ import {
     ValidationError,
     ConflictError,
     ForbiddenError,
-    NotFoundError,
     ServiceUnavailableError,
     UnauthorizedError,
 } from "@scalius/core/errors";
@@ -54,7 +53,6 @@ import { selectSettingsDocuments } from "../../settings-store";
 // ─────────────────────────────────────────
 
 export const COOKIE_NAME = "cs_tok";
-export const OTP_PREFIX = "cust_otp:";
 export const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 days
 export const OTP_TTL_SECONDS = 60 * 5; // 5 minutes
 const OTP_MAX_ATTEMPTS = 5;
@@ -159,17 +157,6 @@ export interface CleanupExpiredCustomerSessionsResult {
     deleted: number;
     limit: number;
     hasMore: boolean;
-}
-
-// ─────────────────────────────────────────
-// Utility functions
-// ─────────────────────────────────────────
-
-export function generateOtpCode(): string {
-    const array = new Uint8Array(4);
-    crypto.getRandomValues(array);
-    const num = (new DataView(array.buffer).getUint32(0) % 900000) + 100000;
-    return String(num);
 }
 
 export async function deriveCustomerAuthOtpDeliveryCode(input: {

@@ -75,7 +75,6 @@ export type ReviewRejectionReason = (typeof REVIEW_REJECTION_REASONS)[number];
 /** `auto` publishes reviews that pass `checkReviewContent`; `hold` sends every review to moderation. */
 export const REVIEW_MODERATION_MODES = ["auto", "hold"] as const;
 export type ReviewModerationMode = (typeof REVIEW_MODERATION_MODES)[number];
-export const DEFAULT_REVIEW_MODERATION_MODE: ReviewModerationMode = "auto";
 
 /** Line types a buyer may review. Gift-card lines are not reviewable. */
 export const REVIEWABLE_FULFILLMENT_TYPES = ["ship", "pickup", "digital", "service"] as const satisfies readonly FulfillmentType[];
@@ -90,16 +89,8 @@ export function isReviewRating(value: unknown): value is ReviewRating {
   return typeof value === "number" && Number.isInteger(value) && value >= REVIEW_RATING_MIN && value <= REVIEW_RATING_MAX;
 }
 
-export function isReviewStatus(value: unknown): value is ReviewStatus {
-  return typeof value === "string" && (REVIEW_STATUSES as readonly string[]).includes(value);
-}
-
 export function isReviewRejectionReason(value: unknown): value is ReviewRejectionReason {
   return typeof value === "string" && (REVIEW_REJECTION_REASONS as readonly string[]).includes(value);
-}
-
-export function isReviewModerationMode(value: unknown): value is ReviewModerationMode {
-  return typeof value === "string" && (REVIEW_MODERATION_MODES as readonly string[]).includes(value);
 }
 
 export function isReviewableFulfillmentType(type: FulfillmentType): boolean {

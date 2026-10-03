@@ -399,23 +399,6 @@ export async function markAgentStorefrontPaymentContinuationStarted(
   ));
 }
 
-export async function failAgentStorefrontContinuation(
-  db: Database,
-  continuationId: string,
-  now = new Date(),
-): Promise<void> {
-  await db.update(agentStorefrontContinuations).set({
-    status: "failed",
-    bootstrapCodeHash: null,
-    safeResultJson: JSON.stringify({ retryable: true }),
-    completedAt: now,
-    updatedAt: now,
-  }).where(and(
-    eq(agentStorefrontContinuations.id, continuationId),
-    eq(agentStorefrontContinuations.status, "pending"),
-  ));
-}
-
 export async function refreshAgentStorefrontPaymentContinuation(
   db: Database,
   continuationId: string,
@@ -727,11 +710,4 @@ export async function assertHostedContinuationOrderAccess(
     )).get();
   if (!grant) throw new UnauthorizedError("This secure step no longer owns the order.");
   return { contextId: context.id, orderId: continuation.orderId, customerId: null };
-}
-
-export async function getContinuationContextId(
-  db: Database,
-  continuationId: string,
-): Promise<string> {
-  return (await loadHostedContinuation(db, continuationId)).context.id;
 }

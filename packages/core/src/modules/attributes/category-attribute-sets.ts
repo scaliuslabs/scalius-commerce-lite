@@ -17,11 +17,6 @@ import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/err
 import { jsonIdSet } from "./projection-refresh";
 import { MAX_ATTRIBUTE_REQUEST_IDS } from "./attributes.validation";
 
-/** The key that orders an ancestor's set row (see the file comment). */
-export function categoryAttributeSetOrderKey(closureDepth: number, sortOrder: number): number {
-    return (3 - closureDepth) * 100_000 + sortOrder;
-}
-
 export interface CategoryAttributeSetEntry {
     attributeId: string;
     name: string;

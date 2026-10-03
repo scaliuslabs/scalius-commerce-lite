@@ -121,12 +121,6 @@ export class AmbiguousStorageWriteError extends ServiceUnavailableError {
   }
 }
 
-export function isAmbiguousStorageWriteError(
-  error: unknown,
-): error is AmbiguousStorageWriteError {
-  return error instanceof AmbiguousStorageWriteError;
-}
-
 function boundedCustomMetadata(
   metadata: Record<string, string> | undefined,
 ): Record<string, string> {

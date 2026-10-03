@@ -1,6 +1,6 @@
 // src/lib/rbac/helpers.ts
 import { eq, and, desc, inArray } from "drizzle-orm";
-import { safeBatch, type Database } from "@scalius/database/client";
+import { type Database } from "@scalius/database/client";
 import { NotFoundError } from "@scalius/core/errors";
 import { deleteKvHint, putKvHint } from "@scalius/shared/kv-hints";
 import { planLimits } from "@scalius/shared/plan-limits";
@@ -13,7 +13,7 @@ import {
   userRoles,
   userPermissions,
 } from "@scalius/database/schema";
-import type { PermissionName, UserPermissionContext, PermissionCheckResult } from "./types";
+import type { PermissionName, UserPermissionContext } from "./types";
 import { getAllPermissionNames, withoutUnmetPrerequisites } from "./permissions";
 
 // Every role or assignment mutation clears the affected entries, so the TTL is
@@ -219,81 +219,6 @@ export async function hasAllPermissions(
 ): Promise<boolean> {
   const permissions = await getUserPermissions(db, userId, kv);
   return permissionList.every((p) => permissions.has(p));
-}
-
-/**
- * Get detailed permission check result with reason
- */
-export async function checkPermissionDetailed(
-  db: Database,
-  userId: string,
-  permission: PermissionName | string
-): Promise<PermissionCheckResult> {
-  // Check if super admin
-  const userResult = await db
-    .select({ isSuperAdmin: user.isSuperAdmin })
-    .from(user)
-    .where(eq(user.id, userId))
-    .limit(1);
-
-  if (userResult.length === 0) {
-    return { allowed: false, reason: "no_permission" };
-  }
-
-  if (userResult[0]?.isSuperAdmin) {
-    return { allowed: true, reason: "super_admin" };
-  }
-
-  // Check user-level override first
-  const permResult = await db
-    .select({ id: permissions.id })
-    .from(permissions)
-    .where(eq(permissions.name, permission))
-    .limit(1);
-
-  if (permResult.length === 0 || !permResult[0]) {
-    return { allowed: false, reason: "no_permission" };
-  }
-
-  const permId = permResult[0].id;
-
-  const override = await db
-    .select({ granted: userPermissions.granted })
-    .from(userPermissions)
-    .where(
-      and(
-        eq(userPermissions.userId, userId),
-        eq(userPermissions.permissionId, permId)
-      )
-    )
-    .limit(1);
-
-  if (override.length > 0 && override[0]) {
-    if (override[0].granted) {
-      return { allowed: true, reason: "user_grant" };
-    } else {
-      return { allowed: false, reason: "user_denial" };
-    }
-  }
-
-  // Check role-based permission
-  const roleCheck = await db
-    .select({ roleId: rolePermissions.roleId })
-    .from(userRoles)
-    .innerJoin(rolePermissions, eq(userRoles.roleId, rolePermissions.roleId))
-    .where(
-      and(
-        eq(userRoles.userId, userId),
-        eq(rolePermissions.permissionId, permId)
-      )
-    )
-    .limit(1);
-
-  if (roleCheck.length > 0) {
-    return { allowed: true, reason: "role_permission" };
-  }
-
-  return { allowed: false, reason: "no_permission" };
 }
 
 /**

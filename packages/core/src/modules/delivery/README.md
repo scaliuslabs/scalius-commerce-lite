@@ -37,7 +37,6 @@ Multi-courier delivery management. Every courier, built in (Pathao, Steadfast) o
 | `getDeliveryProviders` | `(db)` | All providers, ordered by updatedAt desc |
 | `getDeliveryProvider` | `(db, id)` | Single provider by ID |
 | `saveDeliveryProvider` | `(db, provider, encryptionKey, couriers?)` | Create or update. Requires `CREDENTIAL_ENCRYPTION_KEY`; rejects before insert/update if no dedicated key is supplied. Activation checks the courier's own blockers (`assertDeliveryProviderActivatable`). Preserves live-test proof only when the current setup fingerprint still matches. |
-| `deleteDeliveryProvider` | `(db, id)` | Hard delete |
 | `testDeliveryProvider` | `(db, id, encryptionKey?, couriers?)` | Records a test attempt, runs the courier's `testConnection`, and stores successful proof for the current setup fingerprint (none for app couriers) |
 | `testDeliveryProviderSetup` | `(db, row, encryptionKey, couriers?)` | Tests an unsaved setup (the settings form's typed keys); records nothing |
 | `getDeliveryProviderReadiness` | `(row, encryptionKey, couriers?)` | The row's readiness summary through its courier |

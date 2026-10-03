@@ -1,4 +1,3 @@
-import { MEDIA_KINDS } from "@scalius/shared/media-policy";
 import { z } from "zod";
 
 const resourceId = z.string().trim().min(8).max(160).regex(/^[A-Za-z0-9_-]+$/u);
@@ -57,10 +56,5 @@ export const updateFolderSchema = z.object({
     expectedVersion: z.number().int().min(1),
 });
 
-export const mediaKindSchema = z.enum(MEDIA_KINDS);
-
 export type InitiateMediaUploadInput = z.infer<typeof initiateMediaUploadSchema>;
 export type UpdateMediaInput = z.infer<typeof updateMediaSchema>;
-export type MoveMediaInput = z.infer<typeof moveMediaSchema>;
-export type CreateFolderInput = z.infer<typeof createFolderSchema>;
-export type UpdateFolderInput = z.infer<typeof updateFolderSchema>;

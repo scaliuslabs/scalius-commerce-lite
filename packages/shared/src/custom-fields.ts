@@ -48,10 +48,6 @@ export const CUSTOM_FIELD_STOREFRONT_OWNER_TYPES = [
   "page",
 ] as const satisfies readonly CustomFieldOwnerType[];
 
-export function isCustomFieldOwnerType(value: unknown): value is CustomFieldOwnerType {
-  return typeof value === "string" && (CUSTOM_FIELD_OWNER_TYPES as readonly string[]).includes(value);
-}
-
 export function customFieldOwnerIsStorefront(ownerType: CustomFieldOwnerType): boolean {
   return (CUSTOM_FIELD_STOREFRONT_OWNER_TYPES as readonly string[]).includes(ownerType);
 }

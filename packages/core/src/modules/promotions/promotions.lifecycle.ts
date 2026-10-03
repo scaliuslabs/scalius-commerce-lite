@@ -15,8 +15,6 @@ async function loadWithUsage(db: Database, promotionId: string) {
     return aggregate ? { ...aggregate, ...await getPromotionUsageStats(db, promotionId, null) } : null;
 }
 
-export type PromotionLifecycleStatus = "active" | "paused";
-
 export async function activatePromotion(
     db: Database,
     promotionId: string,

@@ -246,7 +246,7 @@ The function is **idempotent** -- a same-pool "released" movement excludes that 
 |----------------------------|----------------------------------------------------------------------------------------------------|
 | `index.ts`                 | Barrel re-exports for all public API                                                               |
 | `types.ts`                 | `StockOperationResult`, `ReservationEntry`, `MovementEntry` interfaces                             |
-| `reserve.ts`               | `reserveStock()` -- single variant CAS reservation; `reserveMultiple()` -- sequential with rollback; `reserveStockBatch()` -- strict D1 batch movement-claim + counter reservation with CAS verification and rollback |
+| `reserve.ts`               | `reserveStock()` -- single variant CAS reservation; `reserveStockBatch()` -- strict D1 batch movement-claim + counter reservation with CAS verification and rollback |
 | `locations.ts`             | Inventory locations (hook H1): location records (list, create, update, archive, unarchive, set default), the location a stock movement resolves to, `assertInventoryLocationCovers()` shortfall pre-check, per-SKU level reads and the level/location trigger error mapping |
 | `release.ts`               | `releaseReservation()` -- single variant (no CAS, safe to apply unconditionally with MAX(0,...)); `releaseMultiple()` -- best-effort, continues on individual failures, checks low stock alerts after release |
 | `expiry.ts`                | `releaseExpiredReservations()` -- bounded cron sweep; `ExpiryResult` interface                     |
@@ -258,7 +258,7 @@ The function is **idempotent** -- a same-pool "released" movement excludes that 
 | `inventory.service.ts`     | `InventoryService.getInventoryOverview()` -- paginated current-product variants/alerts plus audit-preserving movement history; `InventoryService.adjustInventory()` -- admin adjustment with `stockVersion` CAS + retry (3 attempts, exponential backoff) |
 | `inventory.validation.ts`  | `adjustInventorySchema` -- Zod schema for adjustment payload (delta, reason enum, notes, pool)     |
 | `inventory-transitions.ts` | Claimed movement + stock-CAS engine; `applyInventoryForStatusChange()` for order lifecycle transitions; `applyClaimedInventoryEntryBatch()` for version-scoped manual-order deltas; `InventoryAction` type |
-| `validation.ts`            | `validateStockNonNegative()`, `validateBackorderLimit()`, `validateReservedStockConsistency()`, `validatePositiveQuantity()` |
+| `validation.ts`            | `validatePositiveQuantity()` |
 | `stock-commands.ts`        | `executeStockCommand()` -- the multi-SKU command engine (receipts, transfers); `weightedAverageCostMinor()` |
 | `unit-costs.ts`            | `setSkuCosts()`, cost parsing (`unitCostToMinor`), `marginPercent()` |
 | `cost-visibility.ts`       | What readers without `products.view_costs` get (SKUs, purchase orders, receipts without money) and location details without `inventory.view`/`settings.general.view` |
@@ -368,11 +368,9 @@ Alerts are checked after: manual adjustments (negative delta), stock deductions 
 
 ## Concurrency Control Details
 
-### Reserve: Two Strategies
+### Reserve
 
-1. **`reserveMultiple()`** -- Sequential. Reserves one variant at a time with individual CAS. On any failure, rolls back all previously successful reservations. Suitable for small order sizes.
-
-2. **`reserveStockBatch()`** -- Atomic for batch reservations. Reads all variant states upfront through a sellability guard (`product_variants.deleted_at IS NULL`, parent product active, parent product not deleted), validates ALL availability before writing, inserts strict reservation movement claims and variant CAS counter updates in one D1 `safeBatch()`, then verifies every movement insert and update returned a row. Movement inserts are `INSERT ... SELECT` gated on the same pre-read `stockVersion`, so stale versions create neither audit rows nor counter updates. Variant counter updates also require the variant to remain non-deleted at write time. If any insert/update returns empty, successful movement claims are deleted, successful counter updates are reversed, and the whole operation retries. Callers may pass `reservationKey` (queued checkout uses `checkout-ingest:v1`) or explicit `movementId` for deterministic replay; exact duplicate deterministic claims are treated as idempotent success, while mismatches return `manualReconciliationRequired`.
+**`reserveStockBatch()`** is the batch reservation path and is atomic. Reads all variant states upfront through a sellability guard (`product_variants.deleted_at IS NULL`, parent product active, parent product not deleted), validates ALL availability before writing, inserts strict reservation movement claims and variant CAS counter updates in one D1 `safeBatch()`, then verifies every movement insert and update returned a row. Movement inserts are `INSERT ... SELECT` gated on the same pre-read `stockVersion`, so stale versions create neither audit rows nor counter updates. Variant counter updates also require the variant to remain non-deleted at write time. If any insert/update returns empty, successful movement claims are deleted, successful counter updates are reversed, and the whole operation retries. Callers may pass `reservationKey` (queued checkout uses `checkout-ingest:v1`) or explicit `movementId` for deterministic replay; exact duplicate deterministic claims are treated as idempotent success, while mismatches return `manualReconciliationRequired`.
 
 ### Deduct
 

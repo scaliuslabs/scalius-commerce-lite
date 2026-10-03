@@ -150,18 +150,3 @@ export async function assertCategoryClaimsCurrent(
         throw new CategoryStateConflictError(stateMismatch.id, requiredState);
     }
 }
-
-export function revisionResult(rows: unknown): number {
-    const row = Array.isArray(rows) ? rows[0] : undefined;
-    const revision = row && typeof row === "object"
-        ? (row as { revision?: unknown }).revision
-        : undefined;
-    if (typeof revision !== "number" || !Number.isInteger(revision) || revision < 1) {
-        throw new AppError(
-            409,
-            "CATEGORY_REVISION_UNCONFIRMED",
-            "The category change could not be confirmed. Reload the category and try again.",
-        );
-    }
-    return revision;
-}

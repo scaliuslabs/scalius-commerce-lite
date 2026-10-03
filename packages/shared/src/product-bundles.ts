@@ -16,7 +16,6 @@ import { z } from "zod";
 import { cashRoundingMinor, discountedPriceMinor } from "./money";
 
 export const PRODUCT_BUNDLE_DISCOUNT_TYPES = ["percentage", "fixed_price"] as const;
-export type ProductBundleDiscountType = (typeof PRODUCT_BUNDLE_DISCOUNT_TYPES)[number];
 export const PRODUCT_BUNDLE_MIN_QUANTITY = 2;
 export const PRODUCT_BUNDLE_MAX_QUANTITY = 100;
 export const PRODUCT_BUNDLES_MAX = 6;

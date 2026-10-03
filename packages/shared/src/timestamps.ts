@@ -11,16 +11,6 @@ export function toISOString(unixSeconds: number): string {
   return new Date(unixSeconds * 1000).toISOString();
 }
 
-/** Convert Unix epoch seconds to Date object */
-export function fromUnixSeconds(unixSeconds: number): Date {
-  return new Date(unixSeconds * 1000);
-}
-
-/** Get current Unix epoch seconds (for non-Drizzle contexts) */
-export function nowUnixSeconds(): number {
-  return Math.floor(Date.now() / 1000);
-}
-
 /**
  * Converts a timestamp to a JavaScript Date object.
  * Handles Unix seconds, milliseconds, ISO strings, and Date objects.

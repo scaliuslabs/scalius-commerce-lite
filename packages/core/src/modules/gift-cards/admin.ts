@@ -1,11 +1,11 @@
 // Staff gift-card reads and writes (Wave B §4.2, §7.2). Reads need
 // GIFT_CARDS_VIEW, writes GIFT_CARDS_MANAGE (checked by the route map). Staff
 // see `last4` only; the code is shown once, at manual issue.
-import { and, desc, eq, inArray, lt, or, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, lt, or, sql, type SQL } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import { alias } from "drizzle-orm/sqlite-core";
 import type { Database } from "@scalius/database/client";
-import { safeBatch, chunkForD1 } from "@scalius/database/client";
+import { safeBatch } from "@scalius/database/client";
 import { customers, giftCards, giftCardTransactions, orders, user } from "@scalius/database/schema";
 import { ConflictError, NotFoundError, ValidationError } from "../../errors";
 import type { GiftCardSource, GiftCardStatus, GiftCardTransactionKind } from "./browser";
@@ -385,17 +385,6 @@ export async function updateGiftCardForStaff(
         throw new ConflictError("This gift card changed since you opened it. Reload it and try again.");
     }
     return getStaffGiftCardSummary(db, input.giftCardId);
-}
-
-/** Cards by id (for batched presentation, e.g. tender rows); ≤ 90 per query. */
-export async function listGiftCardLast4(db: Database, giftCardIds: readonly string[]): Promise<Map<string, string>> {
-    const map = new Map<string, string>();
-    for (const chunk of chunkForD1(giftCardIds)) {
-        const rows = await db.select({ id: giftCards.id, last4: giftCards.codeLast4 })
-            .from(giftCards).where(inArray(giftCards.id, chunk)).all();
-        for (const row of rows) map.set(row.id, row.last4);
-    }
-    return map;
 }
 
 export type { Statement as GiftCardStatement };

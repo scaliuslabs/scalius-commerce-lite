@@ -15,7 +15,6 @@ import { MAX_PRODUCT_PRICE } from "@scalius/shared/product-options";
  * accepting the kind here never sells something that cannot be delivered.
  */
 export const EDITABLE_FULFILLMENT_KINDS = FULFILLMENT_KINDS;
-export type EditableFulfillmentKind = (typeof EDITABLE_FULFILLMENT_KINDS)[number];
 
 export const editableFulfillmentKindSchema = z.enum(EDITABLE_FULFILLMENT_KINDS)
     .describe("physical: shipped or picked up. digital: delivered as files or licence keys after payment. service: performed, nothing delivered (no address needed).");

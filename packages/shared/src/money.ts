@@ -53,8 +53,6 @@ export function bpsToPercent(bps: number): number {
   return bps / 100;
 }
 
-export type CatalogDiscountType = "percentage" | "flat";
-
 /**
  * Cash rounding: amounts that come from a percentage are rounded half-up to
  * whole taka in BDT, because couriers and riders collect whole taka. Other

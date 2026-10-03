@@ -3,17 +3,8 @@
  * Server code stores and computes money in integer minor units (./money).
  */
 import Currency from "currency.js";
-import { getDecimalPlaces, getCurrencyCode } from "./currency";
+import { getDecimalPlaces } from "./currency";
 import { discountedPriceMinor, fromMinor, percentToBps, toMinor } from "./money";
-
-/**
- * Round a price to the correct decimal places for the given currency.
- * Defaults to the globally configured currency code.
- */
-export function roundPrice(amount: number, currencyCode?: string): number {
-  const precision = getDecimalPlaces(currencyCode ?? getCurrencyCode());
-  return Currency(amount, { precision }).value;
-}
 
 /** Round using an already-resolved currency precision. */
 export function roundPriceToPrecision(

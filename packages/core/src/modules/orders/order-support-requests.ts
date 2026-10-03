@@ -45,9 +45,6 @@ export const ORDER_SUPPORT_REQUEST_STATUSES = [
   "completed",
 ] as const;
 
-export type OrderSupportRequestStatus =
-  typeof ORDER_SUPPORT_REQUEST_STATUSES[number];
-
 export const ADMIN_ORDER_SUPPORT_REQUEST_STATUSES = [
   "under_review",
   "approved",

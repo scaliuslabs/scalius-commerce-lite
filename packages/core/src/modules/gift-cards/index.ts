@@ -80,7 +80,6 @@ export {
     getGiftCardForStaff,
     getStaffGiftCardSummary,
     giftCardLiabilitySummary,
-    listGiftCardLast4,
     listGiftCardsForStaff,
     updateGiftCardForStaff,
     type GiftCardListFilter,

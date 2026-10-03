@@ -199,42 +199,6 @@ export function buildMetaPurchaseOutboxClaimInsert(
         .onConflictDoNothing() as SQLiteBatchItem;
 }
 
-export async function ensureAndProcessMetaPurchaseForOrder(options: {
-    db: Database;
-    orderId: string;
-} & MetaPurchaseRuntimeOptions): Promise<{
-    outboxId: string;
-    created: boolean;
-    processed: boolean;
-    status: MetaCapiPurchaseOutboxStatus;
-}> {
-    const recorded = await recordMetaPurchaseOutbox(options.db, {
-        orderId: options.orderId,
-        source: options.source,
-    });
-
-    if (recorded.row.status === "sent" || recorded.row.status === "skipped") {
-        return {
-            outboxId: recorded.row.id,
-            created: recorded.created,
-            processed: false,
-            status: recorded.row.status as MetaCapiPurchaseOutboxStatus,
-        };
-    }
-
-    const result = await processMetaPurchaseOutboxById(options.db, recorded.row.id, {
-        storefrontUrl: options.storefrontUrl,
-        encryptionKey: options.encryptionKey,
-    });
-
-    return {
-        outboxId: recorded.row.id,
-        created: recorded.created,
-        processed: result.processed,
-        status: result.status,
-    };
-}
-
 export async function processExistingMetaPurchaseOutboxForOrder(options: {
     db: Database;
     orderId: string;
@@ -327,43 +291,6 @@ export async function flushPendingMetaPurchaseOutbox(options: {
     }
 
     return { scanned: dueRows.length, sent, failed, skipped, busy };
-}
-
-async function recordMetaPurchaseOutbox(
-    db: Database,
-    input: { orderId: string; source: string },
-): Promise<{ row: PurchaseOutboxRow; created: boolean }> {
-    const values = createMetaPurchaseOutboxClaimInsertValues(input);
-
-    try {
-        await db.insert(metaCapiPurchaseOutbox).values(values);
-        return { row: valuesToRow(values), created: true };
-    } catch (error) {
-        const existing = await selectOutboxByOrderId(db, input.orderId);
-        if (!existing) throw error;
-
-        if (existing.status === "pending" || existing.status === "failed") {
-            await db
-                .update(metaCapiPurchaseOutbox)
-                .set({
-                    source: input.source,
-                    status: "pending",
-                    nextAttemptAt: sql`unixepoch()`,
-                    claimId: null,
-                    claimExpiresAt: null,
-                    lastError: null,
-                    updatedAt: sql`unixepoch()`,
-                })
-                .where(and(
-                    eq(metaCapiPurchaseOutbox.orderId, input.orderId),
-                    inArray(metaCapiPurchaseOutbox.status, ["pending", "failed"]),
-                ));
-            const refreshed = await selectOutboxByOrderId(db, input.orderId);
-            return { row: refreshed ?? existing, created: false };
-        }
-
-        return { row: existing, created: false };
-    }
 }
 
 async function processMetaPurchaseOutboxById(
@@ -595,25 +522,6 @@ async function selectOutboxByOrderId(db: Database, orderId: string): Promise<Pur
         .from(metaCapiPurchaseOutbox)
         .where(eq(metaCapiPurchaseOutbox.orderId, orderId))
         .get();
-}
-
-function valuesToRow(values: PurchaseOutboxInsert): PurchaseOutboxRow {
-    return {
-        id: String(values.id),
-        orderId: String(values.orderId),
-        eventId: String(values.eventId),
-        source: String(values.source),
-        status: String(values.status ?? "pending") as MetaCapiPurchaseOutboxStatus,
-        attempts: Number(values.attempts ?? 0),
-        nextAttemptAt: Number(values.nextAttemptAt ?? 0),
-        claimId: null,
-        claimExpiresAt: null,
-        lastError: null,
-        sentAt: null,
-        skippedAt: null,
-        createdAt: Number(values.createdAt ?? 0),
-        updatedAt: Number(values.updatedAt ?? 0),
-    };
 }
 
 function createOrderSuccessEventSourceUrl(storefrontUrl: string, orderId: string): string {

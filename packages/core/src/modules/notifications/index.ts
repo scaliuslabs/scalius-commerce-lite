@@ -58,7 +58,6 @@ export {
   claimOrderNotificationOutboxForProcessing,
   createOrderNotificationOutboxInsertValues,
   enqueueOrderNotificationOutboxById,
-  flushPendingOrderNotificationOutbox,
   listOrderNotificationOutboxForOrder,
   markOrderNotificationOutboxDeadLettered,
   markOrderNotificationOutboxProcessingFailed,

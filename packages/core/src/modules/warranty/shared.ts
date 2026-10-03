@@ -4,7 +4,7 @@
 
 import type { Database } from "@scalius/database/client";
 import { AppError, ConflictError } from "../../errors";
-import { warrantySummaryLabel, type WarrantyDurationUnit, type WarrantyProvider } from "@scalius/shared/warranty";
+import { type WarrantyDurationUnit, type WarrantyProvider } from "@scalius/shared/warranty";
 
 export type BatchStatements = Parameters<Database["batch"]>[0];
 export type BatchStatement = BatchStatements[number];
@@ -137,10 +137,6 @@ export interface PolicyTerms {
   durationValue: number;
   durationUnit: WarrantyDurationUnit;
   replacementDays: number | null;
-}
-
-export function policySummary(policy: PolicyTerms): string {
-  return warrantySummaryLabel(policy);
 }
 
 export function errorText(error: unknown): string {

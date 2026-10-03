@@ -22,7 +22,6 @@ import {
   type Database,
 } from "@scalius/database/client";
 import type {
-  InitCODTrackingParams,
   RecordCODCollectionParams,
   RecordCODFailureParams,
 } from "./types";
@@ -122,20 +121,6 @@ export function createCODTrackingInsertValues(orderId: string) {
     createdAt: sql`unixepoch()`,
     updatedAt: sql`unixepoch()`,
   };
-}
-
-/**
- * Create a COD tracking record when a COD order is placed.
- * Called during order creation.
- */
-export async function initCODTracking(
-  db: Database,
-  params: InitCODTrackingParams
-): Promise<void> {
-  await db
-    .insert(codTracking)
-    .values(createCODTrackingInsertValues(params.orderId))
-    .onConflictDoNothing({ target: codTracking.orderId });
 }
 
 /**

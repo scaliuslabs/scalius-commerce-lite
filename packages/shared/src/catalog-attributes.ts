@@ -39,10 +39,6 @@ export function normalizeAttributeValue(value: string): string {
 }
 
 export const attributeUnitSchema = z.string().trim().min(1).max(ATTRIBUTE_UNIT_MAX_LENGTH).nullable();
-export const attributeSwatchHexSchema = z
-  .string()
-  .regex(/^#[0-9a-f]{6}$/, "Use a lowercase #rrggbb colour.")
-  .nullable();
 
 export const attributeDefinitionSchema = z.object({
   valueType: z.enum(ATTRIBUTE_VALUE_TYPES),

@@ -56,4 +56,3 @@ export function categoryPlacementProblem(input: {
 export const TEMPLATE_ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,39}$/;
 export const templateIdSchema = z.string().regex(TEMPLATE_ID_PATTERN, "Use lowercase letters, numbers and dashes.");
 export const templateAssignmentSchema = templateIdSchema.nullable();
-export type TemplateAssignment = z.infer<typeof templateAssignmentSchema>;

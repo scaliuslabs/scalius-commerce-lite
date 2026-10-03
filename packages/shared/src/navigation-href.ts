@@ -69,8 +69,3 @@ export function parseNavigationHref(value: unknown): NavigationHrefParseResult {
     return { ok: true, kind: "internal", href: `/${href}` };
   }
 }
-
-export function normalizeNavigationHref(value: unknown): string | undefined {
-  const result = parseNavigationHref(value);
-  return result.ok ? result.href : undefined;
-}

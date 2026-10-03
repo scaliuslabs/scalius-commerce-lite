@@ -25,10 +25,8 @@ export const CONVERSATION_AUTHOR_TYPES = ["customer", "guest_receipt", "staff", 
 export type ConversationAuthorType = (typeof CONVERSATION_AUTHOR_TYPES)[number];
 
 export const CONVERSATION_ATTACHMENT_UPLOADER_TYPES = ["customer", "guest_receipt", "staff"] as const;
-export type ConversationAttachmentUploaderType = (typeof CONVERSATION_ATTACHMENT_UPLOADER_TYPES)[number];
 
 export const CONVERSATION_ID_PREFIX = "cnv_";
-export const CONVERSATION_MESSAGE_ID_PREFIX = "msg_";
 export const CONVERSATION_ATTACHMENT_ID_PREFIX = "att_";
 export const CONVERSATION_ATTACHMENT_R2_PREFIX = "private/conversations/";
 

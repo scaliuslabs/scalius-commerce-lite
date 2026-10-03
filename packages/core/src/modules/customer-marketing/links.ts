@@ -67,8 +67,6 @@ export function newOptInNonce(): string {
     return bytesToHex(crypto.getRandomValues(new Uint8Array(16)));
 }
 
-export const OPT_IN_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/;
-
 /** The confirmation token of one opt-in request. */
 export async function deriveOptInToken(env: MarketingLinkEnv, input: { customerId: string; nonce: string }): Promise<string> {
     return sign(env, MARKETING_OPT_IN_LINK_PURPOSE, `opt-in:v1:${input.customerId}:${input.nonce}`);

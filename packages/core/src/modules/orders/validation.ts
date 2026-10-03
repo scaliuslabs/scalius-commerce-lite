@@ -199,8 +199,6 @@ export type ArchiveOrdersInput = z.infer<typeof archiveOrdersSchema>;
 
 export const restoreOrderSchema = orderRevisionSchema.pick({ expectedVersion: true });
 
-export type RestoreOrderInput = z.infer<typeof restoreOrderSchema>;
-
 const shipmentResourceIdSchema = z.string().trim().min(1).max(180);
 
 /**
@@ -259,5 +257,3 @@ export const bulkShipOrderSchema = z.object({
     providerId: shipmentResourceIdSchema,
     options: shipmentCreationOptionsSchema.optional(),
 }).strict();
-
-export type BulkShipOrderInput = z.infer<typeof bulkShipOrderSchema>;

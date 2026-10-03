@@ -387,15 +387,6 @@ export async function saveDeliveryProvider(
   return { ...provider, id: providerId };
 }
 
-/**
- * Delete provider from database
- */
-export async function deleteDeliveryProvider(db: Database, id: string) {
-  await db.delete(deliveryProviders).where(eq(deliveryProviders.id, id));
-
-  return true;
-}
-
 /** Runs a courier's connection test with a row's settings. */
 async function testCourierConnection(
   courier: Courier,

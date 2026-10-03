@@ -313,8 +313,5 @@ export const newsletterSubscribeSchema = /* @__PURE__ */ (() => z.object({
   consentText: z.string().trim().min(1).max(MARKETING_CONSENT_TEXT_MAX).optional(),
 }).strict())();
 
-export type NewsletterSubscribeInput = z.infer<typeof newsletterSubscribeSchema>;
-
 /** Outcome the storefront shows; never says whether the contact was known. */
 export const NEWSLETTER_RESULTS = ["subscribed", "pending", "error", "rate_limited", "invalid"] as const;
-export type NewsletterResult = (typeof NEWSLETTER_RESULTS)[number];

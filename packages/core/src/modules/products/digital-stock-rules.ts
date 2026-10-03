@@ -57,12 +57,6 @@ export function digitalStockError(
     return new ValidationError(message, details);
 }
 
-/** True for a validation error raised by these rules. */
-export function isDigitalStockError(error: unknown): error is ValidationError {
-    return error instanceof ValidationError
-        && (error.details as { reason?: unknown } | undefined)?.reason === DIGITAL_STOCK_IS_KEYS_REASON;
-}
-
 export function isDigitalKind(kind: string | null | undefined): boolean {
     return kind === "digital";
 }

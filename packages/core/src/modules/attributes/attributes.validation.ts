@@ -247,5 +247,3 @@ export type CreateAttributeGroupInput = z.infer<typeof createAttributeGroupSchem
 export type UpdateAttributeGroupInput = z.infer<typeof updateAttributeGroupSchema>;
 export type CreateAttributeValueRowInput = z.infer<typeof createAttributeValueRowSchema>;
 export type UpdateAttributeValueRowInput = z.infer<typeof updateAttributeValueRowSchema>;
-export type ConvertAttributeTypeInput = z.input<typeof convertAttributeTypeSchema>;
-export type ReplaceCategoryAttributeSetInput = z.infer<typeof replaceCategoryAttributeSetSchema>;

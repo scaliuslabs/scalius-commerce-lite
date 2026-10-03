@@ -421,16 +421,6 @@ export interface StorefrontOrderShippingMethodSnapshot {
     feeWaived: boolean;
 }
 
-/** How an order's physical lines reach the buyer, frozen at commit. */
-export interface StorefrontOrderFulfilmentSnapshot {
-    /** Some line has fulfilment type `ship`: the order carries an address. */
-    requiresShipping: boolean;
-    /** The chosen rate's kind; null when nothing physical was bought. */
-    shippingMethodKind: DeliveryMethodKind | null;
-    pickupAddress: string | null;
-    pickupHours: string | null;
-}
-
 /** Prepared, server-authoritative storefront order data committed synchronously by checkout. */
 export interface StorefrontOrderCommitPayload {
     checkoutToken: string;

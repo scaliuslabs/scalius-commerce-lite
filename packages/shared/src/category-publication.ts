@@ -9,9 +9,3 @@ export const CATEGORY_STATUSES = ["draft", "published", "internal"] as const;
 export const categoryStatusSchema = z.enum(CATEGORY_STATUSES);
 
 export type CategoryStatus = z.infer<typeof categoryStatusSchema>;
-
-export function isPublishedCategoryStatus(
-  status: CategoryStatus,
-): status is "published" {
-  return status === "published";
-}

@@ -137,8 +137,6 @@ export async function getPublicBrandBySlug(db: Database, slug: string) {
     };
 }
 
-export type PublicStorefrontBrand = NonNullable<Awaited<ReturnType<typeof getPublicBrandBySlug>>>;
-
 /** One page of public brands in merchant order (sort order, then name): the brand wall and agents. */
 export async function listPublicBrands(
     db: Database,

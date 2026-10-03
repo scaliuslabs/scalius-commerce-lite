@@ -124,7 +124,6 @@ export const productImportItemSchema = z.object({
 export type ProductImportVariant = z.infer<typeof productImportVariantSchema>;
 export type ProductImportOption = z.infer<typeof productImportOptionSchema>;
 export type ProductImportItem = z.infer<typeof productImportItemSchema>;
-export type ProductImportItemInput = z.input<typeof productImportItemSchema>;
 
 export const productImportBatchSchema = z.object({
   mode: z.enum(PRODUCT_IMPORT_MODES),

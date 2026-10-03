@@ -101,10 +101,6 @@ export type CustomerFlowNotificationType = (typeof CUSTOMER_FLOW_NOTIFICATION_TY
 /** Every type an outbox row or a delivery receipt may carry. */
 export type OutboxNotificationType = NotificationType | CustomerFlowNotificationType;
 
-export function isCustomerFlowNotificationType(value: string): value is CustomerFlowNotificationType {
-    return (CUSTOMER_FLOW_NOTIFICATION_TYPES as readonly string[]).includes(value);
-}
-
 /** What a notification is about; the outbox and receipts are keyed by it. */
 export const NOTIFICATION_SUBJECT_TYPES = ["order", "conversation", "gift_card", "digital", "customer"] as const;
 export type NotificationSubjectType = (typeof NOTIFICATION_SUBJECT_TYPES)[number];
@@ -157,10 +153,6 @@ export function adminChannelsForType(type: NotificationType): readonly AdminNoti
 
 export function isOrderNotificationType(value: string): value is OrderNotificationType {
     return (ORDER_NOTIFICATION_TYPES as readonly string[]).includes(value);
-}
-
-export function isConversationNotificationType(value: string): value is ConversationNotificationType {
-    return (CONVERSATION_NOTIFICATION_TYPES as readonly string[]).includes(value);
 }
 
 export function isResolvedNotificationType(value: string): value is ResolvedNotificationType {

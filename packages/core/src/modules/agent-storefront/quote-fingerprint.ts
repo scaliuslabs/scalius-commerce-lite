@@ -1,8 +1,6 @@
 import { AppError } from "@scalius/core/errors";
 import type { TaxQuote } from "@scalius/core/modules/tax/browser";
 
-export const AGENT_STOREFRONT_CHECKOUT_QUOTE_FINGERPRINT_PATTERN = /^taxq_[A-Za-z0-9_-]{22}$/;
-
 export interface AgentStorefrontCheckoutQuoteFingerprintInput {
   contextRevision: number;
   /** The method the order uses; null when nothing in the cart needs one. */

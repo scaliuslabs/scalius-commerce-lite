@@ -16,7 +16,7 @@ import {
 import type { BatchItem } from "drizzle-orm/batch";
 import { resolveTrackedBuyerAvailabilityBand } from "@scalius/shared/buyer-availability";
 import { recordMovement } from "./movements";
-import type { ReservationEntry, StockOperationResult } from "./types";
+import type { StockOperationResult } from "./types";
 import { validatePositiveQuantity } from "./validation";
 import {
   buildInventoryLedgerV2Edge,
@@ -224,42 +224,6 @@ export async function reserveStock(
     newStock: 0,
     error: `Failed to reserve stock after ${MAX_RETRIES} retries due to concurrent modifications`,
   };
-}
-
-/**
- * Reserve stock for multiple variants atomically.
- * If any reservation fails, rolls back all successful reservations.
- */
-export async function reserveMultiple(
-  db: Database,
-  entries: ReservationEntry[],
-  orderId?: string
-): Promise<{ success: boolean; results: StockOperationResult[]; error?: string }> {
-  for (const entry of entries) validatePositiveQuantity(entry.quantity);
-
-  const results: StockOperationResult[] = [];
-  const toRollback: ReservationEntry[] = [];
-
-  for (const entry of entries) {
-    const result = await reserveStock(db, entry.variantId, entry.quantity, orderId, entry.pool ?? "regular");
-    results.push(result);
-
-    if (!result.success) {
-      // Rollback all previous successful reservations
-      for (const rolledBack of toRollback) {
-        await releaseReservationInternal(db, rolledBack.variantId, rolledBack.quantity, orderId, rolledBack.pool ?? "regular");
-      }
-      return {
-        success: false,
-        results,
-        error: result.error ?? `Failed to reserve stock for variant ${entry.variantId}`,
-      };
-    }
-
-    toRollback.push(entry);
-  }
-
-  return { success: true, results };
 }
 
 export type ReservationBatchItem = {
@@ -1342,39 +1306,4 @@ function validateStockAvailability(
     }
   }
   return null;
-}
-
-// Internal helper to avoid circular import with release module
-async function releaseReservationInternal(
-  db: Database,
-  variantId: string,
-  quantity: number,
-  orderId?: string,
-  pool: "regular" | "preorder" | "backorder" = "regular"
-): Promise<void> {
-  await safeBatch(db, [
-    db
-      .update(productVariants)
-      .set({
-        reservedStock: sql`MAX(0, ${productVariants.reservedStock} - ${quantity})`,
-        ...(pool === "preorder"
-          ? { preorderStock: sql`${productVariants.preorderStock} + ${quantity}` }
-          : {}),
-        stockVersion: sql`${productVariants.stockVersion} + 1`,
-        updatedAt: sql`unixepoch()`,
-      })
-      .where(eq(productVariants.id, variantId)),
-    ...catalogBuyerStateRefreshStatementsForSkus(db, [variantId]),
-  ] as never);
-
-  // Log the rollback
-  await recordMovement(db, {
-    variantId,
-    orderId,
-    type: "released",
-    quantity: -quantity,
-    previousStock: 0, // Approximate — not critical for rollback logs
-    newStock: 0,
-    notes: `Reservation rollback (batch failure)`,
-  });
 }

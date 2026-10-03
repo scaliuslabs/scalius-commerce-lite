@@ -5,7 +5,7 @@ import {
   releaseReservation,
   releaseReservedStockBatch,
 } from "./release";
-import { reserveMultiple, reserveStock, reserveStockBatch } from "./reserve";
+import { reserveStock, reserveStockBatch } from "./reserve";
 
 const invalidQuantities = [
   ["zero", 0],
@@ -19,7 +19,6 @@ type QuantityMutation = (db: Database, quantity: number) => Promise<unknown>;
 
 const quantityMutations: Array<[string, QuantityMutation]> = [
   ["reserveStock", (db, quantity) => reserveStock(db, "variant_1", quantity)],
-  ["reserveMultiple", (db, quantity) => reserveMultiple(db, [{ variantId: "variant_1", quantity }])],
   ["reserveStockBatch", (db, quantity) => reserveStockBatch(db, [{ variantId: "variant_1", quantity }])],
   ["releaseReservation", (db, quantity) => releaseReservation(db, "variant_1", quantity)],
   ["releaseMultiple", (db, quantity) => releaseMultiple(db, [{ variantId: "variant_1", quantity }])],
@@ -47,13 +46,6 @@ describe("inventory mutation quantity validation", () => {
   }
 
   it.each([
-    [
-      "reserveMultiple",
-      (db: Database) => reserveMultiple(db, [
-        { variantId: "variant_1", quantity: 1 },
-        { variantId: "variant_2", quantity: 0 },
-      ]),
-    ],
     [
       "reserveStockBatch",
       (db: Database) => reserveStockBatch(db, [
