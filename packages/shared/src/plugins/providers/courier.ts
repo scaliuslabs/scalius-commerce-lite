@@ -13,6 +13,7 @@ import { z } from "zod";
 import {
   providerCountrySchema,
   providerCurrencySchema,
+  providerDetailsSchema,
   providerHttpRequestSchema,
   providerIdempotencyKeySchema,
   providerMinorSchema,
@@ -70,13 +71,13 @@ export const courierShipmentInputSchema = z.object({
   /** The currency's decimal places, for couriers that take major units. */
   decimalPlaces: z.number().int().min(0).max(4),
   note: text(1000).nullable(),
-  itemCount: z.number().int().min(1).max(10_000).nullable(),
+  itemCount: z.number().int().min(1).max(1_000_000).nullable(),
   itemDescription: text(500).nullable(),
-  /** Staff choices on the booking form; each courier reads the ones it understands. */
+  /** Staff choices on the booking form (within its bounds); each courier reads the ones it understands. */
   options: z.object({
-    deliveryType: z.number().int().min(0).max(1000).nullable(),
-    itemType: z.number().int().min(0).max(1000).nullable(),
-    itemWeightKg: z.number().min(0).max(1000).nullable(),
+    deliveryType: z.number().int().min(0).max(1_000_000).nullable(),
+    itemType: z.number().int().min(0).max(1_000_000).nullable(),
+    itemWeightKg: z.number().min(0).max(10_000).nullable(),
   }).strict(),
 }).strict();
 export type CourierShipmentInput = z.infer<typeof courierShipmentInputSchema>;
@@ -97,6 +98,8 @@ export const courierShipmentSchema = z.object({
     z.object({ url: z.string().url().max(2048).refine((value) => value.startsWith("https://"), "Use an https URL.") }).strict(),
     z.object({ pdfBase64: z.string().min(8).max(1_400_000).regex(/^[A-Za-z0-9+/]+={0,2}$/) }).strict(),
   ]).nullable(),
+  /** The courier's own booking facts kept with the shipment for staff (fee, invoice): never contact data or secrets. */
+  details: providerDetailsSchema.optional(),
 }).strict();
 export type CourierShipment = z.infer<typeof courierShipmentSchema>;
 
@@ -108,6 +111,8 @@ export const courierTrackingSchema = z.object({
   rawStatus: text(100),
   /** When the courier recorded this state (ISO 8601). */
   updatedAt: z.string().datetime({ offset: true }),
+  /** The courier's own tracking facts kept with the shipment for staff: never contact data or secrets. */
+  details: providerDetailsSchema.optional(),
 }).strict();
 export type CourierTracking = z.infer<typeof courierTrackingSchema>;
 
@@ -133,9 +138,18 @@ export const courierQuoteSchema = z.object({
   estimatedDays: z.number().int().min(0).max(365).nullable(),
 }).strict();
 
-/** An authenticated tracking push, or why nothing applies. */
+/**
+ * An authenticated tracking push, or why nothing applies. The platform
+ * applies a push once: by the courier's own `eventId` when it sends one, else
+ * by the shipment, state and time the push reports.
+ */
 export const courierWebhookSchema = z.discriminatedUnion("status", [
-  z.object({ status: z.literal("update"), externalId: providerRefSchema, tracking: courierTrackingSchema }).strict(),
+  z.object({
+    status: z.literal("update"),
+    eventId: providerRefSchema.optional(),
+    externalId: providerRefSchema,
+    tracking: courierTrackingSchema,
+  }).strict(),
   z.object({ status: z.literal("ignored"), reason: providerReasonSchema }).strict(),
   z.object({ status: z.literal("invalid"), reason: providerReasonSchema }).strict(),
 ]);

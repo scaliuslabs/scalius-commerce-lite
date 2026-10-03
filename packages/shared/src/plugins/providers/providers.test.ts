@@ -97,6 +97,25 @@ describe("provider port contracts", () => {
     expect(output.safeParse({ status: "approved" }).success).toBe(false);
   });
 
+  it("keeps a courier's flat audit facts and push ids, within the booking form's bounds", () => {
+    const courier = PROVIDER_PORTS.courier;
+    const [, , input, booked] = SAMPLES.find(([kind, operation]) => kind === "courier" && operation === "createShipment")!;
+    const tracking = { status: "in_transit", rawStatus: "At the sorting hub", updatedAt: "2026-10-03T10:00:00Z" };
+    expect(courier.createShipment.output.safeParse({ ...(booked as object), details: { delivery_fee: 60, invoice: "ORD1", cod: null } }).success).toBe(true);
+    expect(courier.createShipment.output.safeParse({ ...(booked as object), details: { recipient: { phone: "+880" } } }).success).toBe(false);
+    expect(courier.trackShipment.output.safeParse({ ...tracking, details: { hub: "Dhaka" } }).success).toBe(true);
+
+    const push = { status: "update", externalId: "CN1", tracking };
+    expect(courier.verifyWebhook.output.safeParse(push).success).toBe(true);
+    expect(courier.verifyWebhook.output.safeParse({ ...push, eventId: "evt-1" }).success).toBe(true);
+    expect(courier.verifyWebhook.output.safeParse({ ...push, eventId: "" }).success).toBe(false);
+    expect(courier.verifyWebhook.output.safeParse({ ...push, tracking: { ...tracking, status: "lost" } }).success).toBe(false);
+
+    const options = (itemWeightKg: number) => ({ ...(input as object), options: { deliveryType: 48, itemType: 2, itemWeightKg } });
+    expect(courier.createShipment.input.safeParse(options(5_000)).success).toBe(true);
+    expect(courier.createShipment.input.safeParse(options(10_001)).success).toBe(false);
+  });
+
   it("names app providers plugin:provider and keeps built-in ids distinct", () => {
     expect(qualifiedProviderId("scalius.bkash", "bkash")).toBe("scalius.bkash:bkash");
     expect(parseQualifiedProviderId("scalius.bkash:bkash")).toEqual({ pluginId: "scalius.bkash", providerId: "bkash" });
