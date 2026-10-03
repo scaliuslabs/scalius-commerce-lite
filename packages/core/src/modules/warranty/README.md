@@ -1,25 +1,70 @@
-# Warranty Module
+# Warranty
 
-Warranty and guarantee policies, per-line warranty records and claims (design: `audit/rewrite-2026-09-23/WAVE-B-DESIGN.md` §5). Owner slice: **B5**. B0 landed the stubs below; they do no I/O and return empty or zero, so nothing is buyer-visible until B5.
+Warranty and guarantee policies with immutable revisions, per-fulfilment-line warranty records, and claims backed by conversation threads. Audience: contributors and coding agents.
 
-Public entries: `index.ts` (server) and `browser.ts` (providers, duration units, claim statuses/resolutions/openers, limits, `LineWarrantyExtra`).
+## Entries
 
-## Will own
+- `index.ts` is the server entry.
+- `browser.ts` is the closed entry: `WARRANTY_PROVIDERS`, `WARRANTY_DURATION_UNITS`, `WARRANTY_CLAIM_STATUSES`, `WARRANTY_CLAIM_RESOLUTIONS`, `WARRANTY_CLAIM_OPENERS`, `WARRANTY_LIMITS`, `LineWarrantyExtra`.
 
-Policy CRUD with immutable revisions, the product warranty projection, the per-line extras reader, buyer warranty lists, and claims (open and update) as records backed by a `warranty_claim` conversation thread.
+| File | Owns |
+|------|------|
+| `policies.ts` | Create, edit (new revision), archive and restore policies. Input validation. |
+| `claims.ts` | Open a claim, update its status, stage claim photos, staff list and detail. |
+| `extras.ts` | The per-line `warranty` extra, the account Warranties list (at most 100), the active count. |
+| `buyer-thread.ts` | A buyer's view of one claim and its thread, for the guest receipt and the account. |
+| `shared.ts` | Ids, claim id derivation, error codes, claim event lines. |
 
-## Seams already mounted (B0)
+## Layer and imports
 
-- Stubs: `listLineWarranties`, `countActiveBuyerWarranties` (`extras.ts`).
-- Routers: `apps/api/src/routes/admin/warranty-policies.ts`, `routes/admin/warranty-claims.ts`, `routes/admin/orders/warranty-claims.ts` (staff opens a claim from an order), `routes/customer-auth/warranties.ts`, `routes/storefront-orders/warranties.ts`.
-- Permissions (`PRODUCTS_EDIT` for policies, `ORDERS_EDIT` for claims) in `route-permissions/warranty.ts`; operations in `operation-registry/{dashboard,storefront}-warranty.ts`.
+- Layer L9. Imports `conversations` (claim threads) and `media-references` (product image keys in the extras read).
+- Nothing imports `warranty`. An edge back from a lower domain would close a cycle, which the domain graph check rejects.
 
-## Domain edges
+## Tables
 
-`warranty → conversations` (claim threads) and `warranty → media-references`. Nothing imports `warranty`; an edge back from a lower domain would close a cycle, which the domain graph check rejects.
+| Table | Role and constraints |
+|-------|----------------------|
+| `warranty_policies` | The editable policy. `provider` is `brand` or `store`. Duration is 1 to 120 `days`, `months` or `years`. Replacement is 0 to 90 days or NULL. Terms are at most 4,000 characters. `current_revision_id` is the revision checkout freezes. `archived_at` hides it. `version` is the CAS token. |
+| `warranty_policy_revisions` | Immutable buyer-facing copy of a policy. Unique `(policy_id, revision)`. Triggers refuse update and delete. |
+| `order_item_warranties` | One record per fulfilment line. Id `wty_<fulfilment line id>`. Holds `starts_at`, `expires_at`, `replacement_until` and `voided_at`. |
+| `warranty_claims` | A claim record. `status` is `open`, `in_progress`, `resolved` or `rejected`. `resolved` needs a `resolution` (`repair`, `replacement`, `refund`, `other`). Unique `conversation_id`. At most one claim in `open` or `in_progress` per warranty. |
 
-## Invariants (design §5.4)
+Related columns: `products.warranty_policy_id` and `order_items.warranty_revision_id`.
 
-- Exactly one warranty record per fulfilment line that has a revision (DB trigger), voided with its fulfilment. Revisions are immutable; the line's revision is frozen at commit.
-- Buyer claims only on active warranties; at most one open claim per warranty; the thread is created in the same batch.
-- Claims never mutate money, stock or order status.
+## Rules
+
+- A policy edit that changes a buyer-facing field inserts the next revision and points the policy at it in one batch, guarded by the `version` the editor loaded.
+- Checkout freezes the policy's current revision onto the order line (`order_items.warranty_revision_id`). A trigger blocks any later change. An edit never changes what a buyer bought.
+- A trigger on `order_fulfillment_lines` creates one warranty record per fulfilment line of a line with a frozen revision. It starts at the fulfilment's creation time and expires by the revision's duration. A trigger voids the record when its fulfilment is voided.
+- A product may point only at a live (not archived) policy. Archiving hides the policy from buyers and from new products. Revisions are never deleted.
+- Buyers claim only an active warranty: not voided, not expired, checked again inside the batch. A buyer is the account that owns the order or a guest holding the receipt proof. Staff may open a goodwill claim on an expired warranty, never on a voided one.
+- Opening a claim is one batch. It writes the thread (if not reserved yet), the claim row, the opening event line, the description as the first public message with its staged photos, and its notification outbox row.
+- A claim takes at most 3 photos.
+- The claim id derives from the warranty and a client key from the form (`claimIdFor`), so a double submit lands on the same claim and thread.
+- Claims are records. They never change money, stock, fulfilment or order status. A replacement goes through a manual order or return. A refund goes through the refund dialog. Staff start both from the order.
+- Staff move a claim with the `version` they loaded. A status change writes a public event line in the claim thread. Reopening needs the warranty's open-claim slot to be free.
+
+## DVC
+
+- `order_item_warranties` and `warranty_claims` are private in the registry. `warranty_policy_revisions` is frozen at checkout and no public route reads it. `warranty_policies` is registered: a policy edit advances `p:<id>` of every product that points at it.
+
+## Routes
+
+Permissions are in `packages/core/src/auth/rbac/route-permissions/warranty.ts`.
+
+| Method and path | Permission |
+|-----------------|------------|
+| `GET /api/v1/admin/warranty-policies`, `GET /{id}` | `products.view` |
+| `POST /api/v1/admin/warranty-policies`, `PUT /{id}`, `DELETE /{id}` (archive), `POST /{id}/restore` | `products.edit` |
+| `GET /api/v1/admin/warranty-claims`, `GET /{id}` | `orders.view` |
+| `PATCH /api/v1/admin/warranty-claims/{id}` | `orders.edit` and `conversations.reply` |
+| `POST /api/v1/admin/orders/{id}/warranty-claims` (staff opens a claim) | `orders.edit` and `conversations.reply` |
+| `GET /api/v1/customer-auth/warranties`, `POST /warranties/{id}/claim-attachments`, `POST /warranties/{id}/claims` | customer session |
+| `POST /api/v1/orders/receipt/{id}/warranties/{warrantyId}/claim-attachments`, `/claims` | receipt proof |
+| `GET /api/v1/orders/receipt/{id}/warranty-claims/{claimId}`, plus `/messages`, `/read`, `/attachments` | receipt proof |
+
+## Where to look
+
+- Routes under `apps/api/src/routes/`: `admin/warranty-policies.ts`, `admin/warranty-claims.ts`, `admin/orders/warranty-claims.ts`, `customer-auth/warranties.ts` and `storefront-orders/warranties.ts`.
+- Dashboard: `apps/admin-v2/src/components/admin/warranty/` and `components/admin/settings/warranty-policies/`.
+- Storefront: `apps/storefront/src/components/warranty/WarrantyClaimForm.astro`.
