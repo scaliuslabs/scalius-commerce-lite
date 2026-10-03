@@ -258,6 +258,8 @@ export const queryKeys = {
     adminNotificationChannels: () =>
       ["settings", "admin-notification-channels"] as const,
     deliveryProviders: () => ["settings", "delivery-providers"] as const,
+    /** Installed apps' providers of one port, with their readiness. */
+    appProviders: (kind: string) => ["settings", "app-providers", kind] as const,
     deliveryLocations: (params?: Record<string, unknown>) =>
       params !== undefined
         ? (["settings", "delivery-locations", params] as const)
