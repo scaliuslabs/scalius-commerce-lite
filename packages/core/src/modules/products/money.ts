@@ -20,7 +20,7 @@ import {
     toStoreMinor,
     type StoreCurrency,
 } from "../settings/store-money";
-import { SETTINGS_DOCUMENT_ROW_KEY } from "../settings/settings-store";
+import { SETTINGS_DOCUMENT_ROW_KEY } from "../../settings-store";
 import { deps } from "../../cache-deps";
 import type { BuyerCatalogPricingProjection } from "./buyer-projection";
 

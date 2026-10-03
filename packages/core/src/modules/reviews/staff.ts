@@ -30,7 +30,7 @@ import {
   reviewsDocument,
   type ReviewSettings,
 } from "../settings/documents";
-import { readSettingsDocumentStrict } from "../settings/settings-store";
+import { readSettingsDocumentStrict } from "../../settings-store";
 import {
   ADMIN_REVIEW_PAGE_SIZE,
   REVIEW_MODERATION_BATCH_MAX,

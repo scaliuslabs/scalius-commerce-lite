@@ -16,7 +16,7 @@ import {
 import type { Database } from "@scalius/database/client";
 import { sql, type SQL, type SQLWrapper } from "drizzle-orm";
 import { businessDocument, seoDocument } from "../settings/documents";
-import { SETTINGS_DOCUMENT_ROW_KEY } from "../settings/settings-store";
+import { SETTINGS_DOCUMENT_ROW_KEY } from "../../settings-store";
 
 /**
  * Where a file is used. Every place that can hold a media reference is listed

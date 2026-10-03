@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { ValidationError } from "@scalius/core/errors";
 
-import { SettingsRevisionConflictError } from "../settings/settings-store";
+import { SettingsRevisionConflictError } from "../../settings-store";
 import {
     getCheckoutFlowSettingsDocument,
     saveCheckoutFlowSettingsDocument,

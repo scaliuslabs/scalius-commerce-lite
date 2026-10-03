@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { composeAuthOtpMessage, storeDisplayName } from "./store-messages";
+import { composeAuthOtpMessage } from "./store-messages";
+import { storeDisplayName } from "../settings/store-name";
 
 describe("the store's display name", () => {
   it("uses the business name, then the legal name, then the Store URL host, never a blank", () => {

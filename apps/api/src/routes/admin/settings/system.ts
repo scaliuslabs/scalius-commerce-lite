@@ -26,10 +26,6 @@ import {
     type CustomerIdentitySettings,
 } from "@scalius/shared/customer-auth-policy";
 import {
-    SettingsRevisionConflictError,
-    selectSettingsDocuments,
-    writeSettingsDocuments,
-    type SettingsDocumentWriteRequest,
     getCurrencySettings,
     customerAuthDocument,
     emailDocument,
@@ -39,11 +35,16 @@ import {
     type EmailSettings,
     type FirebaseSettings,
     type WhatsAppSettings,
-    CHECKOUT_READINESS_CUSTOMER_SIGN_IN_ISSUE,
-    getCheckoutReadiness,
-    getCustomerSignInReadiness,
-    isCustomerAuthChannelReady,
 } from "@scalius/core/modules/settings";
+import { CHECKOUT_READINESS_CUSTOMER_SIGN_IN_ISSUE } from "@scalius/shared/checkout-readiness";
+import { getCustomerSignInReadiness, isCustomerAuthChannelReady } from "@scalius/core/modules/customers";
+import { getCheckoutReadiness } from "@scalius/core/modules/checkout";
+import {
+    SettingsRevisionConflictError,
+    selectSettingsDocuments,
+    writeSettingsDocuments,
+    type SettingsDocumentWriteRequest,
+} from "@scalius/core/settings-store";
 import { getCheckoutFlowSettingsDocument, saveCheckoutFlowSettingsDocument } from "@scalius/core/modules/checkout";
 
 import { buildClearNotificationProviderBlocksStatement } from "@scalius/core/modules/notifications";

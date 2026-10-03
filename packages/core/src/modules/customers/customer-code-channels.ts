@@ -14,7 +14,7 @@ import {
 } from "@scalius/shared/customer-auth-policy";
 import type { EmailRuntimeContext } from "../../integrations/email";
 import type { AppProviders } from "../../integrations/provider-port";
-import { isCustomerAuthChannelReady } from "../settings/checkout-readiness";
+import { isCustomerAuthChannelReady } from "./sign-in-readiness";
 import { customerAuthDocument } from "../settings/documents";
 import { maskContact } from "./customer-identity";
 

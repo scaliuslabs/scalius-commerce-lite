@@ -48,7 +48,7 @@ import {
   type CustomerCountries,
   type MediaOptimizationSettings,
 } from "./documents";
-import type { SettingsDocument, SettingsDocumentWriteResult } from "./settings-store";
+import type { SettingsDocument, SettingsDocumentWriteResult } from "../../settings-store";
 
 const THEME_SETTINGS_ID = "default";
 

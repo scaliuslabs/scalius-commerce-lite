@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { productVariants, settings } from "@scalius/database/schema";
 import { sql, type SQL } from "drizzle-orm";
-import { defineSettingsDocument, SETTINGS_DOCUMENT_ROW_KEY } from "../settings/settings-store";
+import { defineSettingsDocument, SETTINGS_DOCUMENT_ROW_KEY } from "../../settings-store";
 import { deps } from "../../cache-deps";
 
 export const LOW_STOCK_THRESHOLD_MAX = 1_000_000;

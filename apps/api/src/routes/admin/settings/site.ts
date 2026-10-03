@@ -32,9 +32,9 @@ import {
   currencyDocument,
   customerCountriesDocument,
   mediaDocument,
-  platformDocument,
   seoDocument,
 } from "@scalius/core/modules/settings";
+import { platformDocument } from "@scalius/core/modules/platform";
 import { getStorefrontUrlSetting, saveStorefrontUrl } from "@scalius/core/modules/platform";
 import {
   PRODUCT_FEED_DIAGNOSTIC_MAX_SAMPLE_LIMIT,

@@ -5,7 +5,7 @@ const mocks = vi.hoisted(() => ({
   logCapiEvent: vi.fn(),
 }));
 
-vi.mock("../../modules/analytics/meta.service", () => ({
+vi.mock("./capi-settings", () => ({
   getCapiSettings: mocks.getCapiSettings,
   logCapiEvent: mocks.logCapiEvent,
 }));

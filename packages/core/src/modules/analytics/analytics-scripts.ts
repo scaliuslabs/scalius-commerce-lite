@@ -1,10 +1,11 @@
-// Server-side analytics script policy: snippet processing and public-injection
-// checks. Browser event tracking lives in apps/storefront/src/lib/analytics.ts.
+// Analytics script policy: snippet processing and public-injection checks
+// (pure; the API applies it when it serves the public scripts). Browser
+// event tracking lives in apps/storefront/src/lib/analytics.ts.
 
 import {
   isPubliclyInjectableAnalyticsConfig,
   resolveAnalyticsPartytownPolicy,
-} from "../modules/analytics/analytics.validation";
+} from "./analytics.validation";
 
 export interface AnalyticsConfig {
   type: string;

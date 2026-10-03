@@ -7,7 +7,7 @@ import {
   isFts5SearchEnabled,
   sanitizeFtsQuery,
 } from "./fts5";
-import { productSearchRelevanceOrder } from "./relevance";
+import { productSearchRelevanceOrder } from "../modules/catalog/search-relevance";
 
 const dialect = new SQLiteSyncDialect();
 

@@ -5,7 +5,7 @@ import { planLimits } from "@scalius/shared/plan-limits";
 
 import { resolvePublicAttributeFilters } from "./facets";
 import { resolveCollectionProductsBatch } from "./collections";
-import { search } from "../../search";
+import { search } from "./site-search";
 import { getHomepageData } from "../storefront/storefront.service";
 import { getProductsByIds, listProducts } from "../product-admin/read";
 import {

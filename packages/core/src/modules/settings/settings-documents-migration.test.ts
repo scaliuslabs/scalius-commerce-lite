@@ -19,7 +19,7 @@ import { getEmailRuntimeSettings } from "../../integrations/email/settings";
 import { readFirebaseSettings } from "../../integrations/firebase/settings";
 import { getSmsSettings } from "../../integrations/sms/sms-settings";
 import { getWhatsAppCloudApiSettings } from "../../integrations/whatsapp";
-import { getCapiSettings } from "../analytics/meta.service";
+import { getCapiSettings } from "../../integrations/meta/capi-settings";
 import {
   getPaymentMethodPreferences,
   getSSLCommerzSettings,

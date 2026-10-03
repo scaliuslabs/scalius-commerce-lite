@@ -31,7 +31,7 @@ import {
 import { fromMinor, isWholeCashAmountMinor, toMinor, WHOLE_TAKA_MESSAGE } from "@scalius/shared/money";
 import type { StoreCurrency } from "../settings/store-money";
 import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
-import { defineSettingsDocument, SettingsRevisionConflictError } from "../settings/settings-store";
+import { defineSettingsDocument, SettingsRevisionConflictError } from "../../settings-store";
 
 type Statement = BatchItem<"sqlite">;
 

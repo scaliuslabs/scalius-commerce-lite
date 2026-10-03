@@ -17,13 +17,13 @@ vi.mock("../../integrations/whatsapp", () => ({
 }));
 
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
-import { checkoutDocument } from "./documents";
+import { checkoutDocument } from "../settings/documents";
 import {
     CHECKOUT_READINESS_CODES,
     CHECKOUT_READINESS_CUSTOMER_SIGN_IN_ISSUE,
-    getCheckoutReadiness,
-    getCustomerSignInReadiness,
-} from "./checkout-readiness";
+} from "@scalius/shared/checkout-readiness";
+import { getCheckoutReadiness } from "./readiness";
+import { getCustomerSignInReadiness } from "../customers/sign-in-readiness";
 
 async function createAuthDb(options: {
     guestCheckoutEnabled: boolean;

@@ -21,7 +21,7 @@ import {
     type CustomerCountries,
 } from "../settings/documents";
 import type { CheckoutContactFieldSettings } from "./contact-fields";
-import { selectSettingsDocuments } from "../settings/settings-store";
+import { selectSettingsDocuments } from "../../settings-store";
 import { notificationsDocument } from "../notifications/documents";
 import {
     resolveProductMediaProjectionRows,

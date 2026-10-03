@@ -24,19 +24,14 @@ const mocks = vi.hoisted(() => ({
   readFirebaseSettings: vi.fn(),
 }));
 
-vi.mock("@scalius/core/modules/settings", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@scalius/core/modules/settings")>()),
-  getCheckoutReadiness: mocks.getCheckoutReadiness,
+vi.mock("@scalius/core/modules/customers", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/customers")>()),
   getCustomerSignInReadiness: mocks.getCustomerSignInReadiness,
-  CHECKOUT_READINESS_CUSTOMER_SIGN_IN_ISSUE: {
-    code: "unusable_customer_sign_in",
-    message:
-      "Configure a usable customer sign-in verification channel before requiring customer accounts at checkout.",
-  },
 }));
 
 vi.mock("@scalius/core/modules/checkout", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@scalius/core/modules/checkout")>()),
+  getCheckoutReadiness: mocks.getCheckoutReadiness,
   getCheckoutFlowSettingsDocument: mocks.getCheckoutFlowSettingsDocument,
   saveCheckoutFlowSettingsDocument: mocks.saveCheckoutFlowSettingsDocument,
 }));

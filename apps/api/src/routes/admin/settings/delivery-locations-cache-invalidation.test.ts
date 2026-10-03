@@ -25,8 +25,8 @@ vi.mock("@scalius/core/modules/delivery", async (importOriginal) => ({
   resetPathaoImportProgress: mocks.resetPathaoImportProgress,
 }));
 
-vi.mock("@scalius/core/modules/settings", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@scalius/core/modules/settings")>()),
+vi.mock("@scalius/core/modules/checkout", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@scalius/core/modules/checkout")>()),
   getCheckoutDeliveryReadiness: mocks.getCheckoutDeliveryReadiness,
 }));
 

@@ -51,7 +51,7 @@ import {
     customerAuthDocument,
     customerCountriesDocument,
 } from "../settings/documents";
-import { selectSettingsDocuments } from "../settings/settings-store";
+import { selectSettingsDocuments } from "../../settings-store";
 
 // ─────────────────────────────────────────
 // Constants

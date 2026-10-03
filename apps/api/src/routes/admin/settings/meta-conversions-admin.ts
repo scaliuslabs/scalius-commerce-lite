@@ -3,13 +3,11 @@ import { metaConversionsLogs } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import { desc, count } from "drizzle-orm";
 import {
-    manualLogCleanup,
-    summarizeMetaRequestPayload,
-    summarizeMetaResponsePayload,
     buildUnavailableMetaPixelParityDiagnostics,
     getMetaPixelParityDiagnostics,
     metaPixelParityStatuses,
 } from "@scalius/core/modules/analytics";
+import { manualLogCleanup, summarizeMetaRequestPayload, summarizeMetaResponsePayload } from "@scalius/core/integrations/meta/capi-settings";
 import { metaConversionsDocument, type MetaConversionsSettings } from "@scalius/core/modules/settings";
 
 import { ok, created } from "../../../utils/api-response";

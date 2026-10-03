@@ -4,8 +4,8 @@ import {
   processAnalyticsScript,
   shouldInjectAnalyticsScript,
   shouldUsePartytown,
-} from "./analytics";
-import { CLOUDFLARE_WEB_ANALYTICS_SCRIPT_SRC } from "../modules/analytics/analytics.validation";
+} from "./analytics-scripts";
+import { CLOUDFLARE_WEB_ANALYTICS_SCRIPT_SRC } from "./analytics.validation";
 
 const baseScript = {
   id: "analytics_1",

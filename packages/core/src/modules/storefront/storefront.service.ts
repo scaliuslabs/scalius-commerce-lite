@@ -23,7 +23,7 @@ import {
   processAnalyticsScript,
   shouldInjectAnalyticsScript,
   shouldUsePartytown,
-} from "../../integrations/analytics";
+} from "../analytics/analytics-scripts";
 import { normalizeCloudflareWebAnalyticsConfig } from "../analytics/analytics.validation";
 import { planCollectionProducts } from "../catalog/collections";
 import { planHomeProductLists, type HomeProductList } from "../catalog/home-lists";
@@ -43,7 +43,7 @@ import { planPublicStorePolicies } from "../pages/store-policies";
 import {
   selectSettingsDocuments,
   type SettingsDocumentRow,
-} from "../settings/settings-store";
+} from "../../settings-store";
 import {
   DEFAULT_STOREFRONT_THEME,
   homeSectionRequests,

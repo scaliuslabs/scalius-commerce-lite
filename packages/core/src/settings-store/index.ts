@@ -1,4 +1,4 @@
-// src/modules/settings/settings-store.ts
+// src/settings-store/index.ts
 // One typed store for every merchant settings document.
 //
 // A document is declared once with `defineSettingsDocument()` and owns:
@@ -38,7 +38,7 @@ import {
   encryptCredentials,
   readStoredCredentialStrict,
 } from "@scalius/core/utils/credential-encryption";
-import { deps } from "../../cache-deps";
+import { deps } from "../cache-deps";
 
 type SQLiteBatchItem = BatchItem<"sqlite">;
 

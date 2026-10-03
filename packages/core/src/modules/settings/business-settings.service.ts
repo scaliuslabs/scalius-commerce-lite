@@ -19,7 +19,7 @@ import {
     type BusinessInfo,
     type BusinessSocialLink,
 } from "./documents";
-import type { SettingsDocumentWriteResult } from "./settings-store";
+import type { SettingsDocumentWriteResult } from "../../settings-store";
 
 export type { BusinessInfo } from "./documents";
 

@@ -33,6 +33,7 @@ export {
   type PublicReviewSummary,
 } from "./product-reviews";
 export * from "./search";
+export * from "./site-search";
 export * from "./feed";
 export * from "./sitemap";
 export * from "./recommendations";

@@ -5,7 +5,7 @@ import { normalizeResourceCanonicalPath } from "@scalius/shared/seo-canonical";
 import { and, asc, eq, gt, isNull, or, sql, type SQL } from "drizzle-orm";
 import type { AnySQLiteColumn } from "drizzle-orm/sqlite-core";
 import { ValidationError } from "@scalius/core/errors";
-import { ftsMatch } from "../../search";
+import { ftsMatch } from "../../search/fts5";
 import { contentEntryPath } from "../pages/pages.validation";
 import { publicCategoryConditions } from "../categories/categories.publication";
 

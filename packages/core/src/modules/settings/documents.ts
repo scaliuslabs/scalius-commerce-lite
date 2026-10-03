@@ -5,13 +5,6 @@
 
 import { z } from "zod";
 import {
-  emptyPlatformConfig,
-  normalizePlatformConfig,
-  PLATFORM_CORS_ORIGINS_MAX_COUNT,
-  IDENTITY_HANDOFF_CLAIM_MAX_LENGTH,
-  type PlatformConfig,
-} from "@scalius/shared/platform-config";
-import {
   normalizeSupportedCurrencyCode,
   type SupportedCurrencyCode,
 } from "@scalius/shared/currency";
@@ -47,7 +40,7 @@ import {
   readSettingsDocumentStrict,
   SETTINGS_DOCUMENT_ROW_KEY,
   type StrictSettingsRead,
-} from "./settings-store";
+} from "../../settings-store";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -56,38 +49,6 @@ function asRecord(value: unknown): JsonRecord {
 }
 
 const jsonRecord = z.record(z.string(), z.unknown());
-
-// ─────────────────────────────────────────
-// Platform origins (Settings -> Platform). Read at Worker entry through KV.
-// ─────────────────────────────────────────
-
-export const platformDocument = defineSettingsDocument<PlatformConfig>({
-  key: "platform",
-  schema: z
-    .object({
-      storefrontUrl: z.string(),
-      apiUrl: z.string(),
-      dashboardUrl: z.string(),
-      mediaUrl: z.string(),
-      customerAuthCookieDomain: z.string(),
-      // A pre-document comma-separated list is normalized like an array.
-      corsAllowedOrigins: z.union([
-        z.array(z.string()).max(PLATFORM_CORS_ORIGINS_MAX_COUNT),
-        z.string(),
-      ]),
-      setupTokenRequired: z.boolean(),
-      identityHandoff: z.object({
-        enabled: z.boolean().default(false),
-        issuer: z.string().max(IDENTITY_HANDOFF_CLAIM_MAX_LENGTH).default(""),
-        audience: z.string().max(IDENTITY_HANDOFF_CLAIM_MAX_LENGTH).default(""),
-        jwksUrl: z.string().default(""),
-        localLoginDisabled: z.boolean().default(false),
-      }),
-    })
-    .transform((value) => normalizePlatformConfig(value)),
-  defaults: emptyPlatformConfig(),
-  cacheKey: "settings:platform",
-});
 
 // ─────────────────────────────────────────
 // Storefront security policy (merchant CSP sources, comma-separated). The API

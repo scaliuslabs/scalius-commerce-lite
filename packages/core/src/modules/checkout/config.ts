@@ -22,10 +22,10 @@ import { getPaymentGatewaySettingsSnapshot } from "../payments/gateway-settings"
 import { isCheckoutGatewayUsableForFlow } from "./flow";
 import {
     CHECKOUT_READINESS_PUBLIC_UNAVAILABLE_MESSAGE,
-    getCheckoutReadiness,
-    getOfferedCustomerIdentity,
     type CheckoutReadiness,
-} from "../settings/checkout-readiness";
+} from "@scalius/shared/checkout-readiness";
+import { getCheckoutReadiness } from "./readiness";
+import { getOfferedCustomerIdentity } from "../customers/sign-in-readiness";
 import {
     checkoutDocument,
     currencyDocument,
@@ -33,7 +33,7 @@ import {
     customerCountriesDocument,
     marketingConsentDocument,
 } from "../settings/documents";
-import { selectSettingsDocuments } from "../settings/settings-store";
+import { selectSettingsDocuments } from "../../settings-store";
 
 export interface CheckoutConfig {
     gateways: Array<Record<string, unknown>>;

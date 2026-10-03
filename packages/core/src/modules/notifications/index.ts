@@ -85,7 +85,18 @@ export type {
   RecordAndEnqueueOrderNotificationResult,
 } from "./order-notification-outbox";
 export { sendStaffOrderEmails } from "./notifications.service";
-export { composeAuthOtpMessage, readStoreIdentity, readStoreName, storeDisplayName } from "./store-messages";
+// The dispatch kit other senders build on (customer marketing): a delivery
+// receipt per recipient and channel, provider pauses, and the result shape.
+export {
+  buildDispatchResult,
+  dispatchWithReceipt,
+  emailResultToDeliveryResult,
+  maskEmail,
+  recordProviderBlockedDeliveryIfNeeded,
+  recordSkippedDelivery,
+  type OrderNotificationDispatchResult,
+} from "./notifications.service";
+export { composeAuthOtpMessage, readStoreIdentity, readStoreName } from "./store-messages";
 export { describeNotificationProviderBlock } from "./notification-provider-health";
 export { getNotificationTemplates, saveNotificationTemplate } from "./notification-templates.service";
 export {

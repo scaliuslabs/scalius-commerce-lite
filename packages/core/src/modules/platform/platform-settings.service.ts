@@ -19,9 +19,9 @@ import {
 } from "@scalius/shared/platform-config";
 import { normalizeStorefrontOrigin } from "@scalius/shared/storefront-url";
 import { ValidationError } from "@scalius/core/errors";
-import type { SettingsDocumentWriteResult, SettingsStoreKv } from "../settings/settings-store";
+import type { SettingsDocumentWriteResult, SettingsStoreKv } from "../../settings-store";
 import type { SettingsSaveOptions } from "../settings/site-settings.service";
-import { platformDocument } from "../settings/documents";
+import { platformDocument } from "./document";
 
 type PlatformKv = SettingsStoreKv;
 

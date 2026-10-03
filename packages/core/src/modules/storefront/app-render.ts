@@ -12,8 +12,9 @@ import { and, eq, isNull } from "drizzle-orm";
 import { deps } from "../../cache-deps";
 import { activePluginInstallationsFromRows, selectActivePluginInstallations } from "../plugins/storefront";
 import type { PluginInstallation } from "../plugins/installations";
-import { businessDocument, currencyDocument, platformDocument } from "../settings/documents";
-import { selectSettingsDocuments, type SettingsDocumentRow } from "../settings/settings-store";
+import { businessDocument, currencyDocument } from "../settings/documents";
+import { platformDocument } from "../platform/document";
+import { selectSettingsDocuments, type SettingsDocumentRow } from "../../settings-store";
 import { storeDisplayName } from "../settings/store-name";
 
 /** The store facts a storefront render's `ctx.store` carries. */

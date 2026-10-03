@@ -2,7 +2,7 @@
 // Admin OpenAPI routes for search.
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
-import { search } from "@scalius/core/search";
+import { search } from "@scalius/core/modules/catalog";
 
 import { ok } from "../../utils/api-response";
 import { ServiceUnavailableError } from "../../utils/api-error";

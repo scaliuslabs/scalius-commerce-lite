@@ -2,7 +2,7 @@
 
 import { hashEmail, hashPhone } from "./crypto-utils";
 import { sha256Hex } from "@scalius/shared/hash";
-import { getCapiSettings, logCapiEvent } from "../../modules/analytics/meta.service";
+import { getCapiSettings, logCapiEvent } from "./capi-settings";
 import { type Database } from "@scalius/database/client";
 
 export const META_GRAPH_API_VERSION = "v25.0";

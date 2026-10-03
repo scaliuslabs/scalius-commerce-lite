@@ -23,7 +23,7 @@ import { getPublishedNavigationPlacements } from "../navigation/navigation.autho
 import { cacheDep } from "@scalius/shared/cache-deps";
 import { deps } from "../../cache-deps";
 import { emiDocument, reviewsEnabledSql } from "../settings/documents";
-import { SETTINGS_DOCUMENT_ROW_KEY } from "../settings/settings-store";
+import { SETTINGS_DOCUMENT_ROW_KEY } from "../../settings-store";
 
 const cap = STORE_SHAPE_COUNT_CAP;
 

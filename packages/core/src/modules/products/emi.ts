@@ -8,7 +8,7 @@ import { settings } from "@scalius/database/schema";
 import { fromMinor } from "@scalius/shared/money";
 import { lowestEmiQuote, normalizeEmiSettings, type EmiSettings } from "@scalius/shared/emi";
 import { emiDocument } from "../settings/documents";
-import { SETTINGS_DOCUMENT_ROW_KEY } from "../settings/settings-store";
+import { SETTINGS_DOCUMENT_ROW_KEY } from "../../settings-store";
 import { deps } from "../../cache-deps";
 
 /** The stored `emi` document as a scalar subquery, so a page read carries it without a statement of its own. */

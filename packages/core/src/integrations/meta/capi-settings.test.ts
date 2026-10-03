@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { encryptCredentials } from "../../utils/credential-encryption";
-import { getCapiSettings, logCapiEvent } from "./meta.service";
+import { getCapiSettings, logCapiEvent } from "./capi-settings";
 
 function createDb(accessToken: string) {
   const { db, sqlite } = createSqliteD1Database();

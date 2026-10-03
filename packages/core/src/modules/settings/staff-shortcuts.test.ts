@@ -3,7 +3,7 @@ import { safeBatch } from "@scalius/database/client";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { ValidationError } from "@scalius/core/errors";
 
-import { SettingsRevisionConflictError } from "./settings-store";
+import { SettingsRevisionConflictError } from "../../settings-store";
 import {
   deleteStaffShortcutsStatement,
   readStaffShortcuts,

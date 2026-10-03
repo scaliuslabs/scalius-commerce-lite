@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { correctSearchQuery, transliterateBangla } from "./correct";
+import { correctSearchQuery, transliterateBangla } from "./search-correction";
 
 const CATALOG = [
   "Copper Tea Kettle",

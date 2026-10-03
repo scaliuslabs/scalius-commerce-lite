@@ -8,7 +8,7 @@ import { createMigratedSqlite, createSqliteD1Database } from "@scalius/database/
 import { ConflictError, RateLimitError, ValidationError } from "../../errors";
 import { saveSmsSettings } from "../../integrations/sms";
 import { getOrderDetails } from "../orders/admin/detail";
-import { getOfferedCustomerIdentity } from "../settings/checkout-readiness";
+import { getOfferedCustomerIdentity } from "./sign-in-readiness";
 import { customerAuthDocument } from "../settings/documents";
 import { createAtomicCheckoutAttempt } from "../checkout/attempts";
 import { commitStorefrontOrderPayload } from "../checkout/commit";

@@ -6,7 +6,7 @@
 // the request's AppProviders. Senders call `send` and never ask which it is.
 
 import type { SmsSettings } from "../../modules/settings/documents";
-import type { SettingsDocumentReadResult } from "../../modules/settings/settings-store";
+import type { SettingsDocumentReadResult } from "../../settings-store";
 import type { BoundProvider, BuiltInAdapter } from "../provider-port";
 
 /** The built-in gateways, in the order the dashboard lists them. */

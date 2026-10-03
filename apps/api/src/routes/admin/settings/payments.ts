@@ -30,8 +30,8 @@ import {
     type SSLCommerzSettingsDocument,
     type StripeSettingsDocument,
     getCurrencySettings,
-    writeSettingsDocuments,
 } from "@scalius/core/modules/settings";
+import { writeSettingsDocuments } from "@scalius/core/settings-store";
 import { getCheckoutFlowValidationIssues, isCheckoutGatewayUsableForFlow } from "@scalius/core/modules/checkout";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();

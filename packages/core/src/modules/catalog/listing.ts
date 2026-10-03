@@ -6,8 +6,8 @@
 // eligibility predicate or ranks SKUs per request.
 import { products, categories } from "@scalius/database/schema";
 import { and, sql, desc, eq, type SQL, type SQLWrapper } from "drizzle-orm";
-import { suggestSearchCorrection } from "../../search/correct";
-import { productSearchRankJoin, productSearchRelevanceOrder } from "../../search/relevance";
+import { suggestSearchCorrection } from "./search-correction";
+import { productSearchRankJoin, productSearchRelevanceOrder } from "./search-relevance";
 import { unixToDate } from "@scalius/shared/utils";
 import { fromMinor } from "@scalius/shared/money";
 import { planLimits } from "@scalius/shared/plan-limits";

@@ -15,7 +15,7 @@ import {
   ENGLISH_CHECKOUT_LANGUAGE_DATA,
   resolveCheckoutLanguageData,
 } from "@scalius/shared/checkout-language";
-import { SettingsRevisionConflictError } from "@scalius/core/modules/settings";
+import { SettingsRevisionConflictError } from "@scalius/core/settings-store";
 import { deps } from "@scalius/core/cache-deps";
 import { NotFoundError, ConflictError } from "../utils/api-error";
 

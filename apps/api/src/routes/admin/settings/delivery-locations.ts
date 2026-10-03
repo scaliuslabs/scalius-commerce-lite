@@ -13,7 +13,7 @@ import {
     getPathaoImportStatus,
 } from "@scalius/core/modules/delivery";
 import { isReady, readinessMessages } from "@scalius/shared/readiness";
-import { getCheckoutDeliveryReadiness } from "@scalius/core/modules/settings";
+import { getCheckoutDeliveryReadiness } from "@scalius/core/modules/checkout";
 import { NotFoundError, ValidationError } from "../../../utils/api-error";
 import { getCredentialEncryptionKey } from "../../../utils/encryption-key";
 import { readStoredCredentialStrict } from "@scalius/core/utils/credential-encryption";

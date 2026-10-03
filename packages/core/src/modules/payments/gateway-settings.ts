@@ -18,7 +18,7 @@ import {
 import {
   selectSettingsDocuments,
   type SettingsDocumentRow,
-} from "../settings/settings-store";
+} from "../../settings-store";
 
 // ---------------------------------------------------------------------------
 // Types

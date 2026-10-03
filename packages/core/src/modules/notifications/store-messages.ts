@@ -7,9 +7,10 @@ import { escapeHtml } from "@scalius/shared/html-escape";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { and, eq, isNull, notInArray, sql } from "drizzle-orm";
 import { getCurrentPublicMediaUrl } from "../../integrations/storage";
-import { businessDocument, platformDocument, type BusinessInfo } from "../settings/documents";
+import { businessDocument, type BusinessInfo } from "../settings/documents";
+import { platformDocument } from "../platform/document";
 import { storeDisplayName } from "../settings/store-name";
-import { selectSettingsDocuments } from "../settings/settings-store";
+import { selectSettingsDocuments } from "../../settings-store";
 import { MESSAGE_COPY, type MessageLanguage } from "./message-copy";
 import { storeHeaderHtml, type EmailStore } from "./notification-templates";
 
@@ -20,9 +21,6 @@ export interface StoreIdentity extends EmailStore {
   /** True when no business name is set and `name` is the Store URL's host. */
   nameFromAddress: boolean;
 }
-
-/** The store's display name (settings/store-name.ts), re-exported where messages are built. */
-export { storeDisplayName };
 
 /** Only the store's display name, for staff emails. A failed read returns null: the email still goes, unbranded. */
 export async function readStoreName(db: Database): Promise<string | null> {

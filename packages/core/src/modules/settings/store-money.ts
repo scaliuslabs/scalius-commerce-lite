@@ -7,7 +7,7 @@ import { ValidationError } from "@scalius/core/errors";
 import { deps } from "../../cache-deps";
 import { currencyDocument } from "./documents";
 import { getCurrencyConfig } from "./settings.service";
-import { SETTINGS_DOCUMENT_ROW_KEY } from "./settings-store";
+import { SETTINGS_DOCUMENT_ROW_KEY } from "../../settings-store";
 
 /** The store currency as money writes need it. */
 export interface StoreCurrency {

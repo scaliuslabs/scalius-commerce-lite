@@ -6,11 +6,11 @@ import { deps } from "@scalius/core/cache-deps";
 import { ok } from "../utils/api-response";
 import { successEnvelope, errorResponses } from "../schemas/responses";
 import {
+  normalizeCloudflareWebAnalyticsConfig,
   processAnalyticsScript,
   shouldInjectAnalyticsScript,
   shouldUsePartytown
-} from "@scalius/core/integrations/analytics";
-import { normalizeCloudflareWebAnalyticsConfig } from "@scalius/core/modules/analytics/browser";
+} from "@scalius/core/modules/analytics/browser";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 

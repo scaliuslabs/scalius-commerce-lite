@@ -2,7 +2,7 @@
 import { products, categories, productReviewStats } from "@scalius/database/schema";
 import { and, sql, eq, or, type AnyColumn, type SQL } from "drizzle-orm";
 import { ftsMatch } from "../../search/fts5";
-import { productCategoryNameMatch } from "../../search/relevance";
+import { productCategoryNameMatch } from "./search-relevance";
 import type { StorefrontProductFilterInput } from "../products/types";
 import type { Database } from "@scalius/database/client";
 import { publicProductBaseConditions } from "../products/public-eligibility";

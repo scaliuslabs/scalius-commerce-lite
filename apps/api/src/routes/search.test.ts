@@ -14,6 +14,9 @@ vi.mock("@scalius/core/search", () => ({
     const cleaned = value.replace(/["\-*(){}[\]^~:\\/<>|@#&+!?.,'=\u0964\u0965]/g, " ").trim();
     return cleaned ? cleaned.split(/\s+/).map((token) => `${token}*`).join(" ") : "";
   },
+}));
+
+vi.mock("@scalius/core/modules/catalog", () => ({
   search: mocks.search,
 }));
 

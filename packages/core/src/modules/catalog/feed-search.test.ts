@@ -24,7 +24,7 @@ const getStorefrontCollectionProducts: typeof readStorefrontCollectionProducts =
     withProjections(db, () => readStorefrontCollectionProducts(db, membership, params));
 import { searchStorefrontProducts } from "./search";
 import { resolvePublicAttributeFilters } from "./facets";
-import { search as searchCatalog } from "../../search";
+import { search as searchCatalog } from "./site-search";
 
 let sqlite: DatabaseSync;
 let db: Database;

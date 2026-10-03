@@ -4,7 +4,7 @@
 // recipients, the order WhatsApp template, and the merchant's message copy.
 
 import { z } from "zod";
-import { defineSettingsDocument } from "../settings/settings-store";
+import { defineSettingsDocument } from "../../settings-store";
 import {
   NOTIFICATION_TYPES,
   TEMPLATED_NOTIFICATION_TYPES,

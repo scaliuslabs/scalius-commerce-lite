@@ -1,6 +1,6 @@
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { describe, expect, it } from "vitest";
-import { search } from "./index";
+import { search } from "./site-search";
 
 const RELEVANCE_FIXTURE = `
   INSERT INTO categories (id, name, slug, status) VALUES ('cat_bags', 'Bags', 'bags', 'published');

@@ -1,14 +1,11 @@
-// Settings domain: the settings documents, their store, and the services that
-// read and write them. The documents and their store come first: other domains
-// read document definitions while their modules load, and a domain entry that
-// is still loading exposes only what it has already re-exported.
+// Settings domain: the store's shared settings documents (core/settings-store
+// keeps every document; a domain that owns one declares it itself) and the
+// services that read and write them. It depends on no other domain.
 export * from "./browser";
 export * from "./documents";
-export * from "./settings-store";
 export * from "./settings.service";
 export * from "./site-settings.service";
 export * from "./store-name";
-export * from "./checkout-readiness";
 export * from "./customer-request-policy";
 export * from "./business-settings.service";
 export * from "./emi-settings.service";

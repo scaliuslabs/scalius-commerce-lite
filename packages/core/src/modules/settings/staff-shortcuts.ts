@@ -16,7 +16,7 @@ import {
   defineSettingsDocument,
   SETTINGS_DOCUMENT_ROW_KEY,
   type SettingsDocument,
-} from "./settings-store";
+} from "../../settings-store";
 
 export const STAFF_SHORTCUTS_MAX_ENTRIES = 80;
 export const STAFF_SHORTCUT_PATH_MAX_LENGTH = 64;
