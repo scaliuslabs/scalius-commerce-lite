@@ -1,6 +1,7 @@
 // Manual COD order amendments: preview and confirm a line change under the order version.
 import { buildBatchGuard, isBatchGuardError, safeBatch, type Database } from "@scalius/database/client";
 import {
+    firstCustomerAddressId,
     orders,
     orderItems,
     orderAmendments,
@@ -463,7 +464,7 @@ export async function confirmManualOrderAmendment(
         // The new record's address book starts with the order's address, as at checkout.
         if (shippingAddress) {
             statements.push(db.insert(customerAddresses).values({
-                id: `caddr_${nanoid()}`,
+                id: firstCustomerAddressId(newCustomerId),
                 customerId: newCustomerId,
                 isDefault: true,
                 ...customerAddressColumns(shippingAddress),

@@ -20,7 +20,7 @@
 
 import type { Database } from "@scalius/database/client";
 import { safeBatch } from "@scalius/database/client";
-import { customerAddresses, customerHistory, customerTagLinks, customers } from "@scalius/database/schema";
+import { CUSTOMER_ADDRESS_ID_PREFIX, customerAddresses, customerHistory, customerTagLinks, customers, firstCustomerAddressId } from "@scalius/database/schema";
 import { and, isNull, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { validateAndFormatPhone } from "@scalius/shared/customer-utils";
@@ -152,7 +152,12 @@ function consentChanges(item: CustomerImportItem, actorId: string | null, record
  * Bangladesh City/Thana ids, so an address that breaks its country's rules is
  * kept, marked validation_skipped; a missing country is Bangladesh's.
  */
-function importedAddressStatement(db: Database, customerId: string, address: CustomerImportItem["address"]) {
+function importedAddressStatement(
+  db: Database,
+  customerId: string,
+  address: CustomerImportItem["address"],
+  options: { newRecord: boolean },
+) {
   if (!address) return null;
   let resolved;
   try {
@@ -163,7 +168,8 @@ function importedAddressStatement(db: Database, customerId: string, address: Cus
     throw error;
   }
   return db.insert(customerAddresses).values({
-    id: `caddr_${nanoid()}`,
+    // A new record's address is part of its creation; an existing record's is an update.
+    id: options.newRecord ? firstCustomerAddressId(customerId) : `${CUSTOMER_ADDRESS_ID_PREFIX}${nanoid()}`,
     customerId,
     isDefault: true,
     ...customerAddressColumns(resolved),
@@ -231,7 +237,7 @@ export async function importCustomers(
       const name = displayName(item);
       if ((!match.name.trim() || match.name === match.phone) && name !== match.phone) updates.name = name;
       if (!match.email && item.email && !emailConflict) updates.email = item.email;
-      const addressStatement = Number(match.hasAddress) === 1 ? null : importedAddressStatement(db, match.id, item.address);
+      const addressStatement = Number(match.hasAddress) === 1 ? null : importedAddressStatement(db, match.id, item.address, { newRecord: false });
       const recordEmail = updates.email ?? match.email;
       const { changes, skipped } = consentChanges(item, actorId, recordEmail);
       result.issues.push(...skipped);
@@ -300,7 +306,7 @@ export async function importCustomers(
         createdAt: sql`unixepoch()`,
       }),
     ];
-    const addressStatement = importedAddressStatement(db, customerId, item.address);
+    const addressStatement = importedAddressStatement(db, customerId, item.address, { newRecord: true });
     if (addressStatement) statements.push(addressStatement);
     if (item.tags.length > 0) statements.push(tagStatement(db, customerId, item.tags));
     const consent = changes.length > 0

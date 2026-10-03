@@ -18,8 +18,9 @@
  *
  * `orders_seed_customer_address`: a guest record (no account) that has no
  * saved address takes the first shipping order's snapshot as its default
- * address. One rule for every order writer (checkout, staff, agents), and no
- * extra statement in any of their batches. Accounts are never written by an
+ * address (id `firstCustomerAddressId`: no `customer.updated` beside the
+ * record's `customer.created`). One rule for every order writer (checkout,
+ * staff, agents), and no extra statement in any of their batches. Accounts are never written by an
  * order (a guest checkout never changes an account; MARKETS-DESIGN step 3a).
  *
  * The bodies are one statement without CASE (remote D1 rule); the guards are
@@ -27,6 +28,7 @@
  */
 import { DELIVERY_HIERARCHY_COUNTRY } from "../../shared/src/markets";
 import { ADDRESS_COUNTRY_CODES, countriesRequiringAddressField } from "../../shared/src/address-metadata";
+import { CUSTOMER_ADDRESS_ID_PREFIX } from "../src/schema/customers";
 import { compileSqliteTriggerForPostgres } from "./postgres-schema";
 
 export const SHIPPING_ADDRESS_TRIGGER_MIGRATION = "0113_country_aware_addresses";
@@ -137,7 +139,7 @@ export function generateShippingAddressTriggers(): ShippingAddressTrigger[] {
         "  AND EXISTS (SELECT 1 FROM `customers` WHERE `id` = NEW.`customer_id` AND `account_claimed_at` IS NULL)",
         "BEGIN",
         `  INSERT INTO \`customer_addresses\` (\`id\`, \`customer_id\`, \`is_default\`, ${SEED_COLUMNS.map(([target]) => `\`${target}\``).join(", ")})`,
-        `  VALUES ('caddr_' || NEW.\`id\`, NEW.\`customer_id\`, 1, ${SEED_COLUMNS.map(([, source]) => `NEW.\`${source}\``).join(", ")});`,
+        `  VALUES ('${CUSTOMER_ADDRESS_ID_PREFIX}' || NEW.\`customer_id\`, NEW.\`customer_id\`, 1, ${SEED_COLUMNS.map(([, source]) => `NEW.\`${source}\``).join(", ")});`,
         "END",
       ].join("\n"),
     },

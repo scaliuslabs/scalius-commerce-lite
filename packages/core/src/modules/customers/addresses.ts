@@ -13,7 +13,7 @@
 // - Staff (never buyers) may save an address that breaks its rules
 //   (`skipValidation`): it is stored as typed and marked validation_skipped.
 import type { Database } from "@scalius/database/client";
-import { customerAddresses, customers, deliveryLocations } from "@scalius/database/schema";
+import { CUSTOMER_ADDRESS_ID_PREFIX, customerAddresses, customers, deliveryLocations } from "@scalius/database/schema";
 import {
     deliveryHierarchyCanonicalFields,
     normalizeAddressText,
@@ -401,7 +401,7 @@ export async function createCustomerAddress(
         throw new ConflictError(`A customer can have at most ${MAX_CUSTOMER_ADDRESSES} addresses.`);
     }
     const address = await resolveAddress(db, input, options);
-    const id = `caddr_${nanoid()}`;
+    const id = `${CUSTOMER_ADDRESS_ID_PREFIX}${nanoid()}`;
     const makeDefault = existing === 0 || input.isDefault === true;
     const insert = db.insert(customerAddresses).values({
         id,

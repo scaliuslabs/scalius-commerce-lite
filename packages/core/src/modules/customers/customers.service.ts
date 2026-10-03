@@ -9,6 +9,7 @@ import {
     customers,
     customerHistory,
     customerSessions,
+    firstCustomerAddressId,
     orders,
 } from "@scalius/database/schema";
 import { sql, isNull, inArray, desc, eq, and, or, type SQL, type SQLWrapper } from "drizzle-orm";
@@ -336,7 +337,7 @@ export async function createCustomer(
         }),
         ...(address
             ? [db.insert(customerAddresses).values({
-                id: `caddr_${nanoid()}`,
+                id: firstCustomerAddressId(customerId),
                 customerId,
                 isDefault: true,
                 ...customerAddressColumns(address),

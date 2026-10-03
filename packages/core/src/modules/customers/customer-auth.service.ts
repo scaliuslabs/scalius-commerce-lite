@@ -9,7 +9,7 @@
 // block anyone from signing in.
 
 import { nanoid } from "nanoid";
-import { customerAddresses, customers, customerSessions, orders } from "@scalius/database/schema";
+import { customerAddresses, customers, customerSessions, firstCustomerAddressId, orders } from "@scalius/database/schema";
 import { and, desc, eq, gt, inArray, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
 import { safeBatch, type Database } from "@scalius/database/client";
 import type { BatchItem } from "drizzle-orm/batch";
@@ -825,7 +825,7 @@ async function prepareNewAccount(
     const orderLine = input.account.saveOrderAddress ? latestOrder?.shippingAddress?.trim() : null;
     const address: CustomerAddressRowValue | null = orderLine && latestOrder
         ? {
-            id: `caddr_${nanoid()}`,
+            id: firstCustomerAddressId(values.id),
             customerId: values.id,
             isDefault: true,
             countryCode: latestOrder.shippingCountryCode ?? "BD",

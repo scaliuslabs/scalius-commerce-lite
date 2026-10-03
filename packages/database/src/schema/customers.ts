@@ -60,6 +60,18 @@ export const customers = sqliteTable("customers", {
     index("customers_dashboard_activity_idx").on(table.deletedAt, table.createdAt),
 ]);
 
+/** Every address-book id starts with it (`caddr_<nanoid>`). */
+export const CUSTOMER_ADDRESS_ID_PREFIX = "caddr_";
+
+/**
+ * The id of a record's first address when it is written with the record (a
+ * new customer's address, an order's seed, the 0113 move): no
+ * `customer.updated` is announced for it, as `customer.created` carries it.
+ */
+export function firstCustomerAddressId(customerId: string): string {
+  return `${CUSTOMER_ADDRESS_ID_PREFIX}${customerId}`;
+}
+
 /**
  * The address book (Shopify's customer addresses; MARKETS-DESIGN D7, migration
  * 0113): canonical fields validated by the country's rules, and Bangladesh's
@@ -72,7 +84,8 @@ export const customers = sqliteTable("customers", {
  *
  * The first delivery address of a guest record (no account) comes from its
  * first shipping order: trigger `orders_seed_customer_address` copies the
- * order's snapshot when the record has no address yet, for every order writer.
+ * order's snapshot when the record has no address yet, for every order writer
+ * (id `firstCustomerAddressId`).
  */
 export const customerAddresses = sqliteTable("customer_addresses", {
     id: text("id").primaryKey(),

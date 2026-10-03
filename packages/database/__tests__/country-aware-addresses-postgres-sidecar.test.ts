@@ -105,9 +105,13 @@ describe.runIf(postgresUrl)("0113 country-aware addresses PostgreSQL sidecar", (
     await client.query("INSERT INTO customers (id, name, phone) VALUES ('guest', 'G', '+8801711111119')");
     await order("seed", "customer_id, shipping_address, shipping_country_code, city, zone|'guest', 'House 9', 'BD', 'c1', 'z1'");
     expect((await client.query("SELECT id, is_default, line1 FROM customer_addresses WHERE customer_id = 'guest'")).rows)
-      .toEqual([{ id: "caddr_seed", is_default: 1, line1: "House 9" }]);
+      .toEqual([{ id: "caddr_guest", is_default: 1, line1: "House 9" }]);
     await expect(client.query("INSERT INTO customer_addresses (id, customer_id, is_default, country_code) VALUES ('x', 'guest', 1, 'IN')"))
       .rejects.toThrow(/unique/i);
+    // The seeded first address is part of the record (no customer.updated); a later change is an update.
+    expect((await client.query("SELECT topic FROM event_outbox WHERE resource_id = 'guest' ORDER BY id")).rows.map((row) => row.topic))
+      .not.toContain("customer.updated");
+    await client.query("UPDATE customer_addresses SET line1 = 'House 10' WHERE id = 'caddr_guest'");
     expect((await client.query("SELECT topic FROM event_outbox WHERE resource_id = 'guest' ORDER BY id")).rows.map((row) => row.topic))
       .toContain("customer.updated");
     expect((await client.query("SELECT version FROM scalius_schema_migrations ORDER BY version DESC LIMIT 1")).rows)

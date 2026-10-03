@@ -140,7 +140,7 @@ WHEN NEW.`customer_id` IS NOT NULL
   AND EXISTS (SELECT 1 FROM `customers` WHERE `id` = NEW.`customer_id` AND `account_claimed_at` IS NULL)
 BEGIN
   INSERT INTO `customer_addresses` (`id`, `customer_id`, `is_default`, `country_code`, `name`, `company`, `line1`, `line2`, `dependent_locality`, `locality`, `admin_area`, `postal_code`, `phone_e164`, `city`, `zone`, `area`, `city_name`, `zone_name`, `area_name`, `validation_skipped`)
-  VALUES ('caddr_' || NEW.`id`, NEW.`customer_id`, 1, NEW.`shipping_country_code`, NEW.`shipping_name`, NEW.`shipping_company`, NEW.`shipping_address`, NEW.`shipping_address_line2`, NEW.`shipping_dependent_locality`, NEW.`shipping_locality`, NEW.`shipping_admin_area`, NEW.`shipping_postal_code`, NEW.`shipping_phone`, NEW.`city`, NEW.`zone`, NEW.`area`, NEW.`city_name`, NEW.`zone_name`, NEW.`area_name`, NEW.`shipping_validation_skipped`);
+  VALUES ('caddr_' || NEW.`customer_id`, NEW.`customer_id`, 1, NEW.`shipping_country_code`, NEW.`shipping_name`, NEW.`shipping_company`, NEW.`shipping_address`, NEW.`shipping_address_line2`, NEW.`shipping_dependent_locality`, NEW.`shipping_locality`, NEW.`shipping_admin_area`, NEW.`shipping_postal_code`, NEW.`shipping_phone`, NEW.`city`, NEW.`zone`, NEW.`area`, NEW.`city_name`, NEW.`zone_name`, NEW.`area_name`, NEW.`shipping_validation_skipped`);
 END;
 --> statement-breakpoint
 DROP TRIGGER IF EXISTS `evt_customers_updated`;
@@ -188,6 +188,7 @@ BEGIN
 END;
 --> statement-breakpoint
 CREATE TRIGGER `evt_customer_addresses_created` AFTER INSERT ON `customer_addresses`
+WHEN substr(NEW.`id`, 7) <> NEW.`customer_id`
 BEGIN
   INSERT INTO `event_outbox` (`id`, `topic`, `resource_type`, `resource_id`, `data`) VALUES ('evt_' || CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) || lower(hex(randomblob(6))), 'customer.updated', 'customer', NEW.`customer_id`, json_object('customerId', NEW.`customer_id`));
 END;
@@ -204,4 +205,4 @@ BEGIN
   INSERT INTO `event_outbox` (`id`, `topic`, `resource_type`, `resource_id`, `data`) VALUES ('evt_' || CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER) || lower(hex(randomblob(6))), 'customer.updated', 'customer', OLD.`customer_id`, json_object('customerId', OLD.`customer_id`));
 END;
 --> statement-breakpoint
-INSERT INTO `scalius_schema_migrations` (`version`, `name`, `source_sha256`) VALUES (113, '0113_country_aware_addresses', '1b0a60e586dc5229bf3df6af01cde569ee629d16633565cda2538aa6664e023e');
+INSERT INTO `scalius_schema_migrations` (`version`, `name`, `source_sha256`) VALUES (113, '0113_country_aware_addresses', 'b7331d0aab61c2fc111305687d7350db463fec9b07fdf69d670da6cb32b1bd59');

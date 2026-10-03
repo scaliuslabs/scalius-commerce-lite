@@ -198,6 +198,7 @@ describe(`${NAME} rules`, () => {
     `);
     insertOrder(db, "pickup", { customer_id: "guest", requires_shipping: 0 });
     expect(db.prepare("SELECT count(*) AS n FROM customer_addresses").get()).toEqual({ n: 0 });
+    db.exec("DELETE FROM event_outbox");
     insertOrder(db, "first", {
       customer_id: "guest", shipping_address: "House 1", shipping_country_code: "BD", city: "c1", zone: "z1",
       city_name: "Dhaka", zone_name: "Dhanmondi", shipping_locality: "Dhaka", shipping_dependent_locality: "Dhanmondi",
@@ -205,8 +206,10 @@ describe(`${NAME} rules`, () => {
     insertOrder(db, "second", { customer_id: "guest", shipping_address: "Elsewhere 2", shipping_country_code: "BD", city: "c2", zone: "z2" });
     insertOrder(db, "account_order", { customer_id: "account", shipping_address: "House 5", shipping_country_code: "BD", city: "c1", zone: "z1" });
     expect(db.prepare("SELECT id, customer_id, is_default, country_code, line1, locality, dependent_locality, city, zone, city_name FROM customer_addresses").all()).toEqual([
-      { id: "caddr_first", customer_id: "guest", is_default: 1, country_code: "BD", line1: "House 1", locality: "Dhaka", dependent_locality: "Dhanmondi", city: "c1", zone: "z1", city_name: "Dhaka" },
+      { id: "caddr_guest", customer_id: "guest", is_default: 1, country_code: "BD", line1: "House 1", locality: "Dhaka", dependent_locality: "Dhanmondi", city: "c1", zone: "z1", city_name: "Dhaka" },
     ]);
+    // The record's first address is part of the record, as when it was a customer column: no customer.updated.
+    expect(db.prepare("SELECT topic FROM event_outbox WHERE topic = 'customer.updated'").all()).toEqual([]);
   });
 
   it("makes every address-book write its customer's update", () => {
@@ -219,5 +222,11 @@ describe(`${NAME} rules`, () => {
     expect(db.prepare("SELECT topic, resource_id, data FROM event_outbox ORDER BY rowid").all()).toEqual(
       Array.from({ length: 3 }, () => ({ topic: "customer.updated", resource_id: "cust_1", data: JSON.stringify({ customerId: "cust_1" }) })),
     );
+    // A first address written with its record (`caddr_<customer id>`) is part of customer.created; changing it later is an update.
+    db.exec("DELETE FROM event_outbox");
+    db.exec("INSERT INTO customer_addresses (id, customer_id, is_default, country_code, line1) VALUES ('caddr_cust_1', 'cust_1', 1, 'BD', 'House 1')");
+    expect(db.prepare("SELECT count(*) AS n FROM event_outbox").get()).toEqual({ n: 0 });
+    db.exec("UPDATE customer_addresses SET line1 = 'House 3' WHERE id = 'caddr_cust_1'");
+    expect(db.prepare("SELECT count(*) AS n FROM event_outbox WHERE topic = 'customer.updated'").get()).toEqual({ n: 1 });
   });
 });

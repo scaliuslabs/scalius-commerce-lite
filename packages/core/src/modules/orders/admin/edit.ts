@@ -1,6 +1,6 @@
 // Editing an order's customer and delivery details.
 import { safeBatch, type Database } from "@scalius/database/client";
-import { orders, customerAddresses, customers, deliveryShipments, FulfillmentStatus } from "@scalius/database/schema";
+import { orders, customerAddresses, customers, deliveryShipments, firstCustomerAddressId, FulfillmentStatus } from "@scalius/database/schema";
 import { sql, eq, inArray, isNull, and } from "drizzle-orm";
 import { customerAddressColumns, guestRecordForPhone, resolveAddress } from "../../customers";
 import { orderAddressInput, orderShippingAddressColumns } from "../shipping-address";
@@ -105,7 +105,7 @@ export async function updateOrderDetails(
         // The new record's address book starts with the order's address, as at checkout.
         if (address) {
             statements.push(db.insert(customerAddresses).values({
-                id: `caddr_${nanoid()}`,
+                id: firstCustomerAddressId(newCustomerId),
                 customerId: newCustomerId,
                 isDefault: true,
                 ...customerAddressColumns(address),

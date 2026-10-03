@@ -25,6 +25,7 @@
 import { getTableConfig, type SQLiteTable } from "drizzle-orm/sqlite-core";
 
 import * as schema from "../src/schema";
+import { CUSTOMER_ADDRESS_ID_PREFIX } from "../src/schema/customers";
 import {
   EVENT_TOPIC_RESOURCE,
   type EventResourceType,
@@ -46,6 +47,8 @@ export type EventExpr =
   | { kind: "int"; value: number }
   | { kind: "null" }
   | { kind: "negate"; expr: EventExpr }
+  /** The text from the 1-based position `from` (`substr` in both dialects). */
+  | { kind: "substr"; expr: EventExpr; from: number }
   | { kind: "lookup"; table: string; select: string; key: string; value: EventExpr };
 
 export type EventCondition =
@@ -62,6 +65,7 @@ const text = (value: string): EventExpr => ({ kind: "text", value });
 const int = (value: number): EventExpr => ({ kind: "int", value });
 const NULL: EventExpr = { kind: "null" };
 const negate = (expr: EventExpr): EventExpr => ({ kind: "negate", expr });
+const substr = (expr: EventExpr, from: number): EventExpr => ({ kind: "substr", expr, from });
 const lookup = (table: string, select: string, key: string, value: EventExpr): EventExpr =>
   ({ kind: "lookup", table, select, key, value });
 
@@ -500,6 +504,10 @@ export const EVENT_TRIGGER_SPECS: readonly EventTriggerSpec[] = [
     name: "customer_addresses_created",
     table: "customer_addresses",
     event: "insert",
+    // Not a record's first address, written with it (`caddr_<customer id>`:
+    // a new record's address, an order's seed): its `customer.created`
+    // carries it, as when the address was a customer column.
+    when: ne(substr(NEW("id"), CUSTOMER_ADDRESS_ID_PREFIX.length + 1), NEW("customer_id")),
     topic: "customer.updated",
     resourceId: NEW("customer_id"),
     facts: [["customerId", NEW("customer_id")]],
@@ -642,6 +650,9 @@ function renderExpr(dialect: Dialect, expr: EventExpr): string {
       return "NULL";
     case "negate":
       return `-${renderExpr(dialect, expr.expr)}`;
+    case "substr":
+      if (!Number.isSafeInteger(expr.from) || expr.from < 1) throw new Error(`Invalid substr position ${expr.from}.`);
+      return `substr(${renderExpr(dialect, expr.expr)}, ${expr.from})`;
     case "lookup":
       return `(SELECT ${id(dialect, expr.select)} FROM ${id(dialect, expr.table)} WHERE ${id(dialect, expr.key)} = ${renderExpr(dialect, expr.value)})`;
   }
@@ -775,6 +786,7 @@ function exprColumns(table: string, expr: EventExpr, trigger: string, event: Eve
       assertColumn(table, expr.column, trigger);
       return;
     case "negate":
+    case "substr":
       exprColumns(table, expr.expr, trigger, event);
       return;
     case "lookup":
