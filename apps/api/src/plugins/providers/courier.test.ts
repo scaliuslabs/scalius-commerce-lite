@@ -25,7 +25,7 @@ import { bulkShipOrders, lookupUnknownOrderShipment } from "@scalius/core/module
 import { activatePlugin, installPlugin, listPluginLogs, writePluginSettings } from "@scalius/core/modules/plugins";
 import { PROVIDER_PORTS, ProviderError, type CourierShipmentInput } from "@scalius/shared/plugins/providers";
 import { errorResponseFromError } from "../../utils/api-response";
-import { PLUGIN_TEST_CREDENTIAL_KEY, pluginTestCtx, pluginTestEnv } from "../testing/fixtures";
+import { pluginTestCtx, pluginTestEnv } from "../testing/fixtures";
 import {
   PARCEL_COURIER_ID,
   PARCEL_FIXTURE_CODE,
@@ -65,6 +65,7 @@ vi.mock("./runtime", async (importOriginal) => {
 import { loadCourierProviders } from "./courier";
 import { requestProviderRuntime } from "./runtime";
 import { courierWebhookRoutes } from "../../routes/webhooks/couriers";
+import { deliveryProvidersRoutes } from "../../routes/admin/settings/delivery-providers";
 
 let workdir: string;
 beforeAll(async () => {
@@ -75,6 +76,8 @@ beforeAll(async () => {
 });
 afterAll(() => rmSync(workdir, { recursive: true, force: true }));
 
+/** The store's credential key: delivery rows and app settings are encrypted with it. */
+const CREDENTIAL_KEY = Buffer.alloc(32, 9).toString("base64");
 let sqlite: DatabaseSync;
 let db: Database;
 let env: Env;
@@ -87,12 +90,12 @@ function requestCouriers(): Promise<CourierProviders> {
 beforeEach(async () => {
   let binding: D1Database;
   ({ sqlite, db, binding } = createSqliteD1Database({ foreignKeys: true }));
-  env = pluginTestEnv(binding);
+  env = pluginTestEnv(binding, { CREDENTIAL_ENCRYPTION_KEY: CREDENTIAL_KEY });
   sqlite.prepare("INSERT INTO user (id, name, email, email_verified, role, is_super_admin) VALUES ('owner', 'Owner', 'owner@shop.test', 1, 'admin', 1)").run();
   const installed = await installPlugin(db, { manifest: PARCEL_FIXTURE_MANIFEST, source: "upload", bundleSha256: sha256, actorUserId: "owner" });
   const configured = await writePluginSettings(db, PARCEL_FIXTURE_ID, { secret: PARCEL_FIXTURE_SECRET }, {
     expectedRevision: installed.revision,
-    credentialEncryptionKey: PLUGIN_TEST_CREDENTIAL_KEY,
+    credentialEncryptionKey: CREDENTIAL_KEY,
   });
   await activatePlugin(db, PARCEL_FIXTURE_ID, { actorUserId: "owner", expectedRevision: configured.revision });
 });
@@ -157,7 +160,7 @@ async function appHarness(): Promise<Harness> {
   const setup = await courier.setup({
     id: "provider_parcel", type: PARCEL_COURIER_ID, isActive: true, credentials: "{}", config: "{}",
     lastTestAttemptAt: null, lastTestSuccessAt: null, lastTestFailureAt: null, lastTestSuccessFingerprint: null,
-  }, PLUGIN_TEST_CREDENTIAL_KEY);
+  }, CREDENTIAL_KEY);
   expect(setup.readiness).toMatchObject({ configured: true, tested: true });
   return { courier, call: { settings: setup.settings, signal: new AbortController().signal, db } };
 }
@@ -199,6 +202,53 @@ describe.each([
   });
 });
 
+describe("app courier as a merchant's delivery provider", () => {
+  function settingsApp() {
+    const app = new OpenAPIHono<{ Bindings: Env }>();
+    app.onError((error, c) => {
+      const { body, status } = errorResponseFromError(error);
+      return c.json(body, status);
+    });
+    app.use("*", async (c, next) => {
+      c.set("db", db);
+      await next();
+    });
+    app.route("/delivery-providers", deliveryProvidersRoutes);
+    return app;
+  }
+  const save = (body: Record<string, unknown>) => settingsApp().request("/delivery-providers", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  }, env);
+
+  it("is added without credentials of its own and judged by the app's readiness", async () => {
+    const response = await save({ name: "Acme Parcel", type: PARCEL_COURIER_ID, isActive: true });
+    expect(response.status, await response.clone().text()).toBe(201);
+    expect((await response.json() as { data: unknown }).data).toMatchObject({
+      type: PARCEL_COURIER_ID,
+      credentials: "{}",
+      config: "{}",
+      readiness: { status: "ready", configured: true, tested: true, active: true, canCreateShipment: true },
+    });
+    const stored = sqlite.prepare("SELECT credentials FROM delivery_providers").get() as { credentials: string };
+    expect(stored.credentials).not.toBe("{}");
+
+    expect((await save({ name: "Acme Parcel", type: PARCEL_COURIER_ID, credentials: { apiKey: "x" } })).status).toBe(400);
+    expect((await save({ name: "Acme Parcel", type: "acme.parcel" })).status).toBe(400);
+  });
+
+  it("cannot be switched on while its app is not active", async () => {
+    sqlite.exec("UPDATE plugin_installations SET status = 'disabled'");
+    const response = await save({ name: "Acme Parcel", type: PARCEL_COURIER_ID, isActive: true });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({
+      error: { message: "Delivery provider cannot be activated until required setup is complete." },
+    });
+    expect(sqlite.prepare("SELECT count(*) AS n FROM delivery_providers").get()).toEqual({ n: 0 });
+  });
+});
+
 describe("app courier through core delivery", () => {
   const orderState = (id: string) => sqlite.prepare("SELECT status, version, shipment_claim_id FROM orders WHERE id = ?").get(id) as Record<string, unknown>;
   const shipmentsOf = (id: string) => sqlite.prepare(
@@ -231,7 +281,7 @@ describe("app courier through core delivery", () => {
     });
   });
 
-  const ship = (orderId: string) => bulkShipOrders(db, [orderId], "provider_parcel", {}, PLUGIN_TEST_CREDENTIAL_KEY, requestCouriers);
+  const ship = (orderId: string) => bulkShipOrders(db, [orderId], "provider_parcel", {}, CREDENTIAL_KEY, requestCouriers);
 
   it("books, records and tracks an order through the app, with order money and contents", async () => {
     await seedOrder("ORD-1");
@@ -249,7 +299,7 @@ describe("app courier through core delivery", () => {
     });
     expect(JSON.parse(String(shipment!.metadata))).toEqual({ zone: "Gulshan", codMinor: 16_000, items: 1 });
 
-    await expect(checkShipmentStatus(db, String(shipment!.id), PLUGIN_TEST_CREDENTIAL_KEY, requestCouriers)).resolves.toMatchObject({
+    await expect(checkShipmentStatus(db, String(shipment!.id), CREDENTIAL_KEY, requestCouriers)).resolves.toMatchObject({
       status: "in_transit",
       rawStatus: "On the way",
     });
@@ -284,7 +334,7 @@ describe("app courier through core delivery", () => {
       expectedOrderVersion: Number(orderState("ORD-TIMEOUT").version),
       operationKey: "00000000-0000-4000-8000-000000000101",
       actorId: "owner",
-      encryptionKey: PLUGIN_TEST_CREDENTIAL_KEY,
+      encryptionKey: CREDENTIAL_KEY,
       couriers: requestCouriers,
     });
     expect(result).toMatchObject({ status: "repaired", resolution: "provider_confirmed_existing" });
