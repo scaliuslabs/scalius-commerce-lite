@@ -43,15 +43,13 @@ const designRules = [
   },
 ];
 
-// All dashboard choices use the viewport-aware SearchableSelect.
-const noLegacySelect = {
+// All dashboard choices use the viewport-aware SearchableSelect; screens toast
+// through ~/lib/toast, so sonner loads after a page's first render.
+const restrictedImports = (extraPaths = []) => ({
   "no-restricted-imports": [
     "error",
     {
-      paths: [
-        { name: "@radix-ui/react-select", message: "Use SearchableSelect from components/ui." },
-        { name: "sonner", importNames: ["toast"], message: "Import toast from ~/lib/toast: sonner loads after a page's first render." },
-      ],
+      paths: [{ name: "@radix-ui/react-select", message: "Use SearchableSelect from components/ui." }, ...extraPaths],
       patterns: [
         {
           group: ["**/components/ui/select", "~/components/ui/select", "@/components/ui/select", "./select", "**/native-select", "**/native-select.*", "**/components/ui/select.*"],
@@ -60,7 +58,8 @@ const noLegacySelect = {
       ],
     },
   ],
-};
+});
+const sonnerToast = { name: "sonner", importNames: ["toast"], message: "Import toast from ~/lib/toast: sonner loads after a page's first render." };
 
 const designSystem = (level) => ({
   "shadcn/no-restyle": [
@@ -112,6 +111,11 @@ export default [
   },
   {
     files: ["src/**/*.{ts,tsx}"],
-    rules: noLegacySelect,
+    rules: restrictedImports(),
+  },
+  {
+    files: ["src/**/*.{ts,tsx}"],
+    ignores: ["src/**/*.test.{ts,tsx}", "src/lib/toast.ts"],
+    rules: restrictedImports([sonnerToast]),
   },
 ];
