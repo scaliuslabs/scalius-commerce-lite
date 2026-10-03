@@ -275,6 +275,28 @@ describe("DVC directed scenarios", () => {
     expect(verdict).toEqual({ cached: true, valid: false, equal: false });
   }, 120_000);
 
+  it.each([
+    ["its name", "/api/v1/checkout/config?presence=en-in", "UPDATE markets SET name = 'India II' WHERE id = 'mkt_dvc_india'", false],
+    ["its country", "/api/v1/storefront/markets", "INSERT INTO market_countries (country_code, market_id) VALUES ('LK', 'mkt_dvc_india')", false],
+    ["its status", "/api/v1/storefront/markets", "UPDATE markets SET status = 'draft' WHERE id = 'mkt_dvc_india'", false],
+    ["its subfolder language", "/api/v1/storefront/layout", "UPDATE market_presences SET value = 'bn-in', locale = 'bn' WHERE id = 'mkp_dvc_india'", false],
+    // Another market's edit leaves this market's checkout config valid.
+    ["another market's country", "/api/v1/checkout/config?presence=en-in", "INSERT INTO market_countries (country_code, market_id) VALUES ('LK', 'mkt_dvc_draft')", true],
+    // A market edit never reaches the catalogue: every catalogue read is the same in every market.
+    ["a product read", "/api/v1/products/linen-panjabi", "UPDATE markets SET name = 'India II' WHERE id = 'mkt_dvc_india'", true],
+  ])("markets: %s", async (name, path, sql, unchanged) => {
+    const verdict = await staleAfter(`scenario-markets-${name}`, path, (sqlite) => sqlite.exec(sql));
+    expect(verdict).toEqual(unchanged ? { cached: true, valid: true, equal: true } : { cached: true, valid: false, equal: false });
+  }, 120_000);
+
+  it("markets: the backup market's price increment invalidates the prices that round to it", async () => {
+    const verdict = await staleAfter("scenario-markets-increment", "/api/v1/products/linen-panjabi", (sqlite) => {
+      sqlite.exec("UPDATE markets SET price_increment_minor = CASE price_increment_minor WHEN 100 THEN 1 ELSE 100 END WHERE is_backup = 1");
+    });
+    expect(verdict.cached).toBe(true);
+    expect(verdict.valid).toBe(false);
+  }, 120_000);
+
   it("landing page: a merchant's draft edit leaves the live cached page valid", async () => {
     const verdict = await staleAfter("scenario-landing-draft", "/api/v1/storefront/landing/eid", (sqlite) => {
       sqlite.exec(`INSERT INTO theme_settings_drafts (id, theme, revision, base_published_revision, created_at, updated_at)

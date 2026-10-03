@@ -77,6 +77,9 @@ function otherParts(): string[] {
     ...DVC_IDS.landingSlugs.map((slug) => `/api/v1/storefront/landing/${slug}`),
     "/api/v1/storefront/pages/slug/about",
     "/api/v1/checkout/config",
+    // The one market-keyed read: the India market's subfolder.
+    "/api/v1/checkout/config?presence=en-in",
+    "/api/v1/storefront/markets",
     "/api/v1/checkout-languages/active",
     "/api/v1/shipping-methods",
     "/api/v1/locations/cities",
@@ -120,6 +123,8 @@ const COMMERCE = ["/api/v1/shipping-methods", "/api/v1/checkout/config"];
 export function dvcPageCatalogue(): DvcPage[] {
   const pages: DvcPage[] = [
     { name: "home", parts: [...SHELL, "/api/v1/storefront/homepage", ...COMMERCE] },
+    // A presence page: the same reads, the checkout config of its market.
+    { name: "home:en-in", parts: [...SHELL, "/api/v1/storefront/homepage", "/api/v1/shipping-methods", "/api/v1/checkout/config?presence=en-in"] },
     { name: "search", parts: [...SHELL, `/api/v1/products?${LIST}&search=panjabi`] },
     { name: "shop-all-price", parts: [...SHELL, `/api/v1/products?${LIST}&sort=price-asc`] },
     { name: "collection", parts: [...SHELL, "/api/v1/collections/col_manual"] },

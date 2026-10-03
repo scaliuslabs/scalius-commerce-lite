@@ -7,7 +7,8 @@
  * settings documents, a theme using every section type (with brand images,
  * an announcement, footer words, hero slides, category tiles, collections
  * and a product homepage), shipping,
- * locations, tax, scheduled promotions, checkout languages, analytics,
+ * locations, tax, markets (an active subfolder market and a draft one),
+ * scheduled promotions, checkout languages, analytics,
  * reviews of a delivered order's lines, warranty policies and custom fields.
  *
  * Deterministic: fixed ids and a fixed epoch (`DVC_SEED_EPOCH`).
@@ -300,6 +301,17 @@ function seedSql(): string {
     ('rate_dhaka', 'tax_std', 'Dhaka surcharge', 100, 'city', 'loc_dhaka', 'Dhaka', 1, 0, 1);
   INSERT INTO tax_settings (id, enabled, prices_include_tax, tax_shipping, default_tax_class_id, shipping_tax_class_id, display_label) VALUES
     ('default', 1, 1, 0, 'tax_std', NULL, 'VAT');
+
+  -- Markets beside the migration's backup market (BD at the root): an active
+  -- market at a subfolder and a draft one, so the generator edits each kind.
+  INSERT INTO markets (id, handle, name, status, is_backup, price_increment_minor, revision, created_at, updated_at) VALUES
+    ('mkt_dvc_india', 'india', 'India', 'active', 0, NULL, 1, ${T}, ${T}),
+    ('mkt_dvc_draft', 'pakistan', 'Pakistan', 'draft', 0, NULL, 1, ${T}, ${T});
+  INSERT INTO market_countries (country_code, market_id, created_at) VALUES
+    ('IN', 'mkt_dvc_india', ${T}), ('NP', 'mkt_dvc_india', ${T}), ('PK', 'mkt_dvc_draft', ${T});
+  INSERT INTO market_presences (id, market_id, kind, value, locale, created_at) VALUES
+    ('mkp_dvc_india', 'mkt_dvc_india', 'subfolder', 'en-in', 'en', ${T}),
+    ('mkp_dvc_draft', 'mkt_dvc_draft', 'subfolder', 'en-pk', 'en', ${T});
 
   INSERT INTO customers (id, name, phone, created_at, updated_at) VALUES ('cus_1', 'Rahim', '01700000001', ${T}, ${T});
   INSERT INTO orders (id, customer_name, customer_phone, shipping_address, city, zone, status, created_at, updated_at, customer_id) VALUES
