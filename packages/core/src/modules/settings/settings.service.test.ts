@@ -206,7 +206,7 @@ describe("notification channel settings", () => {
         }, "credential-key");
 
         expect(result.order_created).toEqual(["email", "sms"]);
-        expect(mocks.getSmsProviderReadiness).toHaveBeenCalledWith(db.db, "credential-key");
+        expect(mocks.getSmsProviderReadiness).toHaveBeenCalledWith(db.db, "credential-key", undefined);
         expect(storedOrderChannels(db)).toMatchObject({ order_created: ["email", "sms"] });
     });
 

@@ -11,7 +11,8 @@ import {
   type Readiness,
   type ReadinessIssue,
 } from "@scalius/shared/readiness";
-import type { EmailRuntimeContext, EmailRuntimeSettings } from "./provider";
+import { isAppProviderId, resolveAppProvider } from "../provider-port";
+import { BUILT_IN_EMAIL_PROVIDER_IDS, type EmailRuntimeContext, type EmailRuntimeSettings } from "./provider";
 
 const DEFAULT_FROM = "noreply@example.com";
 const EMAIL_ADDRESS_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -28,7 +29,8 @@ export const EMAIL_READINESS_CODES = {
  * screen renders.
  */
 export interface EmailProviderReadiness extends Readiness {
-  provider: EmailRuntimeSettings["provider"] | "mailpit";
+  /** The chosen sender (an app provider's id for an app), or `mailpit` in local development. */
+  provider: string;
   sender: string;
   senderConfigured: boolean;
   cloudflareBindingConfigured: boolean;
@@ -116,15 +118,35 @@ export async function getEmailRuntimeSettings(
   }
 }
 
+/** A choice the email settings can save: a built-in sender or an app provider id. */
+export function isEmailProviderChoice(id: string): boolean {
+  return (BUILT_IN_EMAIL_PROVIDER_IDS as readonly string[]).includes(id) || isAppProviderId(id);
+}
+
+/** Why the chosen sender cannot send, or null when it can. An app choice is asked through the context's AppProviders. */
+async function selectedProviderIssue(
+  settings: EmailRuntimeSettings,
+  context: EmailRuntimeContext | undefined,
+): Promise<string | null> {
+  if (settings.localMailpitUrl) return null;
+  if (isAppProviderId(settings.provider)) {
+    return (await resolveAppProvider(context?.appProviders, "email", settings.provider)).issue;
+  }
+  if (settings.provider === "cloudflare") {
+    return settings.cloudflareBindingConfigured
+      ? null
+      : "The selected Cloudflare Email provider requires the EMAIL binding.";
+  }
+  return settings.hasResendApiKey
+    ? null
+    : settings.resendCredentialError ?? "The selected Resend provider requires a Resend API key.";
+}
+
 export async function getEmailProviderReadiness(
   context?: EmailRuntimeContext,
 ): Promise<EmailProviderReadiness> {
   const settings = await getEmailRuntimeSettings(context);
   const issues: ReadinessIssue[] = [];
-  const selectedProviderConfigured = Boolean(settings.localMailpitUrl)
-    || (settings.provider === "cloudflare"
-      ? settings.cloudflareBindingConfigured
-      : settings.hasResendApiKey);
 
   if (!settings.senderConfigured) {
     issues.push(readinessIssue(
@@ -133,14 +155,9 @@ export async function getEmailProviderReadiness(
     ));
   }
 
-  if (!selectedProviderConfigured) {
-    issues.push(readinessIssue(
-      EMAIL_READINESS_CODES.missingProvider,
-      settings.provider === "resend"
-        ? settings.resendCredentialError
-          ?? "The selected Resend provider requires a Resend API key."
-        : "The selected Cloudflare Email provider requires the EMAIL binding.",
-    ));
+  const providerIssue = await selectedProviderIssue(settings, context);
+  if (providerIssue) {
+    issues.push(readinessIssue(EMAIL_READINESS_CODES.missingProvider, providerIssue));
   }
 
   const value = readiness.from(issues);

@@ -13,6 +13,8 @@ import { PluginError } from "@scalius/core/modules/plugins";
 import { eq } from "drizzle-orm";
 import { pluginWithinRateLimit } from "./authority";
 import type { PluginBridgeEnvironment } from "./bridge";
+import { createAppProviders } from "./providers/app-providers";
+import { createAppProviderRuntime } from "./providers/runtime";
 
 export interface PluginMessagingContext {
   pluginId: string;
@@ -43,6 +45,20 @@ async function customerContact(context: PluginMessagingContext, customerId: unkn
     .from(customers).where(eq(customers.id, customerId)).get();
   if (!row) throw new PluginError("messaging.invalid", "The customer was not found.");
   return { email: row.email ?? null, phone: row.phone ?? null };
+}
+
+/**
+ * The store's messaging as order notifications send it: the composed env,
+ * the credential key, and the app provider a saved SMS or email choice may
+ * name (never the calling app itself: the bridge refuses messaging inside a
+ * provider operation).
+ */
+async function messagingRuntime(context: PluginMessagingContext) {
+  const env = await context.runtime.composedEnv();
+  const db = context.runtime.db();
+  const encryptionKey = env.CREDENTIAL_ENCRYPTION_KEY;
+  const appProviders = createAppProviders(createAppProviderRuntime({ env, db, ctx: context.runtime.ctx }), encryptionKey);
+  return { env, db, encryptionKey, appProviders };
 }
 
 function escapeHtml(value: string): string {
@@ -89,11 +105,11 @@ export async function sendPluginEmail(
     const unsubscribe = permission.unsubscribeUrl!;
     html = `${html}<p style="margin:24px 0 0;font-size:12px;line-height:1.5;color:#5f6368;">${escapeHtml(permission.footer.text)} <a href="${escapeHtml(unsubscribe)}">${escapeHtml(permission.footer.unsubscribeLabel)}</a></p>`;
     plain = `${plain ?? ""}\n\n${permission.footer.text}\n${permission.footer.unsubscribeLabel}: ${unsubscribe}`.trim();
-    const env = await context.runtime.composedEnv();
+    const { env, db, encryptionKey, appProviders } = await messagingRuntime(context);
     const { sendEmail } = await import("@scalius/core/integrations/email");
     const result = await sendEmail(
       { to: permission.contact!, subject, html, text: plain, headers: permission.headers },
-      { env: env as never, db: context.runtime.db(), encryptionKey: env.CREDENTIAL_ENCRYPTION_KEY },
+      { env: env as never, db, encryptionKey, appProviders },
     );
     return { queued: result.success };
   }
@@ -106,11 +122,11 @@ export async function sendPluginEmail(
     throw new PluginError("messaging.invalid", "to is an e-mail address.");
   }
   await requireRate(context);
-  const env = await context.runtime.composedEnv();
+  const { env, db, encryptionKey, appProviders } = await messagingRuntime(context);
   const { sendEmail } = await import("@scalius/core/integrations/email");
   const result = await sendEmail(
     { to: to.trim(), subject, html, ...(plain ? { text: plain } : {}) },
-    { env: env as never, db: context.runtime.db(), encryptionKey: env.CREDENTIAL_ENCRYPTION_KEY },
+    { env: env as never, db, encryptionKey, appProviders },
   );
   return { queued: result.success };
 }
@@ -136,11 +152,11 @@ export async function sendPluginSms(
     throw new PluginError("messaging.invalid", "to is a phone number (+8801XXXXXXXXX).");
   }
   await requireRate(context);
-  const env = await context.runtime.composedEnv();
+  const { db, encryptionKey, appProviders } = await messagingRuntime(context);
   const { getActiveSmsProvider } = await import("@scalius/core/integrations/sms");
-  const provider = await getActiveSmsProvider(context.runtime.db(), env.CREDENTIAL_ENCRYPTION_KEY);
+  const provider = await getActiveSmsProvider(db, encryptionKey, appProviders);
   if (!provider) throw new PluginError("messaging.unavailable", "No SMS provider is configured.");
-  const result = await provider.sendSms({ to: phone, message });
+  const result = await provider.send({ to: phone, message }, {});
   return { queued: result.success };
 }
 

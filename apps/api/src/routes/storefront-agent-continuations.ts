@@ -40,6 +40,7 @@ import {
   getCredentialEncryptionKey,
   getCustomerSessionHashKey,
 } from "../utils/encryption-key";
+import { requestAppProviders } from "../plugins/providers/app-providers";
 import {
   conflictResponse,
   errorResponses,
@@ -249,6 +250,7 @@ app.openapi(sendCustomerOtpRoute, async (c) => {
     emailEnv: c.env as unknown as Record<string, unknown>,
     encryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
     credentialEncryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
+    appProviders: requestAppProviders(c),
   });
   try {
     await enqueueAuthOtp(c, result.queuePayload);
@@ -426,6 +428,7 @@ app.openapi(sendRecoveryOtpRoute, async (c) => {
     emailEnv: c.env as unknown as Record<string, unknown>,
     encryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
     credentialEncryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
+    appProviders: requestAppProviders(c),
   });
   if (result.queuePayload) {
     try {

@@ -1,32 +1,33 @@
-// src/integrations/sms/providers/bdbulksms.ts
-// BDBulkSMS (GreenWeb) provider implementation.
+// BDBulkSMS (GreenWeb) behind the SMS port.
 // API docs: https://api.bdbulksms.net — token auth, JSON POST.
 
-import type { SmsProvider, SendSmsOptions, SendSmsResult } from "../provider";
+import { smsCredentialIssue } from "../credentials";
+import type { SmsAdapter } from "../port";
 import { classifySmsProviderFailure, sanitizeSmsProviderDiagnostic } from "../retryability";
 
-export interface BdBulkSmsConfig {
+export interface BdBulkSmsSettings {
   token: string;
 }
 
-export class BdBulkSmsProvider implements SmsProvider {
-  readonly name = "bdbulksms";
+export const bdBulkSms: SmsAdapter<BdBulkSmsSettings> = {
+  id: "bdbulksms",
+  label: "BDBulkSMS (GreenWeb)",
 
-  constructor(private config: BdBulkSmsConfig) {}
+  configure(stored) {
+    const token = stored.value.bdbulksmsToken;
+    const error = smsCredentialIssue(stored, "bdbulksmsToken", [["BDBulkSMS token", token]])
+      ?? (!token ? "BDBulkSMS token is required" : null);
+    return error ? { error } : { settings: { token } };
+  },
 
-  validateConfig(): string | null {
-    if (!this.config.token) return "BDBulkSMS token is required";
-    return null;
-  }
-
-  async sendSms(options: SendSmsOptions): Promise<SendSmsResult> {
+  async send(input, { settings }) {
     // BDBulkSMS accepts +8801XXXXXXXXX directly — no stripping needed
     const res = await fetch("https://api.bdbulksms.net/api.php?json", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        token: this.config.token,
-        smsdata: [{ to: options.to, message: options.message }],
+        token: settings.token,
+        smsdata: [{ to: input.to, message: input.message }],
       }),
     });
 
@@ -46,7 +47,7 @@ export class BdBulkSmsProvider implements SmsProvider {
     if (res.ok && first?.status === "SENT") {
       return {
         success: true,
-        providerRef: options.clientReference,
+        providerRef: input.clientReference,
         rawStatus: sanitizeSmsProviderDiagnostic(first.statusmsg),
       };
     }
@@ -56,5 +57,5 @@ export class BdBulkSmsProvider implements SmsProvider {
       rawStatus: sanitizeSmsProviderDiagnostic(rawStatus),
       retryable: classifySmsProviderFailure(rawStatus, res.ok ? undefined : res.status),
     };
-  }
-}
+  },
+};

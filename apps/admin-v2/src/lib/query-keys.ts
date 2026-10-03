@@ -245,6 +245,8 @@ export const queryKeys = {
     theme: () => ["settings", "theme"] as const,
     media: () => ["settings", "media"] as const,
     sms: () => ["settings", "sms"] as const,
+    /** An installed app's providers of one port (sms, email, fraud, ...), with readiness. */
+    appProviders: (kind: string) => ["settings", "app-providers", kind] as const,
     metaConversions: () => ["settings", "meta-conversions"] as const,
     metaConversionsLogs: (params?: Record<string, unknown>) =>
       params !== undefined

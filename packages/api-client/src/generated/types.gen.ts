@@ -44102,7 +44102,7 @@ export type GetApiV1AdminFraudCheckerResponses = {
                 apiSecret?: string;
                 userId?: string;
                 isActive: boolean;
-                providerType?: 'default' | 'fraudbd' | 'fraudguard' | 'ecourier';
+                providerType?: 'default' | 'fraudbd' | 'fraudguard' | 'ecourier' | string;
             }>;
             pagination: {
                 page: number;
@@ -44124,6 +44124,10 @@ export type PostApiV1AdminFraudCheckerData = {
         userId?: string;
         isActive?: boolean;
         providerType?: 'default' | 'fraudbd' | 'fraudguard' | 'ecourier';
+    } | {
+        name: string;
+        isActive?: boolean;
+        providerType: string;
     };
     path?: never;
     query?: never;
@@ -44226,7 +44230,7 @@ export type PostApiV1AdminFraudCheckerResponses = {
             apiSecret?: string;
             userId?: string;
             isActive: boolean;
-            providerType?: 'default' | 'fraudbd' | 'fraudguard' | 'ecourier';
+            providerType?: 'default' | 'fraudbd' | 'fraudguard' | 'ecourier' | string;
         };
     };
 };
@@ -44243,6 +44247,11 @@ export type PutApiV1AdminFraudCheckerData = {
         userId?: string;
         isActive?: boolean;
         providerType?: 'default' | 'fraudbd' | 'fraudguard' | 'ecourier';
+    } | {
+        name: string;
+        isActive?: boolean;
+        providerType: string;
+        id: string;
     };
     path?: never;
     query?: never;
@@ -44345,7 +44354,7 @@ export type PutApiV1AdminFraudCheckerResponses = {
             apiSecret?: string;
             userId?: string;
             isActive: boolean;
-            providerType?: 'default' | 'fraudbd' | 'fraudguard' | 'ecourier';
+            providerType?: 'default' | 'fraudbd' | 'fraudguard' | 'ecourier' | string;
         };
     };
 };
@@ -50083,7 +50092,7 @@ export type GetApiV1AdminSettingsEmailResponses = {
     200: {
         success: true;
         data: {
-            provider: 'cloudflare' | 'resend';
+            provider: 'cloudflare' | 'resend' | string;
             apiKey: string;
             sender: string;
             senderConfigured: boolean;
@@ -50107,7 +50116,7 @@ export type GetApiV1AdminSettingsEmailResponse = GetApiV1AdminSettingsEmailRespo
 export type PostApiV1AdminSettingsEmailData = {
     body: {
         expectedRevision: number;
-        provider?: 'cloudflare' | 'resend';
+        provider?: 'cloudflare' | 'resend' | string;
         apiKey?: string;
         sender?: string;
     };
@@ -54194,7 +54203,7 @@ export type GetApiV1AdminSettingsSmsResponses = {
     200: {
         success: true;
         data: {
-            activeProvider: 'smsnetbd' | 'bdbulksms' | 'mimsms' | 'gennet' | null;
+            activeProvider: string | null;
             activeProviderConfigured: boolean;
             activeProviderError: string | null;
             bdbulksmsToken: string;
@@ -54215,7 +54224,7 @@ export type GetApiV1AdminSettingsSmsResponse = GetApiV1AdminSettingsSmsResponses
 
 export type PostApiV1AdminSettingsSmsData = {
     body: {
-        activeProvider?: 'smsnetbd' | 'bdbulksms' | 'mimsms' | 'gennet';
+        activeProvider?: 'smsnetbd' | 'bdbulksms' | 'mimsms' | 'gennet' | string;
         bdbulksmsToken?: string;
         mimsmsUsername?: string;
         mimsmsApiKey?: string;
@@ -54332,7 +54341,7 @@ export type PostApiV1AdminSettingsSmsResponses = {
     200: {
         success: true;
         data: {
-            activeProvider: 'smsnetbd' | 'bdbulksms' | 'mimsms' | 'gennet' | null;
+            activeProvider: string | null;
             activeProviderConfigured: boolean;
             activeProviderError: string | null;
             bdbulksmsToken: string;

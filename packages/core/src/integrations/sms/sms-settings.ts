@@ -1,5 +1,8 @@
 // src/integrations/sms/sms-settings.ts
-// SMS provider settings (the `sms` settings document).
+// SMS provider settings (the `sms` settings document) and the merchant's
+// choice resolved to one SMS port: a built-in gateway with its credentials,
+// or an app provider (`<plugin id>:<provider id>`) through the request's
+// AppProviders, asked only when the saved choice names an app.
 //
 // SECURITY: Decrypted credentials are NEVER written to KV or any persistent
 // store. Dispatch reads the authoritative document for every send so a
@@ -17,53 +20,44 @@ import {
   smsDocument,
   type SmsSettings,
 } from "../../modules/settings/documents";
-import type { SettingsDocumentReadResult } from "../../modules/settings/settings-store";
-import { SMS_PROVIDER_IDS, type SmsProvider, type SmsProviderId } from "./provider";
+import { bindProvider, isAppProviderId, resolveAppProvider, type AppProviders } from "../provider-port";
+import { MASKED_SMS_SECRET as MASKED, firstPlaceholderConfigError } from "./credentials";
+import {
+  BUILT_IN_SMS_PROVIDER_IDS,
+  type BuiltInSmsProviderId,
+  type SmsAdapter,
+  type SmsProvider,
+  type StoredSms,
+} from "./port";
+import { bdBulkSms } from "./providers/bdbulksms";
+import { gennetSms } from "./providers/gennet";
+import { mimSms } from "./providers/mimsms";
+import { smsNetBdSms } from "./providers/smsnetbd";
 
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
+/** The built-in gateways, by id. */
+const BUILT_IN_SMS_ADAPTERS: Record<BuiltInSmsProviderId, SmsAdapter<unknown>> = {
+  smsnetbd: smsNetBdSms,
+  bdbulksms: bdBulkSms,
+  mimsms: mimSms,
+  gennet: gennetSms,
+};
 
-const MASKED = "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022"; // 12 bullet chars
-const PLACEHOLDER_EXACT_VALUES = new Set([
-  "000000",
-  "111111",
-  "123456",
-  "123456789",
-  "apikey",
-  "apitoken",
-  "changeme",
-  "changeit",
-  "demo",
-  "dummy",
-  "example",
-  "password",
-  "sample",
-  "secret",
-  "test",
-  "testing",
-  "token",
-  "yourapikey",
-  "yourapikeyhere",
-  "yourapi",
-  "yourtoken",
-  "yourtokenhere",
-]);
+function isBuiltInSmsProviderId(id: string): id is BuiltInSmsProviderId {
+  return (BUILT_IN_SMS_PROVIDER_IDS as readonly string[]).includes(id);
+}
 
-const PLACEHOLDER_WORD_VALUES = new Set([
-  "changeme",
-  "dummy",
-  "example",
-  "placeholder",
-  "sample",
-]);
+/** A choice the SMS settings can save: a built-in gateway or an app provider id. */
+export function isSmsProviderChoice(id: string): boolean {
+  return isBuiltInSmsProviderId(id) || isAppProviderId(id);
+}
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
 export interface SmsSettingsData {
-  activeProvider: SmsProviderId | null;
+  /** A built-in gateway id or an app provider's `<plugin id>:<provider id>`. */
+  activeProvider: string | null;
   activeProviderConfigured: boolean;
   activeProviderError: string | null;
   // Per-provider fields (all returned, UI shows conditionally)
@@ -88,167 +82,44 @@ export const SMS_READINESS_CODE = "missing_sms_provider_credentials";
  * provider the merchant selected.
  */
 export interface SmsProviderReadiness extends Readiness {
-  activeProvider: SmsProviderId | null;
+  activeProvider: string | null;
 }
-
-type StoredSms = SettingsDocumentReadResult<SmsSettings>;
 
 async function readSms(db: Database, encryptionKey?: string): Promise<StoredSms> {
   return smsDocument.readDetailed(db, { encryptionKey });
 }
 
-async function instantiateSmsProvider(
-  stored: StoredSms,
-): Promise<{
-  activeProvider: SmsProviderId | null;
+interface ResolvedSms {
+  activeProvider: string | null;
   provider: SmsProvider | null;
   error: string | null;
-}> {
-  const vals = stored.value;
-  const secretError = (field: keyof SmsSettings) => stored.secretErrors[field] ?? null;
-  const providerName = (vals.activeProvider || undefined) as SmsProviderId | undefined;
-  if (!providerName) {
-    return {
-      activeProvider: null,
-      provider: null,
-      error: "No active SMS provider selected",
-    };
-  }
-
-  let provider: SmsProvider;
-
-  switch (providerName) {
-    case "smsnetbd": {
-      const { SmsNetBdProvider } = await import("./providers/smsnetbd");
-      const error = secretError("smsnetbdApiKey");
-      if (error) return smsProviderReadinessError(providerName, error);
-      const placeholderError = firstPlaceholderConfigError([
-        ["SMS.net.bd API key", vals.smsnetbdApiKey],
-        ["SMS.net.bd sender ID", vals.smsnetbdSenderId],
-      ]);
-      if (placeholderError) return smsProviderReadinessError(providerName, placeholderError);
-      provider = new SmsNetBdProvider({
-        apiKey: vals.smsnetbdApiKey,
-        senderId: vals.smsnetbdSenderId || undefined,
-      });
-      break;
-    }
-    case "bdbulksms": {
-      const { BdBulkSmsProvider } = await import("./providers/bdbulksms");
-      const error = secretError("bdbulksmsToken");
-      if (error) return smsProviderReadinessError(providerName, error);
-      const placeholderError = firstPlaceholderConfigError([
-        ["BDBulkSMS token", vals.bdbulksmsToken],
-      ]);
-      if (placeholderError) return smsProviderReadinessError(providerName, placeholderError);
-      provider = new BdBulkSmsProvider({
-        token: vals.bdbulksmsToken,
-      });
-      break;
-    }
-    case "mimsms": {
-      const { MimSmsProvider } = await import("./providers/mimsms");
-      const error = secretError("mimsmsApiKey");
-      if (error) return smsProviderReadinessError(providerName, error);
-      const placeholderError = firstPlaceholderConfigError([
-        ["MIM SMS username", vals.mimsmsUsername],
-        ["MIM SMS API key", vals.mimsmsApiKey],
-        ["MIM SMS sender name", vals.mimsmsSenderName],
-      ]);
-      if (placeholderError) return smsProviderReadinessError(providerName, placeholderError);
-      provider = new MimSmsProvider({
-        userName: vals.mimsmsUsername,
-        apiKey: vals.mimsmsApiKey,
-        senderName: vals.mimsmsSenderName,
-      });
-      break;
-    }
-    case "gennet": {
-      const { GennetProvider } = await import("./providers/gennet");
-      const error = secretError("gennetApiToken");
-      if (error) return smsProviderReadinessError(providerName, error);
-      const placeholderError = firstPlaceholderConfigError([
-        ["GenNet API token", vals.gennetApiToken],
-        ["GenNet base URL", vals.gennetBaseUrl],
-        ["GenNet SID", vals.gennetSid],
-      ]);
-      if (placeholderError) return smsProviderReadinessError(providerName, placeholderError);
-      provider = new GennetProvider({
-        apiToken: vals.gennetApiToken,
-        baseUrl: vals.gennetBaseUrl,
-        sid: vals.gennetSid,
-      });
-      break;
-    }
-    default:
-      return {
-        activeProvider: null,
-        provider: null,
-        error: `Unsupported SMS provider "${providerName}"`,
-      };
-  }
-
-  const validationError = provider.validateConfig();
-  return {
-    activeProvider: providerName,
-    provider: validationError ? null : provider,
-    error: validationError,
-  };
 }
 
-function firstPlaceholderConfigError(
-  fields: Array<[label: string, value: string | null | undefined]>,
-): string | null {
-  for (const [label, value] of fields) {
-    if (looksLikePlaceholderCredential(value)) {
-      return `${label} looks like a placeholder. Save a real provider value before enabling SMS.`;
-    }
+/** The merchant's saved choice as one SMS port, or why it cannot send. */
+async function resolveSmsProvider(stored: StoredSms, apps: AppProviders | undefined): Promise<ResolvedSms> {
+  const activeProvider = stored.value.activeProvider || null;
+  if (!activeProvider) {
+    return { activeProvider: null, provider: null, error: "No active SMS provider selected" };
   }
-  return null;
-}
-
-function looksLikePlaceholderCredential(value: string | null | undefined): boolean {
-  const trimmed = value?.trim();
-  if (!trimmed || trimmed === MASKED) return false;
-
-  const normalized = trimmed.toLowerCase().replace(/[^a-z0-9]+/g, "");
-  if (!normalized) return false;
-  if (PLACEHOLDER_EXACT_VALUES.has(normalized)) return true;
-  if (/^([0-9])\1{3,}$/.test(normalized)) return true;
-  if (/^1234567890?$/.test(normalized)) return true;
-
-  const words = trimmed.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
-  if (words.some((word) => PLACEHOLDER_WORD_VALUES.has(word))) return true;
-  if (words.length <= 2 && words.some((word) => word === "test" || word === "demo")) {
-    return true;
+  if (isAppProviderId(activeProvider)) {
+    const choice = await resolveAppProvider(apps, "sms", activeProvider);
+    return { activeProvider, provider: choice.provider, error: choice.issue };
   }
-  if (words[0] === "your" && words.some((word) => word === "key" || word === "token" || word === "api")) {
-    return true;
+  if (!isBuiltInSmsProviderId(activeProvider)) {
+    return { activeProvider: null, provider: null, error: `Unsupported SMS provider "${activeProvider}"` };
   }
-
-  return false;
-}
-
-function smsProviderReadinessError(
-  activeProvider: SmsProviderId,
-  error: string,
-): {
-  activeProvider: SmsProviderId;
-  provider: null;
-  error: string;
-} {
-  return {
-    activeProvider,
-    provider: null,
-    error,
-  };
+  const adapter = BUILT_IN_SMS_ADAPTERS[activeProvider];
+  const configured = adapter.configure(stored);
+  if ("error" in configured) return { activeProvider, provider: null, error: configured.error };
+  return { activeProvider, provider: bindProvider("sms", adapter, configured.settings), error: null };
 }
 
 export async function getSmsProviderReadiness(
   db: Database,
   encryptionKey?: string,
+  apps?: AppProviders,
 ): Promise<SmsProviderReadiness> {
-  const resolved = await instantiateSmsProvider(await readSms(db, encryptionKey));
+  const resolved = await resolveSmsProvider(await readSms(db, encryptionKey), apps);
   const configured = Boolean(resolved.provider);
   const value = configured
     ? readiness.ready()
@@ -272,18 +143,19 @@ export async function getSmsProviderReadiness(
 export async function getSmsSettings(
   db: Database,
   encryptionKey?: string,
+  apps?: AppProviders,
 ): Promise<SmsSettingsData> {
   const stored = await readSms(db, encryptionKey);
-  const readiness = await instantiateSmsProvider(stored);
+  const resolved = await resolveSmsProvider(stored, apps);
   const vals = stored.value;
   // A secret is "stored" even when this request cannot decrypt it.
   const masked = (field: keyof SmsSettings) =>
     vals[field] || stored.secretErrors[field] ? MASKED : "";
 
   return {
-    activeProvider: (vals.activeProvider || null) as SmsProviderId | null,
-    activeProviderConfigured: Boolean(readiness.provider),
-    activeProviderError: readiness.error,
+    activeProvider: vals.activeProvider || null,
+    activeProviderConfigured: Boolean(resolved.provider),
+    activeProviderError: resolved.error,
     bdbulksmsToken: masked("bdbulksmsToken"),
     mimsmsUsername: vals.mimsmsUsername,
     mimsmsApiKey: masked("mimsmsApiKey"),
@@ -301,23 +173,27 @@ export async function getSmsSettings(
 // Save settings (skip masked = unchanged)
 // ---------------------------------------------------------------------------
 
+export type SmsSettingsInput = Partial<{
+  activeProvider: string;
+  bdbulksmsToken: string;
+  mimsmsUsername: string;
+  mimsmsApiKey: string;
+  mimsmsSenderName: string;
+  smsnetbdApiKey: string;
+  smsnetbdSenderId: string;
+  gennetApiToken: string;
+  gennetBaseUrl: string;
+  gennetSid: string;
+}>;
+
 /**
  * Save SMS settings. Only writes fields that are provided and not masked.
+ * An app provider id is accepted as the active provider; the caller checks
+ * that an installed app declares it.
  */
 export async function saveSmsSettings(
   db: Database,
-  data: Partial<{
-    activeProvider: string;
-    bdbulksmsToken: string;
-    mimsmsUsername: string;
-    mimsmsApiKey: string;
-    mimsmsSenderName: string;
-    smsnetbdApiKey: string;
-    smsnetbdSenderId: string;
-    gennetApiToken: string;
-    gennetBaseUrl: string;
-    gennetSid: string;
-  }>,
+  data: SmsSettingsInput,
   encryptionKey?: string,
   /** The revision the editor loaded; a stale one is a 409 conflict. */
   options: { expectedRevision?: number } = {},
@@ -341,24 +217,8 @@ const SMS_SECRET_FIELDS = new Set<keyof SmsSettings>([
   "gennetApiToken",
 ]);
 
-function validateSmsSettingsInput(
-  data: Partial<{
-    activeProvider: string;
-    bdbulksmsToken: string;
-    mimsmsUsername: string;
-    mimsmsApiKey: string;
-    mimsmsSenderName: string;
-    smsnetbdApiKey: string;
-    smsnetbdSenderId: string;
-    gennetApiToken: string;
-    gennetBaseUrl: string;
-    gennetSid: string;
-  }>,
-): void {
-  if (
-    data.activeProvider
-    && !SMS_PROVIDER_IDS.includes(data.activeProvider as SmsProviderId)
-  ) {
+function validateSmsSettingsInput(data: SmsSettingsInput): void {
+  if (data.activeProvider && !isSmsProviderChoice(data.activeProvider)) {
     throw new ValidationError("Unsupported SMS provider.");
   }
   const placeholderError = firstPlaceholderConfigError([
@@ -376,21 +236,20 @@ function validateSmsSettingsInput(
 }
 
 // ---------------------------------------------------------------------------
-// Active provider resolver (used by queue consumer at dispatch time)
+// Active provider resolver (used at dispatch time)
 // ---------------------------------------------------------------------------
 
 /**
- * Resolve the active SMS provider by reading settings from DB, decrypting
- * credentials, and instantiating the provider.
- *
- * This is called by the queue consumer at dispatch time.
- * Returns null (does not throw) when no provider is configured.
+ * The SMS provider to send through: the saved choice with its credentials
+ * read (and decrypted) now; an app provider through `apps`. Returns null
+ * (does not throw) when no provider can send.
  */
 export async function getActiveSmsProvider(
   db: Database,
   encryptionKey?: string,
+  apps?: AppProviders,
 ): Promise<SmsProvider | null> {
-  const resolved = await instantiateSmsProvider(await readSms(db, encryptionKey));
+  const resolved = await resolveSmsProvider(await readSms(db, encryptionKey), apps);
 
   if (resolved.error) {
     console.error(

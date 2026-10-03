@@ -1,60 +1,72 @@
-// src/integrations/sms/providers/gennet.ts
-// Gennet iSMS provider implementation.
+// GenNet iSMS behind the SMS port.
 // API docs: <domain>/api/v3/ — account-specific domain, api_token auth, JSON POST.
 
-import type { SmsProvider, SendSmsOptions, SendSmsResult } from "../provider";
+import { smsCredentialIssue } from "../credentials";
+import type { SmsAdapter } from "../port";
 import { classifySmsProviderFailure, sanitizeSmsProviderDiagnostic } from "../retryability";
 
-export interface GennetConfig {
+export interface GennetSettings {
   apiToken: string;
-  baseUrl: string; // Account-specific domain (e.g., "https://subdomain.gennet.com.bd")
-  sid: string; // Brand/masking sender ID assigned by GenNet
+  /** Account-specific domain (e.g., "https://subdomain.gennet.com.bd"). */
+  baseUrl: string;
+  /** Brand/masking sender ID assigned by GenNet. */
+  sid: string;
 }
 
-export class GennetProvider implements SmsProvider {
-  readonly name = "gennet";
-
-  constructor(private config: GennetConfig) {}
-
-  validateConfig(): string | null {
-    if (!this.config.apiToken) return "Gennet API token is required";
-    if (!this.config.baseUrl) return "Gennet base URL is required";
-    if (!this.config.sid) return "Gennet SID (sender ID) is required";
-    try {
-      const parsed = new URL(this.config.baseUrl);
-      if (
-        parsed.protocol !== "https:" ||
-        parsed.username ||
-        parsed.password ||
-        parsed.search ||
-        parsed.hash
-      ) {
-        return "Gennet base URL must be an absolute HTTPS URL without credentials, query parameters, or a fragment";
-      }
-    } catch {
-      return "Gennet base URL must be a valid absolute HTTPS URL";
+function baseUrlIssue(baseUrl: string): string | null {
+  try {
+    const parsed = new URL(baseUrl);
+    if (
+      parsed.protocol !== "https:" ||
+      parsed.username ||
+      parsed.password ||
+      parsed.search ||
+      parsed.hash
+    ) {
+      return "Gennet base URL must be an absolute HTTPS URL without credentials, query parameters, or a fragment";
     }
     return null;
+  } catch {
+    return "Gennet base URL must be a valid absolute HTTPS URL";
   }
+}
 
-  async sendSms(options: SendSmsOptions): Promise<SendSmsResult> {
+export const gennetSms: SmsAdapter<GennetSettings> = {
+  id: "gennet",
+  label: "GenNet iSMS",
+
+  configure(stored) {
+    const { gennetApiToken: apiToken, gennetBaseUrl: baseUrl, gennetSid: sid } = stored.value;
+    const error = smsCredentialIssue(stored, "gennetApiToken", [
+      ["GenNet API token", apiToken],
+      ["GenNet base URL", baseUrl],
+      ["GenNet SID", sid],
+    ])
+      ?? (!apiToken ? "Gennet API token is required" : null)
+      ?? (!baseUrl ? "Gennet base URL is required" : null)
+      ?? (!sid ? "Gennet SID (sender ID) is required" : null)
+      ?? baseUrlIssue(baseUrl);
+    return error ? { error } : { settings: { apiToken, baseUrl, sid } };
+  },
+
+  async send(input, { settings }) {
     // Strip + prefix: +8801XXXXXXXXX -> 8801XXXXXXXXX
-    const msisdn = options.to.replace(/^\+/, "");
+    const msisdn = input.to.replace(/^\+/, "");
 
     // csms_id must be unique per day. Use a deterministic caller reference
     // when available so provider retries dedupe the same logical message.
-    const csmsId = normalizeCsmsId(options.clientReference);
+    const csmsId = normalizeCsmsId(input.clientReference);
 
-    const url = `${this.config.baseUrl.replace(/\/$/, "")}/api/v3/send-sms`;
+    const url = `${settings.baseUrl.replace(/\/$/, "")}/api/v3/send-sms`;
 
     const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        api_token: this.config.apiToken,
-        sid: this.config.sid,
+        api_token: settings.apiToken,
+        sid: settings.sid,
         msisdn,
-        sms: options.message,
+        sms: input.message,
         csms_id: csmsId,
       }),
     });
@@ -98,8 +110,8 @@ export class GennetProvider implements SmsProvider {
       rawStatus: sanitizeSmsProviderDiagnostic(rawStatus),
       retryable: classifySmsProviderFailure(rawStatus, res.ok ? undefined : res.status),
     };
-  }
-}
+  },
+};
 
 function normalizeCsmsId(clientReference?: string): string {
   const cleaned = (clientReference ?? "")

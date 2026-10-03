@@ -161635,12 +161635,20 @@
                                 "type": "boolean"
                               },
                               "providerType": {
-                                "type": "string",
-                                "enum": [
-                                  "default",
-                                  "fraudbd",
-                                  "fraudguard",
-                                  "ecourier"
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "default",
+                                      "fraudbd",
+                                      "fraudguard",
+                                      "ecourier"
+                                    ]
+                                  },
+                                  {
+                                    "type": "string",
+                                    "maxLength": 160
+                                  }
                                 ]
                               }
                             },
@@ -161960,50 +161968,77 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object",
-                "properties": {
-                  "name": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 100
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 100
+                      },
+                      "apiUrl": {
+                        "type": "string",
+                        "maxLength": 2048,
+                        "format": "uri"
+                      },
+                      "apiKey": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 4096
+                      },
+                      "apiSecret": {
+                        "type": "string",
+                        "maxLength": 4096
+                      },
+                      "userId": {
+                        "type": "string",
+                        "maxLength": 4096
+                      },
+                      "isActive": {
+                        "type": "boolean",
+                        "default": true
+                      },
+                      "providerType": {
+                        "type": "string",
+                        "enum": [
+                          "default",
+                          "fraudbd",
+                          "fraudguard",
+                          "ecourier"
+                        ],
+                        "default": "default"
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "apiUrl",
+                      "apiKey"
+                    ]
                   },
-                  "apiUrl": {
-                    "type": "string",
-                    "maxLength": 2048,
-                    "format": "uri"
-                  },
-                  "apiKey": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 4096
-                  },
-                  "apiSecret": {
-                    "type": "string",
-                    "maxLength": 4096
-                  },
-                  "userId": {
-                    "type": "string",
-                    "maxLength": 4096
-                  },
-                  "isActive": {
-                    "type": "boolean",
-                    "default": true
-                  },
-                  "providerType": {
-                    "type": "string",
-                    "enum": [
-                      "default",
-                      "fraudbd",
-                      "fraudguard",
-                      "ecourier"
+                  {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 100
+                      },
+                      "isActive": {
+                        "type": "boolean",
+                        "default": true
+                      },
+                      "providerType": {
+                        "type": "string",
+                        "maxLength": 160
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "providerType"
                     ],
-                    "default": "default"
+                    "additionalProperties": false
                   }
-                },
-                "required": [
-                  "name",
-                  "apiUrl",
-                  "apiKey"
                 ]
               }
             }
@@ -162055,12 +162090,20 @@
                           "type": "boolean"
                         },
                         "providerType": {
-                          "type": "string",
-                          "enum": [
-                            "default",
-                            "fraudbd",
-                            "fraudguard",
-                            "ecourier"
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "default",
+                                "fraudbd",
+                                "fraudguard",
+                                "ecourier"
+                              ]
+                            },
+                            {
+                              "type": "string",
+                              "maxLength": 160
+                            }
                           ]
                         }
                       },
@@ -162388,55 +162431,87 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object",
-                "properties": {
-                  "id": {
-                    "type": "string",
-                    "minLength": 1
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 100
+                      },
+                      "apiUrl": {
+                        "type": "string",
+                        "maxLength": 2048,
+                        "format": "uri"
+                      },
+                      "apiKey": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 4096
+                      },
+                      "apiSecret": {
+                        "type": "string",
+                        "maxLength": 4096
+                      },
+                      "userId": {
+                        "type": "string",
+                        "maxLength": 4096
+                      },
+                      "isActive": {
+                        "type": "boolean",
+                        "default": true
+                      },
+                      "providerType": {
+                        "type": "string",
+                        "enum": [
+                          "default",
+                          "fraudbd",
+                          "fraudguard",
+                          "ecourier"
+                        ],
+                        "default": "default"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "name",
+                      "apiUrl",
+                      "apiKey"
+                    ]
                   },
-                  "name": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 100
-                  },
-                  "apiUrl": {
-                    "type": "string",
-                    "maxLength": 2048,
-                    "format": "uri"
-                  },
-                  "apiKey": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 4096
-                  },
-                  "apiSecret": {
-                    "type": "string",
-                    "maxLength": 4096
-                  },
-                  "userId": {
-                    "type": "string",
-                    "maxLength": 4096
-                  },
-                  "isActive": {
-                    "type": "boolean",
-                    "default": true
-                  },
-                  "providerType": {
-                    "type": "string",
-                    "enum": [
-                      "default",
-                      "fraudbd",
-                      "fraudguard",
-                      "ecourier"
+                  {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 100
+                      },
+                      "isActive": {
+                        "type": "boolean",
+                        "default": true
+                      },
+                      "providerType": {
+                        "type": "string",
+                        "maxLength": 160
+                      },
+                      "id": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "providerType",
+                      "id"
                     ],
-                    "default": "default"
+                    "additionalProperties": false
                   }
-                },
-                "required": [
-                  "id",
-                  "name",
-                  "apiUrl",
-                  "apiKey"
                 ]
               }
             }
@@ -162488,12 +162563,20 @@
                           "type": "boolean"
                         },
                         "providerType": {
-                          "type": "string",
-                          "enum": [
-                            "default",
-                            "fraudbd",
-                            "fraudguard",
-                            "ecourier"
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "default",
+                                "fraudbd",
+                                "fraudguard",
+                                "ecourier"
+                              ]
+                            },
+                            {
+                              "type": "string",
+                              "maxLength": 160
+                            }
                           ]
                         }
                       },
@@ -183238,10 +183321,18 @@
                       "type": "object",
                       "properties": {
                         "provider": {
-                          "type": "string",
-                          "enum": [
-                            "cloudflare",
-                            "resend"
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "cloudflare",
+                                "resend"
+                              ]
+                            },
+                            {
+                              "type": "string",
+                              "maxLength": 160
+                            }
                           ]
                         },
                         "apiKey": {
@@ -183601,10 +183692,18 @@
                     "minimum": 0
                   },
                   "provider": {
-                    "type": "string",
-                    "enum": [
-                      "cloudflare",
-                      "resend"
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "cloudflare",
+                          "resend"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "maxLength": 160
+                      }
                     ]
                   },
                   "apiKey": {
@@ -198526,13 +198625,7 @@
                         "activeProvider": {
                           "type": "string",
                           "nullable": true,
-                          "enum": [
-                            "smsnetbd",
-                            "bdbulksms",
-                            "mimsms",
-                            "gennet",
-                            null
-                          ]
+                          "maxLength": 160
                         },
                         "activeProviderConfigured": {
                           "type": "boolean"
@@ -198881,12 +198974,20 @@
                 "type": "object",
                 "properties": {
                   "activeProvider": {
-                    "type": "string",
-                    "enum": [
-                      "smsnetbd",
-                      "bdbulksms",
-                      "mimsms",
-                      "gennet"
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "smsnetbd",
+                          "bdbulksms",
+                          "mimsms",
+                          "gennet"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "maxLength": 160
+                      }
                     ]
                   },
                   "bdbulksmsToken": {
@@ -198958,13 +199059,7 @@
                         "activeProvider": {
                           "type": "string",
                           "nullable": true,
-                          "enum": [
-                            "smsnetbd",
-                            "bdbulksms",
-                            "mimsms",
-                            "gennet",
-                            null
-                          ]
+                          "maxLength": 160
                         },
                         "activeProviderConfigured": {
                           "type": "boolean"
@@ -203101,8 +203196,11 @@
           "oneTimeSecretOutput": false
         },
         "x-scalius-rbac": {
-          "type": "permission",
-          "permission": "settings.general.view"
+          "type": "anyOf",
+          "permissions": [
+            "settings.fraud_checker.view",
+            "settings.general.view"
+          ]
         }
       }
     },
@@ -203417,8 +203515,12 @@
           "oneTimeSecretOutput": false
         },
         "x-scalius-rbac": {
-          "type": "permission",
-          "permission": "settings.general.edit"
+          "type": "anyOf",
+          "permissions": [
+            "settings.fraud_checker.edit",
+            "settings.general.edit",
+            "settings.notifications.edit"
+          ]
         }
       }
     },

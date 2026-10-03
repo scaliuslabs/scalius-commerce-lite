@@ -1,26 +1,4 @@
 // src/integrations/email.ts
-// Re-exports from the email provider module for backward compatibility.
+// The email port's public entry (`@scalius/core/integrations/email`).
 
-export { sendEmail } from "./email/index";
-
-export type {
-  SendEmailOptions,
-  SendEmailResult,
-  EmailProvider,
-  EmailProviderReadiness,
-  EmailRuntimeContext,
-  EmailRuntimeSettings,
-  CloudflareEmailBinding,
-} from "./email/index";
-
-export {
-  registerEmailProvider,
-  getEmailProvider,
-} from "./email/index";
-
-export {
-  CloudflareEmailProvider,
-  ResendEmailProvider,
-  getEmailProviderReadiness,
-  getEmailRuntimeSettings,
-} from "./email/index";
+export * from "./email/index";

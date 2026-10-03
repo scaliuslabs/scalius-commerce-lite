@@ -8,6 +8,7 @@ import { isReady } from "@scalius/shared/readiness";
 import { eq, inArray, sql } from "drizzle-orm";
 import { sendEmail } from "../../integrations/email";
 import type { EmailRuntimeContext, SendEmailResult } from "../../integrations/email";
+import type { AppProviders } from "../../integrations/provider-port";
 import { getFirebaseAdminMessaging } from "../../integrations/firebase/admin";
 import { readFirebaseServiceAccountJson } from "../../integrations/firebase/settings";
 import {
@@ -60,6 +61,8 @@ interface OrderNotificationOptions {
     encryptionKey?: string;
     env?: EmailRuntimeContext["env"];
     outboxId?: string;
+    /** The app providers a saved SMS or email choice may name. */
+    appProviders?: AppProviders;
 }
 
 interface AdminPushOptions {
@@ -690,6 +693,7 @@ export async function sendOrderNotificationEmail(
                         db,
                         env: options.env,
                         encryptionKey: options.encryptionKey,
+                        appProviders: options.appProviders,
                     })),
                 }));
             }
@@ -702,6 +706,7 @@ export async function sendOrderNotificationEmail(
                     db,
                     env: options.env,
                     encryptionKey: options.encryptionKey,
+                    appProviders: options.appProviders,
                 });
                 if (result && !result.success) {
                     console.error(`[Notifications] Email did not send for ${type} (order ${orderId}): ${result.rawStatus}`);
@@ -735,7 +740,7 @@ export async function sendOrderNotificationEmail(
                     }));
                 }
             } else if (db) {
-                const smsReadiness = await getSmsProviderReadiness(db, options.encryptionKey);
+                const smsReadiness = await getSmsProviderReadiness(db, options.encryptionKey, options.appProviders);
                 const readinessProviderName = smsReadiness.activeProvider ?? "sms";
 
                 if (!isReady(smsReadiness)) {
@@ -777,8 +782,8 @@ export async function sendOrderNotificationEmail(
                         );
                     }
                 } else {
-                    const smsProvider = await getActiveSmsProvider(db, options.encryptionKey);
-                    const providerName = smsProvider?.name ?? readinessProviderName;
+                    const smsProvider = await getActiveSmsProvider(db, options.encryptionKey, options.appProviders);
+                    const providerName = smsProvider?.id ?? readinessProviderName;
 
                     if (receiptDb && outboxId) {
                         const blocked = await recordProviderBlockedDeliveryIfNeeded({
@@ -813,19 +818,19 @@ export async function sendOrderNotificationEmail(
                                             retryable: false,
                                         };
                                     }
-                                    const smsResult = await smsProvider.sendSms({
+                                    const smsResult = await smsProvider.send({
                                         to: customerPhone,
                                         message: await smsMessage(),
                                         clientReference: createProviderClientReference(target),
-                                    });
+                                    }, {});
                                     if (smsResult.success) {
-                                        console.log(`[Notifications] SMS sent via ${smsProvider.name} for ${type} (order ${orderId}), ref=${smsResult.providerRef}`);
+                                        console.log(`[Notifications] SMS sent via ${smsProvider.id} for ${type} (order ${orderId}), ref=${smsResult.providerRef}`);
                                     } else {
-                                        console.error(`[Notifications] SMS failed via ${smsProvider.name} for ${type} (order ${orderId}): ${smsResult.rawStatus}`);
+                                        console.error(`[Notifications] SMS failed via ${smsProvider.id} for ${type} (order ${orderId}): ${smsResult.rawStatus}`);
                                     }
                                     return {
                                         success: smsResult.success,
-                                        provider: smsProvider.name,
+                                        provider: smsProvider.id,
                                         providerMessageId: smsResult.providerRef,
                                         providerStatus: smsResult.rawStatus,
                                         rawResponse: smsResult.rawStatus,
@@ -835,11 +840,11 @@ export async function sendOrderNotificationEmail(
                             }));
                         }
                     } else if (smsProvider) {
-                        const smsResult = await smsProvider.sendSms({ to: customerPhone, message: await smsMessage() });
+                        const smsResult = await smsProvider.send({ to: customerPhone, message: await smsMessage() }, {});
                         if (smsResult.success) {
-                            console.log(`[Notifications] SMS sent via ${smsProvider.name} for ${type} (order ${orderId}), ref=${smsResult.providerRef}`);
+                            console.log(`[Notifications] SMS sent via ${smsProvider.id} for ${type} (order ${orderId}), ref=${smsResult.providerRef}`);
                         } else {
-                            console.error(`[Notifications] SMS failed via ${smsProvider.name} for ${type} (order ${orderId}): ${smsResult.rawStatus}`);
+                            console.error(`[Notifications] SMS failed via ${smsProvider.id} for ${type} (order ${orderId}): ${smsResult.rawStatus}`);
                         }
                     } else {
                         console.warn(`[Notifications] SMS channel enabled for ${type} but no SMS provider configured`);
@@ -1048,7 +1053,7 @@ export async function sendStaffOrderEmails(
     }, db));
     const compose = async () =>
         composeStaffOrderEmail(await context(), resolveDashboardOrderLink(options.env, order.id));
-    const emailContext = { db, env: options.env, encryptionKey: options.encryptionKey };
+    const emailContext = { db, env: options.env, encryptionKey: options.encryptionKey, appProviders: options.appProviders };
     const outcomes: OrderNotificationChannelOutcome[] = [];
 
     for (const recipient of recipients) {
@@ -1489,7 +1494,7 @@ export function emailResultToDeliveryResult(result: SendEmailResult): DeliverySe
         rawResponse: result.rawStatus,
         retryable: result.success
             ? false
-            : isNonRetryableDispatchStatus(result.rawStatus)
+            : result.retryable === false || isNonRetryableDispatchStatus(result.rawStatus)
                 ? false
                 : undefined,
     };

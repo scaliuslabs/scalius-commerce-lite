@@ -61,6 +61,7 @@ import { SCANNER_TOKEN_TTL_SECONDS } from "@scalius/shared/scanner-auth";
 
 import { ok, created } from "../../utils/api-response";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
+import { requestAppProviders } from "../../plugins/providers/app-providers";
 import { AppError, UnauthorizedError, ForbiddenError, NotFoundError, ValidationError, ConflictError, ServiceUnavailableError } from "../../utils/api-error";
 import {
     conflictResponse,
@@ -441,7 +442,7 @@ app.openapi(createUserRoute, async (c) => {
         const db = c.get("db");
         const sessionUser = c.get("user");
         const env = c.env;
-        const auth = createAuth(env);
+        const auth = createAuth(env, { appProviders: requestAppProviders(c) });
 
         const { name, email, roleId } = c.req.valid("json");
         const normalizedEmail = email.trim().toLowerCase();
@@ -605,7 +606,7 @@ app.openapi(resendAdminSetupRoute, async (c) => {
         throw new ValidationError("This administrator does not have a pending invitation");
     }
 
-    const auth = createAuth(env);
+    const auth = createAuth(env, { appProviders: requestAppProviders(c) });
     try {
         await auth.api.requestPasswordReset({
             headers: c.req.raw.headers,
@@ -970,7 +971,7 @@ app.openapi(changePasswordRoute, async (c) => {
     const session = c.get("session");
     const sessionUser = c.get("user");
     const db = c.get("db");
-    const auth = createAuth(c.env);
+    const auth = createAuth(c.env, { appProviders: requestAppProviders(c) });
     const { currentPassword, newPassword } = c.req.valid("json");
 
     if (!session) {
@@ -1022,6 +1023,7 @@ app.openapi(changePasswordRoute, async (c) => {
         env: c.env as unknown as Record<string, unknown>,
         dashboardUrl: c.env.BETTER_AUTH_URL,
         user: { name: sessionUser.name, email: sessionUser.email },
+        appProviders: requestAppProviders(c),
     });
     try {
         c.executionCtx.waitUntil(notice);
@@ -1292,7 +1294,7 @@ app.openapi(start2faMethodChallengeRoute, async (c) => {
         throw new ServiceUnavailableError("Two-factor method changes are unavailable");
     }
 
-    const auth = createAuth(c.env);
+    const auth = createAuth(c.env, { appProviders: requestAppProviders(c) });
     const passwordProof = await (async () => {
         try {
             return await auth.api.verifyPassword({
@@ -1406,7 +1408,7 @@ app.openapi(update2faMethodRoute, async (c) => {
         verificationMethod: "totp" | "email",
         code: string,
     ): Promise<{ sessionId: string; sessionToken: string }> => {
-        const auth = createAuth(c.env);
+        const auth = createAuth(c.env, { appProviders: requestAppProviders(c) });
         const verifiedProof = await (async () => {
             try {
                 const betterAuthResult = verificationMethod === "email"
@@ -1739,7 +1741,7 @@ app.openapi(verify2faRoute, async (c) => {
         throw new ValidationError("Trusted-device 2FA verification is not enabled");
     }
 
-    const auth = createAuth(c.env);
+    const auth = createAuth(c.env, { appProviders: requestAppProviders(c) });
     const verifyResult = await (async () => {
         try {
             if (type === "backup") {
@@ -2304,7 +2306,7 @@ setupApp.openapi(setupRoute, async (c) => {
     await enforceAdminSetupRateLimit(db, ip);
     await enforceSetupToken(c, ip);
 
-    const auth = createAuth(env);
+    const auth = createAuth(env, { appProviders: requestAppProviders(c) });
 
     const { name, email, password } = c.req.valid("json");
     const normalizedEmail = email.trim().toLowerCase();

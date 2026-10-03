@@ -11,7 +11,7 @@ import { settingsHead } from "~/components/admin/settings/settings-nav";
 import { usePermissions } from "~/contexts/PermissionContext";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { fraudCheckerProvidersQueryOptions } from "~/lib/api-query-options/fraud-checker";
-import { aiAccessQuery, metaQuery, trackingQuery } from "~/lib/api-query-options/settings-screens";
+import { aiAccessQuery, appProvidersQuery, metaQuery, trackingQuery } from "~/lib/api-query-options/settings-screens";
 import { RouteErrorComponent } from "~/lib/route-error";
 
 export const Route = createFileRoute("/admin/settings/integrations")({
@@ -21,6 +21,7 @@ export const Route = createFileRoute("/admin/settings/integrations")({
       queryClient.ensureQueryData(trackingQuery),
       queryClient.ensureQueryData(metaQuery),
       queryClient.ensureQueryData(fraudCheckerProvidersQueryOptions()),
+      queryClient.ensureQueryData(appProvidersQuery("fraud")),
       queryClient.ensureQueryData(aiAccessQuery),
     ]),
   head: () => settingsHead("integrations"),

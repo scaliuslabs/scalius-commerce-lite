@@ -1,44 +1,22 @@
 // src/integrations/email/resend.ts
-// Resend email provider.
+// Resend behind the email port.
 
-import {
-  resolveSender,
-  safeEmailHeaders,
-  type EmailProvider,
-  type EmailRuntimeContext,
-  type SendEmailOptions,
-  type SendEmailResult,
-} from "./provider";
 import { ServiceUnavailableError } from "@scalius/core/errors";
-import { getEmailRuntimeSettings } from "./settings";
+import { maskEmailForLog, resolveSender, safeEmailHeaders, type EmailAdapter } from "./provider";
 
-function maskEmailForLog(value: string): string {
-  const [localPart, domain] = value.split("@");
-  if (!localPart || !domain) return "redacted";
-  const visible = localPart.length <= 2
-    ? localPart[0] ?? "*"
-    : `${localPart[0]}${localPart[localPart.length - 1]}`;
-  return `${visible}***@${domain}`;
-}
+export const resendEmail: EmailAdapter = {
+  id: "resend",
+  label: "Resend",
 
-/**
- * Email provider that sends via the Resend API.
- * Falls back to console logging when the API key is not configured.
- */
-export class ResendEmailProvider implements EmailProvider {
-  readonly name = "resend";
+  configured: ({ runtime }) => Boolean(runtime.resendApiKey),
 
-  async sendEmail(
-    { to, subject, html, from, fromName, text, idempotencyKey, headers }: SendEmailOptions,
-    context?: EmailRuntimeContext,
-  ): Promise<SendEmailResult> {
-    const settings = await getEmailRuntimeSettings(context);
-    const apiKey = settings.resendApiKey;
+  async send({ to, subject, html, from, fromName, text, idempotencyKey, headers }, { settings: { runtime } }) {
+    const apiKey = runtime.resendApiKey;
     if (!apiKey) {
       throw new ServiceUnavailableError("Resend API key is not configured");
     }
 
-    const sender = resolveSender({ from, fromName }, settings);
+    const sender = resolveSender({ from, fromName }, runtime);
     const fromAddress = sender.name ? `"${sender.name}" <${sender.email}>` : sender.email;
     const extraHeaders = safeEmailHeaders(headers);
 
@@ -72,7 +50,6 @@ export class ResendEmailProvider implements EmailProvider {
       console.log(`[Email] Sent via Resend to ${maskEmailForLog(to)}${data.id ? ` (${data.id})` : ""}`);
       return {
         success: true,
-        provider: "resend",
         providerRef: data.id,
         rawStatus: "accepted",
       };
@@ -82,5 +59,5 @@ export class ResendEmailProvider implements EmailProvider {
         `Failed to send email: ${error instanceof Error ? error.message : "Unknown error"}`,
       );
     }
-  }
-}
+  },
+};

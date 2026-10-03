@@ -1,7 +1,15 @@
 // src/modules/fraud-checker/provider.ts
-// Provider interface and registry for fraud checker integrations.
+// The built-in fraud checkers behind the fraud port
+// (`@scalius/shared/plugins/providers/fraud`, the one app providers
+// implement): a courier-history lookup for a buyer's phone, normalized from
+// each provider's own response. The merchant's manual tool on the order
+// page; never automatic blocking.
 import { formatPhoneForProvider } from "@scalius/shared/customer-utils";
+import type { FraudCheck } from "@scalius/shared/plugins/providers";
+import type { BoundProvider, BuiltInAdapter } from "../../integrations/provider-port";
+import { getFraudCheckProviderDefinition, type FraudCheckProviderType } from "./provider-definitions";
 
+/** A built-in checker's saved settings (one `fraud-checker` row). */
 export interface FraudCheckProviderConfig {
   apiUrl: string;
   apiKey: string;
@@ -9,23 +17,11 @@ export interface FraudCheckProviderConfig {
   userId?: string;
 }
 
-/**
- * Normalized result from a fraud check lookup.
- */
-export interface FraudCheckResult {
-  riskLevel: "low" | "medium" | "high" | "unknown";
-  details: Record<string, unknown>;
-  raw?: unknown;
-}
+/** The fraud checker a lookup goes through: a built-in one with its row's settings, or an app's. */
+export type FraudProvider = BoundProvider<"fraud">;
 
-/**
- * Contract that every fraud-check provider must implement.
- */
-export interface FraudCheckProvider {
-  readonly name: string;
-  /** Check a phone number for fraud signals. */
-  lookup(phone: string, config: FraudCheckProviderConfig): Promise<FraudCheckResult>;
-}
+/** A built-in checker: one provider's API behind the fraud port. */
+export type FraudAdapter = BuiltInAdapter<"fraud", FraudCheckProviderConfig>;
 
 // -- Shared normalization ----------------------------------------------------
 
@@ -322,14 +318,17 @@ function computeRiskLevel(data: NormalizedFraudStats): "low" | "medium" | "high"
   return "low";
 }
 
-async function fetchWithTimeout(url: string, init: RequestInit): Promise<Response> {
+async function fetchWithTimeout(url: string, init: RequestInit, signal?: AbortSignal): Promise<Response> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const abort = () => controller.abort();
+  signal?.addEventListener("abort", abort, { once: true });
 
   try {
     return await fetch(url, { ...init, signal: controller.signal });
   } finally {
     clearTimeout(timeout);
+    signal?.removeEventListener("abort", abort);
   }
 }
 
@@ -346,13 +345,55 @@ async function readProviderJson(response: Response): Promise<unknown> {
   return data;
 }
 
-function toProviderResult(raw: unknown, phone: string): FraudCheckResult {
+/** A provider response as the port's answer. */
+function toFraudCheck(raw: unknown, phone: string): FraudCheck {
   const data = normalizeFraudResponse(raw, phone);
+  const couriers = data.apis
+    ? Object.fromEntries(Object.entries(data.apis).map(([name, stats]) => [name, {
+        totalParcels: stats.total_parcels,
+        delivered: stats.total_delivered_parcels,
+        cancelled: stats.total_cancelled_parcels,
+      }]))
+    : undefined;
 
   return {
     riskLevel: computeRiskLevel(data),
-    details: { ...data },
-    raw,
+    phone: data.mobile_number,
+    totalParcels: data.total_parcels,
+    delivered: data.total_delivered,
+    cancelled: data.total_cancel,
+    ...(data.success_rate !== undefined ? { successRate: data.success_rate } : {}),
+    ...(data.cancel_rate !== undefined ? { cancelRate: data.cancel_rate } : {}),
+    ...(data.customer_tag !== undefined ? { customerTag: data.customer_tag } : {}),
+    ...(data.provider_status !== undefined ? { providerStatus: data.provider_status } : {}),
+    ...(data.message !== undefined ? { message: data.message } : {}),
+    ...(couriers ? { couriers } : {}),
+  };
+}
+
+/** The number a connection test looks up. */
+const TEST_PHONE = "+8801700000000";
+
+/** One provider's lookup request; everything else is shared. */
+function checker(
+  id: FraudCheckProviderType,
+  request: (phone: string, settings: FraudCheckProviderConfig) => { headers: Record<string, string>; body: BodyInit },
+): FraudAdapter {
+  return {
+    id,
+    label: getFraudCheckProviderDefinition(id).label,
+    async check({ phone }, { settings, signal }) {
+      const response = await fetchWithTimeout(settings.apiUrl, { method: "POST", ...request(phone, settings) }, signal);
+      return toFraudCheck(await readProviderJson(response), phone);
+    },
+    async testConnection(_input, call) {
+      try {
+        await this.check({ phone: TEST_PHONE }, call);
+        return { ok: true, message: "Connection successful" };
+      } catch (error: unknown) {
+        return { ok: false, message: error instanceof Error ? error.message : "Connection failed" };
+      }
+    },
   };
 }
 
@@ -360,112 +401,59 @@ function toProviderResult(raw: unknown, phone: string): FraudCheckResult {
 // Matches the existing behavior: HTTP POST with phone as FormData,
 // Bearer token auth, and a JSON response containing delivery stats.
 
-export class DefaultFraudCheckProvider implements FraudCheckProvider {
-  readonly name = "default";
+export const defaultFraudChecker = checker("default", (phone, settings) => {
+  const formData = new FormData();
+  formData.append("phone", toLocalPhone(phone));
+  return { headers: { Authorization: `Bearer ${settings.apiKey}` }, body: formData };
+});
 
-  async lookup(phone: string, config: FraudCheckProviderConfig): Promise<FraudCheckResult> {
-    const formData = new FormData();
-    formData.append("phone", toLocalPhone(phone));
+export const fraudBdChecker = checker("fraudbd", (phone, settings) => ({
+  headers: {
+    "Content-Type": "application/json",
+    Accept: "application/json",
+    api_key: settings.apiKey,
+    user_name: settings.userId ?? "",
+    password: settings.apiSecret ?? "",
+  },
+  body: JSON.stringify({ phone_number: toLocalPhone(phone) }),
+}));
 
-    const response = await fetchWithTimeout(config.apiUrl, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${config.apiKey}`,
-      },
-      body: formData,
-    });
+export const fraudGuardChecker = checker("fraudguard", (phone, settings) => ({
+  headers: {
+    "Content-Type": "application/json",
+    Accept: "application/json",
+    "X-API-KEY": settings.apiKey,
+    "X-API-SECRET": settings.apiSecret ?? "",
+  },
+  body: JSON.stringify({ phone_number: toLocalPhone(phone) }),
+}));
 
-    return toProviderResult(await readProviderJson(response), phone);
-  }
-}
+export const eCourierFraudChecker = checker("ecourier", (phone, settings) => ({
+  headers: {
+    "Content-Type": "application/json",
+    Accept: "application/json",
+    "API-KEY": settings.apiKey,
+    "API-SECRET": settings.apiSecret ?? "",
+    "USER-ID": settings.userId ?? "",
+  },
+  body: JSON.stringify({ number: toLocalPhone(phone) }),
+}));
 
-export class FraudBdCheckProvider implements FraudCheckProvider {
-  readonly name = "fraudbd";
-
-  async lookup(phone: string, config: FraudCheckProviderConfig): Promise<FraudCheckResult> {
-    const response = await fetchWithTimeout(config.apiUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-        api_key: config.apiKey,
-        user_name: config.userId ?? "",
-        password: config.apiSecret ?? "",
-      },
-      body: JSON.stringify({ phone_number: toLocalPhone(phone) }),
-    });
-
-    return toProviderResult(await readProviderJson(response), phone);
-  }
-}
-
-export class FraudGuardCheckProvider implements FraudCheckProvider {
-  readonly name = "fraudguard";
-
-  async lookup(phone: string, config: FraudCheckProviderConfig): Promise<FraudCheckResult> {
-    const response = await fetchWithTimeout(config.apiUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-        "X-API-KEY": config.apiKey,
-        "X-API-SECRET": config.apiSecret ?? "",
-      },
-      body: JSON.stringify({ phone_number: toLocalPhone(phone) }),
-    });
-
-    return toProviderResult(await readProviderJson(response), phone);
-  }
-}
-
-export class ECourierFraudCheckProvider implements FraudCheckProvider {
-  readonly name = "ecourier";
-
-  async lookup(phone: string, config: FraudCheckProviderConfig): Promise<FraudCheckResult> {
-    const response = await fetchWithTimeout(config.apiUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-        "API-KEY": config.apiKey,
-        "API-SECRET": config.apiSecret ?? "",
-        "USER-ID": config.userId ?? "",
-      },
-      body: JSON.stringify({ number: toLocalPhone(phone) }),
-    });
-
-    return toProviderResult(await readProviderJson(response), phone);
-  }
-}
-
-// ── Provider Registry ───────────────────────────────────────────────
-
-const providers = new Map<string, FraudCheckProvider>();
-
-// Register the default provider on module load.
-providers.set("default", new DefaultFraudCheckProvider());
-providers.set("fraudbd", new FraudBdCheckProvider());
-providers.set("fraudguard", new FraudGuardCheckProvider());
-providers.set("ecourier", new ECourierFraudCheckProvider());
+const BUILT_IN_FRAUD_CHECKERS: Readonly<Record<string, FraudAdapter>> = {
+  default: defaultFraudChecker,
+  fraudbd: fraudBdChecker,
+  fraudguard: fraudGuardChecker,
+  ecourier: eCourierFraudChecker,
+};
 
 /**
- * Register a custom fraud-check provider.
+ * The built-in checker of a saved provider type; a row without a type is the
+ * custom checker. An unknown type is never routed to another checker.
  */
-export function registerFraudCheckProvider(provider: FraudCheckProvider): void {
-  providers.set(provider.name, provider);
-}
-
-/**
- * Retrieve a provider by type name. Falls back to the default provider
- * when the requested type is not found.
- */
-export function getFraudCheckProvider(providerType: string): FraudCheckProvider {
-  const provider = providers.get(providerType);
-  if (provider) return provider;
-
-  if (!providerType || providerType === "default") {
-    return providers.get("default")!;
+export function builtInFraudChecker(providerType: string | undefined): FraudAdapter {
+  const type = providerType || "default";
+  if (!Object.hasOwn(BUILT_IN_FRAUD_CHECKERS, type)) {
+    throw new Error(`Unsupported fraud checker provider type: ${providerType}`);
   }
-
-  throw new Error(`Unsupported fraud checker provider type: ${providerType}`);
+  return BUILT_IN_FRAUD_CHECKERS[type]!;
 }

@@ -1,5 +1,8 @@
 // src/server/routes/admin/fraud-checker.ts
-// Admin OpenAPI routes for fraud checker providers.
+// Admin OpenAPI routes for the fraud checkers: built-in checkers with their
+// credentials, or an installed app's fraud provider (its credentials live in
+// the app's settings), and the order page's manual lookup through the first
+// active one. Advice for the merchant, never automatic blocking.
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import {
@@ -12,7 +15,9 @@ import {
     getFraudProviderUrlIssue,
 } from "@scalius/core/modules/fraud-checker";
 import { FRAUD_CHECK_PROVIDER_TYPES } from "@scalius/core/modules/fraud-checker/browser";
+import { isQualifiedProviderId, type FraudCheck } from "@scalius/shared/plugins/providers";
 import { getCredentialEncryptionKey, requireEncryptionKey } from "../../utils/encryption-key";
+import { assertAppProviderInstalled, requestAppProviders } from "../../plugins/providers/app-providers";
 import { NotFoundError, ValidationError } from "../../utils/api-error";
 
 import { ok, created } from "../../utils/api-response";
@@ -21,6 +26,8 @@ const app = new OpenAPIHono<{ Bindings: Env }>();
 const MASKED_VALUE = "••••••••••••";
 const FRAUD_PROVIDER_PAGE_LIMIT = 20;
 const providerTypeSchema = z.enum(FRAUD_CHECK_PROVIDER_TYPES);
+/** An installed app's fraud provider (`<plugin id>:<provider id>`). */
+const appProviderTypeSchema = z.string().max(160).refine(isQualifiedProviderId, "Name an app provider as <plugin id>:<provider id>.");
 
 function safeProviderUrlForClient(value: string): string {
     return getFraudProviderUrlIssue(value) ? "" : new URL(value).toString();
@@ -34,7 +41,7 @@ function maskProviderSecrets(provider: {
     apiSecret?: string;
     userId?: string;
     isActive: boolean;
-    providerType?: (typeof FRAUD_CHECK_PROVIDER_TYPES)[number];
+    providerType?: string;
 }) {
     return {
         id: provider.id.slice(0, 100),
@@ -77,34 +84,32 @@ function boundedText(value: unknown, max = 100): string | undefined {
         : undefined;
 }
 
-function projectFraudLookupResult(
-    data: Record<string, unknown> | undefined,
-    riskLevel: "low" | "medium" | "high" | "unknown" | undefined,
-) {
-    const rawApis = data?.apis && typeof data.apis === "object" && !Array.isArray(data.apis)
-        ? data.apis as Record<string, unknown>
+/** The fraud port's answer as the order page reads it, bounded. */
+function projectFraudLookupResult(result: FraudCheck) {
+    const rawCouriers = result.couriers && typeof result.couriers === "object" && !Array.isArray(result.couriers)
+        ? result.couriers as Record<string, unknown>
         : {};
     const apis = Object.fromEntries(
-        Object.entries(rawApis).slice(0, 20).flatMap(([provider, value]) => {
+        Object.entries(rawCouriers).slice(0, 20).flatMap(([provider, value]) => {
             if (!value || typeof value !== "object" || Array.isArray(value)) return [];
             const row = value as Record<string, unknown>;
             return [[provider.slice(0, 80), {
-                total_parcels: finiteNonNegative(row.total_parcels) ?? 0,
-                total_delivered_parcels: finiteNonNegative(row.total_delivered_parcels) ?? 0,
-                total_cancelled_parcels: finiteNonNegative(row.total_cancelled_parcels) ?? 0,
+                total_parcels: finiteNonNegative(row.totalParcels) ?? 0,
+                total_delivered_parcels: finiteNonNegative(row.delivered) ?? 0,
+                total_cancelled_parcels: finiteNonNegative(row.cancelled) ?? 0,
             }]];
         }),
     );
 
     return {
-        total_parcels: finiteNonNegative(data?.total_parcels),
-        total_delivered: finiteNonNegative(data?.total_delivered),
-        total_cancel: finiteNonNegative(data?.total_cancel),
-        provider_status: boundedText(data?.provider_status),
-        customer_tag: boundedText(data?.customer_tag),
-        success_rate: finiteNonNegative(data?.success_rate),
-        cancel_rate: finiteNonNegative(data?.cancel_rate),
-        riskLevel: riskLevel ?? "unknown",
+        total_parcels: finiteNonNegative(result.totalParcels),
+        total_delivered: finiteNonNegative(result.delivered),
+        total_cancel: finiteNonNegative(result.cancelled),
+        provider_status: boundedText(result.providerStatus),
+        customer_tag: boundedText(result.customerTag),
+        success_rate: finiteNonNegative(result.successRate),
+        cancel_rate: finiteNonNegative(result.cancelRate),
+        riskLevel: result.riskLevel ?? "unknown",
         ...(Object.keys(apis).length > 0 ? { apis } : {}),
     };
 }
@@ -119,7 +124,7 @@ const fraudProviderSchema = z.object({
     apiSecret: z.string().max(20).optional(),
     userId: z.string().max(20).optional(),
     isActive: z.boolean(),
-    providerType: providerTypeSchema.optional(),
+    providerType: z.union([providerTypeSchema, appProviderTypeSchema]).optional(),
 });
 
 const listRoute = createRoute({
@@ -167,7 +172,7 @@ app.openapi(listRoute, async (c) => {
 
 // ── Create Provider ──
 
-const createProviderSchema = z.object({
+const createBuiltInProviderSchema = z.object({
     name: z.string().min(1).max(100),
     apiUrl: secureProviderUrlSchema,
     apiKey: z.string().min(1).max(4096),
@@ -176,6 +181,15 @@ const createProviderSchema = z.object({
     isActive: z.boolean().optional().default(true),
     providerType: providerTypeSchema.optional().default("default"),
 });
+
+/** An app fraud provider: only which app and whether lookups use it; its credentials live in the app's settings. */
+const appProviderRowSchema = z.object({
+    name: z.string().min(1).max(100),
+    isActive: z.boolean().optional().default(true),
+    providerType: appProviderTypeSchema,
+}).strict();
+
+const createProviderSchema = z.union([createBuiltInProviderSchema, appProviderRowSchema]);
 
 const createProviderRoute = createRoute({
     method: "post",
@@ -195,9 +209,11 @@ const createProviderRoute = createRoute({
 
 app.openapi(createProviderRoute, async (c) => {
     const db = c.get("db");
-    const provider = c.req.valid("json");
+    const body = c.req.valid("json");
     const encryptionKey = requireEncryptionKey(c.env as Record<string, unknown>);
 
+    const provider = "apiUrl" in body ? body : { ...body, apiUrl: "", apiKey: "" };
+    if (isQualifiedProviderId(provider.providerType)) await assertAppProviderInstalled(db, "fraud", provider.providerType);
     const savedProvider = await saveFraudProvider(db, provider, encryptionKey);
 
     const maskedResponse = maskProviderSecrets(savedProvider);
@@ -207,7 +223,7 @@ app.openapi(createProviderRoute, async (c) => {
 
 // ── Update Provider ──
 
-const updateProviderSchema = z.object({
+const updateBuiltInProviderSchema = z.object({
     id: z.string().min(1),
     name: z.string().min(1).max(100),
     apiUrl: secureProviderUrlSchema,
@@ -217,6 +233,11 @@ const updateProviderSchema = z.object({
     isActive: z.boolean().default(true),
     providerType: providerTypeSchema.optional().default("default"),
 });
+
+const updateProviderSchema = z.union([
+    updateBuiltInProviderSchema,
+    appProviderRowSchema.extend({ id: z.string().min(1) }).strict(),
+]);
 
 const updateProviderRoute = createRoute({
     method: "put",
@@ -236,8 +257,14 @@ const updateProviderRoute = createRoute({
 
 app.openapi(updateProviderRoute, async (c) => {
     const db = c.get("db");
-    const validated = c.req.valid("json");
+    const body = c.req.valid("json");
     const env = c.env as Record<string, unknown>;
+    if (!("apiUrl" in body)) {
+        await assertAppProviderInstalled(db, "fraud", body.providerType);
+        const saved = await saveFraudProvider(db, { ...body, apiUrl: "", apiKey: "" }, requireEncryptionKey(env));
+        return ok(c, maskProviderSecrets(saved));
+    }
+    const validated = body;
     const readKey = getCredentialEncryptionKey(env);
     const encryptionKey = requireEncryptionKey(env);
     let apiKey = validated.apiKey;
@@ -323,7 +350,7 @@ const testProviderRoute = createRoute({
 app.openapi(testProviderRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
-    const result = await testFraudProvider(db, id, getCredentialEncryptionKey(c.env as Record<string, unknown>));
+    const result = await testFraudProvider(db, id, getCredentialEncryptionKey(c.env as Record<string, unknown>), requestAppProviders(c));
     return ok(c, safeProviderTestResult(result));
 });
 
@@ -372,17 +399,14 @@ app.openapi(lookupRoute, async (c) => {
     const { phone } = c.req.valid("json");
     let result: Awaited<ReturnType<typeof fraudLookupWithActiveProvider>>;
     try {
-        result = await fraudLookupWithActiveProvider(db, phone, getCredentialEncryptionKey(c.env as Record<string, unknown>));
+        result = await fraudLookupWithActiveProvider(db, phone, getCredentialEncryptionKey(c.env as Record<string, unknown>), requestAppProviders(c));
     } catch (error: unknown) {
         if (error instanceof NotFoundError) return ok(c, { configured: false });
         throw error;
     }
     return ok(c, {
         configured: true,
-        ...projectFraudLookupResult(
-            result.data as Record<string, unknown> | undefined,
-            result.riskLevel,
-        ),
+        ...projectFraudLookupResult(result),
     });
 });
 
