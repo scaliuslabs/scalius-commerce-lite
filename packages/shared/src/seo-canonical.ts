@@ -1,3 +1,5 @@
+import { MARKET_SUBFOLDER_PATTERN } from "./markets";
+
 export const CANONICAL_PATH_MAX_LENGTH = 2048;
 
 export type CanonicalResourceKind =
@@ -20,6 +22,8 @@ const RESERVED_PAGE_CANONICAL_SEGMENTS = new Set([
   "checkout",
   "collections",
   "health",
+  // The market selector's form target (/localization).
+  "localization",
   // Newsletter result, confirmation and unsubscribe pages (/newsletter/*).
   "newsletter",
   "404",
@@ -113,7 +117,8 @@ export function isValidResourceCanonicalPath(
   }
   if (!CANONICAL_SLUG_SEGMENT_PATTERN.test(segment)) return false;
 
-  return kind !== "page" || !RESERVED_PAGE_CANONICAL_SEGMENTS.has(segment);
+  // `<locale>-<country>` (`en-in`) is a market's subfolder presence, never a page.
+  return kind !== "page" || (!RESERVED_PAGE_CANONICAL_SEGMENTS.has(segment) && !MARKET_SUBFOLDER_PATTERN.test(segment));
 }
 
 export function normalizeResourceCanonicalPath(

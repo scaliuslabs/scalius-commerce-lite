@@ -82,6 +82,10 @@ describe("SEO canonical path helpers", () => {
     );
     expect(isValidResourceCanonicalPath("page", "/sitemap.xml")).toBe(false);
     expect(isValidResourceCanonicalPath("page", "/blog")).toBe(false);
+    // A market's subfolder presence and the market selector's target are never CMS pages.
+    expect(isValidResourceCanonicalPath("page", "/en-in")).toBe(false);
+    expect(isValidResourceCanonicalPath("page", "/localization")).toBe(false);
+    expect(isValidResourceCanonicalPath("page", "/en-india")).toBe(true);
     expect(
       isValidResourceCanonicalPath("article", "/articles/choose-running-shoes"),
     ).toBe(false);
