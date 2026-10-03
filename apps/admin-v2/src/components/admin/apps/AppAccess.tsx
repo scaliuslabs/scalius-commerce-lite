@@ -12,7 +12,7 @@ import { APP_FUNCTION_POINTS, type AppDetail, type AppGrant } from "~/lib/api-qu
 import { topicLabel } from "../settings/webhooks/webhook-format";
 import { RISK_VARIANT } from "./app-status";
 
-const PROVIDER_KINDS = ["payment", "shipping", "messaging", "email", "fraud", "tax"] as const;
+const PROVIDER_KINDS = ["payment", "courier", "sms", "email", "fraud", "tax"] as const;
 
 function known<T extends string>(list: readonly T[], value: string): value is T {
   return (list as readonly string[]).includes(value);
@@ -72,11 +72,18 @@ export function AppAccess({ app }: { app: AppDetail }) {
     );
   }
   if (request.functions.length > 0) {
+    const pointLabel = (point: string) => (known(APP_FUNCTION_POINTS, point) ? t(`function_${point}`) : point);
     sections.push(
       <Section key="checkout" title={t("access_checkout")}>
         {request.functions.map((point) =>
           row(point, known(APP_FUNCTION_POINTS, point) ? t(`function_${point}`) : <span className="font-mono">{point}</span>, isNew("functions", point)),
         )}
+        {request.blockingFunctions.map((point) =>
+          row(`block:${point}`, t("checkoutBlocking", { point: pointLabel(point) }), isNew("blockingFunctions", point)),
+        )}
+        {app.functions.flatMap((fn) => (fn.snapshotCollection
+          ? [row(`snapshot:${fn.point}`, t("checkoutSnapshot", { collection: fn.snapshotCollection }), false)]
+          : []))}
       </Section>,
     );
   }
