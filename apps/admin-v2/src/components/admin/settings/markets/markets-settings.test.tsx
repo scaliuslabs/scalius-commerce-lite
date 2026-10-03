@@ -5,7 +5,7 @@
  * owns the price increment; another market sells at a subfolder and uses
  * the backup market's increment; each country belongs to one market.
  */
-import { act, type ReactNode } from "react";
+import { act, useState, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { notifyManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -30,6 +30,7 @@ vi.mock("@tanstack/react-router", () => ({
 
 import { PermissionProvider } from "~/contexts/PermissionContext";
 import { SaveScope, type SaveScopeState } from "../../shared/SaveBar";
+import { MarketCountryPicker } from "./MarketCountryPicker";
 import { MarketEditor } from "./MarketEditor";
 import { MarketsList } from "./MarketsList";
 import {
@@ -181,13 +182,96 @@ describe("markets settings", () => {
     expect(container.textContent).toContain("Every market sells in the shop currency for now.");
     expect(container.textContent).toContain("Delete market");
 
+    // Off, the switch says what it gives; it makes no claim about orders.
+    expect(container.textContent).toContain("Without a subfolder, this market has no address of its own.");
+    expect(container.textContent).not.toContain("count for this market");
+
     act(() => switchNamed("Sell at a subfolder").click());
     await vi.waitFor(() => expect(container.querySelector("code")?.textContent).toBe("/en-in"));
+    // Language stacks above its select like every other field: its box is a block, not inline beside the label.
+    const languageBox = container.querySelector<HTMLElement>('[data-slot="searchable-select"]')!;
+    expect(languageBox.classList.contains("block")).toBe(true);
+    expect(languageBox.classList.contains("inline-block")).toBe(false);
     let saved = false;
     await act(async () => { saved = await scope!.saveAll(); });
     expect(saved).toBe(true);
     const body = sdk.patchApiV1AdminSettingsMarketsById.mock.calls[0]![0].body;
     expect(body).toMatchObject({ expectedRevision: 1, status: "draft", presence: { value: "en-in", locale: "en" } });
     expect(body).not.toHaveProperty("priceIncrementMinor");
+  });
+});
+
+describe("market country picker", () => {
+  let root: Root;
+  let container: HTMLDivElement;
+
+  beforeEach(() => {
+    container = document.createElement("div");
+    document.body.append(container);
+    root = createRoot(container);
+  });
+
+  afterEach(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+
+  function Picker({ initial = [] }: { initial?: string[] }) {
+    const [selected, setSelected] = useState<string[]>(initial);
+    return <MarketCountryPicker id="countries" selected={selected} taken={new Map([["BD", "Bangladesh"]])} onChange={setSelected} />;
+  }
+
+  const list = () => container.querySelector<HTMLElement>('[data-slot="country-list"]')!;
+  const chips = () => container.querySelector<HTMLElement>('[data-slot="country-chips"]')!;
+  const search = (value: string) => {
+    const input = container.querySelector<HTMLInputElement>("input[type=search]")!;
+    const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+    act(() => {
+      set.call(input, value);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  };
+  const rows = () => list().querySelectorAll("label").length;
+
+  it("keeps the list in a box of fixed height, so filtering changes rows and never the size", async () => {
+    await act(async () => root.render(<Picker />));
+    const box = list();
+    const full = rows();
+    expect(box.classList.contains("h-64")).toBe(true);
+    expect(box.classList.contains("max-h-64")).toBe(false);
+    search("india");
+    expect(rows()).toBeLessThan(full);
+    expect(rows()).toBeGreaterThan(0);
+    // The same box, with the same fixed height class and no inline size.
+    expect(list()).toBe(box);
+    expect(box.classList.contains("h-64")).toBe(true);
+    expect(box.getAttribute("style")).toBeNull();
+    // Nothing found: the message sits in the same box.
+    search("zzzz");
+    expect(rows()).toBe(0);
+    expect(list()).toBe(box);
+    expect(box.textContent).toContain("No country found.");
+    expect(box.classList.contains("h-64")).toBe(true);
+  });
+
+  it("puts the search field first and the chips below the list, in a row that keeps one row's height", async () => {
+    await act(async () => root.render(<Picker />));
+    const input = container.querySelector("input[type=search]")!;
+    expect(input.compareDocumentPosition(list()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(list().compareDocumentPosition(chips()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // Empty: a hint holds the row's height, so the first pick pushes nothing.
+    expect(chips().textContent).toBe("No countries added yet.");
+    const emptyClass = chips().className;
+    expect(emptyClass).toContain("min-h-9");
+    expect(emptyClass).toContain("sm:min-h-7");
+
+    search("india");
+    act(() => list().querySelector<HTMLInputElement>("input[type=checkbox]")!.click());
+    expect(chips().textContent).toContain("India");
+    expect(chips().querySelectorAll("button")).toHaveLength(1);
+    // The search text, the list's box and the row's size classes are untouched by the pick.
+    expect(container.querySelector<HTMLInputElement>("input[type=search]")!.value).toBe("india");
+    expect(chips().className).toBe(emptyClass);
+    expect(list().classList.contains("h-64")).toBe(true);
   });
 });

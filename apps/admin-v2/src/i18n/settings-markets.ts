@@ -46,6 +46,7 @@ export const settingsMarketsMessages = defineMessages({
     backupCountriesHelp: "Buyers in these countries, and in every country that no other market includes, get the backup market.",
     countrySearch: "Search countries",
     countryNone: "No country found.",
+    countryNoneSelected: "No countries added yet.",
     removeCountry: "Remove {country}",
     inMarket: "In {market}",
 
@@ -59,7 +60,7 @@ export const settingsMarketsMessages = defineMessages({
     languageHelp: "Search engines show this address to buyers who use this language.",
     useSubfolder: "Sell at a subfolder",
     subfolderHelp: "Pages, sitemaps and product feeds of this market get their own address.",
-    noSubfolderHelp: "Without a subfolder, buyers browse the root URL. Orders from its countries still count for this market.",
+    noSubfolderHelp: "Without a subfolder, this market has no address of its own. Turn it on to give its pages, sitemaps and product feeds their own address.",
     suffix: "Country code",
     suffixHelp: "Two letters, such as in.",
     suffixInvalid: "Use two letters, such as in.",
@@ -122,6 +123,7 @@ export const settingsMarketsMessages = defineMessages({
     backupCountriesHelp: "এই দেশগুলোর ক্রেতারা, আর অন্য কোনো মার্কেটে না থাকা সব দেশের ক্রেতারা ব্যাকআপ মার্কেট পান।",
     countrySearch: "দেশ খুঁজুন",
     countryNone: "কোনো দেশ পাওয়া যায়নি।",
+    countryNoneSelected: "এখনো কোনো দেশ যোগ করা হয়নি।",
     removeCountry: "{country} সরান",
     inMarket: "{market} মার্কেটে",
 
@@ -135,7 +137,7 @@ export const settingsMarketsMessages = defineMessages({
     languageHelp: "এই ভাষা ব্যবহার করা ক্রেতাদের সার্চ ইঞ্জিন এই ঠিকানা দেখায়।",
     useSubfolder: "সাবফোল্ডারে বিক্রি করুন",
     subfolderHelp: "এই মার্কেটের পেজ, সাইটম্যাপ ও প্রোডাক্ট ফিড নিজস্ব ঠিকানা পায়।",
-    noSubfolderHelp: "সাবফোল্ডার ছাড়া ক্রেতারা মূল URL ব্রাউজ করেন। এর দেশগুলোর অর্ডার তবুও এই মার্কেটের হিসেবে গণ্য হয়।",
+    noSubfolderHelp: "সাবফোল্ডার ছাড়া এই মার্কেটের নিজস্ব কোনো ঠিকানা থাকে না। চালু করলে এর পেজ, সাইটম্যাপ ও প্রোডাক্ট ফিড নিজস্ব ঠিকানা পায়।",
     suffix: "দেশের কোড",
     suffixHelp: "দুটি অক্ষর, যেমন in।",
     suffixInvalid: "দুটি অক্ষর ব্যবহার করুন, যেমন in।",

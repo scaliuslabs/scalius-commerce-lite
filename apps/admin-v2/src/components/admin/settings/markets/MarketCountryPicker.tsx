@@ -1,6 +1,11 @@
-// The countries a market sells to: the chosen ones as chips, then a search
-// over every country. A country another market sells to is shown with that
-// market's name and can't be chosen here (each country belongs to one market).
+// The countries a market sells to: a search over every country, a list in a
+// box of fixed height (filtering changes its rows, never its size), and the
+// chosen ones as chips below it. The search field is first and the list never
+// resizes, so nothing above the chips moves when a country is picked, and the
+// chip row keeps the height of one row (it shows a hint while empty) so the
+// first pick doesn't push what follows. A country another market sells to is
+// shown with that market's name and can't be chosen here (each country
+// belongs to one market).
 import { useMemo, useState } from "react";
 import { Search, X } from "lucide-react";
 import { getCountries } from "@scalius/shared/customer-utils";
@@ -49,24 +54,6 @@ export function MarketCountryPicker({
 
   return (
     <div className="space-y-3">
-      {selected.length > 0 ? (
-        <div className="flex flex-wrap gap-1.5">
-          {selected.map((code) => (
-            <span key={code} className="inline-flex items-center gap-1 rounded-lg bg-secondary py-0.5 pl-2 pr-0.5 text-body text-secondary-foreground">
-              {countryName(code)}
-              <button
-                type="button"
-                disabled={disabled}
-                aria-label={t("removeCountry", { country: countryName(code) })}
-                className="grid size-8 place-items-center rounded-full hover:bg-muted-foreground/20 disabled:pointer-events-none disabled:opacity-50 sm:size-6"
-                onClick={() => toggle(code)}
-              >
-                <X className="size-3.5" aria-hidden="true" />
-              </button>
-            </span>
-          ))}
-        </div>
-      ) : null}
       <div className="relative">
         <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
         <Input
@@ -82,7 +69,7 @@ export function MarketCountryPicker({
           onChange={(event) => setSearch(event.target.value)}
         />
       </div>
-      <div className="max-h-64 divide-y divide-border overflow-y-auto rounded-lg border border-border">
+      <div data-slot="country-list" className="h-64 divide-y divide-border overflow-y-auto rounded-lg border border-border">
         {matches.length === 0 ? (
           <p className="p-4 text-center text-body text-muted-foreground">{t("countryNone")}</p>
         ) : (
@@ -102,6 +89,26 @@ export function MarketCountryPicker({
               </label>
             );
           })
+        )}
+      </div>
+      <div data-slot="country-chips" className="flex min-h-9 max-h-24 flex-wrap items-center gap-1.5 overflow-y-auto sm:min-h-7">
+        {selected.length === 0 ? (
+          <p className="text-body text-muted-foreground">{t("countryNoneSelected")}</p>
+        ) : (
+          selected.map((code) => (
+            <span key={code} className="inline-flex items-center gap-1 rounded-lg bg-secondary py-0.5 pl-2 pr-0.5 text-body text-secondary-foreground">
+              {countryName(code)}
+              <button
+                type="button"
+                disabled={disabled}
+                aria-label={t("removeCountry", { country: countryName(code) })}
+                className="grid size-8 place-items-center rounded-full hover:bg-muted-foreground/20 disabled:pointer-events-none disabled:opacity-50 sm:size-6"
+                onClick={() => toggle(code)}
+              >
+                <X className="size-3.5" aria-hidden="true" />
+              </button>
+            </span>
+          ))
         )}
       </div>
     </div>

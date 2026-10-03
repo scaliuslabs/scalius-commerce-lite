@@ -187,7 +187,7 @@ function WebPresenceCard({ values, canEdit, suffixError, setValues }: {
         id="market-language"
         value={values.locale}
         disabled={!canEdit}
-        triggerClassName="w-full sm:w-64"
+        triggerClassName="block w-full sm:w-64"
         options={languages.map((code) => ({ value: code, label: displayName(code, "language"), keywords: [code] }))}
         onValueChange={(locale) => setValues((draft) => ({ ...draft, locale }))}
       />
