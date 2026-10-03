@@ -20,6 +20,7 @@ import {
   getApiV1AdminSettingsNotificationChannels,
   getApiV1AdminSettingsPaymentMethods,
   getApiV1AdminSettingsPlatform,
+  getApiV1AdminSettingsProviders,
   getApiV1AdminSettingsSecurity,
   getApiV1AdminSettingsSecurityRuntimeSources,
   getApiV1AdminSettingsSms,
@@ -200,6 +201,13 @@ export const smsQuery = {
   queryKey: queryKeys.settings.sms(),
   queryFn: () => apiData(getApiV1AdminSettingsSms()),
 };
+/** The installed apps' providers of one port, with the readiness its callers check. */
+export type AppProviderKind = "sms" | "email" | "fraud";
+export type AppProvider = ApiResult<typeof getApiV1AdminSettingsProviders>["providers"][number];
+export const appProvidersQuery = (kind: AppProviderKind) => ({
+  queryKey: queryKeys.settings.appProviders(kind),
+  queryFn: async () => (await apiData(getApiV1AdminSettingsProviders({ query: { kind } }))).providers,
+});
 export const authQuery = {
   queryKey: queryKeys.settings.auth(),
   queryFn: () => apiData(getApiV1AdminSettingsAuth()),

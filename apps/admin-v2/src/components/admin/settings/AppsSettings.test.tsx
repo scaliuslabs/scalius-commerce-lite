@@ -21,6 +21,9 @@ const sdk = vi.hoisted(() => ({
   getApiV1AdminSettingsMetaConversions: vi.fn(),
   postApiV1AdminSettingsMetaConversions: vi.fn(),
   getApiV1AdminFraudChecker: vi.fn(),
+  postApiV1AdminFraudChecker: vi.fn(),
+  getApiV1AdminSettingsProviders: vi.fn(),
+  postApiV1AdminSettingsProvidersByIdTest: vi.fn(),
 }));
 vi.mock("@scalius/api-client/sdk", () => sdk);
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
@@ -81,6 +84,7 @@ beforeEach(() => {
   sdk.getApiV1AdminFraudChecker.mockImplementation(() =>
     ok({ providers: [], pagination: { page: 1, limit: 20, hasMore: false } }));
   sdk.postApiV1AdminSettingsMetaConversions.mockImplementation(() => ok({}));
+  sdk.getApiV1AdminSettingsProviders.mockImplementation(() => ok({ providers: [] }));
 });
 
 afterEach(() => {
@@ -154,5 +158,40 @@ describe("Settings → Apps cards", () => {
     expect(dialog.textContent).toContain("Someone else changed these settings since you opened them.");
     expect(button("Reload and keep my edits")).toBeTruthy();
     expect(dialog.querySelector('[role="switch"]')!.getAttribute("aria-checked")).toBe("true");
+  });
+
+  it("offers an installed app's fraud check beside the built-in ones, with its readiness and test", async () => {
+    const radar = {
+      id: "acme.notify:radar",
+      kind: "fraud",
+      pluginId: "acme.notify",
+      appName: "Acme Notify",
+      name: "Acme Radar",
+      operations: ["check", "testConnection"],
+      canTestConnection: true,
+      readiness: { configured: true, enabled: true, usable: true, missingFields: [], credentialErrors: [] },
+      environment: "live",
+    };
+    sdk.getApiV1AdminSettingsProviders.mockImplementation(() => ok({ providers: [radar] }));
+    sdk.postApiV1AdminSettingsProvidersByIdTest.mockImplementation(() => ok({ ok: true, message: "Radar reachable." }));
+    sdk.postApiV1AdminFraudChecker.mockImplementation(() =>
+      ok({ id: "row_radar", name: "Acme Radar", apiUrl: "", apiKey: "", isActive: true, providerType: radar.id }));
+    await render(["settings.fraud_checker.view", "settings.fraud_checker.edit"]);
+    await vi.waitFor(() => expect(document.body.textContent).toContain("Acme Radar"));
+    expect(sdk.getApiV1AdminSettingsProviders).toHaveBeenCalledWith({ query: { kind: "fraud" } });
+
+    await click(button("Acme Radar"));
+    const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!;
+    // An app not chosen yet is off; its keys live in the app.
+    expect(dialog.querySelector('[role="switch"]')!.getAttribute("aria-checked")).toBe("false");
+    await click(button("Test connection"));
+    await vi.waitFor(() => expect(dialog.textContent).toContain("Radar reachable."));
+    expect(sdk.postApiV1AdminSettingsProvidersByIdTest).toHaveBeenCalledWith({ path: { id: radar.id } });
+
+    await click(dialog.querySelector<HTMLButtonElement>('[role="switch"]')!);
+    await click(button(translate(settingsMessages, "save")));
+    expect(sdk.postApiV1AdminFraudChecker).toHaveBeenCalledWith({
+      body: { name: "Acme Radar", providerType: radar.id, isActive: true },
+    });
   });
 });
