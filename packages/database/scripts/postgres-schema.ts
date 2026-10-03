@@ -480,7 +480,7 @@ export async function compileCanonicalPostgresSchema(
     const compiledTriggers = triggerDefinitions.flatMap((definition) => {
       const cacheDep = cacheDepPostgresTrigger(definition.name);
       if (cacheDep === null) return [];
-      return [cacheDep ?? eventOutboxPostgresTrigger(definition.name) ?? compileSqliteTriggerForPostgres(definition)];
+      return [cacheDep ?? eventOutboxPostgresTrigger(definition.name, definition.sql) ?? compileSqliteTriggerForPostgres(definition)];
     });
     const preDataSql = [
       "BEGIN;",

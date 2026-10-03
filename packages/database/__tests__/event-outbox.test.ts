@@ -19,6 +19,8 @@ import {
   eventOutboxPostgresTrigger,
   eventOutboxSqliteStatements,
   generateEventOutboxTriggers,
+  supersededEventOutboxPostgresStatements,
+  supersededEventOutboxSqliteStatements,
 } from "../scripts/event-outbox-triggers";
 import { safeBatch } from "../src/batch-helper";
 import { ORDER_CHANNEL_VALUES, orders } from "../src/schema";
@@ -79,6 +81,13 @@ describe(`${MIGRATION} files`, () => {
       expect(sqliteStatements.some((candidate) => candidate.includes(statement)), statement.split("\n")[0]).toBe(true);
     }
     for (const statement of eventOutboxPostgresStatements(migration)) {
+      expect(postgresStatements.some((candidate) => candidate.includes(statement)), statement.split("\n")[0]).toBe(true);
+    }
+    // Earlier forms a later migration re-created stay verbatim where they were installed.
+    for (const statement of supersededEventOutboxSqliteStatements(migration)) {
+      expect(sqliteStatements.some((candidate) => candidate.includes(statement)), statement.split("\n")[0]).toBe(true);
+    }
+    for (const statement of supersededEventOutboxPostgresStatements(migration)) {
       expect(postgresStatements.some((candidate) => candidate.includes(statement)), statement.split("\n")[0]).toBe(true);
     }
   });

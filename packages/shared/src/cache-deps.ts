@@ -876,6 +876,9 @@ export const CACHE_DEP_EXEMPT_TABLES: Readonly<Record<string, string>> = {
   order_fulfillments: PRIVATE,
   order_fulfillment_lines: PRIVATE,
   customers: PRIVATE,
+  // The address book (0113): read by the dashboard, the signed-in account and
+  // checkout prefill (all private, no-store); no public cached read uses it.
+  customer_addresses: PRIVATE,
   customer_history: PRIVATE,
   customer_auth_otp_challenges: PRIVATE,
   customer_sessions: PRIVATE,

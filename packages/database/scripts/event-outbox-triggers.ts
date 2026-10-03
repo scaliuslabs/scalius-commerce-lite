@@ -115,6 +115,16 @@ export const ORDER_UPDATED_COLUMNS = [
   "customer_email",
   "customer_whatsapp",
   "shipping_address",
+  "shipping_address_line2",
+  "shipping_country_code",
+  "shipping_dependent_locality",
+  "shipping_locality",
+  "shipping_admin_area",
+  "shipping_postal_code",
+  "shipping_company",
+  "shipping_name",
+  "shipping_phone",
+  "shipping_validation_skipped",
   "city",
   "zone",
   "area",
@@ -129,24 +139,45 @@ export const ORDER_UPDATED_COLUMNS = [
   "deleted_at",
 ] as const;
 
-/** Customer profile columns whose change is a `customer.updated` (not order counters or sign-in times). */
+/**
+ * Customer profile columns whose change is a `customer.updated` (not order
+ * counters or sign-in times). Address-book writes (0113) are
+ * `customer.updated` too, from `customer_addresses`.
+ */
 export const CUSTOMER_UPDATED_COLUMNS = [
   "name",
   "email",
   "phone",
-  "address",
-  "city",
-  "zone",
-  "area",
-  "city_name",
-  "zone_name",
-  "area_name",
   "account_claimed_at",
   "phone_verified_at",
   "email_verified_at",
   "origin",
   "merged_into_customer_id",
   "deleted_at",
+] as const;
+
+/** Address-book columns whose change is a `customer.updated` of its customer (not timestamps). */
+export const CUSTOMER_ADDRESS_UPDATED_COLUMNS = [
+  "customer_id",
+  "is_default",
+  "country_code",
+  "name",
+  "company",
+  "line1",
+  "line2",
+  "dependent_locality",
+  "locality",
+  "admin_area",
+  "postal_code",
+  "phone_e164",
+  "phone_raw",
+  "city",
+  "zone",
+  "area",
+  "city_name",
+  "zone_name",
+  "area_name",
+  "validation_skipped",
 ] as const;
 
 const INCOMPLETE = "incomplete";
@@ -464,6 +495,34 @@ export const EVENT_TRIGGER_SPECS: readonly EventTriggerSpec[] = [
     resourceId: NEW("id"),
     facts: [["customerId", NEW("id")]],
   },
+  // ── the address book (0113): any change is its customer's update ─────
+  {
+    name: "customer_addresses_created",
+    table: "customer_addresses",
+    event: "insert",
+    topic: "customer.updated",
+    resourceId: NEW("customer_id"),
+    facts: [["customerId", NEW("customer_id")]],
+  },
+  {
+    name: "customer_addresses_changed",
+    table: "customer_addresses",
+    event: "update",
+    when: changed(...CUSTOMER_ADDRESS_UPDATED_COLUMNS),
+    topic: "customer.updated",
+    resourceId: NEW("customer_id"),
+    facts: [["customerId", NEW("customer_id")]],
+  },
+  {
+    name: "customer_addresses_deleted",
+    table: "customer_addresses",
+    event: "delete",
+    // Not when its customer is being deleted (the cascade): that is no update.
+    when: notNull(lookup("customers", "id", "id", OLD("customer_id"))),
+    topic: "customer.updated",
+    resourceId: OLD("customer_id"),
+    facts: [["customerId", OLD("customer_id")]],
+  },
   // ── marketing consent (0108) ──────────────────────────────────────────
   {
     name: "customer_marketing_consents_created",
@@ -510,7 +569,51 @@ export const EVENT_TRIGGER_MIGRATIONS: Readonly<Record<string, string>> = {
   inventory_transfers_created: "0109_inventory_purchasing",
   inventory_transfers_changed: "0109_inventory_purchasing",
   inventory_transfers_deleted: "0109_inventory_purchasing",
+  // 0113 (country-aware addresses) re-creates these two with the new column
+  // lists and adds the address book's.
+  orders_updated: "0113_country_aware_addresses",
+  customers_updated: "0113_country_aware_addresses",
+  customer_addresses_created: "0113_country_aware_addresses",
+  customer_addresses_changed: "0113_country_aware_addresses",
+  customer_addresses_deleted: "0113_country_aware_addresses",
 };
+
+/**
+ * Earlier forms of triggers a later migration re-created, with the migration
+ * that installed them: a schema compiled before the re-creation (the
+ * PostgreSQL upgrade path starts from the fresh 0103 schema) keeps the form
+ * it really has. Their columns may no longer exist, so they are not checked
+ * against today's schema; their migration must still carry them verbatim.
+ */
+export const SUPERSEDED_EVENT_TRIGGER_SPECS: ReadonlyArray<{ migration: string; spec: EventTriggerSpec }> = [
+  {
+    migration: "0103_order_channel_event_outbox",
+    spec: {
+      ...EVENT_TRIGGER_SPECS.find((spec) => spec.name === "orders_updated")!,
+      when: and(
+        ne(OLD("status"), text(INCOMPLETE)),
+        ne(NEW("status"), text(INCOMPLETE)),
+        changed(
+          "status", "payment_status", "fulfillment_status", "payment_method", "paid_amount_minor", "balance_due_minor",
+          "subtotal_amount_minor", "shipping_amount_minor", "discount_amount_minor", "tax_amount_minor", "total_amount_minor",
+          "customer_name", "customer_phone", "customer_email", "customer_whatsapp", "shipping_address", "city", "zone", "area",
+          "notes", "shipping_method_id", "pickup_ready_at", "expected_delivery", "customer_id", "channel_source",
+          "invoice_number", "archived_at", "deleted_at",
+        ),
+      ),
+    },
+  },
+  {
+    migration: "0103_order_channel_event_outbox",
+    spec: {
+      ...EVENT_TRIGGER_SPECS.find((spec) => spec.name === "customers_updated")!,
+      when: changed(
+        "name", "email", "phone", "address", "city", "zone", "area", "city_name", "zone_name", "area_name",
+        "account_claimed_at", "phone_verified_at", "email_verified_at", "origin", "merged_into_customer_id", "deleted_at",
+      ),
+    },
+  },
+];
 
 /** The migration file name (without `.sql`) that installs a trigger spec. */
 export function eventTriggerMigration(spec: Pick<EventTriggerSpec, "name">): string {
@@ -602,15 +705,35 @@ function sqliteTrigger(spec: EventTriggerSpec): string {
   ].join("\n");
 }
 
+/** Whether a condition reads another table (PostgreSQL forbids a subquery in a trigger's WHEN). */
+function conditionHasLookup(condition: EventCondition): boolean {
+  const exprHasLookup = (expr: EventExpr): boolean =>
+    expr.kind === "lookup" || (expr.kind === "negate" && exprHasLookup(expr.expr));
+  switch (condition.kind) {
+    case "and":
+    case "or":
+      return condition.conditions.some(conditionHasLookup);
+    case "eq":
+    case "ne":
+    case "distinct":
+      return exprHasLookup(condition.left) || exprHasLookup(condition.right);
+    default:
+      return exprHasLookup(condition.expr);
+  }
+}
+
 function postgresTrigger(spec: EventTriggerSpec): string {
   const name = eventTriggerName(spec);
   const fn = `scalius_compat.${id("postgres", `${name}_fn`)}`;
+  // A guard that reads another table runs inside the function instead.
+  const inBody = spec.when !== undefined && conditionHasLookup(spec.when);
   return [
     `CREATE OR REPLACE FUNCTION ${fn}()`,
     "RETURNS trigger",
     "LANGUAGE plpgsql",
     "AS $trigger_function$",
     "BEGIN",
+    ...(inBody ? [`  IF NOT coalesce((${renderCondition("postgres", spec.when!)}), false) THEN`, "    RETURN NULL;", "  END IF;"] : []),
     `  ${insertSql("postgres", spec)};`,
     "  RETURN NULL;",
     "END",
@@ -618,7 +741,7 @@ function postgresTrigger(spec: EventTriggerSpec): string {
     `CREATE TRIGGER ${id("postgres", name)}`,
     `AFTER ${spec.event.toUpperCase()} ON ${id("postgres", spec.table)}`,
     "FOR EACH ROW",
-    ...(spec.when ? [`WHEN (${renderCondition("postgres", spec.when)})`] : []),
+    ...(spec.when && !inBody ? [`WHEN (${renderCondition("postgres", spec.when)})`] : []),
     `EXECUTE FUNCTION ${fn}()`,
   ].join("\n");
 }
@@ -705,13 +828,34 @@ export function generateEventOutboxTriggers(): GeneratedEventTrigger[] {
 
 const generated = generateEventOutboxTriggers();
 const postgresByName = new Map(generated.map((trigger) => [trigger.name, trigger.postgres]));
+const normalizeTriggerSql = (sql: string) => sql.trim().replace(/;$/, "").replace(/\s+/g, " ");
+const superseded = SUPERSEDED_EVENT_TRIGGER_SPECS.map(({ migration, spec }) => ({
+  migration,
+  name: eventTriggerName(spec),
+  sqlite: sqliteTrigger(spec),
+  postgres: postgresTrigger(spec),
+}));
+
+/** The superseded SQLite statements (each ends with `;`) a migration installed. */
+export function supersededEventOutboxSqliteStatements(migration: string): string[] {
+  return superseded.filter((trigger) => trigger.migration === migration).map((trigger) => `${trigger.sqlite};`);
+}
+
+/** The superseded PostgreSQL statements (each ends with `;`) a migration installed. */
+export function supersededEventOutboxPostgresStatements(migration: string): string[] {
+  return superseded.filter((trigger) => trigger.migration === migration).map((trigger) => `${trigger.postgres};`);
+}
 
 /**
  * The PostgreSQL form of a generated event trigger for the canonical
  * PostgreSQL schema compiler, or `undefined` for any other trigger.
  */
-export function eventOutboxPostgresTrigger(name: string): string | undefined {
-  const postgresSql = postgresByName.get(name);
+export function eventOutboxPostgresTrigger(name: string, sqliteSql?: string): string | undefined {
+  // A schema from before a re-creation holds the earlier form: compile that one.
+  const earlier = sqliteSql === undefined
+    ? undefined
+    : superseded.find((trigger) => trigger.name === name && normalizeTriggerSql(trigger.sqlite) === normalizeTriggerSql(sqliteSql));
+  const postgresSql = earlier?.postgres ?? postgresByName.get(name);
   return postgresSql === undefined ? undefined : `${postgresSql};`;
 }
 

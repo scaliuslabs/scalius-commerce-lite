@@ -487,6 +487,16 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 38,
         postgresStatements: 38,
       },
+      {
+        version: 113,
+        name: "0113_country_aware_addresses",
+        // The address book and its indexes, ten order snapshot columns, the
+        // backfill, the per-country address triggers and the seed, the moved
+        // customer addresses, fourteen dropped columns and the re-created
+        // event triggers: one statement each on both providers.
+        sqliteStatements: 42,
+        postgresStatements: 42,
+      },
     ]);
   });
 
@@ -648,6 +658,7 @@ describe("provider-neutral schema upgrades", () => {
           { version: 110, name: "0110_plugin_providers" },
           { version: 111, name: "0111_order_money_chain" },
           { version: 112, name: "0112_markets" },
+          { version: 113, name: "0113_country_aware_addresses" },
         ],
       });
     } finally {

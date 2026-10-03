@@ -22,8 +22,8 @@ export const DATABASE_SCHEMA_LEGACY_BASELINE = {
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA = {
-  version: 112,
-  name: "0112_markets",
+  version: 113,
+  name: "0113_country_aware_addresses",
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
@@ -341,6 +341,11 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
     version: 112,
     name: "0112_markets",
     sourceSha256: "b558d17ad0707700f956c46aa7c892760df786f7dddd34b781ef7b56ae2b13e8",
+  },
+  {
+    version: 113,
+    name: "0113_country_aware_addresses",
+    sourceSha256: "1b0a60e586dc5229bf3df6af01cde569ee629d16633565cda2538aa6664e023e",
   },
 ] as const;
 

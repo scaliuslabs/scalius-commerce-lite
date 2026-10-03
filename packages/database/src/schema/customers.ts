@@ -1,8 +1,9 @@
 // src/db/schema/customers.ts
-// Customer domain tables: customers, customerHistory, customerAuthOtpChallenges,
-// authOtpDeliveryReceipts, customerSessions.
+// Customer domain tables: customers, customerAddresses (the address book),
+// customerHistory, customerAuthOtpChallenges, authOtpDeliveryReceipts,
+// customerSessions.
 
-import { sqliteTable, text, integer, index, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, index, uniqueIndex, check } from "drizzle-orm/sqlite-core";
 import { sql, type InferSelectModel } from "drizzle-orm";
 import { UNIX_NOW } from "./shared";
 
@@ -16,13 +17,7 @@ export const customers = sqliteTable("customers", {
      * per phone for the merchant's CRM. Typed phones never block anyone.
      */
     phone: text("phone").notNull(),
-    address: text("address"),
-    city: text("city"),
-    zone: text("zone"),
-    area: text("area"),
-    cityName: text("city_name"),
-    zoneName: text("zone_name"),
-    areaName: text("area_name"),
+    // Addresses live in the address book (`customer_addresses`, migration 0113).
     accountClaimedAt: integer("account_claimed_at", { mode: "timestamp" }),
     phoneVerifiedAt: integer("phone_verified_at", { mode: "timestamp" }),
     emailVerifiedAt: integer("email_verified_at", { mode: "timestamp" }),
@@ -65,6 +60,71 @@ export const customers = sqliteTable("customers", {
     index("customers_dashboard_activity_idx").on(table.deletedAt, table.createdAt),
 ]);
 
+/**
+ * The address book (Shopify's customer addresses; MARKETS-DESIGN D7, migration
+ * 0113): canonical fields validated by the country's rules, and Bangladesh's
+ * City/Thana/Area adapter (delivery location ids and names) beside them. At
+ * most one address per customer is the default (a partial unique index).
+ *
+ * `name` and `phone_e164` are the recipient when it is not the customer
+ * (null means the customer's own name and phone). `phone_raw` keeps what was
+ * typed when it could not be read as E.164 (validation skipped).
+ *
+ * The first delivery address of a guest record (no account) comes from its
+ * first shipping order: trigger `orders_seed_customer_address` copies the
+ * order's snapshot when the record has no address yet, for every order writer.
+ */
+export const customerAddresses = sqliteTable("customer_addresses", {
+    id: text("id").primaryKey(),
+    customerId: text("customer_id")
+        .notNull()
+        .references(() => customers.id, { onDelete: "cascade" }),
+    isDefault: integer("is_default", { mode: "boolean" }).notNull().default(false),
+    /** ISO 3166-1 alpha-2. */
+    countryCode: text("country_code").notNull(),
+    name: text("name"),
+    company: text("company"),
+    line1: text("line1"),
+    line2: text("line2"),
+    dependentLocality: text("dependent_locality"),
+    locality: text("locality"),
+    adminArea: text("admin_area"),
+    postalCode: text("postal_code"),
+    phoneE164: text("phone_e164"),
+    phoneRaw: text("phone_raw"),
+    /** Bangladesh adapter: delivery location ids (couriers book with them) and their names. */
+    city: text("city"),
+    zone: text("zone"),
+    area: text("area"),
+    cityName: text("city_name"),
+    zoneName: text("zone_name"),
+    areaName: text("area_name"),
+    /** Saved by staff although it breaks its country's rules. */
+    validationSkipped: integer("validation_skipped", { mode: "boolean" }).notNull().default(false),
+    createdAt: integer("created_at", { mode: "timestamp" })
+        .notNull()
+        .default(UNIX_NOW),
+    updatedAt: integer("updated_at", { mode: "timestamp" })
+        .notNull()
+        .default(UNIX_NOW),
+}, (table) => [
+    uniqueIndex("customer_addresses_default_unique")
+        .on(table.customerId)
+        .where(sql`${table.isDefault} = 1`),
+    index("customer_addresses_customer_idx").on(table.customerId, table.createdAt),
+    check("customer_addresses_default_flag", sql`${table.isDefault} IN (0, 1)`),
+    check("customer_addresses_validation_skipped_flag", sql`${table.validationSkipped} IN (0, 1)`),
+    check(
+        "customer_addresses_country_shape",
+        sql`length(${table.countryCode}) = 2 AND ${table.countryCode} NOT GLOB '*[^A-Z]*'`,
+    ),
+    // The City/Thana/Area adapter is Bangladesh's alone.
+    check(
+        "customer_addresses_delivery_hierarchy_bd_only",
+        sql`${table.countryCode} = 'BD' OR (${table.city} IS NULL AND ${table.zone} IS NULL AND ${table.area} IS NULL)`,
+    ),
+]);
+
 export const customerHistory = sqliteTable("customer_history", {
     id: text("id").primaryKey(),
     customerId: text("customer_id")
@@ -73,13 +133,6 @@ export const customerHistory = sqliteTable("customer_history", {
     name: text("name").notNull(),
     email: text("email"),
     phone: text("phone").notNull(),
-    address: text("address"),
-    city: text("city"),
-    zone: text("zone"),
-    area: text("area"),
-    cityName: text("city_name"),
-    zoneName: text("zone_name"),
-    areaName: text("area_name"),
     /**
      * signed_up: an account was created (or a guest record claimed) by a code.
      * order_linked: `orderId` was filed to this account at checkout by a verified contact.
@@ -188,6 +241,7 @@ export const authOtpDeliveryReceipts = sqliteTable("auth_otp_delivery_receipts",
 ]);
 
 export type Customer = InferSelectModel<typeof customers>;
+export type CustomerAddressRow = InferSelectModel<typeof customerAddresses>;
 export type CustomerHistory = InferSelectModel<typeof customerHistory>;
 export type CustomerAuthOtpChallenge = InferSelectModel<typeof customerAuthOtpChallenges>;
 export type CustomerSessionRow = InferSelectModel<typeof customerSessions>;

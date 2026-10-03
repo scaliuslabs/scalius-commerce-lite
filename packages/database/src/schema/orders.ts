@@ -44,10 +44,32 @@ export const orders = sqliteTable("orders", {
     /** Separate WhatsApp number, when Customer accounts collects one; null means the phone. */
     customerWhatsapp: text("customer_whatsapp"),
     /**
-     * Present exactly when something ships (`requiresShipping`); pickup,
-     * service-only and digital orders carry no address. A trigger enforces it.
+     * The shipping address snapshot (MARKETS-DESIGN D7, migration 0113),
+     * present exactly when something ships (`requiresShipping`); pickup,
+     * service-only and digital orders carry none. `shippingAddress` is the
+     * first street line. Triggers `orders_shipping_address_required_*` check
+     * it per country: Bangladesh needs its city and thana; another country
+     * needs what its rules require unless staff skipped validation.
      */
     shippingAddress: text("shipping_address"),
+    shippingAddressLine2: text("shipping_address_line2"),
+    /**
+     * ISO 3166-1 alpha-2; it decides the order's market. Every order writer
+     * sets it when something ships; a shipped row written by raw SQL without
+     * one counts as Bangladesh (the delivery hierarchy), as before 0113.
+     */
+    shippingCountryCode: text("shipping_country_code"),
+    shippingDependentLocality: text("shipping_dependent_locality"),
+    shippingLocality: text("shipping_locality"),
+    shippingAdminArea: text("shipping_admin_area"),
+    shippingPostalCode: text("shipping_postal_code"),
+    shippingCompany: text("shipping_company"),
+    /** The recipient when it is not the order contact; null means `customerName`. */
+    shippingName: text("shipping_name"),
+    /** The recipient's phone (E.164) when it is not the order contact's; null means `customerPhone`. */
+    shippingPhone: text("shipping_phone"),
+    shippingValidationSkipped: integer("shipping_validation_skipped", { mode: "boolean" }).notNull().default(false),
+    /** Bangladesh adapter: delivery location ids couriers book with, and their names. */
     city: text("city"),
     zone: text("zone"),
     area: text("area"),
@@ -172,8 +194,14 @@ export const orders = sqliteTable("orders", {
         "orders_channel_source_shape",
         sql`${table.channelSource} IS NULL OR (length(${table.channelSource}) BETWEEN 1 AND 64 AND ${table.channelSource} = lower(trim(${table.channelSource})))`,
     ),
-    // Triggers orders_shipping_address_required_{insert,update} require the
-    // address, city and zone whenever requires_shipping = 1.
+    // Column checks added by 0113 (ALTER TABLE ADD ... CHECK).
+    check(
+        "orders_shipping_country_shape",
+        sql`${table.shippingCountryCode} IS NULL OR (length(${table.shippingCountryCode}) = 2 AND ${table.shippingCountryCode} NOT GLOB '*[^A-Z]*')`,
+    ),
+    check("orders_shipping_validation_skipped_flag", sql`${table.shippingValidationSkipped} IN (0, 1)`),
+    // Triggers orders_shipping_address_required_{insert,update} require a
+    // shipped order's address per country (0113).
     uniqueIndex("orders_order_number_unique").on(table.orderNumber),
     index("orders_status_idx").on(table.status),
     index("orders_payment_status_idx").on(table.paymentStatus),
