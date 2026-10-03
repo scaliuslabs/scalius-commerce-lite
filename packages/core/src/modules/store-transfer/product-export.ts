@@ -104,7 +104,7 @@ export async function buildProductCsvPage(
   const rows = page.slice(0, limit);
   const ids = rows.map((row) => row.id);
   const lines: string[] = input.includeHeader === false ? [] : [SHOPIFY_PRODUCT_COLUMNS.map((column) => csvCell(column)).join(",")];
-  if (ids.length === 0) return { body: lines.length ? `﻿${lines.join("\r\n")}\r\n` : "", rowCount: 0, itemCount: 0, nextCursor: null };
+  if (ids.length === 0) return { body: lines.length ? `\uFEFF${lines.join("\r\n")}\r\n` : "", rowCount: 0, itemCount: 0, nextCursor: null };
 
   const [currency, paths, options, variants, selections, images] = await Promise.all([
     readStoreCurrency(db),
@@ -265,6 +265,6 @@ export async function buildProductCsvPage(
     for (const row of output) lines.push(csvLine(row));
     rowCount += output.length;
   }
-  const body = lines.length ? `${input.includeHeader === false ? "" : "﻿"}${lines.join("\r\n")}\r\n` : "";
+  const body = lines.length ? `${input.includeHeader === false ? "" : "\uFEFF"}${lines.join("\r\n")}\r\n` : "";
   return { body, rowCount, itemCount: rows.length, nextCursor: hasMore ? rows[rows.length - 1]!.id : null };
 }
