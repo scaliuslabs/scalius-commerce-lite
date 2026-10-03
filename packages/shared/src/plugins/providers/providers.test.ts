@@ -97,6 +97,14 @@ describe("provider port contracts", () => {
     expect(output.safeParse({ status: "approved" }).success).toBe(false);
   });
 
+  it("takes each email list header on its own and no other header", () => {
+    const send = PROVIDER_PORTS.email.send.input;
+    const message = { to: "buyer@example.test", subject: "News", html: "<p>News</p>" };
+    expect(send.safeParse({ ...message, headers: { "List-Unsubscribe": "<https://shop.test/u>" } }).success).toBe(true);
+    expect(send.safeParse({ ...message, headers: { "List-Unsubscribe": "<https://shop.test/u>", "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" } }).success).toBe(true);
+    expect(send.safeParse({ ...message, headers: { "Reply-To": "owner@shop.test" } }).success).toBe(false);
+  });
+
   it("names app providers plugin:provider and keeps built-in ids distinct", () => {
     expect(qualifiedProviderId("scalius.bkash", "bkash")).toBe("scalius.bkash:bkash");
     expect(parseQualifiedProviderId("scalius.bkash:bkash")).toEqual({ pluginId: "scalius.bkash", providerId: "bkash" });

@@ -36,8 +36,8 @@ export const emailSendInputSchema = z.object({
   /** The sender address; the store's verified sender when absent. */
   from: z.string().max(320).optional(),
   fromName: z.string().max(200).optional(),
-  /** Only the list headers marketing mail needs (`List-Unsubscribe`, `List-Unsubscribe-Post`). */
-  headers: z.record(z.enum(["List-Unsubscribe", "List-Unsubscribe-Post"]), z.string().max(2000)).optional(),
+  /** Only the list headers marketing mail needs (`List-Unsubscribe`, `List-Unsubscribe-Post`), each optional. */
+  headers: z.partialRecord(z.enum(["List-Unsubscribe", "List-Unsubscribe-Post"]), z.string().max(2000)).optional(),
   idempotencyKey: providerIdempotencyKeySchema.optional(),
 }).strict();
 export type EmailSendInput = z.infer<typeof emailSendInputSchema>;
