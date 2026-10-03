@@ -26,7 +26,7 @@ import {
     updateInventoryLocation,
 } from "./locations";
 import { setOrderFulfillmentLocation } from "../orders/admin/fulfillment-location";
-import { getInventoryOverview, listInventoryMovements } from "./inventory.service";
+import { getInventoryOverview, listInventoryMovements, movementLocationCounts } from "./inventory.service";
 
 let sqlite: DatabaseSync;
 let db: Database;
@@ -330,10 +330,25 @@ describe("per-location reads", () => {
         expect(atBranch.movements.map((row) => [row.variantId, row.stockDelta, row.locationName])).toEqual([
             ["var_a", 3, "Branch"],
         ]);
+        // History names both scopes: the branch went 0 → 3 while the SKU went 5 → 8 in all.
+        expect(atBranch.movements[0]).toMatchObject({
+            previousStock: 5, newStock: 8, locationPreviousStock: 0, locationNewStock: 3,
+        });
         const atDefault = await listInventoryMovements(db, { locationId: "loc_default", limit: 10 });
         expect(atDefault.movements.map((row) => [row.variantId, row.stockDelta, row.locationName])).toEqual([
             ["var_b", -2, "Main location"],
         ]);
+        expect(atDefault.movements[0]).toMatchObject({ locationPreviousStock: 2, locationNewStock: 0 });
+    });
+
+    it("reads a location's own count only from the operation that recorded it", () => {
+        const payload = JSON.stringify({ variantId: "var_a", previousStock: 5, newStock: 8, delta: 3, locationId: "loc_b", locationPreviousStock: 0, locationNewStock: 3 });
+        expect(movementLocationCounts(payload, "loc_b")).toEqual({ locationPreviousStock: 0, locationNewStock: 3 });
+        // Another location's counts, no location, a malformed or missing payload: unknown.
+        expect(movementLocationCounts(payload, "loc_c")).toEqual({ locationPreviousStock: null, locationNewStock: null });
+        expect(movementLocationCounts(payload, null)).toEqual({ locationPreviousStock: null, locationNewStock: null });
+        expect(movementLocationCounts("{", "loc_b")).toEqual({ locationPreviousStock: null, locationNewStock: null });
+        expect(movementLocationCounts(null, "loc_b")).toEqual({ locationPreviousStock: null, locationNewStock: null });
     });
 });
 

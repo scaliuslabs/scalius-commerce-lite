@@ -125,7 +125,19 @@ describe("inventory history search", () => {
       locations: [location("loc_default", "Main location", true), location("loc_branch", "Banani store", false), location("loc_old", "Old depot", false, "archived")],
     });
     mocks.list.mockImplementation(async () => ({
-      movements: [{ ...movement("m3", "Simple saree", "SAREE"), ledgerVersion: 2, stockDelta: -3, locationId: "loc_branch", locationName: "Banani store" }],
+      movements: [
+        // An adjustment recorded the branch's own count: 5 → 2 there, 15 → 12 in all.
+        {
+          ...movement("m3", "Simple saree", "SAREE"), ledgerVersion: 2, stockDelta: -3, locationId: "loc_branch", locationName: "Banani store",
+          locationPreviousStock: 5, locationNewStock: 2,
+        },
+        // A transfer in names the location; only the store total has a before and after.
+        {
+          ...movement("m4", "Cotton panjabi", "PANJABI"), type: "transfer_in", notes: "Received on transfer T1001", ledgerVersion: 2,
+          stockDelta: 4, previousStock: 8, newStock: 12, locationId: "loc_branch", locationName: "Banani store",
+          locationPreviousStock: null, locationNewStock: null,
+        },
+      ],
       pageInfo: { limit: 50, hasMore: false, nextCursor: null },
     }));
     function LocationPage() {
@@ -142,7 +154,39 @@ describe("inventory history search", () => {
     await settle();
 
     expect(mocks.list).toHaveBeenLastCalledWith({ query: expect.objectContaining({ movementLocationId: "loc_branch" }) });
-    expect(host.textContent).toContain(translate(inventoryMessages, "movedAt", { location: "Banani store" }));
+    const lines = [...host.querySelectorAll("li p.tabular-nums")].map((line) => line.textContent);
+    const at = translate(inventoryMessages, "onHandAtLocation", { location: "Banani store" });
+    const all = translate(inventoryMessages, "onHandAllLocations");
+    expect(lines).toEqual([
+      `${at} -3 (5 → 2)`,
+      `${all} 15 → 12`,
+      `${at} +4`,
+      `${all} 8 → 12`,
+    ]);
     expect(host.querySelector(`[aria-label="${translate(inventoryMessages, "location")}"]`)).not.toBeNull();
+  });
+
+  it("says how many licence keys were imported, never the key pool's id", async () => {
+    mocks.list.mockImplementation(async () => ({
+      movements: [
+        { ...movement("m5", "Office suite", "OFFICE-KEY"), notes: "Licence keys (Imported): 3 keys into dga_AbC123xyz0000000", ledgerVersion: 2, stockDelta: 3 },
+        { ...movement("m6", "Office suite", "OFFICE-KEY"), notes: "Licence keys (Imported)", ledgerVersion: 2, stockDelta: 1 },
+      ],
+      pageInfo: { limit: 50, hasMore: false, nextCursor: null },
+    }));
+    await act(async () => {
+      root.render(
+        <QueryClientProvider client={new QueryClient()}>
+          <Page initialTerm="" />
+        </QueryClientProvider>,
+      );
+    });
+    await settle();
+    const text = host.textContent ?? "";
+    expect(text).toContain(translate(inventoryMessages, "noteKeysImported", { count: 3 }));
+    expect(text).toContain(translate(inventoryMessages, "noteKeyImported"));
+    expect(text).toContain("Office suite");
+    expect(text).not.toContain("dga_");
+    expect(text).not.toContain("Licence keys (");
   });
 });

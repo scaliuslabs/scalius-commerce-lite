@@ -202,7 +202,17 @@ describe("adjust stock dialog locations", () => {
     mocks.adjust.mockResolvedValue({});
     await render({ locations: [main, branch], levels, initialLocationId: "loc_branch" });
     expect(document.getElementById("inventory-adjustment-location")?.textContent).toBe("Chattogram branch");
-    expect(document.body.textContent).toContain(t("onHandHere"));
+    // Every number names its scope: the branch's 3 beside the store-wide 13.
+    const facts = Object.fromEntries([...document.querySelectorAll("dl > div")].map((fact) => [
+      fact.querySelector("dt")!.textContent,
+      fact.querySelector("dd")!.textContent,
+    ]));
+    expect(facts).toEqual({
+      [translate(inventoryMessages, "onHandAtLocation", { location: "Chattogram branch" })]: "3",
+      [t("onHandAllLocations")]: "13",
+      [t("committedAllLocations")]: "0",
+      [t("availableAllLocations")]: "13",
+    });
 
     // The branch holds 3: removing 4 there would go below zero.
     await setAmount("-4");
