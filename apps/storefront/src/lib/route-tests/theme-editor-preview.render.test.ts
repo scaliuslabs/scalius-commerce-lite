@@ -195,7 +195,7 @@ function stubApi(api: Api) {
     if (path.startsWith("/api/v1/storefront/landing/")) {
       const slug = path.split("/").at(-1)!;
       const landing = api.document.pages.landing[slug];
-      return landing ? { status: 200, body: envelope({ landing, sections: sectionData() }) } : { status: 404, body: "{}" };
+      return landing ? { status: 200, body: envelope({ title: landing.title, description: landing.description, sections: sectionData() }) } : { status: 404, body: "{}" };
     }
     if (path === "/api/v1/shipping-methods") return { status: 200, body: envelope({ shippingMethods: [] }) };
     if (path === "/api/v1/checkout/config") return { status: 200, body: envelope({ gateways: [] }) };

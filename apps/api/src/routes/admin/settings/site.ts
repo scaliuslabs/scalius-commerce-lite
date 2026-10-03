@@ -18,7 +18,7 @@ import {
   runSeoDiscoveryLiveProbe,
   type SeoDiscoveryLiveProbeResult,
 } from "@scalius/shared/seo-discovery-live-probe";
-import { NotFoundError, ServiceUnavailableError, ValidationError } from "@scalius/core/errors";
+import { ServiceUnavailableError, ValidationError } from "@scalius/core/errors";
 import {
   getCurrencySettings,
   isCurrencyCodeLocked,
@@ -166,13 +166,18 @@ app.openapi(saveCurrencyRoute, async (c) => {
 // operation) and `document_get` (an authenticated JSON artifact for agents);
 // every command answers revisions only, so each agent result stays small.
 
-const dateTimeSchema = z.any().openapi({ type: "string", format: "date-time" });
+/** A stored timestamp, sent as its ISO string. */
+const dateTimeSchema = z.string().openapi({ format: "date-time" });
+const iso = (date: Date) => date.toISOString();
 
 const themeDraftReceiptSchema = z.object({
   revision: revisionSchema,
   basePublishedRevision: revisionSchema,
   updatedAt: dateTimeSchema.nullable(),
 });
+/** A draft's revisions, with its save time as the contract states it. */
+const draftReceipt = <Draft extends { updatedAt: Date | null }>(draft: Draft) =>
+  ({ ...draft, updatedAt: draft.updatedAt && iso(draft.updatedAt) });
 
 const themeStatusSchema = z.object({
   published: z.object({ revision: revisionSchema }),
@@ -184,17 +189,19 @@ const themeStatusSchema = z.object({
     publishedByName: z.string().max(200).nullable(),
     createdAt: dateTimeSchema,
   }).nullable(),
-}).openapi("ThemeStatus");
+});
 
 type ThemeStatusValue = ReturnType<typeof themeStatus>;
-/** Bounded strings for agent results (a user's name has no length limit of its own). */
+/** The status as the contract states it: ISO times, and bounded strings for agent results (a user's name has no length limit of its own). */
 function boundedStatus(status: ThemeStatusValue) {
   return {
     ...status,
+    draft: draftReceipt(status.draft),
     lastPublished: status.lastPublished && {
       ...status.lastPublished,
       publishedBy: status.lastPublished.publishedBy?.slice(0, 160) ?? null,
       publishedByName: status.lastPublished.publishedByName?.slice(0, 200) ?? null,
+      createdAt: iso(status.lastPublished.createdAt),
     },
   };
 }
@@ -298,7 +305,8 @@ app.openapi(getThemeEditorRoute, async (c) => {
     readStoreShape(db),
     readThemeAppSurfaces(db),
   ]);
-  return ok(c, { ...workspace, storeShape, media, apps });
+  const { lastPublished } = boundedStatus(themeStatus(workspace));
+  return ok(c, { ...workspace, draft: draftReceipt(workspace.draft), lastPublished, storeShape, media, apps });
 });
 
 app.openapi(createRoute({
@@ -330,32 +338,28 @@ app.openapi(createRoute({
   });
 });
 
-const themeDocumentPageSchema = z.enum(["home", "landing"]);
 app.openapi(createRoute({
   method: "get",
   path: "/theme/document",
   tags: ["Admin - Settings"],
-  summary: "Read the draft, live or one published version's theme document, or one of its pages",
+  summary: "Read the whole draft, live or one published version's theme document",
   operationId: "dashboard.theme.document_get",
   request: {
     query: z.object({
       source: z.enum(["draft", "published", "version"]).default("draft"),
+      /** The published version, with `source=version`. */
       revision: z.coerce.number().int().positive().optional(),
-      page: themeDocumentPageSchema.optional(),
-      slug: storefrontLandingSlugSchema.optional(),
     }),
   },
   responses: {
     200: {
-      description: "Theme or page document",
+      description: "Theme document",
       content: {
         "application/json": {
           schema: successEnvelope(z.object({
             source: z.enum(["draft", "published", "version"]),
             revision: revisionSchema,
-            page: themeDocumentPageSchema.nullable(),
-            slug: z.string().nullable(),
-            document: z.union([storefrontThemeDocumentApiSchema, storefrontSectionListSchema, storefrontLandingPageSchema]),
+            document: storefrontThemeDocumentApiSchema,
           })),
         },
       },
@@ -367,20 +371,14 @@ app.openapi(createRoute({
   if ((query.source === "version") !== (query.revision !== undefined)) {
     throw new ValidationError("Choose a revision exactly when reading a published version.");
   }
-  if ((query.page === "landing") !== (query.slug !== undefined)) {
-    throw new ValidationError("Choose a handle exactly when reading a landing page.");
-  }
   const db = c.get("db");
   const source = query.source === "version"
     ? await getThemeVersion(db, query.revision!)
     : (await getThemeWorkspace(db))[query.source];
-  const theme = source.theme;
-  const document = query.page === "landing" ? theme.pages.landing[query.slug!] : query.page === "home" ? theme.pages.home : theme;
-  if (!document) throw new NotFoundError("That landing page is not in this theme.");
   // Agents receive this as an authenticated artifact; the editor reads it as JSON.
   c.header("Content-Disposition", `inline; filename="theme-${query.source}-${source.revision}.json"`);
   c.header("Cache-Control", "private, no-store");
-  return ok(c, { source: query.source, revision: source.revision, page: query.page ?? null, slug: query.slug ?? null, document });
+  return ok(c, { source: query.source, revision: source.revision, document: source.theme });
 });
 
 const themeVersionSummarySchema = z.object({
@@ -435,6 +433,7 @@ app.openapi(createRoute({
       id: version.id.slice(0, 128),
       publishedBy: version.publishedBy?.slice(0, 160) ?? null,
       publishedByName: version.publishedByName?.slice(0, 200) ?? null,
+      createdAt: iso(version.createdAt),
     })),
     nextBeforeRevision: versions.length === limit && last && last.revision > 1 ? last.revision : null,
     retained: THEME_VERSION_HISTORY_LIMIT,
@@ -463,7 +462,7 @@ app.openapi(createRoute({
   const { revision, basePublishedRevision, updatedAt } = await saveThemeDraft(
     c.get("db"), body.theme, body.expectedDraftRevision, body.basePublishedRevision, user?.id ?? null,
   );
-  return ok(c, { revision, basePublishedRevision, updatedAt });
+  return ok(c, draftReceipt({ revision, basePublishedRevision, updatedAt }));
 });
 
 app.openapi(createRoute({
@@ -499,7 +498,7 @@ app.openapi(createRoute({
   const { revision, basePublishedRevision, updatedAt } = await saveThemePageDraft(
     c.get("db"), edit, body.expectedDraftRevision, body.basePublishedRevision, user?.id ?? null,
   );
-  return ok(c, { revision, basePublishedRevision, updatedAt });
+  return ok(c, draftReceipt({ revision, basePublishedRevision, updatedAt }));
 });
 
 app.openapi(createRoute({
@@ -606,7 +605,7 @@ const createThemePreviewRoute = createRoute({
               }),
               draftRevision: z.number().int().positive(),
               basePublishedRevision: z.number().int().nonnegative(),
-              expiresAt: z.any(),
+              expiresAt: dateTimeSchema,
             }),
           ),
         },
@@ -652,7 +651,7 @@ app.openapi(createThemePreviewRoute, async (c) => {
     },
     draftRevision: preview.draftRevision,
     basePublishedRevision: preview.basePublishedRevision,
-    expiresAt: preview.expiresAt,
+    expiresAt: iso(preview.expiresAt),
   });
 });
 

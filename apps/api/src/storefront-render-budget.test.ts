@@ -416,11 +416,14 @@ describe("storefront page render D1 budget", () => {
   it("reads a landing page's sections through the home planner, including media and every product source", async () => {
     const result = await renderPage("landing");
     const body = (result.bodies[1] as { data: {
-      landing: { title: string; sections: StorefrontSection[] };
+      title: string;
+      description: string;
       sections: { lists: Array<{ key: string; products: unknown[] }>; media: unknown[]; homeProduct: unknown };
     } }).data;
-    expect(body.landing.title).toBe("ঈদের বাছাই");
-    expect(new Set(body.landing.sections.map((section) => section.type))).toEqual(new Set(STOREFRONT_SECTION_TYPES));
+    expect(body).toMatchObject({ title: "ঈদের বাছাই", description: "" });
+    // Every section type is on the page (the layout's theme names them; this read carries their data).
+    const layout = (result.bodies[0] as { data: { theme: { pages: { landing: Record<string, { sections: StorefrontSection[] }> } } } }).data;
+    expect(new Set(layout.theme.pages.landing.eid!.sections.map((section) => section.type))).toEqual(new Set(STOREFRONT_SECTION_TYPES));
     expect(Object.fromEntries(body.sections.lists.map((list) => [list.key, list.products.length]))).toMatchObject({
       newest: 2, "on-sale": 1, popular: 1, "category:cat_panjabi": 2, "collection:col_grid": 2,
     });

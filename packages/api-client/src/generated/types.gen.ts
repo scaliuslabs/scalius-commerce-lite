@@ -88,7 +88,7 @@ export type StorefrontAppSurface = {
 };
 
 export type StorefrontThemeDocument = {
-    version: 6;
+    version: 7;
     template: 'boutique' | 'heritage-editorial' | 'fashion-value' | 'spec-catalogue' | 'rounded-tech' | 'marketplace' | 'mass-retail' | 'department-mall' | 'daily-essentials' | 'showcase-landing';
     tokens: {
         colors: {
@@ -536,6 +536,7 @@ export type StorefrontThemeDocument = {
             id: string;
             type: 'hero';
             version: 1;
+            hidden?: boolean;
             settings: {
                 layout: 'full-bleed' | 'contained-banners' | 'app-panel' | 'split' | 'story-cards' | 'full-screen' | 'wide-editorial';
                 slides: Array<{
@@ -567,6 +568,7 @@ export type StorefrontThemeDocument = {
             id: string;
             type: 'usp-strip';
             version: 1;
+            hidden?: boolean;
             settings: {
                 style: 'icons' | 'ticker';
                 source: {
@@ -583,6 +585,7 @@ export type StorefrontThemeDocument = {
             id: string;
             type: 'category-tiles';
             version: 1;
+            hidden?: boolean;
             settings: {
                 style: 'photo' | 'photo-grid' | 'round' | 'round-small' | 'round-row' | 'icons' | 'quad' | 'square';
                 title: string;
@@ -592,6 +595,7 @@ export type StorefrontThemeDocument = {
             id: string;
             type: 'collections';
             version: 1;
+            hidden?: boolean;
             settings: {
                 carousel: 'large' | 'compact';
                 collectionIds: Array<string>;
@@ -600,6 +604,7 @@ export type StorefrontThemeDocument = {
             id: string;
             type: 'product-rail';
             version: 1;
+            hidden?: boolean;
             settings: {
                 title: string;
                 source: {
@@ -621,6 +626,7 @@ export type StorefrontThemeDocument = {
             id: string;
             type: 'product-grid';
             version: 1;
+            hidden?: boolean;
             settings: {
                 title: string;
                 source: {
@@ -643,6 +649,7 @@ export type StorefrontThemeDocument = {
             id: string;
             type: 'deal-block';
             version: 1;
+            hidden?: boolean;
             settings: {
                 title: string;
                 source: {
@@ -664,6 +671,7 @@ export type StorefrontThemeDocument = {
             id: string;
             type: 'product-tabs';
             version: 1;
+            hidden?: boolean;
             settings: {
                 title: string;
                 tabs: Array<{
@@ -688,6 +696,7 @@ export type StorefrontThemeDocument = {
             id: string;
             type: 'shop-by';
             version: 1;
+            hidden?: boolean;
             settings: {
                 title: string;
                 cards: Array<{
@@ -700,6 +709,7 @@ export type StorefrontThemeDocument = {
             id: string;
             type: 'banner-mosaic';
             version: 1;
+            hidden?: boolean;
             settings: {
                 tiles: Array<{
                     mediaId: string;
@@ -711,6 +721,7 @@ export type StorefrontThemeDocument = {
             id: string;
             type: 'lookbook';
             version: 1;
+            hidden?: boolean;
             settings: {
                 title: string;
                 mediaId: string | null;
@@ -733,6 +744,7 @@ export type StorefrontThemeDocument = {
             id: string;
             type: 'banner';
             version: 1;
+            hidden?: boolean;
             settings: {
                 layout: 'full' | 'two-up' | 'four-up';
                 heading: string;
@@ -747,6 +759,7 @@ export type StorefrontThemeDocument = {
             id: string;
             type: 'brand-wall';
             version: 1;
+            hidden?: boolean;
             settings: {
                 title: string;
                 style: 'grid' | 'rail';
@@ -755,6 +768,7 @@ export type StorefrontThemeDocument = {
             id: string;
             type: 'editorial';
             version: 1;
+            hidden?: boolean;
             settings: {
                 layout: 'rich-text';
                 heading: string;
@@ -783,6 +797,7 @@ export type StorefrontThemeDocument = {
             id: string;
             type: 'faq';
             version: 1;
+            hidden?: boolean;
             settings: {
                 heading: string;
                 items: Array<{
@@ -794,6 +809,7 @@ export type StorefrontThemeDocument = {
             id: string;
             type: 'utility-cards';
             version: 1;
+            hidden?: boolean;
             settings: {
                 cards: Array<{
                     title: string;
@@ -805,6 +821,7 @@ export type StorefrontThemeDocument = {
             id: string;
             type: 'endless-grid';
             version: 1;
+            hidden?: boolean;
             settings: {
                 title: string;
                 pageSize: 12 | 24 | 36;
@@ -813,6 +830,7 @@ export type StorefrontThemeDocument = {
             id: string;
             type: 'seo-text';
             version: 1;
+            hidden?: boolean;
             settings: {
                 heading: string;
                 body: string;
@@ -821,6 +839,7 @@ export type StorefrontThemeDocument = {
             id: string;
             type: 'recently-viewed';
             version: 1;
+            hidden?: boolean;
             settings: {
                 title: string;
             };
@@ -828,6 +847,7 @@ export type StorefrontThemeDocument = {
             id: string;
             type: 'newsletter';
             version: 1;
+            hidden?: boolean;
             settings: {
                 heading: string;
                 text: string;
@@ -839,6 +859,7 @@ export type StorefrontThemeDocument = {
             id: string;
             type: 'app';
             version: 1;
+            hidden?: boolean;
             settings: {
                 app: string;
                 values: {
@@ -851,6 +872,347 @@ export type StorefrontThemeDocument = {
         } | {
             kind: 'product';
             productId: string;
+        };
+        landing: {
+            [key: string]: {
+                title: string;
+                description: string;
+                sections: Array<{
+                    id: string;
+                    type: 'hero';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        layout: 'full-bleed' | 'contained-banners' | 'app-panel' | 'split' | 'story-cards' | 'full-screen' | 'wide-editorial';
+                        slides: Array<{
+                            image: string;
+                            phoneImage?: string;
+                            focalPoint: {
+                                x: number;
+                                y: number;
+                            };
+                            phoneFocalPoint?: {
+                                x: number;
+                                y: number;
+                            };
+                            alt: string;
+                            heading?: string;
+                            text?: string;
+                            buttonLabel?: string;
+                            link: string | null;
+                        }>;
+                        phonePlacement?: 'after-categories';
+                        sideBanners?: Array<{
+                            mediaId: string;
+                            alt: string;
+                            href: string | null;
+                        }>;
+                        phoneHeight?: 'screen' | 'compact';
+                    };
+                } | {
+                    id: string;
+                    type: 'usp-strip';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        style: 'icons' | 'ticker';
+                        source: {
+                            kind: 'delivery-facts';
+                        } | {
+                            kind: 'custom';
+                            items: Array<{
+                                title: string;
+                                detail: string;
+                            }>;
+                        };
+                    };
+                } | {
+                    id: string;
+                    type: 'category-tiles';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        style: 'photo' | 'photo-grid' | 'round' | 'round-small' | 'round-row' | 'icons' | 'quad' | 'square';
+                        title: string;
+                        categoryIds: Array<string>;
+                    };
+                } | {
+                    id: string;
+                    type: 'collections';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        carousel: 'large' | 'compact';
+                        collectionIds: Array<string>;
+                    };
+                } | {
+                    id: string;
+                    type: 'product-rail';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        title: string;
+                        source: {
+                            kind: 'newest';
+                        } | {
+                            kind: 'on-sale';
+                        } | {
+                            kind: 'popular';
+                        } | {
+                            kind: 'collection';
+                            collectionId: string;
+                        } | {
+                            kind: 'category';
+                            categoryId: string;
+                        };
+                        limit: number;
+                    };
+                } | {
+                    id: string;
+                    type: 'product-grid';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        title: string;
+                        source: {
+                            kind: 'newest';
+                        } | {
+                            kind: 'on-sale';
+                        } | {
+                            kind: 'popular';
+                        } | {
+                            kind: 'collection';
+                            collectionId: string;
+                        } | {
+                            kind: 'category';
+                            categoryId: string;
+                        };
+                        columns: number;
+                        rows: number;
+                    };
+                } | {
+                    id: string;
+                    type: 'deal-block';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        title: string;
+                        source: {
+                            kind: 'newest';
+                        } | {
+                            kind: 'on-sale';
+                        } | {
+                            kind: 'popular';
+                        } | {
+                            kind: 'collection';
+                            collectionId: string;
+                        } | {
+                            kind: 'category';
+                            categoryId: string;
+                        };
+                        promotionId?: string | null;
+                    };
+                } | {
+                    id: string;
+                    type: 'product-tabs';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        title: string;
+                        tabs: Array<{
+                            label: string;
+                            source: {
+                                kind: 'newest';
+                            } | {
+                                kind: 'on-sale';
+                            } | {
+                                kind: 'popular';
+                            } | {
+                                kind: 'collection';
+                                collectionId: string;
+                            } | {
+                                kind: 'category';
+                                categoryId: string;
+                            };
+                        }>;
+                        limit: number;
+                    };
+                } | {
+                    id: string;
+                    type: 'shop-by';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        title: string;
+                        cards: Array<{
+                            mediaId: string;
+                            title: string;
+                            href: string;
+                        }>;
+                    };
+                } | {
+                    id: string;
+                    type: 'banner-mosaic';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        tiles: Array<{
+                            mediaId: string;
+                            alt: string;
+                            href: string | null;
+                        }>;
+                    };
+                } | {
+                    id: string;
+                    type: 'lookbook';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        title: string;
+                        mediaId: string | null;
+                        source: {
+                            kind: 'newest';
+                        } | {
+                            kind: 'on-sale';
+                        } | {
+                            kind: 'popular';
+                        } | {
+                            kind: 'collection';
+                            collectionId: string;
+                        } | {
+                            kind: 'category';
+                            categoryId: string;
+                        };
+                        photo: 'tall' | 'square';
+                    };
+                } | {
+                    id: string;
+                    type: 'banner';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        layout: 'full' | 'two-up' | 'four-up';
+                        heading: string;
+                        text: string;
+                        mediaId: string | null;
+                        cta: {
+                            label: string;
+                            href: string;
+                        } | null;
+                    };
+                } | {
+                    id: string;
+                    type: 'brand-wall';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        title: string;
+                        style: 'grid' | 'rail';
+                    };
+                } | {
+                    id: string;
+                    type: 'editorial';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        layout: 'rich-text';
+                        heading: string;
+                        body: string;
+                    } | {
+                        layout: 'image-with-text';
+                        heading: string;
+                        body: string;
+                        mediaId: string | null;
+                        imageSide: 'start' | 'end';
+                    } | {
+                        layout: 'multicolumn';
+                        heading: string;
+                        columns: Array<{
+                            title: string;
+                            text: string;
+                        }>;
+                    } | {
+                        layout: 'testimonial';
+                        quotes: Array<{
+                            quote: string;
+                            author: string;
+                        }>;
+                    };
+                } | {
+                    id: string;
+                    type: 'faq';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        heading: string;
+                        items: Array<{
+                            question: string;
+                            answer: string;
+                        }>;
+                    };
+                } | {
+                    id: string;
+                    type: 'utility-cards';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        cards: Array<{
+                            title: string;
+                            text: string;
+                            href: string;
+                        }>;
+                    };
+                } | {
+                    id: string;
+                    type: 'endless-grid';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        title: string;
+                        pageSize: 12 | 24 | 36;
+                    };
+                } | {
+                    id: string;
+                    type: 'seo-text';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        heading: string;
+                        body: string;
+                    };
+                } | {
+                    id: string;
+                    type: 'recently-viewed';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        title: string;
+                    };
+                } | {
+                    id: string;
+                    type: 'newsletter';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        heading: string;
+                        text: string;
+                        email?: 'optional' | 'required' | 'hidden';
+                        whatsapp?: boolean;
+                        buttonLabel?: string;
+                    };
+                } | {
+                    id: string;
+                    type: 'app';
+                    version: 1;
+                    hidden?: boolean;
+                    settings: {
+                        app: string;
+                        values: {
+                            [key: string]: string | number | boolean | Array<string> | unknown;
+                        };
+                    };
+                }>;
+            };
         };
     };
 };
@@ -1440,6 +1802,49 @@ export type AppSettingField = {
     max: number | null;
     integer: boolean;
     maxLength: number | null;
+};
+
+export type ThemeVersionSummary = {
+    id: string;
+    revision: number;
+    source: 'publish' | 'rollback' | 'migration';
+    sourceRevision: number | null;
+    publishedBy: string | null;
+    publishedByName: string | null;
+    createdAt: string;
+    changes: Array<{
+        kind: 'section-added';
+        page: string;
+        sectionId: string;
+        sectionType: string;
+    } | {
+        kind: 'section-removed';
+        page: string;
+        sectionId: string;
+        sectionType: string;
+    } | {
+        kind: 'section-changed';
+        page: string;
+        sectionId: string;
+        sectionType: string;
+    } | {
+        kind: 'sections-reordered';
+        page: string;
+    } | {
+        kind: 'page-added';
+        page: string;
+    } | {
+        kind: 'page-removed';
+        page: string;
+    } | {
+        kind: 'page-changed';
+        page: string;
+    } | {
+        kind: 'settings-changed';
+        area: 'template' | 'colors' | 'typography' | 'style' | 'brand' | 'header' | 'navigation' | 'footer' | 'productCard' | 'listing' | 'productPage' | 'homeMode';
+    }>;
+    moreChanges: number;
+    note: string | null;
 };
 
 export type WarrantyClaim = {
@@ -5199,6 +5604,229 @@ export type GetApiV1StorefrontHomepageResponses = {
 
 export type GetApiV1StorefrontHomepageResponse = GetApiV1StorefrontHomepageResponses[keyof GetApiV1StorefrontHomepageResponses];
 
+export type GetApiV1StorefrontLandingBySlugData = {
+    body?: never;
+    path: {
+        slug: string;
+    };
+    query?: never;
+    url: '/api/v1/storefront/landing/{slug}';
+};
+
+export type GetApiV1StorefrontLandingBySlugErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1StorefrontLandingBySlugError = GetApiV1StorefrontLandingBySlugErrors[keyof GetApiV1StorefrontLandingBySlugErrors];
+
+export type GetApiV1StorefrontLandingBySlugResponses = {
+    /**
+     * Landing page and its bounded section data
+     */
+    200: {
+        success: true;
+        data: {
+            title: string;
+            description: string;
+            sections: {
+                lists: Array<{
+                    key: string;
+                    products: Array<{
+                        id: string;
+                        name: string;
+                        slug: string;
+                        price: number;
+                        discountType: string | null;
+                        discountPercentage: number | null;
+                        discountAmount: number | null;
+                        discountedPrice: number;
+                        priceVaries: boolean;
+                        availableForSale: boolean;
+                        quickAddEligible: boolean;
+                        freeDelivery: boolean;
+                        categoryId: string | null;
+                        hasVariants: boolean;
+                        imageUrl: string | null;
+                        imageMediaId: string | null;
+                        imageAlt: string | null;
+                        secondaryImageUrl: string | null;
+                        /**
+                         * Published-review average and count; null without a published review.
+                         */
+                        rating: {
+                            average: number;
+                            count: number;
+                        } | null;
+                        cardFacts?: ProductCardFacts;
+                    }>;
+                    category: {
+                        id: string;
+                        name: string;
+                        slug: string;
+                        canonicalPath: string | null;
+                    } | null;
+                    collection: {
+                        id: string;
+                        title: string;
+                    } | null;
+                }>;
+                media: Array<{
+                    id: string;
+                    url: string;
+                    alt: string;
+                    width: number | null;
+                    height: number | null;
+                }>;
+                brands: Array<{
+                    id: string;
+                    name: string;
+                    slug: string;
+                    canonicalPath: string | null;
+                    logo: {
+                        mediaId: string;
+                        url: string;
+                        alt: string;
+                        width: number | null;
+                        height: number | null;
+                    } | null;
+                }>;
+                promotions: Array<{
+                    id: string;
+                    endsAt: string;
+                }>;
+                categories: Array<{
+                    id: string;
+                    name: string;
+                    slug: string;
+                    description: string | null;
+                    imageUrl: string | null;
+                    canonicalPath: string | null;
+                }>;
+                collections: Array<{
+                    id: string;
+                    name: string;
+                    presentation: string;
+                    config: {
+                        maxProducts: number;
+                        title: string;
+                        subtitle: string;
+                    };
+                    sortOrder: number;
+                    isActive: boolean;
+                    categories: Array<{
+                        id: string;
+                        name: string;
+                        slug: string;
+                    }>;
+                    products: Array<{
+                        id: string;
+                        name: string;
+                        slug: string;
+                        price: number;
+                        discountType: string | null;
+                        discountPercentage: number | null;
+                        discountAmount: number | null;
+                        discountedPrice: number;
+                        priceVaries: boolean;
+                        availableForSale: boolean;
+                        quickAddEligible: boolean;
+                        freeDelivery: boolean;
+                        categoryId: string | null;
+                        hasVariants: boolean;
+                        imageUrl: string | null;
+                        imageMediaId: string | null;
+                        imageAlt: string | null;
+                        secondaryImageUrl: string | null;
+                        /**
+                         * Published-review average and count; null without a published review.
+                         */
+                        rating: {
+                            average: number;
+                            count: number;
+                        } | null;
+                        cardFacts?: ProductCardFacts;
+                    }>;
+                    featuredProduct: {
+                        id: string;
+                        name: string;
+                        slug: string;
+                        price: number;
+                        discountType: string | null;
+                        discountPercentage: number | null;
+                        discountAmount: number | null;
+                        discountedPrice: number;
+                        priceVaries: boolean;
+                        availableForSale: boolean;
+                        quickAddEligible: boolean;
+                        freeDelivery: boolean;
+                        categoryId: string | null;
+                        hasVariants: boolean;
+                        imageUrl: string | null;
+                        imageMediaId: string | null;
+                        imageAlt: string | null;
+                        secondaryImageUrl: string | null;
+                        /**
+                         * Published-review average and count; null without a published review.
+                         */
+                        rating: {
+                            average: number;
+                            count: number;
+                        } | null;
+                        cardFacts?: ProductCardFacts;
+                    } | null;
+                }>;
+                /**
+                 * A product homepage's product while it is public (the storefront answers `/` with a redirect to its page); null for a sections homepage or a product that is not public.
+                 */
+                homeProduct: {
+                    id: string;
+                    slug: string;
+                } | null;
+                /**
+                 * The app sections that drew something, by section id: sanitized HTML (no scripts, styles or event handlers) and the head tags their apps may add. An app section missing here renders nothing.
+                 */
+                apps: Array<StorefrontAppSurface & {
+                    sectionId: string;
+                }>;
+            };
+        };
+    };
+};
+
+export type GetApiV1StorefrontLandingBySlugResponse = GetApiV1StorefrontLandingBySlugResponses[keyof GetApiV1StorefrontLandingBySlugResponses];
+
 export type GetApiV1StorefrontProductAppsBySlugData = {
     body?: never;
     path: {
@@ -5734,6 +6362,7 @@ export type PostApiV1StorefrontThemePreviewResolveResponse = PostApiV1Storefront
 export type PostApiV1StorefrontThemePreviewHomepageData = {
     body?: {
         token: string;
+        pageSlug?: string;
     };
     path?: never;
     query?: never;
@@ -5938,6 +6567,73 @@ export type PostApiV1StorefrontThemePreviewHomepageResponses = {
 };
 
 export type PostApiV1StorefrontThemePreviewHomepageResponse = PostApiV1StorefrontThemePreviewHomepageResponses[keyof PostApiV1StorefrontThemePreviewHomepageResponses];
+
+export type PostApiV1StorefrontThemePreviewProductAppsBySlugData = {
+    body: {
+        token: string;
+    };
+    path: {
+        slug: string;
+    };
+    query?: never;
+    url: '/api/v1/storefront/theme-preview/product-apps/{slug}';
+};
+
+export type PostApiV1StorefrontThemePreviewProductAppsBySlugErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1StorefrontThemePreviewProductAppsBySlugError = PostApiV1StorefrontThemePreviewProductAppsBySlugErrors[keyof PostApiV1StorefrontThemePreviewProductAppsBySlugErrors];
+
+export type PostApiV1StorefrontThemePreviewProductAppsBySlugResponses = {
+    /**
+     * The drawn app blocks
+     */
+    200: {
+        success: true;
+        data: {
+            blocks: Array<StorefrontAppSurface & {
+                id: string;
+                app: string;
+                placement: 'buy-box' | 'below';
+            }>;
+        };
+    };
+};
+
+export type PostApiV1StorefrontThemePreviewProductAppsBySlugResponse = PostApiV1StorefrontThemePreviewProductAppsBySlugResponses[keyof PostApiV1StorefrontThemePreviewProductAppsBySlugResponses];
 
 export type GetApiV1PlatformData = {
     body?: never;
@@ -46007,6 +46703,123 @@ export type PostApiV1AdminSettingsCurrencyResponses = {
 
 export type PostApiV1AdminSettingsCurrencyResponse = PostApiV1AdminSettingsCurrencyResponses[keyof PostApiV1AdminSettingsCurrencyResponses];
 
+export type GetApiV1AdminSettingsThemeEditorData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/theme/editor';
+};
+
+export type GetApiV1AdminSettingsThemeEditorErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsThemeEditorError = GetApiV1AdminSettingsThemeEditorErrors[keyof GetApiV1AdminSettingsThemeEditorErrors];
+
+export type GetApiV1AdminSettingsThemeEditorResponses = {
+    /**
+     * Theme editor workspace
+     */
+    200: {
+        success: true;
+        data: {
+            published: {
+                theme: StorefrontThemeDocument;
+                revision: number;
+            };
+            draft: {
+                revision: number;
+                basePublishedRevision: number;
+                updatedAt: string | null;
+                theme: StorefrontThemeDocument;
+            };
+            draftDiffersFromLive: boolean;
+            lastPublished: {
+                revision: number;
+                publishedBy: string | null;
+                publishedByName: string | null;
+                createdAt: string;
+            } | null;
+            storeShape: StorefrontStoreShape;
+            media: Array<{
+                id: string;
+                url: string;
+                alt: string;
+                width: number | null;
+                height: number | null;
+            }>;
+            apps: Array<ThemeAppSurfaces>;
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsThemeEditorResponse = GetApiV1AdminSettingsThemeEditorResponses[keyof GetApiV1AdminSettingsThemeEditorResponses];
+
 export type GetApiV1AdminSettingsThemeWorkspaceData = {
     body?: never;
     path?: never;
@@ -46087,48 +46900,48 @@ export type GetApiV1AdminSettingsThemeWorkspaceError = GetApiV1AdminSettingsThem
 
 export type GetApiV1AdminSettingsThemeWorkspaceResponses = {
     /**
-     * Theme workspace
+     * Theme status
      */
     200: {
         success: true;
         data: {
             published: {
-                theme: StorefrontThemeDocument;
                 revision: number;
             };
             draft: {
-                theme: StorefrontThemeDocument;
                 revision: number;
                 basePublishedRevision: number;
-                updatedAt?: unknown;
+                updatedAt: string | null;
             };
-            storeShape: StorefrontStoreShape;
-            media: Array<{
-                id: string;
-                url: string;
-                alt: string;
-                width: number | null;
-                height: number | null;
+            draftDiffersFromLive: boolean;
+            lastPublished: {
+                revision: number;
+                publishedBy: string | null;
+                publishedByName: string | null;
+                createdAt: string;
+            } | null;
+            landingPages: Array<{
+                slug: string;
+                title: string;
+                sections: number;
             }>;
-            apps: Array<ThemeAppSurfaces>;
         };
     };
 };
 
 export type GetApiV1AdminSettingsThemeWorkspaceResponse = GetApiV1AdminSettingsThemeWorkspaceResponses[keyof GetApiV1AdminSettingsThemeWorkspaceResponses];
 
-export type PostApiV1AdminSettingsThemeDraftData = {
-    body: {
-        theme: StorefrontThemeDocument;
-        expectedDraftRevision: number;
-        basePublishedRevision: number;
-    };
+export type GetApiV1AdminSettingsThemeDocumentData = {
+    body?: never;
     path?: never;
-    query?: never;
-    url: '/api/v1/admin/settings/theme/draft';
+    query?: {
+        source?: 'draft' | 'published' | 'version';
+        revision?: number;
+    };
+    url: '/api/v1/admin/settings/theme/document';
 };
 
-export type PostApiV1AdminSettingsThemeDraftErrors = {
+export type GetApiV1AdminSettingsThemeDocumentErrors = {
     /**
      * Validation error
      */
@@ -46197,134 +47010,30 @@ export type PostApiV1AdminSettingsThemeDraftErrors = {
     };
 };
 
-export type PostApiV1AdminSettingsThemeDraftError = PostApiV1AdminSettingsThemeDraftErrors[keyof PostApiV1AdminSettingsThemeDraftErrors];
+export type GetApiV1AdminSettingsThemeDocumentError = GetApiV1AdminSettingsThemeDocumentErrors[keyof GetApiV1AdminSettingsThemeDocumentErrors];
 
-export type PostApiV1AdminSettingsThemeDraftResponses = {
+export type GetApiV1AdminSettingsThemeDocumentResponses = {
     /**
-     * Draft saved
+     * Theme document
      */
     200: {
         success: true;
         data: {
-            theme: StorefrontThemeDocument;
+            source: 'draft' | 'published' | 'version';
             revision: number;
-            basePublishedRevision: number;
-            updatedAt?: unknown;
+            document: StorefrontThemeDocument;
         };
     };
 };
 
-export type PostApiV1AdminSettingsThemeDraftResponse = PostApiV1AdminSettingsThemeDraftResponses[keyof PostApiV1AdminSettingsThemeDraftResponses];
-
-export type PostApiV1AdminSettingsThemePublishData = {
-    body: {
-        expectedPublishedRevision: number;
-        expectedDraftRevision: number;
-    };
-    path?: never;
-    query?: never;
-    url: '/api/v1/admin/settings/theme/publish';
-};
-
-export type PostApiV1AdminSettingsThemePublishErrors = {
-    /**
-     * Validation error
-     */
-    400: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Unauthorized
-     */
-    401: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Forbidden
-     */
-    403: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Not found
-     */
-    404: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Rate limit exceeded
-     */
-    429: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-    /**
-     * Server error
-     */
-    500: {
-        success: false;
-        error: {
-            code: string;
-            message: string;
-            details?: unknown;
-        };
-    };
-};
-
-export type PostApiV1AdminSettingsThemePublishError = PostApiV1AdminSettingsThemePublishErrors[keyof PostApiV1AdminSettingsThemePublishErrors];
-
-export type PostApiV1AdminSettingsThemePublishResponses = {
-    /**
-     * Draft published
-     */
-    200: {
-        success: true;
-        data: {
-            published: {
-                theme: StorefrontThemeDocument;
-                revision: number;
-            };
-            draft: {
-                theme: StorefrontThemeDocument;
-                revision: number;
-                basePublishedRevision: number;
-                updatedAt?: unknown;
-            };
-        };
-    };
-};
-
-export type PostApiV1AdminSettingsThemePublishResponse = PostApiV1AdminSettingsThemePublishResponses[keyof PostApiV1AdminSettingsThemePublishResponses];
+export type GetApiV1AdminSettingsThemeDocumentResponse = GetApiV1AdminSettingsThemeDocumentResponses[keyof GetApiV1AdminSettingsThemeDocumentResponses];
 
 export type GetApiV1AdminSettingsThemeVersionsData = {
     body?: never;
     path?: never;
     query?: {
         limit?: number;
+        beforeRevision?: number;
     };
     url: '/api/v1/admin/settings/theme/versions';
 };
@@ -46402,38 +47111,32 @@ export type GetApiV1AdminSettingsThemeVersionsError = GetApiV1AdminSettingsTheme
 
 export type GetApiV1AdminSettingsThemeVersionsResponses = {
     /**
-     * Published theme revisions
+     * A page of theme versions
      */
     200: {
         success: true;
         data: {
-            versions: Array<{
-                id: string;
-                theme: StorefrontThemeDocument;
-                revision: number;
-                source: 'publish' | 'rollback' | 'migration';
-                sourceRevision: number | null;
-                publishedBy: string | null;
-                createdAt?: unknown;
-            }>;
+            versions: Array<ThemeVersionSummary>;
+            nextBeforeRevision: number | null;
+            retained: number;
         };
     };
 };
 
 export type GetApiV1AdminSettingsThemeVersionsResponse = GetApiV1AdminSettingsThemeVersionsResponses[keyof GetApiV1AdminSettingsThemeVersionsResponses];
 
-export type PostApiV1AdminSettingsThemeRollbackData = {
+export type PostApiV1AdminSettingsThemeDraftData = {
     body: {
-        sourceRevision: number;
-        expectedPublishedRevision: number;
+        theme: StorefrontThemeDocument;
         expectedDraftRevision: number;
+        basePublishedRevision: number;
     };
     path?: never;
     query?: never;
-    url: '/api/v1/admin/settings/theme/rollback';
+    url: '/api/v1/admin/settings/theme/draft';
 };
 
-export type PostApiV1AdminSettingsThemeRollbackErrors = {
+export type PostApiV1AdminSettingsThemeDraftErrors = {
     /**
      * Validation error
      */
@@ -46479,6 +47182,17 @@ export type PostApiV1AdminSettingsThemeRollbackErrors = {
         };
     };
     /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
      * Rate limit exceeded
      */
     429: {
@@ -46502,34 +47216,1178 @@ export type PostApiV1AdminSettingsThemeRollbackErrors = {
     };
 };
 
-export type PostApiV1AdminSettingsThemeRollbackError = PostApiV1AdminSettingsThemeRollbackErrors[keyof PostApiV1AdminSettingsThemeRollbackErrors];
+export type PostApiV1AdminSettingsThemeDraftError = PostApiV1AdminSettingsThemeDraftErrors[keyof PostApiV1AdminSettingsThemeDraftErrors];
 
-export type PostApiV1AdminSettingsThemeRollbackResponses = {
+export type PostApiV1AdminSettingsThemeDraftResponses = {
     /**
-     * Theme rollback published
+     * Draft saved
+     */
+    200: {
+        success: true;
+        data: {
+            revision: number;
+            basePublishedRevision: number;
+            updatedAt: string | null;
+        };
+    };
+};
+
+export type PostApiV1AdminSettingsThemeDraftResponse = PostApiV1AdminSettingsThemeDraftResponses[keyof PostApiV1AdminSettingsThemeDraftResponses];
+
+export type PostApiV1AdminSettingsThemePageDraftData = {
+    body: {
+        expectedDraftRevision: number;
+        basePublishedRevision: number;
+        page: 'home';
+        value: Array<{
+            id: string;
+            type: 'hero';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                layout: 'full-bleed' | 'contained-banners' | 'app-panel' | 'split' | 'story-cards' | 'full-screen' | 'wide-editorial';
+                slides: Array<{
+                    image: string;
+                    phoneImage?: string;
+                    focalPoint: {
+                        x: number;
+                        y: number;
+                    };
+                    phoneFocalPoint?: {
+                        x: number;
+                        y: number;
+                    };
+                    alt: string;
+                    heading?: string;
+                    text?: string;
+                    buttonLabel?: string;
+                    link: string | null;
+                }>;
+                phonePlacement?: 'after-categories';
+                sideBanners?: Array<{
+                    mediaId: string;
+                    alt: string;
+                    href: string | null;
+                }>;
+                phoneHeight?: 'screen' | 'compact';
+            };
+        } | {
+            id: string;
+            type: 'usp-strip';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                style: 'icons' | 'ticker';
+                source: {
+                    kind: 'delivery-facts';
+                } | {
+                    kind: 'custom';
+                    items: Array<{
+                        title: string;
+                        detail: string;
+                    }>;
+                };
+            };
+        } | {
+            id: string;
+            type: 'category-tiles';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                style: 'photo' | 'photo-grid' | 'round' | 'round-small' | 'round-row' | 'icons' | 'quad' | 'square';
+                title: string;
+                categoryIds: Array<string>;
+            };
+        } | {
+            id: string;
+            type: 'collections';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                carousel: 'large' | 'compact';
+                collectionIds: Array<string>;
+            };
+        } | {
+            id: string;
+            type: 'product-rail';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                title: string;
+                source: {
+                    kind: 'newest';
+                } | {
+                    kind: 'on-sale';
+                } | {
+                    kind: 'popular';
+                } | {
+                    kind: 'collection';
+                    collectionId: string;
+                } | {
+                    kind: 'category';
+                    categoryId: string;
+                };
+                limit: number;
+            };
+        } | {
+            id: string;
+            type: 'product-grid';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                title: string;
+                source: {
+                    kind: 'newest';
+                } | {
+                    kind: 'on-sale';
+                } | {
+                    kind: 'popular';
+                } | {
+                    kind: 'collection';
+                    collectionId: string;
+                } | {
+                    kind: 'category';
+                    categoryId: string;
+                };
+                columns: number;
+                rows: number;
+            };
+        } | {
+            id: string;
+            type: 'deal-block';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                title: string;
+                source: {
+                    kind: 'newest';
+                } | {
+                    kind: 'on-sale';
+                } | {
+                    kind: 'popular';
+                } | {
+                    kind: 'collection';
+                    collectionId: string;
+                } | {
+                    kind: 'category';
+                    categoryId: string;
+                };
+                promotionId?: string | null;
+            };
+        } | {
+            id: string;
+            type: 'product-tabs';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                title: string;
+                tabs: Array<{
+                    label: string;
+                    source: {
+                        kind: 'newest';
+                    } | {
+                        kind: 'on-sale';
+                    } | {
+                        kind: 'popular';
+                    } | {
+                        kind: 'collection';
+                        collectionId: string;
+                    } | {
+                        kind: 'category';
+                        categoryId: string;
+                    };
+                }>;
+                limit: number;
+            };
+        } | {
+            id: string;
+            type: 'shop-by';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                title: string;
+                cards: Array<{
+                    mediaId: string;
+                    title: string;
+                    href: string;
+                }>;
+            };
+        } | {
+            id: string;
+            type: 'banner-mosaic';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                tiles: Array<{
+                    mediaId: string;
+                    alt: string;
+                    href: string | null;
+                }>;
+            };
+        } | {
+            id: string;
+            type: 'lookbook';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                title: string;
+                mediaId: string | null;
+                source: {
+                    kind: 'newest';
+                } | {
+                    kind: 'on-sale';
+                } | {
+                    kind: 'popular';
+                } | {
+                    kind: 'collection';
+                    collectionId: string;
+                } | {
+                    kind: 'category';
+                    categoryId: string;
+                };
+                photo: 'tall' | 'square';
+            };
+        } | {
+            id: string;
+            type: 'banner';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                layout: 'full' | 'two-up' | 'four-up';
+                heading: string;
+                text: string;
+                mediaId: string | null;
+                cta: {
+                    label: string;
+                    href: string;
+                } | null;
+            };
+        } | {
+            id: string;
+            type: 'brand-wall';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                title: string;
+                style: 'grid' | 'rail';
+            };
+        } | {
+            id: string;
+            type: 'editorial';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                layout: 'rich-text';
+                heading: string;
+                body: string;
+            } | {
+                layout: 'image-with-text';
+                heading: string;
+                body: string;
+                mediaId: string | null;
+                imageSide: 'start' | 'end';
+            } | {
+                layout: 'multicolumn';
+                heading: string;
+                columns: Array<{
+                    title: string;
+                    text: string;
+                }>;
+            } | {
+                layout: 'testimonial';
+                quotes: Array<{
+                    quote: string;
+                    author: string;
+                }>;
+            };
+        } | {
+            id: string;
+            type: 'faq';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                heading: string;
+                items: Array<{
+                    question: string;
+                    answer: string;
+                }>;
+            };
+        } | {
+            id: string;
+            type: 'utility-cards';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                cards: Array<{
+                    title: string;
+                    text: string;
+                    href: string;
+                }>;
+            };
+        } | {
+            id: string;
+            type: 'endless-grid';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                title: string;
+                pageSize: 12 | 24 | 36;
+            };
+        } | {
+            id: string;
+            type: 'seo-text';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                heading: string;
+                body: string;
+            };
+        } | {
+            id: string;
+            type: 'recently-viewed';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                title: string;
+            };
+        } | {
+            id: string;
+            type: 'newsletter';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                heading: string;
+                text: string;
+                email?: 'optional' | 'required' | 'hidden';
+                whatsapp?: boolean;
+                buttonLabel?: string;
+            };
+        } | {
+            id: string;
+            type: 'app';
+            version: 1;
+            hidden?: boolean;
+            settings: {
+                app: string;
+                values: {
+                    [key: string]: string | number | boolean | Array<string> | unknown;
+                };
+            };
+        }>;
+    } | {
+        expectedDraftRevision: number;
+        basePublishedRevision: number;
+        page: 'landing';
+        slug: string;
+        value: {
+            title: string;
+            description: string;
+            sections: Array<{
+                id: string;
+                type: 'hero';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    layout: 'full-bleed' | 'contained-banners' | 'app-panel' | 'split' | 'story-cards' | 'full-screen' | 'wide-editorial';
+                    slides: Array<{
+                        image: string;
+                        phoneImage?: string;
+                        focalPoint: {
+                            x: number;
+                            y: number;
+                        };
+                        phoneFocalPoint?: {
+                            x: number;
+                            y: number;
+                        };
+                        alt: string;
+                        heading?: string;
+                        text?: string;
+                        buttonLabel?: string;
+                        link: string | null;
+                    }>;
+                    phonePlacement?: 'after-categories';
+                    sideBanners?: Array<{
+                        mediaId: string;
+                        alt: string;
+                        href: string | null;
+                    }>;
+                    phoneHeight?: 'screen' | 'compact';
+                };
+            } | {
+                id: string;
+                type: 'usp-strip';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    style: 'icons' | 'ticker';
+                    source: {
+                        kind: 'delivery-facts';
+                    } | {
+                        kind: 'custom';
+                        items: Array<{
+                            title: string;
+                            detail: string;
+                        }>;
+                    };
+                };
+            } | {
+                id: string;
+                type: 'category-tiles';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    style: 'photo' | 'photo-grid' | 'round' | 'round-small' | 'round-row' | 'icons' | 'quad' | 'square';
+                    title: string;
+                    categoryIds: Array<string>;
+                };
+            } | {
+                id: string;
+                type: 'collections';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    carousel: 'large' | 'compact';
+                    collectionIds: Array<string>;
+                };
+            } | {
+                id: string;
+                type: 'product-rail';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    title: string;
+                    source: {
+                        kind: 'newest';
+                    } | {
+                        kind: 'on-sale';
+                    } | {
+                        kind: 'popular';
+                    } | {
+                        kind: 'collection';
+                        collectionId: string;
+                    } | {
+                        kind: 'category';
+                        categoryId: string;
+                    };
+                    limit: number;
+                };
+            } | {
+                id: string;
+                type: 'product-grid';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    title: string;
+                    source: {
+                        kind: 'newest';
+                    } | {
+                        kind: 'on-sale';
+                    } | {
+                        kind: 'popular';
+                    } | {
+                        kind: 'collection';
+                        collectionId: string;
+                    } | {
+                        kind: 'category';
+                        categoryId: string;
+                    };
+                    columns: number;
+                    rows: number;
+                };
+            } | {
+                id: string;
+                type: 'deal-block';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    title: string;
+                    source: {
+                        kind: 'newest';
+                    } | {
+                        kind: 'on-sale';
+                    } | {
+                        kind: 'popular';
+                    } | {
+                        kind: 'collection';
+                        collectionId: string;
+                    } | {
+                        kind: 'category';
+                        categoryId: string;
+                    };
+                    promotionId?: string | null;
+                };
+            } | {
+                id: string;
+                type: 'product-tabs';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    title: string;
+                    tabs: Array<{
+                        label: string;
+                        source: {
+                            kind: 'newest';
+                        } | {
+                            kind: 'on-sale';
+                        } | {
+                            kind: 'popular';
+                        } | {
+                            kind: 'collection';
+                            collectionId: string;
+                        } | {
+                            kind: 'category';
+                            categoryId: string;
+                        };
+                    }>;
+                    limit: number;
+                };
+            } | {
+                id: string;
+                type: 'shop-by';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    title: string;
+                    cards: Array<{
+                        mediaId: string;
+                        title: string;
+                        href: string;
+                    }>;
+                };
+            } | {
+                id: string;
+                type: 'banner-mosaic';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    tiles: Array<{
+                        mediaId: string;
+                        alt: string;
+                        href: string | null;
+                    }>;
+                };
+            } | {
+                id: string;
+                type: 'lookbook';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    title: string;
+                    mediaId: string | null;
+                    source: {
+                        kind: 'newest';
+                    } | {
+                        kind: 'on-sale';
+                    } | {
+                        kind: 'popular';
+                    } | {
+                        kind: 'collection';
+                        collectionId: string;
+                    } | {
+                        kind: 'category';
+                        categoryId: string;
+                    };
+                    photo: 'tall' | 'square';
+                };
+            } | {
+                id: string;
+                type: 'banner';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    layout: 'full' | 'two-up' | 'four-up';
+                    heading: string;
+                    text: string;
+                    mediaId: string | null;
+                    cta: {
+                        label: string;
+                        href: string;
+                    } | null;
+                };
+            } | {
+                id: string;
+                type: 'brand-wall';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    title: string;
+                    style: 'grid' | 'rail';
+                };
+            } | {
+                id: string;
+                type: 'editorial';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    layout: 'rich-text';
+                    heading: string;
+                    body: string;
+                } | {
+                    layout: 'image-with-text';
+                    heading: string;
+                    body: string;
+                    mediaId: string | null;
+                    imageSide: 'start' | 'end';
+                } | {
+                    layout: 'multicolumn';
+                    heading: string;
+                    columns: Array<{
+                        title: string;
+                        text: string;
+                    }>;
+                } | {
+                    layout: 'testimonial';
+                    quotes: Array<{
+                        quote: string;
+                        author: string;
+                    }>;
+                };
+            } | {
+                id: string;
+                type: 'faq';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    heading: string;
+                    items: Array<{
+                        question: string;
+                        answer: string;
+                    }>;
+                };
+            } | {
+                id: string;
+                type: 'utility-cards';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    cards: Array<{
+                        title: string;
+                        text: string;
+                        href: string;
+                    }>;
+                };
+            } | {
+                id: string;
+                type: 'endless-grid';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    title: string;
+                    pageSize: 12 | 24 | 36;
+                };
+            } | {
+                id: string;
+                type: 'seo-text';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    heading: string;
+                    body: string;
+                };
+            } | {
+                id: string;
+                type: 'recently-viewed';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    title: string;
+                };
+            } | {
+                id: string;
+                type: 'newsletter';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    heading: string;
+                    text: string;
+                    email?: 'optional' | 'required' | 'hidden';
+                    whatsapp?: boolean;
+                    buttonLabel?: string;
+                };
+            } | {
+                id: string;
+                type: 'app';
+                version: 1;
+                hidden?: boolean;
+                settings: {
+                    app: string;
+                    values: {
+                        [key: string]: string | number | boolean | Array<string> | unknown;
+                    };
+                };
+            }>;
+        } | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/theme/page-draft';
+};
+
+export type PostApiV1AdminSettingsThemePageDraftErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminSettingsThemePageDraftError = PostApiV1AdminSettingsThemePageDraftErrors[keyof PostApiV1AdminSettingsThemePageDraftErrors];
+
+export type PostApiV1AdminSettingsThemePageDraftResponses = {
+    /**
+     * Page saved to the draft
+     */
+    200: {
+        success: true;
+        data: {
+            revision: number;
+            basePublishedRevision: number;
+            updatedAt: string | null;
+        };
+    };
+};
+
+export type PostApiV1AdminSettingsThemePageDraftResponse = PostApiV1AdminSettingsThemePageDraftResponses[keyof PostApiV1AdminSettingsThemePageDraftResponses];
+
+export type PostApiV1AdminSettingsThemePublishData = {
+    body: {
+        expectedPublishedRevision: number;
+        expectedDraftRevision: number;
+        note?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/theme/publish';
+};
+
+export type PostApiV1AdminSettingsThemePublishErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminSettingsThemePublishError = PostApiV1AdminSettingsThemePublishErrors[keyof PostApiV1AdminSettingsThemePublishErrors];
+
+export type PostApiV1AdminSettingsThemePublishResponses = {
+    /**
+     * Theme revisions
      */
     200: {
         success: true;
         data: {
             published: {
-                theme: StorefrontThemeDocument;
                 revision: number;
             };
             draft: {
-                theme: StorefrontThemeDocument;
                 revision: number;
                 basePublishedRevision: number;
-                updatedAt?: unknown;
+                updatedAt: string | null;
             };
+            draftDiffersFromLive: boolean;
+            lastPublished: {
+                revision: number;
+                publishedBy: string | null;
+                publishedByName: string | null;
+                createdAt: string;
+            } | null;
         };
     };
 };
 
-export type PostApiV1AdminSettingsThemeRollbackResponse = PostApiV1AdminSettingsThemeRollbackResponses[keyof PostApiV1AdminSettingsThemeRollbackResponses];
+export type PostApiV1AdminSettingsThemePublishResponse = PostApiV1AdminSettingsThemePublishResponses[keyof PostApiV1AdminSettingsThemePublishResponses];
+
+export type PostApiV1AdminSettingsThemeRestoreData = {
+    body: {
+        expectedDraftRevision: number;
+        basePublishedRevision: number;
+        sourceRevision: number;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/theme/restore';
+};
+
+export type PostApiV1AdminSettingsThemeRestoreErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminSettingsThemeRestoreError = PostApiV1AdminSettingsThemeRestoreErrors[keyof PostApiV1AdminSettingsThemeRestoreErrors];
+
+export type PostApiV1AdminSettingsThemeRestoreResponses = {
+    /**
+     * Theme revisions
+     */
+    200: {
+        success: true;
+        data: {
+            published: {
+                revision: number;
+            };
+            draft: {
+                revision: number;
+                basePublishedRevision: number;
+                updatedAt: string | null;
+            };
+            draftDiffersFromLive: boolean;
+            lastPublished: {
+                revision: number;
+                publishedBy: string | null;
+                publishedByName: string | null;
+                createdAt: string;
+            } | null;
+        };
+    };
+};
+
+export type PostApiV1AdminSettingsThemeRestoreResponse = PostApiV1AdminSettingsThemeRestoreResponses[keyof PostApiV1AdminSettingsThemeRestoreResponses];
+
+export type PostApiV1AdminSettingsThemeDiscardData = {
+    body: {
+        expectedDraftRevision: number;
+        basePublishedRevision: number;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/theme/discard';
+};
+
+export type PostApiV1AdminSettingsThemeDiscardErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminSettingsThemeDiscardError = PostApiV1AdminSettingsThemeDiscardErrors[keyof PostApiV1AdminSettingsThemeDiscardErrors];
+
+export type PostApiV1AdminSettingsThemeDiscardResponses = {
+    /**
+     * Theme revisions
+     */
+    200: {
+        success: true;
+        data: {
+            published: {
+                revision: number;
+            };
+            draft: {
+                revision: number;
+                basePublishedRevision: number;
+                updatedAt: string | null;
+            };
+            draftDiffersFromLive: boolean;
+            lastPublished: {
+                revision: number;
+                publishedBy: string | null;
+                publishedByName: string | null;
+                createdAt: string;
+            } | null;
+        };
+    };
+};
+
+export type PostApiV1AdminSettingsThemeDiscardResponse = PostApiV1AdminSettingsThemeDiscardResponses[keyof PostApiV1AdminSettingsThemeDiscardResponses];
 
 export type PostApiV1AdminSettingsThemePreviewSessionData = {
     body?: {
         expectedDraftRevision: number;
+        sourceRevision?: number;
         path?: string;
         device?: 'full' | 'desktop' | 'mobile';
     };
@@ -46638,7 +48496,7 @@ export type PostApiV1AdminSettingsThemePreviewSessionResponses = {
             };
             draftRevision: number;
             basePublishedRevision: number;
-            expiresAt?: unknown;
+            expiresAt: string;
         };
     };
 };

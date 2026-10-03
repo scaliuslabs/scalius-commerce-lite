@@ -181,7 +181,10 @@ describe("storefront private cache policy", () => {
     vi.mocked(getLandingPageData).mockResolvedValue({ landing, sections: { lists: [], media: [] } } as never);
     const published = await createTestApp().request("/api/v1/storefront/landing/eid-offers");
     expect(published.status).toBe(200);
+    expect(((await published.json()) as { data: unknown }).data).toEqual({ title: "Eid offers", description: "", sections: { lists: [], media: [] } });
     expect(getLandingPageData).toHaveBeenCalledWith({}, "eid-offers", { renderApps: expect.any(Function) });
+    vi.mocked(getLandingPageData).mockResolvedValueOnce(null);
+    expect((await createTestApp().request("/api/v1/storefront/landing/missing")).status).toBe(404);
     vi.mocked(getLandingPageData).mockClear();
     const query = await createTestApp().request("/api/v1/storefront/landing/eid-offers?draft=true");
     expect(query.status).toBe(400);

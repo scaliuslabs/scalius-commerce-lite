@@ -5,7 +5,6 @@ import type { Page, PaginatedResponse } from "./types";
 import { withEdgeCache, CACHE_TTL } from "@/lib/api/transport";
 import { unwrapData, unwrapEnvelope } from "./unwrap";
 import { BUILD_ID } from "@/config/build-id";
-import type { StorefrontLandingPage } from "@scalius/shared/storefront-theme";
 import type { HomepageSectionData } from "./storefront";
 import {
   getApiV1PagesSlugBySlug,
@@ -51,8 +50,10 @@ export interface PageRenderData {
   page: Page;
 }
 
+/** A published landing page's words and its sections' data (its sections come from the layout's theme). */
 export interface LandingPageData {
-  landing: StorefrontLandingPage;
+  title: string;
+  description: string;
   sections: HomepageSectionData;
 }
 

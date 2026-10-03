@@ -27,7 +27,6 @@ import {
   HOME_MAX_PROMOTIONS,
   HOME_PRODUCT_LIST_LIMIT,
   homeSectionRequests,
-  storefrontLandingPageSchema,
   type HomeAppSectionRequest,
   type StorefrontThemeDocument,
 } from "@scalius/shared/storefront-theme";
@@ -401,19 +400,28 @@ app.openapi(homepageRoute, async (c) => {
   return ok(c, data);
 });
 
-const landingPageDataSchema = z.object({
-  landing: storefrontLandingPageSchema,
-  sections: homepageSectionsSchema,
-});
+// GET /storefront/landing/:slug — a published landing page's sections' data
+// (the storefront takes the page's sections from the layout's theme).
 const landingPageRoute = createRoute({
   method: "get",
   path: "/landing/{slug}",
   operationId: "storefront.landing.get",
   tags: ["Storefront"],
-  summary: "Get a published section-based landing page",
+  summary: "Get a published landing page: its title, description and its sections' data",
   request: { params: z.object({ slug: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).max(100) }) },
   responses: {
-    200: { description: "Landing page and its bounded section data", content: { "application/json": { schema: successEnvelope(landingPageDataSchema) } } },
+    200: {
+      description: "Landing page and its bounded section data",
+      content: {
+        "application/json": {
+          schema: successEnvelope(z.object({
+            title: z.string(),
+            description: z.string(),
+            sections: homepageSectionsSchema,
+          })),
+        },
+      },
+    },
     400: errorResponses[400],
     404: errorResponses[404],
     500: errorResponses[500],
@@ -423,7 +431,7 @@ app.openapi(landingPageRoute, async (c) => {
   if (new URL(c.req.url).search) throw new ValidationError("The landing page read takes no query parameters");
   const data = await getLandingPageData(c.get("db"), c.req.valid("param").slug, { renderApps: homeAppRenderer(c) });
   if (!data) throw new NotFoundError("Landing page not found");
-  return ok(c, data);
+  return ok(c, { title: data.landing.title, description: data.landing.description, sections: data.sections });
 });
 
 // GET /storefront/product-apps/:slug — the product page's app blocks

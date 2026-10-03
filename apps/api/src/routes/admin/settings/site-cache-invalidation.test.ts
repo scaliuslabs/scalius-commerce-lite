@@ -1035,17 +1035,17 @@ describe("site settings write behavior", () => {
     expect(body.data.versions[0]!.publishedByName).toHaveLength(200);
   });
 
-  it("reads one version's document or one of its pages, and refuses mismatched queries", async () => {
+  it("reads one version's whole document, and refuses mismatched queries", async () => {
     const { app, env } = createTestApp();
     const theme = structuredClone(DEFAULT_STOREFRONT_THEME);
     theme.pages.landing.eid = { title: "Eid", description: "", sections: [] };
     mocks.getThemeVersion.mockResolvedValue({ revision: 4, theme });
-    const page = await app.request("/api/v1/admin/settings/theme/document?source=version&revision=4&page=landing&slug=eid", { method: "GET" }, env);
-    expect(page.status).toBe(200);
-    expect(page.headers.get("Content-Disposition")).toBe('inline; filename="theme-version-4.json"');
-    expect(page.headers.get("Cache-Control")).toContain("no-store");
-    expect(((await page.json()) as { data: unknown }).data).toEqual({ source: "version", revision: 4, page: "landing", slug: "eid", document: theme.pages.landing.eid });
-    for (const query of ["source=version", "source=draft&revision=4", "page=landing", "page=landing&slug=missing"]) {
+    const version = await app.request("/api/v1/admin/settings/theme/document?source=version&revision=4", { method: "GET" }, env);
+    expect(version.status).toBe(200);
+    expect(version.headers.get("Content-Disposition")).toBe('inline; filename="theme-version-4.json"');
+    expect(version.headers.get("Cache-Control")).toContain("no-store");
+    expect(((await version.json()) as { data: unknown }).data).toEqual({ source: "version", revision: 4, document: theme });
+    for (const query of ["source=version", "source=draft&revision=4", "source=published&revision=4", "source=version&revision=0"]) {
       const refused = await app.request(`/api/v1/admin/settings/theme/document?${query}`, { method: "GET" }, env);
       expect(refused.status, query).toBeGreaterThanOrEqual(400);
     }

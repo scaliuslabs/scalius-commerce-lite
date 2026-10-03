@@ -147,8 +147,8 @@ describe("theme operations through real MCP dispatch and D1", () => {
     expect(objects.size).toBe(0);
   });
 
-  it("delivers only the requested large version page as an encrypted JSON artifact", async () => {
-    const result = await call("read", "dashboard.theme.document_get", { query: { source: "version", revision: 1, page: "landing", slug: "eid" } });
+  it("delivers a large version's whole document as an encrypted JSON artifact", async () => {
+    const result = await call("read", "dashboard.theme.document_get", { query: { source: "version", revision: 1 } });
     // The MCP formatter deliberately strips data:null from artifact metadata.
     expect(result).not.toHaveProperty("data");
     expect(result.artifact).toMatchObject({ mediaType: "application/json", filename: "theme-version-1.json", sizeBytes: expect.any(Number) });
@@ -157,7 +157,8 @@ describe("theme operations through real MCP dispatch and D1", () => {
     measured.artifactBytes = result.artifact.sizeBytes;
     const [key, encrypted] = [...objects][0]!;
     const decoded = JSON.parse(new TextDecoder().decode(await openAgentArtifact(env, key, encrypted)));
-    expect(decoded.data.document).toEqual(largePage());
-    expect(decoded.data.document).not.toHaveProperty("tokens");
+    expect(decoded.data).toMatchObject({ source: "version", revision: 1 });
+    expect(decoded.data.document.pages.landing.eid).toEqual(largePage());
+    expect(decoded.data.document.tokens).toEqual(DEFAULT_STOREFRONT_THEME.tokens);
   });
 });
