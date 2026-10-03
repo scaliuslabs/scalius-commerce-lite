@@ -8,6 +8,17 @@ import { z } from "@hono/zod-openapi";
 // Envelope helpers
 // ─────────────────────────────────────────
 
+/**
+ * A schema a shared package built, named as one contract component
+ * (`.openapi(name)`). Where a test runner loads the shared package with a
+ * second copy of zod that the OpenAPI extension never reached, the schema
+ * stays unnamed: only the contract's generation reads names, never
+ * validation.
+ */
+export function namedSharedSchema<Schema extends z.ZodType>(schema: Schema, name: string): Schema {
+  return typeof (schema as { openapi?: unknown }).openapi === "function" ? schema.openapi(name) : schema;
+}
+
 /** Wraps any data schema in the standard { success: true, data: T } envelope. */
 export const successEnvelope = <T extends z.ZodTypeAny>(dataSchema: T) =>
   z.object({ success: z.literal(true), data: dataSchema });

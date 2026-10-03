@@ -1,5 +1,6 @@
 import "@hono/zod-openapi";
 import { buildStorefrontThemeDocumentSchemas, storeShapeSchema } from "@scalius/shared/storefront-theme";
+import { namedSharedSchema } from "./responses";
 
 /**
  * The shared, strict storefront theme document (version 7) as named OpenAPI
@@ -7,9 +8,9 @@ import { buildStorefrontThemeDocumentSchemas, storeShapeSchema } from "@scalius/
  * stated once in the contract and referred to everywhere else (the homepage
  * and every landing page share one section list).
  */
-const themeDocumentParts = buildStorefrontThemeDocumentSchemas((name, schema) => schema.openapi(name));
+const themeDocumentParts = buildStorefrontThemeDocumentSchemas((name, schema) => namedSharedSchema(schema, name));
 
-export const storefrontThemeDocumentApiSchema = themeDocumentParts.document.openapi("StorefrontThemeDocument");
+export const storefrontThemeDocumentApiSchema = namedSharedSchema(themeDocumentParts.document, "StorefrontThemeDocument");
 /** The homepage's (or a landing page's) sections. */
 export const storefrontSectionListApiSchema = themeDocumentParts.sections;
 /** One landing page: its title, description and sections. */

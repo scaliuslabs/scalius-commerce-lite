@@ -1,6 +1,7 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { describe, expect, it } from "vitest";
 
+import { inlineComponentSchemaRefs } from "../../openapi/component-schema-refs";
 import { adminProductsRoutes } from "./products";
 
 type OperationDoc = {
@@ -16,10 +17,12 @@ type TestOpenApiDocument = {
 function buildAdminProductsSpec(): TestOpenApiDocument {
     const app = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1/admin");
     app.route("/products", adminProductsRoutes);
-    return app.getOpenAPIDocument({
+    const document = app.getOpenAPIDocument({
         openapi: "3.0.0",
         info: { title: "Test", version: "1.0.0" },
-    }) as unknown as TestOpenApiDocument;
+    }) as unknown as TestOpenApiDocument & { components?: { schemas?: Record<string, unknown> } };
+    // Shared shapes (the error envelope, the product conflict) are components: read them inline.
+    return { paths: inlineComponentSchemaRefs(document.paths, document.components?.schemas ?? {}) as TestOpenApiDocument["paths"] };
 }
 
 function expectResponses(

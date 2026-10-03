@@ -50,7 +50,7 @@ import { fromMinor, toMinor } from "@scalius/shared/money";
 import { eq, inArray } from "drizzle-orm";
 import { ok, created, noContent } from "../../utils/api-response";
 import { NotFoundError, ValidationError } from "../../utils/api-error";
-import { conflictResponse, errorResponses, noContentResponse, successEnvelope } from "../../schemas/responses";
+import { conflictResponse, errorResponses, namedSharedSchema, noContentResponse, successEnvelope } from "../../schemas/responses";
 import { customerSummarySchema } from "../../schemas/entities";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -74,7 +74,7 @@ function segmentView(record: CustomerSegmentRecord, decimals: number) {
 }
 
 /** A segment's rules (one contract component: lists, reads, writes and previews share it). */
-const segmentDefinitionSchema = customerSegmentDefinitionInputSchema.openapi("CustomerSegmentDefinition");
+const segmentDefinitionSchema = namedSharedSchema(customerSegmentDefinitionInputSchema, "CustomerSegmentDefinition");
 
 const segmentSchema = z.object({
     id: z.string(),
