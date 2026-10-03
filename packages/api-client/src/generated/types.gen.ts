@@ -33082,8 +33082,10 @@ export type GetApiV1AdminSettingsSeoFeedRowPreviewByProductIdResponses = {
                         name: 'size' | 'color' | 'material' | 'pattern' | 'gender' | 'age_group';
                         value: string;
                     }>;
+                    /**
+                     * A free-delivery product: it ships free to every country a shipping zone serves (the feed states each); null otherwise.
+                     */
                     shipping: {
-                        country: 'BD';
                         service: 'Standard';
                         price: string;
                     } | null;
