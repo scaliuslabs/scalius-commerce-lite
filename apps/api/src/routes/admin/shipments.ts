@@ -9,6 +9,7 @@ import { getCredentialEncryptionKey } from "../../utils/encryption-key";
 import { successEnvelope, messageResponse, errorResponses, conflictResponse, serviceUnavailableResponse } from "../../schemas/responses";
 import { deliveryShipmentSchema } from "../../schemas/entities";
 import { checkAndSyncShipmentStatus } from "./shipment-status-sync";
+import { requestCourierProviders } from "../../plugins/providers/courier";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -133,6 +134,7 @@ app.openapi(checkStatusRoute, (async (c: AdminRouteContext<typeof checkStatusRou
         db,
         shipment: currentShipment,
         encryptionKey,
+        couriers: requestCourierProviders(c),
         c,
         source: "shipments",
     });

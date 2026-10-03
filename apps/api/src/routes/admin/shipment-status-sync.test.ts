@@ -39,6 +39,7 @@ vi.mock("../../utils/order-notification-queue", () => ({
   enqueueOrderStatusChangeNotification: mocks.enqueueOrderStatusChangeNotification,
 }));
 
+import type { CourierProvidersSource } from "@scalius/core/modules/delivery";
 import { checkAndSyncShipmentStatus } from "./shipment-status-sync";
 
 function shipment(overrides: Partial<ShipmentView> = {}): ShipmentView {
@@ -113,10 +114,12 @@ describe("admin shipment status sync helper", () => {
       availabilityTransitionVariantIds: ["variant_1"],
     });
 
+    const couriers: CourierProvidersSource = vi.fn(async () => { throw new Error("no app couriers"); });
     const result = await checkAndSyncShipmentStatus({
       db: db as never,
       shipment: initialShipment,
       encryptionKey: "credential-key",
+      couriers,
       c: { env: { JOBS_QUEUE: queue } as unknown as Env },
       source: "orders-shipment-status",
     });
@@ -125,6 +128,7 @@ describe("admin shipment status sync helper", () => {
       db,
       "ship_1",
       "credential-key",
+      couriers,
     );
     expect(mocks.updateOrderStatusFromShipment).toHaveBeenCalledWith(
       db,
@@ -158,6 +162,7 @@ describe("admin shipment status sync helper", () => {
     await expect(checkAndSyncShipmentStatus({
       db: db as never,
       shipment: shipment(),
+      couriers: vi.fn(async () => { throw new Error("no app couriers"); }),
       c: { env: { JOBS_QUEUE: { send: vi.fn() } } as unknown as Env },
       source: "orders-shipment-status",
     })).rejects.toThrow("active refund operation");

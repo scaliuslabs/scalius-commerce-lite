@@ -9,6 +9,7 @@ import authRoutes from "../routes/auth";
 import { authSetupRoutes } from "../routes/admin/auth-management";
 import { cacheControlRoutes } from "../routes/cache";
 import { paymentRoutes } from "../routes/payment/payment-routes";
+import { courierWebhookRoutes } from "../routes/webhooks/couriers";
 import { pathaoWebhookRoutes } from "../routes/webhooks/pathao";
 import { paymentWebhookRoutes } from "../routes/webhooks/payments";
 import { steadfastWebhookRoutes } from "../routes/webhooks/steadfast";
@@ -21,6 +22,8 @@ export function registerSystemRoutes(app: RuntimeApiApp): void {
   app.use("/webhooks/*", webhookBodyLimitMiddleware);
   app.route("/webhooks/pathao", pathaoWebhookRoutes);
   app.route("/webhooks/steadfast", steadfastWebhookRoutes);
+  // App couriers: /webhooks/couriers/{provider}.
+  app.route("/webhooks/couriers", courierWebhookRoutes);
   // Payment gateways: /webhooks/{provider}. Registered after the courier routes.
   app.route("/webhooks", paymentWebhookRoutes);
 
