@@ -4,11 +4,17 @@
 //   has pure types and policies, browser.ts;
 // - package consumers reach a domain only through those entries (the exports
 //   map in packages/core/package.json lists nothing else);
-// - inside core, one domain imports another only through a public file: the
-//   other domain's entry or a file that entry re-exports;
+// - inside core, everything outside a domain (another domain, or core's shared
+//   areas: auth, integrations, search, settings-store, utils, ...) imports it
+//   only through an entry: `../<domain>` or `../<domain>/browser`, never a file
+//   inside it;
 // - a browser entry is closed: everything it reaches, types included, is itself
 //   browser-exported, so the dashboard never compiles or bundles server code;
-// - the directed domain dependency graph only shrinks (core-domain-graph.test.mjs).
+// - no import cycle leaves a unit (a domain, or one shared-area file or
+//   subdirectory): an entry loads its whole domain, so such a cycle would hand
+//   a module another one that has not finished loading;
+// - the directed domain dependency graph is acyclic and only shrinks
+//   (core-domain-graph.test.mjs).
 //
 // All checks take a Map of repo-relative path -> source text, so tests can feed
 // small synthetic trees.
@@ -117,22 +123,6 @@ function reexportedFiles(path, sources, seen = new Set()) {
   return seen;
 }
 
-/** Per domain: the files its public entries expose (the entries themselves included). */
-export function publicFilesByDomain(sources) {
-  const result = new Map();
-  for (const path of sources.keys()) {
-    const domain = domainOf(path);
-    if (!domain || result.has(domain)) continue;
-    const files = new Set();
-    for (const entry of ["index", "browser"]) {
-      const file = entryPath(domain, entry);
-      if (sources.has(file)) for (const reached of reexportedFiles(file, sources)) if (domainOf(reached) === domain) files.add(reached);
-    }
-    result.set(domain, files);
-  }
-  return result;
-}
-
 /** Files some browser entry exposes. */
 export function browserFiles(sources) {
   const files = new Set();
@@ -145,11 +135,11 @@ export function browserFiles(sources) {
 }
 
 /**
- * Imports that cross into another domain without going through a public file.
- * `@scalius/core/modules/<domain>/<file>` package paths are always violations.
+ * Imports of a domain's file from outside that domain that do not name one of
+ * its entries (index.ts, browser.ts). `@scalius/core/modules/<domain>/<file>`
+ * package paths are always violations.
  */
 export function crossDomainImportViolations(sources) {
-  const publicFiles = publicFilesByDomain(sources);
   const violations = [];
   for (const [path, text] of sources) {
     const from = domainOf(path);
@@ -161,8 +151,8 @@ export function crossDomainImportViolations(sources) {
       const target = resolveCoreImport(spec, path, sources);
       const to = target && domainOf(target);
       if (!to || to === from) continue;
-      if (!publicFiles.get(to)?.has(target)) {
-        violations.push(`${path}:${line} imports ${spec}, which ${to}'s index.ts and browser.ts do not export`);
+      if (target !== entryPath(to, "index") && target !== entryPath(to, "browser")) {
+        violations.push(`${path}:${line} imports ${spec}, a file inside ${to}; import ${to}'s entry (index.ts or browser.ts)`);
       }
     }
   }
@@ -185,6 +175,28 @@ export function browserClosureViolations(sources) {
     }
   }
   return violations;
+}
+
+/** The unit of a core file: its domain, or its shared area's file or subdirectory (`@integrations/email`). */
+export function unitOf(path) {
+  return domainOf(path) ?? `@${path.slice(CORE_SRC.length + 1).replace(/\.ts$/, "").split("/").slice(0, 2).join("/")}`;
+}
+
+/** Import cycles (type imports included) whose files belong to more than one unit. */
+export function crossUnitCycleViolations(sources) {
+  const graph = new Map();
+  for (const [path, text] of sources) {
+    const targets = new Set();
+    for (const { spec } of importsOf(path, text)) {
+      const target = resolveCoreImport(spec, path, sources);
+      if (target) targets.add(target);
+    }
+    graph.set(path, targets);
+  }
+  return stronglyConnectedComponents(graph)
+    .map((component) => ({ component, units: [...new Set(component.map(unitOf))].sort() }))
+    .filter(({ units }) => units.length > 1)
+    .map(({ component, units }) => `import cycle across ${units.join(", ")}: ${component.sort().join(", ")}`);
 }
 
 /** Directed domain edges ("from -> to") of production code, type imports included. */
@@ -265,6 +277,7 @@ export function collectCoreBoundaryViolations(root = repoRoot) {
     ...coreExportsViolations(pkg, readDomains(root)),
     ...crossDomainImportViolations(sources),
     ...browserClosureViolations(sources),
+    ...crossUnitCycleViolations(sources),
   ];
 }
 
@@ -278,7 +291,7 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
     $comment: [
       "Directed dependencies between packages/core/src/modules domains (type imports included).",
       "scripts/core-domain-graph.test.mjs fails on any edge not listed here and on any listed edge the code no longer has.",
-      "cycles lists the strongly connected domain groups these edges allow; shrink them, never grow them without review.",
+      "cycles lists the strongly connected domain groups these edges allow. It is empty: the domain graph is a DAG (docs/ARCHITECTURE.md lists its layers), and a dependency that would close a cycle needs a design change, not an allowlist entry.",
       "Regenerate with: node scripts/core-boundaries.mjs --write-allowlist",
     ],
     edges: [...edges.keys()].sort(),

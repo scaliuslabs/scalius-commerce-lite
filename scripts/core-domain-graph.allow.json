@@ -2,7 +2,7 @@
   "$comment": [
     "Directed dependencies between packages/core/src/modules domains (type imports included).",
     "scripts/core-domain-graph.test.mjs fails on any edge not listed here and on any listed edge the code no longer has.",
-    "cycles lists the strongly connected domain groups these edges allow; shrink them, never grow them without review.",
+    "cycles lists the strongly connected domain groups these edges allow. It is empty: the domain graph is a DAG (docs/ARCHITECTURE.md lists its layers), and a dependency that would close a cycle needs a design change, not an allowlist entry.",
     "Regenerate with: node scripts/core-boundaries.mjs --write-allowlist"
   ],
   "edges": [

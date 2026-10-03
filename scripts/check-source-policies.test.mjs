@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import { collectSourcePolicyViolations, policies, policyViolations } from "./check-source-policies.mjs";
-import { browserClosureViolations, coreExportsViolations, crossDomainImportViolations } from "./core-boundaries.mjs";
+import {
+  browserClosureViolations,
+  coreExportsViolations,
+  crossDomainImportViolations,
+  crossUnitCycleViolations,
+} from "./core-boundaries.mjs";
 
 describe("source policies", () => {
   it("holds for the current tree", () => {
@@ -22,10 +27,29 @@ describe("source policies", () => {
       ...extra,
     ]);
 
-    it("accepts imports of another domain's entries and the files they export", () => {
+    it("accepts imports of another domain's entries", () => {
       expect(crossDomainImportViolations(tree([
-        ["packages/core/src/modules/b/b.ts", 'import { shown } from "../a";\nimport { hidden } from "../a/public";\nimport { schema } from "../a/browser";'],
+        ["packages/core/src/modules/b/b.ts", 'import { shown } from "../a";\nimport { schema } from "../a/browser";'],
+        ["packages/core/src/integrations/c.ts", 'import { shown } from "../modules/a";'],
       ]))).toEqual([]);
+    });
+
+    it("catches a deep import of a file the entry exports, from a domain or a shared area", () => {
+      expect(crossDomainImportViolations(tree([
+        ["packages/core/src/modules/b/b.ts", 'import { shown } from "../a/public";'],
+        ["packages/core/src/integrations/c.ts", 'import { shown } from "../modules/a/public";'],
+      ]))).toHaveLength(2);
+    });
+
+    it("catches an import cycle that leaves a unit", () => {
+      const acyclic = tree([
+        ["packages/core/src/modules/b/index.ts", 'import { shown } from "../a";\nexport const b = shown;'],
+      ]);
+      expect(crossUnitCycleViolations(acyclic)).toEqual([]);
+      expect(crossUnitCycleViolations(tree([
+        ["packages/core/src/modules/a/public.ts", 'import { c } from "../../integrations/c";\nexport const shown = c;'],
+        ["packages/core/src/integrations/c.ts", 'import { shown } from "../modules/a";\nexport const c = 1;'],
+      ]))).toEqual([expect.stringContaining("import cycle across @integrations/c, a")]);
     });
 
     it("catches an import of another domain's internal file", () => {
