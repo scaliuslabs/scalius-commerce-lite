@@ -33,6 +33,7 @@ import {
 import { sql, eq, inArray, isNull, and } from "drizzle-orm";
 import { guestRecordForPhone } from "../../customers";
 import { fromMinor } from "@scalius/shared/money";
+import { orderShopAmounts } from "@scalius/shared/money-chain";
 import { nanoid } from "nanoid";
 import type {
     ConfirmManualOrderAmendmentInput,
@@ -502,6 +503,15 @@ export async function confirmManualOrderAmendment(
             discountAmountMinor: prepared.taxQuote.discountMinor,
             taxAmountMinor: prepared.taxQuote.taxMinor,
             totalAmountMinor: prepared.taxQuote.totalMinor,
+            // The shop totals follow, at the rate the order was placed with.
+            ...orderShopAmounts({
+                currencyCode: prepared.taxQuote.currencyCode,
+                subtotalAmountMinor: prepared.taxQuote.subtotalMinor,
+                shippingAmountMinor: prepared.taxQuote.shippingMinor,
+                discountAmountMinor: prepared.taxQuote.discountMinor,
+                taxAmountMinor: prepared.taxQuote.taxMinor,
+                totalAmountMinor: prepared.taxQuote.totalMinor,
+            }, order),
             taxLabel: prepared.taxQuote.displayLabel,
             pricesIncludeTax: prepared.taxQuote.pricesIncludeTax,
             paidAmountMinor: 0,

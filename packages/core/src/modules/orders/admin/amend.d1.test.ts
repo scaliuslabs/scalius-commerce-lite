@@ -215,6 +215,19 @@ describe("manual COD order amendments on D1 storage", () => {
       total_amount_minor: 28000,
       balance_due_minor: 28000,
     });
+    // The shop totals follow the edit at the order's own rate (same-currency: equal).
+    expect(sqlite.prepare(`
+      SELECT shop_currency, fx_rate, subtotal_shop_minor, shipping_shop_minor, discount_shop_minor, tax_shop_minor, total_shop_minor
+      FROM orders WHERE id = 'order_1'
+    `).get()).toEqual({
+      shop_currency: "BDT",
+      fx_rate: "1",
+      subtotal_shop_minor: 20000,
+      shipping_shop_minor: 6000,
+      discount_shop_minor: 0,
+      tax_shop_minor: 2000,
+      total_shop_minor: 28000,
+    });
   });
 
   it("replays a duplicate confirmation without changing stock or revision again", async () => {

@@ -558,7 +558,7 @@ const inventorySellThrough: SqlReport = {
 function ordersInRange(ctx: AnalyticsContext, range: AnalyticsRange): SQL {
   const { start, endExclusive } = analyticsInstantRange(range);
   return sql`o.deleted_at is null and o.created_at >= ${start} and o.created_at < ${endExclusive}
-    and o.currency_code = ${ctx.currency.code}`;
+    and o.currency_code = ${ctx.currency.code} and o.shop_currency = ${ctx.currency.code}`;
 }
 
 /** Payment records (charges and refunds) of the orders placed in the range, by method, kind and status. */

@@ -22,6 +22,7 @@ import {
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import type { OrderChannel } from "@scalius/shared/order-channel";
+import { orderMoneyChainColumns } from "@scalius/shared/money-chain";
 import { ConflictError, ServiceUnavailableError, ValidationError } from "../../errors";
 import {
     isInventoryReservationConflictError,
@@ -432,6 +433,9 @@ function buildOrderWriteBatch(
             discountAmountMinor: od.discountAmountMinor,
             taxAmountMinor: od.taxAmountMinor,
             totalAmountMinor: od.totalAmountMinor,
+            // The money chain, in this same insert: checkout prices in the shop
+            // currency, so the order is same-currency (rate 1, shop = presentment).
+            ...orderMoneyChainColumns(od),
             taxLabel: od.taxLabel,
             pricesIncludeTax: od.pricesIncludeTax,
             status: od.status,

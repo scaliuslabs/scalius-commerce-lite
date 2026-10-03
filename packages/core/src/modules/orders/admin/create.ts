@@ -18,6 +18,7 @@ import type { ReservationEntry } from "../../inventory";
 import { sql, eq } from "drizzle-orm";
 import { guestRecordForPhone } from "../../customers";
 import { generateOrderId } from "@scalius/shared/order-utils";
+import { orderMoneyChainColumns } from "@scalius/shared/money-chain";
 import { normalizeOrderChannelSource } from "@scalius/shared/order-channel-source";
 import { nanoid } from "nanoid";
 import type { CreateOrderInput } from "../validation";
@@ -323,6 +324,16 @@ export async function createManualOrder(
             discountAmountMinor: taxQuote.discountMinor,
             taxAmountMinor: taxQuote.taxMinor,
             totalAmountMinor: taxQuote.totalMinor,
+            // The money chain in the same insert: a staff order is priced in the
+            // shop currency, so it is same-currency (rate 1, shop = presentment).
+            ...orderMoneyChainColumns({
+                currencyCode: taxQuote.currencyCode,
+                subtotalAmountMinor: taxQuote.subtotalMinor,
+                shippingAmountMinor: taxQuote.shippingMinor,
+                discountAmountMinor: taxQuote.discountMinor,
+                taxAmountMinor: taxQuote.taxMinor,
+                totalAmountMinor: taxQuote.totalMinor,
+            }),
             taxLabel: taxQuote.displayLabel,
             pricesIncludeTax: taxQuote.pricesIncludeTax,
             paidAmountMinor: initialPaymentState.paidAmountMinor,

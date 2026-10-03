@@ -146,6 +146,13 @@ describe("Wave A checkout", () => {
         expect(one("SELECT fulfillment_type, properties, properties_price_minor, base_unit_price_minor, unit_price_minor FROM order_items WHERE order_id = ?", result.orderId))
             .toEqual({ fulfillment_type: "ship", properties: null, properties_price_minor: 0, base_unit_price_minor: 30000, unit_price_minor: 30000 });
         expect(result.linePropertiesHashes).toEqual(["none"]);
+        // The money chain commits with the order: same-currency, shop totals = presentment totals.
+        expect(one(`SELECT currency_code = shop_currency AND fx_rate = '1' AND fx_source = 'same_currency'
+            AND fx_as_of IS NULL AND fx_locked_until IS NULL
+            AND subtotal_shop_minor = subtotal_amount_minor AND shipping_shop_minor = shipping_amount_minor
+            AND discount_shop_minor = discount_amount_minor AND tax_shop_minor = tax_amount_minor
+            AND total_shop_minor = total_amount_minor AND total_shop_minor = 36000 AS same
+            FROM orders WHERE id = ?`, result.orderId)).toEqual({ same: 1 });
     });
 
     it("F4: a pickup order carries no address and only store-wide tax; a delivery order without one is refused", async () => {

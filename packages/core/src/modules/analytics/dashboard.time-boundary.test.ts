@@ -36,9 +36,9 @@ describe("dashboard merchant calendar boundaries", () => {
   ) {
     sqlite.prepare(`
       INSERT INTO orders (id, customer_name, customer_phone, shipping_address, city, zone,
-        shipping_amount_minor, total_amount_minor, status, created_at, deleted_at)
-      VALUES (?, 'Buyer', '+8801711111111', 'Dhaka', 'dhaka', 'zone_1', 0, ?, ?, ?, ?)
-    `).run(id, Math.round(total * 100), status, epoch(createdAt), deletedAt);
+        shipping_amount_minor, total_amount_minor, total_shop_minor, status, created_at, deleted_at)
+      VALUES (?, 'Buyer', '+8801711111111', 'Dhaka', 'dhaka', 'zone_1', 0, ?, ?, ?, ?, ?)
+    `).run(id, Math.round(total * 100), Math.round(total * 100), status, epoch(createdAt), deletedAt);
   }
 
   it("compares equal month populations and values with the same order inclusion", async () => {

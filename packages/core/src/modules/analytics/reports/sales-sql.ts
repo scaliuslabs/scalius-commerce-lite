@@ -19,7 +19,12 @@ import {
   type AnalyticsRange,
 } from "@scalius/shared/analytics-period";
 
-/** The orders a report reads: placed in the range, in the report currency. */
+/**
+ * The orders a report reads: placed in the range, presented and reported in
+ * the report currency (the store's). Line measures are presentment amounts,
+ * so an order presented in another currency is counted only once reports
+ * read line-level shop amounts (Markets, before a second currency).
+ */
 export interface SalesScope extends AnalyticsInstantRange {
   currency: string;
 }
@@ -92,6 +97,7 @@ export function salesOrdersCte(scope: SalesScope): SQL {
       and o.created_at >= ${scope.start} and o.created_at < ${scope.endExclusive}
       and o.status not in (${NON_SALES})
       and o.currency_code = ${scope.currency}
+      and o.shop_currency = ${scope.currency}
   )`;
 }
 

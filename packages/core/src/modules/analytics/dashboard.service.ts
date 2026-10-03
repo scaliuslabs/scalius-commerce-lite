@@ -6,6 +6,7 @@ import { safeBatch, type Database } from "@scalius/database/client";
 import { products, customers, orders } from "@scalius/database/schema";
 import { and, sql, desc } from "drizzle-orm";
 import { fromMinor } from "@scalius/shared/money";
+import { DEFAULT_CURRENCY, getDecimalPlaces } from "@scalius/shared/currency";
 import {
     COMMERCE_UTC_OFFSET_SECONDS,
     commerceCalendarDateKey,
@@ -69,7 +70,8 @@ async function runDashboardQuery<T>(
 
 type CountRow = { count: number };
 /** Revenue is summed exactly in minor units; a store's orders share one currency. */
-type RevenueMinor = { revenueMinor: number | null; currencyDecimalPlaces: number };
+/** Revenue in the shop currency (`total_shop_minor`): one currency, whatever each order was presented in. */
+type RevenueMinor = { revenueMinor: number | null; shopCurrency: string | null };
 type CurrentMonthRow = RevenueMinor & {
     count: number;
     delivered: number;
@@ -96,11 +98,15 @@ type RecentOrderRow = {
     createdAt: Date | string;
 };
 
-const recognizedRevenueMinor = sql<number>`sum(case when ${orders.status} NOT IN ('cancelled', 'returned') then ${orders.totalAmountMinor} else 0 end)`;
-const revenueDecimalPlaces = sql<number>`coalesce(max(${orders.currencyDecimalPlaces}), 2)`;
+// Analytics sum shop amounts (MARKETS-DESIGN D3): the store currency is locked
+// once orders exist, so every order shares one shop currency.
+const recognizedRevenueMinor = sql<number>`sum(case when ${orders.status} NOT IN ('cancelled', 'returned') then ${orders.totalShopMinor} else 0 end)`;
+const revenueShopCurrency = sql<string | null>`max(${orders.shopCurrency})`;
 
 function revenueAmount(row: RevenueMinor | undefined): number {
-    return row ? fromMinor(Number(row.revenueMinor ?? 0), Number(row.currencyDecimalPlaces)) : 0;
+    return row
+        ? fromMinor(Number(row.revenueMinor ?? 0), getDecimalPlaces(row.shopCurrency ?? DEFAULT_CURRENCY.code))
+        : 0;
 }
 
 function calculateGrowth(current: number, previous: number): number | null {
@@ -137,7 +143,7 @@ function getDashboardSummaryQueries(
             .select({
                 count: sql<number>`count(*)`,
                 revenueMinor: recognizedRevenueMinor,
-                currencyDecimalPlaces: revenueDecimalPlaces,
+                shopCurrency: revenueShopCurrency,
                 delivered: sql<number>`count(case when status = 'delivered' then 1 end)`,
                 processing: sql<number>`count(case when status in ('pending', 'processing', 'confirmed') then 1 end)`,
                 shipping: sql<number>`count(case when status = 'shipped' then 1 end)`,
@@ -151,7 +157,7 @@ function getDashboardSummaryQueries(
             .select({
                 count: sql<number>`count(*)`,
                 revenueMinor: recognizedRevenueMinor,
-                currencyDecimalPlaces: revenueDecimalPlaces,
+                shopCurrency: revenueShopCurrency,
             })
             .from(orders)
             .where(
@@ -291,7 +297,7 @@ export async function getDailyActivityData(db: Database, days: number) {
                     day: orderDay.mapWith(Number),
                     orderCount: sql<number>`count(*)`.mapWith(Number),
                     revenueMinor: recognizedRevenueMinor.mapWith(Number),
-                    currencyDecimalPlaces: revenueDecimalPlaces.mapWith(Number),
+                    shopCurrency: revenueShopCurrency,
                 })
                 .from(orders)
                 .where(

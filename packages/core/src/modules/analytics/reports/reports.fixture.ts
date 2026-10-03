@@ -129,10 +129,11 @@ export function createAnalyticsFixture(): AnalyticsFixture {
       sqlite.prepare(`
         INSERT INTO orders (id, customer_name, customer_phone, customer_id, shipping_address, city, zone,
           city_name, zone_name, currency_code, subtotal_amount_minor, shipping_amount_minor, discount_amount_minor,
-          tax_amount_minor, total_amount_minor, prices_include_tax, status, payment_method, payment_status,
+          tax_amount_minor, total_amount_minor, shop_currency, subtotal_shop_minor, shipping_shop_minor,
+          discount_shop_minor, tax_shop_minor, total_shop_minor, prices_include_tax, status, payment_method, payment_status,
           paid_amount_minor, balance_due_minor, fulfillment_status, shipping_method_id, shipping_method_kind,
           requires_shipping, fulfillment_location_id, channel, channel_source, created_at, updated_at, deleted_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         order.id,
         order.customerName ?? "Buyer",
@@ -143,6 +144,13 @@ export function createAnalyticsFixture(): AnalyticsFixture {
         requiresShipping ? "zone_1" : null,
         order.cityName === undefined ? (requiresShipping ? "Dhaka" : null) : order.cityName,
         order.zoneName ?? null,
+        order.currencyCode ?? "BDT",
+        subtotal,
+        shipping,
+        discount,
+        tax,
+        total,
+        // Same-currency orders, as checkout writes them: shop amounts = presentment amounts.
         order.currencyCode ?? "BDT",
         subtotal,
         shipping,

@@ -120,6 +120,22 @@ describe.each(["d1", "turso"] as const)("integer money (%s)", (provider) => {
     });
     expect(Number(order.subtotal_amount_minor) + Number(order.shipping_amount_minor)
       - Number(order.discount_amount_minor) + Number(order.tax_amount_minor)).toBe(order.total_amount_minor);
+    // The money chain is written with the order: same-currency, shop = presentment.
+    expect(get(`
+      SELECT shop_currency, fx_rate, fx_source, fx_as_of, fx_locked_until, subtotal_shop_minor, shipping_shop_minor,
+        discount_shop_minor, tax_shop_minor, total_shop_minor
+      FROM orders WHERE id = ?`, created.id)).toEqual({
+      shop_currency: "BDT",
+      fx_rate: "1",
+      fx_source: "same_currency",
+      fx_as_of: null,
+      fx_locked_until: null,
+      subtotal_shop_minor: 2700,
+      shipping_shop_minor: 6000,
+      discount_shop_minor: 100,
+      tax_shop_minor: 300,
+      total_shop_minor: 8900,
+    });
     expect(all(`
       SELECT unit_price_minor, quantity, line_subtotal_minor, discount_amount_minor, taxable_amount_minor, tax_amount_minor
       FROM order_items WHERE order_id = ?`, created.id)).toEqual([{
