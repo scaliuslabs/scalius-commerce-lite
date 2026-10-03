@@ -5,7 +5,10 @@
 // `app_discount` facts; an app rule refuses the quote and the order; a
 // hidden cash on delivery refuses the order; `order.risk` is recorded once
 // after the commit and never for a replay; staff delivery-charge overrides
-// beat an app's price; and a store without apps prices exactly as before.
+// beat an app's price; an app registered to block that cannot answer stops
+// checkout on every channel with the store's words; an `order.risk` hold
+// keeps the order from moving on until staff release it; and a store without
+// apps prices exactly as before.
 import type { DatabaseSync } from "node:sqlite";
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -24,7 +27,8 @@ import {
   priceStorefrontCheckout,
   type CheckoutAppFunctions,
 } from "@scalius/core/modules/checkout";
-import { getOrderDetails, quoteManualOrder, type CreateStorefrontOrderInput } from "@scalius/core/modules/orders";
+import { getOrderDetails, quoteManualOrder, updateOrderStatus, type CreateStorefrontOrderInput } from "@scalius/core/modules/orders";
+import { bulkFulfillOrders } from "@scalius/core/modules/fulfilment";
 import { quoteAgentStorefrontCheckout } from "@scalius/core/modules/agent-storefront";
 import { PLUGIN_API_VERSION, type PluginManifestInput } from "@scalius/shared/plugins";
 import type { PluginInvocationResult } from "@scalius/plugin-sdk/runtime";
@@ -48,6 +52,7 @@ import { storefrontAgentContextRoutes } from "../routes/storefront-agent-context
 import { adminOrdersRoutes } from "../routes/admin/orders";
 
 const ok = (value: unknown): PluginInvocationResult => ({ ok: true, value, error: null, logs: [], droppedLogs: 0 });
+const thrown = (message: string): PluginInvocationResult => ({ ok: false, value: null, error: { code: null, message }, logs: [], droppedLogs: 0 });
 const GRANT = "agr_storefront0123456789";
 const CONTEXT = "asc_context0123456789abc";
 const PHONE = "+8801712345678";
@@ -115,10 +120,11 @@ describe("checkout app functions on the agent and admin channels", () => {
   const count = (query: string, ...params: Array<string | number>) => one<{ n: number }>(query, ...params).n;
   const pointCalls = (point: string) => calls.filter((call) => call.point === point);
 
-  async function installTestApp(id: string, points: string[]) {
+  async function installTestApp(id: string, points: Array<string | { point: string; onError?: "skip" | "block" }>) {
     const manifest: PluginManifestInput = {
       id, name: `${id} app`, version: "1.0.0", apiVersion: PLUGIN_API_VERSION, description: "A checkout test app.",
-      author: { name: "Test" }, functions: points.map((point) => ({ point })) as PluginManifestInput["functions"],
+      author: { name: "Test" },
+      functions: points.map((point) => (typeof point === "string" ? { point } : point)) as PluginManifestInput["functions"],
       limits: { cpuMs: 50, wallMs: 100 },
     };
     await installPlugin(db, { manifest, source: "upload", bundleSha256: "3".repeat(64), actorUserId: "owner" });
@@ -324,6 +330,28 @@ describe("checkout app functions on the agent and admin channels", () => {
     expect(pointCalls("cart.validate").map((entry) => entry.channel)).toEqual(expect.arrayContaining(["agent", "admin"]));
   });
 
+  it("an app registered to block that cannot answer stops checkout on every channel, with the store's words", async () => {
+    await installTestApp("acme.verify", [{ point: "cart.validate", onError: "block" }]);
+    await installTestApp("acme.optional", ["cart.validate"]);
+    answers["acme.verify"] = () => thrown("Error: address service down");
+    answers["acme.optional"] = () => thrown("Error: also down");
+    const refusal = {
+      status: 400,
+      body: { error: { message: "We can't confirm your order right now. Please try again in a few minutes.", details: { reason: "CHECKOUT_APP_UNAVAILABLE" } } },
+    };
+
+    await expect(onlineStore(await apps())).rejects.toMatchObject({ details: { reason: "CHECKOUT_APP_UNAVAILABLE" } });
+    expect(await agentQuote()).toMatchObject(refusal);
+    expect(await agentSubmit("taxq_abcdefghijklmnopqrstuv")).toMatchObject(refusal);
+    expect(await adminQuote()).toMatchObject(refusal);
+    expect(await adminCreate("66666666-6666-4666-8666-666666666666")).toMatchObject(refusal);
+    expect(count("SELECT count(*) AS n FROM orders")).toBe(0);
+
+    // The app answers again: checkout continues; a skip app that fails is only left out.
+    answers["acme.verify"] = () => ok({ errors: [] });
+    expect((await agentQuote()).status).toBe(200);
+  });
+
   it("an app that hides cash on delivery: the agent quote shows it, and agent submit and the staff order are refused", async () => {
     await installTestApp("acme.pay", ["checkout.payment_methods"]);
     answers["acme.pay"] = () => ok({ operations: [{ op: "hide", methodId: "cod" }] });
@@ -362,6 +390,35 @@ describe("checkout app functions on the agent and admin channels", () => {
     expect(detail?.appRiskChecks).toEqual([expect.objectContaining({ appId: "acme.risk", level: "medium", reasons: ["New buyer."] })]);
     // Advice only: the order is untouched.
     expect(one("SELECT status FROM orders WHERE id = ?", created.body.data!.id as string)).toEqual({ status: "confirmed" });
+  });
+
+  it("an order.risk hold keeps a staff order from moving on until staff release it; cancelling stays possible", async () => {
+    await installTestApp("acme.risk", ["order.risk"]);
+    answers["acme.risk"] = () => ok({ level: "high", reasons: ["Phone seen on returned orders."], hold: true });
+
+    const created = await adminCreate("77777777-7777-4777-8777-777777777777");
+    expect(created.status).toBe(201);
+    const orderId = created.body.data!.id as string;
+    const detail = await getOrderDetails(db, orderId);
+    expect(detail?.holds).toEqual([expect.objectContaining({ appId: "acme.risk", appName: "acme.risk app", reason: "Phone seen on returned orders.", releasedAt: null })]);
+    // Nothing is handed over while it is held.
+    expect(await bulkFulfillOrders(db, [orderId], { requestKey: "held-send" }))
+      .toEqual([expect.objectContaining({ orderId, success: false, error: expect.stringContaining("on hold for review (acme.risk app: Phone seen on returned orders.)") })]);
+    expect(one("SELECT status FROM orders WHERE id = ?", orderId)).toEqual({ status: "confirmed" });
+
+    // A retried risk run places nothing new.
+    expect(count("SELECT count(*) AS n FROM order_holds WHERE order_id = ?", orderId)).toBe(1);
+
+    const holdId = detail!.holds[0]!.id;
+    const released = await call("POST", `/admin/orders/${orderId}/holds/${holdId}/release`, {});
+    expect(released).toMatchObject({ status: 200, body: { data: { id: holdId, releasedAt: expect.any(String) } } });
+    expect(one("SELECT released_by FROM order_holds WHERE id = ?", holdId)).toEqual({ released_by: "owner" });
+    expect(await bulkFulfillOrders(db, [orderId], { requestKey: "released-send" })).toEqual([expect.objectContaining({ orderId, success: true })]);
+    expect(one("SELECT status FROM orders WHERE id = ?", orderId)).toEqual({ status: "shipped" });
+
+    const second = await adminCreate("88888888-8888-4888-8888-888888888888");
+    await updateOrderStatus(db, second.body.data!.id as string, "cancelled");
+    expect(one("SELECT status FROM orders WHERE id = ?", second.body.data!.id as string)).toEqual({ status: "cancelled" });
   });
 
   it("delivery options: the agent quote shows them and refuses a hidden method; staff keep their own charge over an app's price", async () => {

@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Database } from "@scalius/database/client";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { DIGITAL_STOCK_IS_KEYS_MESSAGE, DIGITAL_STOCK_IS_KEYS_REASON } from "@scalius/core/modules/products";
+import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 
 import { errorResponseFromError } from "../../utils/api-response";
 import { adminProductsRoutes } from "./products";
@@ -20,6 +21,7 @@ let db: Database;
 let raceNextBatch: ((sqlite: DatabaseSync) => void) | undefined;
 
 beforeEach(() => {
+  permissions = EDITOR;
   ({ sqlite, db } = createSqliteD1Database({
     beforeBatch(sqlite) {
       const race = raceNextBatch;
@@ -42,10 +44,15 @@ beforeEach(() => {
 });
 afterEach(() => sqlite.close());
 
+/** The editor's staff member: edits products and sees their costs. */
+const EDITOR = [PERMISSIONS.PRODUCTS_VIEW, PERMISSIONS.PRODUCTS_EDIT, PERMISSIONS.PRODUCTS_VIEW_COSTS];
+let permissions: readonly string[] = EDITOR;
+
 function app() {
   const router = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1/admin");
   router.use("*", async (c, next) => {
     c.set("db", db as never);
+    c.set("adminPermissions", new Set(permissions));
     await next();
   });
   router.route("/products", adminProductsRoutes);
@@ -269,6 +276,35 @@ describe("PUT /products/{id} with the page's sections and costs", () => {
 
     expect(refused.status).toBe(409);
     expect(snapshot()).toEqual({ ...before, variants: [expect.objectContaining({ id: "var_default", cost_minor: 41000 })] });
+  });
+});
+
+describe("costs per item without View product costs", () => {
+  beforeEach(() => {
+    permissions = [PERMISSIONS.PRODUCTS_VIEW, PERMISSIONS.PRODUCTS_EDIT];
+  });
+
+  it("leaves every SKU's cost out of the product and its variants", async () => {
+    const product = await call("GET", "/products/prod_copy");
+    expect(product.status).toBe(200);
+    expect(product.body.data.variants[0]).toMatchObject({ id: "var_default", sku: "PANJABI-COPY" });
+    expect(product.body.data.variants[0]).not.toHaveProperty("cost");
+    const variants = await call("GET", "/products/prod_copy/variants");
+    expect(variants.body.data.variants[0]).not.toHaveProperty("cost");
+
+    permissions = EDITOR;
+    expect((await call("GET", "/products/prod_copy")).body.data.variants[0]).toMatchObject({ cost: 400 });
+  });
+
+  it("refuses a Save that sets a cost and changes nothing; the same Save without costs is saved", async () => {
+    const before = snapshot();
+    const refused = await call("PUT", "/products/prod_copy", details({ skuCosts: [{ variantId: "var_default", cost: 450, expectedCost: 400 }] }));
+    expect(refused.status).toBe(403);
+    expect(snapshot()).toEqual(before);
+
+    const saved = await call("PUT", "/products/prod_copy", details());
+    expect(saved.status).toBe(200);
+    expect(sqlite.prepare("SELECT cost_minor FROM product_variants WHERE id = 'var_default'").get()).toEqual({ cost_minor: 40000 });
   });
 });
 

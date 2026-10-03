@@ -47,17 +47,74 @@ export interface PluginStorageQuery {
   cursor?: string | null;
 }
 
+/** A record with the revision its last write gave it. */
+export interface PluginRecordVersion<T extends Record<string, unknown> = Record<string, unknown>> {
+  data: T;
+  revision: number;
+}
+
+/**
+ * The revision a write requires: the one you read (the record is unchanged
+ * since), or null (the record must not exist). A write that finds anything
+ * else changes nothing and fails with `storage.conflict`.
+ */
+export interface PluginWriteCondition {
+  expectedRevision?: number | null;
+}
+
+/**
+ * One app collection. Every write advances the record's revision; pass the
+ * revision you read to write only if nobody wrote since (compare-and-set).
+ */
 export interface PluginStorageCollection<T extends Record<string, unknown> = Record<string, unknown>> {
   get(id: string): Promise<T | null>;
-  put(id: string, record: T): Promise<void>;
-  delete(id: string): Promise<boolean>;
+  /** The record and its revision, for a conditional write. */
+  getVersion(id: string): Promise<PluginRecordVersion<T> | null>;
+  put(id: string, record: T, options?: PluginWriteCondition): Promise<{ revision: number }>;
+  /**
+   * Merges top-level fields into an existing record (`storage.not_found`
+   * otherwise). Without `expectedRevision` a concurrent write is re-read and
+   * merged again, so no update is lost.
+   */
+  update(id: string, patch: Partial<T>, options?: { expectedRevision?: number }): Promise<PluginRecordVersion<T>>;
+  /**
+   * Adds `delta` to a whole-number field (absent: 0; a missing record is
+   * created), atomically. A result outside `min`/`max` changes nothing and
+   * fails with `storage.out_of_range`: a balance never goes below its floor,
+   * however many debits race.
+   */
+  increment(id: string, field: string, delta: number, options?: { min?: number; max?: number }): Promise<{ value: number; revision: number }>;
+  delete(id: string, options?: PluginWriteCondition): Promise<boolean>;
   query(query?: PluginStorageQuery): Promise<{ records: Array<{ id: string; data: T }>; nextCursor: string | null }>;
   count(where?: PluginStorageQuery["where"]): Promise<number>;
 }
 
+/** One write of an atomic `ctx.storage.batch`; `check` writes nothing and only adds its condition. */
+export type PluginStorageOperation =
+  | { op: "put"; collection: string; id: string; record: Record<string, unknown>; expectedRevision?: number | null }
+  | { op: "delete"; collection: string; id: string; expectedRevision?: number | null }
+  | { op: "check"; collection: string; id: string; expectedRevision: number | null };
+
+/**
+ * The app's declared collections by name (`ctx.storage.points`), and
+ * `batch`: up to 25 puts, deletes and checks across collections, written
+ * all-or-nothing in one database batch. Any failed condition aborts it with
+ * `storage.conflict` (`error.details.index` is not exposed; re-read and retry).
+ */
+export type PluginStorage = Record<string, PluginStorageCollection> & {
+  batch(operations: PluginStorageOperation[]): Promise<{ revisions: Array<number | null> }>;
+};
+
 export interface PluginKv {
   get<T = unknown>(key: string): Promise<T | null>;
-  set(key: string, value: unknown, options?: { ttlSeconds?: number }): Promise<void>;
+  /** The live entry and its revision, for `compareAndSet`. */
+  getVersion<T = unknown>(key: string): Promise<{ value: T; revision: number } | null>;
+  set(key: string, value: unknown, options?: { ttlSeconds?: number }): Promise<{ revision: number }>;
+  /**
+   * Sets the entry only while it is still at `expectedRevision` (null: no
+   * live entry); otherwise nothing changes and it fails with `kv.conflict`.
+   */
+  compareAndSet(key: string, expectedRevision: number | null, value: unknown, options?: { ttlSeconds?: number }): Promise<{ revision: number }>;
   delete(key: string): Promise<void>;
   list(prefix?: string): Promise<string[]>;
 }
@@ -107,7 +164,7 @@ export interface PluginContext {
   /** The installation's settings; secrets are present only here, decrypted. */
   settings: Readonly<Record<string, PluginSettingValue>>;
   api: PluginApi;
-  storage: Record<string, PluginStorageCollection>;
+  storage: PluginStorage;
   kv: PluginKv;
   http: PluginHttp;
   customFields: PluginCustomFields;

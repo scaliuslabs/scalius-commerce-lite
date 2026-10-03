@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Database } from "@scalius/database/client";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { getRoutePermission } from "@scalius/core/auth/rbac/route-permissions";
+import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 
 import { errorResponseFromError } from "../../utils/api-response";
 import { classifyAdminRuntimePath } from "../../runtime/admin-app";
@@ -18,6 +19,7 @@ let sqlite: DatabaseSync;
 let db: Database;
 
 beforeEach(() => {
+  permissions = COSTED;
   ({ sqlite, db } = createSqliteD1Database());
   sqlite.exec(`
     INSERT INTO products (id, name, slug, price_minor, is_active) VALUES ('prod_a', 'Panjabi', 'panjabi', 150000, 1);
@@ -29,11 +31,18 @@ beforeEach(() => {
 });
 afterEach(() => sqlite.close());
 
+/** A staff member who runs purchasing and sees costs (the route map is checked separately). */
+const COSTED = [PERMISSIONS.PRODUCTS_VIEW, PERMISSIONS.PRODUCTS_EDIT, PERMISSIONS.PRODUCTS_VIEW_COSTS, PERMISSIONS.INVENTORY_VIEW, PERMISSIONS.INVENTORY_MANAGE];
+/** The same staff member without "View product costs". */
+const UNCOSTED = COSTED.filter((permission) => permission !== PERMISSIONS.PRODUCTS_VIEW_COSTS);
+let permissions: readonly string[] = COSTED;
+
 function app() {
   const router = new OpenAPIHono<{ Bindings: Env }>().basePath("/api/v1/admin");
   router.use("*", async (c, next) => {
     c.set("db", db as never);
     c.set("user" as never, { id: "usr_staff" } as never);
+    c.set("adminPermissions", new Set(permissions));
     await next();
   });
   router.route("/inventory/suppliers", adminSupplierRoutes);
@@ -138,8 +147,74 @@ describe("costs and valuation routes", () => {
   });
 });
 
+describe("without View product costs", () => {
+  /** Every cost-bearing key anywhere in a response body. */
+  function costKeys(value: unknown, found = new Set<string>()): Set<string> {
+    if (Array.isArray(value)) value.forEach((entry) => costKeys(entry, found));
+    else if (value && typeof value === "object") {
+      for (const [key, entry] of Object.entries(value)) {
+        if (["cost", "costMinor", "unitCost", "lineTotal", "currentCost", "costBefore", "costAfter", "subtotal", "shipping", "otherCosts", "tax"].includes(key)) found.add(key);
+        costKeys(entry, found);
+      }
+    }
+    return found;
+  }
+
+  it("leaves every unit cost and purchase-order amount out, and refuses cost writes", async () => {
+    sqlite.exec("UPDATE product_variants SET cost_minor = 70000 WHERE id = 'var_a'");
+    const created = await call("POST", "/inventory/purchase-orders", {
+      destinationLocationId: "loc_shop",
+      lines: [{ variantId: "var_a", quantity: 4, unitCost: 650 }],
+    });
+    const id = created.body.data.id as string;
+    await call("POST", `/inventory/purchase-orders/${id}/order`, { expectedRevision: 1 });
+    const lineId = (await call("GET", `/inventory/purchase-orders/${id}`)).body.data.lines[0].id as string;
+
+    permissions = UNCOSTED;
+    const detail = await call("GET", `/inventory/purchase-orders/${id}`);
+    expect(detail.status).toBe(200);
+    expect(detail.body.data).toMatchObject({ displayNumber: "PO1001", quantity: 4, lines: [{ sku: "PANJABI-M", quantity: 4 }] });
+    expect([...costKeys(detail.body.data)]).toEqual([]);
+    expect(detail.body.data.total).toBeUndefined();
+    const list = await call("GET", "/inventory/purchase-orders");
+    expect(list.body.data.purchaseOrders[0]).not.toHaveProperty("total");
+    expect(list.body.data.purchaseOrders[0]).not.toHaveProperty("subtotal");
+    expect(list.body.data.pagination.total).toBe(1);
+    const inventory = await call("GET", "/inventory?section=variants");
+    expect(inventory.body.data.variants[0]).toMatchObject({ id: "var_a", stock: 8 });
+    expect(inventory.body.data.variants[0]).not.toHaveProperty("cost");
+
+    // Receiving works; moving the unit cost would write one, so it is refused.
+    const moving = await call("POST", `/inventory/purchase-orders/${id}/receive`, { lines: [{ lineId, quantity: 1 }], updateCost: true }, { "idempotency-key": "receipt-key-0000000010" });
+    expect(moving.status).toBe(403);
+    const received = await call("POST", `/inventory/purchase-orders/${id}/receive`, { lines: [{ lineId, quantity: 1 }] }, { "idempotency-key": "receipt-key-0000000011" });
+    expect(received.status).toBe(200);
+    expect([...costKeys(received.body.data)]).toEqual([]);
+    expect(sqlite.prepare("SELECT stock, cost_minor FROM product_variants WHERE id = 'var_a'").get()).toEqual({ stock: 9, cost_minor: 70000 });
+  });
+});
+
+describe("locations", () => {
+  it("lists names for stock screens and addresses only for inventory or settings staff", async () => {
+    sqlite.exec("UPDATE inventory_locations SET address_line1 = 'House 4, Road 7', phone = '+8801711000000' WHERE id = 'loc_shop'");
+    permissions = [PERMISSIONS.PRODUCTS_VIEW];
+    const viewer = await call("GET", "/inventory/locations");
+    const shop = viewer.body.data.locations.find((location: { id: string }) => location.id === "loc_shop");
+    expect(shop).toMatchObject({ id: "loc_shop", name: "Dhanmondi shop", status: "active" });
+    expect(shop).not.toHaveProperty("addressLine1");
+    expect(shop).not.toHaveProperty("phone");
+
+    for (const detailed of [[PERMISSIONS.PRODUCTS_VIEW, PERMISSIONS.INVENTORY_VIEW], [PERMISSIONS.SETTINGS_GENERAL_VIEW]]) {
+      permissions = detailed;
+      const full = await call("GET", "/inventory/locations");
+      expect(full.body.data.locations.find((location: { id: string }) => location.id === "loc_shop"))
+        .toMatchObject({ addressLine1: "House 4, Road 7", phone: "+8801711000000" });
+    }
+  });
+});
+
 describe("routing and RBAC", () => {
-  it("serves every path from the catalog family with products.view reads and products.edit writes", () => {
+  it("serves every path from the catalog family with inventory.view reads and inventory.manage writes", () => {
     for (const path of [
       "/api/v1/admin/inventory/suppliers",
       "/api/v1/admin/inventory/purchase-orders/po_1/receive",
@@ -147,7 +222,8 @@ describe("routing and RBAC", () => {
       "/api/v1/admin/inventory/valuation",
       "/api/v1/admin/inventory/costs",
     ]) expect(classifyAdminRuntimePath(path), path).toBe("catalog");
-    expect(getRoutePermission("/api/v1/admin/inventory/purchase-orders/po_1", "GET")).toEqual({ permission: "products.view" });
-    expect(getRoutePermission("/api/v1/admin/inventory/purchase-orders/po_1/receive", "POST")).toEqual({ permission: "products.edit" });
+    expect(getRoutePermission("/api/v1/admin/inventory/purchase-orders/po_1", "GET")).toEqual({ permission: "inventory.view" });
+    expect(getRoutePermission("/api/v1/admin/inventory/purchase-orders/po_1/receive", "POST")).toEqual({ permission: "inventory.manage" });
+    expect(getRoutePermission("/api/v1/admin/inventory/valuation", "GET")).toEqual({ permission: "products.view_costs" });
   });
 });

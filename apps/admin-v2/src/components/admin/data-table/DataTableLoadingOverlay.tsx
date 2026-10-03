@@ -1,4 +1,6 @@
 import { memo } from "react";
+import { translate } from "~/i18n";
+import { resourceMessages } from "~/i18n/resource";
 
 interface DataTableLoadingOverlayProps {
   visible: boolean;
@@ -14,7 +16,7 @@ export const DataTableLoadingOverlay = memo(function DataTableLoadingOverlay({ v
       className="absolute inset-0 z-10 flex items-start justify-center bg-background/50 pt-20 transition-opacity"
     >
       <div className="h-5 w-5 animate-spin rounded-full border-2 border-muted border-t-primary" />
-      <span className="sr-only">Updating results</span>
+      <span className="sr-only">{translate(resourceMessages, "loading")}</span>
     </div>
   );
 });

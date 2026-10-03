@@ -63,7 +63,7 @@ export function ContentList({ type, search }: { type: ContentType; search: Retur
       meta: { mobile: "status", priority: 80, minWidth: 110 },
       cell: ({ row }) => {
         const mode = getPagePublicationMode(row.original);
-        return <StatusBadge tone={mode === "published" ? "success" : "neutral"}>{t(mode === "published" ? "visible" : mode)}</StatusBadge>;
+        return <StatusBadge status={mode === "published" ? "active" : mode}>{t(mode === "published" ? "visible" : mode)}</StatusBadge>;
       },
     },
     {

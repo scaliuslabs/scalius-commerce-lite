@@ -23,6 +23,7 @@ import {
 } from "../../schemas/responses";
 import { ok } from "../../utils/api-response";
 import { getCredentialEncryptionKey, getCustomerSessionHashKey } from "../../utils/encryption-key";
+import { requestAppProviders } from "../../plugins/providers/app-providers";
 import { getTrustedClientIp } from "../../utils/client-ip";
 import { customerAuthProfileSchema, setPrivateNoStoreHeaders } from "./shared";
 
@@ -80,6 +81,7 @@ app.openapi(sendOtpRoute, async (c) => {
     emailEnv: env,
     encryptionKey: getCredentialEncryptionKey(env),
     credentialEncryptionKey: getCredentialEncryptionKey(env),
+    appProviders: requestAppProviders(c),
   });
 
   try {

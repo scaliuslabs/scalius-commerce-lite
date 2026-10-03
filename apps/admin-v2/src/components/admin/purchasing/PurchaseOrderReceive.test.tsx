@@ -7,6 +7,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { translate } from "~/i18n";
 import { purchasingMessages } from "~/i18n/purchasing";
 import type { PurchaseOrder } from "~/lib/api-query-options/purchasing";
+import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
+import { PermissionProvider } from "~/contexts/PermissionContext";
 
 const mocks = vi.hoisted(() => ({
   receive: vi.fn(),
@@ -51,19 +53,31 @@ describe("receive a purchase order", () => {
   let host: HTMLDivElement;
   let root: Root;
 
+  async function mount(permissions: string[]) {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+    await act(async () => {
+      root.render(
+        <PermissionProvider permissions={permissions}>
+          <QueryClientProvider client={client}>
+            <PurchaseOrderReceive order={order} onReload={async () => undefined} />
+          </QueryClientProvider>
+        </PermissionProvider>,
+      );
+    });
+  }
+
   beforeEach(async () => {
     vi.clearAllMocks();
     host = document.createElement("div");
     document.body.append(host);
     root = createRoot(host);
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
-    await act(async () => {
-      root.render(
-        <QueryClientProvider client={client}>
-          <PurchaseOrderReceive order={order} onReload={async () => undefined} />
-        </QueryClientProvider>,
-      );
-    });
+    await mount([PERMISSIONS.INVENTORY_MANAGE, PERMISSIONS.PRODUCTS_VIEW_COSTS]);
+  });
+
+  it("offers moving unit costs only to staff who can see them", async () => {
+    expect(document.getElementById("receive-update-cost")).not.toBeNull();
+    await mount([PERMISSIONS.INVENTORY_MANAGE]);
+    expect(document.getElementById("receive-update-cost")).toBeNull();
   });
 
   afterEach(() => {

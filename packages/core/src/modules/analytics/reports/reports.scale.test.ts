@@ -109,7 +109,7 @@ describe(`analytics on a generated store (${ORDERS} orders)`, () => {
     async (reportId) => {
       const ctx = await createAnalyticsContext(database.db, NOW);
       const page = await measure(`report ${reportId}`, () =>
-        getAnalyticsReportPage(ctx, reportId as AnalyticsReportId, { ...YEAR, page: 1, pageSize: 50 }, { customers: true }));
+        getAnalyticsReportPage(ctx, reportId as AnalyticsReportId, { ...YEAR, page: 1, pageSize: 50 }, { customers: true, costs: true }));
       expect(page.rows.length).toBeLessThanOrEqual(50);
       const result = results.at(-1)!;
       // Snapshot inventory reads cover the catalogue (every live SKU) by design; sales reads never scan orders.
@@ -120,7 +120,7 @@ describe(`analytics on a generated store (${ORDERS} orders)`, () => {
   it("exports the largest report as bounded CSV reads", async () => {
     const ctx = await createAnalyticsContext(database.db, NOW);
     const exported = await measure("export sales_by_variant", () =>
-      exportAnalyticsReportCsv(ctx, "sales_by_variant", { ...YEAR }, { customers: true }));
+      exportAnalyticsReportCsv(ctx, "sales_by_variant", { ...YEAR }, { customers: true, costs: true }));
     expect(exported.artifact.rowCount).toBeGreaterThan(1);
     expect(results.at(-1)!.statements).toBeLessThanOrEqual(6);
   });

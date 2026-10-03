@@ -94,7 +94,7 @@ describe("customer checkout sign-in readiness", () => {
             customerSignInRequired: true,
             hasUsableCustomerSignIn: true,
         });
-        expect(mocks.getSmsProviderReadiness).toHaveBeenCalledWith(db, "credential-key");
+        expect(mocks.getSmsProviderReadiness).toHaveBeenCalledWith(db, "credential-key", undefined);
     });
 
     it("does not read optional sign-in providers on the public guest-checkout path", async () => {

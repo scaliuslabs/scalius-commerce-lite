@@ -6,6 +6,7 @@ This folder records courier contracts and dated live observations that are usefu
 
 - [Pathao](pathao.md) — sandbox/production environments, OAuth, stores, locations, booking, status, and webhook behavior.
 - [Steadfast](steadfast.md) — production API, API-key auth, invoice lookup limits, and portal webhook contract.
+- Courier apps — an installed app that implements the courier port (`<plugin id>:<provider id>`). The merchant adds it under Settings → Shipping → Couriers; its keys live in the app's own settings, its readiness and connection test come from the app, and its tracking pushes arrive at `POST /api/v1/webhooks/couriers/{id}` when the app verifies them. Every rule below applies to it unchanged (owning code: [`apps/api/src/plugins/providers/courier.ts`](../../apps/api/src/plugins/providers/courier.ts)).
 
 ## Shared Scalius rules
 

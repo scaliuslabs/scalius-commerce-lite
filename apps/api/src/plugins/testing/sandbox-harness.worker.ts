@@ -87,7 +87,7 @@ export default {
       import("../functions"),
     ]);
     const command = await request.json() as {
-      action: "event" | "function" | "route" | "cron" | "lifecycle" | "deliver" | "price";
+      action: "event" | "function" | "route" | "cron" | "lifecycle" | "deliver" | "price" | "provider";
       pluginId: string;
       [key: string]: unknown;
     };
@@ -138,6 +138,17 @@ export default {
         return Response.json(await host.invokeCron(installation, command.name as string, command.scheduledAt as string));
       case "lifecycle":
         return Response.json(await host.invokeLifecycle(installation, command.hook as never));
+      case "provider":
+        // The port's answer, or its ProviderError's fields as they reached the host.
+        try {
+          return Response.json({
+            ok: true,
+            value: await host.invokeProvider(installation, command.kind as never, command.provider as string, command.operation as never, command.input as never),
+          });
+        } catch (error) {
+          const failure = error as { name?: string; category?: string; uncertain?: boolean; code?: string; message?: string };
+          return Response.json({ ok: false, error: { name: failure.name, category: failure.category, uncertain: failure.uncertain, code: failure.code, message: failure.message } });
+        }
     }
   },
 };

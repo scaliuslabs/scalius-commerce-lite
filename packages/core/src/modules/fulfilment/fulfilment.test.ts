@@ -52,6 +52,16 @@ vi.mock("./ledger", async (importOriginal) => ({
   recordCourierBookingFulfilment: vi.fn(async () => ({ fulfillmentId: null, lines: [], recorded: false })),
 }));
 
+// No app holds in these scripted-database tests (orders/holds.ts has its own D1 coverage).
+vi.mock("../orders/holds", async () => {
+  const { sql } = await import("drizzle-orm");
+  return {
+    assertOrderNotOnHold: vi.fn(async () => undefined),
+    noOpenOrderHoldCondition: () => sql`1 = 1`,
+    listOrderHolds: vi.fn(async () => new Map()),
+  };
+});
+
 vi.mock("../orders/returns/returns", () => ({
   listOrderReturns: mocks.listOrderReturns,
   createOrderReturn: mocks.createOrderReturn,

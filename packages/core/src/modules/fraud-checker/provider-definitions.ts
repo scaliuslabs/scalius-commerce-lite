@@ -2,6 +2,8 @@
 // The fraud check providers a merchant can choose, as data: shared by the
 // dashboard's settings screen and the server, without the provider clients.
 
+import { isQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
+
 export const FRAUD_CHECK_PROVIDER_TYPES = [
   "default",
   "fraudbd",
@@ -96,4 +98,12 @@ export function isFraudCheckProviderType(
   providerType: string | undefined,
 ): providerType is FraudCheckProviderType {
   return FRAUD_CHECK_PROVIDER_DEFINITIONS.some((definition) => definition.value === providerType);
+}
+
+/**
+ * A fraud checker a merchant can save: a built-in type, or an app provider
+ * (`<plugin id>:<provider id>`), whose credentials live in the app's settings.
+ */
+export function isFraudProviderChoice(providerType: string | undefined): boolean {
+  return isFraudCheckProviderType(providerType) || isQualifiedProviderId(providerType);
 }

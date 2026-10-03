@@ -275,14 +275,25 @@ export function AdjustStockDialog({
               </div>
             ) : null}
 
-            <dl className="grid grid-cols-3 gap-4">
-              {([
-                [pickLocation ? "onHandHere" : "onHand", pickLocation ? locationOnHand : variant.stock],
-                ["committed", variant.reservedStock],
-                ["available", variant.available],
-              ] as const).map(([key, value]) => (
-                <div key={key} className="space-y-1">
-                  <dt className="text-body text-muted-foreground">{t(key)}</dt>
+            {/* Every number names its scope: with several locations the chosen
+                location's on-hand sits beside the store-wide counts (orders
+                are committed and sold from the SKU, not a location). */}
+            <dl className={pickLocation ? "grid grid-cols-2 gap-4 sm:grid-cols-4" : "grid grid-cols-3 gap-4"}>
+              {(pickLocation
+                ? [
+                  [t("onHandAtLocation", { location: location?.name ?? "" }), locationOnHand],
+                  [t("onHandAllLocations"), variant.stock],
+                  [t("committedAllLocations"), variant.reservedStock],
+                  [t("availableAllLocations"), variant.available],
+                ] as const
+                : [
+                  [t("onHand"), variant.stock],
+                  [t("committed"), variant.reservedStock],
+                  [t("available"), variant.available],
+                ] as const
+              ).map(([label, value]) => (
+                <div key={label} className="space-y-1">
+                  <dt className="text-body text-muted-foreground">{label}</dt>
                   <dd className="text-body font-medium tabular-nums">{value === null ? t("loading") : formatNumber(value)}</dd>
                 </div>
               ))}

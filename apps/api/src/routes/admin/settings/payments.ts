@@ -6,6 +6,8 @@ import { getCredentialEncryptionKey, requireEncryptionKey } from "../../../utils
 
 import { successEnvelope, conflictResponse, errorResponses, serviceUnavailableResponse } from "../../../schemas/responses";
 import {
+    BUILT_IN_PAYMENT_GATEWAY_IDS,
+    BUILT_IN_PAYMENT_PROVIDERS,
     getPaymentGatewaySettingsSnapshot,
     getActivePaymentMethods,
     getStripeSettings,
@@ -13,14 +15,13 @@ import {
     getSSLCommerzCheckoutReadiness,
     getSSLCommerzSettings,
     COD_PAYMENT_METHOD,
-    filterPaymentMethodsForCurrency,
-    getPaymentMethodCurrencyIssue,
-    listPaymentGateways,
-    listPaymentMethodIds,
+    isPaymentMethodId,
     paymentMethodLabel,
-    requirePaymentGateway,
     type GatewaySettings,
+    type PaymentProviders,
 } from "@scalius/core/modules/payments";
+import { isQualifiedProviderId, parseQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
+import { requestPaymentProviders } from "../../../plugins/providers/payment";
 import {
     checkoutDocument,
     paymentMethodsDocument,
@@ -44,16 +45,15 @@ async function assertDisablingGatewayKeepsCheckoutFlow(
     db: Database,
     env: Env,
     gatewayId: string,
+    providers: PaymentProviders = BUILT_IN_PAYMENT_PROVIDERS,
 ): Promise<void> {
+    const encryptionKey = getCredentialEncryptionKey(env as Record<string, unknown>);
     const [checkoutSettings, activePaymentMethods, currencySettings] = await Promise.all([
         checkoutDocument.read(db),
-        getActivePaymentMethods(
-            db,
-            getCredentialEncryptionKey(env as Record<string, unknown>),
-        ),
+        getActivePaymentMethods(db, encryptionKey, providers),
         getCurrencySettings(db),
     ]);
-    const nextPaymentMethods = filterPaymentMethodsForCurrency(
+    const nextPaymentMethods = providers.filterForCurrency(
         activePaymentMethods.enabledMethods.filter((method) => method !== gatewayId),
         currencySettings.currencyCode,
     );
@@ -62,11 +62,12 @@ async function assertDisablingGatewayKeepsCheckoutFlow(
         partialPaymentEnabled: checkoutSettings.partialPaymentEnabled,
         partialPaymentAmount: checkoutSettings.partialPaymentAmount,
         availablePaymentMethods: nextPaymentMethods,
+        paymentProviders: providers,
     });
 
     if (checkoutFlowIssues.length > 0) {
         throw new ValidationError(
-            `Cannot disable ${paymentMethodLabel(gatewayId)} because it would leave checkout without a compatible payment method. ${checkoutFlowIssues.join(" ")}`,
+            `Cannot disable ${providers.label(gatewayId)} because it would leave checkout without a compatible payment method. ${checkoutFlowIssues.join(" ")}`,
         );
     }
 }
@@ -74,11 +75,12 @@ async function assertDisablingGatewayKeepsCheckoutFlow(
 // ─────────────────────────────────────────
 // VALIDATION SCHEMAS
 // ─────────────────────────────────────────
-const paymentMethodIdSchema = z.enum(listPaymentMethodIds() as [string, ...string[]]);
+/** `cod`, a built-in gateway id or an app provider's `<plugin id>:<provider id>`. */
+const paymentMethodIdSchema = z.string().max(160).refine(isPaymentMethodId, "Unknown payment method");
 const updateMethodsSchema = z.object({
     enabledMethods: z.array(paymentMethodIdSchema)
         .min(1, "At least one payment method is required")
-        .max(listPaymentMethodIds().length)
+        .max(20)
         .refine((methods) => new Set(methods).size === methods.length, "Payment methods must be unique"),
     defaultMethod: paymentMethodIdSchema,
     expectedRevision: revisionSchema,
@@ -177,14 +179,30 @@ const gatewayStatusSchema = z.object({
     environment: z.enum(["test", "live", "mixed", "unknown", "not_applicable"]).optional(),
 });
 
+/** A gateway the merchant can offer: built in, or an active app's provider. */
+const paymentGatewaySchema = z.object({
+    id: z.string(),
+    label: z.string(),
+    checkoutName: z.string(),
+    flow: z.enum(["card", "hosted"]),
+    /** The app that provides it; null for a built-in gateway. */
+    pluginId: z.string().nullable(),
+    supportsRefund: z.boolean(),
+    chargeCurrencies: z.union([z.literal("any"), z.array(z.string())]),
+});
+
 const paymentMethodsResponseSchema = z.object({
     enabledMethods: z.array(z.string()),
     defaultMethod: z.string(),
     revision: revisionSchema,
     activeMethods: z.array(z.string()).optional(),
     activeDefaultMethod: z.string().optional(),
-    /** Keyed by payment method id: every registered gateway plus cod. */
-    gatewayStatus: z.object(Object.fromEntries(listPaymentMethodIds().map((id) => [id, gatewayStatusSchema]))),
+    /** Every gateway the store can offer now (built in first, then app providers). */
+    gateways: z.array(paymentGatewaySchema),
+    /** Keyed by payment method id: every gateway plus cod (app providers under their qualified ids). */
+    gatewayStatus: z.object(Object.fromEntries(
+        [...BUILT_IN_PAYMENT_GATEWAY_IDS, COD_PAYMENT_METHOD].map((id) => [id, gatewayStatusSchema]),
+    )).catchall(gatewayStatusSchema),
 }).passthrough();
 
 const getPaymentMethodsRoute = createRoute({
@@ -202,7 +220,8 @@ const getPaymentMethodsRoute = createRoute({
 app.openapi(getPaymentMethodsRoute, async (c) => {
     const db = c.get("db");
     const encKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
-    const gatewaySnapshot = await getPaymentGatewaySettingsSnapshot(db, encKey);
+    const providers = await requestPaymentProviders(c);
+    const gatewaySnapshot = await getPaymentGatewaySettingsSnapshot(db, encKey, providers);
     const rawConfig = gatewaySnapshot.preferences;
     const activeConfig = gatewaySnapshot.activePaymentMethods;
     const savedSettings = gatewaySnapshot.settings as unknown as Record<string, GatewaySettings | null | undefined>;
@@ -213,7 +232,7 @@ app.openapi(getPaymentMethodsRoute, async (c) => {
         paymentMethodsDocument.readDetailed(db),
     ]);
 
-    const flowActiveMethods = filterPaymentMethodsForCurrency(
+    const flowActiveMethods = providers.filterForCurrency(
         activeConfig.enabledMethods,
         currencySettings.currencyCode,
     ).filter((method) =>
@@ -233,10 +252,12 @@ app.openapi(getPaymentMethodsRoute, async (c) => {
     });
 
     const gatewayStatus: Record<string, z.infer<typeof gatewayStatusSchema>> = {};
-    for (const gateway of listPaymentGateways()) {
-        const settings = savedSettings[gateway.id] ?? null;
+    for (const gateway of providers.gateways) {
+        // Built-in settings come with the snapshot; an app gateway loads its own.
+        const settings = savedSettings[gateway.id]
+            ?? (isQualifiedProviderId(gateway.id) ? await gateway.loadSettings(db, encKey) : null);
         const readiness = gateway.readiness(settings);
-        const currencyIssue = getPaymentMethodCurrencyIssue(gateway.id, currencySettings.currencyCode);
+        const currencyIssue = providers.currencyIssue(gateway.id, currencySettings.currencyCode);
         gatewayStatus[gateway.id] = {
             ...readiness,
             usable: readiness.usable && !currencyIssue,
@@ -264,6 +285,15 @@ app.openapi(getPaymentMethodsRoute, async (c) => {
         revision,
         activeMethods: flowActiveMethods,
         ...(flowDefaultMethod ? { activeDefaultMethod: flowDefaultMethod } : {}),
+        gateways: providers.gateways.map((gateway) => ({
+            id: gateway.id,
+            label: gateway.label,
+            checkoutName: gateway.checkoutName,
+            flow: gateway.flow,
+            pluginId: parseQualifiedProviderId(gateway.id)?.pluginId ?? null,
+            supportsRefund: gateway.supportsRefund,
+            chargeCurrencies: gateway.chargeCurrencies === "any" ? "any" as const : [...gateway.chargeCurrencies],
+        })),
         gatewayStatus,
     });
 });
@@ -292,17 +322,19 @@ app.openapi(savePaymentMethodsRoute, async (c) => {
 
     const encKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
     const currencySettings = await getCurrencySettings(db);
+    // App gateways are read only when the merchant selects one.
+    const providers = await requestPaymentProviders(c, data.enabledMethods.find(isQualifiedProviderId) ?? COD_PAYMENT_METHOD);
     for (const method of data.enabledMethods) {
         if (method === COD_PAYMENT_METHOD) continue;
-        const gateway = requirePaymentGateway(method);
+        const gateway = providers.require(method);
         const readiness = gateway.readiness(await gateway.loadSettings(db, encKey));
         if (!readiness.usable) {
             throw new ValidationError(readiness.blockedReason ?? `${gateway.label} is not ready for checkout.`);
         }
-        const currencyIssue = getPaymentMethodCurrencyIssue(method, currencySettings.currencyCode);
+        const currencyIssue = providers.currencyIssue(method, currencySettings.currencyCode);
         if (currencyIssue) throw new ValidationError(currencyIssue);
     }
-    const usableMethods = filterPaymentMethodsForCurrency(data.enabledMethods, currencySettings.currencyCode);
+    const usableMethods = providers.filterForCurrency(data.enabledMethods, currencySettings.currencyCode);
 
     const checkoutSettings = await checkoutDocument.read(db);
     const checkoutFlowIssues = getCheckoutFlowValidationIssues({
@@ -310,6 +342,7 @@ app.openapi(savePaymentMethodsRoute, async (c) => {
         partialPaymentEnabled: checkoutSettings.partialPaymentEnabled,
         partialPaymentAmount: checkoutSettings.partialPaymentAmount,
         availablePaymentMethods: usableMethods,
+        paymentProviders: providers,
     });
     if (checkoutFlowIssues.length > 0) {
         throw new ValidationError(checkoutFlowIssues.join(" "));

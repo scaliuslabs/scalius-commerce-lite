@@ -131,7 +131,7 @@ export function NotificationDropdown({ userId }: { userId: string }) {
                 className={cn("block w-full rounded-md px-3 py-2 text-left hover:bg-muted", !notification.read && "bg-muted/50")}
               >
                 <p className={cn("truncate text-body", !notification.read && "font-medium")}>{notification.title}</p>
-                <p className="line-clamp-2 text-body text-muted-foreground">{notification.message}</p>
+                {notification.message ? <p className="line-clamp-2 text-body text-muted-foreground">{notification.message}</p> : null}
                 <p className="mt-0.5 text-caption text-muted-foreground">
                   {formatDateTime(new Date(notification.timestamp), { dateStyle: "medium", timeStyle: "short" })}
                 </p>

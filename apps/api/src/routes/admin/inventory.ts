@@ -37,6 +37,8 @@ import {
     getInventoryValuation,
     setSkuCosts,
     setSkuCostsSchema,
+    canViewLocationDetails,
+    locationWithoutDetails,
 } from "@scalius/core/modules/inventory";
 import { INVENTORY_LOCATION_KINDS, INVENTORY_LOCATION_STATUSES } from "@scalius/database/schema";
 import { getCurrencyConfig } from "@scalius/core/modules/settings";
@@ -48,6 +50,7 @@ import { enqueueCatalogProjectionRebuild } from "../../utils/catalog-jobs";
 
 import { nullableTimestampSchema, timestampSchema } from "../../schemas/timestamps";
 import { parseBangladeshDateOnlyBoundary } from "./order-date-filter";
+import { presentSkuCost } from "./cost-access";
 import { commerceCalendarDateKey } from "@scalius/shared/commerce-time";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -93,7 +96,7 @@ const inventoryVariantSchema = z.object({
     lowStockThreshold: z.number().nullable(),
     version: z.number(),
     locationOnHand: z.number().int().nullable().openapi({ description: "On-hand at the `locationId` filter; null without one" }),
-    cost: z.number().nullable().openapi({ description: "Unit cost (cost per item) in major units; null when not set. Staff-only." }),
+    cost: z.number().nullable().optional().openapi({ description: "Unit cost (cost per item) in major units; null when not set. Left out without the View product costs permission." }),
     incoming: z.number().int().openapi({ description: "Open purchase order units plus transfers in transit (to the `locationId` filter, if any); not on hand" }),
 }).passthrough();
 
@@ -113,8 +116,10 @@ const inventoryMovementSchema = z.object({
     orderNumber: z.number().int().nullable().openapi({ description: "The order's short number (#1073); null for movements without an order." }),
     type: z.string(),
     quantity: z.number(),
-    previousStock: z.number(),
-    newStock: z.number(),
+    previousStock: z.number().openapi({ description: "The SKU's on-hand across every location before the movement" }),
+    newStock: z.number().openapi({ description: "The SKU's on-hand across every location after the movement" }),
+    locationPreviousStock: z.number().int().nullable().openapi({ description: "On-hand at `locationId` before, when the operation recorded it (adjustments, counts, scans, licence keys); null otherwise" }),
+    locationNewStock: z.number().int().nullable().openapi({ description: "On-hand at `locationId` after, when recorded; null otherwise" }),
     notes: z.string().nullable(),
     createdBy: z.string().nullable(),
     ledgerVersion: z.number().int(),
@@ -212,12 +217,13 @@ const inventoryLocationSchema = z.object({
     name: z.string(),
     code: z.string(),
     kind: z.enum(INVENTORY_LOCATION_KINDS),
-    addressLine1: z.string().nullable(),
-    addressLine2: z.string().nullable(),
-    city: z.string().nullable(),
-    postalCode: z.string().nullable(),
+    // The address and phone: left out without inventory.view or settings.general.view.
+    addressLine1: z.string().nullable().optional(),
+    addressLine2: z.string().nullable().optional(),
+    city: z.string().nullable().optional(),
+    postalCode: z.string().nullable().optional(),
     countryCode: z.string(),
-    phone: z.string().nullable(),
+    phone: z.string().nullable().optional(),
     isDefault: z.boolean(),
     status: z.enum(INVENTORY_LOCATION_STATUSES),
     position: z.number().int(),
@@ -352,6 +358,10 @@ app.openapi(listRoute, async (c) => {
             order: query.order,
             locationId: query.locationId,
         });
+        // Unit costs only with "View product costs".
+        if ("variants" in result && result.variants) {
+            return ok(c, { ...result, variants: result.variants.map((variant) => presentSkuCost(c, variant)) });
+        }
         return ok(c, result);
     } catch (error: unknown) {
         if (error instanceof Error && error.message === "Invalid section parameter") {
@@ -1068,6 +1078,10 @@ const listLocationsRoute = createRoute({
 app.openapi(listLocationsRoute, async (c) => {
     const { includeArchived } = c.req.valid("query");
     const locations = await listInventoryLocations(c.get("db"), { includeArchived: includeArchived === "true" });
+    // Stock screens need where units are, not the warehouse's address.
+    if (!canViewLocationDetails(c.get("adminPermissions"))) {
+        return ok(c, { locations: locations.map(locationWithoutDetails) });
+    }
     return ok(c, { locations });
 });
 

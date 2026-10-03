@@ -13,6 +13,7 @@ import { useCurrency } from "~/hooks/use-currency";
 import { formatNumber, useMessages } from "~/i18n";
 import { analyticsMessages, type AnalyticsMessageKey } from "~/i18n/analytics";
 import { analyticsOverviewQueryOptions, type AnalyticsOverview as OverviewData } from "~/lib/api-query-options/analytics";
+import { appPaymentMethodFallbackName } from "~/lib/app-payment-method";
 import { AnalyticsToolbar } from "./AnalyticsToolbar";
 import { BreakdownCard, type BreakdownRow } from "./BreakdownCard";
 import { MetricTile } from "./MetricTile";
@@ -118,7 +119,7 @@ export function AnalyticsOverview({
   }
 
   const { current, previous } = data;
-  const compared = previous ? t(`comparison.${data.comparison}`).toLowerCase() : null;
+  const compared = previous && data.comparison !== "none" ? data.comparison : null;
   const tile = (key: Extract<keyof Period["totals"], string>, upIsGood = true) => ({
     current: current.totals[key],
     previous: previous?.totals[key] ?? null,
@@ -258,7 +259,10 @@ export function breakdownRow(
   else if (kind === "channel") {
     name = word(`enum.channel.${row.key}`, row.key);
     detail = row.label || null;
-  } else if (kind === "paymentMethod") name = word(`enum.paymentMethod.${row.key}`, row.key);
+  } else if (kind === "paymentMethod") {
+    // An app's method (`<plugin id>:<provider id>`) reads as its provider, never the stored id.
+    name = word(`enum.paymentMethod.${row.key}`, appPaymentMethodFallbackName(row.key) ?? row.key);
+  }
   else if (kind === "city") name = row.key || t("token.city");
   else if (kind === "zone") name = row.label || word(`token.${row.key}`, row.key);
   else name = row.label || row.key || t("token.none");

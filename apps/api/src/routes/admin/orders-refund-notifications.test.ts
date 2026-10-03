@@ -126,7 +126,7 @@ describe("admin refund notification routes", () => {
         }, env);
 
         expect(response.status).toBe(200);
-        expect(mocks.processRefund).toHaveBeenCalledWith(db, expect.objectContaining({ requestKey }), "credential-key");
+        expect(mocks.processRefund).toHaveBeenCalledWith(db, expect.objectContaining({ requestKey }), "credential-key", expect.any(Function));
         expect(mocks.enqueueOrderRefundNotificationForOrder).not.toHaveBeenCalled();
 
         const body = await response.json() as { data: Record<string, unknown> };
@@ -167,6 +167,7 @@ describe("admin refund notification routes", () => {
                 actorUserId: "admin_1",
             },
             "credential-key",
+            expect.any(Function),
         );
     });
 
@@ -206,6 +207,7 @@ describe("admin refund notification routes", () => {
             db,
             expect.objectContaining({ settlement: "store_credit", actorUserId: "admin_1" }),
             "credential-key",
+            expect.any(Function),
         );
         expect(mocks.enqueueNotificationOutboxById).toHaveBeenCalledWith({ db, queue, outboxId: "outbox_gc_1" });
         const body = await response.json() as { data: Record<string, unknown> };
@@ -347,7 +349,7 @@ describe("admin refund notification routes", () => {
             db,
             "order_1",
             "rfa_1",
-            { encryptionKey: "credential-key" },
+            { encryptionKey: "credential-key", providers: expect.any(Function) },
         );
 
         expect(mocks.enqueueOrderRefundNotificationForOrder).toHaveBeenCalledWith({

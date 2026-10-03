@@ -7,7 +7,7 @@ import { MoreHorizontal } from "lucide-react";
 import { toast } from "~/lib/toast";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
-import { Badge } from "~/components/ui/badge";
+import { StatusBadge } from "~/components/admin/resource/StatusBadge";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "~/components/ui/dropdown-menu";
@@ -69,7 +69,7 @@ export function WarrantyPoliciesManager() {
                     <div className="min-w-0 flex-1 space-y-0.5">
                       <p className="flex flex-wrap items-center gap-2">
                         <span className="break-words text-body font-medium">{policy.name}</span>
-                        {policy.archivedAt ? <Badge variant="outline">{t("archived")}</Badge> : null}
+                        {policy.archivedAt ? <StatusBadge status="archived">{t("archived")}</StatusBadge> : null}
                       </p>
                       <p className="text-body">{warrantySummary(t, policy)}</p>
                       <p className="text-body text-muted-foreground">

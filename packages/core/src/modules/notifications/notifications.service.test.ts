@@ -258,8 +258,9 @@ describe("order notification dispatch", () => {
         });
         mocks.sendSms.mockResolvedValue({ success: true, providerRef: "sms_1" });
         mocks.getActiveSmsProvider.mockResolvedValue({
-            name: "Test SMS",
-            sendSms: mocks.sendSms,
+            id: "Test SMS",
+            label: "Test SMS",
+            send: (input: unknown) => mocks.sendSms(input),
         });
 
         await sendOrderNotificationEmail(
@@ -275,6 +276,7 @@ describe("order notification dispatch", () => {
         expect(mocks.getActiveSmsProvider).toHaveBeenCalledWith(
             db,
             "credential-key",
+            undefined,
         );
         expect(mocks.sendSms).toHaveBeenCalledWith({
             to: "+8801700000000",
@@ -296,8 +298,9 @@ describe("order notification dispatch", () => {
         });
         mocks.sendSms.mockResolvedValue({ success: true, providerRef: "sms_partial" });
         mocks.getActiveSmsProvider.mockResolvedValue({
-            name: "Test SMS",
-            sendSms: mocks.sendSms,
+            id: "Test SMS",
+            label: "Test SMS",
+            send: (input: unknown) => mocks.sendSms(input),
         });
 
         await sendOrderNotificationEmail(
@@ -343,8 +346,9 @@ describe("order notification dispatch", () => {
         });
         mocks.sendSms.mockResolvedValue({ success: true, providerRef: "sms_refund_state" });
         mocks.getActiveSmsProvider.mockResolvedValue({
-            name: "Test SMS",
-            sendSms: mocks.sendSms,
+            id: "Test SMS",
+            label: "Test SMS",
+            send: (input: unknown) => mocks.sendSms(input),
         });
 
         await sendOrderNotificationEmail(
@@ -417,8 +421,9 @@ describe("order notification dispatch", () => {
         });
         mocks.sendSms.mockResolvedValue({ success: true, providerRef: "sms_1" });
         mocks.getActiveSmsProvider.mockResolvedValue({
-            name: "Test SMS",
-            sendSms: mocks.sendSms,
+            id: "Test SMS",
+            label: "Test SMS",
+            send: (input: unknown) => mocks.sendSms(input),
         });
 
         await sendOrderNotificationEmail(
@@ -628,8 +633,9 @@ describe("order notification dispatch", () => {
         });
         mocks.sendSms.mockResolvedValue({ success: true, providerRef: "sms_1", rawStatus: "accepted" });
         mocks.getActiveSmsProvider.mockResolvedValue({
-            name: "gennet",
-            sendSms: mocks.sendSms,
+            id: "gennet",
+            label: "gennet",
+            send: (input: unknown) => mocks.sendSms(input),
         });
 
         await sendOrderNotificationEmail(
@@ -671,8 +677,9 @@ describe("order notification dispatch", () => {
         });
         mocks.isNotificationProviderBreakerFailure.mockReturnValue(true);
         mocks.getActiveSmsProvider.mockResolvedValue({
-            name: "smsnetbd",
-            sendSms: mocks.sendSms,
+            id: "smsnetbd",
+            label: "smsnetbd",
+            send: (input: unknown) => mocks.sendSms(input),
         });
 
         const result = await sendOrderNotificationEmail(
@@ -718,8 +725,9 @@ describe("order notification dispatch", () => {
             blockedAt: 1_782_684_758,
         });
         mocks.getActiveSmsProvider.mockResolvedValue({
-            name: "smsnetbd",
-            sendSms: mocks.sendSms,
+            id: "smsnetbd",
+            label: "smsnetbd",
+            send: (input: unknown) => mocks.sendSms(input),
         });
 
         const result = await sendOrderNotificationEmail(
@@ -762,8 +770,9 @@ describe("order notification dispatch", () => {
             source: "receipt",
         });
         mocks.getActiveSmsProvider.mockResolvedValue({
-            name: "smsnetbd",
-            sendSms: mocks.sendSms,
+            id: "smsnetbd",
+            label: "smsnetbd",
+            send: (input: unknown) => mocks.sendSms(input),
         });
 
         const result = await sendOrderNotificationEmail(
@@ -808,8 +817,9 @@ describe("order notification dispatch", () => {
         });
         mocks.isNotificationProviderBreakerFailure.mockReturnValue(true);
         mocks.getActiveSmsProvider.mockResolvedValue({
-            name: "smsnetbd",
-            sendSms: mocks.sendSms,
+            id: "smsnetbd",
+            label: "smsnetbd",
+            send: (input: unknown) => mocks.sendSms(input),
         });
 
         const result = await sendOrderNotificationEmail(
@@ -863,8 +873,9 @@ describe("order notification dispatch", () => {
             retryable: true,
         });
         mocks.getActiveSmsProvider.mockResolvedValue({
-            name: "smsnetbd",
-            sendSms: mocks.sendSms,
+            id: "smsnetbd",
+            label: "smsnetbd",
+            send: (input: unknown) => mocks.sendSms(input),
         });
 
         const result = await sendOrderNotificationEmail(
@@ -915,8 +926,9 @@ describe("order notification dispatch", () => {
             retryable: true,
         });
         mocks.getActiveSmsProvider.mockResolvedValue({
-            name: "smsnetbd",
-            sendSms: mocks.sendSms,
+            id: "smsnetbd",
+            label: "smsnetbd",
+            send: (input: unknown) => mocks.sendSms(input),
         });
 
         const result = await sendOrderNotificationEmail(
@@ -1275,7 +1287,8 @@ describe("order notification dispatch", () => {
         expect(mocks.sendEachForMulticast).toHaveBeenCalledWith(expect.objectContaining({
             notification: {
                 title: "Order Delivered",
-                body: "Order Delivered: Order order_1 from Push Customer. Click to view.",
+                // Never the order's internal id.
+                body: "Order Delivered from Push Customer. Click to view.",
             },
             data: expect.objectContaining({
                 orderId: "order_1",

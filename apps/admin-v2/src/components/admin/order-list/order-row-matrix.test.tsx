@@ -105,6 +105,30 @@ describe("orders list rows across the state matrix", () => {
     const seen = new Set(rows.map(({ order }) => `${order.status}/${order.paymentStatus}/${order.fulfillmentStatus}`));
     expect(seen.size).toBe(ORDER_STATUSES.length * PAYMENT_STATUSES.length * FULFILLMENT_STATUSES.length);
     expect(rows.length).toBeGreaterThanOrEqual(340);
+    // Apps' holds turn over across every status too, held and not.
+    const held = rows.filter(({ order }) => order.onHold);
+    expect(held.length).toBeGreaterThan(0);
+    expect(new Set(held.map(({ order }) => order.status)).size).toBe(ORDER_STATUSES.length);
+  });
+
+  it("says a held order is on hold in its one attention marker, without changing the row's shape", async () => {
+    const columns = getOrderColumns(handlers());
+    const order = columns.find((column) => column.id === "order")!;
+    const cell = order.cell as (context: { row: { original: OrderListItem } }) => ReactNode;
+    const [held, free] = [rows.find((entry) => entry.order.onHold)!, rows.find((entry) => !entry.order.onHold)!];
+    await render(
+      <table>
+        <tbody>
+          {[held, free].map(({ label, order: original }) => (
+            <tr key={label} data-row={label}><td>{cell({ row: { original } })}</td></tr>
+          ))}
+        </tbody>
+      </table>,
+    );
+    const [heldCell, freeCell] = [...host.querySelectorAll("td")];
+    expect(heldCell!.querySelector('[data-part="attention"]')?.getAttribute("aria-label")).toContain("On hold for review");
+    expect(freeCell!.querySelector('[data-part="attention"]')?.getAttribute("aria-label") ?? "").not.toContain("On hold for review");
+    expect(shape(heldCell!)).toBe(shape(freeCell!));
   });
 
   it.each(["en", "bn"] as const)("gives every row the same cells, one line each (%s)", async (locale) => {

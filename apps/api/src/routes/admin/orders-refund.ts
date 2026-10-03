@@ -7,9 +7,10 @@ import {
     type RefundNotificationFact,
     type RefundRequest,
     reconcileRefundAttemptForOrder,
-    listPaymentMethodIds,
+    isPaymentMethodId,
 } from "@scalius/core/modules/payments";
 import { GIFT_CARD_PAYMENT_METHOD } from "@scalius/core/modules/gift-cards";
+import { requestPaymentProviders } from "../../plugins/providers/payment";
 import { enqueueNotificationOutboxById } from "@scalius/core/modules/notifications";
 import { NotFoundError, ValidationError } from "../../utils/api-error";
 import { ok } from "../../utils/api-response";
@@ -286,9 +287,11 @@ const refundOrderRoute = createRoute({
                     schema: z.object({
                         amount: z.number().optional(),
                         reason: z.string().optional(),
-                        gateway: z.enum([GIFT_CARD_PAYMENT_METHOD, ...listPaymentMethodIds()] as [string, ...string[]]).optional().openapi({
-                            description: "Refund only payments taken by this method (gift_card: only the gift-card tenders).",
-                        }),
+                        gateway: z.string().max(160)
+                            .refine((method) => method === GIFT_CARD_PAYMENT_METHOD || isPaymentMethodId(method), "Unsupported payment method")
+                            .optional().openapi({
+                                description: "Refund only payments taken by this method (`cod`, a gateway id, an app provider's `<plugin id>:<provider id>`, or gift_card: only the gift-card tenders).",
+                            }),
                         manualSettlementConfirmed: z.boolean().optional(),
                         settlement: z.enum(REFUND_SETTLEMENTS).optional().openapi({
                             description: "original (default): back to the payments it came from. store_credit: one new gift card for the whole amount, sent to the order contact; no cash or provider refund.",
@@ -332,6 +335,8 @@ app.openapi(refundOrderRoute, async (c) => {
                 actorUserId: actorId,
             },
             encryptionKey,
+            // App gateways refund through the same port as built-in ones (read only when one is named).
+            () => requestPaymentProviders(c),
         );
     } catch (error: unknown) {
         if (error instanceof PartialRefundProcessedError) {
@@ -418,6 +423,7 @@ app.openapi(reconcileRefundAttemptRoute, async (c) => {
         attemptId,
         {
             encryptionKey: getCredentialEncryptionKey(c.env as Record<string, unknown>),
+            providers: () => requestPaymentProviders(c),
         },
     );
     if (!result.found) {

@@ -15,6 +15,8 @@ vi.mock("@/hooks/use-currency", () => ({
   useCurrency: () => ({ symbol: "৳", code: "BDT", fmt: (price: number) => `৳${price}`, salePrice: () => currency.sale }),
 }));
 
+import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
+import { PermissionProvider } from "~/contexts/PermissionContext";
 import { PricingCard } from "./PricingCard";
 import { SkuCostProvider, type SkuCostStore } from "./sku-costs";
 
@@ -53,12 +55,18 @@ describe("PricingCard", () => {
   let host: HTMLDivElement;
   let root: Root;
 
-  async function render(node: ReactNode) {
+  async function render(node: ReactNode, permissions: string[] = [PERMISSIONS.PRODUCTS_VIEW, PERMISSIONS.PRODUCTS_VIEW_COSTS]) {
     host = document.createElement("div");
     document.body.append(host);
     root = createRoot(host);
-    await act(async () => root.render(node));
+    await act(async () => root.render(<PermissionProvider permissions={permissions}>{node}</PermissionProvider>));
   }
+
+  it("shows no cost per item without View product costs", async () => {
+    await render(<SkuCostProvider store={costStore(600)}><Harness variantPrices={null} price={1000} /></SkuCostProvider>, [PERMISSIONS.PRODUCTS_VIEW]);
+    expect(host.textContent).not.toContain(translate(productMessages, "costPerItem"));
+    expect(host.textContent).not.toContain("৳600");
+  });
 
   afterEach(() => {
     act(() => root.unmount());

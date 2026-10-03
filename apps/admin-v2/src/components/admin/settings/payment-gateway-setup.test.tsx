@@ -15,6 +15,8 @@ const sdk = vi.hoisted(() => ({
   postApiV1AdminSettingsStripe: vi.fn(),
   postApiV1AdminSettingsSslcommerz: vi.fn(),
   postApiV1AdminSettingsPaymentMethods: vi.fn(),
+  getApiV1AdminSettingsProviders: vi.fn(),
+  postApiV1AdminSettingsProvidersByIdTest: vi.fn(),
   deleteApiV1AdminSettingsStripe: vi.fn(),
   deleteApiV1AdminSettingsSslcommerz: vi.fn(),
 }));
@@ -46,6 +48,10 @@ function methods(stripe: Record<string, unknown>) {
   return {
     enabledMethods: ["cod"],
     defaultMethod: "cod",
+    gateways: [
+      { id: "stripe", label: "Stripe", checkoutName: "Card", flow: "card", pluginId: null, supportsRefund: true, chargeCurrencies: "any" },
+      { id: "sslcommerz", label: "SSLCommerz", checkoutName: "SSLCommerz", flow: "hosted", pluginId: null, supportsRefund: true, chargeCurrencies: ["BDT"] },
+    ],
     gatewayStatus: {
       cod: status({ environment: "not_applicable", checkoutSelected: true }),
       sslcommerz: status({ configured: false, enabled: false, usable: false, missingFields: ["storeId", "storePassword"], providerEnabled: false }),
@@ -63,6 +69,9 @@ function type(input: HTMLInputElement, value: string) {
 
 const button = (label: string) =>
   [...document.querySelectorAll("button")].find((element) => element.textContent?.trim() === label)!;
+/** A payment method row's "Set up" / "Manage" button. */
+const setUpButton = (method: string) =>
+  [...document.querySelectorAll(`[data-method="${method}"] button`)].find((element) => element.textContent === "Set up") as HTMLButtonElement;
 
 describe("payment gateway setup", () => {
   let root: Root;
@@ -83,6 +92,7 @@ describe("payment gateway setup", () => {
     sdk.getApiV1AdminSettingsStripe.mockImplementation(() =>
       envelope({ secretKey: MASKED, publishableKey: "", webhookSecret: "", enabled: false }));
     sdk.postApiV1AdminSettingsStripe.mockImplementation(() => envelope({ message: "ok" }));
+    sdk.getApiV1AdminSettingsProviders.mockImplementation(() => envelope({ providers: [] }));
   });
 
   afterEach(() => {
@@ -122,7 +132,7 @@ describe("payment gateway setup", () => {
       envelope(methods({ configured: false, enabled: false, usable: false, providerEnabled: false, missingFields: ["publishableKey", "webhookSecret"] })));
     await renderCard();
 
-    const setUp = [...container.querySelectorAll("button")].filter((element) => element.textContent === "Set up")[1]!;
+    const setUp = setUpButton("stripe");
     await act(async () => setUp.click());
     const publishable = await vi.waitFor(() => {
       const input = document.querySelector<HTMLInputElement>("#stripe-publishable");
@@ -179,7 +189,7 @@ describe("payment gateway setup", () => {
     sdk.getApiV1AdminSettingsStripe.mockImplementation(() =>
       envelope({ secretKey: MASKED, publishableKey: "", webhookSecret: "", enabled: false, revision: 3 }));
     await renderCard();
-    const setUp = [...container.querySelectorAll("button")].filter((element) => element.textContent === "Set up")[1]!;
+    const setUp = setUpButton("stripe");
     await act(async () => setUp.click());
     return vi.waitFor(() => {
       const dialog = document.querySelector<HTMLElement>("[role=dialog]");

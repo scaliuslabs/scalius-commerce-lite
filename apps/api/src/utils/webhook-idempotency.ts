@@ -1,11 +1,21 @@
 import { and, eq, inArray, lte, sql } from "drizzle-orm";
 import { webhookEvents } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
-import { listPaymentGateways } from "@scalius/core/modules/payments";
+import { onlinePaymentMethodCondition } from "@scalius/core/modules/payments";
 
 export type WebhookEventStatus = "processing" | "queued" | "processed" | "failed" | "manual_reconciliation";
 export const DEFAULT_WEBHOOK_PROCESSING_LEASE_SECONDS = 5 * 60;
-export const PAYMENT_WEBHOOK_PROVIDERS = listPaymentGateways().map((gateway) => gateway.id);
+/**
+ * Webhook events of payment gateways (built-in and app providers): an app
+ * courier's tracking events share the provider id shape, never the
+ * `courier.` event type.
+ */
+export function paymentWebhookEventCondition() {
+  return and(
+    onlinePaymentMethodCondition(webhookEvents.provider),
+    sql`${webhookEvents.eventType} NOT LIKE 'courier.%'`,
+  )!;
+}
 
 export interface StaleQueuedWebhookSweepResult {
   scanned: number;
@@ -214,7 +224,7 @@ export async function failStaleQueuedPaymentWebhookEvents(
     .from(webhookEvents)
     .where(and(
       eq(webhookEvents.status, "queued"),
-      inArray(webhookEvents.provider, PAYMENT_WEBHOOK_PROVIDERS),
+      paymentWebhookEventCondition(),
       lte(webhookEvents.processedAt, cutoffDate),
     ))
     .limit(limit + 1);

@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { mediaImageUrl } from "@scalius/shared/media-variants";
 
 import type { Scope, ScopeKind } from "./discount-form";
-import { Badge } from "~/components/ui/badge";
+import { StatusBadge } from "~/components/admin/resource/StatusBadge";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import {
@@ -213,7 +213,7 @@ export function ScopeField({
                         </span>
                       ) : null}
                       <span className="min-w-0 flex-1 truncate">{option.name}</span>
-                      {option.isActive === false ? <Badge variant="attention">{t("statusDraft")}</Badge> : null}
+                      {option.isActive === false ? <StatusBadge status="draft">{t("statusDraft")}</StatusBadge> : null}
                       {option.priceRange !== undefined ? <span className="shrink-0 tabular-nums text-muted-foreground">{priceRangeText(option.priceRange, fmt) ?? t("noPrice")}</span> : null}
                     </label>
                   </li>

@@ -1,34 +1,22 @@
 // src/integrations/email/cloudflare.ts
-// Cloudflare Email Service provider using the Workers send_email binding.
+// Cloudflare Email Service behind the email port, through the Workers
+// send_email binding.
 
 import { ServiceUnavailableError } from "@scalius/core/errors";
-import type { EmailProvider, EmailRuntimeContext, SendEmailOptions, SendEmailResult } from "./provider";
-import { resolveSender, safeEmailHeaders } from "./provider";
-import { getEmailRuntimeSettings } from "./settings";
+import { maskEmailForLog, resolveSender, safeEmailHeaders, type EmailAdapter } from "./provider";
 
-function maskEmailForLog(value: string): string {
-  const [localPart, domain] = value.split("@");
-  if (!localPart || !domain) return "redacted";
-  const visible = localPart.length <= 2
-    ? localPart[0] ?? "*"
-    : `${localPart[0]}${localPart[localPart.length - 1]}`;
-  return `${visible}***@${domain}`;
-}
+export const cloudflareEmail: EmailAdapter = {
+  id: "cloudflare",
+  label: "Cloudflare Email",
 
-export class CloudflareEmailProvider implements EmailProvider {
-  readonly name = "cloudflare";
+  configured: ({ binding }) => Boolean(binding),
 
-  async sendEmail(
-    { to, subject, html, from, fromName, text, headers }: SendEmailOptions,
-    context?: EmailRuntimeContext,
-  ): Promise<SendEmailResult> {
-    const binding = context?.env?.EMAIL;
+  async send({ to, subject, html, from, fromName, text, headers }, { settings: { runtime, binding } }) {
     if (!binding) {
       throw new ServiceUnavailableError("Cloudflare Email binding EMAIL is not configured");
     }
 
-    const settings = await getEmailRuntimeSettings(context);
-    const sender = resolveSender({ from, fromName }, settings);
+    const sender = resolveSender({ from, fromName }, runtime);
     const extraHeaders = safeEmailHeaders(headers);
     const result = await binding.send({
       to,
@@ -42,9 +30,8 @@ export class CloudflareEmailProvider implements EmailProvider {
     console.log(`[Email] Sent via Cloudflare to ${maskEmailForLog(to)} (${result.messageId})`);
     return {
       success: true,
-      provider: "cloudflare",
       providerRef: result.messageId,
       rawStatus: "accepted",
     };
-  }
-}
+  },
+};

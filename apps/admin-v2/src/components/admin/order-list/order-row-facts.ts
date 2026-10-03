@@ -19,16 +19,19 @@ export interface AttentionItem {
   text: string;
 }
 
-type AttentionOrder = Pick<OrderListItem, "paymentRecovery" | "activeRefundOperation" | "shipmentRecovery" | "openRequestType" | "refundDue" | "cod">;
+type AttentionOrder = Pick<OrderListItem, "onHold" | "paymentRecovery" | "activeRefundOperation" | "shipmentRecovery" | "openRequestType" | "refundDue" | "cod">;
 
 /**
  * Everything that needs the merchant before the order can move on, most
- * urgent first: a failed online payment, a refund or courier booking stuck
- * mid-way, a customer request, money owed back, a failed delivery. The row
- * shows one marker for all of them (the Order cell); the words are its label.
+ * urgent first: an app's hold for review, a failed online payment, a refund
+ * or courier booking stuck mid-way, a customer request, money owed back, a
+ * failed delivery. The row shows one marker for all of them (the Order
+ * cell); the words are its label.
  */
 export function orderAttention(order: AttentionOrder, t: ListT, o: OrderT): AttentionItem[] {
   const items: AttentionItem[] = [];
+  // Nothing ships or moves on until staff release it.
+  if (order.onHold) items.push({ tone: "critical", text: t("onHold") });
   const payment = order.paymentRecovery;
   const paymentState = payment?.state;
   if (paymentState && paymentState !== "none") {

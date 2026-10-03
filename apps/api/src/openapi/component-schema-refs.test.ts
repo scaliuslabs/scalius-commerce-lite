@@ -140,7 +140,9 @@ describe("shared component schemas in the agent manifest", () => {
     }
     // `.nullable()` on a named schema makes the component itself nullable; a
     // nullable use is `z.union([Named, z.null()])` (finalized as `allOf` + `nullable`).
-    expect(Object.entries(schemas).filter(([name, schema]) => schema.nullable === true && !name.startsWith("Nullable")).map(([name]) => name))
+    // Only components whose own value may be null are nullable.
+    const nullableByDesign = new Set(["NullableTimestamp", "AppTranslations"]);
+    expect(Object.entries(schemas).filter(([name, schema]) => schema.nullable === true && !nullableByDesign.has(name)).map(([name]) => name))
       .toEqual([]);
     // The section list is written once, not per page or per route.
     expect(OPENAPI_CONTRACT_JSON.split('"enum":["usp-strip"]').length - 1).toBe(1);

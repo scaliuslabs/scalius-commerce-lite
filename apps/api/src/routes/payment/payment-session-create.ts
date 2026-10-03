@@ -17,10 +17,7 @@ import { currencyDocument } from "@scalius/core/modules/settings";
 import {
   getPaymentMethodPreferences,
   getGatewayAmountIssue,
-  getPaymentGateway,
-  getPaymentMethodCurrencyIssue,
   isOnlinePaymentMethod,
-  requirePaymentGateway,
   buildPaymentSessionAttemptIdentity,
   assertNoActivePaymentSessionAttempt,
   claimPaymentSessionAttempt,
@@ -31,7 +28,13 @@ import {
   buildPaymentCorrelationId,
   PaymentProviderError,
   type PaymentGateway,
+  type PaymentProviders,
 } from "@scalius/core/modules/payments";
+import { encodeProviderAmount } from "@scalius/shared/plugins/providers/amount";
+import { minorToMajorString } from "@scalius/core/modules/payments";
+import { getDecimalPlaces } from "@scalius/shared/currency";
+import { isQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
+import { requestPaymentProviders } from "../../plugins/providers/payment";
 import {
   resolveOrderCurrencySnapshot,
   type OrderCurrencySnapshot,
@@ -232,9 +235,10 @@ export async function createPaymentSession(
   gatewayId: string,
   input: CreatePaymentSessionInput,
 ): Promise<CreatedCustomerPaymentSession | PaymentSessionProcessingResponse> {
-  const gateway = requirePaymentGateway(gatewayId);
+  const providers = await requestPaymentProviders(c, gatewayId);
+  const gateway = providers.require(gatewayId);
   const order = await loadPaymentSessionOrder(c.get("db"), input.orderId, input.expectedCustomerId);
-  return createPaymentSessionForOrder(c, gateway, input, order);
+  return createPaymentSessionForOrder(c, providers, gateway, input, order);
 }
 
 function sessionBody(
@@ -262,6 +266,7 @@ function sessionBody(
  */
 async function createPaymentSessionForOrder(
   c: PaymentRouteContext,
+  providers: PaymentProviders,
   gateway: PaymentGateway,
   input: CreatePaymentSessionInput,
   order: PaymentSessionOrderRow,
@@ -269,12 +274,12 @@ async function createPaymentSessionForOrder(
   const db = c.get("db");
   assertOrderCanReachGatewayReadinessCheck(order, gateway.id, gateway.label);
   const orderCurrency = resolveAuthoritativeOrderCurrency(order);
-  const currencyIssue = getPaymentMethodCurrencyIssue(gateway.id, orderCurrency.code);
+  const currencyIssue = providers.currencyIssue(gateway.id, orderCurrency.code);
   if (currencyIssue) throw new ValidationError(currencyIssue);
   const currentCurrency = createCurrentCurrencyReader(db);
 
   const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
-  const checkoutFlowSettings = await assertGatewaySelectedForCheckout(db, gateway.id);
+  const checkoutFlowSettings = await assertGatewaySelectedForCheckout(db, gateway.id, providers);
   const policy = await resolvePaymentSessionPolicy(db, order, {
     paymentType: input.paymentType,
     depositAmount: input.depositAmount,
@@ -283,6 +288,16 @@ async function createPaymentSessionForOrder(
   const amountMinor = policy.chargeAmountMinor;
   const amountIssue = getGatewayAmountIssue(gateway, amountMinor, currency);
   if (amountIssue) throw new ValidationError(amountIssue);
+  // The provider's wire form, encoded once (D2). A form that cannot carry the
+  // exact amount is refused here: the difference is never added to the charge.
+  const encoded = encodeProviderAmount(amountMinor, currency, gateway.amountCodecs);
+  if (encoded.roundingMinor !== 0) {
+    const decimals = getDecimalPlaces(currency);
+    throw new ValidationError(
+      `${gateway.label} cannot charge ${minorToMajorString(amountMinor, decimals)} ${currency} exactly `
+      + `(it would drop ${minorToMajorString(encoded.roundingMinor, decimals)}). Set prices in steps the provider accepts.`,
+    );
+  }
 
   const settings = await loadCheckoutGatewaySettings(db, encryptionKey, gateway);
   const urls = buildGatewayUrls(c, gateway.id, input, policy);
@@ -311,13 +326,14 @@ async function createPaymentSessionForOrder(
   let session: Awaited<ReturnType<PaymentGateway["createSession"]>>;
   try {
     session = await withPaymentProviderDeadline(gateway.label, (signal, requestTimeoutMs) =>
-      gateway.createSession(settings, {
+      gateway.createSession({
         attemptKey: attemptIdentity.attemptKey,
         correlationId,
         orderId: input.orderId,
         paymentType: policy.paymentType,
         amountMinor,
         currency,
+        wireAmount: encoded.wire,
         buyer: {
           name: order.customerName,
           phone: order.customerPhone,
@@ -326,9 +342,8 @@ async function createPaymentSessionForOrder(
           city: order.cityName ?? undefined,
         },
         urls,
-        signal,
         requestTimeoutMs,
-      })
+      }, { settings, signal })
     );
   } catch (error: unknown) {
     await markPaymentSessionAttemptFailed(db, attemptClaim.attempt, error)
@@ -349,7 +364,10 @@ async function createPaymentSessionForOrder(
         amount: policy.chargeAmount,
         currency: currency.toLowerCase(),
       }
-    : { gatewayUrl: session.redirectUrl, sessionKey: session.providerRef };
+    : {
+        gatewayUrl: session.redirectUrl,
+        sessionKey: session.providerRef,
+      };
 
   await markPaymentSessionAttemptCreated(db, attemptClaim.attempt, {
     providerSessionId: session.providerRef,
@@ -381,6 +399,7 @@ export async function createCustomerAccountPaymentSession(
   if (!gateway) {
     throw new ValidationError("This order does not use an online payment gateway.");
   }
+  const providers = await requestPaymentProviders(c, gateway);
 
   const sessionInput: CreatePaymentSessionInput = {
     orderId: input.orderId,
@@ -391,7 +410,7 @@ export async function createCustomerAccountPaymentSession(
     replaceExistingAttempt: input.replaceExistingAttempt,
   };
 
-  return createPaymentSessionForOrder(c, requirePaymentGateway(gateway), sessionInput, order);
+  return createPaymentSessionForOrder(c, providers, providers.require(gateway), sessionInput, order);
 }
 
 export async function createAgentContextPaymentSession(
@@ -414,7 +433,8 @@ export async function createAgentContextPaymentSession(
     },
     expectedCustomerId: input.customerId ?? undefined,
   };
-  return createPaymentSessionForOrder(c, requirePaymentGateway(gateway), sessionInput, order);
+  const providers = await requestPaymentProviders(c, gateway);
+  return createPaymentSessionForOrder(c, providers, providers.require(gateway), sessionInput, order);
 }
 
 export async function resolveCustomerPaymentSessionRecovery(
@@ -444,6 +464,8 @@ export async function resolveCustomerPaymentSessionRecovery(
           (method) => isOnlinePaymentMethod(method) && method !== gateway,
         ),
       ];
+  // App gateways are read only when a candidate is one.
+  const providers = await requestPaymentProviders(c, candidateGateways.find(isQualifiedProviderId) ?? gateway);
   let blockedRecovery = inactiveRecovery(
     "No configured online payment method can recover this order.",
     gateway,
@@ -452,14 +474,14 @@ export async function resolveCustomerPaymentSessionRecovery(
 
   for (const candidateGateway of candidateGateways) {
     try {
-      const candidate = requirePaymentGateway(candidateGateway);
+      const candidate = providers.require(candidateGateway);
       assertOrderCanReachGatewayReadinessCheck(order, candidate.id, candidate.label);
       const orderCurrency = resolveAuthoritativeOrderCurrency(order);
       const currentCurrency = createCurrentCurrencyReader(db);
-      const currencyIssue = getPaymentMethodCurrencyIssue(candidate.id, orderCurrency.code);
+      const currencyIssue = providers.currencyIssue(candidate.id, orderCurrency.code);
       if (currencyIssue) throw new ValidationError(currencyIssue);
       const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
-      const checkoutFlowSettings = await assertGatewaySelectedForCheckout(db, candidateGateway);
+      const checkoutFlowSettings = await assertGatewaySelectedForCheckout(db, candidateGateway, providers);
       const policy = await resolvePaymentSessionPolicy(
         db,
         order,
@@ -767,8 +789,9 @@ async function ensureOrderCanUseGateway(
   };
 }
 
+/** The order's online gateway id (built-in or app), whatever is installed now. */
 function getOrderPaymentGateway(order: Pick<PaymentSessionOrderRow, "paymentMethod">): string | null {
-  return getPaymentGateway(order.paymentMethod)?.id ?? null;
+  return isOnlinePaymentMethod(order.paymentMethod) ? order.paymentMethod : null;
 }
 
 function shouldRequestBalancePayment(

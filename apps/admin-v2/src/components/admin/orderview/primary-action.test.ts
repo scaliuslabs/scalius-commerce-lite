@@ -66,6 +66,21 @@ describe("order primary phone action", () => {
     expect(resolveOrderPrimaryAction(order({ archivedAt: 1 }), all)).toBeNull();
   });
 
+  it("waits while an app holds the order, except for a cancellation request", () => {
+    const hold = { id: "ohd_1", appId: "acme.radar", appName: "Risk radar", reason: "Odd address", placedAt: 1, releasedAt: null };
+    const held = order({ status: "pending", holds: [hold] });
+    expect(resolveOrderPrimaryAction(held, all)).toBeNull();
+    expect(resolveOrderPrimaryAction(order({ status: "confirmed", deliveryProviders: [courier], holds: [hold] }), all)).toBeNull();
+    // Cancelling stays possible, so the buyer's request still comes first.
+    const requested = order({
+      ...held,
+      supportRequests: [{ id: "req_1", type: "cancel_pre_shipment", active: true, status: "submitted" }] as Order["supportRequests"],
+    });
+    expect(resolveOrderPrimaryAction(requested, { ...all, canResolveOrderSupportRequests: true })).toBe("reviewCancellation");
+    // Released: the usual next step again.
+    expect(resolveOrderPrimaryAction(order({ status: "pending", holds: [{ ...hold, releasedAt: 2 }] }), all)).toBe("confirm");
+  });
+
   it("books a courier only for confirmed orders without an active shipment", () => {
     expect(resolveOrderPrimaryAction(order({ status: "confirmed", deliveryProviders: [courier] }), all)).toBe("bookCourier");
     const booked = order({

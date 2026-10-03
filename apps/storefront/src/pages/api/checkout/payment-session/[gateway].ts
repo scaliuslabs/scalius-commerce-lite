@@ -12,8 +12,7 @@ import {
   paymentSessionProxySuccessResponse,
 } from "@/lib/checkout/payment-session-proxy";
 import { readOrderReceiptCookie } from "@/lib/order-receipt-cookie";
-
-const GATEWAY_ID = /^[a-z][a-z0-9_-]{0,63}$/;
+import { isPaymentMethodIdShape } from "@/lib/payment-method-id";
 
 function jsonError(error: string, status: number) {
   return new Response(JSON.stringify({ error }), {
@@ -31,7 +30,7 @@ export const POST: APIRoute = async ({ request, params }) => {
     return jsonError("Cross-origin cookie request denied", 403);
   }
   const gateway = params.gateway ?? "";
-  if (!GATEWAY_ID.test(gateway) || gateway === "cod") {
+  if (!isPaymentMethodIdShape(gateway) || gateway === "cod") {
     return jsonError("Unsupported payment method.", 404);
   }
 

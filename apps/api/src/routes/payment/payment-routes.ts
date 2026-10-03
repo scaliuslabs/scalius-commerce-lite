@@ -2,6 +2,9 @@
 //   POST /{provider}/session    create (or replay) a buyer payment session
 //   POST /{provider}/reconcile  ask the provider whether the session was captured
 //   GET|POST /{provider}/success|fail|cancel  hosted-gateway buyer returns
+//
+// `provider` is a built-in gateway id or an app provider's
+// `<plugin id>:<provider id>`; both go through the same port.
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
@@ -9,13 +12,14 @@ import { eq } from "drizzle-orm";
 import type { Database } from "@scalius/database/client";
 import { orders } from "@scalius/database/schema";
 import {
-  getPaymentGateway,
   reconcileHostedPaymentReturn,
   type HostedPaymentReturnResult,
   parsePaymentCorrelationId,
   type GatewayRequest,
+  type PaymentGateway,
   type PaymentType,
 } from "@scalius/core/modules/payments";
+import { requestPaymentProviders } from "../../plugins/providers/payment";
 import { validateReceiptToken } from "../../utils/order-receipt-token";
 import { successEnvelope, errorResponses, serviceUnavailableResponse } from "../../schemas/responses";
 import { ok } from "../../utils/api-response";
@@ -32,7 +36,7 @@ import {
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const RECEIPT_TOKEN_HEADER = "X-Receipt-Token";
-const providerParamSchema = z.object({ provider: z.string().min(1).max(64) });
+const providerParamSchema = z.object({ provider: z.string().min(1).max(160) });
 
 async function validateReceiptProof(
   c: { env: Env; req: { header: (name: string) => string | undefined } },
@@ -149,7 +153,13 @@ app.openapi(reconcileRoute, async (c) => {
   const body = c.req.valid("json");
   await validateReceiptProof(c, db, body);
 
-  const { data, accepted } = await reconcileOrderPayment({ db, env: c.env, orderId: body.orderId, provider });
+  const { data, accepted } = await reconcileOrderPayment({
+    db,
+    env: c.env,
+    orderId: body.orderId,
+    provider,
+    providers: () => requestPaymentProviders(c),
+  });
   return accepted ? c.json({ success: true as const, data }, 202) : ok(c, data);
 });
 
@@ -213,16 +223,18 @@ async function buildReturnRedirectUrl(
   return url.toString();
 }
 
-function hostedGateway(c: ReturnContext) {
-  const gateway = getPaymentGateway(c.req.param("provider"));
-  if (!gateway?.verifyReturn || !gateway.returnCorrelationId) throw new NotFoundError("Payment gateway not found");
+async function hostedGateway(c: ReturnContext): Promise<PaymentGateway> {
+  const providerId = c.req.param("provider");
+  const gateway = (await requestPaymentProviders(c, providerId)).get(providerId);
+  if (!gateway?.verifyReturn) throw new NotFoundError("Payment gateway not found");
   return gateway;
 }
 
 async function handleSuccessReturn(c: ReturnContext): Promise<Response> {
-  const gateway = hostedGateway(c);
+  const gateway = await hostedGateway(c);
   const request = await toGatewayRequest(c);
-  const correlationId = gateway.returnCorrelationId!(request) || request.query.tran_id || "";
+  if (!gateway.returnCorrelationId) return handleAuthenticatedReturn(c, gateway, request);
+  const correlationId = gateway.returnCorrelationId(request) || request.query.tran_id || "";
   const orderId = request.query.order_id?.trim() || parsePaymentCorrelationId(correlationId).orderId;
   if (request.method === "POST") {
     try {
@@ -231,7 +243,7 @@ async function handleSuccessReturn(c: ReturnContext): Promise<Response> {
       if (loaded.status === "ready") {
         const verification = await withPaymentProviderDeadline(
           gateway.label,
-          (signal) => gateway.verifyReturn!(loaded.settings, request, signal),
+          (signal) => gateway.verifyReturn!(request, { settings: loaded.settings, signal }),
         );
         if (verification.status === "event" && verification.event.kind === "confirmed") {
           await claimAndEnqueuePaymentEvent({
@@ -254,11 +266,12 @@ async function handleSuccessReturn(c: ReturnContext): Promise<Response> {
 }
 
 async function handleUnsuccessfulReturn(c: ReturnContext, result: HostedPaymentReturnResult): Promise<Response> {
-  const gateway = hostedGateway(c);
+  const gateway = await hostedGateway(c);
   const request = await toGatewayRequest(c);
+  if (!gateway.returnCorrelationId) return handleAuthenticatedReturn(c, gateway, request);
   // Unsigned returns: only the provider-posted correlation id can select an
   // attempt; query values remain redirect context and must agree with it.
-  const correlationId = gateway.returnCorrelationId!(request);
+  const correlationId = gateway.returnCorrelationId(request);
   const parsed = parsePaymentCorrelationId(correlationId);
   const queryOrderId = request.query.order_id?.trim() ?? "";
   const queryPaymentType = callbackPaymentType(request.query);
@@ -281,6 +294,50 @@ async function handleUnsuccessfulReturn(c: ReturnContext, result: HostedPaymentR
       })
     : "ignored";
   return c.redirect(await buildReturnRedirectUrl(c, gateway.id, request, orderId, outcome === "retry_ready" ? result : undefined));
+}
+
+/**
+ * Gateways without an unsigned correlation id (app providers) answer every
+ * return, whatever its path or method, by authenticating it with the
+ * provider: a confirmed payment is claimed once like a webhook; a failed or
+ * cancelled one releases the attempt its authenticated merchant reference
+ * names, so the buyer can try again. Query values stay redirect context.
+ */
+async function handleAuthenticatedReturn(c: ReturnContext, gateway: PaymentGateway, request: GatewayRequest): Promise<Response> {
+  const db = c.get("db");
+  let orderId = request.query.order_id?.trim() ?? "";
+  let result: HostedPaymentReturnResult | undefined;
+  try {
+    const loaded = await loadCallbackSettings(gateway, db, c.env);
+    const verification = loaded.status === "ready"
+      ? await withPaymentProviderDeadline(gateway.label, (signal) => gateway.verifyReturn!(request, { settings: loaded.settings, signal }))
+      : null;
+    if (verification?.status === "event") {
+      const event = verification.event;
+      orderId = event.orderId;
+      if (event.kind === "confirmed") {
+        await claimAndEnqueuePaymentEvent({ db, queue: c.env.JOBS_QUEUE, provider: gateway.id, event, source: "buyer_return" });
+      } else if ((event.kind === "failed" || event.kind === "cancelled") && event.correlationId) {
+        const parsed = parsePaymentCorrelationId(event.correlationId);
+        if (parsed.paymentType && parsed.orderId === event.orderId) {
+          const outcome = await reconcileHostedPaymentReturn(db, {
+            orderId: event.orderId,
+            gateway: gateway.id,
+            paymentType: parsed.paymentType,
+            result: event.kind,
+            providerCorrelationId: event.correlationId,
+          });
+          if (outcome === "retry_ready") result = event.kind;
+        }
+      }
+    }
+  } catch (error) {
+    console.warn("[payment-return] Buyer-return payment verification did not settle before redirect", {
+      provider: gateway.id,
+      error: error instanceof Error ? error.name : "verification_failed",
+    });
+  }
+  return c.redirect(await buildReturnRedirectUrl(c, gateway.id, request, orderId, result));
 }
 
 app.on(["GET", "POST"], "/:provider/success", handleSuccessReturn);

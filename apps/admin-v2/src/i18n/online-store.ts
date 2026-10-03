@@ -788,7 +788,7 @@ export const onlineStoreMessages = defineMessages({
     pickCategory: "ক্যাটাগরি বাছুন",
     dealNoPromotion: "কাউন্টডাউন নেই",
     searchPromotions: "ডিসকাউন্ট খুঁজুন",
-    noPromotions: "শেষ তারিখসহ চালু কোনো ডিসকাউন্ট নেই।",
+    noPromotions: "শেষ তারিখসহ সক্রিয় কোনো ডিসকাউন্ট নেই।",
     promotionEnds: "শেষ হবে {date}",
     cardTitle: "কার্ড {number} এর নাম",
 

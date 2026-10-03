@@ -42,6 +42,7 @@ import { CUSTOMER_AUTH_OTP_CHANNELS } from "@scalius/shared/customer-auth-policy
 import { NotFoundError, RateLimitError, UnauthorizedError, ServiceUnavailableError } from "../../utils/api-error";
 import { isWithinRateLimit } from "../../utils/rate-limit";
 import { getCredentialEncryptionKey, getCustomerSessionHashKey } from "../../utils/encryption-key";
+import { requestAppProviders } from "../../plugins/providers/app-providers";
 import { validateReceiptToken } from "../../utils/order-receipt-token";
 import { ok } from "../../utils/api-response";
 import {
@@ -374,6 +375,7 @@ app.openapi(sendOrderLookupOtpRoute, async (c) => {
     emailEnv: env,
     encryptionKey: getCredentialEncryptionKey(env),
     credentialEncryptionKey: getCredentialEncryptionKey(env),
+    appProviders: requestAppProviders(c),
   });
   try {
     await c.env.JOBS_QUEUE.send(result.queuePayload);

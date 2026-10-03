@@ -199,7 +199,7 @@ export function VariantsTab({ filters, onFiltersChange, onSelectionChange }: Var
   const [adjusting, setAdjusting] = useState<InventoryVariant | null>(null);
   const [adjustOpen, setAdjustOpen] = useState(false);
   const [adjustSession, setAdjustSession] = useState(0);
-  // Bulk cost edit of the selected SKUs (cost writes need products.edit, like stock).
+  // Bulk cost edit of the selected SKUs (products.edit plus "View product costs").
   const [costOpen, setCostOpen] = useState(false);
   const [costSession, setCostSession] = useState(0);
   const listQuery = inventoryQueryOptions(variantsQuery({ ...filters, location: locationId }, page, limit, sort));
@@ -212,6 +212,7 @@ export function VariantsTab({ filters, onFiltersChange, onSelectionChange }: Var
   const storeLevel = useQuery({ ...listQuery, placeholderData: keepPreviousData }).data?.defaultLowStockThreshold ?? null;
 
   const canAdjustStock = permissions.canAdjustStock;
+  const showCosts = permissions.canViewCosts;
   const adjustButton = useCallback((variant: InventoryVariant) => canAdjustStock ? (
     <Button
       type="button"
@@ -274,13 +275,14 @@ export function VariantsTab({ filters, onFiltersChange, onSelectionChange }: Var
       cell: ({ row }) => <IncomingCell units={row.original.incoming ?? 0} />,
       enableSorting: false,
     },
-    {
+    // What each unit cost: only with "View product costs" (the API leaves it out otherwise).
+    ...(showCosts ? [{
       accessorKey: "cost",
       header: t("cost"),
       meta: { numeric: true, priority: 75, minWidth: 110 },
       cell: ({ row }) => <CostCell cost={row.original.cost ?? null} />,
       enableSorting: false,
-    },
+    } satisfies ColumnDef<InventoryVariant, unknown>] : []),
     {
       id: "status",
       header: r("status"),
@@ -293,7 +295,7 @@ export function VariantsTab({ filters, onFiltersChange, onSelectionChange }: Var
       cell: ({ row }) => adjustButton(row.original),
       enableSorting: false,
     },
-  ], [adjustButton, filterLocation, r, storeLevel, t]);
+  ], [adjustButton, filterLocation, r, showCosts, storeLevel, t]);
 
   const { table, isFetching, isLoading, error, refetch, selectedIds, selectedRows, clearSelection } = useServerTable<InventoryVariant>({
     columns,
@@ -323,7 +325,7 @@ export function VariantsTab({ filters, onFiltersChange, onSelectionChange }: Var
   const clearFilters = () => onFiltersChange({ q: "", stock: "all" });
   // Phones keep bulk selection through a bottom action bar (desktop uses the page header button).
   const showSelectionBar = isMobile && selectedIds.length > 0;
-  const canEditCosts = permissions.canAdjustStock;
+  const canEditCosts = permissions.canEditCosts;
   const openCostEdit = () => {
     setCostSession((session) => session + 1);
     setCostOpen(true);
@@ -355,7 +357,7 @@ export function VariantsTab({ filters, onFiltersChange, onSelectionChange }: Var
           <p className="text-body text-muted-foreground tabular-nums">
             {[
               (variant.incoming ?? 0) > 0 ? t("incomingCount", { count: variant.incoming }) : null,
-              variant.cost == null ? t("noCost") : t("costValue", { amount: fmt(variant.cost) }),
+              !showCosts ? null : variant.cost == null ? t("noCost") : t("costValue", { amount: fmt(variant.cost) }),
             ].filter(Boolean).join(" · ")}
           </p>
         </div>

@@ -1,9 +1,10 @@
 // @vitest-environment happy-dom
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   hideCheckoutLoadingOverlay,
   showCheckoutLoadingOverlay,
+  SLOW_REDIRECT_AFTER_MS,
 } from "./loading-overlay";
 
 describe("checkout loading overlay", () => {
@@ -48,5 +49,34 @@ describe("checkout loading overlay", () => {
     expect(document.querySelector("main")?.hasAttribute("aria-busy")).toBe(false);
     expect(document.body.style.overflow).toBe("auto");
     expect(document.activeElement).toBe(document.getElementById("pay"));
+  });
+
+  it("tells the buyer a slow redirect is still on its way, and only while the overlay is up", () => {
+    vi.useFakeTimers();
+    try {
+      showCheckoutLoadingOverlay({
+        title: "Opening bKash",
+        message: "You'll leave this store to pay with bKash.",
+        slowMessage: "Still opening bKash.",
+      });
+      const message = document.getElementById("loadingMsg");
+      vi.advanceTimersByTime(SLOW_REDIRECT_AFTER_MS - 1);
+      expect(message?.textContent).toBe("You'll leave this store to pay with bKash.");
+      vi.advanceTimersByTime(1);
+      expect(message?.textContent).toBe("Still opening bKash.");
+
+      // Hidden (a refusal, an error): the pending message is dropped.
+      showCheckoutLoadingOverlay({ title: "Opening bKash", message: "Leaving", slowMessage: "Still opening" });
+      hideCheckoutLoadingOverlay();
+      vi.advanceTimersByTime(SLOW_REDIRECT_AFTER_MS);
+      expect(message?.textContent).toBe("Leaving");
+
+      // Without a slow message (built-in gateways) the copy never changes.
+      showCheckoutLoadingOverlay({ title: "Opening secure payment", message: "Continue" });
+      vi.advanceTimersByTime(SLOW_REDIRECT_AFTER_MS * 2);
+      expect(message?.textContent).toBe("Continue");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

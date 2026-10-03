@@ -22,7 +22,7 @@ import {
     ORDER_CHANNEL_SOURCE_PATTERN,
 } from "@scalius/shared/order-channel";
 import { commerceCalendarDateKey } from "@scalius/shared/commerce-time";
-import { listPaymentMethodIds } from "@scalius/core/modules/payments";
+import { isPaymentMethodId } from "@scalius/core/modules/payments";
 import {
     type OrderPaymentRecoveryFilter,
     createOrdersCsvArtifactBuilder,
@@ -50,7 +50,8 @@ const orderListViewQuerySchema = z.enum(ORDER_LIST_VIEWS).openapi({
 
 const ORDER_LIST_SORTS = ["relevance", "customerName", "totalAmount", "createdAt", "updatedAt"] as const;
 
-const paymentMethodQuerySchema = z.enum(listPaymentMethodIds() as [string, ...string[]]);
+/** `cod`, a gateway id, or an app provider's `<plugin id>:<provider id>`. */
+const paymentMethodQuerySchema = z.string().max(160).refine(isPaymentMethodId, "Unknown payment method");
 
 const fulfillmentStatusQuerySchema = z.enum([
     FulfillmentStatus.PENDING,

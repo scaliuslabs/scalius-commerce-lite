@@ -8,6 +8,7 @@ import { customerMarketingConsents, customers } from "@scalius/database/schema";
 import { marketingConsentContact, type MarketingChannel } from "@scalius/shared/customer-marketing";
 import { and, eq } from "drizzle-orm";
 import { sendEmail, type EmailRuntimeContext } from "../../integrations/email";
+import type { AppProviders } from "../../integrations/provider-port";
 import { MESSAGE_COPY } from "../notifications/message-copy";
 import { renderMessageEmail } from "../notifications/notification-templates";
 import {
@@ -35,6 +36,8 @@ export interface MarketingMessageRuntime {
     encryptionKey?: string;
     /** The absolute storefront origin (Platform settings); links need it. */
     storefrontUrl: string | null | undefined;
+    /** The app providers a saved email choice may name. */
+    appProviders?: AppProviders;
 }
 
 /**
@@ -89,7 +92,7 @@ export async function sendMarketingOptInEmail(
     };
     const blocked = await recordProviderBlockedDeliveryIfNeeded(target);
     if (blocked) return buildDispatchResult([blocked]);
-    const context: EmailRuntimeContext = { db, env: runtime.env, encryptionKey: runtime.encryptionKey };
+    const context: EmailRuntimeContext = { db, env: runtime.env, encryptionKey: runtime.encryptionKey, appProviders: runtime.appProviders };
     return buildDispatchResult([await dispatchWithReceipt({
         ...target,
         // The link is a bearer of this request: never in a receipt or a log.

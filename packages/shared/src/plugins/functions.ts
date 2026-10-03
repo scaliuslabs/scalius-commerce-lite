@@ -67,6 +67,16 @@ export const cartValidateOutputSchema = z.object({
 
 // ── checkout.discounts ────────────────────────────────────────────────────
 
+/**
+ * The signed-in buyer's record in the collection the function declares
+ * (`snapshot` in the manifest), with its revision; null for a guest or when
+ * the buyer has none yet. Only apps that declare a snapshot receive it.
+ */
+export const functionSnapshotSchema = z.object({
+  revision: z.number().int().min(1),
+  data: z.record(z.string(), z.unknown()),
+}).strict().nullable();
+
 export const checkoutDiscountsOutputSchema = z.object({
   discounts: z.array(z.object({
     title: label,
@@ -84,6 +94,13 @@ export const checkoutDiscountsOutputSchema = z.object({
     /** Caps the discount's total. */
     maxAmountMinor: minor.positive().optional(),
   }).strict()).max(10),
+  /**
+   * The snapshot record's next version, committed with the order (same
+   * batch, at the snapshot's revision) only when one of these discounts
+   * applies; a concurrent change aborts the order instead. Needs a declared
+   * snapshot and a signed-in buyer.
+   */
+  commit: z.object({ record: z.record(z.string(), z.unknown()) }).strict().optional(),
 }).strict();
 
 // ── checkout.shipping_rates ───────────────────────────────────────────────
@@ -129,10 +146,15 @@ export const orderRiskInputSchema = z.object({
   }).strict(),
 }).strict();
 
-/** Advisory only: shown to the merchant on the order, never auto-cancels. */
+/**
+ * Shown to the merchant on the order. `hold: true` also puts the order on
+ * hold for staff review: it cannot be shipped or advanced until staff
+ * release it. Nothing is ever cancelled automatically.
+ */
 export const orderRiskOutputSchema = z.object({
   level: z.enum(["low", "medium", "high"]),
   reasons: z.array(message).max(5),
+  hold: z.boolean().default(false),
 }).strict();
 
 // ── Registry ──────────────────────────────────────────────────────────────
@@ -143,7 +165,7 @@ export const PLUGIN_FUNCTION_SCHEMAS = {
     output: cartValidateOutputSchema,
   },
   "checkout.discounts": {
-    input: z.object({ cart: functionCartSchema }).strict(),
+    input: z.object({ cart: functionCartSchema, snapshot: functionSnapshotSchema.optional() }).strict(),
     output: checkoutDiscountsOutputSchema,
   },
   "checkout.shipping_rates": {

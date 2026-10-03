@@ -29,9 +29,11 @@ import type { OrderCsvArtifact } from "../../orders/csv-export";
 export interface AnalyticsAccess {
   /** "View customers": reports that name customers. */
   customers: boolean;
+  /** "View product costs": reports built on unit costs (profit). */
+  costs: boolean;
 }
 
-export type ReportUnavailableReason = "customer_access";
+export type ReportUnavailableReason = "customer_access" | "cost_access";
 
 export interface ReportCatalogEntry extends AnalyticsReportDefinition {
   available: boolean;
@@ -60,6 +62,7 @@ async function unavailableReason(
   access: AnalyticsAccess,
 ): Promise<ReportUnavailableReason | null> {
   if (report.requiresCustomerAccess && !access.customers) return "customer_access";
+  if (report.requiresCostAccess && !access.costs) return "cost_access";
   return null;
 }
 
@@ -76,6 +79,9 @@ async function assertReportAvailable(ctx: AnalyticsContext, report: AnalyticsRep
   const reason = await unavailableReason(ctx, report, access);
   if (reason === "customer_access") {
     throw new ForbiddenError("This report names customers: it needs the View customers permission.");
+  }
+  if (reason === "cost_access") {
+    throw new ForbiddenError("This report shows unit costs: it needs the View product costs permission.");
   }
 }
 

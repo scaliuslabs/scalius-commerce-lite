@@ -13,7 +13,6 @@ const mocks = vi.hoisted(() => ({
   getDeliveryProvider: vi.fn(),
   saveDeliveryProvider: vi.fn(),
   testDeliveryProvider: vi.fn(),
-  createProvider: vi.fn(),
   deleteWhere: vi.fn(),
 }));
 
@@ -32,9 +31,9 @@ vi.mock("@scalius/core/modules/delivery", async (importOriginal) => ({
   getDeliveryProvider: mocks.getDeliveryProvider,
   saveDeliveryProvider: mocks.saveDeliveryProvider,
   testDeliveryProvider: mocks.testDeliveryProvider,
-  createProvider: mocks.createProvider,
 }));
 
+import { pathaoCourier, steadfastCourier } from "@scalius/core/modules/delivery";
 import { deliveryProvidersRoutes } from "./delivery-providers";
 
 const providerRecord = {
@@ -97,6 +96,7 @@ function createTestApp() {
 describe("delivery provider write behavior", () => {
   afterEach(() => {
     vi.clearAllMocks();
+    vi.restoreAllMocks();
   });
 
   it("returns success after provider creation", async () => {
@@ -139,6 +139,7 @@ describe("delivery provider write behavior", () => {
         }),
       }),
       "credential-key",
+      expect.any(Function),
     );
   });
 
@@ -165,6 +166,7 @@ describe("delivery provider write behavior", () => {
       expect.anything(),
       expect.objectContaining({ isActive: false }),
       "credential-key",
+      expect.any(Function),
     );
   });
 
@@ -249,6 +251,7 @@ describe("delivery provider write behavior", () => {
         }),
       }),
       "credential-key",
+      expect.any(Function),
     );
   });
 
@@ -308,6 +311,7 @@ describe("delivery provider write behavior", () => {
         }),
       }),
       "credential-key",
+      expect.any(Function),
     );
   });
 
@@ -477,17 +481,16 @@ describe("delivery provider write behavior", () => {
       expect.anything(),
       "provider_pathao",
       "credential-key",
+      expect.any(Function),
     );
 
   });
 
   it("does not return upstream failure details from credential tests", async () => {
     const { app, env } = createTestApp();
-    mocks.createProvider.mockResolvedValueOnce({
-      testConnection: vi.fn().mockResolvedValue({
-        success: false,
-        message: "Rejected token secret-provider-token",
-      }),
+    vi.spyOn(pathaoCourier, "testConnection").mockResolvedValueOnce({
+      ok: false,
+      message: "Rejected token secret-provider-token",
     });
 
     const response = await app.request(
@@ -521,6 +524,7 @@ describe("delivery provider write behavior", () => {
 
   it("rejects non-public provider URLs before testing credentials", async () => {
     const { app, env } = createTestApp();
+    const testConnection = vi.spyOn(steadfastCourier, "testConnection");
 
     const response = await app.request(
       "/api/v1/admin/settings/delivery-providers/create-test",
@@ -542,7 +546,7 @@ describe("delivery provider write behavior", () => {
     );
 
     expect(response.status).toBe(400);
-    expect(mocks.createProvider).not.toHaveBeenCalled();
+    expect(testConnection).not.toHaveBeenCalled();
   });
 
   it("does not fall back to JWT_SECRET when encrypted credentials cannot be strict-read", async () => {
@@ -676,6 +680,7 @@ describe("delivery provider write behavior", () => {
       expect.anything(),
       expect.objectContaining({ isActive: false }),
       "credential-key",
+      expect.any(Function),
     );
   });
 

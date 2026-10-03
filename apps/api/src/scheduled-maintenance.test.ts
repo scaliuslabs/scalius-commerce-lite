@@ -459,13 +459,16 @@ describe("runScheduledMaintenance", () => {
     expect(console.log).toHaveBeenCalledWith(expect.stringContaining("event=scheduled_run_completed"));
     expect(console.log).toHaveBeenCalledWith(expect.stringContaining("staleQueued=1"));
     expect(console.log).toHaveBeenCalledWith(expect.stringContaining("Meta Purchase outbox flush"));
+    // App gateways load only when a due row names one.
     expect(mocks.reconcileDueRefundAttempts).toHaveBeenCalledWith(mocks.db, {
       encryptionKey: undefined,
       limit: REFUND_ATTEMPT_RECONCILIATION_LIMIT,
+      providers: expect.any(Function),
     });
     expect(mocks.reconcileExternalRefundWebhooks).toHaveBeenCalledWith(mocks.db, {
       encryptionKey: undefined,
       limit: EXTERNAL_REFUND_RECONCILIATION_LIMIT,
+      providers: expect.any(Function),
     });
     expect(mocks.enqueueOrderRefundNotificationForOrder).toHaveBeenNthCalledWith(1, {
       db: mocks.db,

@@ -60,6 +60,17 @@ is set to ship from it.
 
 ## Purchasing, transfers and unit cost (migration 0109)
 
+**Who sees what (RBAC).** Stock is product data: `products.view` reads it,
+`products.edit` adjusts it. Unit costs, margins, inventory value,
+purchase-order money and profit reports need `products.view_costs` (Shopify's
+"View product costs"): reads leave those fields out without it
+(`cost-visibility.ts`, applied at the API edge, so agent connections get the
+same answers) and writes that set a cost are refused. Suppliers, purchase
+orders, transfers and location addresses need `inventory.view`; their writes
+`inventory.manage` (drafting or editing a purchase order also
+`products.view_costs`). Locations are listed by name to anyone who can see
+stock; their writes take `inventory.manage` or `settings.general.edit`.
+
 **Unit cost.** `product_variants.cost_minor` is the SKU's current cost per
 item (minor units, NULL = not set; a trigger keeps it a non-negative safe
 integer). It is staff-only: buyer reads project explicit columns and never
@@ -250,6 +261,7 @@ The function is **idempotent** -- a same-pool "released" movement excludes that 
 | `validation.ts`            | `validateStockNonNegative()`, `validateBackorderLimit()`, `validateReservedStockConsistency()`, `validatePositiveQuantity()` |
 | `stock-commands.ts`        | `executeStockCommand()` -- the multi-SKU command engine (receipts, transfers); `weightedAverageCostMinor()` |
 | `unit-costs.ts`            | `setSkuCosts()`, cost parsing (`unitCostToMinor`), `marginPercent()` |
+| `cost-visibility.ts`       | What readers without `products.view_costs` get (SKUs, purchase orders, receipts without money) and location details without `inventory.view`/`settings.general.view` |
 | `suppliers.ts`             | Supplier records (list, create, update at version, archive while no open PO, unarchive) |
 | `purchase-orders.ts`       | Purchase orders: list/get, draft create/edit/delete, mark ordered, receive (cost history, average cost), cancel, CSV |
 | `transfers.ts`             | Transfers: list/get, draft create/edit/delete, ship, receive in parts, cancel (returns in-transit units) |

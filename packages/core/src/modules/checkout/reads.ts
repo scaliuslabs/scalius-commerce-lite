@@ -16,10 +16,12 @@ import {
 } from "./attempts";
 import {
     resolveActiveFunctionRegistrations,
-    selectActiveFunctionRegistrations,
+    selectActiveCheckoutRegistrations,
     type ActiveFunctionRegistrationRow,
     type RegisteredPlugin,
 } from "../plugins/registry";
+import { resolveAppPaymentUsability } from "../payments/gateway-settings";
+import { BUILT_IN_PAYMENT_PROVIDERS, type PaymentProviders } from "../payments/gateways/registry";
 import {
     createStorefrontCheckoutAuthorityReadPlan,
     type StorefrontCheckoutAuthorityInput,
@@ -52,21 +54,26 @@ function tagCheckoutError(error: unknown, code: string): unknown {
 /**
  * One read round trip for a storefront checkout: the idempotency row, the
  * checkout authority snapshot, the rows the commit needs and the apps'
- * checkout function registrations (none: checkout does no app work). The
- * attempt is decided first so a committed request replays even if authority
- * changed.
+ * checkout function and payment provider registrations (none: checkout does
+ * no app work). The attempt is decided first so a committed request replays
+ * even if authority changed. `paymentProviders` turns the active payment
+ * provider registrations into the request's gateways (the API builds them;
+ * without it only built-in gateways are offered).
  */
 export async function loadStorefrontCheckoutReads<TResponse>(
     db: Database,
     identity: CheckoutAttemptIdentity,
     authorityInput: StorefrontCheckoutAuthorityInput & { customerPhone: string; customerEmail?: string | null },
     credentialEncryptionKey?: string,
+    options: { paymentProviders?: (registrations: readonly RegisteredPlugin[]) => PaymentProviders } = {},
 ): Promise<{
     existingAttempt: ExistingCheckoutAttemptResult<TResponse> | null;
     commitReads: StorefrontOrderCommitReads;
     authority(): StorefrontCheckoutAuthoritySnapshot;
     /** Active checkout function registrations, every point. */
     functionRegistrations: RegisteredPlugin[];
+    /** The request's gateways: built-in and the active app providers. */
+    paymentProviders: PaymentProviders;
 }> {
     const plan = createStorefrontCheckoutAuthorityReadPlan(db, authorityInput);
     const contact: OrderContact = { phone: authorityInput.customerPhone, email: authorityInput.customerEmail ?? null };
@@ -78,7 +85,7 @@ export async function loadStorefrontCheckoutReads<TResponse>(
         selectCheckoutAttemptByKey(db, identity.requestKey),
         selectContactCustomerCandidates(db, contact),
         selectReservationVariantStates(db, variantIds),
-        selectActiveFunctionRegistrations(db),
+        selectActiveCheckoutRegistrations(db),
     ];
     let results: unknown[];
     try {
@@ -93,9 +100,18 @@ export async function loadStorefrontCheckoutReads<TResponse>(
         ActiveFunctionRegistrationRow[] | undefined,
     ];
     const existingAttempt = resolveCheckoutAttemptRow<TResponse>(attemptRows[0], identity);
+    const registrations = resolveActiveFunctionRegistrations(registrationRows ?? []);
+    const paymentRegistrations = registrations.filter((registration) => registration.kind === "provider");
+    const paymentProviders = paymentRegistrations.length > 0 && options.paymentProviders
+        ? options.paymentProviders(paymentRegistrations)
+        : BUILT_IN_PAYMENT_PROVIDERS;
     const settled: SettledAuthority = existingAttempt?.status === "replay"
         ? { ok: false, error: new Error("Replayed checkout does not resolve authority.") }
-        : await plan.resolve(results.slice(0, plan.statements.length), credentialEncryptionKey)
+        : await plan.resolve(
+            results.slice(0, plan.statements.length),
+            credentialEncryptionKey,
+            await resolveAppPaymentUsability(db, paymentProviders.gateways, credentialEncryptionKey),
+        )
             .then((snapshot): SettledAuthority => ({ ok: true, snapshot }))
             .catch((error: unknown): SettledAuthority => ({
                 ok: false,
@@ -112,6 +128,7 @@ export async function loadStorefrontCheckoutReads<TResponse>(
             if (!settled.ok) throw settled.error;
             return settled.snapshot;
         },
-        functionRegistrations: resolveActiveFunctionRegistrations(registrationRows ?? []),
+        functionRegistrations: registrations.filter((registration) => registration.kind !== "provider"),
+        paymentProviders,
     };
 }

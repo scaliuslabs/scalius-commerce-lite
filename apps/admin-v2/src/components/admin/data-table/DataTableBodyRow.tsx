@@ -87,11 +87,13 @@ export function DataTableHeadCell<TData extends TableRowData>({
   hasSelect: boolean;
 }) {
   const size = column.getSize();
+  const { style: _cap, ...attributes } = columnAttributes(column, hasSelect);
+  const maxWidth = column.columnDef.meta?.maxWidth;
   return (
     <TableHead
-      {...columnAttributes(column, hasSelect)}
+      {...attributes}
       className={cn(size !== 150 && "w-(--column-width)")}
-      style={{ "--column-width": `${size}px` } as CSSProperties}
+      style={{ "--column-width": `${size}px`, "--column-max": maxWidth ? `${maxWidth}px` : undefined } as CSSProperties}
     >
       {header && !header.isPlaceholder ? flexRender(column.columnDef.header, header.getContext()) : null}
     </TableHead>

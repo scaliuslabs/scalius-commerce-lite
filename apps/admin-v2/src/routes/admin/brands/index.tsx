@@ -21,7 +21,7 @@ import { brandsQueryOptions, type BrandListItem } from "~/lib/api-query-options/
 import { useStorefrontUrl } from "~/hooks/use-storefront-url";
 import { useCatalogActionPermissions } from "~/hooks/use-catalog-action-permissions";
 import { Button } from "~/components/ui/button";
-import { Badge } from "~/components/ui/badge";
+import { StatusBadge } from "~/components/admin/resource/StatusBadge";
 import type { ColumnDef } from "~/components/admin/data-table/table-config";
 import { ResourceListPage, ResourceRowLink } from "~/components/admin/resource/ResourceListPage";
 import { DateText, Thumb, sortHeader } from "~/components/admin/resource/columns";
@@ -86,9 +86,9 @@ function BrandsPage() {
       header: t("status"),
       meta: { mobile: "status", priority: 90, minWidth: 100 },
       cell: ({ row }) => (
-        <Badge variant={row.original.status === "published" ? "success" : "attention"}>
+        <StatusBadge status={row.original.status === "published" ? "active" : "draft"}>
           {t(row.original.status === "published" ? "active" : "draft")}
-        </Badge>
+        </StatusBadge>
       ),
     },
     {

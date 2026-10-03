@@ -12,10 +12,16 @@ import {
   type ActiveFunctionRegistrationRow,
   type RegisteredPlugin,
 } from "@scalius/core/modules/plugins";
-import type { CheckoutAppFunctionResult, CheckoutAppFunctions } from "@scalius/core/modules/checkout";
+import {
+  CHECKOUT_APP_UNAVAILABLE_REASON,
+  readCheckoutCopy,
+  type CheckoutAppFunctionResult,
+  type CheckoutAppFunctions,
+} from "@scalius/core/modules/checkout";
+import { ValidationError } from "@scalius/core/errors";
 import { PLUGIN_FUNCTION_POINTS, type PluginFunctionInput, type PluginFunctionPoint } from "@scalius/shared/plugins";
 import type { PluginHost, PluginHostOptions } from "./host";
-import { runPluginFunctions } from "./functions";
+import { PluginFunctionsBlockedError, runPluginFunctions } from "./functions";
 
 export interface CheckoutAppFunctionsOptions {
   env: Env;
@@ -73,7 +79,13 @@ export function createCheckoutAppFunctions(options: CheckoutAppFunctionsOptions)
         pending = sharedHost()
           .then((shared) => runPluginFunctions(point, input, options.env, ctx, { db: options.db, registered: forPoint, host: shared }))
           .then((results) => results.map((result) => ({ ...result, appName: names.get(result.pluginId) ?? result.pluginId })))
-          .catch((error: unknown) => {
+          .catch(async (error: unknown) => {
+            // An app the store made blocking could not answer: checkout stops, with the store's words.
+            if (error instanceof PluginFunctionsBlockedError) {
+              throw new ValidationError(await readCheckoutCopy(options.db, "checkoutAppUnavailableText"), {
+                reason: CHECKOUT_APP_UNAVAILABLE_REASON,
+              });
+            }
             // A platform fault here must not take checkout down: no app output (fail-open).
             console.error(`[plugins] checkout function ${point} could not run: ${error instanceof Error ? error.name : "error"}`);
             return [];

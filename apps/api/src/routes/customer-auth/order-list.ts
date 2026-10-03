@@ -10,6 +10,7 @@ import { deliveryMethodKindSchema } from "../../schemas/order-lines";
 import { nullableTimestampSchema } from "../../schemas/timestamps";
 import { ok } from "../../utils/api-response";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
+import { requestAppProviders } from "../../plugins/providers/app-providers";
 import { setPrivateNoStoreHeaders, requireCustomerSession } from "./shared";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
@@ -167,7 +168,7 @@ app.openapi(getCustomerOrdersRoute, async (c) => {
   await linkVerifiedContactOrders(db, session.customerId);
   const [result, phoneVerification] = await Promise.all([
     getCustomerOrders(db, session.customerId, query),
-    getAccountPhoneVerificationPrompt(db, session.customerId, getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>)),
+    getAccountPhoneVerificationPrompt(db, session.customerId, getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>), requestAppProviders(c)),
   ]);
 
   // Merge session data into profile (DB profile wins, session fills gaps)

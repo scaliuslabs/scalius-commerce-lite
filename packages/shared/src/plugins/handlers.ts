@@ -6,6 +6,8 @@
 // can never be missing. Pure and free of zod: the sandbox wrapper bundles it.
 // Part of the versioned plugin API.
 
+import { PROVIDER_KINDS, PROVIDER_OPERATIONS, type ProviderKind } from "./providers/kinds";
+
 /** What a manifest declares, by handler kind (names as the manifest spells them). */
 export interface PluginHandlerInventory {
   /** Topic filters (`order.paid`, `order.*`, `*`); each needs a handler under the same key. */
@@ -13,7 +15,15 @@ export interface PluginHandlerInventory {
   functions: string[];
   routes: { admin: string[]; public: string[]; webhooks: string[] };
   cron: string[];
-  providers: string[];
+  /** Each provider's port and the operations its implementation must have. */
+  providers: PluginProviderInventory[];
+}
+
+export interface PluginProviderInventory {
+  id: string;
+  kind: ProviderKind;
+  /** The operations the host may call: the port's required ones and the declared optional ones. */
+  operations: string[];
 }
 
 /** Lifecycle hooks are optional and need no declaration. */
@@ -30,7 +40,7 @@ export interface PluginHandlerManifest {
     webhooks: readonly string[];
   };
   cron: ReadonlyArray<{ name: string }>;
-  providers: ReadonlyArray<{ id: string }>;
+  providers: ReadonlyArray<{ id: string; kind: ProviderKind; operations: readonly string[] }>;
 }
 
 export function pluginHandlerInventory(manifest: PluginHandlerManifest): PluginHandlerInventory {
@@ -43,7 +53,11 @@ export function pluginHandlerInventory(manifest: PluginHandlerManifest): PluginH
       webhooks: [...manifest.routes.webhooks],
     },
     cron: manifest.cron.map((job) => job.name),
-    providers: manifest.providers.map((provider) => provider.id),
+    providers: manifest.providers.map((provider) => ({
+      id: provider.id,
+      kind: provider.kind,
+      operations: [...PROVIDER_OPERATIONS[provider.kind].required, ...provider.operations],
+    })),
   };
 }
 
@@ -100,7 +114,13 @@ export function checkPluginHandlers(inventory: PluginHandlerInventory, definitio
   compare("Event", inventory.events, plugin.events, "function");
   compare("Function", inventory.functions, plugin.functions, "function");
   compare("Cron job", inventory.cron, plugin.cron, "function");
-  compare("Provider", inventory.providers, plugin.providers, "object");
+  compare("Provider", inventory.providers.map((provider) => provider.id), plugin.providers, "object");
+  if (isRecord(plugin.providers)) {
+    for (const declared of inventory.providers) {
+      const implementation = plugin.providers[declared.id];
+      if (isRecord(implementation)) issues.push(...providerIssues(declared, implementation));
+    }
+  }
 
   const routes = plugin.routes;
   if (routes !== undefined && !isRecord(routes)) {
@@ -139,4 +159,31 @@ export function pluginEventHandlerKey(topic: string, declared: readonly string[]
   const prefix = topic.split(".", 1)[0];
   if (prefix && declared.includes(`${prefix}.*`)) return `${prefix}.*`;
   return declared.includes("*") ? "*" : null;
+}
+
+/**
+ * How a provider implementation disagrees with its declaration: the port it
+ * was defined for (`definePaymentProvider` stamps `kind`), a declared
+ * operation it lacks, an operation it has but does not declare, or one the
+ * port does not have.
+ */
+function providerIssues(declared: PluginProviderInventory, implementation: Record<string, unknown>): string[] {
+  const label = `Provider "${declared.id}"`;
+  if (!(PROVIDER_KINDS as readonly unknown[]).includes(declared.kind)) return [`${label} names an unknown port.`];
+  const issues: string[] = [];
+  if (implementation.kind !== declared.kind) {
+    issues.push(`${label} is declared as a ${declared.kind} provider but defined for another port.`);
+  }
+  const port = PROVIDER_OPERATIONS[declared.kind];
+  const known = new Set<string>([...port.required, ...port.optional]);
+  for (const operation of declared.operations) {
+    if (typeof implementation[operation] !== "function") issues.push(`${label} must implement ${operation}.`);
+  }
+  for (const [key, value] of Object.entries(implementation)) {
+    if (key === "kind") continue;
+    if (!known.has(key)) issues.push(`${label} has "${key}", which the ${declared.kind} port does not define.`);
+    else if (typeof value !== "function") issues.push(`${label}: ${key} must be a function.`);
+    else if (!declared.operations.includes(key)) issues.push(`${label} implements ${key}; declare it in the provider's operations.`);
+  }
+  return issues;
 }

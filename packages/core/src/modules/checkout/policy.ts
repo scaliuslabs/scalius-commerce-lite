@@ -9,7 +9,7 @@ import {
   ValidationError,
 } from "../../errors";
 import type { StorefrontCheckoutAuthoritySnapshot } from "./authority";
-import { paymentMethodLabel } from "../payments/gateways/registry";
+import { BUILT_IN_PAYMENT_PROVIDERS, type PaymentProviders } from "../payments/gateways/registry";
 
 export interface StorefrontCheckoutSettingsSnapshot {
   checkoutMode: "guest_cod_only" | "gateways_only" | "all";
@@ -24,6 +24,8 @@ export function assertStorefrontCheckoutPolicy(
     StorefrontCheckoutAuthoritySnapshot,
     "checkoutSettings" | "allowedCountries" | "activePaymentMethods"
   >,
+  /** The request's gateways, for method names in refusals. */
+  providers: PaymentProviders = BUILT_IN_PAYMENT_PROVIDERS,
 ): StorefrontCheckoutSettingsSnapshot {
   const checkoutSettings = authority.checkoutSettings;
   const snapshot: StorefrontCheckoutSettingsSnapshot = {
@@ -45,7 +47,7 @@ export function assertStorefrontCheckoutPolicy(
 
   if (!(authority.activePaymentMethods.enabledMethods as readonly string[]).includes(paymentMethod)) {
     throw new ServiceUnavailableError(
-      `${paymentMethodLabel(paymentMethod)} is not enabled for checkout.`,
+      `${providers.label(paymentMethod)} is not enabled for checkout.`,
     );
   }
 
@@ -56,7 +58,7 @@ export function assertStorefrontCheckoutPolicy(
     partialPaymentAmount: snapshot.partialPaymentAmount,
   })) {
     throw new ValidationError(
-      `${paymentMethodLabel(paymentMethod)} is not available for the current checkout settings.`,
+      `${providers.label(paymentMethod)} is not available for the current checkout settings.`,
     );
   }
 
@@ -70,8 +72,10 @@ export function assertGuestStorefrontCheckoutPolicy(
     StorefrontCheckoutAuthoritySnapshot,
     "checkoutSettings" | "allowedCountries" | "activePaymentMethods"
   >,
+  /** The request's gateways, for method names in refusals. */
+  providers: PaymentProviders = BUILT_IN_PAYMENT_PROVIDERS,
 ): StorefrontCheckoutSettingsSnapshot {
-  const snapshot = assertStorefrontCheckoutPolicy(customerPhone, paymentMethod, authority);
+  const snapshot = assertStorefrontCheckoutPolicy(customerPhone, paymentMethod, authority, providers);
   if (!authority.checkoutSettings.guestCheckoutEnabled) {
     throw new UnauthorizedError("Please sign in before checkout.");
   }

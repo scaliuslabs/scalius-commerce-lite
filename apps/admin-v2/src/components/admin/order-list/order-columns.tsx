@@ -10,6 +10,8 @@ import type { ColumnDef } from "~/components/admin/data-table/table-config";
 import { createSelectColumn } from "~/components/admin/data-table/columns/column-factories";
 import { DataTableRowActions } from "~/components/admin/data-table/DataTableRowActions";
 import { statusBadgeVariant } from "~/components/admin/orderview/status-badges";
+import { isQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
+import { useAppPaymentMethodNames } from "~/hooks/use-app-payment-method-names";
 import { useCurrency } from "~/hooks/use-currency";
 import { useMessages } from "~/i18n";
 import {
@@ -170,8 +172,20 @@ export function PaymentCell({ order }: { order: Pick<OrderListItem, "status" | "
   const t = useMessages(orderMessages);
   const status = paymentShown(order);
   if (!status) return <Empty />;
+  // An app's method (`<plugin id>:<provider id>`) is named by its provider; only those rows read the names.
+  if (isQualifiedProviderId(order.paymentMethod)) return <AppPaymentBadge status={status} method={order.paymentMethod} />;
   return (
     <Badge data-part="value" variant={statusBadgeVariant(status, "payment")} title={paymentMethodLabel(t, order.paymentMethod)}>
+      {paymentStatusLabel(t, status)}
+    </Badge>
+  );
+}
+
+function AppPaymentBadge({ status, method }: { status: string; method: string }) {
+  const t = useMessages(orderMessages);
+  const appNames = useAppPaymentMethodNames(true);
+  return (
+    <Badge data-part="value" variant={statusBadgeVariant(status, "payment")} title={paymentMethodLabel(t, method, appNames)}>
       {paymentStatusLabel(t, status)}
     </Badge>
   );
@@ -271,7 +285,7 @@ function OrderRowActions({ order, handlers }: { order: OrderListItem; handlers: 
  * an empty cell reads "—". Narrow screens drop the lowest priority first.
  */
 export function getOrderColumns(handlers: OrderRowHandlers): ColumnDef<OrderListItem, unknown>[] {
-  const meta = (key: OrderListMessageKey, layout: { priority?: number; minWidth: number; numeric?: boolean; primary?: boolean }) => ({
+  const meta = (key: OrderListMessageKey, layout: { priority?: number; minWidth: number; maxWidth?: number; numeric?: boolean; primary?: boolean }) => ({
     label: handlers.label?.(key),
     ...layout,
   });
@@ -296,7 +310,9 @@ export function getOrderColumns(handlers: OrderRowHandlers): ColumnDef<OrderList
     },
     {
       id: "customer",
-      meta: meta("customer", { priority: 96, minWidth: 180 }),
+      // A long name truncates (the whole name on hover) instead of pushing Total,
+      // Payment and Fulfillment out of the table.
+      meta: meta("customer", { priority: 96, minWidth: 180, maxWidth: 240 }),
       header: () => <Title k="customer" />,
       cell: ({ row }) => <CustomerCell order={row.original} />,
     },

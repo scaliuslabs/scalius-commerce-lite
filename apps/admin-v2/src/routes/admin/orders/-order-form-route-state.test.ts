@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { orderEditLockMessages } from "~/i18n/order-edit-locks";
-import { editLockMessageKey, orderEditState, savedDeliveryMethod } from "./-order-form-route-state";
+import { editLockMessageKey, orderEditLockMessages } from "~/i18n/order-edit-locks";
+import { orderEditState, savedDeliveryMethod } from "./-order-form-route-state";
 import { formItems } from "~/components/admin/order-form/order-form-data";
 
 const allowed = { allowed: true, reason: null };

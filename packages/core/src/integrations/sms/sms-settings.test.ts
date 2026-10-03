@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { encryptCredentials } from "../../utils/credential-encryption";
 import { ValidationError } from "../../errors";
+import type { AppProviders } from "../provider-port";
 import {
   getActiveSmsProvider,
   getSmsProviderReadiness,
@@ -179,5 +180,62 @@ describe("SMS settings readiness", () => {
     db.sqlite.exec("UPDATE settings SET value = json_set(value, '$.activeProvider', '') WHERE category = 'sms'");
     vi.spyOn(console, "error").mockImplementation(() => undefined);
     await expect(getActiveSmsProvider(db)).resolves.toBeNull();
+  });
+});
+
+describe("SMS provider selection", () => {
+  const APP_ID = "acme.texts:texts";
+  const appSend = vi.fn(async () => ({ success: true, providerRef: "app-1" }));
+  const appProvider = { id: APP_ID, label: "Acme Texts", send: appSend };
+
+  function apps(choice: { provider: typeof appProvider; issue: null } | { provider: null; issue: string }): AppProviders & { resolve: ReturnType<typeof vi.fn> } {
+    return { resolve: vi.fn(async () => choice) } as never;
+  }
+
+  it("sends through the app provider the saved choice names", async () => {
+    const db = createSmsSettingsDb([{ key: "active_provider", value: APP_ID }]);
+    const lookup = apps({ provider: appProvider, issue: null });
+
+    const provider = await getActiveSmsProvider(db, undefined, lookup);
+    expect(lookup.resolve).toHaveBeenCalledWith("sms", APP_ID);
+    expect(provider?.id).toBe(APP_ID);
+    await expect(provider!.send({ to: "+8801700000000", message: "Hi" }, {})).resolves.toEqual({ success: true, providerRef: "app-1" });
+    await expect(getSmsProviderReadiness(db, undefined, lookup)).resolves.toEqual({ status: "ready", issues: [], activeProvider: APP_ID });
+    await expect(getSmsSettings(db, undefined, lookup)).resolves.toMatchObject({ activeProvider: APP_ID, activeProviderConfigured: true });
+  });
+
+  it("fails closed when the chosen app is not ready, or no app can run here", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const db = createSmsSettingsDb([{ key: "active_provider", value: APP_ID }]);
+    const notReady = apps({ provider: null, issue: "Acme Texts credentials could not be opened. Save them again in the app's settings." });
+
+    await expect(getActiveSmsProvider(db, undefined, notReady)).resolves.toBeNull();
+    await expect(getSmsProviderReadiness(db, undefined, notReady)).resolves.toEqual({
+      status: "incomplete",
+      issues: [{ code: SMS_READINESS_CODE, message: "Acme Texts credentials could not be opened. Save them again in the app's settings." }],
+      activeProvider: APP_ID,
+    });
+    await expect(getActiveSmsProvider(db)).resolves.toBeNull();
+    await expect(getSmsProviderReadiness(db)).resolves.toMatchObject({ status: "incomplete", activeProvider: APP_ID });
+  });
+
+  it("never asks for app providers when a built-in gateway is chosen", async () => {
+    const db = createSmsSettingsDb([
+      { key: "active_provider", value: "bdbulksms" },
+      { key: "bdbulksms_token", value: "live-token-123" },
+    ]);
+    const lookup = apps({ provider: appProvider, issue: null });
+
+    await expect(getActiveSmsProvider(db, undefined, lookup)).resolves.toMatchObject({ id: "bdbulksms", label: "BDBulkSMS (GreenWeb)" });
+    await getSmsProviderReadiness(db, undefined, lookup);
+    expect(lookup.resolve).not.toHaveBeenCalled();
+  });
+
+  it("saves an app provider id as the choice and refuses anything else", async () => {
+    const db = createSmsSettingsDb([]);
+    await saveSmsSettings(db, { activeProvider: APP_ID });
+    await expect(getSmsSettings(db)).resolves.toMatchObject({ activeProvider: APP_ID, activeProviderConfigured: false });
+    await expect(saveSmsSettings(db, { activeProvider: "acme.texts" })).rejects.toBeInstanceOf(ValidationError);
+    await expect(saveSmsSettings(db, { activeProvider: "twilio" })).rejects.toBeInstanceOf(ValidationError);
   });
 });

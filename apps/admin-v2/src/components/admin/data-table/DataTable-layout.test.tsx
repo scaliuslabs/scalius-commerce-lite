@@ -40,7 +40,7 @@ function Harness() {
     { accessorKey: "name", header: "Product", meta: { primary: true, minWidth: 200 } },
     { accessorKey: "sku", header: "SKU", meta: { priority: 80, minWidth: 140 }, cell: ({ row }) => <IdText value={row.original.sku} copy /> },
     { accessorKey: "stock", header: "Available", meta: { numeric: true, priority: 90, minWidth: 100 } },
-    { accessorKey: "vendor", header: "Vendor", meta: { priority: 20, minWidth: 140 } },
+    { accessorKey: "vendor", header: "Vendor", meta: { priority: 20, minWidth: 140, maxWidth: 220 } },
     { id: "actions", header: "", cell: () => "…" },
   ], []);
   const table = useTable({
@@ -122,5 +122,20 @@ describe("DataTable column layout", () => {
     expect(sku?.className).toContain("whitespace-nowrap");
     expect(sku?.className).toContain("truncate");
     expect(host.querySelector(`button[aria-label="Copy ${LONG_SKU}"]`)).not.toBeNull();
+  });
+
+  it("caps a column with maxWidth on its header and every cell", async () => {
+    await act(async () => root.render(<Harness />));
+    await resize(1440);
+    const vendorHead = [...host.querySelectorAll("th")].find((th) => th.textContent === "Vendor")!;
+    const vendorCell = [...host.querySelectorAll("tbody td")].find((td) => td.textContent === "Aarong")!;
+    for (const cell of [vendorHead, vendorCell]) {
+      expect(cell.hasAttribute("data-capped")).toBe(true);
+      expect((cell as HTMLElement).style.getPropertyValue("--column-max")).toBe("220px");
+    }
+    // The header keeps its own width variable beside the cap.
+    expect(vendorHead.style.getPropertyValue("--column-width")).not.toBe("");
+    const sku = [...host.querySelectorAll("tbody td")].find((td) => td.textContent?.includes(LONG_SKU))!;
+    expect(sku.hasAttribute("data-capped")).toBe(false);
   });
 });

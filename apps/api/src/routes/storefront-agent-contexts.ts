@@ -25,7 +25,9 @@ import {
 import { ForbiddenError, ValidationError } from "@scalius/core/errors";
 import { getOrderSupportRequestStatusLabel } from "@scalius/core/modules/orders";
 import { runStorefrontOrderPostCommitSideEffects, type CheckoutAppFunctions } from "@scalius/core/modules/checkout";
-import { listActiveFunctionRegistrations } from "@scalius/core/modules/plugins";
+import { listActiveCheckoutRegistrations } from "@scalius/core/modules/plugins";
+import { paymentProvidersFromRegistrations } from "../plugins/providers/payment";
+import { requestProviderRuntime } from "../plugins/providers/runtime";
 import type { Database } from "@scalius/database/client";
 import { phoneNumberSchema } from "@scalius/shared/customer-utils";
 import { createCheckoutAppFunctions } from "../plugins/checkout-functions";
@@ -41,7 +43,7 @@ import {
 import { getCredentialEncryptionKey } from "../utils/encryption-key";
 import { getOptionalExecutionContext } from "../utils/execution-context";
 import { enqueueOrderSupportRequestNotificationForOrder } from "../utils/order-notification-queue";
-import { listPaymentMethodIds } from "@scalius/core/modules/payments";
+import { BUILT_IN_PAYMENT_PROVIDERS, isPaymentMethodId, type PaymentProviders } from "@scalius/core/modules/payments";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -237,8 +239,8 @@ const checkoutSubmitSchema = z.object({
     description: "Street address. Required only when a line ships; omit it for a pickup method or a cart with nothing physical (services).",
   }),
   notes: z.string().trim().max(500).nullable(),
-  paymentMethod: z.enum(listPaymentMethodIds() as [string, ...string[]]).openapi({
-    description: "Selected active checkout payment method. Online methods continue through storefront.orders.payment.begin.",
+  paymentMethod: z.string().max(160).refine(isPaymentMethodId, "Unknown payment method").openapi({
+    description: "Selected active checkout payment method (`cod`, a gateway id, or an app provider's `<plugin id>:<provider id>`). Online methods continue through storefront.orders.payment.begin.",
   }),
 }).strict();
 
@@ -333,20 +335,28 @@ function noStore(c: { header(name: string, value: string): void }): void {
 }
 
 /**
- * The apps' checkout functions for a buyer agent's checkout (channel
- * "agent"), the same merge rules as the online store: one indexed
+ * The apps a buyer agent's checkout uses (channel "agent"), the same as the
+ * online store's: their checkout functions and the request's payment
+ * gateways (built in plus the active app providers), from one indexed
  * registration read; none active means no app work.
  */
 async function agentCheckoutApps(
-  c: Parameters<typeof getOptionalExecutionContext>[0] & { env: Env; get(key: "db"): Database },
-): Promise<CheckoutAppFunctions> {
+  c: Parameters<typeof getOptionalExecutionContext>[0] & { env: Env; get(key: "db"): Database; req: { raw: Request } },
+): Promise<{ apps: CheckoutAppFunctions; paymentProviders: PaymentProviders }> {
   const db = c.get("db");
-  return createCheckoutAppFunctions({
-    env: c.env,
-    ctx: getOptionalExecutionContext(c) as ExecutionContext | undefined,
-    db,
-    registrations: await listActiveFunctionRegistrations(db),
-  });
+  const registrations = await listActiveCheckoutRegistrations(db);
+  const payment = registrations.filter((registration) => registration.kind === "provider");
+  return {
+    apps: createCheckoutAppFunctions({
+      env: c.env,
+      ctx: getOptionalExecutionContext(c) as ExecutionContext | undefined,
+      db,
+      registrations,
+    }),
+    paymentProviders: payment.length > 0
+      ? paymentProvidersFromRegistrations(requestProviderRuntime(c), payment)
+      : BUILT_IN_PAYMENT_PROVIDERS,
+  };
 }
 
 function continuationBootstrap(env: Env, continuationCode: string) {
@@ -563,7 +573,7 @@ app.openapi(applyDiscountRoute, async (c) => {
   return ok(c, await setAgentStorefrontDiscount(
     c.get("db"), principal.grantId, c.req.valid("param").contextId, input.revision, input.code,
     // A code only an app answers to is a valid code here too.
-    { customerPhone: input.customerPhone, apps: await agentCheckoutApps(c) },
+    { customerPhone: input.customerPhone, apps: (await agentCheckoutApps(c)).apps },
   ));
 });
 
@@ -627,7 +637,7 @@ app.openapi(validateCheckoutRoute, async (c) => {
     c.get("db"),
     principal.grantId,
     c.req.valid("param").contextId,
-    { customerPhone: c.req.valid("json").customerPhone, apps: await agentCheckoutApps(c) },
+    { customerPhone: c.req.valid("json").customerPhone, apps: (await agentCheckoutApps(c)).apps },
   ));
 });
 
@@ -656,7 +666,7 @@ app.openapi(quoteCheckoutRoute, async (c) => {
     c.req.valid("param").contextId,
     {
       customerPhone: c.req.valid("json").customerPhone,
-      apps: await agentCheckoutApps(c),
+      ...await agentCheckoutApps(c),
       credentialEncryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
     },
   ));
@@ -694,7 +704,7 @@ app.openapi(submitCheckoutRoute, async (c) => {
     c.req.valid("header")["idempotency-key"],
     bodyIdempotencyKey,
   );
-  const apps = await agentCheckoutApps(c);
+  const { apps, paymentProviders } = await agentCheckoutApps(c);
   const submitted = await submitAgentStorefrontCheckout(
     c.get("db"),
     principal.grantId,
@@ -707,6 +717,7 @@ app.openapi(submitCheckoutRoute, async (c) => {
       ).toString(),
       credentialEncryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
       apps,
+      paymentProviders,
     },
   );
   const executionCtx = getOptionalExecutionContext(c);

@@ -5,24 +5,39 @@
 import type { BundledPluginEntry } from "./loaders/bundled";
 
 export const BUNDLED_PLUGINS: Readonly<Record<string, BundledPluginEntry>> = {
+  "scalius.bkash": {
+    version: "0.1.1",
+    sha256: "aa2fb378b16f559c57c015553c25a01f2cb2224831de5816a233fccba38e20f4",
+    load: () => import("../../../../plugins/bkash/src/index"),
+  },
   "scalius.bulk-discount": {
-    version: "0.1.0",
-    sha256: "5dbf2cc5545c38de70b2e52d46f2b0e87670369bab2dd2527d1d9b9cd9157005",
+    version: "0.1.1",
+    sha256: "17e4bc680643b1d649cf252ea7b6d56fdf724e3c620b63da93666af7d0d7afd2",
     load: () => import("../../../../plugins/bulk-discount/src/index"),
   },
   "scalius.hello": {
-    version: "0.3.0",
-    sha256: "1f01c6ce43988416dffb4aa3270330ba2402adc47328403971bec9b0a84ae59b",
+    version: "0.3.1",
+    sha256: "e6b07fc8a14735a67d679ec60cf47a60b8b1305242341f82b4666fc6f391b80b",
     load: () => import("../../../../plugins/hello/src/index"),
   },
-  "scalius.order-tagger": {
+  "scalius.loyalty": {
     version: "0.1.1",
-    sha256: "66d8d66ff7f7233918b2eb0720fde0bffa2297f387557958ef09da126c86b87a",
+    sha256: "6610a06873ed6f4ddd20b2590c74f21c52fd0c98abc410d60fff78f647007953",
+    load: () => import("../../../../plugins/loyalty/src/index"),
+  },
+  "scalius.nagad": {
+    version: "0.1.1",
+    sha256: "7f7cb0934620c15a561e17c48e14a07bca1d4d461c03971e82ee305bf30d82f6",
+    load: () => import("../../../../plugins/nagad/src/index"),
+  },
+  "scalius.order-tagger": {
+    version: "0.1.2",
+    sha256: "ff1704a0929a77a444283df3824cb3f69ac7b2a7ad259f11bcafcd393bef6eea",
     load: () => import("../../../../plugins/order-tagger/src/index"),
   },
   "scalius.wishlist": {
-    version: "0.1.0",
-    sha256: "fc9b8002c47d754f744d2ea58263c067b061d2e5b87c5288430fa02ea5223bc8",
+    version: "0.1.1",
+    sha256: "21d4227b0842638d2910edc05a5542cf8cfbab705a750b72e2447989b927e645",
     load: () => import("../../../../plugins/wishlist/src/index"),
   },
 };

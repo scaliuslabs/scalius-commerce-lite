@@ -17,7 +17,7 @@ import {
 } from "../tax";
 import type { TaxDiscountAllocationInput, TaxQuote } from "../tax/types";
 import { DELIVERY_RATE_UNAVAILABLE_REASON, listDeliveryRatesForAddress } from "../delivery/zones";
-import { COD_LABEL, getPaymentGateway } from "../payments/gateways/registry";
+import { BUILT_IN_PAYMENT_PROVIDERS, COD_LABEL, type PaymentProviders } from "../payments/gateways/registry";
 import { GIFT_CARD_PAYMENT_METHOD } from "../gift-cards/ledger";
 import type { StorefrontOrderCommitPayload, StorefrontOrderShippingMethodSnapshot } from "../orders/types";
 import { resolveBundlePromotionInterplay, type BundlePromotionInterplay } from "./bundle-discounts";
@@ -34,6 +34,7 @@ import {
   wantsAppCart,
   type AppDiscountResolution,
   type AppliedAppDiscount,
+  type AppStorageCommit,
   type CheckoutAppFunctions,
   type CheckoutPaymentMethodOption,
   type CheckoutRateOption,
@@ -83,6 +84,8 @@ export interface StorefrontCheckoutPricing {
   bundleDiscountMinor: number;
   bundleLines: BundlePromotionInterplay["bundleLines"];
   appDiscounts: AppliedAppDiscount[];
+  /** Snapshot writes the applied app discounts commit with the order. */
+  appStorageCommits: AppStorageCommit[];
   /** The delivery charge before discounts (an app may have priced the chosen rate). */
   shippingMinor: number;
   /** The chosen rate as the buyer sees it (an app may have renamed or priced it). */
@@ -195,6 +198,7 @@ export async function priceStorefrontCheckout(
   let shippingMethod = delivery.shippingMethod;
   let platform = await platformPricing(shippingMinor);
   let appDiscounts: AppliedAppDiscount[] = [];
+  let appStorageCommits: AppStorageCommit[] = [];
   let claimedCodes: string[] = [];
   let ruleErrors: CheckoutRuleError[] = [];
   let shippingRates: CheckoutRateOption[] | null = null;
@@ -290,6 +294,7 @@ export async function priceStorefrontCheckout(
         apps,
       });
       appDiscounts = resolution.applied;
+      appStorageCommits = resolution.commits;
       claimedCodes = resolution.claimedCodes;
     }
   }
@@ -340,6 +345,7 @@ export async function priceStorefrontCheckout(
     bundleDiscountMinor: platform.bundleDiscountMinor,
     bundleLines: platform.bundleLines,
     appDiscounts,
+    appStorageCommits,
     shippingMinor,
     shippingMethod,
     taxQuote,
@@ -473,9 +479,9 @@ export async function previewStorefrontAppDiscounts(
 }
 
 /** A payment method's buyer-facing name (the gateway's checkout name; cash on delivery). */
-export function checkoutPaymentMethodName(methodId: string): string {
+export function checkoutPaymentMethodName(methodId: string, providers: PaymentProviders = BUILT_IN_PAYMENT_PROVIDERS): string {
   if (methodId === "cod") return COD_LABEL;
-  return getPaymentGateway(methodId)?.checkoutName?.trim() || methodId;
+  return providers.get(methodId)?.checkoutName?.trim() || methodId;
 }
 
 /**
@@ -487,8 +493,9 @@ export async function resolveAppPaymentMethods(
   apps: CheckoutAppFunctions | undefined,
   cart: FunctionCart | null,
   methodIds: readonly string[],
+  providers: PaymentProviders = BUILT_IN_PAYMENT_PROVIDERS,
 ): Promise<{ methods: CheckoutPaymentMethodOption[]; changed: boolean }> {
-  const methods = [...new Set(methodIds)].map((methodId) => ({ methodId, name: checkoutPaymentMethodName(methodId) }));
+  const methods = [...new Set(methodIds)].map((methodId) => ({ methodId, name: checkoutPaymentMethodName(methodId, providers) }));
   if (!apps?.points.has("checkout.payment_methods") || !cart || methods.length === 0) return { methods, changed: false };
   const results = await apps.run("checkout.payment_methods", {
     cart,
@@ -503,9 +510,10 @@ export async function assertStorefrontAppPaymentMethod(
   cart: FunctionCart | null,
   chosen: string,
   methodIds: readonly string[],
+  providers: PaymentProviders = BUILT_IN_PAYMENT_PROVIDERS,
 ): Promise<void> {
   if (chosen === GIFT_CARD_PAYMENT_METHOD || !methodIds.includes(chosen)) return;
-  const { methods, changed } = await resolveAppPaymentMethods(apps, cart, methodIds);
+  const { methods, changed } = await resolveAppPaymentMethods(apps, cart, methodIds, providers);
   if (changed && !methods.some((method) => method.methodId === chosen)) {
     throw new ValidationError(
       "This payment method isn't available for this order. Choose another.",

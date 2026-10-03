@@ -5,6 +5,8 @@ import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Label } from "~/components/ui/label";
 import { ORDER_STATUSES } from "@scalius/shared/order-state";
+import { isQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
+import { useAppPaymentMethodNames } from "~/hooks/use-app-payment-method-names";
 import { SearchableSelect, type SearchableSelectOption } from "~/components/ui/searchable-select";
 import { DataTableToolbar } from "~/components/admin/data-table/DataTableToolbar";
 import { formatDateOnly, parseDateOnly } from "~/lib/date-only";
@@ -82,6 +84,29 @@ function FilterSelect({
         options={[{ value: ANY, label: t("any") }, ...options]}
       />
     </div>
+  );
+}
+
+/**
+ * Cash, the built-in gateways and the installed apps' methods (read when the
+ * filters open); a filtered app method stays listed after its app is removed.
+ */
+function PaymentMethodFilter({ value, onChange }: { value: string | undefined; onChange: (value: string | undefined) => void }) {
+  const t = useMessages(orderListMessages);
+  const to = useMessages(orderMessages);
+  const appNames = useAppPaymentMethodNames(true);
+  const methods = [...new Set<string>([
+    ...PAYMENT_METHODS,
+    ...(appNames?.keys() ?? []),
+    ...(value && isQualifiedProviderId(value) ? [value] : []),
+  ])];
+  return (
+    <FilterSelect
+      label={t("paymentMethod")}
+      value={value}
+      onChange={onChange}
+      options={methods.map((method) => ({ value: method, label: paymentMethodLabel(to, method, appNames) }))}
+    />
   );
 }
 
@@ -201,12 +226,7 @@ export function OrderListToolbar({
               onChange={(value) => filter({ paymentStatus: value as OrderListSearch["paymentStatus"] })}
               options={PAYMENT_STATUSES.map((status) => ({ value: status, label: paymentStatusLabel(to, status) }))}
             />
-            <FilterSelect
-              label={t("paymentMethod")}
-              value={search.paymentMethod}
-              onChange={(value) => filter({ paymentMethod: value as OrderListSearch["paymentMethod"] })}
-              options={PAYMENT_METHODS.map((method) => ({ value: method, label: paymentMethodLabel(to, method) }))}
-            />
+            <PaymentMethodFilter value={search.paymentMethod} onChange={(paymentMethod) => filter({ paymentMethod })} />
             <FilterSelect
               label={t("fulfillment")}
               value={search.fulfillmentStatus}

@@ -35,6 +35,7 @@ import {
 } from "../payments/payment-session-attempts";
 import { validateTransition } from "../orders/status/state-machine";
 import { assertNoActiveShipmentClaim, noActiveShipmentClaimCondition } from "../orders/shipment-claim";
+import { assertOrderNotOnHold } from "../orders/holds";
 import { applyOrderStatusChange, reconcileInventoryForStatus } from "../orders/status/lifecycle";
 import type { StatusUpdateResult } from "../orders/types";
 import { fulfilmentVoidBlockedReason } from "../orders/line-presentation";
@@ -381,6 +382,8 @@ export async function recordOrderFulfilment(
 
     const order = await readOrderForFulfilment(db, orderId);
     assertNoActiveShipmentClaim(order);
+    // Nothing is handed over while staff review a hold.
+    await assertOrderNotOnHold(db, orderId);
     await assertNoActiveRefundAttempt(db, orderId);
     await assertNoActivePaymentSessionAttempt(db, orderId);
     if (!HANDOVER_ORDER_STATUSES.has(order.status)) {

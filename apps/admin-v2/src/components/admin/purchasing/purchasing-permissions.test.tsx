@@ -8,7 +8,7 @@ import { translate } from "~/i18n";
 import { purchasingMessages } from "~/i18n/purchasing";
 import type { PurchaseOrder, Transfer } from "~/lib/api-query-options/purchasing";
 
-const mocks = vi.hoisted(() => ({ canEdit: false }));
+const mocks = vi.hoisted(() => ({ canEdit: false, canViewCosts: true }));
 
 vi.mock("@tanstack/react-router", () => ({
   Link: ({ children }: { children: ReactNode }) => <a href="/admin">{children}</a>,
@@ -16,7 +16,17 @@ vi.mock("@tanstack/react-router", () => ({
   useBlocker: () => ({ proceed: () => undefined, reset: () => undefined, status: "idle" }),
 }));
 vi.mock("~/hooks/use-catalog-action-permissions", () => ({
-  useCatalogActionPermissions: () => ({ inventory: { canAdjustStock: mocks.canEdit, canAcknowledgeAlerts: mocks.canEdit } }),
+  useCatalogActionPermissions: () => ({
+    inventory: {
+      canAdjustStock: mocks.canEdit,
+      canAcknowledgeAlerts: mocks.canEdit,
+      canViewCosts: mocks.canViewCosts,
+      canEditCosts: mocks.canEdit && mocks.canViewCosts,
+      canManageOperations: mocks.canEdit,
+      canDraftPurchaseOrders: mocks.canEdit && mocks.canViewCosts,
+      canManageLocations: mocks.canEdit,
+    },
+  }),
 }));
 vi.mock("~/hooks/use-currency", () => ({
   useCurrency: () => ({ symbol: "৳", code: "BDT", fmt: (amount: number) => `৳${amount.toFixed(2)}` }),
@@ -78,7 +88,7 @@ const transfer = {
   activity: [],
 } as unknown as Transfer;
 
-describe("purchasing write actions follow products.edit", () => {
+describe("purchasing write actions follow inventory.manage; money follows products.view_costs", () => {
   let host: HTMLDivElement;
   let root: Root;
 
@@ -86,6 +96,7 @@ describe("purchasing write actions follow products.edit", () => {
     host = document.createElement("div");
     document.body.append(host);
     root = createRoot(host);
+    mocks.canViewCosts = true;
   });
 
   afterEach(() => {
@@ -126,5 +137,33 @@ describe("purchasing write actions follow products.edit", () => {
     await vi.waitFor(() => expect(host.textContent).toContain("PO1001"));
     expect(has(t("createPurchaseOrder"))).toBe(canEdit);
     expect(has(t("suppliers"))).toBe(true);
+  });
+
+  it("shows no purchase-order money without View product costs", async () => {
+    mocks.canEdit = true;
+    mocks.canViewCosts = false;
+    // What the API sends such a caller: the order without any money field.
+    const { subtotal: _s, total: _t, shipping: _sh, otherCosts: _o, tax: _x, ...withoutMoney } = order as unknown as Record<string, unknown>;
+    const costless = {
+      ...withoutMoney,
+      lines: order.lines.map(({ unitCost: _u, lineTotal: _l, currentCost: _c, ...line }) => line),
+    } as unknown as PurchaseOrder;
+    await render(<PurchaseOrderDetail order={costless} onReload={async () => undefined} />);
+    expect(host.textContent).toContain("PANJABI-L");
+    expect(host.textContent).not.toContain(t("costSummary"));
+    expect(host.textContent).not.toContain("৳");
+    // Receiving still works; the supplier's printed copy and editing the extra costs don't.
+    expect(has(t("receive"))).toBe(true);
+    expect(has(t("edit"))).toBe(false);
+  });
+
+  it("drops the Total column and Create from the list without View product costs", async () => {
+    mocks.canEdit = true;
+    mocks.canViewCosts = false;
+    await render(<PurchaseOrderList tab="all" onTabChange={() => undefined} onSupplierChange={() => undefined} />);
+    await vi.waitFor(() => expect(host.textContent).toContain("PO1001"));
+    expect(host.textContent).not.toContain(t("colTotal"));
+    expect(host.textContent).not.toContain("৳");
+    expect(has(t("createPurchaseOrder"))).toBe(false);
   });
 });

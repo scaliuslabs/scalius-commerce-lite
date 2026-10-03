@@ -14,6 +14,7 @@ import { LoadingFallback } from "@/components/admin/shared/LoadingFallback";
 import { DeferredTiptapEditor } from "@/components/ui/tiptap/DeferredTiptapEditor";
 import { useMessages } from "~/i18n";
 import { productMessages } from "~/i18n/products";
+import { productMerchandisingMessages } from "~/i18n/product-merchandising";
 import { CollapsibleCard } from "./CollapsibleCard";
 import type { ProductFormValues } from "./types";
 
@@ -74,14 +75,27 @@ export function TitleDescriptionSection({ form, readOnly }: SectionProps) {
   );
 }
 
-/** Extra tabs on the product page, such as size guide or care. */
+/**
+ * A new product's tabs and sections on its page, such as a size guide or care
+ * (a saved product edits them in the same-named "Product page content" card):
+ * the same title and help, and closed it says how many there are.
+ */
 export function AdditionalSectionsCard({ form, readOnly }: SectionProps) {
-  const t = useMessages(productMessages);
+  const m = useMessages(productMerchandisingMessages);
   const sections = useWatch({ control: form.control, name: "additionalInfo" }) ?? [];
   if (readOnly && sections.length === 0) return null;
 
   return (
-    <CollapsibleCard title={t("additionalSections")} defaultOpen={readOnly || sections.length > 0}>
+    <CollapsibleCard
+      title={m("content")}
+      description={m("contentHelp")}
+      summary={(
+        <p className="text-body text-muted-foreground">
+          {sections.length > 0 ? m("blockCount", { count: sections.length }) : m("noBlocks")}
+        </p>
+      )}
+      defaultOpen={readOnly || sections.length > 0}
+    >
       {readOnly ? (
         sections.map((section) => (
           <div key={section.id} className="space-y-1">

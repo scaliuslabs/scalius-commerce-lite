@@ -5,7 +5,7 @@ import { Badge } from "~/components/ui/badge";
 import { useMessages } from "~/i18n";
 import { inboxMessages } from "~/i18n/inbox";
 import { orderDetailLabel, orderDetailMessages } from "~/i18n/order-detail";
-import { orderMessages } from "~/i18n/orders";
+import { orderMessages, orderStatusLabel } from "~/i18n/orders";
 import { formatSavedMinorAmount } from "~/lib/order-tax-presentation";
 import { formatOrderDate } from "../orderview/formatters";
 import { statusBadgeVariant } from "../orderview/status-badges";
@@ -37,7 +37,7 @@ export function ContextRail({ thread, className }: { thread: StaffThread; classN
           <h3 className="text-heading-sm">{t("order")}</h3>
           <div className="flex flex-wrap items-center gap-2">
             <code>{order.orderNumber}</code>
-            <Badge variant={statusBadgeVariant(order.status, "order")}>{`status.${order.status}` in orderMessages.en ? o(`status.${order.status}` as "status.pending") : order.status}</Badge>
+            <Badge variant={statusBadgeVariant(order.status, "order")}>{orderStatusLabel(o, order.status)}</Badge>
           </div>
           <p className="tabular-nums">
             {formatSavedMinorAmount(order.totalAmountMinor, { currencyCode: currency, decimalPlaces: getDecimalPlaces(currency) })}

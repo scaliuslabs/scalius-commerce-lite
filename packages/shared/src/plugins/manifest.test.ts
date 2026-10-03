@@ -60,7 +60,7 @@ describe("plugin manifest", () => {
     const result = parsePluginManifest(FULL);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.manifest.functions[0]).toEqual({ point: "checkout.discounts", priority: 100 });
+    expect(result.manifest.functions[0]).toEqual({ point: "checkout.discounts", priority: 100, onError: "skip" });
     expect(result.manifest.limits).toEqual({ cpuMs: 50, wallMs: 10_000 });
     expect(result.manifest.storefront.scripts[0]!.placement).toBe("body-end");
   });
@@ -72,15 +72,36 @@ describe("plugin manifest", () => {
     ["an unknown event", { events: ["order.exploded"] }, "events.0"],
     ["an IP host", { allowedHosts: ["10.0.0.1"] }, "allowedHosts.0"],
     ["localhost", { allowedHosts: ["localhost"] }, "allowedHosts.0"],
+    ["a wildcard with a port", { allowedHosts: ["*.acme.example:8443"] }, "allowedHosts.0"],
+    ["a port out of range", { allowedHosts: ["api.acme.example:70000"] }, "allowedHosts.0"],
     ["an http script", { storefront: { scripts: [{ src: "http://cdn.acme.example/w.js" }] } }, "storefront.scripts.0.src"],
     ["a page whose route is missing", { admin: { pages: [{ id: "p", title: "P", route: "nope" }] } }, "admin.pages.0.route"],
     ["a section on an admin route", { storefront: { sections: [{ type: "s", name: "S", route: "dashboard" }] } }, "storefront.sections.0.route"],
     ["an unknown key", { extra: true }, "(root)"],
+    ["a translation of a page it doesn't have", { translations: { bn: { pages: { missing: "পাতা" } } } }, "translations.bn.pages.missing"],
+    ["a translation for a language the dashboard lacks", { translations: { fr: { name: "Fidélité" } } }, "translations"],
+    ["a discount that blocks checkout", { functions: [{ point: "checkout.discounts", onError: "block" }] }, "functions.0.onError"],
+    ["a snapshot outside checkout.discounts", { functions: [{ point: "cart.validate", snapshot: { collection: "visits" } }] }, "functions.0.snapshot"],
+    ["a snapshot of an undeclared collection", { functions: [{ point: "checkout.discounts", snapshot: { collection: "nope" } }] }, "functions.0.snapshot.collection"],
+    ["a collection named batch", { storage: { batch: {} } }, "storage.batch"],
   ])("rejects %s", (_label, override, path) => {
     const result = parsePluginManifest({ ...FULL, ...override });
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.issues.map((issue) => issue.path)).toContain(path);
+  });
+
+  it("carries Bangla text for the dashboard, optional and per surface", () => {
+    const result = parsePluginManifest({
+      ...FULL,
+      translations: { bn: { name: "অ্যাকমি লয়্যালটি", description: "প্রতিটি অর্ডারে পয়েন্ট।", pages: { overview: "লয়্যালটি" }, actions: { grant: "পয়েন্ট দিন" } } },
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.manifest.translations?.bn).toMatchObject({ name: "অ্যাকমি লয়্যালটি", pages: { overview: "লয়্যালটি" } });
+    // Without translations the manifest is English only.
+    const english = parsePluginManifest(FULL);
+    expect(english.ok && english.manifest.translations).toBeUndefined();
   });
 
   it("asks for approval again only when an update widens the grant", () => {
@@ -99,6 +120,12 @@ describe("plugin manifest", () => {
     expect(pluginGrantExpands(granted, parse({ ...FULL, events: ["order.*", "product.created"] }))).toBe(true);
     expect(pluginGrantExpands(granted, parse({ ...FULL, events: ["*"] }))).toBe(true);
     expect(pluginGrantExpands(granted, parse({ ...FULL, events: ["order.*"], allowedHosts: ["api.other.example"] }))).toBe(true);
+    // Pausing checkout on failure is a new power: the same point with onError "block" needs approval.
+    const validating = parse({ ...FULL, events: ["order.*"], functions: [{ point: "cart.validate" }] });
+    const blocking = parse({ ...FULL, events: ["order.*"], functions: [{ point: "cart.validate", onError: "block" }] });
+    expect(blocking.blockingFunctions).toEqual(["cart.validate"]);
+    expect(pluginGrantExpands(validating, blocking)).toBe(true);
+    expect(pluginGrantExpands(blocking, validating)).toBe(false);
     // The key is order-independent.
     expect(pluginGrantKey(parse({ ...FULL, permissions: ["customers.view", "orders.view"] })))
       .toBe(pluginGrantKey(parse({ ...FULL, permissions: ["orders.view", "customers.view"] })));

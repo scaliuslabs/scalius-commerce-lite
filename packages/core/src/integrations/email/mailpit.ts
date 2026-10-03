@@ -1,22 +1,23 @@
+// src/integrations/email/mailpit.ts
+// Local development only: every message is captured by a loopback Mailpit
+// (LOCAL_MAILPIT_URL) instead of reaching a real sender.
+
 import { ServiceUnavailableError } from "@scalius/core/errors";
-import type { EmailProvider, EmailRuntimeContext, SendEmailOptions, SendEmailResult } from "./provider";
-import { resolveSender, safeEmailHeaders } from "./provider";
-import { getEmailRuntimeSettings } from "./settings";
+import { resolveSender, safeEmailHeaders, type EmailAdapter } from "./provider";
 
-export class MailpitEmailProvider implements EmailProvider {
-  readonly name = "mailpit";
+export const mailpitEmail: EmailAdapter = {
+  id: "mailpit",
+  label: "Mailpit",
 
-  async sendEmail(
-    { to, subject, html, from, fromName, text, headers }: SendEmailOptions,
-    context?: EmailRuntimeContext,
-  ): Promise<SendEmailResult> {
-    const settings = await getEmailRuntimeSettings(context);
-    const baseUrl = settings.localMailpitUrl;
+  configured: ({ runtime }) => Boolean(runtime.localMailpitUrl),
+
+  async send({ to, subject, html, from, fromName, text, headers }, { settings: { runtime } }) {
+    const baseUrl = runtime.localMailpitUrl;
     if (!baseUrl) {
       throw new ServiceUnavailableError("Local Mailpit URL is not configured");
     }
 
-    const sender = resolveSender({ from, fromName }, settings);
+    const sender = resolveSender({ from, fromName }, runtime);
     const extraHeaders = safeEmailHeaders(headers);
     const response = await fetch(`${baseUrl}/api/v1/send`, {
       method: "POST",
@@ -42,9 +43,8 @@ export class MailpitEmailProvider implements EmailProvider {
     console.log("[Email] Captured locally in Mailpit");
     return {
       success: true,
-      provider: "mailpit",
       providerRef,
       rawStatus: "captured",
     };
-  }
-}
+  },
+};

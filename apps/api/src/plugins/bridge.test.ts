@@ -73,6 +73,16 @@ describe("plugin bridge", () => {
     expect(isPluginHostAllowed("api.acme.example.evil.com", allowed)).toBe(false);
   });
 
+  it("reaches a non-default port only through its exact host:port entry", () => {
+    const allowed = ["api.acme.example", "sandbox.acme.example:10061", "*.cdn.acme.example"];
+    expect(isPluginHostAllowed("sandbox.acme.example", allowed, "10061")).toBe(true);
+    expect(isPluginHostAllowed("sandbox.acme.example", allowed, "10062")).toBe(false);
+    expect(isPluginHostAllowed("sandbox.acme.example", allowed)).toBe(false);
+    expect(isPluginHostAllowed("api.acme.example", allowed, "8443")).toBe(false);
+    expect(isPluginHostAllowed("img.cdn.acme.example", allowed, "8443")).toBe(false);
+    expect(isPluginHostAllowed("api.acme.example", allowed, "443")).toBe(true);
+  });
+
   it("fetches an allowed https host and returns status, headers and text", async () => {
     fetchMock.mockResolvedValueOnce(new Response("pong", { status: 200, headers: { "X-Ok": "1", "Set-Cookie": "a=b" } }));
     const result = await host.httpFetch("https://api.acme.example/ping", { method: "POST", headers: { Authorization: "Bearer t" }, body: "{}" });
@@ -89,7 +99,7 @@ describe("plugin bridge", () => {
     ["an IPv4-mapped IPv6 literal", "https://[::ffff:127.0.0.1]/"],
     ["localhost", "https://localhost/"],
     ["embedded credentials", "https://user:pass@api.acme.example/"],
-    ["a non-default port", "https://api.acme.example:8443/"],
+    ["a non-default port without its host:port entry", "https://api.acme.example:8443/"],
     ["a wildcard apex", "https://cdn.acme.example/"],
   ])("refuses %s before any request", async (_label, url) => {
     const bridge = createInProcessBridge(host);
@@ -133,10 +143,15 @@ describe("plugin bridge", () => {
   it("only reaches declared collections and returns copies", async () => {
     const bridge = createInProcessBridge(host);
     await expect(bridge.storageGet("secrets", "x")).rejects.toThrow(/^\[storage\.undeclared_collection\] /);
+    await expect(bridge.storageWrite([{ collection: "secrets", op: "put", id: "x", record: {} }])).rejects.toThrow(/^\[storage\.undeclared_collection\] /);
     const record = { owner: "c1", tags: ["a"] };
-    await bridge.storagePut("notes", "n1", record);
+    expect(await bridge.storageWrite([{ collection: "notes", op: "put", id: "n1", record, expectedRevision: null }])).toEqual([1]);
     record.tags.push("mutated");
-    expect(await bridge.storageGet("notes", "n1")).toEqual({ owner: "c1", tags: ["a"] });
+    expect(await bridge.storageGet("notes", "n1")).toEqual({ data: { owner: "c1", tags: ["a"] }, revision: 1 });
+    await expect(bridge.storageWrite([{ collection: "notes", op: "put", id: "n1", record, expectedRevision: null }])).rejects.toThrow(/^\[storage\.conflict\] /);
+    expect(await bridge.kvSet("k", { n: 1 }, { expectedRevision: null })).toEqual({ revision: 1 });
+    await expect(bridge.kvSet("k", { n: 2 }, { expectedRevision: null })).rejects.toThrow(/^\[kv\.conflict\] /);
+    expect(await bridge.kvGet("k")).toEqual({ value: { n: 1 }, revision: 1 });
     expect(await bridge.storageQuery("notes", { where: { owner: "c1" } })).toMatchObject({ records: [{ id: "n1" }], nextCursor: null });
     await expect(bridge.storageQuery("notes", { where: { tags: "a" } })).rejects.toThrow(/^\[storage\.unindexed_query\] /);
   });

@@ -29,10 +29,11 @@ import {
 import { type StorefrontOrderCommitPayload } from "@scalius/core/modules/orders/browser";
 import type { CreateStorefrontOrderResult } from "../orders/types";
 import {
-  getCheckoutGatewayPrecommitIssue,
-  getPaymentMethodCurrencyIssue,
+  BUILT_IN_PAYMENT_PROVIDERS,
   isOnlinePaymentMethod,
+  type PaymentProviders,
 } from "../payments/gateways/registry";
+import { resolveAppPaymentUsability } from "../payments/gateway-settings";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { fromMinor } from "@scalius/shared/money";
 import { and, eq, gt, isNull, sql } from "drizzle-orm";
@@ -331,10 +332,13 @@ export async function submitAgentStorefrontCheckout(
      * online store's order placement does (the fingerprint fences the quote).
      */
     apps?: CheckoutAppFunctions;
+    /** The request's gateways (built-in and active app providers); built-in ones alone by default. */
+    paymentProviders?: PaymentProviders;
   },
 ): Promise<AgentStorefrontCheckoutSubmitResult> {
   const now = options.now ?? new Date();
   const apps = options.apps ?? NO_CHECKOUT_APP_FUNCTIONS;
+  const paymentProviders = options.paymentProviders ?? BUILT_IN_PAYMENT_PROVIDERS;
   const requestId = checkoutRequestId(contextId, input.idempotencyKey);
   const requestKey = await requestKeyForCheckout(requestId);
   const requestHash = await buildAgentStorefrontCheckoutRequestHash(contextId, input);
@@ -347,6 +351,7 @@ export async function submitAgentStorefrontCheckout(
   // The same rule as storefront checkout: the delivery preflight in the
   // authority read decides whether a method and an address are needed (a
   // pickup rate needs no address; a cart with nothing physical needs neither).
+  const appPayments = await resolveAppPaymentUsability(db, paymentProviders.gateways, options.credentialEncryptionKey);
   const authority = await withCheckoutStage("AGENT_CHECKOUT_AUTHORITY", () =>
     loadStorefrontCheckoutAuthority(db, {
       items: cart,
@@ -357,7 +362,7 @@ export async function submitAgentStorefrontCheckout(
       shippingMethodId: owned.shippingMethodId,
       customerEmail: input.customerEmail,
       customerPhone: input.customerPhone,
-    }, options.credentialEncryptionKey));
+    }, options.credentialEncryptionKey, appPayments));
   if (!authority.cartValidation.valid) {
     throw new ValidationError("Some items in the storefront cart need attention.", {
       itemIssues: presentAgentStorefrontCartIssues(authority.cartValidation.issues),
@@ -375,15 +380,15 @@ export async function submitAgentStorefrontCheckout(
 
   const customer = await liveContextCustomer(db, owned);
   const checkoutSettings = customer
-    ? assertStorefrontCheckoutPolicy(input.customerPhone, input.paymentMethod, authority)
-    : assertGuestStorefrontCheckoutPolicy(input.customerPhone, input.paymentMethod, authority);
+    ? assertStorefrontCheckoutPolicy(input.customerPhone, input.paymentMethod, authority, paymentProviders)
+    : assertGuestStorefrontCheckoutPolicy(input.customerPhone, input.paymentMethod, authority, paymentProviders);
   if (customer && !customer.phone) {
     throw new ValidationError(
       "The authorized customer account is missing its required phone number.",
     );
   }
   const gatewayCurrencyIssue = isOnlinePaymentMethod(input.paymentMethod)
-    ? getPaymentMethodCurrencyIssue(input.paymentMethod, authority.currency.currencyCode)
+    ? paymentProviders.currencyIssue(input.paymentMethod, authority.currency.currencyCode)
     : null;
   if (gatewayCurrencyIssue) throw new ValidationError(gatewayCurrencyIssue);
 
@@ -463,7 +468,7 @@ export async function submitAgentStorefrontCheckout(
     }),
     authority.taxAuthority,
     {},
-    { apps, channel: "agent" },
+    { apps, channel: "agent", paymentProviders },
   ));
 
   const currentQuoteFingerprint = await buildAgentStorefrontCheckoutQuoteFingerprint({
@@ -482,10 +487,10 @@ export async function submitAgentStorefrontCheckout(
     await assertStorefrontAppPaymentMethod(apps, prepared.appCart, prepared.paymentMethod, resolveCartPaymentMethods(
       authority.activePaymentMethods.enabledMethods,
       delivery.fulfilment,
-    ));
+    ), paymentProviders);
   }
 
-  const gatewayAmountIssue = getCheckoutGatewayPrecommitIssue({
+  const gatewayAmountIssue = paymentProviders.precommitIssue({
     paymentMethod: input.paymentMethod,
     currencyCode: prepared.taxQuote.currencyCode,
     totalAmountMinor: prepared.taxQuote.totalMinor,

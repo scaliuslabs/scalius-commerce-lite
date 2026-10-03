@@ -12,6 +12,8 @@ export type MovementNote = {
   note: string | null;
   /** "Purchase order PO1001" / "Transfer T1001": the document's label and its number. */
   document?: { label: "notePurchaseOrder" | "noteTransfer"; number: string };
+  /** "Imported 3 licence keys" / "Revoked 2 unused licence keys": the row names the product and variant. */
+  keys?: { label: "noteKeysImported" | "noteKeyImported" | "noteKeysRevoked" | "noteKeyRevoked"; count: number };
 };
 
 const ADJUST_REASONS: Record<string, Key> = {
@@ -44,10 +46,21 @@ const ORDER_SENTENCE = /^(Stock deducted|Deducted stock restored|Reserved \d+|Re
  * known sentences to catalog labels and keep only the person's own words.
  */
 export function describeMovementNote(
-  movement: Pick<InventoryMovement, "notes" | "orderId" | "actorType">,
+  movement: Pick<InventoryMovement, "notes" | "orderId" | "actorType"> & Partial<Pick<InventoryMovement, "stockDelta" | "quantity">>,
 ): MovementNote {
   const text = movement.notes?.trim() ?? "";
   if (!text) return { labels: [], note: null };
+
+  // Licence keys: how many, in merchant words. Older rows also named the
+  // key pool by its internal id ("3 keys into dga_…"); that never shows.
+  const keys = /^Licence keys \((Imported|Revoked)\)(?:: [\s\S]*)?$/.exec(text);
+  if (keys) {
+    const count = Math.abs(movement.stockDelta ?? movement.quantity ?? 0);
+    const label = keys[1] === "Imported"
+      ? count === 1 ? "noteKeyImported" : "noteKeysImported"
+      : count === 1 ? "noteKeyRevoked" : "noteKeysRevoked";
+    return { labels: [], note: null, keys: { label, count } };
+  }
 
   const manual = /^Manual adjustment \((\w+)\)(?:: ([\s\S]*))?$/.exec(text);
   if (manual) {

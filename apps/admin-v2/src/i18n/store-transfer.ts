@@ -301,7 +301,7 @@ export const storeTransferMessages = defineMessages({
     exportFailed: "এক্সপোর্ট হয়নি। আবার চেষ্টা করুন।",
     unsupported_product_tags: "পণ্যের ট্যাগ (কালেকশন ও ক্যাটাগরি ব্যবহার করুন)",
     unsupported_extra_option: "তৃতীয় অপশন (উপরে যেভাবে বেছেছেন)",
-    unsupported_archived: "আর্কাইভ করা পণ্য (ড্রাফট হিসেবে ইমপোর্ট হয়)",
+    unsupported_archived: "আর্কাইভ করা পণ্য (খসড়া হিসেবে ইমপোর্ট হয়)",
     unsupported_shopify_product_category: "Shopify-এর স্ট্যান্ডার্ড ক্যাটাগরি (Type ব্যবহার হয়েছে)",
     unsupported_google_shopping_columns: "Condition ছাড়া অন্য Google Shopping কলাম",
     unsupported_metafields: "মেটাফিল্ড",

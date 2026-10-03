@@ -84,6 +84,7 @@ describe("getCheckoutConfig", () => {
         expect(mocks.getPaymentGatewaySettingsSnapshot).toHaveBeenCalledWith(
             expect.anything(),
             undefined,
+            undefined,
         );
         expect(config.unavailable).toBe(false);
         expect(config.checkoutReadiness.status).toBe("ready");

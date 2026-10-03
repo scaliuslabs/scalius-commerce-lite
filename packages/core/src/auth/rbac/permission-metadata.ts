@@ -20,6 +20,15 @@ export const PERMISSION_METADATA: Record<
     category: "Products",
     isSensitive: false,
   },
+  [PERMISSIONS.PRODUCTS_VIEW_COSTS]: {
+    name: PERMISSIONS.PRODUCTS_VIEW_COSTS,
+    displayName: "View Product Costs",
+    description: "See cost per item, margins, inventory value, purchase order amounts and profit reports",
+    resource: "products",
+    action: "view_costs",
+    category: "Products",
+    isSensitive: false,
+  },
   [PERMISSIONS.PRODUCTS_CREATE]: {
     name: PERMISSIONS.PRODUCTS_CREATE,
     displayName: "Create Products",
@@ -71,6 +80,26 @@ export const PERMISSION_METADATA: Record<
     description: "Perform bulk actions on multiple products",
     resource: "products",
     action: "bulk_operations",
+    category: "Products",
+    isSensitive: false,
+  },
+
+  // Inventory operations
+  [PERMISSIONS.INVENTORY_VIEW]: {
+    name: PERMISSIONS.INVENTORY_VIEW,
+    displayName: "View Inventory Operations",
+    description: "View locations and their addresses, suppliers, purchase orders and transfers",
+    resource: "inventory",
+    action: "view",
+    category: "Products",
+    isSensitive: false,
+  },
+  [PERMISSIONS.INVENTORY_MANAGE]: {
+    name: PERMISSIONS.INVENTORY_MANAGE,
+    displayName: "Manage Inventory Operations",
+    description: "Manage locations and suppliers; create, receive and cancel purchase orders and transfers",
+    resource: "inventory",
+    action: "manage",
     category: "Products",
     isSensitive: false,
   },

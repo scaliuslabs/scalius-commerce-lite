@@ -420,6 +420,32 @@ describe("email provider selection", () => {
     });
   });
 
+  it("reports an app sender's readiness through the request's app providers, failing closed without them", async () => {
+    const db = createEmailSettingsDb([
+      { key: "email_provider", value: "acme.mail:mail" },
+      { key: "email_sender", value: "orders@example.com" },
+    ]);
+    const ready = { resolve: vi.fn(async () => ({ provider: { id: "acme.mail:mail", label: "Acme Mail", send: vi.fn() }, issue: null })) };
+
+    await expect(getEmailProviderReadiness({ db, appProviders: ready as never })).resolves.toMatchObject({
+      status: "ready",
+      provider: "acme.mail:mail",
+      issues: [],
+    });
+    expect(ready.resolve).toHaveBeenCalledWith("email", "acme.mail:mail");
+    await expect(getEmailProviderReadiness({
+      db,
+      appProviders: { resolve: async () => ({ provider: null, issue: "Complete Acme Mail's settings: api_key." }) },
+    })).resolves.toMatchObject({
+      status: "incomplete",
+      issues: [expect.objectContaining({ message: "Complete Acme Mail's settings: api_key." })],
+    });
+    await expect(getEmailProviderReadiness({ db, env: { EMAIL: { send: vi.fn() } } })).resolves.toMatchObject({
+      status: "incomplete",
+      provider: "acme.mail:mail",
+    });
+  });
+
   it("accepts Mailpit only through an explicit loopback HTTP URL", async () => {
     const db = createEmailSettingsDb([
       { key: "email_provider", value: "cloudflare" },

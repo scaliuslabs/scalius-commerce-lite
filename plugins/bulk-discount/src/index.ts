@@ -12,7 +12,7 @@ import { definePlugin, PLUGIN_API_VERSION, type PluginManifestInput } from "@sca
 export const manifest = {
   id: "scalius.bulk-discount",
   name: "Bulk discount",
-  version: "0.1.0",
+  version: "0.1.1",
   apiVersion: PLUGIN_API_VERSION,
   description: "Gives a bigger discount the more a buyer orders (up to three tiers), and can cap how many of one item fit in an order.",
   author: { name: "Scalius" },
@@ -43,6 +43,12 @@ export const manifest = {
     { key: "max_quantity_per_line", label: "Most of one item per order", type: "number", integer: true, min: 0, max: 99, default: 0, help: "0 means no limit. A cart over it can't check out until the buyer lowers the quantity." },
     { key: "max_quantity_message", label: "Message when over the limit", type: "text", maxLength: 160, default: "You can buy at most {max} of this item in one order." },
   ],
+  translations: {
+    bn: {
+      name: "বাল্ক ডিসকাউন্ট",
+      description: "ক্রেতা যত বেশি কেনেন, ডিসকাউন্ট তত বড় (তিন ধাপ পর্যন্ত); এক অর্ডারে একটি প্রোডাক্ট সর্বোচ্চ কতটি কেনা যাবে তাও ঠিক করে দিতে পারেন।",
+    },
+  },
 } satisfies PluginManifestInput;
 
 interface Tier {

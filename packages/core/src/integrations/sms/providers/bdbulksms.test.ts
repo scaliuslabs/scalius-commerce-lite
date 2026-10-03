@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { BdBulkSmsProvider } from "./bdbulksms";
+import { bdBulkSms } from "./bdbulksms";
 
-describe("BdBulkSmsProvider diagnostics", () => {
+describe("BDBulkSMS diagnostics", () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it("never retains the recipient phone as a provider reference", async () => {
@@ -14,13 +14,11 @@ describe("BdBulkSmsProvider diagnostics", () => {
         statusmsg: "Sent to +8801712345678",
       }])),
     }));
-    const provider = new BdBulkSmsProvider({ token: "merchant-token-4821" });
-
-    const result = await provider.sendSms({
+    const result = await bdBulkSms.send({
       to: "+8801712345678",
       message: "Order update",
       clientReference: "receipt_safe_reference",
-    });
+    }, { settings: { token: "merchant-token-4821" } });
 
     expect(result).toMatchObject({
       success: true,

@@ -14,7 +14,9 @@ import {
   putApiV1AdminSettingsNotificationChannels,
   putApiV1AdminSettingsNotificationChannelsAdminChannels,
 } from "@scalius/api-client/sdk";
+import { isQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
 import { isReady } from "@scalius/shared/readiness";
+import { Alert } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
@@ -24,18 +26,22 @@ import { Textarea } from "~/components/ui/textarea";
 import { useHasPermission } from "~/contexts/PermissionContext";
 import { useSettingsForm } from "~/hooks/use-settings-form";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
+import { useProviderPortAccess } from "~/lib/provider-port-access";
 import { apiData, type ApiBody, type ApiResult } from "~/lib/api";
 import {
+  appProvidersQuery,
   authQuery,
   customerRulesQuery,
   emailQuery,
   firebaseQuery,
   smsQuery,
+  type AppProvider,
 } from "~/lib/api-query-options/settings-screens";
 import { useMessages } from "~/i18n";
 import { settingsMessages } from "~/i18n/settings";
 import { notificationEventMessages } from "~/i18n/notification-events";
 import { notificationsMessages } from "~/i18n/settings-notifications";
+import { appProvidersMessages } from "~/i18n/settings-app-providers";
 import {
   CUSTOMER_EVENT_GROUPS,
   CUSTOMER_NOTIFICATION_CHANNELS,
@@ -48,6 +54,7 @@ import {
   serializeCustomerNotificationConfig,
   type NotificationEventGroup,
 } from "./notification-channel-policy";
+import { AppProviderStatus, appProviderOption } from "./AppProviderStatus";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
 import { SettingsCard, SettingsDialog, SettingsField, SettingsRow, SettingsCardLoading } from "./SettingsPage";
 
@@ -59,7 +66,6 @@ type CustomerRules = ApiResult<typeof getApiV1AdminSettingsNotificationChannels>
 type EmailSettings = ApiResult<typeof getApiV1AdminSettingsEmail>;
 type SmsSettings = ApiResult<typeof getApiV1AdminSettingsSms>;
 type AuthSettings = ApiResult<typeof getApiV1AdminSettingsAuth>;
-type SmsProvider = NonNullable<SmsSettings["activeProvider"]>;
 
 function useCanEditNotifications() {
   return useHasPermission(ADMIN_PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT);
@@ -97,13 +103,16 @@ function RulesTable({
 }) {
   const events = useMessages(notificationEventMessages);
   const t = useMessages(notificationsMessages);
+  // Column headings (caption size): each channel column is as wide as its
+  // name on one line with room on both sides, so long Bangla names
+  // ("হোয়াটসঅ্যাপ") never run into the next one; the event names wrap instead.
   return (
     <table className="w-full text-body">
       <thead>
-        <tr className="border-b border-border text-muted-foreground">
-          <th className="py-2 text-left font-medium">{t("event")}</th>
+        <tr className="border-b border-border align-bottom text-muted-foreground">
+          <th className="py-2 pr-2 text-left text-caption font-medium">{t("event")}</th>
           {columns.map((column) => (
-            <th key={column.key} className="w-16 py-2 text-center font-medium sm:w-24">{column.label}</th>
+            <th key={column.key} className="whitespace-nowrap px-1.5 py-2 text-center text-caption font-medium sm:w-24">{column.label}</th>
           ))}
         </tr>
       </thead>
@@ -339,7 +348,11 @@ function EmailFields() {
     errorMessage: common("saveFailed"),
     canEdit: useHasPermission(ADMIN_PERMISSIONS.SETTINGS_GENERAL_EDIT),
   });
+  // Installed apps' email providers sit beside the built-in senders.
+  const apps = useQuery({ ...appProvidersQuery("email"), enabled: useProviderPortAccess("email").canView }).data ?? [];
+  const appT = useMessages(appProvidersMessages);
   if (!values.provider) return null;
+  const app = apps.find((candidate) => candidate.id === values.provider);
   return (
     <>
       <SettingsField id="email-provider" label={t("emailProvider")}>
@@ -353,8 +366,18 @@ function EmailFields() {
               {t(provider)}
             </label>
           ))}
+          {apps.map((provider) => (
+            <label key={provider.id} className="flex min-h-11 items-start gap-2 py-3 text-body">
+              <RadioGroupItem className="mt-0.5" value={provider.id} />
+              <span>
+                {provider.name}
+                <span className="block text-muted-foreground">{appT("fromApp", { app: provider.appName })}</span>
+              </span>
+            </label>
+          ))}
         </RadioGroup>
       </SettingsField>
+      {app ? <AppProviderStatus provider={app} /> : null}
       {values.provider === "resend" ? (
         <SettingsField
           id="email-resend-key"
@@ -389,7 +412,10 @@ function EmailFields() {
 
 // ── Sending: SMS ────────────────────────────────────────────────────────
 
-const SMS_PROVIDERS: Record<SmsProvider, { label: string; fields: Array<{ key: keyof SmsSettings; label: "smsApiKey" | "smsToken" | "smsUsername" | "smsSenderId" | "smsSenderName" | "smsBaseUrl"; secret?: boolean; optional?: boolean; help?: "smsSenderNameHelp" | "smsBaseUrlHelp" }> }> = {
+type SmsGateway = { label: string; fields: Array<{ key: keyof SmsSettings; label: "smsApiKey" | "smsToken" | "smsUsername" | "smsSenderId" | "smsSenderName" | "smsBaseUrl"; secret?: boolean; optional?: boolean; help?: "smsSenderNameHelp" | "smsBaseUrlHelp" }> };
+
+/** The built-in gateways and their credential fields; an app provider's keys live in the app. */
+const SMS_PROVIDERS = {
   smsnetbd: {
     label: "SMS.net.bd",
     fields: [
@@ -414,14 +440,24 @@ const SMS_PROVIDERS: Record<SmsProvider, { label: string; fields: Array<{ key: k
       { key: "gennetSid", label: "smsSenderId" },
     ],
   },
-};
+} satisfies Record<string, SmsGateway>;
+type BuiltInSms = keyof typeof SMS_PROVIDERS;
+
+function builtInSms(provider: string | null | undefined): SmsGateway | null {
+  return provider && Object.hasOwn(SMS_PROVIDERS, provider) ? SMS_PROVIDERS[provider as BuiltInSms] : null;
+}
 
 function smsComplete(values: SmsSettings): boolean {
   const provider = values.activeProvider;
-  return Boolean(
-    provider &&
-      SMS_PROVIDERS[provider].fields.every((field) => field.optional || String(values[field.key] ?? "").trim()),
-  );
+  if (!provider) return false;
+  const gateway = builtInSms(provider);
+  // An app provider's keys are complete when the app says it is ready (shown below the choice).
+  return gateway ? gateway.fields.every((field) => field.optional || String(values[field.key] ?? "").trim()) : isQualifiedProviderId(provider);
+}
+
+/** The merchant-facing name of a saved SMS or email choice, an app's from the installed apps. */
+function providerName(provider: string, apps: readonly AppProvider[] | undefined, builtIn: (id: string) => string | null): string | null {
+  return builtIn(provider) ?? apps?.find((candidate) => candidate.id === provider)?.name ?? null;
 }
 
 function SmsFields() {
@@ -438,7 +474,12 @@ function SmsFields() {
     canEdit: useCanEditNotifications(),
     isValid: smsComplete,
   });
+  // Installed apps' SMS providers sit beside the built-in gateways.
+  const apps = useQuery({ ...appProvidersQuery("sms"), enabled: useProviderPortAccess("sms").canView }).data ?? [];
+  const appT = useMessages(appProvidersMessages);
   const provider = values.activeProvider;
+  const gateway = builtInSms(provider);
+  const app = apps.find((candidate) => candidate.id === provider);
   return (
     <>
       <SettingsField id="sms-provider" label={t("smsProvider")}>
@@ -446,13 +487,24 @@ function SmsFields() {
           id="sms-provider"
           value={provider ?? ""}
           placeholder={t("chooseSmsProvider")}
-          onValueChange={(value) => setValue("activeProvider", value as SmsProvider)}
+          onValueChange={(value) => setValue("activeProvider", value)}
           triggerClassName="w-full"
-          options={(Object.keys(SMS_PROVIDERS) as SmsProvider[]).map((key) => ({ value: key, label: SMS_PROVIDERS[key].label }))}
+          options={[
+            ...(Object.keys(SMS_PROVIDERS) as BuiltInSms[]).map((key) => ({
+              value: key,
+              label: SMS_PROVIDERS[key].label,
+              ...(apps.length > 0 ? { group: appT("builtIn") } : {}),
+            })),
+            ...apps.map((candidate) => appProviderOption(candidate, appT)),
+          ]}
         />
       </SettingsField>
-      {provider
-        ? SMS_PROVIDERS[provider].fields.map((field) => {
+      {app ? <AppProviderStatus provider={app} /> : null}
+      {provider && !gateway && !app && values.activeProviderError ? (
+        <Alert variant="warning">{values.activeProviderError}</Alert>
+      ) : null}
+      {gateway
+        ? gateway.fields.map((field) => {
             const value = String(values[field.key] ?? "");
             const id = `sms-${field.key}`;
             const missing = !field.optional && !value.trim();
@@ -712,7 +764,18 @@ export function SendingCard() {
   const rules = useQuery(customerRulesQuery);
   const email = useQuery(emailQuery);
   const sms = useQuery(smsQuery);
+  // An app's name is read only when the saved choice is an app.
+  const smsAccess = useProviderPortAccess("sms");
+  const emailAccess = useProviderPortAccess("email");
+  const smsApps = useQuery({ ...appProvidersQuery("sms"), enabled: smsAccess.canView && isQualifiedProviderId(sms.data?.activeProvider) });
+  const emailApps = useQuery({ ...appProvidersQuery("email"), enabled: emailAccess.canView && isQualifiedProviderId(email.data?.provider) });
   if (!rules.data) return null;
+  const smsName = sms.data?.activeProvider
+    ? providerName(sms.data.activeProvider, smsApps.data, (id) => builtInSms(id)?.label ?? null)
+    : null;
+  const emailName = email.data?.provider
+    ? providerName(email.data.provider, emailApps.data, (id) => (id === "cloudflare" || id === "resend" ? t(id) : null))
+    : null;
   const status = (ready: boolean, detail?: string | null) => (ready ? detail || t("ready") : t("notSetUp"));
   return (
     <SettingsCard id="sending"
@@ -727,7 +790,7 @@ export function SendingCard() {
                 disabled={!canEditGeneral || !email.data}
                 value={status(
                   isReady(rules.data.email),
-                  email.data?.sender ? t("via", { sender: email.data.sender, provider: t(email.data.provider) }) : null,
+                  email.data?.sender && emailName ? t("via", { sender: email.data.sender, provider: emailName }) : null,
                 )}
               />
             }
@@ -740,7 +803,7 @@ export function SendingCard() {
               <SettingsRow
                 label={t("sms")}
                 disabled={!canEditNotifications || !sms.data}
-                value={status(isReady(rules.data.sms), sms.data?.activeProvider ? SMS_PROVIDERS[sms.data.activeProvider].label : null)}
+                value={status(isReady(rules.data.sms), smsName)}
               />
             }
           >

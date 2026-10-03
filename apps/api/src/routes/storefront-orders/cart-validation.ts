@@ -14,12 +14,13 @@ import {
   validateStorefrontDeliveryPreflight,
   validateStorefrontCartItems,
 } from "@scalius/core/modules/checkout";
-import { listActiveFunctionRegistrations } from "@scalius/core/modules/plugins";
+import { listActiveCheckoutRegistrations } from "@scalius/core/modules/plugins";
 import { getCustomerBySession } from "@scalius/core/modules/customers";
 import { ok } from "../../utils/api-response";
 import { getOptionalExecutionContext } from "../../utils/execution-context";
 import { getCustomerSessionHashKey } from "../../utils/encryption-key";
 import { createCheckoutAppFunctions } from "../../plugins/checkout-functions";
+import { checkoutPaymentMethods } from "../../plugins/providers/payment";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
 import { successEnvelope, errorResponses } from "../../schemas/responses";
 import {
@@ -221,11 +222,14 @@ app.openapi(cartValidationRoute, async (c) => {
   const db = c.get("db");
   const data = c.req.valid("json");
   // The apps' checkout functions ride the first read wave: none, no app work.
-  const [currency, paymentMethods, registrations] = await Promise.all([
+  const encryptionKey = getCredentialEncryptionKey(c.env as Record<string, unknown>);
+  const [currency, builtInPaymentMethods, registrations] = await Promise.all([
     getCurrencySettings(db),
-    getActivePaymentMethods(db, getCredentialEncryptionKey(c.env as Record<string, unknown>)),
-    listActiveFunctionRegistrations(db),
+    getActivePaymentMethods(db, encryptionKey),
+    listActiveCheckoutRegistrations(db),
   ]);
+  // App payment methods join only when an app provides payment (then one more read).
+  const { paymentMethods } = await checkoutPaymentMethods(c, registrations, builtInPaymentMethods, encryptionKey);
   const apps = createCheckoutAppFunctions({
     env: c.env,
     ctx: getOptionalExecutionContext(c) as ExecutionContext | undefined,

@@ -15,6 +15,7 @@ import { articleRoutes } from "./routes/articles";
 import { orderRoutes } from "./routes/storefront-orders";
 import { paymentRoutes } from "./routes/payment/payment-routes";
 import { paymentWebhookRoutes } from "./routes/webhooks/payments";
+import { courierWebhookRoutes } from "./routes/webhooks/couriers";
 import { pathaoWebhookRoutes } from "./routes/webhooks/pathao";
 import { steadfastWebhookRoutes } from "./routes/webhooks/steadfast";
 import { discountRoutes } from "./routes/discounts";
@@ -205,6 +206,8 @@ app.route("/__ptproxy", partytownProxyRoutes);
 app.use("/webhooks/*", webhookBodyLimitMiddleware);
 app.route("/webhooks/pathao", pathaoWebhookRoutes);
 app.route("/webhooks/steadfast", steadfastWebhookRoutes);
+// App couriers: /webhooks/couriers/{provider}.
+app.route("/webhooks/couriers", courierWebhookRoutes);
 // Payment gateways: /webhooks/{provider}. Registered after the courier routes.
 app.route("/webhooks", paymentWebhookRoutes);
 

@@ -15,7 +15,13 @@ import {
   resolveOrderCurrencySnapshot,
   type OrderCurrencySnapshot,
 } from "./order-currency";
-import { COD_PAYMENT_METHOD, getPaymentGateway } from "./gateways/registry";
+import {
+  COD_PAYMENT_METHOD,
+  paymentProvidersFor,
+  type PaymentProviders,
+  type PaymentProvidersSource,
+} from "./gateways/registry";
+import { providerErrorOf } from "@scalius/shared/plugins/providers/kinds";
 import type { GatewayProviderRefund, GatewayRefundProbe } from "./gateways/port";
 import { finalizeAcceptedRefundAttemptIds, isInternalRefundProviderStatus } from "./refund-service";
 import type { RefundNotificationFact } from "./refund-service";
@@ -90,6 +96,8 @@ export interface RefundReconciliationOptions {
   encryptionKey?: string;
   limit?: number;
   nowSeconds?: number;
+  /** The gateways to ask (built-in and app providers); built-in ones alone by default. */
+  providers?: PaymentProvidersSource;
 }
 
 export type ManualRefundAttemptReconciliationReason =
@@ -112,6 +120,7 @@ export interface ExternalRefundWebhookReconciliationOptions {
   encryptionKey?: string;
   limit?: number;
   nowSeconds?: number;
+  providers?: PaymentProvidersSource;
 }
 
 function normalizeLimit(limit: number | undefined): number {
@@ -347,7 +356,8 @@ async function probeProviderRefund(
   db: Database,
   attempt: RefundAttemptProbeRow,
   context: RefundProviderReconciliationContext,
-  encryptionKey?: string,
+  encryptionKey: string | undefined,
+  providers: PaymentProviders,
 ): Promise<ProviderProbeOutcome> {
   // A gift-card credit or store-credit card committed with the refund claim:
   // the money already moved, so recovery only finalizes the order.
@@ -357,7 +367,7 @@ async function probeProviderRefund(
   if (attempt.gateway === COD_PAYMENT_METHOD) {
     return { outcome: "accepted", providerRefundId: attempt.providerRefundId, providerStatus: "accepted" };
   }
-  const gateway = getPaymentGateway(attempt.gateway);
+  const gateway = providers.get(attempt.gateway);
   if (!gateway?.refundStatus) {
     return { outcome: "unknown", error: `Unsupported refund gateway '${attempt.gateway}'`, manualReview: true };
   }
@@ -368,14 +378,21 @@ async function probeProviderRefund(
   if (!Number.isSafeInteger(attempt.amountMinor) || attempt.amountMinor <= 0) {
     return { outcome: "unknown", error: `${gateway.label} refund must resolve to a positive provider amount.`, manualReview: true };
   }
-  return gateway.refundStatus(settings, {
-    providerRefundId: attempt.providerRefundId,
-    sourceRef: attempt.sourceTransactionId,
-    amountMinor: attempt.amountMinor,
-    currency: context.currency.code,
-    reference: attempt.refundReference,
-    idempotencyKey: attempt.providerIdempotencyKey,
-  });
+  try {
+    return await gateway.refundStatus({
+      providerRefundId: attempt.providerRefundId,
+      sourceRef: attempt.sourceTransactionId,
+      amountMinor: attempt.amountMinor,
+      currency: context.currency.code,
+      reference: attempt.refundReference,
+      idempotencyKey: attempt.providerIdempotencyKey,
+    }, { settings, signal: new AbortController().signal });
+  } catch (error) {
+    // A port error is an unanswered probe: the attempt stays pending and is asked again.
+    const failure = providerErrorOf(error);
+    if (!failure) throw error;
+    return { outcome: "unknown", error: failure.message, manualReview: failure.category === "misconfigured" };
+  }
 }
 
 type ExternalRefundWebhookRow = {
@@ -601,7 +618,7 @@ async function reconcileExternalRefundWebhookEvent(
     return DEFERRED_EVENT;
   };
   const evidence = getExternalRefundEvidence(row);
-  const gateway = getPaymentGateway(row.provider);
+  const gateway = (await paymentProvidersFor(options.providers, row.provider)).get(row.provider);
   if (!gateway?.listRefunds) return defer({ reason: "external_refund_import_unsupported" });
   if (!evidence.secondaryRef) return defer({ reason: "source_reference_missing" });
 
@@ -634,7 +651,7 @@ async function reconcileExternalRefundWebhookEvent(
 
   let providerRefunds: GatewayProviderRefund[];
   try {
-    providerRefunds = (await gateway.listRefunds(settings, evidence.secondaryRef))
+    providerRefunds = (await gateway.listRefunds({ sourceRef: evidence.secondaryRef }, { settings, signal: new AbortController().signal }))
       .filter((refund) => refund.sourceRef === evidence.secondaryRef);
   } catch (error: unknown) {
     return defer({ reason: "provider_refund_list_failed", error: serializeError(error) });
@@ -830,7 +847,7 @@ export async function reconcileRefundAttemptById(
           ? attempt.providerStatus!
           : attempt.gateway === COD_PAYMENT_METHOD ? "manual_confirmed" : "accepted",
       } satisfies ProviderProbeOutcome
-    : await probeProviderRefund(db, attempt, context, options.encryptionKey);
+    : await probeProviderRefund(db, attempt, context, options.encryptionKey, await paymentProvidersFor(options.providers, attempt.gateway));
 
   if (outcome.outcome === "accepted") {
     await markAcceptedBeforeFinalize(db, attempt, outcome, nowSeconds);

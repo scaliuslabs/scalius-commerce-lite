@@ -12,6 +12,7 @@ import { toLatinDigits } from "@scalius/shared/phone-input";
 import { parseOrderNumberSearch } from "@scalius/shared/order-utils";
 import type { CustomerAuthOtpChannel } from "@scalius/shared/customer-auth-policy";
 import type { EmailRuntimeContext } from "../../integrations/email";
+import type { AppProviders } from "../../integrations/provider-port";
 import { enforceOtpSendRateLimits } from "../customers/customer-auth-rate-limit";
 import { createAuthOtpDeliveryKey } from "../customers/otp-delivery-receipts";
 import { buildOtpQueuePayload, type OtpQueuePayload } from "../customers/otp-transport";
@@ -52,6 +53,8 @@ export interface SendOrderLookupOtpInput {
     emailEnv?: EmailRuntimeContext["env"];
     encryptionKey?: string;
     credentialEncryptionKey?: string;
+    /** The app providers a saved SMS or email choice may name. */
+    appProviders?: AppProviders;
 }
 
 export interface SendOrderLookupOtpResult {

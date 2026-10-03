@@ -20,6 +20,7 @@ import {
   getApiV1AdminSettingsNotificationChannels,
   getApiV1AdminSettingsPaymentMethods,
   getApiV1AdminSettingsPlatform,
+  getApiV1AdminSettingsProviders,
   getApiV1AdminSettingsSecurity,
   getApiV1AdminSettingsSecurityRuntimeSources,
   getApiV1AdminSettingsSms,
@@ -34,7 +35,7 @@ import type {
 import type { getCountries } from "@scalius/shared/customer-utils";
 import { parseMerchantCspSources } from "@scalius/shared/security-csp";
 import { countClearableAgentConnections, listAgentConnections } from "~/components/admin/agent-access/api";
-import type { GatewayStatus, MethodKey } from "~/components/admin/settings/payment-method-outcome";
+import type { GatewayStatus } from "~/components/admin/settings/payment-method-outcome";
 import type { PolicyKind } from "~/components/admin/settings/policy-templates";
 import { apiClient, apiData, type ApiResult } from "../api";
 import { queryKeys } from "../query-keys";
@@ -76,10 +77,19 @@ export const countriesQuery = {
 
 // ── Payments ─────────────────────────────────────────────────────────────
 
-export type PaymentMethods = Omit<ApiResult<typeof getApiV1AdminSettingsPaymentMethods>, "enabledMethods" | "defaultMethod" | "gatewayStatus"> & {
-  enabledMethods: MethodKey[];
-  defaultMethod: MethodKey;
-  gatewayStatus: Partial<Record<MethodKey, GatewayStatus>>;
+/**
+ * Method ids are `cod`, built-in gateway ids and app providers'
+ * `<plugin id>:<provider id>`; `gateways` lists every gateway the store can
+ * offer (built in first, then active apps' providers).
+ */
+export type PaymentMethods = {
+  enabledMethods: string[];
+  defaultMethod: string;
+  revision: number;
+  activeMethods?: string[];
+  activeDefaultMethod?: string;
+  gateways: ApiResult<typeof getApiV1AdminSettingsPaymentMethods>["gateways"];
+  gatewayStatus: Partial<Record<string, GatewayStatus>>;
 };
 
 export const checkoutFlowQuery = {
@@ -133,6 +143,7 @@ export const areaCountsQuery = {
   },
 };
 export const couriersQuery = deliveryProvidersQueryOptions();
+
 
 // TODO(sdk): the generated SDK predates delivery zones; switch these raw calls
 // to it after `pnpm generate:sdk`.
@@ -200,6 +211,17 @@ export const smsQuery = {
   queryKey: queryKeys.settings.sms(),
   queryFn: () => apiData(getApiV1AdminSettingsSms()),
 };
+/**
+ * The installed apps' providers of one port, with the readiness its callers
+ * check: offered beside the built-in couriers, SMS and email senders and
+ * fraud checkers (payments: payment-providers.ts).
+ */
+export type AppProviderKind = "courier" | "sms" | "email" | "fraud";
+export type AppProvider = ApiResult<typeof getApiV1AdminSettingsProviders>["providers"][number];
+export const appProvidersQuery = (kind: AppProviderKind) => ({
+  queryKey: queryKeys.settings.appProviders(kind),
+  queryFn: async (): Promise<AppProvider[]> => (await apiData(getApiV1AdminSettingsProviders({ query: { kind } }))).providers,
+});
 export const authQuery = {
   queryKey: queryKeys.settings.auth(),
   queryFn: () => apiData(getApiV1AdminSettingsAuth()),

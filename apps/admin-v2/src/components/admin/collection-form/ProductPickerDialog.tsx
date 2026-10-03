@@ -8,6 +8,7 @@ import { useDebounce } from "~/hooks/use-debounce";
 import { collectionProductOptionsQueryOptions } from "~/lib/api-query-options/collections";
 import { priceRangeText } from "~/lib/price-range";
 import { Badge } from "~/components/ui/badge";
+import { StatusBadge } from "~/components/admin/resource/StatusBadge";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "~/components/ui/dialog";
@@ -214,7 +215,7 @@ export function ProductPickerDialog({ selectedProductIds, onAddProducts, maxProd
                       {added ? (
                         <Badge variant="secondary">{t("added")}</Badge>
                       ) : product.isActive === false ? (
-                        <Badge variant="attention">{t("draft")}</Badge>
+                        <StatusBadge status="draft">{t("draft")}</StatusBadge>
                       ) : null}
                     </label>
                   </li>

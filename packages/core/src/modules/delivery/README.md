@@ -1,25 +1,34 @@
 # Delivery
 
-Multi-courier delivery management with provider factory pattern. Supports Pathao and Steadfast.
+Multi-courier delivery management. Every courier, built in (Pathao, Steadfast) or an app's (`<plugin id>:<provider id>`), implements the one courier port (`@scalius/shared/plugins/providers/courier`) and is resolved from a delivery provider row's `type` through the request's couriers; delivery and fulfilment code never branch on which courier it is.
+
+## Couriers
+
+- A merchant uses a courier through a `delivery_providers` row whose `type` is the courier id. Built-in couriers keep encrypted credentials on the row; an app courier's row carries none (its settings live in the app, read strictly through the plugin host).
+- `couriers/registry.ts`: `createCourierProviders(apps)` is one request's catalog (built-ins plus qualified app ids; an app can never shadow a built-in). Functions take an optional `CourierProvidersSource`: the catalog, or a loader the API passes that runs only when a row names an app courier, so built-in work reads no plugin table. Absent: built-ins alone.
+- `Courier.setup(row, key)` reads a row once: settings for calls (null when unreadable: never call the courier), the readiness summary and, for row-held setups, the keyed fingerprint a live test proves. App couriers keep no test proof; their readiness is the app's (active, approved, runnable, settings complete, secrets readable).
+- Port errors (`ProviderError`): a certain refusal (declined, misconfigured, or retryable without `uncertain`) marks the attempt failed; `uncertain` (or any other throw once the call started) keeps it `reconcile_required` with `provider_outcome_unknown`. Recovery asks the courier's `findShipment` when it has one (Steadfast's invoice lookup, an app's), else the merchant attests.
+- Tracking pushes: Pathao and Steadfast keep their own routes; app couriers that declare `verifyWebhook` use `POST /webhooks/couriers/{id}` (apps/api/src/routes/webhooks/couriers.ts).
 
 ## Files
 
 | File | Purpose |
 |------|---------|
-| `index.ts` | Barrel exports (delivery.service, tracking, factory, locations, types, status-mapper, provider). Excludes pathao-location-import and providers/. |
-| `provider.ts` | `DeliveryProviderInterface` -- contract all providers implement. Methods: `getName`, `getType`, `testConnection`, `createShipment`, `checkShipmentStatus`. |
-| `factory.ts` | `createProvider()` -- factory that strict-reads encrypted credentials with `CREDENTIAL_ENCRYPTION_KEY`, parses credentials/config JSON, then returns a `PathaoProvider` or `SteadfastProvider` based on `provider.type`. Legacy plaintext rows remain readable for migration; unreadable encrypted rows fail before provider clients are built. |
-| `types.ts` | Shared types: `ShipmentResult`, `ShipmentStatus`, `ShipmentOptions`, plus provider-specific credential/config/response types (`PathaoCredentials`, `PathaoConfig`, `SteadfastCredentials`, `SteadfastConfig`, etc.) |
-| `delivery.service.ts` | Standalone functions for provider CRUD, shipment lifecycle (insert-first creation), status checking, shipment queries |
-| `provider-readiness.ts` | Activation/readiness rules for Pathao/Steadfast required fields plus keyed setup fingerprints for durable live-test proof |
+| `index.ts` | Barrel exports (delivery.service, tracking, locations, types, status-mapper, couriers port/registry and the built-in adapters). |
+| `couriers/port.ts` | `Courier` -- the courier port plus `setup`, optional `preflight` (store setup a booking needs before anything is written) and `trackingUrl`. |
+| `couriers/registry.ts` | `createCourierProviders`, `BUILT_IN_COURIER_PROVIDERS`, `CourierProvidersSource`, `courierFor`. |
+| `couriers/row-setup.ts` | `readRowCourierSetup()` -- strict-reads row credentials with `CREDENTIAL_ENCRYPTION_KEY`, parses credentials/config JSON (masked logging, never a quoted value), and computes readiness and the live-test fingerprint. Legacy plaintext rows remain readable for migration. |
+| `types.ts` | Shared types: `ShipmentResult`, `ShipmentOptions` (staff choices only), `MerchantOrderShipmentLookup`, plus provider-specific credential/config/response types (`PathaoCredentials`, `PathaoConfig`, `SteadfastCredentials`, `SteadfastConfig`, etc.) |
+| `delivery.service.ts` | Standalone functions for provider CRUD, shipment lifecycle (insert-first creation), status checking, shipment queries, connection tests and recovery lookups |
+| `provider-readiness.ts` | Activation/readiness rules for Pathao/Steadfast required fields plus keyed setup fingerprints for durable live-test proof; app couriers pass their own blockers and no test proof |
 | `tracking.ts` | Standalone functions: `updateOrderStatusFromShipment()` maps shipment status to order status (with inventory side-effects via `applyInventoryForStatusChange`) |
 | `tracking-url.ts` | `getTrackingUrl()`: the courier's public tracking page (used by buyer notifications) |
 | `status-mapper.ts` | `mapProviderStatus()` + `ShipmentStatusCode` enum -- normalizes provider-specific statuses to 14 canonical codes |
 | `locations.ts` | Location CRUD and external ID resolution functions |
 | `zones.ts` | Delivery zones and rates (`shipping_methods`). An address resolves to the zone of its most specific assigned place (area > zone > city), else the zoneless "Everywhere else" rates; local pickup rates are store-wide. `resolveDeliveryRate` is the one checkout decision (zone match, active, free-over on the items subtotal before discounts); zone edits CAS on `delivery_zones.revision`, Everywhere-else edits on a settings document revision. |
 | `pathao-location-import.ts` | Chunked bulk import of Pathao cities/zones/areas (excluded from barrel exports) |
-| `providers/pathao.ts` | `PathaoProvider` -- OAuth2 password-grant auth, lazy token caching, location ID mapping |
-| `providers/steadfast.ts` | `SteadfastProvider` -- API key + secret key auth, full-text address construction |
+| `couriers/pathao.ts` | `pathaoCourier` -- OAuth2 password-grant token per call, location ID mapping (and its preflight), whole-taka COD |
+| `couriers/steadfast.ts` | `steadfastCourier` -- API key + secret key auth, full-text address construction, `findShipment` by invoice |
 
 ## Delivery Service Functions (`delivery.service.ts`)
 
@@ -27,14 +36,17 @@ Multi-courier delivery management with provider factory pattern. Supports Pathao
 |----------|-----------|-------|
 | `getDeliveryProviders` | `(db)` | All providers, ordered by updatedAt desc |
 | `getDeliveryProvider` | `(db, id)` | Single provider by ID |
-| `saveDeliveryProvider` | `(db, provider, encryptionKey)` | Create or update. Requires `CREDENTIAL_ENCRYPTION_KEY`; rejects before insert/update if no dedicated key is supplied. Preserves live-test proof only when the current setup fingerprint still matches. |
+| `saveDeliveryProvider` | `(db, provider, encryptionKey, couriers?)` | Create or update. Requires `CREDENTIAL_ENCRYPTION_KEY`; rejects before insert/update if no dedicated key is supplied. Activation checks the courier's own blockers (`assertDeliveryProviderActivatable`). Preserves live-test proof only when the current setup fingerprint still matches. |
 | `deleteDeliveryProvider` | `(db, id)` | Hard delete |
-| `testDeliveryProvider` | `(db, id, encryptionKey?)` | Records a test attempt, tests connection via provider instance, and stores successful proof for the current provider type/credentials/config fingerprint |
-| `createShipment` | `(db, orderId, providerId, options?, encryptionKey?)` | Requires a provider whose readiness summary is `active`, preflights Pathao city/zone mappings, then uses the insert-first pattern (see below). Enriches with order item names and quantities. |
+| `testDeliveryProvider` | `(db, id, encryptionKey?, couriers?)` | Records a test attempt, runs the courier's `testConnection`, and stores successful proof for the current setup fingerprint (none for app couriers) |
+| `testDeliveryProviderSetup` | `(db, row, encryptionKey, couriers?)` | Tests an unsaved setup (the settings form's typed keys); records nothing |
+| `getDeliveryProviderReadiness` | `(row, encryptionKey, couriers?)` | The row's readiness summary through its courier |
+| `createShipment` | `(db, orderId, providerId, options?, encryptionKey?, { shipmentId?, couriers? })` | Requires a provider whose readiness summary is `active`, runs the courier's preflight (Pathao city/zone mappings), then uses the insert-first pattern (see below). Money, item count and contents come from the saved order. |
+| `lookupShipmentByMerchantOrderId` | `(db, providerId, orderId, encryptionKey?, couriers?)` | Positive-only `findShipment`; couriers without one answer "not supported" without reading their setup |
 | `getShipment` | `(db, id)` | Single shipment by ID |
 | `getLatestShipment` | `(db, orderId)` | Most recent shipment for an order |
 | `getShipments` | `(db, orderId)` | All shipments for an order, ordered by createdAt desc |
-| `checkShipmentStatus` | `(db, shipmentId, encryptionKey?)` | Requires the shipment provider to still be active, polls provider API, updates DB record |
+| `checkShipmentStatus` | `(db, shipmentId, encryptionKey?, couriers?)` | Requires the shipment provider to still be active, asks the courier's `trackShipment`, updates DB record (a courier error is recorded as `unknown`/`error`) |
 | `deleteShipmentRecord` | `(db, id)` | Hard delete only failed/cancelled shipment attempts after claim/reconciliation safety checks. Active and fulfilled shipment history is immutable; stale failed/cancelled claims are cleared before deletion. |
 
 ## Tracking Functions (`tracking.ts`)
@@ -66,18 +78,18 @@ Multi-courier delivery management with provider factory pattern. Supports Pathao
 `createShipment()` guarantees a DB record exists even if the provider API succeeds but the subsequent DB write fails:
 
 1. Load order + order items (with product names for item descriptions and count)
-2. Enrich options with `itemCount` (sum of quantities) and `itemDescription` (product names x qty)
+2. Build the port's `CourierShipmentInput` from the saved order (recipient with the store's location ids and names, COD in minor units, item count and description); only the staff options come from the caller. Its `idempotencyKey` is the shipment id.
 3. INSERT a `"creating"` placeholder shipment record
-4. Call `provider.createShipment(order, enrichedOptions)`
-5. On success: UPDATE with `externalId`, `trackingId`, normalized `status`, raw metadata
-6. On explicit provider rejection or preparation failure before the shipment POST: UPDATE to `status: "failed"`, `rawStatus: "provider_rejected"`
-7. On uncertain POST outcome (transport/read failure, incomplete success identity, server error, or unrecognized response): UPDATE to `reconcile_required` with `rawStatus: "provider_outcome_unknown"`; retain the order claim without an expiry. A failed persistence attempt keeps the original `creating` placeholder and the claim rather than marking the shipment safely retryable.
+4. Call `courier.createShipment(input, { settings, signal, db })`
+5. On success: UPDATE with `externalId`, `trackingId` (the booking id when the courier has no separate one), normalized `status`, `rawStatus`, the courier's `details` as metadata, and the app's tracking page when it declares one
+6. On a certain refusal (explicit rejection, or preparation failure before the shipment POST): UPDATE to `status: "failed"`, `rawStatus: "provider_rejected"`
+7. On an uncertain outcome (transport/read failure, incomplete success identity, server error, unrecognized response, an app timeout after sending): UPDATE to `reconcile_required` with `rawStatus: "provider_outcome_unknown"`; retain the order claim without an expiry. A failed persistence attempt keeps the original `creating` placeholder and the claim rather than marking the shipment safely retryable.
 
 Provider shipment creation is coordinated by order-level shipment claims in the orders module. Bulk shipment creation preflights provider readiness once before the per-order loop; missing, inactive, unconfigured, untested, stale-test, or unreadable providers return one clear failure per requested order without writing order claims or shipment placeholders. `deleteShipmentRecord()` is the deletion gate: do not bypass it when removing shipments, because it protects active claims, reconciliation evidence, and stale claimed rows that still need manual resolution. When provider creation succeeded but local order/inventory finalization failed, the orders module repairs from the persisted shipment evidence and only then clears the matching order claim; delivery providers must not be called a second time for that repair.
 
 Pathao and Steadfast creation accept only a complete success identity or an explicit rejection. Neither a failed HTTP exchange nor the merchant order ID proves that the courier did not create a consignment; remote deduplication is not assumed. Unknown outcomes block another create, deletion, refresh, and local repair until provider confirmation is available. The current repair operation only settles already-confirmed provider/local finalization; it does not discover or attach missing consignments. Expired creating placeholders become unknown, and existing reconciliation evidence survives claim expiry. Failure diagnostics never include upstream response bodies or exception text. `delivery.create-outcome.d1.test.ts` exercises both real adapters through the service and fulfillment claim flow against the full migrated SQLite schema with mocked courier requests.
 
-Unknown outcomes can be resolved from Steadfast's positive invoice lookup or an explicit merchant confirmation from the courier portal/support. Lookup failures and missing results keep the lock; Pathao has no verified merchant-order lookup. Merchant confirmation requires the current order version and shipment claim, a stable operation key, actor, source, bounded note, and an explicit exact-order attestation. Confirmed existing bookings finalize locally without another provider create; confirmed non-creation/cancellation records durable shipment metadata before releasing the claim. Steadfast `cancelled_approval_pending` remains `on_hold`, so it cannot reopen the order for another booking before final cancellation.
+Unknown outcomes can be resolved from the courier's positive `findShipment` (Steadfast's invoice lookup, or an app courier's) or an explicit merchant confirmation from the courier portal/support. Lookup failures and missing results keep the lock; Pathao has no verified merchant-order lookup. A courier with a lookup also vetoes a merchant's "not created" when it confirms a booking. Merchant confirmation requires the current order version and shipment claim, a stable operation key, actor, source, bounded note, and an explicit exact-order attestation. Confirmed existing bookings finalize locally without another provider create; confirmed non-creation/cancellation records durable shipment metadata before releasing the claim. Steadfast `cancelled_approval_pending` remains `on_hold`, so it cannot reopen the order for another booking before final cancellation.
 
 For Pathao, positive-integer city and zone `externalIds.pathao` mappings are mandatory before the insert-first placeholder is written. Area mappings remain optional because Pathao accepts some shipments without area IDs, but when present the provider payload includes them.
 

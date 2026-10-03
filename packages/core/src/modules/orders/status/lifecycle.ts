@@ -48,6 +48,7 @@ import { buildOrderStatusNotificationDedupeKey } from "../../notifications/order
 import { assertNoActiveShipmentClaim } from "../shipment-claim";
 import { rollbackOrderStatusIfInventoryUnchanged } from "./claim";
 import { assertGenericAdminOrderStatusTransition } from "./policy";
+import { assertOrderNotOnHold } from "../holds";
 
 export async function reconcileInventoryForStatus(
     db: Database,
@@ -391,6 +392,8 @@ export async function applyOrderStatusChange(
     }
     if (options.generic && currentStatus !== nextStatus) {
         assertGenericAdminOrderStatusTransition(currentStatus, nextStatus);
+        // A held order waits for staff review; cancelling it stays possible.
+        if (nextStatus !== OrderStatus.CANCELLED) await assertOrderNotOnHold(db, orderId);
     }
     assertNoActiveShipmentClaim(existingOrder);
     await assertNoActiveRefundAttempt(db, orderId);

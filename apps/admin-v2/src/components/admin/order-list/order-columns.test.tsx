@@ -178,3 +178,43 @@ describe("order columns on a narrow screen", () => {
     expect(previous).toEqual(["order"]);
   });
 });
+
+describe("a long customer name", () => {
+  let root: Root;
+  let host: HTMLDivElement;
+
+  afterEach(() => {
+    act(() => root.unmount());
+    host.remove();
+  });
+
+  it.each([
+    ["English", "Mohammad Abdur Rahman Chowdhury Talukder Bhuiyan Siddiqui of Old Dhaka Wholesale Garments"],
+    ["Bangla", "মোহাম্মদ আব্দুর রহমান চৌধুরী তালুকদার ভূঁইয়া সিদ্দিকী পুরান ঢাকা পাইকারি পোশাক বিক্রেতা"],
+  ])("in %s is capped and cut with the whole name on hover, so Total, Payment and Fulfillment stay", async (_language, name) => {
+    const columns = getOrderColumns(handlers);
+    const customer = columns.find((column) => column.id === "customer")!;
+    // The column never grows past its cap; the money and status columns keep their room.
+    expect(customer.meta).toMatchObject({ minWidth: 180, maxWidth: 240 });
+    const room = columns.reduce((sum, column) => sum + ((column.meta as { minWidth?: number } | undefined)?.minWidth ?? 56), 0)
+      - 180 + 240;
+    expect(fitColumns(
+      columns.map((column) => ({
+        id: column.id!,
+        priority: (column.meta as { priority?: number; primary?: boolean } | undefined)?.primary ? Number.POSITIVE_INFINITY : (column.meta as { priority?: number } | undefined)?.priority ?? 50,
+        minWidth: (column.meta as { minWidth?: number } | undefined)?.minWidth ?? 56,
+        locked: column.id === "actions" || Boolean((column.meta as { primary?: boolean } | undefined)?.primary),
+      })),
+      room,
+    ).size).toBe(0);
+
+    host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+    const cell = customer.cell as (context: { row: { original: OrderListItem } }) => ReactNode;
+    await act(async () => root.render(<>{cell({ row: { original: order({ customerName: name }) } })}</>));
+    const line = [...host.querySelectorAll<HTMLElement>("[data-part=value]")].find((element) => element.textContent === name)!;
+    expect(line.className).toContain("truncate");
+    expect(line.title).toBe(name);
+  });
+});

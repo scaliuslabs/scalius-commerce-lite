@@ -2,20 +2,35 @@
 // licence keys left (with tracking) or unlimited downloads (without), and
 // whether checkout accepts it yet. Never an input: keys move stock only
 // through import and revoke, files are unlimited.
-import { useQuery } from "@tanstack/react-query";
+import { lazy, Suspense, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@scalius/shared/utils";
+import { useCatalogActionPermissions } from "~/hooks/use-catalog-action-permissions";
 import { formatNumber, useMessages } from "~/i18n";
 import { digitalMessages } from "~/i18n/digital";
 import { revealCard } from "./CollapsibleCard";
-import { DIGITAL_CARD_ID, digitalAssetsQueryOptions, digitalSkuStock } from "./digital-stock";
+import { DIGITAL_CARD_ID, digitalAssetsKey, digitalAssetsQueryOptions, digitalSkuStock } from "./digital-stock";
+
+// The import dialog's code loads on the first Import keys, then stays mounted.
+const KeyImportDialog = lazy(() => import("./DigitalKeyDialogs").then((module) => ({ default: module.KeyImportDialog })));
 
 function useDigitalSkuStock(productId: string | undefined, variantId: string | undefined) {
   const query = useQuery({ ...digitalAssetsQueryOptions(productId ?? ""), enabled: Boolean(productId) });
-  return { stock: query.data ? digitalSkuStock(variantId, query.data) : null, pending: Boolean(productId) && query.isPending };
+  // The SKU's key pool (made by its first import).
+  const pool = query.data?.find((asset) => asset.kind === "licence_keys" && asset.variantId === variantId) ?? null;
+  return {
+    stock: query.data ? digitalSkuStock(variantId, query.data) : null,
+    poolId: pool?.id ?? null,
+    pending: Boolean(productId) && query.isPending,
+  };
 }
 
-/** The Inventory card's line for a digital product without options. */
+/**
+ * The Inventory card's line for a digital product without options. Import
+ * keys opens the import dialog right here; Add file opens the Digital
+ * delivery card, where files are uploaded.
+ */
 export function DigitalStockStatus({ productId, variantId, tracked }: {
   /** Unset while the product is being added. */
   productId: string | undefined;
@@ -23,7 +38,11 @@ export function DigitalStockStatus({ productId, variantId, tracked }: {
   tracked: boolean;
 }) {
   const t = useMessages(digitalMessages);
-  const { stock, pending } = useDigitalSkuStock(productId, variantId);
+  const queryClient = useQueryClient();
+  const { products: { canEdit } } = useCatalogActionPermissions();
+  const { stock, poolId, pending } = useDigitalSkuStock(productId, variantId);
+  const [importing, setImporting] = useState(false);
+  const [dialogLoaded, setDialogLoaded] = useState(false);
   if (!productId) {
     return <p className="text-body text-warning">{t("stockSaveFirst")}</p>;
   }
@@ -34,20 +53,42 @@ export function DigitalStockStatus({ productId, variantId, tracked }: {
   const problem = !stock || stock.sellable
     ? null
     : tracked && stock.keys === 0 ? t("stockOutOfKeys") : t("stockNotSellable");
+  const importsKeys = tracked && Boolean(variantId);
   return (
     <div className="space-y-1" data-testid="digital-stock">
       <p className="flex flex-wrap items-center gap-x-1 text-body">
         <span className="tabular-nums">{facts}</span>
-        <span aria-hidden="true" className="text-muted-foreground">·</span>
-        <button
-          type="button"
-          className="rounded-sm text-link hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          onClick={() => revealCard(DIGITAL_CARD_ID)}
-        >
-          {t(tracked ? "importKeys" : "addFile")}
-        </button>
+        {canEdit ? (
+          <>
+            <span aria-hidden="true" className="text-muted-foreground">·</span>
+            <button
+              type="button"
+              className="rounded-sm text-link hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              onClick={() => {
+                if (!importsKeys) {
+                  revealCard(DIGITAL_CARD_ID);
+                  return;
+                }
+                setDialogLoaded(true);
+                setImporting(true);
+              }}
+            >
+              {t(tracked ? "importKeys" : "addFile")}
+            </button>
+          </>
+        ) : null}
       </p>
       {problem ? <p className="text-body text-warning">{problem}</p> : null}
+      {dialogLoaded && variantId ? (
+        <Suspense fallback={null}>
+          <KeyImportDialog
+            productId={productId}
+            target={importing ? { variantId, label: null, poolId } : null}
+            onOpenChange={(open) => { if (!open) setImporting(false); }}
+            onChanged={() => void queryClient.invalidateQueries({ queryKey: digitalAssetsKey(productId) })}
+          />
+        </Suspense>
+      ) : null}
     </div>
   );
 }

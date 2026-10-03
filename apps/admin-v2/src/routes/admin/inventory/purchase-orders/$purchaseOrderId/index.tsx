@@ -20,7 +20,7 @@ export const Route = createFileRoute("/admin/inventory/purchase-orders/$purchase
 function PurchaseOrderPage() {
   const { purchaseOrderId } = Route.useParams();
   const query = useSuspenseQuery(purchaseOrderQueryOptions(purchaseOrderId));
-  const { inventory: { canAdjustStock: canEdit } } = useCatalogActionPermissions();
+  const { inventory: { canDraftPurchaseOrders: canEdit } } = useCatalogActionPermissions();
   // A reload after a conflict starts the page again from the latest copy.
   const [session, setSession] = useState(0);
   const reload = async () => {

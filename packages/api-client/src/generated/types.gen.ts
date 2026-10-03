@@ -1853,13 +1853,13 @@ export type PurchaseOrder = {
     quantity: number;
     receivedQuantity: number;
     /**
-     * Σ quantity × unit cost, major units
+     * Σ quantity × unit cost, major units. Left out without the View product costs permission.
      */
-    subtotal: number;
+    subtotal?: number;
     /**
-     * Subtotal + shipping + other costs + tax
+     * Subtotal + shipping + other costs + tax. Left out without the View product costs permission.
      */
-    total: number;
+    total?: number;
     revision: number;
     orderedAt: NullableTimestamp;
     receivedAt: NullableTimestamp;
@@ -1867,9 +1867,18 @@ export type PurchaseOrder = {
     createdAt: string | number;
     updatedAt: string | number;
     notes: string | null;
-    shipping: number;
-    otherCosts: number;
-    tax: number;
+    /**
+     * Shipping charged by the supplier. Left out without the View product costs permission.
+     */
+    shipping?: number;
+    /**
+     * Other charges. Left out without the View product costs permission.
+     */
+    otherCosts?: number;
+    /**
+     * Tax charged by the supplier. Left out without the View product costs permission.
+     */
+    tax?: number;
     createdBy: string | null;
     lines: Array<{
         id: string;
@@ -1887,12 +1896,18 @@ export type PurchaseOrder = {
         quantity: number;
         receivedQuantity: number;
         openQuantity: number;
-        unitCost: number;
-        lineTotal: number;
         /**
-         * The SKU's unit cost now
+         * Unit cost on this purchase order. Left out without the View product costs permission.
          */
-        currentCost: number | null;
+        unitCost?: number;
+        /**
+         * Quantity × unit cost. Left out without the View product costs permission.
+         */
+        lineTotal?: number;
+        /**
+         * The SKU's unit cost now. Left out without the View product costs permission.
+         */
+        currentCost?: number | null;
     }>;
     receipts: Array<{
         operationKey: string;
@@ -1903,9 +1918,18 @@ export type PurchaseOrder = {
             variantId: string;
             sku: string;
             quantity: number;
-            unitCost: number;
-            costBefore: number | null;
-            costAfter: number | null;
+            /**
+             * Unit cost received. Left out without the View product costs permission.
+             */
+            unitCost?: number;
+            /**
+             * The SKU's unit cost before the receipt. Left out without the View product costs permission.
+             */
+            costBefore?: number | null;
+            /**
+             * The SKU's unit cost after the receipt. Left out without the View product costs permission.
+             */
+            costAfter?: number | null;
             costUpdated: boolean;
         }>;
     }>;
@@ -2251,6 +2275,7 @@ export type AppSummary = {
     name: string;
     version: string;
     description: string;
+    translations?: AppTranslations;
     author: {
         name: string;
         url: string | null;
@@ -2276,8 +2301,38 @@ export type AppSummary = {
          * Lower runs first among apps at the same point.
          */
         priority: number;
+        /**
+         * block: the app pauses checkout when it cannot answer (needs approval).
+         */
+        onError: 'skip' | 'block';
+        /**
+         * checkout.discounts: the app reads and updates the signed-in buyer's record in this collection with each order.
+         */
+        snapshotCollection: string | null;
     }>;
 };
+
+/**
+ * Name, description and surface titles in other dashboard languages (null: English only).
+ */
+export type AppTranslations = {
+    bn?: {
+        name?: string;
+        description?: string;
+        pages?: {
+            [key: string]: string;
+        };
+        cards?: {
+            [key: string]: string;
+        };
+        actions?: {
+            [key: string]: string;
+        };
+        widgets?: {
+            [key: string]: string;
+        };
+    };
+} | null;
 
 export type AppAdminSurfaces = {
     id: string;
@@ -2311,6 +2366,7 @@ export type AppAdminSurfaces = {
         name: string;
         methods: Array<'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'>;
     }>;
+    translations?: AppTranslations;
 };
 
 export type AppDetail = AppSummary & {
@@ -2413,6 +2469,10 @@ export type AppGrant = {
     allowedHosts: Array<string>;
     events: Array<string>;
     functions: Array<string>;
+    /**
+     * Function points where the app may pause checkout when it cannot answer.
+     */
+    blockingFunctions: Array<string>;
     providers: Array<string>;
     publicRoutes: boolean;
     storefrontScripts: Array<string>;
@@ -6353,9 +6413,9 @@ export type PostApiV1StorefrontAgentContextsByContextIdCheckoutSubmitData = {
         shippingAddress?: string | null;
         notes: string | null;
         /**
-         * Selected active checkout payment method. Online methods continue through storefront.orders.payment.begin.
+         * Selected active checkout payment method (`cod`, a gateway id, or an app provider's `<plugin id>:<provider id>`). Online methods continue through storefront.orders.payment.begin.
          */
-        paymentMethod: 'stripe' | 'sslcommerz' | 'cod';
+        paymentMethod: string;
     };
     headers?: {
         /**
@@ -15019,7 +15079,7 @@ export type PostApiV1OrdersData = {
         discountCodes?: Array<string>;
         shippingCharge: number;
         shippingMethodId?: string | null;
-        paymentMethod?: 'stripe' | 'sslcommerz' | 'cod' | 'gift_card';
+        paymentMethod?: string;
         inventoryPool?: 'regular' | 'preorder' | 'backorder';
         /**
          * Gift-card apply handles from `POST /checkout/gift-cards/apply`, in the order the buyer added them (at most 5). Omit for no gift cards.
@@ -23959,13 +24019,13 @@ export type GetApiV1AdminInventoryPurchaseOrdersResponses = {
                 quantity: number;
                 receivedQuantity: number;
                 /**
-                 * Σ quantity × unit cost, major units
+                 * Σ quantity × unit cost, major units. Left out without the View product costs permission.
                  */
-                subtotal: number;
+                subtotal?: number;
                 /**
-                 * Subtotal + shipping + other costs + tax
+                 * Subtotal + shipping + other costs + tax. Left out without the View product costs permission.
                  */
-                total: number;
+                total?: number;
                 revision: number;
                 orderedAt: NullableTimestamp;
                 receivedAt: NullableTimestamp;
@@ -24254,9 +24314,18 @@ export type PostApiV1AdminInventoryPurchaseOrdersByPurchaseOrderIdReceiveRespons
                 sku: string;
                 quantity: number;
                 movementId: string;
-                unitCost: number;
-                costBefore: number | null;
-                costAfter: number | null;
+                /**
+                 * Unit cost received. Left out without the View product costs permission.
+                 */
+                unitCost?: number;
+                /**
+                 * The SKU's unit cost before the receipt. Left out without the View product costs permission.
+                 */
+                costBefore?: number | null;
+                /**
+                 * The SKU's unit cost after the receipt. Left out without the View product costs permission.
+                 */
+                costAfter?: number | null;
                 /**
                  * The SKU's on-hand across every location after the receipt
                  */
@@ -24853,9 +24922,9 @@ export type GetApiV1AdminInventoryResponses = {
                  */
                 locationOnHand: number | null;
                 /**
-                 * Unit cost (cost per item) in major units; null when not set. Staff-only.
+                 * Unit cost (cost per item) in major units; null when not set. Left out without the View product costs permission.
                  */
-                cost: number | null;
+                cost?: number | null;
                 /**
                  * Open purchase order units plus transfers in transit (to the `locationId` filter, if any); not on hand
                  */
@@ -24872,8 +24941,22 @@ export type GetApiV1AdminInventoryResponses = {
                 orderNumber: number | null;
                 type: string;
                 quantity: number;
+                /**
+                 * The SKU's on-hand across every location before the movement
+                 */
                 previousStock: number;
+                /**
+                 * The SKU's on-hand across every location after the movement
+                 */
                 newStock: number;
+                /**
+                 * On-hand at `locationId` before, when the operation recorded it (adjustments, counts, scans, licence keys); null otherwise
+                 */
+                locationPreviousStock: number | null;
+                /**
+                 * On-hand at `locationId` after, when recorded; null otherwise
+                 */
+                locationNewStock: number | null;
                 notes: string | null;
                 createdBy: string | null;
                 ledgerVersion: number;
@@ -25753,12 +25836,12 @@ export type GetApiV1AdminInventoryLocationsResponses = {
                 name: string;
                 code: string;
                 kind: 'warehouse' | 'store' | 'other';
-                addressLine1: string | null;
-                addressLine2: string | null;
-                city: string | null;
-                postalCode: string | null;
+                addressLine1?: string | null;
+                addressLine2?: string | null;
+                city?: string | null;
+                postalCode?: string | null;
                 countryCode: string;
-                phone: string | null;
+                phone?: string | null;
                 isDefault: boolean;
                 status: 'active' | 'archived';
                 position: number;
@@ -25821,12 +25904,12 @@ export type PostApiV1AdminInventoryLocationsResponses = {
             name: string;
             code: string;
             kind: 'warehouse' | 'store' | 'other';
-            addressLine1: string | null;
-            addressLine2: string | null;
-            city: string | null;
-            postalCode: string | null;
+            addressLine1?: string | null;
+            addressLine2?: string | null;
+            city?: string | null;
+            postalCode?: string | null;
             countryCode: string;
-            phone: string | null;
+            phone?: string | null;
             isDefault: boolean;
             status: 'active' | 'archived';
             position: number;
@@ -25895,12 +25978,12 @@ export type PatchApiV1AdminInventoryLocationsByLocationIdResponses = {
             name: string;
             code: string;
             kind: 'warehouse' | 'store' | 'other';
-            addressLine1: string | null;
-            addressLine2: string | null;
-            city: string | null;
-            postalCode: string | null;
+            addressLine1?: string | null;
+            addressLine2?: string | null;
+            city?: string | null;
+            postalCode?: string | null;
             countryCode: string;
-            phone: string | null;
+            phone?: string | null;
             isDefault: boolean;
             status: 'active' | 'archived';
             position: number;
@@ -25954,12 +26037,12 @@ export type PostApiV1AdminInventoryLocationsByLocationIdArchiveResponses = {
             name: string;
             code: string;
             kind: 'warehouse' | 'store' | 'other';
-            addressLine1: string | null;
-            addressLine2: string | null;
-            city: string | null;
-            postalCode: string | null;
+            addressLine1?: string | null;
+            addressLine2?: string | null;
+            city?: string | null;
+            postalCode?: string | null;
             countryCode: string;
-            phone: string | null;
+            phone?: string | null;
             isDefault: boolean;
             status: 'active' | 'archived';
             position: number;
@@ -26009,12 +26092,12 @@ export type PostApiV1AdminInventoryLocationsByLocationIdUnarchiveResponses = {
             name: string;
             code: string;
             kind: 'warehouse' | 'store' | 'other';
-            addressLine1: string | null;
-            addressLine2: string | null;
-            city: string | null;
-            postalCode: string | null;
+            addressLine1?: string | null;
+            addressLine2?: string | null;
+            city?: string | null;
+            postalCode?: string | null;
             countryCode: string;
-            phone: string | null;
+            phone?: string | null;
             isDefault: boolean;
             status: 'active' | 'archived';
             position: number;
@@ -26068,12 +26151,12 @@ export type PostApiV1AdminInventoryLocationsByLocationIdDefaultResponses = {
             name: string;
             code: string;
             kind: 'warehouse' | 'store' | 'other';
-            addressLine1: string | null;
-            addressLine2: string | null;
-            city: string | null;
-            postalCode: string | null;
+            addressLine1?: string | null;
+            addressLine2?: string | null;
+            city?: string | null;
+            postalCode?: string | null;
             countryCode: string;
-            phone: string | null;
+            phone?: string | null;
             isDefault: boolean;
             status: 'active' | 'archived';
             position: number;
@@ -28889,9 +28972,10 @@ export type GetApiV1AdminReportsResponses = {
                     direction: 'asc' | 'desc';
                 };
                 requiresCustomerAccess?: boolean;
+                requiresCostAccess?: boolean;
                 rowLink?: 'product' | 'variant';
                 available: boolean;
-                unavailableReason: 'customer_access' | null;
+                unavailableReason: 'customer_access' | 'cost_access' | null;
             }>;
         };
     };
@@ -28983,6 +29067,7 @@ export type GetApiV1AdminReportsByReportIdResponses = {
                     direction: 'asc' | 'desc';
                 };
                 requiresCustomerAccess?: boolean;
+                requiresCostAccess?: boolean;
                 rowLink?: 'product' | 'variant';
             };
             currency: {
@@ -29138,7 +29223,7 @@ export type GetApiV1AdminFraudCheckerResponses = {
                 apiSecret?: string;
                 userId?: string;
                 isActive: boolean;
-                providerType?: 'default' | 'fraudbd' | 'fraudguard' | 'ecourier';
+                providerType?: 'default' | 'fraudbd' | 'fraudguard' | 'ecourier' | string;
             }>;
             pagination: {
                 page: number;
@@ -29160,6 +29245,10 @@ export type PostApiV1AdminFraudCheckerData = {
         userId?: string;
         isActive?: boolean;
         providerType?: 'default' | 'fraudbd' | 'fraudguard' | 'ecourier';
+    } | {
+        name: string;
+        isActive?: boolean;
+        providerType: string;
     };
     path?: never;
     query?: never;
@@ -29213,7 +29302,7 @@ export type PostApiV1AdminFraudCheckerResponses = {
             apiSecret?: string;
             userId?: string;
             isActive: boolean;
-            providerType?: 'default' | 'fraudbd' | 'fraudguard' | 'ecourier';
+            providerType?: 'default' | 'fraudbd' | 'fraudguard' | 'ecourier' | string;
         };
     };
 };
@@ -29230,6 +29319,11 @@ export type PutApiV1AdminFraudCheckerData = {
         userId?: string;
         isActive?: boolean;
         providerType?: 'default' | 'fraudbd' | 'fraudguard' | 'ecourier';
+    } | {
+        name: string;
+        isActive?: boolean;
+        providerType: string;
+        id: string;
     };
     path?: never;
     query?: never;
@@ -29283,7 +29377,7 @@ export type PutApiV1AdminFraudCheckerResponses = {
             apiSecret?: string;
             userId?: string;
             isActive: boolean;
-            providerType?: 'default' | 'fraudbd' | 'fraudguard' | 'ecourier';
+            providerType?: 'default' | 'fraudbd' | 'fraudguard' | 'ecourier' | string;
         };
     };
 };
@@ -31938,6 +32032,15 @@ export type GetApiV1AdminSettingsPaymentMethodsResponses = {
             revision: number;
             activeMethods?: Array<string>;
             activeDefaultMethod?: string;
+            gateways: Array<{
+                id: string;
+                label: string;
+                checkoutName: string;
+                flow: 'card' | 'hosted';
+                pluginId: string | null;
+                supportsRefund: boolean;
+                chargeCurrencies: 'any' | Array<string>;
+            }>;
             gatewayStatus: {
                 stripe: {
                     configured: boolean;
@@ -31975,6 +32078,51 @@ export type GetApiV1AdminSettingsPaymentMethodsResponses = {
                     checkoutVisible?: boolean;
                     environment?: 'test' | 'live' | 'mixed' | 'unknown' | 'not_applicable';
                 };
+                [key: string]: {
+                    configured: boolean;
+                    enabled: boolean;
+                    usable?: boolean;
+                    missingFields?: Array<string>;
+                    credentialErrors?: Array<string>;
+                    blockedReason?: string;
+                    providerEnabled?: boolean;
+                    checkoutSelected?: boolean;
+                    checkoutVisible?: boolean;
+                    environment?: 'test' | 'live' | 'mixed' | 'unknown' | 'not_applicable';
+                } | {
+                    configured: boolean;
+                    enabled: boolean;
+                    usable?: boolean;
+                    missingFields?: Array<string>;
+                    credentialErrors?: Array<string>;
+                    blockedReason?: string;
+                    providerEnabled?: boolean;
+                    checkoutSelected?: boolean;
+                    checkoutVisible?: boolean;
+                    environment?: 'test' | 'live' | 'mixed' | 'unknown' | 'not_applicable';
+                } | {
+                    configured: boolean;
+                    enabled: boolean;
+                    usable?: boolean;
+                    missingFields?: Array<string>;
+                    credentialErrors?: Array<string>;
+                    blockedReason?: string;
+                    providerEnabled?: boolean;
+                    checkoutSelected?: boolean;
+                    checkoutVisible?: boolean;
+                    environment?: 'test' | 'live' | 'mixed' | 'unknown' | 'not_applicable';
+                } | {
+                    configured: boolean;
+                    enabled: boolean;
+                    usable?: boolean;
+                    missingFields?: Array<string>;
+                    credentialErrors?: Array<string>;
+                    blockedReason?: string;
+                    providerEnabled?: boolean;
+                    checkoutSelected?: boolean;
+                    checkoutVisible?: boolean;
+                    environment?: 'test' | 'live' | 'mixed' | 'unknown' | 'not_applicable';
+                };
             };
             [key: string]: unknown;
         };
@@ -31985,8 +32133,8 @@ export type GetApiV1AdminSettingsPaymentMethodsResponse = GetApiV1AdminSettingsP
 
 export type PostApiV1AdminSettingsPaymentMethodsData = {
     body: {
-        enabledMethods: Array<'stripe' | 'sslcommerz' | 'cod'>;
-        defaultMethod: 'stripe' | 'sslcommerz' | 'cod';
+        enabledMethods: Array<string>;
+        defaultMethod: string;
         expectedRevision: number;
     };
     path?: never;
@@ -32916,7 +33064,7 @@ export type GetApiV1AdminSettingsEmailResponses = {
     200: {
         success: true;
         data: {
-            provider: 'cloudflare' | 'resend';
+            provider: 'cloudflare' | 'resend' | string;
             apiKey: string;
             sender: string;
             senderConfigured: boolean;
@@ -32940,7 +33088,7 @@ export type GetApiV1AdminSettingsEmailResponse = GetApiV1AdminSettingsEmailRespo
 export type PostApiV1AdminSettingsEmailData = {
     body: {
         expectedRevision: number;
-        provider?: 'cloudflare' | 'resend';
+        provider?: 'cloudflare' | 'resend' | string;
         apiKey?: string;
         sender?: string;
     };
@@ -33862,6 +34010,13 @@ export type PostApiV1AdminSettingsDeliveryProvidersData = {
             defaultCodAmount?: number;
         };
         isActive?: boolean;
+    } | {
+        name: string;
+        /**
+         * An installed app courier, <plugin id>:<provider id> (GET /admin/settings/providers?kind=courier lists them). Set it up in the app's settings.
+         */
+        type: string;
+        isActive?: boolean;
     };
     path?: never;
     query?: never;
@@ -34022,6 +34177,14 @@ export type PutApiV1AdminSettingsDeliveryProvidersData = {
              */
             defaultCodAmount?: number;
         };
+        isActive?: boolean;
+    } | {
+        id: string;
+        name: string;
+        /**
+         * An installed app courier, <plugin id>:<provider id> (GET /admin/settings/providers?kind=courier lists them). Set it up in the app's settings.
+         */
+        type: string;
         isActive?: boolean;
     };
     path?: never;
@@ -35640,7 +35803,7 @@ export type GetApiV1AdminSettingsSmsResponses = {
     200: {
         success: true;
         data: {
-            activeProvider: 'smsnetbd' | 'bdbulksms' | 'mimsms' | 'gennet' | null;
+            activeProvider: string | null;
             activeProviderConfigured: boolean;
             activeProviderError: string | null;
             bdbulksmsToken: string;
@@ -35661,7 +35824,7 @@ export type GetApiV1AdminSettingsSmsResponse = GetApiV1AdminSettingsSmsResponses
 
 export type PostApiV1AdminSettingsSmsData = {
     body: {
-        activeProvider?: 'smsnetbd' | 'bdbulksms' | 'mimsms' | 'gennet';
+        activeProvider?: 'smsnetbd' | 'bdbulksms' | 'mimsms' | 'gennet' | string;
         bdbulksmsToken?: string;
         mimsmsUsername?: string;
         mimsmsApiKey?: string;
@@ -35722,7 +35885,7 @@ export type PostApiV1AdminSettingsSmsResponses = {
     200: {
         success: true;
         data: {
-            activeProvider: 'smsnetbd' | 'bdbulksms' | 'mimsms' | 'gennet' | null;
+            activeProvider: string | null;
             activeProviderConfigured: boolean;
             activeProviderError: string | null;
             bdbulksmsToken: string;
@@ -36328,6 +36491,128 @@ export type PutApiV1AdminSettingsMarketingConsentResponses = {
 };
 
 export type PutApiV1AdminSettingsMarketingConsentResponse = PutApiV1AdminSettingsMarketingConsentResponses[keyof PutApiV1AdminSettingsMarketingConsentResponses];
+
+export type GetApiV1AdminSettingsProvidersData = {
+    body?: never;
+    path?: never;
+    query: {
+        kind: 'payment' | 'courier' | 'sms' | 'email' | 'fraud' | 'tax';
+    };
+    url: '/api/v1/admin/settings/providers';
+};
+
+export type GetApiV1AdminSettingsProvidersErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminSettingsProvidersError = GetApiV1AdminSettingsProvidersErrors[keyof GetApiV1AdminSettingsProvidersErrors];
+
+export type GetApiV1AdminSettingsProvidersResponses = {
+    /**
+     * App providers
+     */
+    200: {
+        success: true;
+        data: {
+            providers: Array<{
+                id: string;
+                kind: 'payment' | 'courier' | 'sms' | 'email' | 'fraud' | 'tax';
+                pluginId: string;
+                appName: string;
+                name: string;
+                operations: Array<string>;
+                canTestConnection: boolean;
+                readiness: {
+                    configured: boolean;
+                    enabled: boolean;
+                    usable: boolean;
+                    missingFields: Array<string>;
+                    credentialErrors: Array<string>;
+                    blockedReason?: string;
+                };
+                environment: 'test' | 'live' | 'unknown';
+            }>;
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsProvidersResponse = GetApiV1AdminSettingsProvidersResponses[keyof GetApiV1AdminSettingsProvidersResponses];
+
+export type PostApiV1AdminSettingsProvidersByIdTestData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/settings/providers/{id}/test';
+};
+
+export type PostApiV1AdminSettingsProvidersByIdTestErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminSettingsProvidersByIdTestError = PostApiV1AdminSettingsProvidersByIdTestErrors[keyof PostApiV1AdminSettingsProvidersByIdTestErrors];
+
+export type PostApiV1AdminSettingsProvidersByIdTestResponses = {
+    /**
+     * The provider's answer
+     */
+    200: {
+        success: true;
+        data: {
+            ok: boolean;
+            message: string;
+        };
+    };
+};
+
+export type PostApiV1AdminSettingsProvidersByIdTestResponse = PostApiV1AdminSettingsProvidersByIdTestResponses[keyof PostApiV1AdminSettingsProvidersByIdTestResponses];
 
 export type PutApiV1AdminOrdersByIdStatusData = {
     body: {
@@ -37107,9 +37392,9 @@ export type PostApiV1AdminOrdersByIdRefundData = {
         amount?: number;
         reason?: string;
         /**
-         * Refund only payments taken by this method (gift_card: only the gift-card tenders).
+         * Refund only payments taken by this method (`cod`, a gateway id, an app provider's `<plugin id>:<provider id>`, or gift_card: only the gift-card tenders).
          */
-        gateway?: 'gift_card' | 'stripe' | 'sslcommerz' | 'cod';
+        gateway?: string;
         manualSettlementConfirmed?: boolean;
         /**
          * original (default): back to the payments it came from. store_credit: one new gift card for the whole amount, sent to the order contact; no cash or provider refund.
@@ -38489,7 +38774,7 @@ export type GetApiV1AdminOrdersData = {
         /**
          * Filter by payment method
          */
-        paymentMethod?: 'stripe' | 'sslcommerz' | 'cod';
+        paymentMethod?: string;
         /**
          * Filter by fulfillment status
          */
@@ -38664,6 +38949,10 @@ export type GetApiV1AdminOrdersResponses = {
                  */
                 channelSource: string | null;
                 openRequestType: 'cancel_pre_shipment' | 'return' | 'refund' | null;
+                /**
+                 * An app's hold for staff review is open: the order is not shipped or moved on until staff release it.
+                 */
+                onHold: boolean;
                 cod: {
                     status: string;
                     deliveryAttempts: number;
@@ -38827,7 +39116,7 @@ export type GetApiV1AdminOrdersExportData = {
          */
         format?: 'summary' | 'items';
         paymentStatus?: 'unpaid' | 'partial' | 'paid' | 'partially_refunded' | 'refunded' | 'failed';
-        paymentMethod?: 'stripe' | 'sslcommerz' | 'cod';
+        paymentMethod?: string;
         fulfillmentStatus?: 'pending' | 'partial' | 'complete';
         /**
          * How the order reaches the buyer: delivery (ships to an address), pickup, or none (nothing physical).
@@ -38924,7 +39213,7 @@ export type GetApiV1AdminOrdersPaymentRecoveryData = {
         /**
          * Filter by payment gateway
          */
-        paymentMethod?: 'stripe' | 'sslcommerz' | 'cod';
+        paymentMethod?: string;
         /**
          * Sort field
          */
@@ -39075,6 +39364,10 @@ export type GetApiV1AdminOrdersPaymentRecoveryResponses = {
                  */
                 channelSource: string | null;
                 openRequestType: 'cancel_pre_shipment' | 'return' | 'refund' | null;
+                /**
+                 * An app's hold for staff review is open: the order is not shipped or moved on until staff release it.
+                 */
+                onHold: boolean;
                 cod: {
                     status: string;
                     deliveryAttempts: number;
@@ -39158,7 +39451,7 @@ export type GetApiV1AdminOrdersPaymentRecoveryExportData = {
         /**
          * Filter by payment gateway
          */
-        paymentMethod?: 'stripe' | 'sslcommerz' | 'cod';
+        paymentMethod?: string;
         /**
          * Filter by fulfillment status
          */
@@ -39878,6 +40171,60 @@ export type DeleteApiV1AdminOrdersByIdTimelineByEventIdResponses = {
 
 export type DeleteApiV1AdminOrdersByIdTimelineByEventIdResponse = DeleteApiV1AdminOrdersByIdTimelineByEventIdResponses[keyof DeleteApiV1AdminOrdersByIdTimelineByEventIdResponses];
 
+export type PostApiV1AdminOrdersByIdHoldsByHoldIdReleaseData = {
+    body?: never;
+    path: {
+        id: string;
+        holdId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/orders/{id}/holds/{holdId}/release';
+};
+
+export type PostApiV1AdminOrdersByIdHoldsByHoldIdReleaseErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+};
+
+export type PostApiV1AdminOrdersByIdHoldsByHoldIdReleaseError = PostApiV1AdminOrdersByIdHoldsByHoldIdReleaseErrors[keyof PostApiV1AdminOrdersByIdHoldsByHoldIdReleaseErrors];
+
+export type PostApiV1AdminOrdersByIdHoldsByHoldIdReleaseResponses = {
+    /**
+     * The released hold
+     */
+    200: {
+        success: true;
+        data: {
+            id: string;
+            appId: string;
+            appName: string;
+            reason: string;
+            placedAt: string;
+            releasedAt: string | null;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersByIdHoldsByHoldIdReleaseResponse = PostApiV1AdminOrdersByIdHoldsByHoldIdReleaseResponses[keyof PostApiV1AdminOrdersByIdHoldsByHoldIdReleaseResponses];
+
 export type PostApiV1AdminOrdersByIdPaymentRecoveryLinkData = {
     body?: never;
     path: {
@@ -40021,6 +40368,14 @@ export type GetApiV1AdminOrdersByIdResponses = {
                 level: 'low' | 'medium' | 'high';
                 reasons: Array<string>;
                 checkedAt: string | number;
+            }>;
+            holds: Array<{
+                id: string;
+                appId: string;
+                appName: string;
+                reason: string;
+                placedAt: string | number;
+                releasedAt: string | number | unknown;
             }>;
             status: string;
             paymentStatus: string | null;
@@ -40180,6 +40535,10 @@ export type GetApiV1AdminOrdersByIdResponses = {
              */
             channelSource: string | null;
             openRequestType: 'cancel_pre_shipment' | 'return' | 'refund' | null;
+            /**
+             * An app's hold for staff review is open: the order is not shipped or moved on until staff release it.
+             */
+            onHold: boolean;
             cod: {
                 status: string;
                 deliveryAttempts: number;

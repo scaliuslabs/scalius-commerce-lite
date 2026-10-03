@@ -5,6 +5,7 @@ import { BANGLA_CHECKOUT_LANGUAGE_DATA } from "@scalius/shared/checkout-language
 import { getGatewayPresentation } from "./checkout/gateway-presentation";
 import {
   formatOrderReceiptDate,
+  formatOrderSuccessPaymentMethod,
   localizeOrderReceiptGatewayPresentation,
 } from "./order-success-localization";
 
@@ -19,6 +20,18 @@ describe("order receipt localization boundaries", () => {
     expect(presentation.buyerLabel).toBe("অনলাইনে পেমেন্ট করুন");
     expect(presentation.description).toContain("বিকাশ");
     expect(presentation.providerLabel).toBe("SSLCommerz");
+  });
+
+  it("names an app wallet on the receipt by the store's checkout name, never its stored id", () => {
+    const bkash = "scalius.bkash:bkash";
+    const gateways = [{ id: bkash, name: "bKash" }];
+    expect(formatOrderSuccessPaymentMethod(bkash, BANGLA_CHECKOUT_LANGUAGE_DATA, undefined, gateways)).toBe("bKash");
+    // The app was turned off since: its provider id in words.
+    expect(formatOrderSuccessPaymentMethod(bkash, BANGLA_CHECKOUT_LANGUAGE_DATA)).toBe("Bkash");
+    expect(formatOrderSuccessPaymentMethod("sslcommerz", BANGLA_CHECKOUT_LANGUAGE_DATA, undefined, gateways))
+      .toBe(BANGLA_CHECKOUT_LANGUAGE_DATA.orderReceiptPaymentMethodSslcommerzText);
+    expect(formatOrderSuccessPaymentMethod("unknown", BANGLA_CHECKOUT_LANGUAGE_DATA, undefined, gateways))
+      .toBe(BANGLA_CHECKOUT_LANGUAGE_DATA.orderReceiptStatusNotAvailableText);
   });
 
   it("formats receipt time in the active locale with a safe malformed-code fallback", () => {

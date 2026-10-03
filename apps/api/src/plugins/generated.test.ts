@@ -35,4 +35,11 @@ describe("generated plugin modules", () => {
       expect(BUNDLED_PLUGINS[plugin.id]).toMatchObject({ version: plugin.version, sha256: plugin.sha256 });
     }
   });
+
+  it("ships every first-party app in Bangla too", async () => {
+    for (const plugin of readLockfile().plugins.filter((entry) => entry.source.startsWith("plugins/"))) {
+      const { manifest } = await packPlugin(plugin.source);
+      expect(manifest, plugin.id).toMatchObject({ translations: { bn: { name: expect.any(String), description: expect.any(String) } } });
+    }
+  });
 });

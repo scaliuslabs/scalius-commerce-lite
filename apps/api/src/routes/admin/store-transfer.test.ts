@@ -122,6 +122,23 @@ describe("store transfer routes", () => {
     expect((await createOnly.post("/products", { mode: "price", items: [product()] })).status).toBe(403);
   });
 
+  it("writes and exports costs per item only for staff with View product costs", async () => {
+    const costed = product({ variants: [{ ...product().variants[0], cost: 210 }] });
+    const noCosts = createApp(ALL.filter((permission) => permission !== PERMISSIONS.PRODUCTS_VIEW_COSTS));
+    expect((await noCosts.post("/products", { mode: "upsert", items: [costed] })).status).toBe(403);
+    // The same file without costs imports.
+    expect((await noCosts.post("/products", { mode: "upsert", items: [product()] })).status).toBe(200);
+    noCosts.sqlite.exec("UPDATE product_variants SET cost_minor = 21000");
+    const hidden = new TextDecoder().decode(new Uint8Array(await (await noCosts.app.request("/api/v1/admin/export/products?limit=10")).arrayBuffer()));
+    expect(hidden).toContain("Cost per item");
+    expect(hidden).not.toContain("210");
+
+    const withCosts = createApp();
+    expect((await withCosts.post("/products", { mode: "upsert", items: [costed] })).status).toBe(200);
+    const shown = new TextDecoder().decode(new Uint8Array(await (await withCosts.app.request("/api/v1/admin/export/products?limit=10")).arrayBuffer()));
+    expect(shown).toContain("210");
+  });
+
   it("refuses to create categories and brands without categories.create", async () => {
     const { post } = createApp([PERMISSIONS.PRODUCTS_CREATE, PERMISSIONS.PRODUCTS_EDIT]);
     const response = await post("/products", { mode: "create", items: [product()] });

@@ -26,7 +26,7 @@ export const PLUGIN_INSTALLATION_SOURCES = ["bundled", "registry", "upload"] as 
 export type PluginInstallationSource = (typeof PLUGIN_INSTALLATION_SOURCES)[number];
 export const PLUGIN_INSTALLATION_STATUSES = ["installed", "active", "disabled", "failed"] as const;
 export type PluginInstallationStatus = (typeof PLUGIN_INSTALLATION_STATUSES)[number];
-export const PLUGIN_REGISTRATION_KINDS = ["event", "function", "cron"] as const;
+export const PLUGIN_REGISTRATION_KINDS = ["event", "function", "cron", "provider"] as const;
 export type PluginRegistrationKind = (typeof PLUGIN_REGISTRATION_KINDS)[number];
 export const PLUGIN_LOG_LEVELS = ["debug", "info", "warn", "error"] as const;
 export type PluginLogLevel = (typeof PLUGIN_LOG_LEVELS)[number];
@@ -80,7 +80,7 @@ export const pluginInstallations = sqliteTable("plugin_installations", {
 /** Extension-point registrations derived from an installation's manifest. */
 export const pluginRegistrations = sqliteTable("plugin_registrations", {
     kind: text("kind", { enum: PLUGIN_REGISTRATION_KINDS }).notNull(),
-    /** A topic filter (`order.paid`, `order.*`, `*`), a function point or a cron job name. */
+    /** A topic filter (`order.paid`, `order.*`, `*`), a function point, a cron job name or a provider port (`payment`). */
     name: text("name").notNull(),
     pluginId: text("plugin_id")
         .notNull()
@@ -90,7 +90,7 @@ export const pluginRegistrations = sqliteTable("plugin_registrations", {
 }, (table) => [
     primaryKey({ columns: [table.kind, table.name, table.pluginId] }),
     index("plugin_registrations_plugin_idx").on(table.pluginId),
-    check("plugin_registrations_kind_check", sql`${table.kind} IN ('event', 'function', 'cron')`),
+    check("plugin_registrations_kind_check", sql`${table.kind} IN ('event', 'function', 'cron', 'provider')`),
     check("plugin_registrations_name_length", sql`length(${table.name}) BETWEEN 1 AND 64`),
     check("plugin_registrations_priority_range", sql`${table.priority} BETWEEN 0 AND 1000`),
 ]);
@@ -101,6 +101,8 @@ export const pluginRecords = sqliteTable("plugin_records", {
     collection: text("collection").notNull(),
     id: text("id").notNull(),
     dataJson: text("data_json").notNull(),
+    /** Advances by one with every write of the record: the compare-and-set token (`expectedRevision`). */
+    revision: integer("revision").notNull().default(1),
     /** Encoded values of the collection's declared indexes, in declaration order. */
     idx1: text("idx1"),
     idx2: text("idx2"),
@@ -123,6 +125,7 @@ export const pluginRecords = sqliteTable("plugin_records", {
     check("plugin_records_collection_shape", sql`length(${table.collection}) BETWEEN 1 AND 48 AND ${table.collection} NOT GLOB '*[^a-z0-9-]*'`),
     check("plugin_records_id_length", sql`length(${table.id}) BETWEEN 1 AND 128`),
     check("plugin_records_data_json", jsonObject(table.dataJson, 65536)),
+    check("plugin_records_revision_positive", sql`${table.revision} >= 1`),
     check("plugin_records_idx1_hex", hexIndex(table.idx1)),
     check("plugin_records_idx2_hex", hexIndex(table.idx2)),
     check("plugin_records_idx3_hex", hexIndex(table.idx3)),
@@ -136,6 +139,8 @@ export const pluginKv = sqliteTable("plugin_kv", {
     pluginId: text("plugin_id").notNull(),
     key: text("key").notNull(),
     valueJson: text("value_json").notNull(),
+    /** Advances by one with every write of the key: the compare-and-set token. */
+    revision: integer("revision").notNull().default(1),
     /** Epoch seconds after which the entry reads as absent; null never expires. */
     expiresAt: integer("expires_at"),
     updatedAt: integer("updated_at").notNull().default(UNIX_NOW),
@@ -145,6 +150,7 @@ export const pluginKv = sqliteTable("plugin_kv", {
     check("plugin_kv_plugin_id_shape", pluginIdShape(table.pluginId)),
     check("plugin_kv_key_length", sql`length(${table.key}) BETWEEN 1 AND 256`),
     check("plugin_kv_value_json", sql`json_valid(${table.valueJson}) AND length(${table.valueJson}) <= 65536`),
+    check("plugin_kv_revision_positive", sql`${table.revision} >= 1`),
     check("plugin_kv_expires_positive", sql`${table.expiresAt} IS NULL OR ${table.expiresAt} > 0`),
 ]);
 

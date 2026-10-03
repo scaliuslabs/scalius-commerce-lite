@@ -1,8 +1,8 @@
 // Storefront reads of the plugin tables (docs/platform/PLUGINS.md,
 // "Storefront surfaces"): the active installations a public render needs (to
 // draw app sections and blocks, and to load the scripts of active apps), as
-// batch statements, each declaring the keys the plugin module's writes
-// advance (cache-deps.ts). Inactive, ungranted or unparseable installations
+// batch statements, each declaring the keys the generated triggers on the
+// plugin tables advance (migration 0110). Inactive, ungranted or unparseable installations
 // are never returned: they draw nothing and load nothing.
 
 import type { Database } from "@scalius/database/client";

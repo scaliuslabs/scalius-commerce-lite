@@ -23,6 +23,18 @@ describe("order list search", () => {
     expect(orderViewUpdates("ready_for_pickup")).toMatchObject({ view: "ready_for_pickup", deliveryMethod: undefined });
   });
 
+  it("filters by cash, a built-in gateway or an app's method, dropping anything else", () => {
+    for (const paymentMethod of ["cod", "stripe", "sslcommerz", "scalius.bkash:bkash"]) {
+      const search = validateOrderSearch({ paymentMethod });
+      expect(search.paymentMethod).toBe(paymentMethod);
+      expect(orderListQuery(search, "").paymentMethod).toBe(paymentMethod);
+      expect(countOrderFilters(search)).toBe(1);
+    }
+    for (const paymentMethod of ["bkash", "scalius.bkash:", ":bkash", "scalius.bkash:BKASH", 7]) {
+      expect(validateOrderSearch({ paymentMethod }).paymentMethod).toBeUndefined();
+    }
+  });
+
   it("filters by sales channel and counts it, dropping unknown channels", () => {
     const search = validateOrderSearch({ channel: "admin" });
     expect(search.channel).toBe("admin");

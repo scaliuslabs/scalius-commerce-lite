@@ -1,9 +1,14 @@
+// The built-in fraud checkers behind the fraud port: each provider's request,
+// and its response normalized into the port's answer (validated against the
+// port's output schema, the one app providers answer with). HTTP is mocked.
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { PROVIDER_PORTS } from "@scalius/shared/plugins/providers";
+import { bindProvider } from "../../integrations/provider-port";
 import {
-  ECourierFraudCheckProvider,
-  FraudBdCheckProvider,
-  FraudGuardCheckProvider,
-  getFraudCheckProvider,
+  builtInFraudChecker,
+  eCourierFraudChecker,
+  fraudBdChecker,
+  fraudGuardChecker,
 } from "./provider";
 import { getFraudCheckProviderDefinition } from "./provider-definitions";
 
@@ -40,11 +45,13 @@ describe("Bangladesh fraud checker providers", () => {
       },
     });
 
-    const result = await new FraudBdCheckProvider().lookup("+8801711111111", {
-      apiUrl: "https://api.fraudbd.com/api/check-courier-info",
-      apiKey: "fraudbd-key",
-      apiSecret: "fraudbd-password",
-      userId: "fraudbd-user",
+    const result = await fraudBdChecker.check({ phone: "+8801711111111" }, {
+      settings: {
+        apiUrl: "https://api.fraudbd.com/api/check-courier-info",
+        apiKey: "fraudbd-key",
+        apiSecret: "fraudbd-password",
+        userId: "fraudbd-user",
+      },
     });
 
     const firstCall = fetchMock.mock.calls[0];
@@ -57,15 +64,15 @@ describe("Bangladesh fraud checker providers", () => {
     });
     expect(JSON.parse(String(init?.body))).toEqual({ phone_number: "01711111111" });
     expect(result.riskLevel).toBe("medium");
-    expect(result.details).toMatchObject({
-      total_parcels: 10,
-      total_delivered: 8,
-      total_cancel: 2,
-      apis: {
+    expect(PROVIDER_PORTS.fraud.check.output.parse(result)).toMatchObject({
+      totalParcels: 10,
+      delivered: 8,
+      cancelled: 2,
+      couriers: {
         Steadfast: {
-          total_parcels: 6,
-          total_delivered_parcels: 5,
-          total_cancelled_parcels: 1,
+          totalParcels: 6,
+          delivered: 5,
+          cancelled: 1,
         },
       },
     });
@@ -90,10 +97,12 @@ describe("Bangladesh fraud checker providers", () => {
       },
     });
 
-    const result = await new FraudGuardCheckProvider().lookup("+8801811111111", {
-      apiUrl: "https://fraudguard.slope.com.bd/api/v1/fraud-check",
-      apiKey: "guard-key",
-      apiSecret: "guard-secret",
+    const result = await fraudGuardChecker.check({ phone: "+8801811111111" }, {
+      settings: {
+        apiUrl: "https://fraudguard.slope.com.bd/api/v1/fraud-check",
+        apiKey: "guard-key",
+        apiSecret: "guard-secret",
+      },
     });
 
     const firstCall = fetchMock.mock.calls[0];
@@ -104,15 +113,15 @@ describe("Bangladesh fraud checker providers", () => {
       "X-API-SECRET": "guard-secret",
     });
     expect(JSON.parse(String(init?.body))).toEqual({ phone_number: "01811111111" });
-    expect(result.details).toMatchObject({
-      total_parcels: 4,
-      total_delivered: 3,
-      total_cancel: 1,
-      apis: {
+    expect(PROVIDER_PORTS.fraud.check.output.parse(result)).toMatchObject({
+      totalParcels: 4,
+      delivered: 3,
+      cancelled: 1,
+      couriers: {
         Pathao: {
-          total_parcels: 4,
-          total_delivered_parcels: 3,
-          total_cancelled_parcels: 1,
+          totalParcels: 4,
+          delivered: 3,
+          cancelled: 1,
         },
       },
     });
@@ -126,12 +135,13 @@ describe("Bangladesh fraud checker providers", () => {
       ],
     });
 
-    const result = await new ECourierFraudCheckProvider().lookup("+8801911111111", {
+    // Bound to its settings, as lookups call it.
+    const result = await bindProvider("fraud", eCourierFraudChecker, {
       apiUrl: "https://backoffice.ecourier.com.bd/api/fraud-status-check",
       apiKey: "ecourier-key",
       apiSecret: "ecourier-secret",
       userId: "merchant-user-id",
-    });
+    }).check({ phone: "+8801911111111" }, {});
 
     const firstCall = fetchMock.mock.calls[0];
     expect(firstCall).toBeDefined();
@@ -143,12 +153,12 @@ describe("Bangladesh fraud checker providers", () => {
     });
     expect(JSON.parse(String(init?.body))).toEqual({ number: "01911111111" });
     expect(result.riskLevel).toBe("high");
-    expect(result.details).toMatchObject({
-      mobile_number: "01911111111",
-      total_parcels: 0,
-      total_delivered: 0,
-      total_cancel: 0,
-      provider_status: "Warning!",
+    expect(PROVIDER_PORTS.fraud.check.output.parse(result)).toMatchObject({
+      phone: "01911111111",
+      totalParcels: 0,
+      delivered: 0,
+      cancelled: 0,
+      providerStatus: "Warning!",
       message: "This customer has a risky delivery history. Please review before dispatch.",
     });
   });
@@ -160,6 +170,7 @@ describe("Bangladesh fraud checker providers", () => {
   });
 
   it("does not silently route unknown provider types to the default adapter", () => {
-    expect(() => getFraudCheckProvider("missing-provider")).toThrow("Unsupported fraud checker provider type");
+    expect(() => builtInFraudChecker("missing-provider")).toThrow("Unsupported fraud checker provider type");
+    expect(builtInFraudChecker(undefined).id).toBe("default");
   });
 });

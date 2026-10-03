@@ -10,6 +10,12 @@ const mocks = vi.hoisted(() => ({
   deleteFraudProvider: vi.fn(),
   testFraudProvider: vi.fn(),
   fraudLookupWithActiveProvider: vi.fn(),
+  assertAppProviderInstalled: vi.fn(),
+}));
+
+vi.mock("../../plugins/providers/app-providers", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../plugins/providers/app-providers")>()),
+  assertAppProviderInstalled: mocks.assertAppProviderInstalled,
 }));
 
 vi.mock("@scalius/core/modules/fraud-checker", async (importOriginal) => ({
@@ -48,9 +54,11 @@ function createTestApp() {
   mocks.deleteFraudProvider.mockResolvedValue(true);
   mocks.testFraudProvider.mockResolvedValue({ success: true, message: "Connection successful" });
   mocks.fraudLookupWithActiveProvider.mockResolvedValue({
-    success: true,
     riskLevel: "low",
-    data: { mobile_number: "+8801700000000", total_parcels: 1, total_delivered: 1, total_cancel: 0 },
+    phone: "+8801700000000",
+    totalParcels: 1,
+    delivered: 1,
+    cancelled: 0,
   });
 
   app.onError((error, c) => {
@@ -231,17 +239,14 @@ describe("admin fraud checker credential handling", () => {
   it("projects lookup facts without echoing phone or arbitrary provider fields", async () => {
     const { app, env } = createTestApp();
     mocks.fraudLookupWithActiveProvider.mockResolvedValueOnce({
-      success: true,
       riskLevel: "medium",
-      data: {
-        mobile_number: "+8801700000000",
-        total_parcels: 12,
-        total_delivered: 9,
-        total_cancel: 3,
-        message: "owner@example.com token=secret",
-        provider_status: "verified",
-        arbitrarySecret: "must-not-leave",
-      },
+      phone: "+8801700000000",
+      totalParcels: 12,
+      delivered: 9,
+      cancelled: 3,
+      message: "owner@example.com token=secret",
+      providerStatus: "verified",
+      arbitrarySecret: "must-not-leave",
     });
 
     const response = await app.request("/api/v1/admin/fraud-checker/lookup", {
@@ -340,6 +345,33 @@ describe("admin fraud checker credential handling", () => {
       { id: "db" },
       "+8801700000000",
       undefined,
+      expect.objectContaining({ resolve: expect.any(Function) }),
     );
+  });
+
+  it("saves an installed app's fraud provider as a row without credentials", async () => {
+    const { app, env } = createTestApp();
+    const appRow = { name: "Acme Radar", providerType: "acme.radar:radar", isActive: true };
+    mocks.saveFraudProvider.mockResolvedValueOnce({ id: "row_app", ...appRow, apiUrl: "", apiKey: "" });
+
+    const response = await app.request("/api/v1/admin/fraud-checker", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(appRow),
+    }, env);
+
+    expect(response.status, await response.clone().text()).toBe(201);
+    expect(mocks.assertAppProviderInstalled).toHaveBeenCalledWith({ id: "db" }, "fraud", "acme.radar:radar");
+    expect(mocks.saveFraudProvider).toHaveBeenCalledWith({ id: "db" }, { ...appRow, apiUrl: "", apiKey: "" }, "credential-key");
+    await expect(response.json()).resolves.toMatchObject({
+      data: { id: "row_app", providerType: "acme.radar:radar", apiUrl: "", apiKey: "", isActive: true },
+    });
+
+    const withCredentials = await app.request("/api/v1/admin/fraud-checker", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...appRow, apiKey: "should-live-in-the-app" }),
+    }, env);
+    expect(withCredentials.status).toBe(400);
   });
 });

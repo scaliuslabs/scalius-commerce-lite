@@ -2,7 +2,8 @@ import type { OrderReceipt } from "./api/types";
 import type { GatewayConfig } from "./api/checkout";
 import type { OrderSuccessStateKind } from "./order-success-state";
 import { GIFT_CARD_PAYMENT_METHOD, getOrderSuccessVisibleBalanceDue } from "./order-success-state";
-import { getGatewayPresentation } from "./checkout/gateway-presentation";
+import { appGatewayName, getGatewayPresentation } from "./checkout/gateway-presentation";
+import { isPaymentMethodIdShape } from "./payment-method-id";
 
 export type OrderSuccessRetryPaymentType = "full" | "deposit" | "balance";
 /** An online gateway id (every payment method except "cod"). */
@@ -62,7 +63,7 @@ export function canRetryOrderSuccessPayment(
  */
 function normalizeHostedGateway(value: string | null | undefined): OrderSuccessRetryGateway | null {
   const method = normalize(value);
-  return /^[a-z][a-z0-9_-]{0,63}$/.test(method) && method !== "cod" && method !== GIFT_CARD_PAYMENT_METHOD
+  return isPaymentMethodIdShape(method) && method !== "cod" && method !== GIFT_CARD_PAYMENT_METHOD
     ? method
     : null;
 }
@@ -74,7 +75,7 @@ export function getOrderSuccessRetryOptions(
   >,
   stateKind: OrderSuccessStateKind,
   callbackResult: string | null | undefined,
-  gateways: Pick<GatewayConfig, "id">[],
+  gateways: (Pick<GatewayConfig, "id"> & Partial<Pick<GatewayConfig, "name">>)[],
 ): OrderSuccessRetryOption[] {
   if (!canRetryOrderSuccessPayment(order, stateKind, callbackResult)) return [];
 
@@ -95,7 +96,8 @@ export function getOrderSuccessRetryOptions(
         gateway,
         endpoint: getOrderSuccessRetryEndpoint(gateway) ?? "",
         current,
-        label: getGatewayPresentation(gateway, gateway).buyerLabel,
+        // An app's wallet reads by the checkout name the store serves, never its id.
+        label: getGatewayPresentation(gateway, appGatewayName(gateway, gateways) ?? gateway).buyerLabel,
         requiresCardForm: gateway === "stripe",
       };
     })

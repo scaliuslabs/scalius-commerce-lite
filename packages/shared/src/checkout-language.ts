@@ -58,6 +58,12 @@ export const ENGLISH_CHECKOUT_LANGUAGE_DATA = {
   paymentRecoveryContinueToReceiptText: "Continue to receipt",
   paymentRecoveryUnavailableText:
     "Payment recovery isn't available right now. Sign in to check your account orders.",
+  /** An app checkout depends on could not answer: checkout is paused (apps with `onError: "block"`). */
+  checkoutAppUnavailableText:
+    "We can't confirm your order right now. Please try again in a few minutes.",
+  /** An app's offer (such as points) changed while the order was being placed. */
+  checkoutAppOfferChangedText:
+    "An offer in your order changed while it was being placed. Review your order and try again.",
   paymentRecoveryMissingOrderText:
     "This recovery link is missing an order reference. Ask the store to send a fresh payment recovery link.",
   paymentRecoveryViewAccountOrdersText: "View account orders",
@@ -396,6 +402,9 @@ export const ENGLISH_CHECKOUT_LANGUAGE_DATA = {
   placingOrderMessage: "Confirming item availability and delivery.",
   openingSecurePaymentTitle: "Opening secure payment",
   openingSecurePaymentMessage: "You'll continue with the selected payment provider.",
+  openingProviderTitle: "Opening {provider}",
+  leavingToPayMessage: "You'll leave this store to pay with {provider}, then come back here for your receipt.",
+  redirectSlowMessage: "Still opening {provider}. Keep this page open and don't place the order again.",
   unknownPaymentMethodText: "Unknown payment method selected.",
   unsafeRedirectText: "Payment could not open because the gateway returned an unsafe redirect URL.",
   genericErrorText: "An error occurred. Please try again.",
@@ -753,6 +762,10 @@ export const BANGLA_CHECKOUT_LANGUAGE_DATA: CheckoutLanguageData = {
   paymentRecoveryContinueToReceiptText: "রসিদে এগিয়ে যান",
   paymentRecoveryUnavailableText:
     "এই মুহূর্তে পেমেন্ট পুনরুদ্ধার করা যাচ্ছে না। অ্যাকাউন্টের অর্ডার দেখতে সাইন ইন করুন।",
+  checkoutAppUnavailableText:
+    "এই মুহূর্তে আপনার অর্ডার নিশ্চিত করা যাচ্ছে না। কয়েক মিনিট পরে আবার চেষ্টা করুন।",
+  checkoutAppOfferChangedText:
+    "অর্ডার দেওয়ার সময় একটি অফার বদলে গেছে। অর্ডারটি আবার দেখে নিয়ে চেষ্টা করুন।",
   paymentRecoveryMissingOrderText:
     "এই পুনরুদ্ধার লিংকে অর্ডার রেফারেন্স নেই। দোকানের কাছে নতুন পেমেন্ট পুনরুদ্ধার লিংক চান।",
   paymentRecoveryViewAccountOrdersText: "অ্যাকাউন্টের অর্ডার দেখুন",
@@ -1089,6 +1102,9 @@ export const BANGLA_CHECKOUT_LANGUAGE_DATA: CheckoutLanguageData = {
   placingOrderMessage: "পণ্যের প্রাপ্যতা ও ডেলিভারি নিশ্চিত করা হচ্ছে।",
   openingSecurePaymentTitle: "নিরাপদ পেমেন্ট খোলা হচ্ছে",
   openingSecurePaymentMessage: "বেছে নেওয়া পেমেন্ট সেবায় আপনাকে নিয়ে যাওয়া হবে।",
+  openingProviderTitle: "{provider} খোলা হচ্ছে",
+  leavingToPayMessage: "{provider} দিয়ে পেমেন্ট করতে আপনি এই স্টোর থেকে বেরিয়ে যাবেন, তারপর রসিদের জন্য এখানে ফিরে আসবেন।",
+  redirectSlowMessage: "{provider} এখনও খোলা হচ্ছে। পেজটি খোলা রাখুন, আবার অর্ডার করবেন না।",
   unknownPaymentMethodText: "অজানা পেমেন্ট পদ্ধতি বেছে নেওয়া হয়েছে।",
   unsafeRedirectText: "পেমেন্ট সেবা নিরাপদ ঠিকানা না দেওয়ায় পেমেন্ট খোলা যায়নি।",
   genericErrorText: "একটি সমস্যা হয়েছে। আবার চেষ্টা করুন।",
@@ -1439,6 +1455,8 @@ export const CHECKOUT_LANGUAGE_LONG_TEXT_KEYS =/* @__PURE__ */ new Set<CheckoutL
   "paymentRecoveryMessageText",
   "paymentRecoveryIntroText",
   "paymentRecoveryUnavailableText",
+  "checkoutAppUnavailableText",
+  "checkoutAppOfferChangedText",
   "paymentRecoveryMissingOrderText",
   "paymentRecoveryCodeSentText",
   "paymentRecoveryVerificationFailedText",
@@ -1489,6 +1507,8 @@ export const CHECKOUT_LANGUAGE_LONG_TEXT_KEYS =/* @__PURE__ */ new Set<CheckoutL
   "processingPaymentMessage",
   "placingOrderMessage",
   "openingSecurePaymentMessage",
+  "leavingToPayMessage",
+  "redirectSlowMessage",
   "unsafeRedirectText",
   "totalVerificationFailedText",
 ]);

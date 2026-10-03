@@ -7,6 +7,7 @@ import {
 import { RateLimitError, ServiceUnavailableError, ValidationError } from "@scalius/core/errors";
 import type { CustomerAuthOtpChannel } from "@scalius/shared/customer-auth-policy";
 import type { EmailRuntimeContext } from "../../integrations/email";
+import type { AppProviders } from "../../integrations/provider-port";
 import { createAuthOtpDeliveryKey, maskOtpIdentifier } from "../customers/otp-delivery-receipts";
 import { buildOtpQueuePayload, type OtpQueuePayload } from "../customers/otp-transport";
 import { enforceOtpSendRateLimits } from "../customers/customer-auth-rate-limit";
@@ -34,6 +35,8 @@ export interface SendOrderPaymentRecoveryOtpInput {
     emailEnv?: EmailRuntimeContext["env"];
     encryptionKey?: string;
     credentialEncryptionKey?: string;
+    /** The app providers a saved SMS or email choice may name. */
+    appProviders?: AppProviders;
 }
 
 export interface SendOrderPaymentRecoveryOtpResult {

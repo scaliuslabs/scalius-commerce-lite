@@ -1,13 +1,14 @@
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import {
+    BUILT_IN_PAYMENT_PROVIDERS,
     COD_PAYMENT_METHOD,
     getGatewayAmountIssue,
-    getPaymentGateway,
     isOnlinePaymentMethod,
+    type PaymentProviders,
 } from "../payments/gateways/registry";
 import type { CheckoutMode } from "./documents";
 
-/** A registered gateway id or "cod". */
+/** `cod`, a built-in gateway id or an app provider id (`<plugin id>:<provider id>`). */
 export type CheckoutPaymentMethodId = string;
 
 export { isOnlinePaymentMethod };
@@ -41,6 +42,8 @@ export function getCheckoutFlowValidationIssues(options: {
     partialPaymentEnabled: boolean;
     partialPaymentAmount: unknown;
     availablePaymentMethods?: readonly string[];
+    /** The request's gateways, for their amount limits; built-in ones alone by default. */
+    paymentProviders?: PaymentProviders;
 }): string[] {
     const issues: string[] = [];
     const checkoutMode = options.checkoutMode ?? "all";
@@ -66,7 +69,7 @@ export function getCheckoutFlowValidationIssues(options: {
         issues.push("Advance payment amount must be greater than zero.");
     }
     for (const methodId of availablePaymentMethods ?? []) {
-        const gateway = getPaymentGateway(methodId);
+        const gateway = (options.paymentProviders ?? BUILT_IN_PAYMENT_PROVIDERS).get(methodId);
         const limits = gateway?.amountLimits;
         if (!gateway || !limits) continue;
         const amountMinor = Math.round(Number(options.partialPaymentAmount) * 10 ** getDecimalPlaces(limits.currency));

@@ -28,6 +28,16 @@ export default class PluginSandbox extends WorkerEntrypoint {
     return invokePluginDefinition(pluginModule, { kind: "function", point, input }, seed, null);
   }
 
+  invokeProvider(
+    bridge: PluginRuntimeBridge,
+    seed: PluginContextSeed,
+    provider: string,
+    operation: string,
+    input: unknown,
+  ): Promise<PluginInvocationResult> {
+    return invokePluginDefinition(pluginModule, { kind: "provider", provider, operation, input }, seed, bridge);
+  }
+
   invokeRoute(
     bridge: PluginRuntimeBridge,
     seed: PluginContextSeed,

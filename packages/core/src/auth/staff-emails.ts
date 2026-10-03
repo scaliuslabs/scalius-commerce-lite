@@ -5,6 +5,7 @@
 import type { Database } from "@scalius/database/client";
 import { escapeHtml } from "@scalius/shared/html-escape";
 import { joinPlatformUrl } from "@scalius/shared/platform-config";
+import type { AppProviders } from "../integrations/provider-port";
 import { readStoreName } from "../modules/notifications/store-messages";
 
 export const STAFF_INVITE_TTL_SECONDS = 7 * 24 * 60 * 60;
@@ -130,6 +131,8 @@ export async function sendStaffPasswordChangedEmail(input: {
   env: Record<string, unknown>;
   dashboardUrl: string | undefined;
   user: { name: string; email: string };
+  /** The request's app providers, for an app sender the merchant chose. */
+  appProviders?: AppProviders;
 }): Promise<void> {
   try {
     const { sendEmail } = await import("../integrations/email");
@@ -143,6 +146,7 @@ export async function sendStaffPasswordChangedEmail(input: {
       db: input.db,
       env: input.env,
       encryptionKey: input.env.CREDENTIAL_ENCRYPTION_KEY as string | undefined,
+      appProviders: input.appProviders,
     });
     if (!delivery.success) console.warn("[Auth] Password-changed notice was not delivered", { provider: delivery.provider });
   } catch {

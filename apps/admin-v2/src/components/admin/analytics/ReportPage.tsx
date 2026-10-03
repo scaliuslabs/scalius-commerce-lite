@@ -135,7 +135,9 @@ export function ReportPage({
         <Card>
           <CardHeader className="flex-row items-center justify-between gap-3 space-y-0">
             <p className="text-body">
-              {forbidden ? t("unavailable.customer_access") : t("loadFailed")}
+              {forbidden
+                ? t(definition.requiresCostAccess ? "unavailable.cost_access" : "unavailable.customer_access")
+                : t("loadFailed")}
             </p>
             {forbidden ? null : <Button variant="outline" size="sm" onClick={() => void report.refetch()}>{t("retry")}</Button>}
           </CardHeader>

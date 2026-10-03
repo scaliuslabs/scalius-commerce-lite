@@ -4,6 +4,7 @@ import {
   checkShipmentStatus,
   getDeliveryProvider,
   getShipment,
+  type CourierProvidersSource,
   type ShipmentView,
   updateOrderStatusFromShipment,
 } from "@scalius/core/modules/delivery";
@@ -42,16 +43,18 @@ export async function checkAndSyncShipmentStatus(options: {
   db: Database;
   shipment: ShipmentView;
   encryptionKey?: string;
+  /** The request's couriers (app couriers join here). */
+  couriers: CourierProvidersSource;
   c: RequestContext;
   source: string;
 }): Promise<SyncedShipmentStatusResult> {
-  const { db, shipment, encryptionKey, c, source } = options;
+  const { db, shipment, encryptionKey, couriers, c, source } = options;
   const previousStatus = shipment.status;
 
   await assertNoActiveRefundAttempt(db, shipment.orderId);
   await assertNoActivePaymentSessionAttempt(db, shipment.orderId);
 
-  const checkedShipment = await checkShipmentStatus(db, shipment.id, encryptionKey);
+  const checkedShipment = await checkShipmentStatus(db, shipment.id, encryptionKey, couriers);
   const now = new Date();
 
   await db

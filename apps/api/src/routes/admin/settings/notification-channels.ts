@@ -15,6 +15,8 @@ import {
 } from "@scalius/core/modules/settings";
 import { getSmsProviderReadiness } from "@scalius/core/integrations/sms";
 import { getEmailProviderReadiness } from "@scalius/core/integrations/email";
+import type { AppProviders } from "@scalius/core/integrations/provider-port";
+import { requestAppProviders } from "../../../plugins/providers/app-providers";
 import { getFirebaseServiceAccountReadiness } from "@scalius/core/integrations/firebase/settings";
 import {
     clearNotificationProviderBlocks,
@@ -116,7 +118,7 @@ const settingsResponse = {
 };
 const savedSettingsResponse = { ...settingsResponse, 409: conflictResponse };
 
-async function readNotificationSettings(db: Database, env: Env) {
+async function readNotificationSettings(db: Database, env: Env, appProviders: AppProviders) {
     const encryptionKey = getCredentialEncryptionKey(env as Record<string, unknown>);
     const settings = await getNotificationSettings(db);
     return {
@@ -128,8 +130,8 @@ async function readNotificationSettings(db: Database, env: Env) {
             languageCode: settings.whatsappOrderTemplateLanguage,
         },
         whatsapp: await getWhatsAppNotificationReadiness(db, encryptionKey),
-        email: await getEmailNotificationReadiness(db, encryptionKey, env),
-        sms: await getSmsNotificationReadiness(db, encryptionKey),
+        email: await getEmailNotificationReadiness(db, encryptionKey, env, appProviders),
+        sms: await getSmsNotificationReadiness(db, encryptionKey, appProviders),
         push: await getPushNotificationReadiness(db, encryptionKey),
         revision: settings.revision,
     };
@@ -143,7 +145,7 @@ app.openapi(createRoute({
     tags: ["Admin - Settings"],
     summary: "Get customer and staff notification settings",
     responses: settingsResponse,
-}), async (c) => ok(c, await readNotificationSettings(c.get("db"), c.env)));
+}), async (c) => ok(c, await readNotificationSettings(c.get("db"), c.env, requestAppProviders(c))));
 
 // PUT /notification-channels
 app.openapi(createRoute({
@@ -163,10 +165,11 @@ app.openapi(createRoute({
     await updateNotificationChannels(db, channels, encryptionKey, c.env as Record<string, unknown>, {
         whatsappTemplate,
         expectedRevision,
+        appProviders: requestAppProviders(c),
     });
     // A new order template is the fix for a paused Meta template.
     if (whatsappTemplate) await clearNotificationProviderBlocks(db, { channel: "whatsapp" });
-    return ok(c, await readNotificationSettings(db, c.env));
+    return ok(c, await readNotificationSettings(db, c.env, requestAppProviders(c)));
 });
 
 // PUT /notification-channels/admin-channels
@@ -197,7 +200,7 @@ app.openapi(createRoute({
         }
     }
     await updateAdminNotificationChannels(db, { channels, emailRecipients }, { expectedRevision });
-    return ok(c, await readNotificationSettings(db, c.env));
+    return ok(c, await readNotificationSettings(db, c.env, requestAppProviders(c)));
 });
 
 /** A paused provider is merchant-actionable setup, not a platform error. */
@@ -217,8 +220,9 @@ async function getEmailNotificationReadiness(
     db: Database,
     encryptionKey: string | undefined,
     env: Env,
+    appProviders: AppProviders,
 ): Promise<Readiness> {
-    const providerReadiness = await getEmailProviderReadiness({ db, encryptionKey, env: env as Record<string, unknown> });
+    const providerReadiness = await getEmailProviderReadiness({ db, encryptionKey, env: env as Record<string, unknown>, appProviders });
     if (!isReady(providerReadiness)) return bareReadiness(providerReadiness);
 
     const block = await getNotificationProviderBlock(db, { channel: "email", provider: providerReadiness.provider })
@@ -226,8 +230,8 @@ async function getEmailNotificationReadiness(
     return block ? providerBlockedReadiness(block) : readiness.ready();
 }
 
-async function getSmsNotificationReadiness(db: Database, encryptionKey: string | undefined): Promise<Readiness> {
-    const providerReadiness = await getSmsProviderReadiness(db, encryptionKey);
+async function getSmsNotificationReadiness(db: Database, encryptionKey: string | undefined, appProviders: AppProviders): Promise<Readiness> {
+    const providerReadiness = await getSmsProviderReadiness(db, encryptionKey, appProviders);
     if (!isReady(providerReadiness) || !providerReadiness.activeProvider) {
         return bareReadiness(providerReadiness);
     }

@@ -53,8 +53,37 @@ describe("catalog action permissions", () => {
         canToggleStatus: false,
         canReorder: false,
       },
-      inventory: { canAdjustStock: false, canAcknowledgeAlerts: false },
+      inventory: {
+        canAdjustStock: false,
+        canAcknowledgeAlerts: false,
+        canViewCosts: false,
+        canEditCosts: false,
+        canManageOperations: false,
+        canDraftPurchaseOrders: false,
+        canManageLocations: false,
+      },
     });
+  });
+
+  it("keeps costs and inventory operations behind their own permissions", () => {
+    // Editing products adjusts stock but neither shows costs nor runs purchasing.
+    expect(resolveCatalogActions([PERMISSIONS.PRODUCTS_VIEW, PERMISSIONS.PRODUCTS_EDIT]).inventory).toMatchObject({
+      canAdjustStock: true,
+      canViewCosts: false,
+      canEditCosts: false,
+      canManageOperations: false,
+      canDraftPurchaseOrders: false,
+      canManageLocations: false,
+    });
+    expect(resolveCatalogActions([PERMISSIONS.PRODUCTS_EDIT, PERMISSIONS.PRODUCTS_VIEW_COSTS]).inventory)
+      .toMatchObject({ canViewCosts: true, canEditCosts: true });
+    // Receiving and transfers without costs; drafting a purchase order sets them.
+    expect(resolveCatalogActions([PERMISSIONS.INVENTORY_MANAGE]).inventory)
+      .toMatchObject({ canManageOperations: true, canDraftPurchaseOrders: false, canManageLocations: true });
+    expect(resolveCatalogActions([PERMISSIONS.INVENTORY_MANAGE, PERMISSIONS.PRODUCTS_VIEW_COSTS]).inventory)
+      .toMatchObject({ canDraftPurchaseOrders: true });
+    expect(resolveCatalogActions([PERMISSIONS.SETTINGS_GENERAL_EDIT]).inventory)
+      .toMatchObject({ canManageLocations: true, canManageOperations: false });
   });
 
   it("keeps product actions granular and ties stock adjustment to product edit", () => {
@@ -69,7 +98,7 @@ describe("catalog action permissions", () => {
         canPermanentDelete: false,
         canBulkDelete: false,
       },
-      inventory: { canAdjustStock: true, canAcknowledgeAlerts: true },
+      inventory: { canAdjustStock: true, canAcknowledgeAlerts: true, canViewCosts: false },
     });
 
     expect(

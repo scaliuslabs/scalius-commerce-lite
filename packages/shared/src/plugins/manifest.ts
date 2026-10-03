@@ -11,6 +11,8 @@ import { SUPPORTED_PLUGIN_API_VERSIONS } from "./api-version";
 import { parsePluginCronSchedule } from "./cron";
 import { FIRST_PARTY_PLUGIN_VENDOR, PLUGIN_ID_PATTERN } from "./ids";
 import { pluginSettingsSchemaSchema } from "./settings-schema";
+import { pluginProvidersSchema } from "./providers/descriptors";
+import { PROVIDER_KINDS } from "./providers/kinds";
 
 /** Date-versioned like the event catalog; a manifest names the version it was built for. */
 export { PLUGIN_API_VERSION, SUPPORTED_PLUGIN_API_VERSIONS, type PluginApiVersion } from "./api-version";
@@ -26,8 +28,29 @@ const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]{1,40}
 export const PLUGIN_PERMISSION_PATTERN = /^[a-z][a-z_]*(?:\.[a-z][a-z_]*){1,2}$/;
 /** Route, page, card, action, cron, collection and section names. */
 export const PLUGIN_NAME_PATTERN = /^[a-z][a-z0-9-]{0,47}$/;
-/** Exact hosts or one leading wildcard label (`*.example.com`); never IP literals or localhost. */
-export const PLUGIN_HOST_PATTERN = /^(?:\*\.)?(?=[a-z0-9.-]{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
+/**
+ * Exact hosts or one leading wildcard label (`*.example.com`); never IP
+ * literals or localhost. An exact host may name one non-default https port
+ * (`sandbox.example.com:10061`, a provider sandbox's): only that port is
+ * then reachable on it.
+ */
+export const PLUGIN_HOST_PATTERN = /^(?:(?:\*\.)?(?=[a-z0-9.-]{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}|(?=[a-z0-9.-]{1,253}:)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}:(?:[1-9]\d{0,3}|[1-5]\d{4}|6[0-4]\d{3}|65[0-4]\d{2}|655[0-2]\d|6553[0-5]))$/;
+
+/**
+ * Whether `allowedHosts` lets a request reach `hostname` on `port` ("" for
+ * the default https port). A wildcard matches subdomains only, and only on
+ * the default port; a non-default port needs its exact `host:port` entry.
+ */
+export function isPluginHostAllowed(hostname: string, allowedHosts: readonly string[], port = ""): boolean {
+  const host = hostname.toLowerCase().replace(/\.$/, "");
+  if (port !== "" && port !== "443") return allowedHosts.some((pattern) => pattern.toLowerCase() === `${host}:${port}`);
+  return allowedHosts.some((pattern) => {
+    const allowed = pattern.toLowerCase();
+    if (allowed.includes(":")) return false;
+    if (allowed.startsWith("*.")) return host.endsWith(allowed.slice(1)) && host.length > allowed.length - 1;
+    return host === allowed;
+  });
+}
 
 const name = z.string().regex(PLUGIN_NAME_PATTERN);
 const title = z.string().trim().min(1).max(80);
@@ -45,8 +68,16 @@ export const PLUGIN_FUNCTION_POINTS = [
 ] as const;
 export type PluginFunctionPoint = (typeof PLUGIN_FUNCTION_POINTS)[number];
 
-/** Provider ports a plugin can fill; each maps to an existing core provider interface. */
-export const PLUGIN_PROVIDER_KINDS = ["payment", "shipping", "messaging", "email", "fraud", "tax"] as const;
+/**
+ * Points where an app may stop checkout when it cannot answer
+ * (`onError: "block"`): a check the store relies on (address or stock
+ * verification, payment eligibility). Elsewhere a failure only leaves the
+ * app out.
+ */
+export const PLUGIN_BLOCKING_FUNCTION_POINTS = ["cart.validate", "checkout.payment_methods"] as const satisfies readonly PluginFunctionPoint[];
+
+/** Provider ports a plugin can fill: the same ports the platform's own adapters implement (providers.ts). */
+export const PLUGIN_PROVIDER_KINDS = PROVIDER_KINDS;
 export type PluginProviderKind = (typeof PLUGIN_PROVIDER_KINDS)[number];
 
 /** Resources a dashboard card or action can attach to. */
@@ -154,6 +185,28 @@ const storefrontSchema = z.object({
   proxy: z.boolean().default(false),
 }).strict();
 
+// ── Translations ──────────────────────────────────────────────────────────
+
+/** Dashboard languages besides English, the manifest's own language. */
+export const PLUGIN_TRANSLATION_LOCALES = ["bn"] as const;
+export type PluginTranslationLocale = (typeof PLUGIN_TRANSLATION_LOCALES)[number];
+
+/**
+ * The manifest's merchant-facing text in another dashboard language: the
+ * app's name and description, and its pages', cards', actions' and widgets'
+ * titles by id. Anything left out shows in English. An app's own screens
+ * pick their language from `adminContext(request).locale`.
+ */
+const pluginTranslationSchema = z.object({
+  name: title.optional(),
+  description: description.optional(),
+  pages: z.record(name, title).optional(),
+  cards: z.record(name, title).optional(),
+  actions: z.record(name, title).optional(),
+  widgets: z.record(name, title).optional(),
+}).strict();
+export type PluginTranslation = z.infer<typeof pluginTranslationSchema>;
+
 // ── Manifest ──────────────────────────────────────────────────────────────
 
 export const pluginManifestSchema = z.object({
@@ -177,13 +230,27 @@ export const pluginManifestSchema = z.object({
     point: z.enum(PLUGIN_FUNCTION_POINTS),
     /** Lower runs first among plugins at the same point. */
     priority: z.number().int().min(0).max(1000).default(100),
+    /**
+     * What a throw, timeout or invalid answer does: `skip` leaves the app out
+     * (fail open); `block` stops checkout with the store's buyer-safe message
+     * (cart.validate and checkout.payment_methods only).
+     */
+    onError: z.enum(["skip", "block"]).default("skip"),
+    /**
+     * checkout.discounts only: the signed-in buyer's record in this
+     * collection (record id = customer id) is passed in as `snapshot`, and
+     * the answer may `commit` a new version of it, written with the order in
+     * the same atomic batch at the revision the function saw (a spent
+     * balance can never be spent twice).
+     */
+    snapshot: z.object({ collection: name }).strict().optional(),
   }).strict()).max(PLUGIN_FUNCTION_POINTS.length).default([]),
-  providers: z.array(z.object({
-    kind: z.enum(PLUGIN_PROVIDER_KINDS),
-    /** Unique within the plugin; the merchant picks providers by `<plugin id>/<id>`. */
-    id: name,
-    name: title,
-  }).strict()).max(10).default([]),
+  /**
+   * Providers the app implements, grouped by port (providers/descriptors.ts).
+   * Ids are unique within the app; merchants and orders name a provider
+   * `<plugin id>:<id>`.
+   */
+  providers: pluginProvidersSchema,
 
   routes: z.object({
     /** Dashboard-authenticated (`/api/v1/plugins/<id>/admin/<name>`). */
@@ -202,6 +269,8 @@ export const pluginManifestSchema = z.object({
 
   admin: adminSchema.default({ pages: [], cards: [], actions: [], widgets: [] }),
   storefront: storefrontSchema.default({ sections: [], productBlocks: [], head: false, scripts: [], proxy: false }),
+  /** The dashboard text in other languages (additive; English is the manifest itself). */
+  translations: z.object({ bn: pluginTranslationSchema.optional() }).strict().optional(),
 
   /** Per-invocation limits, within the platform's ceilings. */
   limits: z.object({
@@ -222,10 +291,26 @@ export const pluginManifestSchema = z.object({
   manifest.admin.cards.forEach((card, index) => needAdminRoute(["admin", "cards", index, "route"], card.route));
   manifest.admin.actions.forEach((action, index) => needAdminRoute(["admin", "actions", index, "route"], action.route));
   manifest.admin.widgets.forEach((widget, index) => needAdminRoute(["admin", "widgets", index, "route"], widget.route));
+  for (const locale of PLUGIN_TRANSLATION_LOCALES) {
+    const translation = manifest.translations?.[locale];
+    if (!translation) continue;
+    for (const surface of ["pages", "cards", "actions", "widgets"] as const) {
+      const declared = new Set(manifest.admin[surface].map((entry) => entry.id));
+      for (const id of Object.keys(translation[surface] ?? {})) {
+        if (!declared.has(id)) {
+          context.addIssue({ code: "custom", path: ["translations", locale, surface, id], message: `No admin ${surface.slice(0, -1)} ${id} to translate.` });
+        }
+      }
+    }
+  }
   const needPublicRoute = (path: (string | number)[], route: string) => {
     if (!publicRoutes.has(route)) context.addIssue({ code: "custom", path, message: `Public route ${route} is not declared.` });
   };
   const collections = new Set(Object.keys(manifest.storage));
+  // `ctx.storage.batch` is the atomic multi-record write.
+  if (collections.has("batch")) {
+    context.addIssue({ code: "custom", path: ["storage", "batch"], message: "\"batch\" is reserved: name the collection something else." });
+  }
   const surfaces = [
     ...manifest.storefront.sections.map((surface, index) => ({ surface, path: ["storefront", "sections", index] as (string | number)[] })),
     ...manifest.storefront.productBlocks.map((surface, index) => ({ surface, path: ["storefront", "productBlocks", index] as (string | number)[] })),
@@ -250,6 +335,17 @@ export const pluginManifestSchema = z.object({
     if (new Set(values).size !== values.length) context.addIssue({ code: "custom", path, message: `${what} must be unique.` });
   };
   unique(manifest.functions.map((fn) => fn.point), ["functions"], "Function points");
+  manifest.functions.forEach((fn, index) => {
+    if (fn.onError === "block" && !(PLUGIN_BLOCKING_FUNCTION_POINTS as readonly string[]).includes(fn.point)) {
+      context.addIssue({ code: "custom", path: ["functions", index, "onError"], message: "Only cart.validate and checkout.payment_methods may block checkout." });
+    }
+    if (fn.snapshot && fn.point !== "checkout.discounts") {
+      context.addIssue({ code: "custom", path: ["functions", index, "snapshot"], message: "Only checkout.discounts reads a snapshot." });
+    }
+    if (fn.snapshot && !collections.has(fn.snapshot.collection)) {
+      context.addIssue({ code: "custom", path: ["functions", index, "snapshot", "collection"], message: `Storage collection ${fn.snapshot.collection} is not declared.` });
+    }
+  });
   unique(manifest.providers.map((provider) => provider.id), ["providers"], "Provider ids");
   unique(manifest.cron.map((job) => job.name), ["cron"], "Cron names");
   unique(manifest.customFields.map((field) => `${field.ownerType}:${field.key}`), ["customFields"], "Custom field keys");
@@ -284,6 +380,8 @@ export interface PluginGrantRequest {
   allowedHosts: string[];
   events: EventTopicFilter[];
   functions: PluginFunctionPoint[];
+  /** Function points where the app may pause checkout when it cannot answer (`onError: "block"`). */
+  blockingFunctions: PluginFunctionPoint[];
   providers: PluginProviderKind[];
   publicRoutes: boolean;
   storefrontScripts: string[];
@@ -298,6 +396,7 @@ export function pluginGrantRequest(manifest: PluginManifest): PluginGrantRequest
     allowedHosts: sorted(manifest.allowedHosts),
     events: sorted(manifest.events),
     functions: sorted(manifest.functions.map((fn) => fn.point)),
+    blockingFunctions: sorted(manifest.functions.filter((fn) => fn.onError === "block").map((fn) => fn.point)),
     providers: sorted(manifest.providers.map((provider) => provider.kind)),
     publicRoutes: manifest.routes.public.length > 0 || manifest.routes.webhooks.length > 0 || manifest.storefront.proxy,
     storefrontScripts: sorted(manifest.storefront.scripts.map((script) => new URL(script.src).host)),
@@ -318,6 +417,7 @@ export function pluginGrantExpands(granted: PluginGrantRequest, next: PluginGran
     || grows(granted.allowedHosts, next.allowedHosts)
     || next.events.some((filter) => !eventFilterCovered(filter, granted.events))
     || grows(granted.functions, next.functions)
+    || grows(granted.blockingFunctions, next.blockingFunctions)
     || grows(granted.providers, next.providers)
     || (!granted.publicRoutes && next.publicRoutes)
     || grows(granted.storefrontScripts, next.storefrontScripts)
@@ -338,6 +438,7 @@ export function pluginGrantAdditions(granted: PluginGrantRequest | null, next: P
     allowedHosts: added(granted.allowedHosts, next.allowedHosts),
     events: next.events.filter((filter) => !eventFilterCovered(filter, granted.events)),
     functions: added(granted.functions, next.functions),
+    blockingFunctions: added(granted.blockingFunctions, next.blockingFunctions),
     providers: added(granted.providers, next.providers),
     publicRoutes: next.publicRoutes && !granted.publicRoutes,
     storefrontScripts: added(granted.storefrontScripts, next.storefrontScripts),

@@ -27,6 +27,7 @@ Public entries: `index.ts` (the server API) and `browser.ts` (types, the state m
 | `status/policy.ts` | `assertGenericAdminOrderStatusTransition()` | What the generic status editor may do (R3-ORD-01) |
 | `status/claim.ts` | `rollbackOrderStatusIfInventoryUnchanged()` | Status-claim rollback when inventory did not move |
 | `shipment-claim.ts` | `assertNoActiveShipmentClaim()`, `hasActiveShipmentClaim()` | The order-level lease a courier booking holds |
+| `holds.ts` | `placeAppOrderHolds()`, `assertOrderNotOnHold()`, `noOpenOrderHoldCondition()`, `releaseOrderHold()` | App holds for staff review (`order.risk` with `hold: true`): one per order and app; while one is open the order is not shipped, handed over, auto-fulfilled or moved on by status edits (cancel stays possible); staff release it |
 | `returns/returns.ts`, `returns/validation.ts` | `createOrderReturn()`, `approveOrderReturn()`, `receiveOrderReturn()`, ... | Item-level returns and receipts |
 | `invoices/{service,snapshot,order-reader,printable-artifact}.ts` | `issueInvoice()`, `getInvoiceDocument()`, `renderPrintableInvoice()`, ... | Immutable invoice snapshots and printable artifacts |
 | `order-support-requests.ts` | `createCustomerOrderSupportRequest()`, `createReceiptOrderSupportRequest()`, `updateOrderSupportRequestStatus()` | Buyer cancel/return/refund requests (moves to `conversations` in Wave A) |
@@ -148,7 +149,7 @@ All 9 buyer-visible order statuses that trigger status notifications are covered
 
 ### Fulfilment, COD and bulk shipping
 
-See [fulfilment](../fulfilment/README.md). Those actions move the order through `status/lifecycle.ts`.
+See [fulfilment](../fulfilment/README.md). Those actions move the order through `status/lifecycle.ts`. An open app hold (`holds.ts`) refuses a courier booking (also in the claim's `WHERE`, so a hold placed meanwhile still wins), a hand-over and a generic status change other than cancel with `details.reason = "ORDER_ON_HOLD"`; auto-fulfilment skips the order (`on_hold`) until the sweep finds it released.
 
 ### Archive Flow
 

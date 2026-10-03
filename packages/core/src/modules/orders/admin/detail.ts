@@ -12,6 +12,7 @@ import {
 } from "@scalius/database/schema";
 import { listOrderDiscountLines } from "../../promotions/order-discount-lines";
 import { resolveOrderAppFacts, selectOrderAppFactRows, type OrderAppFactRow } from "../app-facts";
+import { listOrderHolds } from "../holds";
 import { sql, desc, eq } from "drizzle-orm";
 import { customerKind } from "../../customers/customer-identity";
 import { fromMinor } from "@scalius/shared/money";
@@ -203,10 +204,11 @@ async function getOrderDetailsOnce(
 
     if (!orderRow) return null;
     // A second wave keeps the read within six simultaneous D1 connections.
-    const [fulfillments, conversation, appRiskRows] = await Promise.all([
+    const [fulfillments, conversation, appRiskRows, holdsByOrder] = await Promise.all([
         listAdminOrderFulfilments(db, id, orderRow.currencyDecimalPlaces, orderRow.status),
         findOrderConversationForStaff(db, id),
         selectOrderAppFactRows(db, [id], ["app_risk"]).all() as Promise<OrderAppFactRow[]>,
+        listOrderHolds(db, [id]),
     ]);
     const { recordId, recordName, recordPhone, recordAccountClaimedAt, recordOrigin, ...order } = orderRow;
     const customerRecord = recordId && recordName !== null && recordPhone !== null
@@ -297,6 +299,14 @@ async function getOrderDetailsOnce(
             level: check.level,
             reasons: check.reasons,
             checkedAt: check.checkedAt,
+        })),
+        holds: (holdsByOrder.get(id) ?? []).map((hold) => ({
+            id: hold.id,
+            appId: hold.pluginId,
+            appName: hold.appName,
+            reason: hold.reason,
+            placedAt: new Date(hold.createdAt * 1000),
+            releasedAt: hold.releasedAt === null ? null : new Date(hold.releasedAt * 1000),
         })),
         items: formattedItems,
         itemCount: formattedItems.length,

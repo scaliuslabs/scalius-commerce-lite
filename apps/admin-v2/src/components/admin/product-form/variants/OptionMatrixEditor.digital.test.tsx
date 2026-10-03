@@ -16,6 +16,8 @@ import { ProductKindRulesContext, productKindRules } from "../product-kind-rules
 import type { ProductFulfilmentMode } from "../fulfilment-mode";
 import { OptionMatrixEditor } from "./OptionMatrixEditor";
 import type { OptionMatrixEditorHandle, ProductCreateComposition } from "./option-matrix-editor-model";
+import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
+import { PermissionProvider } from "~/contexts/PermissionContext";
 
 type Asset = { id: string; kind: "file" | "licence_keys"; status: "draft" | "ready" | "archived"; variantId: string | null; keys?: { available: number; assigned: number } };
 
@@ -106,7 +108,12 @@ describe("digital SKUs in the variant editor", () => {
 
   async function render(element: React.ReactElement) {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    await act(async () => root.render(<QueryClientProvider client={client}>{element}</QueryClientProvider>));
+    // A staff member who edits products (Import keys is an edit).
+    await act(async () => root.render(
+      <PermissionProvider permissions={[PERMISSIONS.PRODUCTS_VIEW, PERMISSIONS.PRODUCTS_EDIT]}>
+        <QueryClientProvider client={client}>{element}</QueryClientProvider>
+      </PermissionProvider>,
+    ));
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
   }
 
@@ -152,8 +159,17 @@ describe("digital SKUs in the variant editor", () => {
     expect(inventory.textContent).not.toContain(d("stockNotSellable"));
     const importKeys = [...inventory.querySelectorAll("button")].find((button) => button.textContent === d("importKeys"))!;
     await act(async () => importKeys.click());
-    expect((reveal.mock.calls[0]?.[0] as CustomEvent).detail).toBe("product-digital");
+    await act(async () => {
+      await import("../DigitalKeyDialogs");
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    // Import keys opens the import dialog itself; it doesn't scroll to the Digital delivery card.
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain(d("importTitle"));
+    expect(reveal).not.toHaveBeenCalled();
     window.removeEventListener("scalius:reveal-card", reveal);
+    await act(async () => {
+      document.querySelector<HTMLButtonElement>('[role="dialog"] button[data-slot="dialog-close"], [role="dialog"] button[aria-label="Close"]')?.click();
+    });
 
     // Any other change saves the SKU, never its quantity (the keys move it).
     const skuInput = [...inventory.querySelectorAll<HTMLInputElement>("input")].find((input) => input.value === "EBOOK-1")!;

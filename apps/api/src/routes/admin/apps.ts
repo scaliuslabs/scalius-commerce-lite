@@ -79,6 +79,7 @@ const grantSchema = z.object({
   allowedHosts: z.array(z.string()),
   events: z.array(z.string()),
   functions: z.array(z.string()),
+  blockingFunctions: z.array(z.string()).openapi({ description: "Function points where the app may pause checkout when it cannot answer." }),
   providers: z.array(z.string()),
   publicRoutes: z.boolean(),
   storefrontScripts: z.array(z.string()),
@@ -86,11 +87,24 @@ const grantSchema = z.object({
   customFieldOwners: z.array(z.string()),
 }).openapi("AppGrant", { description: "What an app may do; the consent screen lists it in plain words." });
 
+/** The manifest's text in other dashboard languages; the dashboard picks its own. */
+const appTranslationsSchema = z.object({
+  bn: z.object({
+    name: z.string().optional(),
+    description: z.string().optional(),
+    pages: z.record(z.string(), z.string()).optional(),
+    cards: z.record(z.string(), z.string()).optional(),
+    actions: z.record(z.string(), z.string()).optional(),
+    widgets: z.record(z.string(), z.string()).optional(),
+  }).optional(),
+}).nullable().openapi("AppTranslations", { description: "Name, description and surface titles in other dashboard languages (null: English only)." });
+
 const appSummarySchema = z.object({
   id: z.string(),
   name: z.string(),
   version: z.string(),
   description: z.string(),
+  translations: appTranslationsSchema.optional(),
   author: z.object({ name: z.string(), url: z.string().nullable() }),
   homepage: z.string().nullable(),
   source: z.enum(["bundled", "registry", "upload"]),
@@ -104,6 +118,8 @@ const appSummarySchema = z.object({
   functions: z.array(z.object({
     point: z.enum(PLUGIN_FUNCTION_POINTS),
     priority: z.number().int().openapi({ description: "Lower runs first among apps at the same point." }),
+    onError: z.enum(["skip", "block"]).openapi({ description: "block: the app pauses checkout when it cannot answer (needs approval)." }),
+    snapshotCollection: z.string().nullable().openapi({ description: "checkout.discounts: the app reads and updates the signed-in buyer's record in this collection with each order." }),
   })).openapi({ description: "The checkout function points the app implements (cart rules, discounts, delivery options, payment methods, order risk)." }),
 }).openapi("AppSummary");
 
@@ -196,6 +212,7 @@ function summary(installation: PluginInstallation) {
     name: manifest.name,
     version: installation.version,
     description: manifest.description,
+    translations: manifest.translations ?? null,
     author: { name: manifest.author.name, url: manifest.author.url ?? null },
     homepage: manifest.homepage ?? null,
     source: installation.source,
@@ -206,7 +223,12 @@ function summary(installation: PluginInstallation) {
     installedAt: iso(installation.installedAt),
     activatedAt: isoOrNull(installation.activatedAt),
     updatedAt: iso(installation.updatedAt),
-    functions: manifest.functions.map((fn) => ({ point: fn.point, priority: fn.priority })),
+    functions: manifest.functions.map((fn) => ({
+      point: fn.point,
+      priority: fn.priority,
+      onError: fn.onError,
+      snapshotCollection: fn.snapshot?.collection ?? null,
+    })),
   };
 }
 
@@ -420,6 +442,7 @@ const appAdminSurfacesSchema = z.object({
   widgets: z.array(z.object({ id: z.string(), title: z.string(), route: z.string() })),
   /** The app's admin routes: buttons and forms in its UI may call only these, with these methods. */
   routes: z.array(surfaceRouteSchema),
+  translations: appTranslationsSchema.optional(),
 }).openapi("AppAdminSurfaces");
 
 const surfacesRoute = createRoute({
@@ -445,7 +468,7 @@ app.openapi(surfacesRoute, async (c) => {
   const apps = installations
     .filter((installation) => installation.status === "active" && installation.grant !== null)
     .map((installation) => {
-      const { admin, routes, name } = installation.manifest;
+      const { admin, routes, name, translations } = installation.manifest;
       return {
         id: installation.pluginId,
         name,
@@ -461,6 +484,7 @@ app.openapi(surfacesRoute, async (c) => {
         })),
         widgets: admin.widgets.map((widget) => ({ id: widget.id, title: widget.title, route: widget.route })),
         routes: routes.admin.map((route) => ({ name: route.name, methods: [...route.methods] })),
+        translations: translations ?? null,
       };
     })
     .filter((surfaces) => surfaces.pages.length + surfaces.cards.length + surfaces.actions.length + surfaces.widgets.length > 0)

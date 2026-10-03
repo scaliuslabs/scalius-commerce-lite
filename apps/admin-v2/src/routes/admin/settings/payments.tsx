@@ -6,6 +6,7 @@ import {
 import { SettingsPage } from "~/components/admin/settings/SettingsPage";
 import { EmiPlansCard } from "~/components/admin/settings/EmiPlansCard";
 import { emiSettingsQuery } from "~/lib/api-query-options/emi";
+import { appPaymentProvidersQuery } from "~/lib/api-query-options/payment-providers";
 import { settingsHead } from "~/components/admin/settings/settings-nav";
 import { useHasPermission } from "~/contexts/PermissionContext";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
@@ -22,6 +23,7 @@ export const Route = createFileRoute("/admin/settings/payments")({
   loader: ({ context: { queryClient } }) =>
     Promise.allSettled([
       queryClient.ensureQueryData(paymentMethodsQuery),
+      queryClient.ensureQueryData(appPaymentProvidersQuery),
       queryClient.ensureQueryData(checkoutFlowQuery),
       queryClient.ensureQueryData(currencyQuery),
       queryClient.ensureQueryData(platformQuery),
