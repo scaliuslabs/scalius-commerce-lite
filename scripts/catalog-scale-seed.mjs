@@ -477,6 +477,11 @@ for (let start = 0; start < ORDERS; start += 5000) {
   });
 }
 db.exec(`UPDATE customers SET total_orders = (SELECT count(*) FROM orders WHERE orders.customer_id = customers.id), last_order_at = (SELECT max(created_at) FROM orders WHERE orders.customer_id = customers.id)`);
+// Same-currency money chain (migration 0111): the shop amounts analytics sum
+// equal the presentment amounts, as checkout writes them.
+db.exec(`UPDATE orders SET shop_currency = currency_code, subtotal_shop_minor = subtotal_amount_minor,
+  shipping_shop_minor = shipping_amount_minor, discount_shop_minor = discount_amount_minor,
+  tax_shop_minor = tax_amount_minor, total_shop_minor = total_amount_minor`);
 log(`orders: ${ORDERS} (items ${orderItems})`);
 
 // ---------------------------------------------------------------- projections

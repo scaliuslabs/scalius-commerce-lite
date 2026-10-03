@@ -432,7 +432,8 @@ export function buildPaymentReadinessFixtureSql() {
           city, zone, area, city_name, zone_name, area_name,
           currency_code, currency_decimal_places, subtotal_amount_minor,
           shipping_amount_minor, discount_amount_minor, tax_amount_minor,
-          total_amount_minor, status, notes,
+          total_amount_minor, shop_currency, subtotal_shop_minor, shipping_shop_minor,
+          total_shop_minor, status, notes,
           payment_method, payment_status, paid_amount_minor, balance_due_minor,
           fulfillment_status, inventory_pool, inventory_action, version,
           created_at, updated_at, deleted_at
@@ -444,6 +445,7 @@ export function buildPaymentReadinessFixtureSql() {
           ${sqlString(fixture.cityId)}, ${sqlString(fixture.zoneId)}, ${sqlString(fixture.areaId)},
           'Dhaka', 'Mirpur', 'Section 10',
           'BDT', 2, ${subtotalAmountMinor}, ${shippingAmountMinor}, 0, 0,
+          ${totalAmountMinor}, 'BDT', ${subtotalAmountMinor}, ${shippingAmountMinor},
           ${totalAmountMinor}, 'incomplete',
           'Disposable local payment readiness smoke order.',
           ${sqlString(gateway.gateway)}, 'unpaid', 0, ${totalAmountMinor},

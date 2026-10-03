@@ -174,7 +174,8 @@ describe("local post-sale smoke CLI", () => {
     expect(sql).toContain("currency_code, currency_decimal_places");
     expect(sql).toContain("subtotal_amount_minor");
     expect(sql).toContain("total_amount_minor");
-    expect(sql).toContain("'BDT', 2, 120000, 8000, 0, 0, 128000, 'incomplete'");
+    // Same-currency money chain: shop amounts equal the presentment amounts.
+    expect(sql).toContain("'BDT', 2, 120000, 8000, 0, 0, 128000, 'BDT', 120000, 8000, 128000, 'incomplete'");
     expect(sql).toContain("'ops006_order_stripe'");
     expect(sql).toContain("'ops006_order_sslcommerz'");
     expect(sql).toContain("'chk_ops006_stripe'");
