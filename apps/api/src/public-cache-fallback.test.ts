@@ -54,7 +54,9 @@ async function readThroughCache(cacheResponse: Response) {
   const response = await worker.fetch(new Request("https://api.example.test/api/v1/categories?ref=secret", {
     headers: { "X-Scalius-Cache-Generation": "abc123" },
   }));
-  return { response, publicApi: (ctx as unknown as { exports: { PublicApi: { fetch: ReturnType<typeof vi.fn> } } }).exports.PublicApi.fetch, warnings: warn.mock.calls.map((call) => String(call[0])) };
+  // The strict reader's batch summary is a 1% sampled diagnostic (DVC_SUMMARY_LOG_RATE), not a warning.
+  const warnings = warn.mock.calls.map((call) => String(call[0])).filter((line) => !line.startsWith("[CacheDVC] hits="));
+  return { response, publicApi: (ctx as unknown as { exports: { PublicApi: { fetch: ReturnType<typeof vi.fn> } } }).exports.PublicApi.fetch, warnings };
 }
 
 afterEach(() => {
