@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ComponentType, type ReactNode } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useState, type ComponentType, type ReactNode } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { hashKey, useMutation, useQueryClient, type QueryKey, type UseQueryOptions } from "@tanstack/react-query";
 import { toast } from "~/lib/toast";
@@ -9,7 +9,6 @@ import type { ExtraAction } from "~/components/admin/data-table/DataTableRowActi
 import { useServerTable } from "~/components/admin/data-table/useServerTable";
 import { createActionsColumn, createSelectColumn } from "~/components/admin/data-table/columns/column-factories";
 import type { ColumnDef } from "~/components/admin/data-table/table-config";
-import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
 import { AppBulkActionsMenu } from "~/components/admin/apps/ui/AppActions";
 import { useAppActions, type AppTarget } from "~/components/admin/apps/ui/surfaces";
 import {
@@ -20,6 +19,7 @@ import {
   type ListSearchParams,
 } from "~/lib/list-helpers";
 import { listSearchKey, useListSearch } from "~/lib/list-search";
+import { useOpenedOnce } from "~/hooks/use-opened-once";
 import { getServerFnError } from "~/lib/api-helpers";
 import { useMessages } from "~/i18n";
 import { resourceMessages } from "~/i18n/resource";
@@ -27,6 +27,9 @@ import { dataTableMessages } from "~/i18n/data-table";
 import { IndexTabs, type IndexTab } from "./IndexTabs";
 import { PageHeader } from "./PageHeader";
 import { EmptyState } from "./EmptyState";
+
+// The trash and delete confirmation loads the first time it is asked for.
+const ConfirmDialog = lazy(() => import("~/components/admin/shared/ConfirmDialog").then((module) => ({ default: module.ConfirmDialog })));
 
 export type ResourceAction = "trash" | "restore" | "delete";
 
@@ -370,6 +373,7 @@ export function ResourceListPage<T extends { id: string }>(props: ResourceListPa
   ) : undefined;
 
   const count = confirm?.rows.length ?? 0;
+  const confirmLoaded = useOpenedOnce(confirm !== null);
   const rowCount = table.getRowModel().rows.length;
   // Nothing created yet: one card with the empty state instead of an empty table.
   const nothingYet = !filtered && !trashed && !isLoading && !error && pagination.total === 0 && rowCount === 0;
@@ -428,27 +432,31 @@ export function ResourceListPage<T extends { id: string }>(props: ResourceListPa
         }
       />
       )}
-      <ConfirmDialog
-        open={confirm !== null}
-        onOpenChange={(open) => {
-          if (!open && !mutation.isPending) setConfirm(null);
-        }}
-        title={
-          count === 1 && rowLabel
-            ? t(confirm?.action === "delete" ? "deleteOneTitle" : "trashOneTitle", { name: rowLabel(confirm!.rows[0]!) })
-            : t(confirm?.action === "delete" ? "deleteTitle" : "trashTitle", { count: props.countLabel ? props.countLabel(count) : count })
-        }
-        description={[
-          t(confirm?.action === "delete" ? "deleteBody" : count === 1 ? "trashBodyOne" : "trashBody"),
-          confirm?.kept ? lifecycle?.deleteBlockedNote?.(confirm.kept) : undefined,
-        ].filter(Boolean).join(" ")}
-        confirmLabel={t(confirm?.action === "delete" ? "deletePermanently" : "moveToTrash")}
-        loadingLabel={t("working")}
-        cancelLabel={t("cancel")}
-        variant={confirm?.action === "delete" ? "destructive" : "default"}
-        isLoading={mutation.isPending}
-        onConfirm={() => confirm && mutation.mutate(confirm)}
-      />
+      {confirmLoaded ? (
+        <Suspense fallback={null}>
+          <ConfirmDialog
+            open={confirm !== null}
+            onOpenChange={(open) => {
+              if (!open && !mutation.isPending) setConfirm(null);
+            }}
+            title={
+              count === 1 && rowLabel
+                ? t(confirm?.action === "delete" ? "deleteOneTitle" : "trashOneTitle", { name: rowLabel(confirm!.rows[0]!) })
+                : t(confirm?.action === "delete" ? "deleteTitle" : "trashTitle", { count: props.countLabel ? props.countLabel(count) : count })
+            }
+            description={[
+              t(confirm?.action === "delete" ? "deleteBody" : count === 1 ? "trashBodyOne" : "trashBody"),
+              confirm?.kept ? lifecycle?.deleteBlockedNote?.(confirm.kept) : undefined,
+            ].filter(Boolean).join(" ")}
+            confirmLabel={t(confirm?.action === "delete" ? "deletePermanently" : "moveToTrash")}
+            loadingLabel={t("working")}
+            cancelLabel={t("cancel")}
+            variant={confirm?.action === "delete" ? "destructive" : "default"}
+            isLoading={mutation.isPending}
+            onConfirm={() => confirm && mutation.mutate(confirm)}
+          />
+        </Suspense>
+      ) : null}
     </div>
   );
 }
