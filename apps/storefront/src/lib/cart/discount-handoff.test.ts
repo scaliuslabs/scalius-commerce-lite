@@ -33,6 +33,7 @@ import {
 } from "../checkout/session-state";
 import { rememberSubmittedCart } from "../checkout/receipt-finalization";
 import { findNamedCheckoutControl } from "../checkout/form-controls";
+import { pagePath } from "../presence-url";
 import { checkoutInformationFields, enhanceCheckoutFields, setFieldError } from "../checkout/field-validation";
 import {
   applyCheckoutDeliveryMode,
@@ -261,6 +262,8 @@ async function startCartPage(): Promise<void> {
     setFieldError,
     hideCheckoutLoadingOverlay: vi.fn(),
     showCheckoutLoadingOverlay: vi.fn(),
+    // The page's presence rule for the checkout link (a root page here).
+    pagePath,
   };
   new Function(
     ...Object.keys(dependencies),
