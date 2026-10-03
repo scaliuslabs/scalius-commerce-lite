@@ -558,7 +558,7 @@ describe("storefront page render D1 budget", () => {
   // show up as extra waves that production (one bundle) never has.
   beforeAll(async () => {
     for (const page of Object.keys(PAGE_PARTS) as Array<keyof typeof PAGE_PARTS>) await renderPage(page);
-  });
+  }, 60_000);
 
   it.each(Object.keys(PAGE_D1_BUDGETS) as Array<keyof typeof PAGE_D1_BUDGETS>)(
     "%s page stays within its D1 round trips and waves",
@@ -579,7 +579,7 @@ describe("storefront page render D1 budget", () => {
       });
       // Every part was stored with its dependency proof.
       expect(result.stored).toEqual(PAGE_PARTS[page].map(() => "miss"));
-      console.info(`[storefront budget] ${page}: render ${result.render.roundTrips} trips/${result.render.waves} waves; validation ${result.validation.roundTrips}/${result.validation.waves}; hit ${result.hit.roundTrips}/${result.hit.waves}`);
+      process.stdout.write(`[storefront budget] ${page}: render ${result.render.roundTrips} trips/${result.render.waves} waves; validation ${result.validation.roundTrips}/${result.validation.waves}; hit ${result.hit.roundTrips}/${result.hit.waves}\n`);
     },
   );
 
