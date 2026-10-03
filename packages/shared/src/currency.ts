@@ -1,9 +1,10 @@
 // packages/shared/src/currency.ts
 // Pure currency type and formatting utilities.
 // getCurrencyConfig lives in @scalius/core (settings service) because it requires DB access.
-// Uses currency.js for precision arithmetic and ISO 4217 decimal places.
+// Uses currency.js for precision arithmetic; per-currency facts come from ./currency-policy.
 
 import Currency from "currency.js";
+import { currencyExponent, SUPPORTED_CURRENCY_CODES, type SupportedCurrencyCode } from "./currency-policy";
 
 // Declare window for environments without DOM types (e.g. Cloudflare Workers).
 // Uses a plain object type so it compiles without the DOM lib.
@@ -23,26 +24,11 @@ export const DEFAULT_CURRENCY: CurrencyConfig = {
 };
 
 /**
- * Currency codes exposed by the dashboard currency picker. Keep this as the
- * single runtime allowlist for settings writes and buyer-facing reads.
+ * Currency codes exposed by the dashboard currency picker: the single runtime
+ * allowlist for settings writes and buyer-facing reads. The list and every
+ * per-currency fact live in ./currency-policy.
  */
-export const SUPPORTED_CURRENCY_CODES = [
-  "USD", "EUR", "GBP", "JPY", "CHF", "CAD", "AUD", "NZD", "CNY", "HKD", "SGD", "SEK",
-  "NOK", "DKK", "MXN", "BRL", "BDT", "INR", "PKR", "LKR", "NPR", "AFN", "BTN", "MVR",
-  "MYR", "PHP", "THB", "IDR", "VND", "MMK", "KHR", "LAK", "BND", "KRW", "TWD", "MNT",
-  "KPW", "MOP", "AED", "SAR", "QAR", "KWD", "BHD", "OMR", "JOD", "IQD", "IRR", "YER",
-  "LBP", "SYP", "ILS", "KZT", "UZS", "KGS", "TJS", "TMT", "GEL", "AMD", "AZN", "TRY",
-  "RUB", "UAH", "PLN", "CZK", "HUF", "RON", "BGN", "HRK", "RSD", "BAM", "MKD", "ALL",
-  "MDL", "BYN", "ISK", "ARS", "CLP", "COP", "PEN", "UYU", "PYG", "BOB", "VES", "GYD",
-  "SRD", "TTD", "JMD", "BBD", "BSD", "BZD", "CRC", "CUP", "DOP", "GTQ", "HNL", "HTG",
-  "NIO", "PAB", "AWG", "ANG", "KYD", "BMD", "XCD", "FKP", "NGN", "GHS", "XOF", "GMD",
-  "GNF", "SLL", "LRD", "CVE", "MRU", "KES", "TZS", "UGX", "RWF", "BIF", "ETB", "SOS",
-  "ERN", "DJF", "SDG", "SSP", "SCR", "KMF", "MGA", "MUR", "XAF", "CDF", "ZAR", "BWP",
-  "LSL", "SZL", "NAD", "MWK", "ZMW", "MZN", "AOA", "ZWL", "EGP", "DZD", "MAD", "TND",
-  "LYD", "STN", "FJD", "PGK", "WST", "TOP", "VUV", "SBD", "XPF", "XDR", "XAG", "XAU",
-] as const;
-
-export type SupportedCurrencyCode = (typeof SUPPORTED_CURRENCY_CODES)[number];
+export { SUPPORTED_CURRENCY_CODES, type SupportedCurrencyCode } from "./currency-policy";
 
 const SUPPORTED_CURRENCY_CODE_SET = new Set<string>(SUPPORTED_CURRENCY_CODES);
 
@@ -56,22 +42,13 @@ export function normalizeSupportedCurrencyCode(
     : null;
 }
 
-// ---------------------------------------------------------------------------
-// ISO 4217 decimal places lookup
-// ---------------------------------------------------------------------------
-// Most currencies use 2 decimal places. Only exceptions are listed here.
-
-const CURRENCY_DECIMALS: Record<string, number> = {
-  // 0 decimal places
-  BIF: 0, CLP: 0, DJF: 0, GNF: 0, ISK: 0, JPY: 0, KMF: 0, KRW: 0,
-  PYG: 0, RWF: 0, UGX: 0, VND: 0, VUV: 0, XAF: 0, XOF: 0, XPF: 0,
-  // 3 decimal places
-  BHD: 3, IQD: 3, JOD: 3, KWD: 3, LYD: 3, OMR: 3, TND: 3,
-};
-
-/** Get the ISO 4217 decimal places for a currency code. Defaults to 2. */
+/**
+ * The ISO 4217 exponent of a currency (./currency-policy). An unknown code
+ * has two; the excluded four-decimal units (CLF, UYW) have four, which
+ * `toMinor` refuses.
+ */
 export function getDecimalPlaces(currencyCode: string): number {
-  return CURRENCY_DECIMALS[currencyCode.toUpperCase()] ?? 2;
+  return currencyExponent(currencyCode);
 }
 
 // ---------------------------------------------------------------------------
