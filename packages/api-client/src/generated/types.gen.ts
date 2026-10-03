@@ -51584,6 +51584,13 @@ export type PostApiV1AdminSettingsDeliveryProvidersData = {
             defaultCodAmount?: number;
         };
         isActive?: boolean;
+    } | {
+        name: string;
+        /**
+         * An installed app courier, <plugin id>:<provider id> (GET /admin/settings/providers?kind=courier lists them). Set it up in the app's settings.
+         */
+        type: string;
+        isActive?: boolean;
     };
     path?: never;
     query?: never;
@@ -51793,6 +51800,14 @@ export type PutApiV1AdminSettingsDeliveryProvidersData = {
              */
             defaultCodAmount?: number;
         };
+        isActive?: boolean;
+    } | {
+        id: string;
+        name: string;
+        /**
+         * An installed app courier, <plugin id>:<provider id> (GET /admin/settings/providers?kind=courier lists them). Set it up in the app's settings.
+         */
+        type: string;
         isActive?: boolean;
     };
     path?: never;
