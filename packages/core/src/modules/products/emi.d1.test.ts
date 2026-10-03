@@ -67,6 +67,15 @@ describe("EMI line", () => {
         expect(await emiLine()).toBeNull();
     });
 
+    it("prices the line only from a public buyer-state row, the rows its cache dependency covers", async () => {
+        await saveEmiSettings({ enabled: true, plans: [cityBank] }, 0);
+        expect(await emiLine()).toMatchObject({ provider: "City Bank" });
+        // A drifted non-public projection row must not price a cached page:
+        // its changes advance no product key.
+        sqlite.exec("UPDATE product_buyer_state SET is_public = 0 WHERE product_id = 'p_phone'");
+        expect(await emiLine()).toBeNull();
+    });
+
     it("refuses paisa, impossible plans and stale saves", async () => {
         await expect(saveEmiSettings({ enabled: true, plans: [{ ...cityBank, minAmount: 4_999.5 }] }, 0))
             .rejects.toMatchObject({ status: 400, message: "Taka amounts are whole numbers." });

@@ -151,7 +151,9 @@ export async function getStorefrontProductBySlug(db: Database, slug: string) {
             ...publicCategoryConditions(),
         ))
         .leftJoin(brands, publicBrandJoinCondition(products.brandId))
-        .leftJoin(productBuyerState, eq(productBuyerState.productId, products.id))
+        // Only a public projection row prices the EMI line: its cache rules
+        // advance p:<id> for public rows (cache-deps product_buyer_state).
+        .leftJoin(productBuyerState, and(eq(productBuyerState.productId, products.id), eq(productBuyerState.isPublic, true)))
         .leftJoin(productReviewStats, eq(productReviewStats.productId, products.id))
         .leftJoin(warrantyPolicies, and(
             eq(warrantyPolicies.id, products.warrantyPolicyId),
