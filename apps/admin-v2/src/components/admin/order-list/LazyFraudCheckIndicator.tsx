@@ -3,7 +3,7 @@ import { LoaderCircle, Shield } from "lucide-react";
 import { Button } from "../../ui/button";
 import { useOrderActionPermissions } from "~/hooks/use-order-action-permissions";
 import { useMessages } from "~/i18n";
-import { orderListMessages } from "~/i18n/order-list";
+import { orderMessages } from "~/i18n/orders";
 
 const FraudCheckIndicator = lazy(() =>
   import("./FraudCheckIndicator").then((module) => ({
@@ -23,7 +23,7 @@ function HistoryTrigger({
   compact?: boolean;
   onActivate?: () => void;
 }) {
-  const t = useMessages(orderListMessages);
+  const t = useMessages(orderMessages);
   const label = t("checkHistoryFor", { name: customerName });
   return (
     <Button

@@ -53,6 +53,7 @@ export const orderMessages = defineMessages({
     "source.whatsapp": "WhatsApp",
     "source.phone": "Phone",
     "source.walk_in": "Walk-in",
+    checkHistoryFor: "Check delivery history for {name}",
   },
   bn: {
     "status.pending": "পেন্ডিং",
@@ -100,6 +101,7 @@ export const orderMessages = defineMessages({
     "source.whatsapp": "হোয়াটসঅ্যাপ",
     "source.phone": "ফোন",
     "source.walk_in": "দোকানে এসে",
+    checkHistoryFor: "{name}-এর ডেলিভারির ইতিহাস দেখুন",
   },
 });
 
