@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { DeliveryZonesCard } from "~/components/admin/settings/DeliveryZones";
+import { DeliveryZonesCard, LocalPickupCard } from "~/components/admin/settings/DeliveryZones";
 import { SettingsPage } from "~/components/admin/settings/SettingsPage";
 import { CouriersCard, DeliveryAreasCard } from "~/components/admin/settings/ShippingSettings";
 import { settingsHead } from "~/components/admin/settings/settings-nav";
@@ -30,6 +30,7 @@ function ShippingPage() {
   return (
     <SettingsPage page="shipping">
       <DeliveryZonesCard />
+      <LocalPickupCard />
       <DeliveryAreasCard />
       <CouriersCard />
     </SettingsPage>

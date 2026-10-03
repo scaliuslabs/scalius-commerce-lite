@@ -20,6 +20,7 @@ export const SETTINGS_CARDS = [
   { page: "checkout", card: "checkoutText" },
   { page: "checkout", card: "customerRequests" },
   { page: "shipping", card: "deliveryCharges" },
+  { page: "shipping", card: "localPickup" },
   { page: "shipping", card: "deliveryAreas" },
   { page: "shipping", card: "couriers" },
   { page: "taxes", card: "taxCollection" },

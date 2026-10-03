@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { rateErrors } from "./DeliveryZones";
+import { countryDraftsOf, countryIssue, rateErrors, zoneRegionsBody } from "./DeliveryZones";
 
 const rate = (patch: Partial<Parameters<typeof rateErrors>[0]> = {}) => ({
   key: "k",
@@ -43,5 +43,49 @@ describe("delivery charge validation", () => {
       name: "rateNameRequired",
       pickupAddress: "pickupAddressRequired",
     });
+  });
+});
+
+describe("zone countries", () => {
+  const dhaka = { id: "city_dhaka", name: "Dhaka", type: "city" as const, parentName: null };
+  const region = (countryCode: string, adminArea: string | null = null, postalPrefix: string | null = null) =>
+    ({ countryCode, adminArea, postalPrefix });
+
+  it("groups a zone's regions by country, and shows Bangladesh delivery areas as part of Bangladesh", () => {
+    expect(countryDraftsOf({
+      regions: [region("US", "CA"), region("US", null, "941"), region("US", "NY"), region("FR")],
+      locations: [dhaka],
+    })).toEqual([
+      { code: "BD", whole: false, adminAreas: [], postalPrefixes: "" },
+      { code: "FR", whole: true, adminAreas: [], postalPrefixes: "" },
+      { code: "US", whole: false, adminAreas: ["CA", "NY"], postalPrefixes: "941" },
+    ]);
+    expect(countryDraftsOf(null)).toEqual([]);
+  });
+
+  it("sends a whole country alone, the parts of another, and Bangladesh areas only for part of Bangladesh", () => {
+    expect(zoneRegionsBody([
+      { code: "BD", whole: false, adminAreas: [], postalPrefixes: "" },
+      { code: "FR", whole: true, adminAreas: ["IDF"], postalPrefixes: "75" },
+      { code: "US", whole: false, adminAreas: ["CA"], postalPrefixes: " 941, 100;941 " },
+    ], [dhaka])).toEqual({
+      regions: [
+        { countryCode: "FR" },
+        { countryCode: "US", adminArea: "CA" },
+        { countryCode: "US", postalPrefix: "941" },
+        { countryCode: "US", postalPrefix: "100" },
+      ],
+      locationIds: ["city_dhaka"],
+    });
+    expect(zoneRegionsBody([{ code: "BD", whole: true, adminAreas: [], postalPrefixes: "" }], [dhaka]))
+      .toEqual({ regions: [{ countryCode: "BD" }], locationIds: [] });
+  });
+
+  it("needs a region or postal code for part of a country, and a delivery area for part of Bangladesh", () => {
+    expect(countryIssue({ code: "US", whole: false, adminAreas: [], postalPrefixes: " , " }, [])).toBe("partRequired");
+    expect(countryIssue({ code: "US", whole: false, adminAreas: [], postalPrefixes: "941" }, [])).toBeNull();
+    expect(countryIssue({ code: "BD", whole: false, adminAreas: [], postalPrefixes: "" }, [])).toBe("placesRequiredFor");
+    expect(countryIssue({ code: "BD", whole: false, adminAreas: [], postalPrefixes: "" }, [dhaka])).toBeNull();
+    expect(countryIssue({ code: "JP", whole: true, adminAreas: [], postalPrefixes: "" }, [])).toBeNull();
   });
 });

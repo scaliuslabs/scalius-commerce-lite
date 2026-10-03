@@ -1,4 +1,4 @@
-import { Fragment, useState, type ReactNode } from "react";
+import { Fragment, useMemo, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronRight, Plus, X } from "lucide-react";
@@ -30,6 +30,9 @@ import {
   type DeliveryZones,
 } from "~/lib/api-query-options/settings-screens";
 import { queryKeys } from "~/lib/query-keys";
+import { addressCountriesQueryOptions, addressRulesQueryOptions } from "~/lib/api-query-options/address-rules";
+import { countryName } from "~/lib/country-name";
+import { CountryChecklist } from "~/components/admin/shared/CountryChecklist";
 import { useMessages } from "~/i18n";
 import { locationMessages } from "~/i18n/location";
 import { settingsMessages } from "~/i18n/settings";
@@ -43,7 +46,11 @@ import { SettingsCard, SettingsCardLoading, SettingsDialog, SettingsField, Setti
 type Zone = DeliveryZones["zones"][number];
 type Rate = Zone["rates"][number];
 type Place = Zone["locations"][number];
+type Region = Zone["regions"][number];
 type Kind = Rate["kind"];
+
+/** Bangladesh: served whole, or by its City → Thana → Area delivery areas. */
+const BD = "BD";
 
 const json = { "Content-Type": "application/json" };
 const send = (method: "post" | "put" | "delete", url: string, body?: unknown) =>
@@ -98,13 +105,14 @@ function toDraft(rate: Rate): RateDraft {
   };
 }
 
-function emptyDraft(): RateDraft {
+function emptyDraft(kind: Kind = "delivery"): RateDraft {
   return {
     key: crypto.randomUUID(),
     id: null,
-    kind: "delivery",
+    kind,
     name: "",
-    fee: "",
+    // Pickup is usually free: a new pickup charge starts at 0.
+    fee: kind === "pickup" ? "0" : "",
     freeOver: "",
     description: "",
     pickupAddress: "",
@@ -164,6 +172,7 @@ function toRateInput(rate: RateDraft) {
 function fieldId(path: string): string | undefined {
   if (path === "name") return "zone-name";
   if (path === "locationIds") return "zone-places";
+  if (path === "regions" || path.startsWith("regions.")) return "zone-regions";
   const match = /^rates\.(\d+)\.(\w+)$/.exec(path);
   return match ? `rate-${match[1]}-${match[2]}` : undefined;
 }
@@ -171,11 +180,12 @@ function fieldId(path: string): string | undefined {
 function RatesEditor({
   rates,
   onChange,
-  allowPickup,
+  pickupOnly = false,
 }: {
   rates: RateDraft[];
   onChange: (rates: RateDraft[]) => void;
-  allowPickup: boolean;
+  /** Local pickup's charges (pickup points); a zone's charges are deliveries. */
+  pickupOnly?: boolean;
 }) {
   const t = useMessages(shippingMessages);
   const { symbol } = useCurrency();
@@ -190,24 +200,6 @@ function RatesEditor({
         const id = (field: string) => `rate-${index}-${field}`;
         return (
           <fieldset key={rate.key} className="space-y-4 border-t border-border pt-4 first-of-type:border-t-0 first-of-type:pt-0">
-            {allowPickup ? (
-              <SettingsField id={id("kind")} label={t("kind")}>
-                <RadioGroup
-                  id={id("kind")}
-                  value={rate.kind}
-                  // Pickup is usually free: a new pickup charge starts at 0.
-                  onValueChange={(kind) =>
-                    update(index, { kind: kind as Kind, ...(kind === "pickup" && !rate.fee.trim() ? { fee: "0" } : {}) })}
-                >
-                  {(["delivery", "pickup"] as const).map((kind) => (
-                    <label key={kind} className="flex min-h-11 items-center gap-2 text-body">
-                      <RadioGroupItem value={kind} />
-                      {t(kind === "delivery" ? "kindDelivery" : "kindPickup")}
-                    </label>
-                  ))}
-                </RadioGroup>
-              </SettingsField>
-            ) : null}
             <div className="grid gap-4 sm:grid-cols-3">
               <div className="sm:col-span-2">
                 <SettingsField id={id("name")} label={t("rateName")} error={errors.name ? t(errors.name) : null}>
@@ -271,7 +263,7 @@ function RatesEditor({
           </fieldset>
         );
       })}
-      <Button type="button" variant="outline" size="sm" onClick={() => onChange([...rates, emptyDraft()])}>
+      <Button type="button" variant="outline" size="sm" onClick={() => onChange([...rates, emptyDraft(pickupOnly ? "pickup" : "delivery")])}>
         <Plus aria-hidden="true" />
         {t("addCharge")}
       </Button>
@@ -498,7 +490,195 @@ function PlacePicker({
   );
 }
 
-// ── Zone and "Everywhere else" forms ───────────────────────────────────
+// ── Countries and regions (Shopify's zone countries) ───────────────────
+
+/**
+ * One chosen country of a zone: all of it, or part of it (some regions and
+ * postal-code prefixes; Bangladesh: some delivery areas).
+ */
+export interface CountryDraft {
+  code: string;
+  whole: boolean;
+  adminAreas: string[];
+  /** As typed: prefixes separated by commas. */
+  postalPrefixes: string;
+}
+
+/** The prefixes typed for a country, as the API takes them. */
+function prefixesOf(country: CountryDraft): string[] {
+  return [...new Set(country.postalPrefixes.split(/[\s,;]+/).map((value) => value.trim().toUpperCase()).filter(Boolean))];
+}
+
+/** A zone's countries as the editor shows them. */
+export function countryDraftsOf(zone: Pick<Zone, "regions" | "locations"> | null): CountryDraft[] {
+  const byCode = new Map<string, CountryDraft>();
+  for (const region of zone?.regions ?? []) {
+    const draft = byCode.get(region.countryCode) ?? { code: region.countryCode, whole: false, adminAreas: [], postalPrefixes: "" };
+    if (region.adminArea) draft.adminAreas.push(region.adminArea);
+    else if (region.postalPrefix) draft.postalPrefixes = draft.postalPrefixes ? `${draft.postalPrefixes}, ${region.postalPrefix}` : region.postalPrefix;
+    else draft.whole = true;
+    byCode.set(region.countryCode, draft);
+  }
+  if ((zone?.locations.length ?? 0) > 0 && !byCode.has(BD)) {
+    byCode.set(BD, { code: BD, whole: false, adminAreas: [], postalPrefixes: "" });
+  }
+  return [...byCode.values()].sort((left, right) => left.code.localeCompare(right.code));
+}
+
+/** The regions and Bangladesh delivery areas the API takes for a zone. */
+export function zoneRegionsBody(countries: readonly CountryDraft[], places: readonly Place[]) {
+  const regions = countries.flatMap((country): Array<{ countryCode: string; adminArea?: string; postalPrefix?: string }> => {
+    if (country.whole) return [{ countryCode: country.code }];
+    if (country.code === BD) return [];
+    return [
+      ...country.adminAreas.map((adminArea) => ({ countryCode: country.code, adminArea })),
+      ...prefixesOf(country).map((postalPrefix) => ({ countryCode: country.code, postalPrefix })),
+    ];
+  });
+  const bangladeshPart = countries.some((country) => country.code === BD && !country.whole);
+  return { regions, locationIds: bangladeshPart ? places.map((place) => place.id) : [] };
+}
+
+/** What a chosen country still needs, or null. */
+export function countryIssue(country: CountryDraft, places: readonly Place[]): "partRequired" | "placesRequiredFor" | null {
+  if (country.whole) return null;
+  if (country.code === BD) return places.length > 0 ? null : "placesRequiredFor";
+  return country.adminAreas.length > 0 || prefixesOf(country).length > 0 ? null : "partRequired";
+}
+
+/** "Bangladesh: Dhaka, Mirpur", "United States: CA, postal codes 941", "France". */
+function regionSummary(zone: Zone, t: ReturnType<typeof useMessages<keyof typeof shippingMessages.en>>): string {
+  return countryDraftsOf(zone).map((country) => {
+    const name = countryName(country.code);
+    if (country.whole) return name;
+    const parts = country.code === BD
+      ? zone.locations.length <= 2 ? zone.locations.map((place) => place.name) : [t("placeCount", { count: zone.locations.length })]
+      : [...country.adminAreas, ...(prefixesOf(country).length ? [t("postalSummary", { prefixes: prefixesOf(country).join(", ") })] : [])];
+    return `${name}: ${parts.join(", ")}`;
+  }).join(" · ") || t("noPlacesInZone");
+}
+
+/** One country's admin areas to choose from (its address rules), each held by at most one zone. */
+function RegionChecklist({
+  country,
+  selected,
+  taken,
+  onChange,
+}: {
+  country: string;
+  selected: readonly string[];
+  /** `${country}|${code}` → the zone that holds it. */
+  taken: ReadonlyMap<string, string>;
+  onChange: (adminAreas: string[]) => void;
+}) {
+  const t = useMessages(shippingMessages);
+  const rules = useQuery(addressRulesQueryOptions(country));
+  const areas = rules.data?.adminAreas ?? [];
+  if (rules.isPending) return <p className="text-body text-muted-foreground">{t("loadingRegions")}</p>;
+  if (areas.length === 0) return null;
+  const id = `zone-regions-${country}`;
+  return (
+    <fieldset className="space-y-2">
+      <legend className="text-body font-medium">{t("regions")}</legend>
+      <div id={id} className="h-48 divide-y divide-border overflow-y-auto rounded-lg border border-border">
+        {areas.map((area) => {
+          const zone = taken.get(`${country}|${area.code}`);
+          return (
+            <label key={area.code} className="flex min-h-11 items-center gap-3 px-3 text-body hover:bg-muted/50">
+              <Checkbox
+                checked={selected.includes(area.code)}
+                disabled={Boolean(zone)}
+                onCheckedChange={(checked) =>
+                  onChange(checked === true ? [...selected, area.code] : selected.filter((code) => code !== area.code))}
+              />
+              <span className="min-w-0 flex-1 truncate">{area.name}</span>
+              {zone ? <span className="shrink-0 text-muted-foreground">{t("inZone", { zone })}</span> : null}
+            </label>
+          );
+        })}
+      </div>
+    </fieldset>
+  );
+}
+
+/** How much of one chosen country the zone serves. */
+function CountryScope({
+  country,
+  places,
+  takenWhole,
+  takenAreas,
+  takenPlaces,
+  onChange,
+  onPlaces,
+}: {
+  country: CountryDraft;
+  places: Place[];
+  /** Another zone holds the whole country: this one can serve only part of it. */
+  takenWhole: string | undefined;
+  takenAreas: ReadonlyMap<string, string>;
+  takenPlaces: Map<string, string>;
+  onChange: (country: CountryDraft) => void;
+  onPlaces: (places: Place[]) => void;
+}) {
+  const t = useMessages(shippingMessages);
+  const name = countryName(country.code);
+  const id = `zone-scope-${country.code}`;
+  const issue = countryIssue(country, places);
+  return (
+    <section aria-labelledby={`${id}-title`} className="space-y-3 border-t border-border pt-4">
+      <h4 id={`${id}-title`} className="text-body font-medium">{name}</h4>
+      <RadioGroup
+        id={id}
+        value={country.whole ? "whole" : "part"}
+        onValueChange={(value) => onChange({ ...country, whole: value === "whole" })}
+      >
+        <label className="flex min-h-11 items-center gap-2 text-body">
+          <RadioGroupItem value="whole" disabled={Boolean(takenWhole) && !country.whole} />
+          {t("wholeCountry", { country: name })}
+          {takenWhole ? <span className="text-muted-foreground">{t("inZone", { zone: takenWhole })}</span> : null}
+        </label>
+        <label className="flex min-h-11 items-center gap-2 text-body">
+          <RadioGroupItem value="part" />
+          {country.code === BD ? t("someDeliveryAreas") : t("partOfCountry", { country: name })}
+        </label>
+      </RadioGroup>
+      {country.whole ? null : country.code === BD ? (
+        <PlacePicker
+          selected={places}
+          taken={takenPlaces}
+          error={issue ? t("placesRequiredFor", { country: name }) : null}
+          onChange={onPlaces}
+        />
+      ) : (
+        <>
+          <RegionChecklist
+            country={country.code}
+            selected={country.adminAreas}
+            taken={takenAreas}
+            onChange={(adminAreas) => onChange({ ...country, adminAreas })}
+          />
+          <SettingsField
+            id={`${id}-postal`}
+            label={t("postalPrefixes")}
+            help={t("postalPrefixesHelp")}
+            error={issue ? t("partRequired", { country: name }) : null}
+          >
+            <Input
+              id={`${id}-postal`}
+              value={country.postalPrefixes}
+              autoComplete="off"
+              inputMode="text"
+              aria-describedby={`${id}-postal-note`}
+              onChange={(event) => onChange({ ...country, postalPrefixes: event.target.value })}
+            />
+          </SettingsField>
+        </>
+      )}
+    </section>
+  );
+}
+
+// ── The zone and local pickup forms ────────────────────────────────────
 
 function ZoneForm({ zone, zones }: { zone: Zone | null; zones: Zone[] }) {
   const t = useMessages(shippingMessages);
@@ -506,19 +686,35 @@ function ZoneForm({ zone, zones }: { zone: Zone | null; zones: Zone[] }) {
   const refresh = useRefreshZones();
   const onConflict = useConflictReload();
   const wholeTaka = useWholeUnitPrices();
+  const countryList = useQuery(addressCountriesQueryOptions()).data;
   const [saved] = useState(() => ({
     name: zone?.name ?? "",
+    countries: countryDraftsOf(zone),
     places: zone?.locations ?? [],
     rates: zone ? zone.rates.map(toDraft) : [emptyDraft()],
   }));
   const [draft, setDraft] = useState(saved);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const taken = new Map(
-    zones.filter((other) => other.id !== zone?.id).flatMap((other) => other.locations.map((place) => [place.id, other.name] as const)),
+  const others = zones.filter((other) => other.id !== zone?.id);
+  const taken = useMemo(() => {
+    const places = new Map(others.flatMap((other) => other.locations.map((place) => [place.id, other.name] as const)));
+    const whole = new Map<string, string>();
+    const areas = new Map<string, string>();
+    for (const other of others) {
+      for (const region of other.regions as Region[]) {
+        if (region.adminArea) areas.set(`${region.countryCode}|${region.adminArea}`, other.name);
+        else if (!region.postalPrefix) whole.set(region.countryCode, other.name);
+      }
+    }
+    return { places, whole, areas };
+  }, [others]);
+  const countryNotes = useMemo(
+    () => new Map([...taken.whole].map(([code, name]) => [code, t("inZone", { zone: name })])),
+    [taken.whole, t],
   );
   const body = () => ({
     name: draft.name.trim(),
-    locationIds: draft.places.map((place) => place.id),
+    ...zoneRegionsBody(draft.countries, draft.places),
     rates: draft.rates.map(toRateInput),
   });
   const save = useMutation({
@@ -537,11 +733,22 @@ function ZoneForm({ zone, zones }: { zone: Zone | null; zones: Zone[] }) {
     },
     onError: () => toast.error(common("saveFailed")),
   });
+  const setCountries = (codes: string[]) =>
+    setDraft((current) => ({
+      ...current,
+      countries: codes.map((code) => current.countries.find((country) => country.code === code)
+        // A country another zone holds whole starts as part of it.
+        ?? { code, whole: !taken.whole.has(code), adminAreas: [], postalPrefixes: "" }),
+      places: codes.includes(BD) ? current.places : [],
+    }));
   useSaveBar({
     fields: fieldId,
     dirty: JSON.stringify(draft) !== JSON.stringify(saved),
     saving: save.isPending,
-    invalid: !draft.name.trim() || draft.places.length === 0 || draft.rates.some((rate) => Object.keys(rateErrors(rate, wholeTaka)).length > 0),
+    invalid: !draft.name.trim()
+      || draft.countries.length === 0
+      || draft.countries.some((country) => countryIssue(country, draft.places) !== null)
+      || draft.rates.some((rate) => Object.keys(rateErrors(rate, wholeTaka)).length > 0),
     save: () => save.mutateAsync(),
     discard: () => setDraft(saved),
   });
@@ -550,13 +757,44 @@ function ZoneForm({ zone, zones }: { zone: Zone | null; zones: Zone[] }) {
       <SettingsField id="zone-name" label={t("zoneName")} error={draft.name.trim() ? null : t("zoneNameRequired")}>
         <Input id="zone-name" value={draft.name} maxLength={100} placeholder={t("zoneNamePlaceholder")} onChange={(event) => setDraft({ ...draft, name: event.target.value })} />
       </SettingsField>
-      <PlacePicker
-        selected={draft.places}
-        taken={taken}
-        error={draft.places.length ? null : t("zonePlacesRequired")}
-        onChange={(places) => setDraft({ ...draft, places })}
-      />
-      <RatesEditor rates={draft.rates} allowPickup={false} onChange={(rates) => setDraft({ ...draft, rates })} />
+      <SettingsField
+        id="zone-regions"
+        label={t("zoneRegions")}
+        help={t("zoneRegionsHelp")}
+        error={draft.countries.length ? null : t("zoneRegionsRequired")}
+      >
+        <CountryChecklist
+          id="zone-regions"
+          countries={countryList ?? [...new Set([BD, ...draft.countries.map((country) => country.code)])]}
+          selected={draft.countries.map((country) => country.code)}
+          notes={countryNotes}
+          describedBy="zone-regions-note"
+          copy={{
+            search: t("countrySearch"),
+            none: t("countryNone"),
+            noneSelected: t("countryNoneSelected"),
+            remove: (country) => t("removeCountry", { country }),
+          }}
+          onChange={setCountries}
+        />
+      </SettingsField>
+      {draft.countries.map((country) => (
+        <CountryScope
+          key={country.code}
+          country={country}
+          places={draft.places}
+          takenWhole={taken.whole.get(country.code)}
+          takenAreas={taken.areas}
+          takenPlaces={taken.places}
+          onChange={(next) => setDraft((current) => ({
+            ...current,
+            countries: current.countries.map((entry) => (entry.code === next.code ? next : entry)),
+            places: next.code === BD && next.whole ? [] : current.places,
+          }))}
+          onPlaces={(places) => setDraft((current) => ({ ...current, places }))}
+        />
+      ))}
+      <RatesEditor rates={draft.rates} onChange={(rates) => setDraft({ ...draft, rates })} />
       {zone ? (
         <>
           <Button type="button" variant="ghost" className="self-start" onClick={() => setConfirmDelete(true)}>
@@ -578,15 +816,15 @@ function ZoneForm({ zone, zones }: { zone: Zone | null; zones: Zone[] }) {
   );
 }
 
-function EverywhereElseForm({ everywhereElse }: { everywhereElse: DeliveryZones["everywhereElse"] }) {
+function PickupForm({ pickup }: { pickup: DeliveryZones["pickup"] }) {
   const refresh = useRefreshZones();
   const wholeTaka = useWholeUnitPrices();
   const onConflict = useConflictReload();
-  const [saved] = useState(() => everywhereElse.rates.map(toDraft));
+  const [saved] = useState(() => pickup.rates.map(toDraft));
   const [rates, setRates] = useState(saved);
   const save = useMutation({
     mutationFn: () =>
-      send("put", `${ZONES_URL}/everywhere-else`, { rates: rates.map(toRateInput), expectedRevision: everywhereElse.revision }),
+      send("put", `${ZONES_URL}/pickup`, { rates: rates.map(toRateInput), expectedRevision: pickup.revision }),
     onSuccess: refresh,
     onError: onConflict,
   });
@@ -598,15 +836,30 @@ function EverywhereElseForm({ everywhereElse }: { everywhereElse: DeliveryZones[
     save: () => save.mutateAsync(),
     discard: () => setRates(saved),
   });
-  return <RatesEditor rates={rates} allowPickup onChange={setRates} />;
+  // Every charge here is a pickup point.
+  return <RatesEditor rates={rates} pickupOnly onChange={setRates} />;
 }
 
-// ── The card ───────────────────────────────────────────────────────────
+// ── The cards ──────────────────────────────────────────────────────────
 
 const TEMPLATES = [
   { id: "dhaka_two_zone", title: "templateTwo", value: "templateTwoValue", inside: 60 },
   { id: "dhaka_three_zone", title: "templateThree", value: "templateThreeValue", inside: 70 },
 ] as const;
+
+function useRateSummary() {
+  const t = useMessages(shippingMessages);
+  const { fmt } = useCurrency();
+  return (rates: Rate[]) =>
+    rates.length === 0
+      ? t("noCharges")
+      : rates.map((rate) => [
+          rate.name,
+          rate.fee === 0 ? t("free") : fmt(rate.fee),
+          rate.freeOver === null ? null : t("freeOverSummary", { amount: fmt(rate.freeOver) }),
+          rate.isActive ? null : t("off"),
+        ].filter(Boolean).join(" ")).join(" · ");
+}
 
 export function DeliveryZonesCard() {
   const t = useMessages(shippingMessages);
@@ -615,6 +868,7 @@ export function DeliveryZonesCard() {
   const canView = useHasPermission(ADMIN_PERMISSIONS.SETTINGS_SHIPPING_METHODS_VIEW);
   const { fmt } = useCurrency();
   const refresh = useRefreshZones();
+  const summary = useRateSummary();
   const { data, isError, refetch } = useQuery({ ...deliveryZonesQuery, enabled: canView });
   const canViewPlaces = useHasPermission(ADMIN_PERMISSIONS.SETTINGS_DELIVERY_LOCATIONS_VIEW);
   const placeCounts = useQuery({ ...areaCountsQuery, enabled: canViewPlaces }).data;
@@ -622,8 +876,7 @@ export function DeliveryZonesCard() {
   const [template, setTemplate] = useState<(typeof TEMPLATES)[number]["id"] | null>(null);
   const [templateError, setTemplateError] = useState<string | null>(null);
   const applyTemplate = useMutation({
-    mutationFn: (id: string) =>
-      send("put", `${ZONES_URL}/template`, { template: id, expectedRevision: data!.everywhereElse.revision }),
+    mutationFn: (id: string) => send("put", `${ZONES_URL}/template`, { template: id }),
     onSuccess: async () => {
       setTemplate(null);
       toast.success(t("templateAdded"));
@@ -637,22 +890,6 @@ export function DeliveryZonesCard() {
   if (!canView) return null;
   if (isError) return <SettingsLoadFailure title={t("loadZones")} onRetry={refetch} />;
   if (!data) return <SettingsCardLoading />;
-
-  const summary = (rates: Rate[]) =>
-    rates.length === 0
-      ? t("noCharges")
-      : rates.map((rate) => [
-          rate.kind === "pickup" ? `${t("pickup")}: ${rate.name}` : rate.name,
-          rate.fee === 0 ? t("free") : fmt(rate.fee),
-          rate.freeOver === null ? null : t("freeOverSummary", { amount: fmt(rate.freeOver) }),
-          rate.isActive ? null : t("off"),
-        ].filter(Boolean).join(" ")).join(" · ");
-  const places = (zone: Zone) =>
-    zone.locations.length === 0
-      ? t("noPlacesInZone")
-      : zone.locations.length <= 2
-        ? zone.locations.map((place) => place.name).join(", ")
-        : t("placeCount", { count: zone.locations.length });
 
   return (
     <SettingsCard
@@ -668,23 +905,14 @@ export function DeliveryZonesCard() {
         <>
           {data.zones.map((zone) => (
             <SettingsDialog key={zone.id} title={t("editZone", { name: zone.name })} trigger={
-              <SettingsRow disabled={!canEdit} label={zone.name} value={`${places(zone)} · ${summary(zone.rates)}`} />
+              <SettingsRow disabled={!canEdit} label={zone.name} value={`${regionSummary(zone, t)} · ${summary(zone.rates)}`} />
             }>
               <ZoneForm zone={zone} zones={data.zones} />
             </SettingsDialog>
           ))}
-          <SettingsDialog title={t("everywhereElse")} description={t("everywhereElseHelp")} trigger={
-            <SettingsRow
-              disabled={!canEdit}
-              label={t("everywhereElse")}
-              value={data.everywhereElse.rates.length ? summary(data.everywhereElse.rates) : t("noDeliveryElsewhere")}
-            />
-          }>
-            <EverywhereElseForm everywhereElse={data.everywhereElse} />
-          </SettingsDialog>
           {data.zones.length === 0 && canEdit ? (
             // Suggestions, not zones: nothing here is live until the merchant uses one.
-            <section aria-labelledby="suggested-setups" className="border-t border-border">
+            <section aria-labelledby="suggested-setups" className="border-t border-border first:border-t-0">
               <h3 id="suggested-setups" className="px-4 pt-3 text-heading-sm text-muted-foreground">{t("suggestedSetups")}</h3>
               {templateError ? <p role="alert" className="px-4 pt-2 text-body text-destructive">{templateError}</p> : null}
               <ul>
@@ -731,6 +959,34 @@ export function DeliveryZonesCard() {
             onConfirm={() => template && applyTemplate.mutate(template)}
           />
         </>
+      }
+    />
+  );
+}
+
+/** Local pickup: store-wide, offered for every address (Shopify's local pickup). */
+export function LocalPickupCard() {
+  const t = useMessages(shippingMessages);
+  const canEdit = useHasPermission(ADMIN_PERMISSIONS.SETTINGS_SHIPPING_METHODS_EDIT);
+  const canView = useHasPermission(ADMIN_PERMISSIONS.SETTINGS_SHIPPING_METHODS_VIEW);
+  const summary = useRateSummary();
+  const { data } = useQuery({ ...deliveryZonesQuery, enabled: canView });
+  if (!canView || !data) return null;
+  return (
+    <SettingsCard
+      id="localPickup"
+      title={t("pickupTitle")}
+      description={t("pickupDescription")}
+      rows={
+        <SettingsDialog title={t("editPickup")} description={t("pickupDescription")} trigger={
+          <SettingsRow
+            disabled={!canEdit}
+            label={t("pickupTitle")}
+            value={data.pickup.rates.length ? summary(data.pickup.rates) : t("noPickup")}
+          />
+        }>
+          <PickupForm pickup={data.pickup} />
+        </SettingsDialog>
       }
     />
   );

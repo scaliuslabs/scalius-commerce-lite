@@ -40,17 +40,24 @@ const rate = (patch: Record<string, unknown>) => ({
 });
 const shippingZones = {
   zones: [{
-    id: "dz_1", name: "Inside Dhaka", revision: 1,
+    id: "dz_1", name: "Inside Dhaka", revision: 1, regions: [],
     locations: [{ id: "dhaka", name: "Dhaka", type: "city", parentName: null }],
     rates: [rate({ name: "Inside Dhaka", fee: 70, freeOver: 3000, description: "Delivery in 1–2 days" })],
-  }],
-  everywhereElse: {
-    revision: 1,
+  }, {
+    id: "dz_bd", name: "Outside Dhaka", revision: 1, locations: [],
+    regions: [{ countryCode: "BD", adminArea: null, postalPrefix: null }],
     rates: [
       rate({ name: "Outside Dhaka", fee: 120.5, description: "Delivery in 2–3 days" }),
       rate({ name: "Courier express", fee: 200, isActive: false }),
-      rate({ kind: "pickup", name: "Shop pickup", fee: 0, pickupAddress: "House 1, Dhanmondi <27>", pickupHours: "10 am – 8 pm" }),
     ],
+  }, {
+    id: "dz_in", name: "India", revision: 1, locations: [],
+    regions: [{ countryCode: "IN", adminArea: null, postalPrefix: null }],
+    rates: [rate({ name: "International", fee: 1500, description: "Delivery in 7–10 days" })],
+  }],
+  pickup: {
+    revision: 1,
+    rates: [rate({ kind: "pickup", name: "Shop pickup", fee: 0, pickupAddress: "House 1, Dhanmondi <27>", pickupHours: "10 am – 8 pm" })],
   },
 };
 
@@ -171,7 +178,9 @@ describe("policies", () => {
     expect(content).toContain("Here is where storefront.scalius.com delivers");
     expect(content).not.toMatch(/our store|1 to 2 days/);
     expect(content).toContain("<strong>Inside Dhaka</strong> (Dhaka): ৳70, free on orders of ৳3,000 or more. Delivery in 1–2 days.");
-    expect(content).toContain("<strong>Everywhere else</strong>: Outside Dhaka ৳120.50. Delivery in 2–3 days.");
+    expect(content).toContain("<strong>Outside Dhaka</strong> (the rest of Bangladesh): ৳120.50. Delivery in 2–3 days.");
+    expect(content).toContain("<strong>India</strong> (India): International ৳1,500. Delivery in 7–10 days.");
+    expect(content).toContain("We don't deliver outside these areas yet.");
     expect(content).not.toContain("Courier express");
     expect(content).toContain("You can collect your order from House 1, Dhanmondi &lt;27&gt; (10 am – 8 pm). Pickup is free.");
   });

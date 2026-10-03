@@ -25,7 +25,36 @@ export interface PolicyShipping {
   currencySymbol: string;
 }
 
-type Rate = DeliveryZones["everywhereElse"]["rates"][number];
+type Rate = DeliveryZones["pickup"]["rates"][number];
+type Zone = DeliveryZones["zones"][number];
+
+/**
+ * A zone's places: its Bangladesh delivery areas, countries and regions. A
+ * whole country that other zones hold part of reads "the rest of <country>",
+ * because those places get the other zones' rates.
+ */
+function zonePlaces(zone: Zone, zones: readonly Zone[]): string[] {
+  const heldElsewhere = (country: string) => zones.some((other) =>
+    other.id !== zone.id &&
+    (other.regions.some((region) => region.countryCode === country) || (country === "BD" && other.locations.length > 0)));
+  return [
+    ...zone.locations.map((place) => place.name),
+    ...zone.regions.map((region) => {
+      const country = countryLabel(region.countryCode);
+      if (region.adminArea) return `${region.adminArea}, ${country}`;
+      if (region.postalPrefix) return `${country} postal codes ${region.postalPrefix}`;
+      return heldElsewhere(region.countryCode) ? `the rest of ${country}` : country;
+    }),
+  ];
+}
+
+function countryLabel(code: string): string {
+  try {
+    return new Intl.DisplayNames(["en"], { type: "region" }).of(code) ?? code;
+  } catch {
+    return code;
+  }
+}
 
 const escape = (value: string) =>
   value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -68,25 +97,20 @@ function deliverySections(shipping: PolicyShipping | null): string {
   const live = (rates: readonly Rate[], kind: Rate["kind"]) => rates.filter((rate) => rate.isActive && rate.kind === kind);
   const zones = (shipping?.zones.zones ?? [])
     .map((zone) => ({ zone, rates: live(zone.rates, "delivery") }))
-    .filter(({ zone, rates }) => zone.locations.length > 0 && rates.length > 0);
-  const elsewhere = live(shipping?.zones.everywhereElse.rates ?? [], "delivery");
-  const pickups = live(shipping?.zones.everywhereElse.rates ?? [], "pickup");
-  if (!shipping || (zones.length === 0 && elsewhere.length === 0 && pickups.length === 0)) {
+    .filter(({ zone, rates }) => (zone.locations.length > 0 || zone.regions.length > 0) && rates.length > 0);
+  const pickups = live(shipping?.zones.pickup.rates ?? [], "pickup");
+  if (!shipping || (zones.length === 0 && pickups.length === 0)) {
     return `<h2>Delivery charges and times</h2>\n${holidays}`;
   }
   const symbol = shipping.currencySymbol;
   const rateText = (rates: readonly Rate[], title: string) =>
     rates.map((rate) => describeRate(rate, symbol, rates.length > 1 || rate.name.trim() !== title)).join(" ");
-  const items = [
-    ...zones.map(({ zone, rates }) =>
-      `<li><strong>${escape(zone.name)}</strong> (${listPlaces(zone.locations.map((place) => place.name))}): ${rateText(rates, zone.name)}</li>`),
-    ...(elsewhere.length > 0
-      ? [`<li><strong>${zones.length > 0 ? "Everywhere else" : "Everywhere we deliver"}</strong>: ${rateText(elsewhere, "")}</li>`]
-      : []),
-  ];
+  const items = zones.map(({ zone, rates }) =>
+    `<li><strong>${escape(zone.name)}</strong> (${listPlaces(zonePlaces(zone, shipping.zones.zones))}): ${rateText(rates, zone.name)}</li>`);
   const delivery = items.length === 0 ? [] : [
     `<h2>Delivery charges and times</h2>\n<ul>\n${items.join("\n")}\n</ul>`,
-    ...(zones.length > 0 && elsewhere.length === 0 ? ["<p>We don't deliver outside these areas yet.</p>"] : []),
+    // Shipping zones are the only places a delivery goes.
+    "<p>We don't deliver outside these areas yet.</p>",
     holidays,
   ];
   const pickup = pickups.length === 0 ? [] : [

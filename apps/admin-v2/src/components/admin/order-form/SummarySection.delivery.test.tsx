@@ -16,6 +16,7 @@ vi.mock("@scalius/api-client/sdk", () => ({
         id: "zone_inside",
         name: "Inside Dhaka",
         revision: 1,
+        regions: [],
         locations: [{ id: "city_dhaka", name: "Dhaka", type: "city", parentName: null }],
         rates: [rate("rate_inside", "Standard delivery", 80)],
       },
@@ -23,11 +24,31 @@ vi.mock("@scalius/api-client/sdk", () => ({
         id: "zone_savar",
         name: "Savar",
         revision: 1,
+        regions: [],
         locations: [{ id: "zone_savar_loc", name: "Savar", type: "zone", parentName: "Dhaka" }],
         rates: [rate("rate_savar", "Suburb delivery", 100)],
       },
+      {
+        id: "zone_bd",
+        name: "Outside Dhaka",
+        revision: 1,
+        regions: [{ countryCode: "BD", adminArea: null, postalPrefix: null }],
+        locations: [],
+        rates: [rate("rate_outside", "Outside Dhaka", 130)],
+      },
+      {
+        id: "zone_us",
+        name: "United States",
+        revision: 1,
+        regions: [
+          { countryCode: "US", adminArea: null, postalPrefix: null },
+          { countryCode: "US", adminArea: "CA", postalPrefix: null },
+        ],
+        locations: [],
+        rates: [rate("rate_us", "International", 2500)],
+      },
     ],
-    everywhereElse: { revision: 1, rates: [rate("rate_outside", "Outside Dhaka", 130), rate("rate_pickup", "Pickup", 0, "pickup")] },
+    pickup: { revision: 1, rates: [rate("rate_pickup", "Pickup", 0, "pickup")] },
   }),
 }));
 vi.mock("~/lib/api", () => ({ apiData: (call: unknown) => call }));
@@ -106,13 +127,22 @@ describe("create order delivery method", () => {
     await flush();
     expect(form.getValues(["shippingMethodId", "shippingCharge"])).toEqual(["rate_savar", 100]);
 
-    // An address in no zone gets the "Everywhere else" rate, not local pickup.
+    // A city in no zone of its own gets the rate of the zone for all of Bangladesh, not local pickup.
     await act(async () => {
       form.setValue("zone", "");
       form.setValue("city", "city_khulna");
     });
     await flush();
     expect(form.getValues(["shippingMethodId", "shippingCharge"])).toEqual(["rate_outside", 130]);
+
+    // Another country gets the rate of the zone that holds it.
+    await act(async () => {
+      form.setValue("city", "");
+      form.setValue("shippingCountryCode", "US");
+      form.setValue("shippingAdminArea", "NY");
+    });
+    await flush();
+    expect(form.getValues(["shippingMethodId", "shippingCharge"])).toEqual(["rate_us", 2500]);
   });
 
   it("keeps a charge the merchant typed when the address changes", async () => {

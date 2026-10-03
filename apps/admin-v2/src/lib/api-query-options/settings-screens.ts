@@ -166,16 +166,24 @@ interface Place {
   type: "city" | "zone" | "area";
   parentName: string | null;
 }
+/** One region a zone serves: a whole country, or one admin area or postal prefix of it. */
+interface ZoneRegion {
+  countryCode: string;
+  adminArea: string | null;
+  postalPrefix: string | null;
+}
 interface Zone {
   id: string;
   name: string;
   revision: number;
+  regions: ZoneRegion[];
+  /** Bangladesh delivery areas. */
   locations: Place[];
   rates: Rate[];
 }
 export interface DeliveryZones {
   zones: Zone[];
-  everywhereElse: { revision: number; rates: Rate[] };
+  pickup: { revision: number; rates: Rate[] };
 }
 
 export const deliveryZonesQuery = {

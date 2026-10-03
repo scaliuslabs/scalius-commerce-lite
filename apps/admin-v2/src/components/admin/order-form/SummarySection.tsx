@@ -33,28 +33,45 @@ import { queryKeys } from "~/lib/query-keys";
 import { useMessages } from "~/i18n";
 import { orderFormMessages } from "~/i18n/order-form";
 import { resourceMessages } from "~/i18n/resource";
+import { resolveDestinationZoneId } from "@scalius/core/modules/delivery/browser";
 
 const discountGuidanceId = "manual-order-discount-guidance";
 const discountErrorId = "manual-order-discount-error";
 const CUSTOM_CHARGE = "custom";
 type DeliveryZones = ApiResult<typeof getApiV1AdminSettingsShippingMethods>;
-type DeliveryAddress = { city: string; zone: string; area: string | null };
+type DeliveryAddress = {
+  /** Absent or BD: Bangladesh, by its City/Thana/Area. */
+  countryCode?: string | null;
+  city: string;
+  zone: string;
+  area: string | null;
+  adminArea?: string | null;
+  postalCode?: string | null;
+};
 
 /**
- * The delivery methods checkout offers for an address: the rates of the zone
- * its most specific location (area, then zone, then city) belongs to, or the
- * "Everywhere else" rates, plus local pickup. Without a city, every rate.
+ * The delivery methods checkout offers for an address: the rates of the
+ * shipping zone it belongs to (the most specific match: Bangladesh area,
+ * thana or city, then postal prefix, admin area, country; checkout's own
+ * rule), plus local pickup. Without a destination, every rate.
  */
 export function deliveryRatesForAddress(data: DeliveryZones | undefined, address: DeliveryAddress) {
   if (!data) return [];
   const named = (zone: DeliveryZones["zones"][number]) =>
     zone.rates.map((rate) => ({ ...rate, name: `${zone.name} · ${rate.name}` }));
-  const elsewhere = data.everywhereElse.rates;
-  const active = (rate: (typeof elsewhere)[number]) => rate.isActive;
-  if (!address.city) return [...data.zones.flatMap(named), ...elsewhere].filter(active);
-  const zoneOf = new Map(data.zones.flatMap((zone) => zone.locations.map((location) => [location.id, zone] as const)));
-  const zone = [address.area, address.zone, address.city].map((id) => (id ? zoneOf.get(id) : undefined)).find(Boolean);
-  return (zone ? [...named(zone), ...elsewhere.filter((rate) => rate.kind === "pickup")] : elsewhere).filter(active);
+  const pickup = data.pickup.rates;
+  const active = (rate: (typeof pickup)[number]) => rate.isActive;
+  const country = address.countryCode?.trim().toUpperCase() || "BD";
+  if (country === "BD" && !address.city) return [...data.zones.flatMap(named), ...pickup].filter(active);
+  const zoneId = resolveDestinationZoneId(
+    { countryCode: country, city: address.city, zone: address.zone, area: address.area, adminArea: address.adminArea, postalCode: address.postalCode },
+    {
+      locations: data.zones.flatMap((zone) => zone.locations.map((location) => ({ id: location.id, deliveryZoneId: zone.id }))),
+      regions: data.zones.flatMap((zone) => zone.regions.map((region) => ({ ...region, zoneId: zone.id }))),
+    },
+  );
+  const zone = data.zones.find((candidate) => candidate.id === zoneId);
+  return [...(zone ? named(zone) : []), ...pickup].filter(active);
 }
 
 /**
@@ -78,14 +95,17 @@ export function SummarySection() {
   const { fmt, code } = useCurrency();
   const t = useMessages(orderFormMessages);
   const r = useMessages(resourceMessages);
-  const [city, zone, area, shippingMethodId, items] = useWatch({
+  const [city, zone, area, shippingMethodId, items, countryCode, adminArea, postalCode] = useWatch({
     control: form.control,
-    name: ["city", "zone", "area", "shippingMethodId", "items"],
+    name: ["city", "zone", "area", "shippingMethodId", "items", "shippingCountryCode", "shippingAdminArea", "shippingPostalCode"],
   });
   // Only physical lines need a delivery method; a cart of services has none (and no charge).
   const hasPhysical = !items?.length || items.some(isPhysicalLine);
   const zones = useDeliveryZones();
-  const rates = deliveryRatesForAddress(zones, { city, zone, area });
+  const rates = deliveryRatesForAddress(zones, { countryCode, city, zone, area, adminArea, postalCode });
+  // Bangladesh is a destination once its city is chosen; another country by itself.
+  const abroad = (countryCode?.trim().toUpperCase() || "BD") !== "BD";
+  const hasDestination = abroad || Boolean(city);
   const pickedRate = rates.find((rate) => rate.id === shippingMethodId);
   // Editing: the method the order was placed with stays named, even when this address no longer offers it.
   const savedOption = savedShippingMethod && !rates.some((rate) => rate.id === savedShippingMethod.id)
@@ -113,17 +133,17 @@ export function SummarySection() {
     if (form.getValues("shippingCharge") !== 0) form.setValue("shippingCharge", 0, set);
   }, [form, hasPhysical]);
 
-  // New orders: choosing the city or zone picks that zone's delivery method and charge, as checkout does.
+  // New orders: choosing the address picks its zone's delivery method and charge, as checkout does.
   React.useEffect(() => {
     // Waits for the zones, so a method carried over from a checkout isn't dropped while they load.
-    if (isEdit || !city || !zones || customChosen.current || !hasPhysical) return;
+    if (isEdit || !hasDestination || !zones || customChosen.current || !hasPhysical) return;
     const current = form.getValues("shippingMethodId");
     if (current && rates.some((rate) => rate.id === current)) return;
     const suggested = rates.find((rate) => rate.kind === "delivery");
     if (suggested || current) pickRate(suggested);
     // Rates are compared by id (offeredKey); the list itself is rebuilt every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isEdit, city, zones, offeredKey, form, pickRate, hasPhysical]);
+  }, [isEdit, hasDestination, zones, offeredKey, form, pickRate, hasPhysical]);
 
   const quote = manualQuote.isCurrent ? manualQuote.data : null;
   const subtotal = quote?.subtotalAmount ?? localTotals.subtotal;
