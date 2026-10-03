@@ -3,7 +3,7 @@
 // to it; staff can open a claim for the buyer (goodwill after expiry).
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useNavigate, Link } from "@tanstack/react-router";
-import { toast } from "sonner";
+import { toast } from "~/lib/toast";
 import { CONVERSATION_LIMITS } from "@scalius/shared/conversation";
 import type { WarrantyClaimStatus, WarrantyDurationUnit, WarrantyProvider } from "@scalius/shared/warranty";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";

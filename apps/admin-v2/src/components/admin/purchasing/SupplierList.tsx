@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { toast } from "sonner";
+import { toast } from "~/lib/toast";
 import { Truck } from "lucide-react";
 import { createActionsColumn } from "~/components/admin/data-table/columns/column-factories";
 import type { ColumnDef } from "~/components/admin/data-table/table-config";

@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
+import { toast } from "~/lib/toast";
 import { firebaseConfigQueryOptions } from "~/lib/api-query-options/firebase";
 import { withDashboardBasePath } from "~/lib/dashboard-base-path";
 import { postApiV1AdminFcmToken } from "@scalius/api-client/sdk";

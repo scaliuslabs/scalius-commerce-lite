@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } 
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { MoreHorizontal, Package } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "~/lib/toast";
 import type { FulfillmentType } from "@scalius/shared/fulfilment";
 import { mediaImageUrl } from "@scalius/shared/media-variants";
 import { canTransitionTo } from "@scalius/shared/order-state";

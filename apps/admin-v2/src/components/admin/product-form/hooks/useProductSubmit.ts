@@ -1,7 +1,7 @@
 // src/components/admin/product-form/hooks/useProductSubmit.ts
 import { useRef, useState } from "react";
 import type { UseFormReturn } from "react-hook-form";
-import { toast } from "sonner";
+import { toast } from "~/lib/toast";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { ProductFormValues } from "../types";
 import { formatFormValuesForSubmission, productSubmitChanges } from "../utils";

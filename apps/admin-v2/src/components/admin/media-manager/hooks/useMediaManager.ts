@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { toast } from "sonner";
+import { toast } from "~/lib/toast";
 import { mediaText as t } from "~/i18n/media";
 import { AdminApiResponseError } from "~/lib/admin-api-error";
 import { MediaApiClient } from "../api";

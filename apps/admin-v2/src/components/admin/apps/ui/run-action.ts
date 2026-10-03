@@ -2,7 +2,7 @@
 // inside an app's UI tree and by the manifest's detail and bulk actions.
 // Loaded on demand: it carries the UI schema (zod), which list pages and the
 // shell never need until someone presses an app's button.
-import { toast } from "sonner";
+import { toast } from "~/lib/toast";
 import {
   parsePluginUiActionResult,
   type PluginUiActionResult,

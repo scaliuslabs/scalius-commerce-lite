@@ -2,7 +2,7 @@
 // makes the next revision (the API does it in one batch, guarded by the
 // version this dialog opened with); orders keep the revision they bought.
 import { useEffect, useState, type FormEvent } from "react";
-import { toast } from "sonner";
+import { toast } from "~/lib/toast";
 import {
   WARRANTY_DURATION_UNITS,
   WARRANTY_LIMITS,

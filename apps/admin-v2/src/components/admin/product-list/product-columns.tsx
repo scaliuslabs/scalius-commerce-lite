@@ -1,5 +1,5 @@
 import { Copy, CopyPlus, Image as ImageIcon } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "~/lib/toast";
 import { mediaImageUrl } from "@scalius/shared/media-variants";
 import { cn } from "@scalius/shared/utils";
 import { ProductStatusBadge } from "./ProductStatusBadge";

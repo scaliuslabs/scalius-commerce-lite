@@ -2,7 +2,7 @@
 // type and owner are fixed once created; an edit is guarded by the revision
 // the dialog opened with. Validations are checked with the shared codec.
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { toast } from "sonner";
+import { toast } from "~/lib/toast";
 import {
   CUSTOM_FIELD_MERCHANT_NAMESPACE,
   CUSTOM_FIELD_SCALAR_TYPES,

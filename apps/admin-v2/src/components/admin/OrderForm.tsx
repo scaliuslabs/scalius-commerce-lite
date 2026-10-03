@@ -4,7 +4,7 @@ import { useForm, useWatch } from "react-hook-form";
 import { useQuery } from "@tanstack/react-query";
 import type { FieldErrors } from "react-hook-form";
 import { useNavigate } from "@tanstack/react-router";
-import { toast } from "sonner";
+import { toast } from "~/lib/toast";
 import { Form } from "@/components/ui/form";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";

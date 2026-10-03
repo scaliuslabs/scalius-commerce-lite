@@ -1,7 +1,7 @@
 // Add or edit one inventory location. An edit is guarded by the version the
 // dialog opened with; a stale save says so instead of overwriting.
 import { useEffect, useState, type FormEvent } from "react";
-import { toast } from "sonner";
+import { toast } from "~/lib/toast";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
 import { useDirtyDialogClose } from "~/components/admin/shared/use-dirty-dialog-close";
 import { Alert, AlertDescription } from "~/components/ui/alert";

@@ -2,7 +2,7 @@ import { useEffect, useId, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { X } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "~/lib/toast";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { REVIEW_LIMITS } from "@scalius/shared/reviews";
 import { Alert, AlertDescription } from "~/components/ui/alert";

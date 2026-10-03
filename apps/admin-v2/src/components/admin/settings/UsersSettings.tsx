@@ -2,7 +2,7 @@ import { useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useRouteContext, useRouter } from "@tanstack/react-router";
 import { ChevronDown, ChevronRight } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "~/lib/toast";
 import { postApiV1AdminAuthUsers } from "@scalius/api-client/sdk";
 import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { cn } from "@scalius/shared/utils";

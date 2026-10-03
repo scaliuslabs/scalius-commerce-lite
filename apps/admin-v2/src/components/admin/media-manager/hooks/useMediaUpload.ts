@@ -8,7 +8,7 @@ import {
   validateMediaFileMetadata,
   validateMediaSignature,
 } from "@scalius/shared/media-policy";
-import { toast } from "sonner";
+import { toast } from "~/lib/toast";
 import { AdminApiResponseError } from "~/lib/admin-api-error";
 import { mediaText as t } from "~/i18n/media";
 import { MediaApiClient, type MediaUploadSession } from "../api";

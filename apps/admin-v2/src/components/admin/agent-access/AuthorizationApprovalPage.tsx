@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Loader2 } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "~/lib/toast";
 
 import { SettingsCard, SettingsCardLoading, SettingsField } from "~/components/admin/settings/SettingsPage";
 import { Button } from "~/components/ui/button";

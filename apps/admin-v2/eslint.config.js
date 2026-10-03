@@ -48,7 +48,10 @@ const noLegacySelect = {
   "no-restricted-imports": [
     "error",
     {
-      paths: [{ name: "@radix-ui/react-select", message: "Use SearchableSelect from components/ui." }],
+      paths: [
+        { name: "@radix-ui/react-select", message: "Use SearchableSelect from components/ui." },
+        { name: "sonner", importNames: ["toast"], message: "Import toast from ~/lib/toast: sonner loads after a page's first render." },
+      ],
       patterns: [
         {
           group: ["**/components/ui/select", "~/components/ui/select", "@/components/ui/select", "./select", "**/native-select", "**/native-select.*", "**/components/ui/select.*"],

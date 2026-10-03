@@ -15,7 +15,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { AlertCircle, Check, Loader2, Plus, RotateCcw, Trash2 } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "~/lib/toast";
 import { cn } from "@scalius/shared/utils";
 import { getServerFnError } from "@/lib/api-helpers";
 import { useCatalogActionPermissions } from "@/hooks/use-catalog-action-permissions";
