@@ -14,6 +14,7 @@
  * browser field checks and the no-JS form path (`lib/cart/server.ts`).
  */
 import type { DeliveryMethodKind } from "@scalius/shared/fulfilment";
+import { isLocationCountry, readForeignAddressFields, shippingCountryOf } from "./shipping-country";
 
 export const CHECKOUT_DELIVERY_MODES = ["delivery", "pickup", "none"] as const;
 export type CheckoutDeliveryMode = (typeof CHECKOUT_DELIVERY_MODES)[number];
@@ -49,22 +50,36 @@ export const CHECKOUT_REQUIRED_FIELDS: Readonly<Record<CheckoutDeliveryMode, rea
   none: ["customerName", "customerPhone"],
 };
 
+/** City and thana are Bangladesh's (its delivery locations); another country's fields follow its rules. */
+const LOCATION_FIELDS: ReadonlySet<CheckoutRequiredField> = new Set(["city", "zone"]);
+
 export function isCheckoutFieldRequired(
   mode: CheckoutDeliveryMode,
   field: CheckoutRequiredField,
+  countryCode?: string | null,
 ): boolean {
+  if (LOCATION_FIELDS.has(field) && !isLocationCountry(countryCode)) return false;
   return CHECKOUT_REQUIRED_FIELDS[mode].includes(field);
 }
 
-/** The required fields left empty, in form order. */
+/** The required fields left empty, in form order (City and Thana only for Bangladesh). */
 export function missingCheckoutFields(
   mode: CheckoutDeliveryMode,
   values: Partial<Record<CheckoutRequiredField, string | null | undefined>>,
+  countryCode?: string | null,
 ): CheckoutRequiredField[] {
-  return CHECKOUT_REQUIRED_FIELDS[mode].filter((field) => !values[field]?.trim());
+  return CHECKOUT_REQUIRED_FIELDS[mode].filter((field) =>
+    isCheckoutFieldRequired(mode, field, countryCode) && !values[field]?.trim());
 }
 
 export interface CheckoutAddressFields {
+  /** Another country's address only: a Bangladesh address sends none (as before). */
+  shippingCountryCode?: string;
+  shippingAddressLine2?: string | null;
+  shippingDependentLocality?: string | null;
+  shippingLocality?: string | null;
+  shippingAdminArea?: string | null;
+  shippingPostalCode?: string | null;
   shippingAddress: string | null;
   city: string | null;
   zone: string | null;
@@ -86,7 +101,9 @@ const NO_ADDRESS: CheckoutAddressFields = {
 
 /**
  * The address the order carries: the buyer's for delivery, nothing for
- * pickup and service orders (a typed address is dropped, not sent).
+ * pickup and service orders (a typed address is dropped, not sent). A
+ * Bangladesh address sends its line and City/Thana/Area as before; another
+ * country's sends its country and canonical fields, never Bangladesh's ids.
  */
 export function checkoutAddressForMode(
   mode: CheckoutDeliveryMode,
@@ -98,6 +115,14 @@ export function checkoutAddressForMode(
     const trimmed = value.trim();
     return trimmed ? trimmed : null;
   };
+  if (!isLocationCountry(typeof values.shippingCountryCode === "string" ? values.shippingCountryCode : null)) {
+    return {
+      ...NO_ADDRESS,
+      shippingCountryCode: shippingCountryOf(values.shippingCountryCode),
+      shippingAddress: text(values.shippingAddress),
+      ...readForeignAddressFields((field) => values[field]),
+    };
+  }
   return {
     shippingAddress: text(values.shippingAddress),
     city: text(values.city),

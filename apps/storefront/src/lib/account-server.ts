@@ -12,6 +12,7 @@ import {
   type MarketingConsentStatus,
 } from "@scalius/shared/customer-marketing";
 import type {
+  CustomerAddress,
   CustomerInfo,
   CustomerOrder,
   CustomerOrdersPagination,
@@ -34,7 +35,7 @@ interface ApiAnswer {
 async function callAccountApi(
   request: Request,
   path: string,
-  init: { method?: "GET" | "PUT"; body?: unknown } = {},
+  init: { method?: "GET" | "PUT" | "POST" | "DELETE"; body?: unknown } = {},
 ): Promise<ApiAnswer | null> {
   const session = sessionCookieOf(request);
   if (!session) return { status: 401, data: null, error: null };
@@ -49,7 +50,7 @@ async function callAccountApi(
       method: init.method ?? "GET",
       headers,
       ...(init.body !== undefined ? { body: JSON.stringify(init.body) } : {}),
-      signal: AbortSignal.timeout(init.method === "PUT" ? WRITE_TIMEOUT_MS : READ_TIMEOUT_MS),
+      signal: AbortSignal.timeout(init.method && init.method !== "GET" ? WRITE_TIMEOUT_MS : READ_TIMEOUT_MS),
     });
     const payload = await response.json().catch(() => null) as {
       success?: unknown;
@@ -118,12 +119,9 @@ export async function readAccountCustomer(request: Request): Promise<AccountRead
   return { ok: true, data: data.customer };
 }
 
+/** The profile is the name; addresses are in the address book. */
 export interface ProfileUpdate {
   name?: string;
-  address?: string;
-  city?: string;
-  zone?: string;
-  area?: string;
 }
 
 export type ProfileSaveResult =
@@ -175,7 +173,44 @@ export async function saveAccountMarketing(
   return { ...failed(answer), message: null };
 }
 
-/** Saves the name or the delivery address; the API validates and resolves the location. */
+/** The account's address book, the default first. */
+export async function readAccountAddresses(request: Request): Promise<AccountRead<CustomerAddress[]>> {
+  const answer = await callAccountApi(request, "/api/v1/customer-auth/addresses");
+  const addresses = answer?.status === 200 ? (answer.data as { addresses?: unknown } | null)?.addresses : null;
+  return Array.isArray(addresses) ? { ok: true, data: addresses as CustomerAddress[] } : failed(answer);
+}
+
+export type AddressBookResult =
+  | { ok: true; addresses: CustomerAddress[] }
+  | { ok: false; reason: "signed_out" | "unavailable" | "invalid"; message: string | null };
+
+/**
+ * One address-book change: add (no `addressId`), change, delete or make
+ * default. The API checks the address against its country's rules and
+ * answers the whole book; a refusal's message names the field.
+ */
+export async function changeAccountAddresses(
+  request: Request,
+  change:
+    | { action: "save"; addressId?: string; body: unknown }
+    | { action: "delete" | "default"; addressId: string },
+): Promise<AddressBookResult> {
+  const path = "/api/v1/customer-auth/addresses";
+  const id = "addressId" in change && change.addressId ? `/${encodeURIComponent(change.addressId)}` : "";
+  const answer = change.action === "save"
+    ? await callAccountApi(request, `${path}${id}`, { method: id ? "PUT" : "POST", body: change.body })
+    : change.action === "delete"
+      ? await callAccountApi(request, `${path}${id}`, { method: "DELETE" })
+      : await callAccountApi(request, `${path}${id}/default`, { method: "POST" });
+  const addresses = answer?.status === 200 ? (answer.data as { addresses?: unknown } | null)?.addresses : null;
+  if (Array.isArray(addresses)) return { ok: true, addresses: addresses as CustomerAddress[] };
+  if (answer?.status === 400 || answer?.status === 404 || answer?.status === 409 || answer?.status === 422) {
+    return { ok: false, reason: "invalid", message: answer.error };
+  }
+  return { ...failed(answer), message: null };
+}
+
+/** Saves the name; the API validates it. */
 export async function saveAccountProfile(request: Request, update: ProfileUpdate): Promise<ProfileSaveResult> {
   const answer = await callAccountApi(request, "/api/v1/customer-auth/profile", { method: "PUT", body: update });
   const customer = answer?.status === 200 ? (answer.data as { customer?: CustomerInfo } | null)?.customer : null;

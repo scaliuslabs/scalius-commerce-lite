@@ -14,6 +14,7 @@ import {
   type CheckoutDeliveryMode,
   type CheckoutRequiredField,
 } from "./delivery-mode";
+import { LOCATION_COUNTRY, isLocationCountry, shippingCountryName } from "./shipping-country";
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
@@ -61,7 +62,9 @@ export function checkoutInformationFields(
     const error = root.querySelector<HTMLElement>(`#${errorId}`);
     if (control && error) fields.push({ control, error, check });
   };
-  const required = (field: CheckoutRequiredField) => isCheckoutFieldRequired(readMode(), field);
+  // Bangladesh by default; a store selling to several countries posts the chosen one.
+  const country = () => value(root, "shippingCountryCode") || LOCATION_COUNTRY;
+  const required = (field: CheckoutRequiredField) => isCheckoutFieldRequired(readMode(), field, country());
   add("customerName", "customerName-error", () => {
     const name = value(root, "customerName");
     if (!name) return copy.nameRequiredText;
@@ -81,7 +84,8 @@ export function checkoutInformationFields(
     if (!required("shippingAddress")) return "";
     const address = value(root, "shippingAddress");
     if (!address) return copy.addressRequiredText;
-    return address.length < MIN_SHIPPING_ADDRESS_LENGTH
+    // Bangladesh's line keeps its minimum; another country's rules are checked by the API.
+    return isLocationCountry(country()) && address.length < MIN_SHIPPING_ADDRESS_LENGTH
       ? formatCheckoutLanguageText(copy.addressIncompleteText, { minimum: MIN_SHIPPING_ADDRESS_LENGTH })
       : "";
   });
@@ -105,6 +109,12 @@ export function checkoutInformationFields(
         if (!required("shippingMethod")) return "";
         if (root.querySelector<HTMLInputElement>('[name="shippingLocation"]:checked')?.value) return "";
         if (mode === "pickup") return copy.pickupLocationRequiredText;
+        // No delivery rates outside Bangladesh until shipping zones by country.
+        if (!isLocationCountry(country())) {
+          return formatCheckoutLanguageText(copy.deliveryCountryUnavailableText, {
+            country: shippingCountryName(country(), document.documentElement.lang || "en"),
+          });
+        }
         // Without a city and thana the location message already says what to do.
         return !value(root, "city") || !value(root, "zone") ? "" : copy.deliveryRequiredText;
       },

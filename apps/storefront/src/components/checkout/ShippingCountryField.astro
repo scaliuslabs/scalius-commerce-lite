@@ -1,0 +1,52 @@
+---
+// The address country (MARKETS-DESIGN D7, step 3a): a select only when the
+// store sells to more than one country; a store that sells to one country
+// shows nothing (Bangladesh) or posts that country. The address blocks below
+// it (`data-country-block`) follow the choice with CSS alone, so the form
+// works without JavaScript; `enhanceShippingCountry()` then applies the
+// country's rules (lib/checkout/country-address.ts).
+import { LOCATION_COUNTRY, shippingCountryName } from "@/lib/checkout/shipping-country";
+
+interface Props {
+  id: string;
+  /** The countries the store sells to, sorted. */
+  countries: string[];
+  selected: string;
+  label: string;
+  /** Country names are written in this language. */
+  language?: string;
+  labelClass: string;
+  fieldClass: string;
+}
+
+const { id, countries, selected, label, language = "en", labelClass, fieldClass } = Astro.props;
+const options = countries
+  .map((code) => ({ code, name: shippingCountryName(code, language) }))
+  .sort((left, right) => left.name.localeCompare(right.name, language));
+---
+
+{
+  countries.length > 1 ? (
+    <div>
+      <label for={id} class={labelClass}>{label}</label>
+      <select id={id} name="shippingCountryCode" autocomplete="country" class={fieldClass} data-shipping-country>
+        {options.map((option) => <option value={option.code} selected={option.code === selected}>{option.name}</option>)}
+      </select>
+    </div>
+  ) : countries[0] && countries[0] !== LOCATION_COUNTRY ? (
+    <input type="hidden" name="shippingCountryCode" value={countries[0]} />
+  ) : null
+}
+
+<style is:global>
+  /* The chosen country's address block only; without :has both show, and the server reads the chosen country's fields. */
+  form:has(select[data-shipping-country]) [data-country-block] {
+    display: none;
+  }
+  form:has(select[data-shipping-country] option[value="BD"]:checked) [data-country-block="BD"] {
+    display: block;
+  }
+  form:has(select[data-shipping-country] option:not([value="BD"]):checked) [data-country-block="foreign"] {
+    display: grid;
+  }
+</style>

@@ -22,7 +22,7 @@ import {
   ACCOUNT_OFFLINE_MESSAGE,
   accountMoney,
   formatAccountDate,
-  formatDeliveryArea,
+  formatOrderPlaces,
   orderPaymentLine,
 } from "@/lib/account-format";
 import { addOrderToCart } from "@/lib/account-buy-again";
@@ -634,7 +634,7 @@ function renderDelivery(detail: AccountOrderDetail): void {
         ? [block.text]
         : [
             block.address,
-            formatDeliveryArea(order),
+            formatOrderPlaces(order),
             order.shippingMethodName ? `Delivery method: ${order.shippingMethodName}` : null,
           ];
     address.innerHTML = [

@@ -1,0 +1,61 @@
+---
+// Another country's address fields (MARKETS-DESIGN D7, step 3a): the generic
+// fields every country's rules choose from, server-rendered so the form
+// works without JavaScript. With it, the chosen country's rules hide the
+// fields it doesn't use, mark the required ones, show a postal code example
+// and offer its regions (lib/checkout/country-address.ts). The API checks
+// the address against the country's rules either way.
+import { FOREIGN_ADDRESS_FIELDS, FOREIGN_FIELD_RULE, type ForeignAddressField } from "@/lib/checkout/shipping-country";
+
+interface Props {
+  idPrefix: string;
+  labels: Record<ForeignAddressField, string>;
+  values?: Partial<Record<ForeignAddressField, string | null>>;
+  errors?: Partial<Record<ForeignAddressField, string>>;
+  labelClass: string;
+  fieldClass: string;
+  errorClass: string;
+  /** The field to fix first after a failed post (focused without JavaScript too). */
+  autofocus?: ForeignAddressField | null;
+}
+
+const { idPrefix, labels, values = {}, errors = {}, labelClass, fieldClass, errorClass, autofocus = null } = Astro.props;
+const AUTOCOMPLETE: Record<ForeignAddressField, string> = {
+  shippingAddressLine2: "address-line2",
+  shippingDependentLocality: "address-level3",
+  shippingLocality: "address-level2",
+  shippingAdminArea: "address-level1",
+  shippingPostalCode: "postal-code",
+};
+---
+
+<div class="grid gap-3 sm:grid-cols-2" data-country-block="foreign" data-foreign-address>
+  {
+    FOREIGN_ADDRESS_FIELDS.map((field) => {
+      const id = `${idPrefix}-${field}`;
+      const error = errors[field];
+      return (
+        <div class={field === "shippingAddressLine2" ? "sm:col-span-2" : undefined} data-address-rule={FOREIGN_FIELD_RULE[field]}>
+          <label for={id} class={labelClass}>
+            {labels[field]}<span aria-hidden="true" class="ml-0.5 hidden text-destructive" data-required-mark>*</span>
+          </label>
+          <input
+            id={id}
+            name={field}
+            type="text"
+            maxlength={field === "shippingPostalCode" ? 20 : field === "shippingAddressLine2" ? 200 : 120}
+            autocomplete={AUTOCOMPLETE[field]}
+            value={values[field] ?? ""}
+            list={field === "shippingAdminArea" ? `${id}-options` : undefined}
+            aria-invalid={error ? "true" : undefined}
+            aria-describedby={error ? `${id}-error` : undefined}
+            autofocus={autofocus === field}
+            class={fieldClass}
+          />
+          {field === "shippingAdminArea" && <datalist id={`${id}-options`} />}
+          <p id={`${id}-error`} class={error ? errorClass.replace("hidden", "").trim() : errorClass} role="alert">{error ?? ""}</p>
+        </div>
+      );
+    })
+  }
+</div>

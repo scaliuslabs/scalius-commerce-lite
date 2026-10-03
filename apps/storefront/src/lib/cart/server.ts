@@ -12,6 +12,7 @@ import {
 } from "@/lib/api/orders";
 import { CART_RULES_REASON } from "@/lib/checkout/tax-quote-error-contract";
 import { validateAndFormatPhone } from "@scalius/shared/customer-utils";
+import { isLocationCountry, readForeignAddressFields, shippingCountryOf } from "@/lib/checkout/shipping-country";
 import { readDiscountCodes } from "@/lib/checkout/tax-quote-client";
 import { MARKETING_CONSENT_FIELD, marketingConsentOrderField } from "@/lib/checkout/marketing-consent";
 import { parseRequestProperties } from "@/lib/checkout/tax-quote-contract";
@@ -184,9 +185,13 @@ export async function processOrder(
   try {
     const customerName = formData.get("customerName") as string;
     const rawPhone = (formData.get("customerPhone") as string)?.trim();
+    // Absent on a store that sells only to Bangladesh (no country field).
+    const shippingCountryCode = shippingCountryOf(formData.get("shippingCountryCode"));
+    const foreignAddress = !isLocationCountry(shippingCountryCode);
     let customerPhone: string;
     try {
-      customerPhone = validateAndFormatPhone(rawPhone);
+      // A national number is read in the address country (Bangladesh as before).
+      customerPhone = validateAndFormatPhone(rawPhone, undefined, { defaultCountry: shippingCountryCode });
     } catch {
       return {
         success: false,
@@ -245,9 +250,11 @@ export async function processOrder(
       })),
       {
         ...(shippingLocationId ? { shippingMethodId: shippingLocationId } : {}),
-        ...(chosenPath === "delivery" && cityId && zoneId
-          ? { city: cityId, zone: zoneId, area: areaId }
-          : {}),
+        ...(chosenPath === "delivery" && foreignAddress
+          ? { shippingCountryCode }
+          : chosenPath === "delivery" && cityId && zoneId
+            ? { city: cityId, zone: zoneId, area: areaId }
+            : {}),
       },
     );
 
@@ -283,7 +290,7 @@ export async function processOrder(
       city: cityId,
       zone: zoneId,
       shippingMethod: shippingLocationId,
-    });
+    }, shippingCountryCode);
     if (missing.length > 0) {
       throw new Error("Please fill in all required fields and add items to your cart.");
     }
@@ -311,6 +318,7 @@ export async function processOrder(
       };
     });
     const address = checkoutAddressForMode(mode, {
+      ...(foreignAddress ? { shippingCountryCode, ...readForeignAddressFields((field) => formData.get(field)) } : {}),
       shippingAddress,
       city: cityId,
       zone: zoneId,

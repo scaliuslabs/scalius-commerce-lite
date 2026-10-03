@@ -1,0 +1,124 @@
+---
+// One address-book form (Account → Profile): add, or change one saved
+// address. A plain POST, so it works without JavaScript. A store that sells
+// to several countries shows a country field; the chosen country's block
+// shows with CSS alone (Bangladesh: City → Thana → Area; elsewhere the
+// generic fields its rules choose from).
+import AccountDialog from "@/components/account/AccountDialog.astro";
+import LocationFields from "@/components/checkout/LocationFields.astro";
+import ShippingCountryField from "@/components/checkout/ShippingCountryField.astro";
+import ForeignAddressFields from "@/components/checkout/ForeignAddressFields.astro";
+import type { LocationData } from "@/lib/api/types";
+import { LOCATION_COUNTRY } from "@/lib/checkout/shipping-country";
+import type { AddressDraft, AddressDraftField } from "@/lib/account-profile";
+import { accountUi as ui } from "@/lib/account-ui";
+import { ENGLISH_CHECKOUT_LANGUAGE_DATA as copy } from "@scalius/shared/checkout-language";
+
+interface Props {
+  dialogId: string;
+  title: string;
+  draft: AddressDraft;
+  /** The countries the store sells to. */
+  countries: string[];
+  locations: { cities: LocationData[]; zones: LocationData[]; areas: LocationData[] };
+  /** A failed save of this form: shown in the page with its errors. */
+  failed?: boolean;
+  errors?: Partial<Record<AddressDraftField, string>>;
+  message?: string | null;
+  /** Offer "make default" (not for the first address or the default itself). */
+  offerDefault?: boolean;
+}
+
+const { dialogId, title, draft, countries, locations, failed = false, errors = {}, message = null, offerDefault = false } = Astro.props;
+const shipsAbroad = countries.some((country) => country !== LOCATION_COUNTRY);
+const shipsToBangladesh = countries.includes(LOCATION_COUNTRY);
+const prefix = dialogId;
+const firstError = (["address", "city", "zone", "area", "shippingAddressLine2", "shippingDependentLocality", "shippingLocality", "shippingAdminArea", "shippingPostalCode"] as const)
+  .find((key) => errors[key]) ?? null;
+const locationError = errors.city ?? errors.zone ?? errors.area ?? null;
+const fieldClass = ui.field;
+---
+
+<AccountDialog id={dialogId} title={title} inline={failed}>
+  <form method="post" action="/account/profile" class="space-y-4" novalidate data-address-form>
+    <input type="hidden" name="intent" value="address" />
+    {draft.addressId && <input type="hidden" name="addressId" value={draft.addressId} />}
+    <ShippingCountryField
+      id={`${prefix}-country`}
+      countries={countries}
+      selected={draft.countryCode}
+      label={copy.shippingCountryLabel}
+      labelClass={ui.label}
+      fieldClass={fieldClass}
+    />
+    <div>
+      <label for={`${prefix}-address`} class={ui.label}>Address</label>
+      <input
+        id={`${prefix}-address`}
+        name="address"
+        type="text"
+        autocomplete="address-line1"
+        required
+        maxlength="300"
+        placeholder={shipsAbroad ? undefined : "House, road, area"}
+        value={draft.address}
+        aria-invalid={errors.address ? "true" : undefined}
+        aria-describedby={errors.address ? `${prefix}-address-error` : undefined}
+        class={fieldClass}
+        autofocus={firstError === "address"}
+      />
+      {errors.address && <p id={`${prefix}-address-error`} class={ui.fieldError}>{errors.address}</p>}
+    </div>
+    {shipsToBangladesh && (
+      <div data-country-block={shipsAbroad ? "BD" : undefined}>
+        <LocationFields
+          idPrefix={prefix}
+          cities={locations.cities}
+          zones={locations.zones}
+          areas={locations.zones.some((zone) => zone.id === draft.zone) ? locations.areas : []}
+          city={draft.city}
+          zone={draft.zone}
+          area={draft.area}
+          copy={copy}
+          showAreaField
+          nativeRequired={!shipsAbroad}
+          errorId={locationError ? `${prefix}-location-error` : undefined}
+          invalid={Boolean(locationError)}
+          autofocus={firstError === "city" || firstError === "zone" || firstError === "area" ? firstError : null}
+        />
+        {locationError && <p id={`${prefix}-location-error`} class={ui.fieldError}>{locationError}</p>}
+      </div>
+    )}
+    {shipsAbroad && (
+      <ForeignAddressFields
+        idPrefix={prefix}
+        labels={{
+          shippingAddressLine2: copy.shippingAddressLine2Label,
+          shippingDependentLocality: copy.shippingDependentLocalityLabel,
+          shippingLocality: copy.shippingLocalityLabel,
+          shippingAdminArea: copy.shippingAdminAreaLabel,
+          shippingPostalCode: copy.shippingPostalCodeLabel,
+        }}
+        values={draft}
+        errors={errors}
+        labelClass={ui.label}
+        fieldClass={fieldClass}
+        errorClass={`hidden ${ui.fieldError}`}
+        autofocus={firstError && firstError.startsWith("shipping") ? firstError as never : null}
+      />
+    )}
+    {offerDefault && (
+      <label class="flex min-h-11 cursor-pointer items-center gap-3">
+        <input type="checkbox" name="makeDefault" checked={draft.isDefault} class="size-5 shrink-0 accent-primary" />
+        <span class="text-sm text-foreground">Make this my default address</span>
+      </label>
+    )}
+    {failed && message && <p role="alert" class="text-sm text-destructive">{message}</p>}
+    <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+      {failed
+        ? <a href="/account/profile" data-astro-prefetch="false" class={ui.secondaryButton}>Cancel</a>
+        : <button type="button" popovertarget={dialogId} popovertargetaction="hide" class={ui.secondaryButton}>Cancel</button>}
+      <button type="submit" class={ui.primaryButton} data-address-save>Save address</button>
+    </div>
+  </form>
+</AccountDialog>

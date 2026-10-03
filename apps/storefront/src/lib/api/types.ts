@@ -792,6 +792,13 @@ export interface OrderReceipt extends OrderFulfilmentFacts {
   accountLinked: boolean;
   /** Null when nothing ships (pickup, service-only or digital orders). */
   shippingAddress: string | null;
+  /** The rest of the shipping snapshot (MARKETS-DESIGN D7); a Bangladesh order adds City/Thana/Area. */
+  shippingCountryCode?: string | null;
+  shippingAddressLine2?: string | null;
+  shippingDependentLocality?: string | null;
+  shippingLocality?: string | null;
+  shippingAdminArea?: string | null;
+  shippingPostalCode?: string | null;
   totalAmount: number;
   shippingCharge: number;
   discountAmount: number | null;

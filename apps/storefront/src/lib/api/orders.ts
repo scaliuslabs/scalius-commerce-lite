@@ -150,6 +150,8 @@ export type CartValidationResult = {
 
 export type CartValidationOptions = {
   inventoryPool?: "regular" | "preorder" | "backorder";
+  /** Another country's delivery (absent: Bangladesh, with City/Thana/Area). */
+  shippingCountryCode?: string | null;
   city?: string | null;
   zone?: string | null;
   area?: string | null;

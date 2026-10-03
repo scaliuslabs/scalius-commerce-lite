@@ -149,6 +149,11 @@ export function enhanceShippingMethods(
     formatMoney: (amount: number) => string;
     /** The checkout path; delivery when not given. */
     readMode?: () => CheckoutDeliveryMode;
+    /**
+     * Why the address can have no delivery rate (a country without shipping
+     * zones yet), said in place of "choose an address"; null when it can.
+     */
+    readNoDeliveryReason?: () => string | null;
     signal?: AbortSignal;
   },
 ): {
@@ -458,7 +463,7 @@ export function enhanceShippingMethods(
       selectedId = keptId ?? (mode === "pickup" && current.length === 1 ? current[0]!.id : null);
       render();
       setNote("");
-      if (mode !== "pickup") list.append(placeholder(copy.chooseAddressText));
+      if (mode !== "pickup") list.append(placeholder(options.readNoDeliveryReason?.() ?? copy.chooseAddressText));
       emit();
       return;
     }

@@ -595,6 +595,70 @@ describe("cart server order processing: delivery, pickup and nothing to deliver"
     expect(mocks.createOrder).not.toHaveBeenCalled();
   });
 
+  it("sends another country's address by its fields, checks delivery against that country, and never sends Bangladesh's ids", async () => {
+    mocks.validateCartItems.mockResolvedValue({
+      success: true,
+      data: {
+        valid: true, issues: [], items: [validatedLine], subtotal: 300, hasFreeDeliveryProduct: false,
+        requiresDeliveryMethod: true, deliveryMethodKind: "delivery", requiresShipping: true,
+        allowedPaymentMethods: ["cod"],
+        delivery: {
+          kind: "delivery", shippingCharge: 1500, cityName: null, zoneName: null, areaName: null,
+          shippingMethod: { id: "ship_1", name: "International", description: null, baseAmountMinor: 150_000, feeWaived: false },
+          pickup: null,
+        },
+      },
+    });
+
+    const result = await processOrder(formWith({
+      shippingCountryCode: "US",
+      customerPhone: "(415) 555-2671",
+      shippingAddress: "1 Infinite Loop",
+      shippingLocality: "Cupertino",
+      shippingAdminArea: "CA",
+      shippingPostalCode: "95014",
+    }));
+
+    expect(result).toMatchObject({ success: true });
+    expect(mocks.validateCartItems).toHaveBeenCalledWith(expect.any(Array), { shippingMethodId: "ship_1", shippingCountryCode: "US" });
+    const payload = mocks.createOrder.mock.calls[0]![0];
+    // A national number is read in the address country.
+    expect(payload).toMatchObject({
+      customerPhone: "+14155552671",
+      shippingCountryCode: "US",
+      shippingAddress: "1 Infinite Loop",
+      shippingLocality: "Cupertino",
+      shippingAdminArea: "CA",
+      shippingPostalCode: "95014",
+      city: null,
+      zone: null,
+      area: null,
+    });
+  });
+
+  it("keeps a Bangladesh order's payload as before: no country, City/Thana/Area ids", async () => {
+    mocks.validateCartItems.mockResolvedValue({
+      success: true,
+      data: {
+        valid: true, issues: [], items: [validatedLine], subtotal: 300, hasFreeDeliveryProduct: false,
+        requiresDeliveryMethod: true, deliveryMethodKind: "delivery", requiresShipping: true,
+        allowedPaymentMethods: ["cod"],
+        delivery: {
+          kind: "delivery", shippingCharge: 60, cityName: "Dhaka", zoneName: "Mirpur", areaName: null,
+          shippingMethod: { id: "ship_1", name: "Inside Dhaka", description: null, baseAmountMinor: 6000, feeWaived: false },
+          pickup: null,
+        },
+      },
+    });
+
+    await processOrder(formWith({ shippingAddress: "House 1, Road 2, Dhaka" }));
+
+    expect(mocks.validateCartItems).toHaveBeenCalledWith(expect.any(Array), { shippingMethodId: "ship_1", city: "city_1", zone: "zone_1", area: null });
+    const payload = mocks.createOrder.mock.calls[0]![0];
+    expect(payload).not.toHaveProperty("shippingCountryCode");
+    expect(payload).toMatchObject({ shippingAddress: "House 1, Road 2, Dhaka", city: "city_1", zone: "zone_1", cityName: "Dhaka" });
+  });
+
   it("requires the address for a delivery rate", async () => {
     mocks.validateCartItems.mockResolvedValue({
       success: true,

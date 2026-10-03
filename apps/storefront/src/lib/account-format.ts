@@ -2,6 +2,7 @@
 // one place order, one payment line and the buyer's words for open requests.
 
 import { formatMoney } from "@/lib/currency";
+import { shippingCountryName } from "@/lib/checkout/shipping-country";
 import { getOrderPaymentPresentation } from "@/lib/order-success-state";
 import { ENGLISH_CHECKOUT_LANGUAGE_DATA } from "@scalius/shared/checkout-language";
 
@@ -53,6 +54,56 @@ export function formatDeliveryArea(place: {
   cityName?: string | null;
 }): string {
   return [place.areaName, place.zoneName, place.cityName].filter(Boolean).join(", ");
+}
+
+/** A saved or shipped address as card lines: a Bangladesh one as always (line, then area, thana, city). */
+export function formatAddressLines(address: {
+  countryCode?: string | null;
+  line1?: string | null;
+  line2?: string | null;
+  dependentLocality?: string | null;
+  locality?: string | null;
+  adminArea?: string | null;
+  postalCode?: string | null;
+  areaName?: string | null;
+  zoneName?: string | null;
+  cityName?: string | null;
+}, language = "en"): string[] {
+  if (!address.countryCode || address.countryCode === "BD") {
+    return [address.line1, address.line2, formatDeliveryArea(address)].filter((line): line is string => Boolean(line?.trim()));
+  }
+  return [
+    address.line1,
+    address.line2,
+    [address.dependentLocality, address.locality].filter(Boolean).join(", "),
+    [address.adminArea, address.postalCode].filter(Boolean).join(" "),
+    shippingCountryName(address.countryCode, language),
+  ].filter((line): line is string => Boolean(line?.trim()));
+}
+
+/** The order snapshot's places after its first line (Bangladesh: area, thana, city, as always). */
+export interface OrderShippingPlaces {
+  shippingCountryCode?: string | null;
+  shippingAddressLine2?: string | null;
+  shippingDependentLocality?: string | null;
+  shippingLocality?: string | null;
+  shippingAdminArea?: string | null;
+  shippingPostalCode?: string | null;
+  areaName?: string | null;
+  zoneName?: string | null;
+  cityName?: string | null;
+}
+
+export function formatOrderPlaces(order: OrderShippingPlaces, language = "en"): string {
+  if (!order.shippingCountryCode || order.shippingCountryCode === "BD") return formatDeliveryArea(order);
+  return formatAddressLines({
+    countryCode: order.shippingCountryCode,
+    line2: order.shippingAddressLine2,
+    dependentLocality: order.shippingDependentLocality,
+    locality: order.shippingLocality,
+    adminArea: order.shippingAdminArea,
+    postalCode: order.shippingPostalCode,
+  }, language).join(", ");
 }
 
 const OPEN_REQUEST_LABELS: Record<string, string> = {

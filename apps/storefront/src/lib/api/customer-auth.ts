@@ -240,19 +240,41 @@ function clearReadableCustomerAuthMirrorCookie(): void {
   document.cookie = "cs_auth=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
 }
 
+/** One address of the account's address book (MARKETS-DESIGN D7). */
+export interface CustomerAddress {
+  id: string;
+  isDefault: boolean;
+  /** ISO 3166-1 alpha-2. */
+  countryCode: string;
+  /** The recipient when not the account holder (null: the account's name). */
+  name: string | null;
+  company: string | null;
+  line1: string | null;
+  line2: string | null;
+  dependentLocality: string | null;
+  locality: string | null;
+  adminArea: string | null;
+  postalCode: string | null;
+  /** E.164; null: the account's phone. */
+  phone: string | null;
+  /** Bangladesh: the delivery locations (ids and names). */
+  city: string | null;
+  zone: string | null;
+  area: string | null;
+  cityName: string | null;
+  zoneName: string | null;
+  areaName: string | null;
+  validationSkipped: boolean;
+}
+
 export interface CustomerInfo {
   email: string;
   name: string;
   phone?: string;
   customerId?: string;
-  address?: string | null;
-  city?: string | null;
-  cityName?: string | null;
-  zone?: string | null;
-  zoneName?: string | null;
-  area?: string | null;
-  areaName?: string | null;
-  /** A delivery address is saved (checkout can prefill it). */
+  /** The address book's default address (checkout prefills it), or null. */
+  defaultAddress?: CustomerAddress | null;
+  /** A complete default delivery address is saved (checkout can prefill it). */
   profileComplete?: boolean;
 }
 
@@ -437,6 +459,13 @@ export interface CustomerOrder {
   fulfillmentStatus: string;
   /** Null when nothing ships (pickup, service-only or digital orders). */
   shippingAddress: string | null;
+  /** The rest of the shipping snapshot (MARKETS-DESIGN D7); a Bangladesh order adds City/Thana/Area. */
+  shippingCountryCode?: string | null;
+  shippingAddressLine2?: string | null;
+  shippingDependentLocality?: string | null;
+  shippingLocality?: string | null;
+  shippingAdminArea?: string | null;
+  shippingPostalCode?: string | null;
   requiresShipping?: boolean;
   shippingMethodKind?: DeliveryMethodKind | null;
   cityName: string | null;
@@ -632,6 +661,13 @@ export interface CustomerOrderDetailOrder {
   expectedDelivery: string | null;
   /** Null when nothing ships (pickup, service-only or digital orders). */
   shippingAddress: string | null;
+  /** The rest of the shipping snapshot (MARKETS-DESIGN D7); a Bangladesh order adds City/Thana/Area. */
+  shippingCountryCode?: string | null;
+  shippingAddressLine2?: string | null;
+  shippingDependentLocality?: string | null;
+  shippingLocality?: string | null;
+  shippingAdminArea?: string | null;
+  shippingPostalCode?: string | null;
   city: string | null;
   zone: string | null;
   area: string | null;
@@ -678,15 +714,9 @@ export interface CustomerOrderDetail {
   discounts?: OrderReceiptDiscount[];
 }
 
+/** The profile is the name; addresses are in the address book. */
 export interface ProfileUpdateData {
   name?: string;
-  address?: string;
-  city?: string;
-  zone?: string;
-  area?: string;
-  cityName?: string;
-  zoneName?: string;
-  areaName?: string;
 }
 
 /**

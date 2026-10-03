@@ -9,6 +9,13 @@ import CheckoutPhoneField from "@/components/CheckoutPhoneField.astro";
 import CheckoutLoadingOverlay from "@/components/CheckoutLoadingOverlay.astro";
 import CheckoutProgress from "@/components/CheckoutProgress.astro";
 import MarketingConsentField from "@/components/checkout/MarketingConsentField.astro";
+import ShippingCountryField from "@/components/checkout/ShippingCountryField.astro";
+import ForeignAddressFields from "@/components/checkout/ForeignAddressFields.astro";
+import {
+  LOCATION_COUNTRY,
+  defaultShippingCountry,
+  storeShippingCountries,
+} from "@/lib/checkout/shipping-country";
 import { marketingConsentCheckbox } from "@/lib/checkout/marketing-consent";
 import { processOrder } from "@/lib/cart/server";
 import {
@@ -23,6 +30,7 @@ import {
   isCodOnly,
 } from "@/lib/api";
 import { markRenderUncacheable } from "@/lib/cache-policy";
+import { getRuntimePresence } from "@/lib/api/runtime";
 import { getCustomerSessionTokenFromCookie } from "@/lib/customer-session-cookie";
 import {
   createOrderReceiptCookieHeader,
@@ -267,6 +275,13 @@ if (Astro.request.method === "POST" && codOnly) {
     isProcessing = false;
   }
 }
+
+// The countries the store sells to (its active markets): a store that sells
+// only to Bangladesh shows no country field and its form is unchanged.
+const shippingCountries = storeShippingCountries(layoutData?.markets);
+const shipsAbroad = shippingCountries.some((country) => country !== LOCATION_COUNTRY);
+const shipsToBangladesh = shippingCountries.includes(LOCATION_COUNTRY);
+const shippingCountry = defaultShippingCountry(layoutData?.markets, getRuntimePresence(), shippingCountries);
 
 // Determine submit button label
 const submitLabel = staleCustomerSession && checkoutConfig.guestCheckoutEnabled !== false
@@ -627,6 +642,15 @@ const marketingConsent = marketingConsentCheckbox(checkoutConfig, lang.code);
                 )
               }
               <fieldset class="min-w-0 space-y-3 border-0 p-0 group-data-[delivery-mode=pickup]:hidden" data-address-fields>
+              <ShippingCountryField
+                id="checkout-country"
+                countries={shippingCountries}
+                selected={shippingCountry}
+                label={copy.shippingCountryLabel}
+                language={checkoutLanguageBaseCode(lang.code)}
+                labelClass={labelClass}
+                fieldClass={fieldClass}
+              />
               <div>
                 <label for="shippingAddress" class={labelClass}>
                   {copy.shippingAddressLabel}
@@ -637,7 +661,7 @@ const marketingConsent = marketingConsentCheckbox(checkoutConfig, lang.code);
                   name="shippingAddress"
                   autocomplete="street-address"
                   aria-required="true"
-                  minlength={MIN_SHIPPING_ADDRESS_LENGTH}
+                  minlength={shipsAbroad ? undefined : MIN_SHIPPING_ADDRESS_LENGTH}
                   maxlength="500"
                   aria-describedby="shippingAddressError"
                   placeholder={copy.shippingAddressPlaceholder}
@@ -647,15 +671,32 @@ const marketingConsent = marketingConsentCheckbox(checkoutConfig, lang.code);
                 <p id="shippingAddressError" class={errorClass} role="alert"></p>
               </div>
 
-              <div>
-                <LocationFields
-                  cities={cities}
-                  copy={copy}
-                  showAreaField={lang.fieldVisibility.showAreaField}
-                  errorId="shippingLocationError"
+              {shipsToBangladesh && (
+                <div data-country-block={shipsAbroad ? "BD" : undefined}>
+                  <LocationFields
+                    cities={cities}
+                    copy={copy}
+                    showAreaField={lang.fieldVisibility.showAreaField}
+                    errorId="shippingLocationError"
+                  />
+                  <p id="shippingLocationError" class={errorClass} role="alert"></p>
+                </div>
+              )}
+              {shipsAbroad && (
+                <ForeignAddressFields
+                  idPrefix="checkout"
+                  labels={{
+                    shippingAddressLine2: copy.shippingAddressLine2Label,
+                    shippingDependentLocality: copy.shippingDependentLocalityLabel,
+                    shippingLocality: copy.shippingLocalityLabel,
+                    shippingAdminArea: copy.shippingAdminAreaLabel,
+                    shippingPostalCode: copy.shippingPostalCodeLabel,
+                  }}
+                  labelClass={labelClass}
+                  fieldClass={fieldClass}
+                  errorClass={errorClass}
                 />
-                <p id="shippingLocationError" class={errorClass} role="alert"></p>
-              </div>
+              )}
               </fieldset>
 
               <CheckoutShippingMethods
@@ -953,6 +994,9 @@ const marketingConsent = marketingConsentCheckbox(checkoutConfig, lang.code);
   import { rememberSubmittedCart } from "@/lib/checkout/receipt-finalization";
   import { readStoredGiftCards } from "@/lib/checkout/gift-cards";
   import { findNamedCheckoutControl } from "@/lib/checkout/form-controls";
+  import { formatCheckoutLanguageText } from "@scalius/shared/checkout-language-format";
+  import { shippingCountryName } from "@/lib/checkout/shipping-country";
+  import { enhanceShippingCountry } from "@/lib/checkout/country-address";
   import {
     checkoutInformationFields,
     enhanceCheckoutFields,
@@ -970,13 +1014,36 @@ const marketingConsent = marketingConsentCheckbox(checkoutConfig, lang.code);
     name?: string | null;
     phone?: string | null;
     email?: string | null;
-    address?: string | null;
-    city?: string | null;
-    cityName?: string | null;
-    zone?: string | null;
-    zoneName?: string | null;
-    area?: string | null;
-    areaName?: string | null;
+    /** The address book's default address (a Bangladesh one fills City/Thana/Area). */
+    defaultAddress?: {
+      countryCode?: string | null;
+      line1?: string | null;
+      line2?: string | null;
+      dependentLocality?: string | null;
+      locality?: string | null;
+      adminArea?: string | null;
+      postalCode?: string | null;
+      city?: string | null;
+      cityName?: string | null;
+      zone?: string | null;
+      zoneName?: string | null;
+      area?: string | null;
+      areaName?: string | null;
+    } | null;
+  };
+
+  /** The country select (only on a store that sells to several countries). */
+  const countrySelect = () => document.querySelector<HTMLSelectElement>("select[data-shipping-country]");
+  /** The country the form posts: Bangladesh unless the store sells elsewhere and the buyer chose it. */
+  const chosenShippingCountry = () =>
+    findNamedCheckoutControl(document, "shippingCountryCode")?.value || "BD";
+  /** Chooses a country the store sells to, as if the buyer had (the address blocks and options follow). */
+  const chooseShippingCountry = (countryCode: string | null | undefined) => {
+    const select = countrySelect();
+    if (!select || !countryCode || select.value === countryCode) return;
+    if (![...select.options].some((option) => option.value === countryCode)) return;
+    select.value = countryCode;
+    select.dispatchEvent(new Event("change", { bubbles: true }));
   };
 
   window.__scaliusCartPageAbortController?.abort();
@@ -1034,6 +1101,15 @@ const marketingConsent = marketingConsentCheckbox(checkoutConfig, lang.code);
     isFeeWaived: () => cartHasFreeDeliveryItem(cartStore.get().items),
     formatMoney,
     readMode: () => readCheckoutDeliveryMode(),
+    // No delivery rates outside Bangladesh until shipping zones by country (step 3b).
+    readNoDeliveryReason: () => {
+      const countryCode = chosenShippingCountry();
+      return countryCode === "BD"
+        ? null
+        : formatCheckoutLanguageText(checkoutCopy.deliveryCountryUnavailableText, {
+            country: shippingCountryName(countryCode, document.documentElement.lang || "en"),
+          });
+    },
     signal: cartPageSignal,
   });
 
@@ -1096,11 +1172,16 @@ const marketingConsent = marketingConsentCheckbox(checkoutConfig, lang.code);
     : null;
   // An address already in the form (restored by the browser) gets its rates too.
   const formLocation = (name: string) => findNamedCheckoutControl(document, name)?.value ?? "";
-  void shippingMethods?.setAddress({
-    cityId: formLocation("city"),
-    zoneId: formLocation("zone"),
-    areaId: formLocation("area"),
-  });
+  // Another country has no City/Thana/Area: its delivery options say why there are none.
+  const formAddress = () => chosenShippingCountry() === "BD"
+    ? { cityId: formLocation("city"), zoneId: formLocation("zone"), areaId: formLocation("area") }
+    : { cityId: "", zoneId: "", areaId: "" };
+  void shippingMethods?.setAddress(formAddress());
+  countrySelect()?.addEventListener(
+    "change",
+    () => void shippingMethods?.setAddress(formAddress()),
+    { signal: cartPageSignal },
+  );
   window.addEventListener(
     "location-prefill",
     (event) =>
@@ -1153,7 +1234,27 @@ const marketingConsent = marketingConsentCheckbox(checkoutConfig, lang.code);
       draft && field in draft ? draft[field] : fallback;
     if (!buyerEditedFields.has("customerName")) setFieldValue("customerName", pick("customerName", customer.name), overwrite);
     if (!buyerEditedFields.has("customerEmail")) setFieldValue("customerEmail", pick("customerEmail", customer.email), overwrite);
-    if (!buyerEditedFields.has("shippingAddress")) setFieldValue("shippingAddress", pick("shippingAddress", customer.address), overwrite);
+    const saved = customer.defaultAddress ?? null;
+    // A saved address in another country fills only where the store sells there.
+    const savedCountry = saved?.countryCode || "BD";
+    const savedFits = savedCountry === "BD" ? !countrySelect() || [...countrySelect()!.options].some((option) => option.value === "BD")
+      : Boolean(countrySelect() && [...countrySelect()!.options].some((option) => option.value === savedCountry));
+    if (savedFits && !buyerEditedFields.has("shippingCountryCode") && !(draft && "shippingCountryCode" in draft)) {
+      chooseShippingCountry(savedCountry);
+    }
+    if (!buyerEditedFields.has("shippingAddress")) setFieldValue("shippingAddress", pick("shippingAddress", savedFits ? saved?.line1 : null), overwrite);
+    if (savedFits && savedCountry !== "BD") {
+      const foreign = {
+        shippingAddressLine2: saved?.line2,
+        shippingDependentLocality: saved?.dependentLocality,
+        shippingLocality: saved?.locality,
+        shippingAdminArea: saved?.adminArea,
+        shippingPostalCode: saved?.postalCode,
+      } as const;
+      for (const [field, value] of Object.entries(foreign)) {
+        if (!buyerEditedFields.has(field)) setFieldValue(field, pick(field as keyof NonNullable<typeof draft>, value), overwrite);
+      }
+    }
     const phone = pick("customerPhone", customer.phone);
     if (phone && !buyerEditedFields.has("customerPhone")) {
       // The field validates the profile phone against the store's policy.
@@ -1166,7 +1267,13 @@ const marketingConsent = marketingConsentCheckbox(checkoutConfig, lang.code);
     "customerPhone",
     "customerEmail",
     "deliveryMode",
+    "shippingCountryCode",
     "shippingAddress",
+    "shippingAddressLine2",
+    "shippingDependentLocality",
+    "shippingLocality",
+    "shippingAdminArea",
+    "shippingPostalCode",
     "city",
     "cityName",
     "zone",
@@ -1287,7 +1394,11 @@ const marketingConsent = marketingConsentCheckbox(checkoutConfig, lang.code);
   const restoreCheckoutFormDraft = (ownerVerified = !isSignedIn()) => {
     const draft = ownerVerified ? readCheckoutFormDraft() : null;
     if (!draft) return;
+    chooseShippingCountry(draft.shippingCountryCode);
     for (const field of contactFields) setFieldValue(field, draft[field], false);
+    for (const field of ["shippingAddressLine2", "shippingDependentLocality", "shippingLocality", "shippingAdminArea", "shippingPostalCode"] as const) {
+      setFieldValue(field, draft[field], false);
+    }
     if (draft.customerPhone) {
       window.dispatchEvent(
         new CustomEvent("phone-prefill", { detail: draft.customerPhone }),
@@ -1310,7 +1421,7 @@ const marketingConsent = marketingConsentCheckbox(checkoutConfig, lang.code);
       const input = event.target;
       if (
         event.isTrusted &&
-        (input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement)
+        (input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement || input instanceof HTMLSelectElement)
       ) {
         const field = input.id === "customerPhone-input" ? "customerPhone" : input.name;
         if (checkoutDraftFields.some((name) => name === field)) {
@@ -1384,7 +1495,8 @@ const marketingConsent = marketingConsentCheckbox(checkoutConfig, lang.code);
             area: draft?.area,
             areaName: draft?.areaName,
           }
-        : customer;
+        // The default address fills City/Thana/Area only when it is in Bangladesh.
+        : (customer.defaultAddress?.countryCode ?? "BD") === "BD" ? customer.defaultAddress : null;
       if (!preferred?.cityName && !preferred?.city) return;
       if (!overwrite) {
         const existingCity =
@@ -1802,6 +1914,12 @@ const marketingConsent = marketingConsentCheckbox(checkoutConfig, lang.code);
           checkoutData.deliveryMode = deliveryMode;
           const locationValue = (name: string) => findNamedCheckoutControl(document, name)?.value;
           Object.assign(checkoutData, checkoutAddressForMode(deliveryMode, {
+            shippingCountryCode: chosenShippingCountry(),
+            shippingAddressLine2: locationValue("shippingAddressLine2"),
+            shippingDependentLocality: locationValue("shippingDependentLocality"),
+            shippingLocality: locationValue("shippingLocality"),
+            shippingAdminArea: locationValue("shippingAdminArea"),
+            shippingPostalCode: locationValue("shippingPostalCode"),
             shippingAddress: locationValue("shippingAddress"),
             city: locationValue("city"),
             zone: locationValue("zone"),
@@ -1864,4 +1982,9 @@ const marketingConsent = marketingConsentCheckbox(checkoutConfig, lang.code);
       { signal: cartPageSignal },
     );
   });
+
+  // ── Address country ──
+  // The chosen country's rules hide the fields it doesn't use and mark the
+  // required ones (the form already works without this).
+  enhanceShippingCountry(document, { signal: cartPageSignal });
 </script>

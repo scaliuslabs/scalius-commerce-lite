@@ -33,7 +33,9 @@ const script = ts.transpileModule(
 
 const customer = {
   name: "Test customer", phone: "+8801712345678", email: "customer@example.test",
-  address: "House 10, Road 2", city: "city_dhaka", cityName: "Dhaka", zone: "zone_mirpur", zoneName: "Mirpur",
+  defaultAddress: {
+    countryCode: "BD", line1: "House 10, Road 2", city: "city_dhaka", cityName: "Dhaka", zone: "zone_mirpur", zoneName: "Mirpur",
+  },
 };
 const phonePrefill = vi.fn();
 const locationPrefill = vi.fn();
@@ -70,7 +72,8 @@ function startCart() {
 }
 
 async function finishSession() {
-  resolveSession({ authenticated: true, customer });
+  // The default address in brief: the prefill reads only these fields.
+  resolveSession({ authenticated: true, customer: customer as unknown as NonNullable<AuthState["customer"]> });
   await Promise.resolve();
 }
 
@@ -117,7 +120,7 @@ describe("customer checkout prefill", () => {
   ] as const)("does not claim untouched blanks after %s (partial fields: %s)", async (eventName, partialFields) => {
     if (partialFields) {
       control("customerName").value = customer.name;
-      control("shippingAddress").value = customer.address;
+      control("shippingAddress").value = customer.defaultAddress.line1;
     }
     startCart();
     const target = eventName === "cart-updated" ? document : window;
@@ -131,10 +134,10 @@ describe("customer checkout prefill", () => {
     await finishSession();
     expect(control("customerName").value).toBe(customer.name);
     expect(control("customerEmail").value).toBe(customer.email);
-    expect(control("shippingAddress").value).toBe(customer.address);
+    expect(control("shippingAddress").value).toBe(customer.defaultAddress.line1);
     expect(phonePrefill).toHaveBeenCalledOnce();
     expect(phonePrefill.mock.calls[0]?.[0].detail).toBe(customer.phone);
-    expect(locationPrefill.mock.calls[0]?.[0].detail).toMatchObject({ city: customer.city, zone: customer.zone });
+    expect(locationPrefill.mock.calls[0]?.[0].detail).toMatchObject({ city: customer.defaultAddress.city, zone: customer.defaultAddress.zone });
   });
 
   it("preserves buyer clears when the session returns before the draft debounce", async () => {

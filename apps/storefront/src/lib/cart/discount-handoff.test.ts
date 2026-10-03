@@ -33,6 +33,8 @@ import {
 } from "../checkout/session-state";
 import { rememberSubmittedCart } from "../checkout/receipt-finalization";
 import { findNamedCheckoutControl } from "../checkout/form-controls";
+import { shippingCountryName } from "../checkout/shipping-country";
+import { enhanceShippingCountry } from "../checkout/country-address";
 import { pagePath } from "../presence-url";
 import { checkoutInformationFields, enhanceCheckoutFields, setFieldError } from "../checkout/field-validation";
 import {
@@ -264,6 +266,9 @@ async function startCartPage(): Promise<void> {
     showCheckoutLoadingOverlay: vi.fn(),
     // The page's presence rule for the checkout link (a root page here).
     pagePath,
+    formatCheckoutLanguageText,
+    shippingCountryName,
+    enhanceShippingCountry,
   };
   new Function(
     ...Object.keys(dependencies),
@@ -532,7 +537,10 @@ describe("cart discount checkout handoff", () => {
     expect(readCheckoutFormDraft()?.customerName).toBe("Previous Buyer");
 
     window.dispatchEvent(new CustomEvent("customer-login", {
-      detail: { customerId: "cust_2", name: "Account Owner", email: "owner@example.com", address: "Owner road 12, Dhaka" },
+      detail: {
+        customerId: "cust_2", name: "Account Owner", email: "owner@example.com",
+        defaultAddress: { countryCode: "BD", line1: "Owner road 12, Dhaka" },
+      },
     }));
     expect(name.value).toBe("Account Owner");
     expect((document.getElementById("customerEmail") as HTMLInputElement).value).toBe("owner@example.com");

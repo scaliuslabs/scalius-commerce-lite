@@ -1,5 +1,6 @@
 ---
 import OrderConversationPanel from "@/components/conversation/OrderConversationPanel.astro";
+import { formatOrderPlaces } from "@/lib/account-format";
 import LineExtras from "@/components/order/LineExtras.astro";
 import Layout from "@/layouts/Layout.astro";
 import CheckoutProgress from "@/components/CheckoutProgress.astro";
@@ -356,7 +357,10 @@ const receiptDeliveryDetails = !showsReceiptDeliveryRow
     ].filter(Boolean).join(" · ")
   : copy.orderReceiptDeliveryNotRecordedText;
 const deliveryLocality = order && deliveryBlock?.mode === "ship"
-  ? [order.areaName || order.area, order.zoneName || order.zone, order.cityName || order.city]
+  ? order.shippingCountryCode && order.shippingCountryCode !== "BD"
+    // Another country's places, then the country (MARKETS-DESIGN D7).
+    ? formatOrderPlaces(order, checkoutLanguageBaseCode(checkoutLanguage.code))
+    : [order.areaName || order.area, order.zoneName || order.zone, order.cityName || order.city]
       .filter((value): value is string => Boolean(value))
       .join(", ")
   : "";
