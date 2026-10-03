@@ -1,52 +1,61 @@
 # Contributing to Scalius Commerce Lite
 
-Thank you for your interest in Scalius Commerce Lite!
+This guide is for people who report issues or want to change the code. It covers issue reports, the pull request policy, and the checks to run before you push.
 
-## Issues Welcome
+## Report an issue
 
-We welcome reproducible bug reports and outcome-focused product proposals through the repository's [structured issue forms](https://github.com/scaliuslabs/scalius-commerce-lite/issues/new/choose).
+Use the [structured issue forms](https://github.com/scaliuslabs/scalius-commerce-lite/issues/new/choose) for reproducible bugs and product proposals.
 
-- Search open and closed issues before filing a new one.
+- Search open and closed issues first.
 - Report one independently deliverable problem per issue.
-- Describe the affected user, observed behavior, expected outcome, and evidence. A preferred implementation by itself is not a product requirement.
+- Describe the affected user, the observed behavior, the expected outcome, and the evidence. A preferred implementation is not a requirement by itself.
 - Never post passwords, API keys, OTPs, receipt proofs, session tokens, raw buyer data, or other sensitive information.
 
-Maintainers classify work with a native GitHub issue type plus status, priority, and product-area labels. The definitions and triage rules live in [`.github/LABELS.md`](./.github/LABELS.md).
+Maintainers classify each issue with a GitHub issue type plus status, priority, and area labels. [.github/LABELS.md](.github/LABELS.md) defines them. For installation help and questions, use [Discord](https://scalius.com/discord) ([.github/SUPPORT.md](.github/SUPPORT.md)).
 
-## Code Contributions
+## Pull requests
 
-**We are not accepting unsolicited pull requests at this time.** The codebase is under active development and the architecture is evolving. We may open contributions in the future.
+**The project does not accept unsolicited pull requests.** The architecture is still changing.
 
-If a maintainer invites a contribution, work from the repository default branch, link the accepted issue, follow the pull request template, and keep the change scoped to the agreed outcome.
+If a maintainer invites a contribution:
 
-## Working on the code
+1. Work from the repository default branch (`mono-repo`).
+2. Link the accepted issue.
+3. Keep the change to the agreed outcome.
+4. Fill in the [pull request template](.github/pull_request_template.md).
 
-Set up a local environment with the [root README](./README.md): `pnpm install`, `pnpm dev:setup`, `pnpm dev`.
+## Work on the code
 
-Run the same gates CI runs before pushing:
+Set up a local environment with the [README](README.md): `pnpm install`, `pnpm dev:setup`, `pnpm dev`. Run every command from the repository root.
+
+CI runs the checks below. Run them before you push:
 
 ```bash
+pnpm repo:check        # repository hygiene and whitespace
+pnpm check:env         # no Wrangler `vars`, only the allowed bindings
+pnpm --filter @scalius/database check:migrations
+pnpm generate:sdk      # commit any change in packages/api-client
 pnpm lint
-pnpm typecheck        # tsc, not esbuild
-pnpm test
-pnpm check:env        # no Wrangler `vars` entries
-pnpm generate:sdk     # then commit any regenerated @scalius/api-client output
+pnpm typecheck
+pnpm test:ci
+pnpm build
+pnpm run deploy:api -- --dry-run
+pnpm check:dist-secrets
+pnpm check:build-canaries
 ```
 
-CI additionally runs repository hygiene, a dependency audit, migration metadata
-checks, `pnpm build`, an API deploy dry run, and a dist secret guard, and fails
-if the working tree is dirty afterwards.
+CI also runs `pnpm audit --audit-level moderate` and fails when the working tree is dirty after these steps.
 
-Never commit secrets, `.dev.vars`, or real buyer data.
+Never commit secrets, `.dev.vars`, `.env*` files, or real buyer data.
 
 ## License
 
-This project is licensed under the **GNU Affero General Public License v3.0 (AGPL v3)**. See [LICENSE](./LICENSE) for details.
+The project is licensed under the [GNU Affero General Public License v3.0](LICENSE). The one exception is the storefront (`apps/storefront/`), which is MIT-licensed ([apps/storefront/LICENSE](apps/storefront/LICENSE)). The storefront is part of this repository: use the same issue forms, branch, and `pnpm` commands for it.
 
 ## Security
 
-If you discover a security vulnerability, **do not open a public issue**. Please report it to **security@scalius.com**. See [SECURITY.md](./SECURITY.md) for details.
+Do not open a public issue for a security vulnerability. Follow [SECURITY.md](SECURITY.md).
 
-## Code of Conduct
+## Code of conduct
 
-This project follows the [Contributor Covenant Code of Conduct](./CODE_OF_CONDUCT.md).
+This project follows the [Contributor Covenant](CODE_OF_CONDUCT.md).
