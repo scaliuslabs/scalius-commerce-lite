@@ -53,6 +53,27 @@ export function createAppProviderRuntime(options: { env: Env; db: Database; ctx?
   };
 }
 
+/** The parts of a Hono request context provider work needs. */
+export interface RequestLike {
+  env: Env;
+  req: { raw: Request };
+  get(key: "db"): Database;
+  executionCtx?: unknown;
+}
+
+function executionContextOf(c: RequestLike): ExecutionContext | undefined {
+  try {
+    return c.executionCtx as ExecutionContext | undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** The runtime app providers of one Hono request use (one plugin host per request). */
+export function requestProviderRuntime(c: RequestLike): AppProviderRuntime {
+  return createAppProviderRuntime({ env: c.env, db: c.get("db"), ctx: executionContextOf(c) });
+}
+
 /** What an app provider's saved settings allow, as every settings page and readiness check reads it. */
 export interface AppProviderSettings {
   /** The app is active, approved for the port and runnable here. */

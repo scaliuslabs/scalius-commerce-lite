@@ -36,9 +36,11 @@ import {
 import {
   createAppProviderRuntime,
   readAppProviderSettings,
+  requestProviderRuntime,
   withSignal,
   type AppProviderRuntime,
   type AppProviderSettings,
+  type RequestLike,
 } from "./runtime";
 
 /** An app gateway's "saved settings": what readiness and every call check first. */
@@ -176,27 +178,7 @@ export async function loadPaymentProviders(runtime: AppProviderRuntime): Promise
   return installations.length === 0 ? BUILT_IN_PAYMENT_PROVIDERS : createPaymentProviders(appPaymentGateways(runtime, installations));
 }
 
-interface RequestLike {
-  env: Env;
-  req: { raw: Request };
-  get(key: "db"): Database;
-  executionCtx?: unknown;
-}
-
 const perRequest = new WeakMap<Request, Promise<PaymentProviders>>();
-
-function executionContextOf(c: RequestLike): ExecutionContext | undefined {
-  try {
-    return c.executionCtx as ExecutionContext | undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-/** The runtime app providers of one Hono request use (one plugin host per request). */
-export function requestProviderRuntime(c: RequestLike): AppProviderRuntime {
-  return createAppProviderRuntime({ env: c.env, db: c.get("db"), ctx: executionContextOf(c) });
-}
 
 /**
  * The gateways one request can use, read once per request. Built-in ids

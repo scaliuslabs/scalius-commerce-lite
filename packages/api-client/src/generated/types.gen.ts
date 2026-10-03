@@ -55276,6 +55276,212 @@ export type PutApiV1AdminSettingsMarketingConsentResponses = {
 
 export type PutApiV1AdminSettingsMarketingConsentResponse = PutApiV1AdminSettingsMarketingConsentResponses[keyof PutApiV1AdminSettingsMarketingConsentResponses];
 
+export type GetApiV1AdminSettingsProvidersData = {
+    body?: never;
+    path?: never;
+    query: {
+        kind: 'payment' | 'courier' | 'sms' | 'email' | 'fraud' | 'tax';
+    };
+    url: '/api/v1/admin/settings/providers';
+};
+
+export type GetApiV1AdminSettingsProvidersErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsProvidersError = GetApiV1AdminSettingsProvidersErrors[keyof GetApiV1AdminSettingsProvidersErrors];
+
+export type GetApiV1AdminSettingsProvidersResponses = {
+    /**
+     * App providers
+     */
+    200: {
+        success: true;
+        data: {
+            providers: Array<{
+                id: string;
+                kind: 'payment' | 'courier' | 'sms' | 'email' | 'fraud' | 'tax';
+                pluginId: string;
+                appName: string;
+                name: string;
+                operations: Array<string>;
+                canTestConnection: boolean;
+                readiness: {
+                    configured: boolean;
+                    enabled: boolean;
+                    usable: boolean;
+                    missingFields: Array<string>;
+                    credentialErrors: Array<string>;
+                    blockedReason?: string;
+                };
+                environment: 'test' | 'live' | 'unknown';
+            }>;
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsProvidersResponse = GetApiV1AdminSettingsProvidersResponses[keyof GetApiV1AdminSettingsProvidersResponses];
+
+export type PostApiV1AdminSettingsProvidersByIdTestData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/settings/providers/{id}/test';
+};
+
+export type PostApiV1AdminSettingsProvidersByIdTestErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Rate limit exceeded
+     */
+    429: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Server error
+     */
+    500: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminSettingsProvidersByIdTestError = PostApiV1AdminSettingsProvidersByIdTestErrors[keyof PostApiV1AdminSettingsProvidersByIdTestErrors];
+
+export type PostApiV1AdminSettingsProvidersByIdTestResponses = {
+    /**
+     * The provider's answer
+     */
+    200: {
+        success: true;
+        data: {
+            ok: boolean;
+            message: string;
+        };
+    };
+};
+
+export type PostApiV1AdminSettingsProvidersByIdTestResponse = PostApiV1AdminSettingsProvidersByIdTestResponses[keyof PostApiV1AdminSettingsProvidersByIdTestResponses];
+
 export type PutApiV1AdminOrdersByIdStatusData = {
     body: {
         status: 'pending' | 'processing' | 'confirmed' | 'shipped' | 'delivered' | 'completed' | 'cancelled' | 'returned' | 'refunded' | 'incomplete';

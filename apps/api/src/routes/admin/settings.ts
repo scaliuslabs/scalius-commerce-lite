@@ -15,6 +15,7 @@ import { platformSettingsRoutes } from "./settings/platform";
 import { feedRowPreviewRoutes } from "./settings/feed-row-preview";
 import { emiSettingsRoutes } from "./settings/emi";
 import { marketingConsentSettingsRoutes } from "./settings/marketing-consent";
+import { appProviderSettingsRoutes } from "./settings/providers";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -36,5 +37,6 @@ app.route("/", customerRequestPolicyRoutes);
 app.route("/", storePoliciesRoutes);
 app.route("/", emiSettingsRoutes);
 app.route("/", marketingConsentSettingsRoutes);
+app.route("/", appProviderSettingsRoutes);
 
 export { app as adminSettingsRoutes };

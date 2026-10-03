@@ -132,6 +132,12 @@ export const SETTINGS_ROUTE_PERMISSIONS: RoutePermissionMap = {
     GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
     POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
   },
+  "/api/v1/admin/settings/providers": {
+    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+  },
+  "/api/v1/admin/settings/providers/*/test": {
+    POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
+  },
   "/api/v1/admin/settings/sms": {
     GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
     POST: { permission: PERMISSIONS.SETTINGS_NOTIFICATIONS_EDIT },

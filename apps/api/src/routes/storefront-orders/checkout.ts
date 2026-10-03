@@ -33,7 +33,8 @@ import {
     type StorefrontCheckoutSettingsSnapshot,
 } from "@scalius/core/modules/checkout";
 import { createCheckoutAppFunctions } from "../../plugins/checkout-functions";
-import { paymentProvidersFromRegistrations, requestProviderRuntime } from "../../plugins/providers/payment";
+import { paymentProvidersFromRegistrations } from "../../plugins/providers/payment";
+import { requestProviderRuntime } from "../../plugins/providers/runtime";
 import { runOrderRiskChecks } from "../../plugins/order-risk";
 import { getOptionalExecutionContext } from "../../utils/execution-context";
 import { enqueueOrderAutoFulfil } from "../../utils/auto-fulfil-queue";
