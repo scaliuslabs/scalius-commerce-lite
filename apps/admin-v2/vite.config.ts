@@ -20,7 +20,10 @@ const __dirname = dirname(__filename);
 const devPorts = readDevPorts();
 const API_DEV_ORIGIN = devOrigins(devPorts).apiUrl;
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
+  // Builds keep their own dependency cache so a deploy or perf build never
+  // breaks a dev server running in the same checkout.
+  cacheDir: command === "build" ? "node_modules/.vite-build" : "node_modules/.vite",
   // The dashboard reads no env: never load .env* files, so no local value can
   // be inlined into the browser bundle (scripts/check-build-canaries.mjs).
   envDir: false,
@@ -99,4 +102,4 @@ export default defineConfig({
     viteReact(),
     tailwindcss(),
   ],
-});
+}));

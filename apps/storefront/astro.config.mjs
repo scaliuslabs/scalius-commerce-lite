@@ -76,6 +76,10 @@ export default defineConfig({
   ],
 
   vite: {
+    // Builds keep their own dependency cache: `astro build` (deploys, perf
+    // checks) rewrites the optimizer cache and would break a dev server
+    // running in the same checkout ("file does not exist … deps_ssr").
+    cacheDir: process.argv.includes("build") ? "node_modules/.vite-build" : "node_modules/.vite",
     plugins: [tailwindcss()],
     define: {
       // Read only under `import.meta.env.DEV` (src/lib/api/transport.ts), so
