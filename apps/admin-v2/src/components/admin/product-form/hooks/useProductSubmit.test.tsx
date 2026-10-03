@@ -71,6 +71,8 @@ import { useProductSubmit } from "./useProductSubmit";
 import type { ProductFormValues } from "../types";
 import { SkuCostProvider, type SkuCostStore } from "../sku-costs";
 import type { ProductCreateComposition } from "../variants/option-matrix-editor-model";
+import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
+import { PermissionProvider } from "~/contexts/PermissionContext";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -362,7 +364,12 @@ interface HarnessProps {
 
 /** The hook under test, inside the page's cost store when one is given. */
 function HookHarness({ costs, ...props }: HarnessProps & { costs?: SkuCostStore }) {
-  return costs ? <SkuCostProvider store={costs}><SubmitHarness {...props} /></SkuCostProvider> : <SubmitHarness {...props} />;
+  // A cost store reaches the page only for staff with "View product costs".
+  return costs ? (
+    <PermissionProvider permissions={[PERMISSIONS.PRODUCTS_VIEW_COSTS]}>
+      <SkuCostProvider store={costs}><SubmitHarness {...props} /></SkuCostProvider>
+    </PermissionProvider>
+  ) : <SubmitHarness {...props} />;
 }
 
 function SubmitHarness({ isEdit, aggregateRevision, onResult, createComposition }: HarnessProps) {

@@ -50,6 +50,16 @@ export interface CatalogActionPermissions {
   inventory: {
     canAdjustStock: boolean;
     canAcknowledgeAlerts: boolean;
+    /** "View product costs": cost per item, margins, inventory value, purchase-order money. */
+    canViewCosts: boolean;
+    /** Changing a cost per item (products.edit) needs to see costs too. */
+    canEditCosts: boolean;
+    /** Suppliers, purchase orders and transfers: create, edit, receive, ship, cancel. */
+    canManageOperations: boolean;
+    /** Drafting or editing a purchase order sets unit costs. */
+    canDraftPurchaseOrders: boolean;
+    /** Add, edit, archive locations: inventory operations or store settings. */
+    canManageLocations: boolean;
   };
 }
 
@@ -62,6 +72,8 @@ export function getCatalogActionPermissions(
   const canDeleteAttributes = hasPermission(PERMISSIONS.ATTRIBUTES_DELETE);
   const canEditCollections = hasPermission(PERMISSIONS.COLLECTIONS_EDIT);
   const canDeleteCollections = hasPermission(PERMISSIONS.COLLECTIONS_DELETE);
+  const canViewCosts = hasPermission(PERMISSIONS.PRODUCTS_VIEW_COSTS);
+  const canManageOperations = hasPermission(PERMISSIONS.INVENTORY_MANAGE);
 
   return {
     products: {
@@ -107,6 +119,11 @@ export function getCatalogActionPermissions(
     inventory: {
       canAdjustStock: canEditProducts,
       canAcknowledgeAlerts: canEditProducts,
+      canViewCosts,
+      canEditCosts: canEditProducts && canViewCosts,
+      canManageOperations,
+      canDraftPurchaseOrders: canManageOperations && canViewCosts,
+      canManageLocations: canManageOperations || hasPermission(PERMISSIONS.SETTINGS_GENERAL_EDIT),
     },
   };
 }

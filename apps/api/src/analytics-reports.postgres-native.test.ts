@@ -123,8 +123,8 @@ describe.runIf(postgresUrl)("analytics: PostgreSQL parity with D1", () => {
       for (const sort of report.columns.slice(0, 3)) {
         const query = { ...AUGUST, sort: sort.key, direction: "asc" as const, page: 1, pageSize: 100 };
         const [onD1, onPg] = await Promise.all([
-          getAnalyticsReportPage(d1Context, report.id as AnalyticsReportId, query, { customers: true }),
-          getAnalyticsReportPage(pgContext, report.id as AnalyticsReportId, query, { customers: true }),
+          getAnalyticsReportPage(d1Context, report.id as AnalyticsReportId, query, { customers: true, costs: true }),
+          getAnalyticsReportPage(pgContext, report.id as AnalyticsReportId, query, { customers: true, costs: true }),
         ]);
         // Text order may differ by collation; compare the row sets and totals.
         const byId = (page: typeof onD1) => [...page.rows].sort((left, right) => left.id.localeCompare(right.id));

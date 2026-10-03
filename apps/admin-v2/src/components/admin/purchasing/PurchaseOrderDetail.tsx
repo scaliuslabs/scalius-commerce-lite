@@ -58,7 +58,7 @@ type DialogName = "details" | "cancel" | null;
  */
 export function PurchaseOrderDetail({ order, onReload }: { order: PurchaseOrder; onReload: () => Promise<void> }) {
   const t = useMessages(purchasingMessages);
-  const { inventory: { canAdjustStock: canEdit } } = useCatalogActionPermissions();
+  const { inventory: { canManageOperations: canEdit, canDraftPurchaseOrders, canViewCosts } } = useCatalogActionPermissions();
   const { fmt } = useCurrency();
   const locale = useLocale();
   const store = useStoreIdentity();
@@ -70,7 +70,9 @@ export function PurchaseOrderDetail({ order, onReload }: { order: PurchaseOrder;
   const [reloading, setReloading] = useState(false);
   const [exporting, setExporting] = useState(false);
   const open = isOpenPurchaseOrder(order.status);
-  const editable = canEdit && (open || order.status === "draft");
+  const cancellable = canEdit && (open || order.status === "draft");
+  // The details carry the extra costs: editing them needs to see costs.
+  const editable = canDraftPurchaseOrders && (open || order.status === "draft");
   const progress = order.quantity > 0 ? Math.round((order.receivedQuantity / order.quantity) * 100) : 0;
 
   const reload = async () => {
@@ -135,33 +137,40 @@ export function PurchaseOrderDetail({ order, onReload }: { order: PurchaseOrder;
         badge={<PurchaseOrderStatusBadge status={order.status} />}
         actions={(
           <>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button type="button" variant="outline" loading={exporting}>
-                  {t("moreActions")}
-                  <ChevronDown />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onSelect={print}>
-                  <Printer />
-                  {t("print")}
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => void exportCsv()}>
-                  <Download />
-                  {t("exportCsv")}
-                </DropdownMenuItem>
-                {editable ? (
-                  <>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem variant="destructive" onSelect={() => setDialog("cancel")}>
-                      <XCircle />
-                      {t("cancelPurchaseOrder")}
-                    </DropdownMenuItem>
-                  </>
-                ) : null}
-              </DropdownMenuContent>
-            </DropdownMenu>
+            {/* The printout and the CSV are the supplier's copy, with every cost. */}
+            {canViewCosts || cancellable ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button type="button" variant="outline" loading={exporting}>
+                    {t("moreActions")}
+                    <ChevronDown />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {canViewCosts ? (
+                    <>
+                      <DropdownMenuItem onSelect={print}>
+                        <Printer />
+                        {t("print")}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => void exportCsv()}>
+                        <Download />
+                        {t("exportCsv")}
+                      </DropdownMenuItem>
+                    </>
+                  ) : null}
+                  {cancellable ? (
+                    <>
+                      {canViewCosts ? <DropdownMenuSeparator /> : null}
+                      <DropdownMenuItem variant="destructive" onSelect={() => setDialog("cancel")}>
+                        <XCircle />
+                        {t("cancelPurchaseOrder")}
+                      </DropdownMenuItem>
+                    </>
+                  ) : null}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : null}
             {canEdit && open ? (
               <Button asChild>
                 <Link to="/admin/inventory/purchase-orders/$purchaseOrderId/receive" params={{ purchaseOrderId: order.id }}>
@@ -199,9 +208,9 @@ export function PurchaseOrderDetail({ order, onReload }: { order: PurchaseOrder;
               </div>
               <Progress value={progress} aria-label={t("receivedProgress", { received: order.receivedQuantity, total: order.quantity })} />
             </CardHeader>
-            <PurchaseOrderLines order={order} />
+            <PurchaseOrderLines order={order} showCosts={canViewCosts} />
           </Card>
-          <ReceiptsCard order={order} />
+          <ReceiptsCard order={order} showCosts={canViewCosts} />
         </div>
 
         <div className="min-w-0 space-y-4">
@@ -242,22 +251,24 @@ export function PurchaseOrderDetail({ order, onReload }: { order: PurchaseOrder;
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>{t("costSummary")}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <dl className="space-y-3">
-                <SummaryRow label={t("subtotal")} detail={unitsText(order.quantity)}>{fmt(order.subtotal)}</SummaryRow>
-                <SummaryRow label={t("shipping")}>{fmt(order.shipping)}</SummaryRow>
-                <SummaryRow label={t("otherCosts")}>{fmt(order.otherCosts)}</SummaryRow>
-                <SummaryRow label={t("tax")}>{fmt(order.tax)}</SummaryRow>
-                <div className="border-t pt-3">
-                  <SummaryRow label={t("total")} strong>{fmt(order.total)}</SummaryRow>
-                </div>
-              </dl>
-            </CardContent>
-          </Card>
+          {canViewCosts ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>{t("costSummary")}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <dl className="space-y-3">
+                  <SummaryRow label={t("subtotal")} detail={unitsText(order.quantity)}>{fmt(order.subtotal ?? 0)}</SummaryRow>
+                  <SummaryRow label={t("shipping")}>{fmt(order.shipping ?? 0)}</SummaryRow>
+                  <SummaryRow label={t("otherCosts")}>{fmt(order.otherCosts ?? 0)}</SummaryRow>
+                  <SummaryRow label={t("tax")}>{fmt(order.tax ?? 0)}</SummaryRow>
+                  <div className="border-t pt-3">
+                    <SummaryRow label={t("total")} strong>{fmt(order.total ?? 0)}</SummaryRow>
+                  </div>
+                </dl>
+              </CardContent>
+            </Card>
+          ) : null}
 
           <Card>
             <CardHeader>
@@ -280,7 +291,7 @@ export function PurchaseOrderDetail({ order, onReload }: { order: PurchaseOrder;
         onReload={reload}
       />
       <ConfirmDialog
-        open={dialog === "cancel" && editable}
+        open={dialog === "cancel" && cancellable}
         onOpenChange={(next) => { if (!next && !status.isPending) setDialog(null); }}
         title={t("cancelPurchaseOrderTitle", { number: order.displayNumber })}
         description={t("cancelPurchaseOrderBody")}
@@ -293,13 +304,13 @@ export function PurchaseOrderDetail({ order, onReload }: { order: PurchaseOrder;
   );
 }
 
-/** Ordered, received and cost per line. */
-function PurchaseOrderLines({ order }: { order: PurchaseOrder }) {
+/** Ordered, received and (with "View product costs") cost per line. */
+function PurchaseOrderLines({ order, showCosts }: { order: PurchaseOrder; showCosts: boolean }) {
   const t = useMessages(purchasingMessages);
   const { fmt } = useCurrency();
   const isMobile = useIsMobile();
   const costHint = (line: PurchaseOrder["lines"][number]) =>
-    line.currentCost !== null && line.currentCost !== line.unitCost
+    line.currentCost != null && line.currentCost !== line.unitCost
       ? <span className="block text-muted-foreground">{t("costNow", { amount: fmt(line.currentCost) })}</span>
       : null;
 
@@ -311,9 +322,9 @@ function PurchaseOrderLines({ order }: { order: PurchaseOrder }) {
             <LineProduct line={line} retired={line.retired} />
             <p className="flex flex-wrap justify-between gap-x-4 text-body tabular-nums">
               <span className="text-muted-foreground">{t("receivedOf", { received: line.receivedQuantity, total: line.quantity })}</span>
-              <span>{formatNumber(line.quantity)} × {fmt(line.unitCost)} = {fmt(line.lineTotal)}</span>
+              {showCosts ? <span>{formatNumber(line.quantity)} × {fmt(line.unitCost ?? 0)} = {fmt(line.lineTotal ?? 0)}</span> : null}
             </p>
-            <p className="text-body tabular-nums">{costHint(line)}</p>
+            {showCosts ? <p className="text-body tabular-nums">{costHint(line)}</p> : null}
           </li>
         ))}
       </ul>
@@ -326,8 +337,8 @@ function PurchaseOrderLines({ order }: { order: PurchaseOrder }) {
           <TableRow>
             <TableHead>{t("colProduct")}</TableHead>
             <TableHead data-numeric="">{t("colReceived")}</TableHead>
-            <TableHead data-numeric="">{t("colCost")}</TableHead>
-            <TableHead data-numeric="">{t("colLineTotal")}</TableHead>
+            {showCosts ? <TableHead data-numeric="">{t("colCost")}</TableHead> : null}
+            {showCosts ? <TableHead data-numeric="">{t("colLineTotal")}</TableHead> : null}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -335,11 +346,13 @@ function PurchaseOrderLines({ order }: { order: PurchaseOrder }) {
             <TableRow key={line.id}>
               <TableCell className="py-2"><LineProduct line={line} retired={line.retired} /></TableCell>
               <TableCell data-numeric="">{t("receivedOf", { received: line.receivedQuantity, total: line.quantity })}</TableCell>
-              <TableCell data-numeric="">
-                {fmt(line.unitCost)}
-                {costHint(line)}
-              </TableCell>
-              <TableCell data-numeric="">{fmt(line.lineTotal)}</TableCell>
+              {showCosts ? (
+                <TableCell data-numeric="">
+                  {fmt(line.unitCost ?? 0)}
+                  {costHint(line)}
+                </TableCell>
+              ) : null}
+              {showCosts ? <TableCell data-numeric="">{fmt(line.lineTotal ?? 0)}</TableCell> : null}
             </TableRow>
           ))}
         </TableBody>
@@ -349,7 +362,7 @@ function PurchaseOrderLines({ order }: { order: PurchaseOrder }) {
 }
 
 /** Each receipt, newest first: when, who, which lines, and any cost it moved. */
-function ReceiptsCard({ order }: { order: PurchaseOrder }) {
+function ReceiptsCard({ order, showCosts }: { order: PurchaseOrder; showCosts: boolean }) {
   const t = useMessages(purchasingMessages);
   const { fmt } = useCurrency();
   const lines = new Map(order.lines.map((line) => [line.id, line]));
@@ -379,10 +392,10 @@ function ReceiptsCard({ order }: { order: PurchaseOrder }) {
                       </span>
                       <span className="tabular-nums">
                         {t("receiptLine", { count: entry.quantity })}
-                        {entry.costUpdated && entry.costBefore !== entry.costAfter && entry.costAfter !== null ? (
+                        {showCosts && entry.costUpdated && entry.costBefore !== entry.costAfter && entry.costAfter != null ? (
                           <span className="text-muted-foreground">
                             {" · "}
-                            {t("costChange", { before: entry.costBefore === null ? "—" : fmt(entry.costBefore), after: fmt(entry.costAfter) })}
+                            {t("costChange", { before: entry.costBefore == null ? "—" : fmt(entry.costBefore), after: fmt(entry.costAfter) })}
                           </span>
                         ) : null}
                       </span>

@@ -8,7 +8,7 @@ import { translate } from "~/i18n";
 import { inventoryMessages } from "~/i18n/inventory";
 import { resourceMessages } from "~/i18n/resource";
 
-const mocks = vi.hoisted(() => ({ mobile: false, canEdit: true, list: vi.fn() }));
+const mocks = vi.hoisted(() => ({ mobile: false, canEdit: true, canViewCosts: true, list: vi.fn() }));
 
 vi.mock("@tanstack/react-router", () => ({
   Link: ({ children }: { children: ReactNode }) => <a href="/admin">{children}</a>,
@@ -20,7 +20,12 @@ vi.mock("~/hooks/use-currency", () => ({
 }));
 vi.mock("~/hooks/use-catalog-action-permissions", () => ({
   useCatalogActionPermissions: () => ({
-    inventory: { canAdjustStock: mocks.canEdit, canAcknowledgeAlerts: mocks.canEdit },
+    inventory: {
+      canAdjustStock: mocks.canEdit,
+      canAcknowledgeAlerts: mocks.canEdit,
+      canViewCosts: mocks.canViewCosts,
+      canEditCosts: mocks.canEdit && mocks.canViewCosts,
+    },
   }),
 }));
 vi.mock("~/lib/api", () => ({ apiData: (call: Promise<unknown>) => call }));
@@ -62,6 +67,7 @@ describe("VariantsTab incoming stock and unit cost", () => {
     host.remove();
     mocks.mobile = false;
     mocks.canEdit = true;
+    mocks.canViewCosts = true;
     vi.clearAllMocks();
   });
 
@@ -117,6 +123,17 @@ describe("VariantsTab incoming stock and unit cost", () => {
     expect(dialog.textContent).toContain(t("costDialogDescriptionOne"));
     const input = dialog.querySelector<HTMLInputElement>(`input[aria-label="${t("costFor", { name: "Kori Trainer · 42" })}"]`)!;
     expect(input.value).toBe("120.5");
+  });
+
+  it("shows no cost column, cost line or cost edit without View product costs", async () => {
+    mocks.canViewCosts = false;
+    await render();
+    expect(Array.from(host.querySelectorAll("th")).map((cell) => cell.textContent)).not.toContain(t("cost"));
+    expect(host.textContent).not.toContain("৳120.5");
+    expect(host.textContent).not.toContain(t("noCost"));
+    const select = host.querySelector<HTMLButtonElement>(`button[aria-label="${translate(resourceMessages, "select", { name: "KORI-42" })}"]`)!;
+    await act(async () => select.click());
+    expect(Array.from(host.querySelectorAll("button")).some((button) => button.textContent === t("editCost"))).toBe(false);
   });
 
   it("offers no cost edit without permission to edit products", async () => {

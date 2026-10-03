@@ -47,6 +47,11 @@ vi.mock("@scalius/core/modules/inventory", async () => {
     updateInventoryLocationSchema: locations.updateInventoryLocationSchema,
     setSkuCostsSchema: locations.setSkuCostsSchema,
     setSkuCosts: vi.fn(),
+    // Who sees costs and location details: the real rules.
+    canViewCosts: locations.canViewCosts,
+    canViewLocationDetails: locations.canViewLocationDetails,
+    locationWithoutDetails: locations.locationWithoutDetails,
+    withoutSkuCost: locations.withoutSkuCost,
     getInventoryValuation: vi.fn(),
     getInventoryOverview: mocks.getInventoryOverview,
     getInventoryLabelVariants: mocks.getInventoryLabelVariants,

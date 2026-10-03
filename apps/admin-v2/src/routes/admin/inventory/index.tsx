@@ -15,6 +15,9 @@ import {
   type InventoryFiltersChange,
 } from "~/components/admin/inventory/inventory-search";
 import type { InventoryWorkspaceSection } from "~/components/admin/inventory-workspace";
+import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
+import { useCatalogActionPermissions } from "~/hooks/use-catalog-action-permissions";
+import { hasAdminPermission } from "~/lib/admin-access";
 import { inventoryQueryOptions } from "~/lib/api-query-options/inventory";
 import { inventoryValuationQueryOptions } from "~/lib/api-query-options/inventory-costs";
 import { adoptListSearch, useListSearch } from "~/lib/list-search";
@@ -41,15 +44,18 @@ export const Route = createFileRoute("/admin/inventory/")({
   validateSearch: validateInventorySearch,
   search: { middlewares: [stripSearchParams(INVENTORY_SEARCH_DEFAULTS)] },
   loaderDeps: ({ search }) => search,
-  loader: ({ context: { queryClient }, deps }) => {
+  loader: ({ context, deps }) => {
     if (typeof window === "undefined") return;
+    const { queryClient } = context;
     // A `?q=` link wins once and becomes the session term (the page then drops it).
     const filters = { ...deps, q: adoptListSearch(`inventory.${deps.section}`, deps.q) };
     const query = filters.section === "variants"
       ? variantsQuery(filters)
       : filters.section === "alerts" ? alertsQuery(filters) : movementsQuery(filters);
     void queryClient.prefetchQuery(inventoryQueryOptions(query));
-    void queryClient.prefetchQuery(inventoryValuationQueryOptions());
+    if (hasAdminPermission(context, PERMISSIONS.PRODUCTS_VIEW_COSTS)) {
+      void queryClient.prefetchQuery(inventoryValuationQueryOptions());
+    }
   },
   head: () => pageHead("inventory"),
   errorComponent: RouteErrorComponent,
@@ -58,6 +64,7 @@ export const Route = createFileRoute("/admin/inventory/")({
 
 function InventoryPage() {
   const t = useMessages(inventoryMessages);
+  const { inventory: { canViewCosts } } = useCatalogActionPermissions();
   const search = Route.useSearch();
   // Each tab keeps its own search: a term typed in All variants never filters Low stock.
   const [term, setTerm] = useListSearch(`inventory.${search.section}`);
@@ -114,7 +121,8 @@ function InventoryPage() {
           </Button>
         )}
       />
-      <ValuationSummary />
+      {/* Inventory value: only with "View product costs". */}
+      {canViewCosts ? <ValuationSummary /> : null}
       <div className="overflow-clip rounded-xl bg-card shadow-card">
         <IndexTabs
           label={t("views")}

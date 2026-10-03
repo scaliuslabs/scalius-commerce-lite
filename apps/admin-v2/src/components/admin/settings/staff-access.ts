@@ -24,6 +24,7 @@ const GROUP_BY_RESOURCE: Record<string, PermissionGroup> = {
   dashboard: "home",
   orders: "orders",
   products: "products",
+  inventory: "products",
   categories: "products",
   collections: "products",
   attributes: "products",

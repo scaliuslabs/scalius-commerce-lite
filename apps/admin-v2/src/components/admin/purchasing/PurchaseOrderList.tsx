@@ -39,7 +39,7 @@ export function PurchaseOrderList({ tab, supplierId, onTabChange, onSupplierChan
 }) {
   const t = useMessages(purchasingMessages);
   const { fmt } = useCurrency();
-  const { inventory: { canAdjustStock: canEdit } } = useCatalogActionPermissions();
+  const { inventory: { canDraftPurchaseOrders: canCreate, canViewCosts } } = useCatalogActionPermissions();
   const severalLocations = hasSeveralLocations(useQuery(inventoryLocationsQueryOptions()).data);
   // The chosen supplier's name, for a filter opened from a link.
   const supplier = useQuery({ ...supplierQueryOptions(supplierId ?? ""), enabled: Boolean(supplierId) }).data;
@@ -91,15 +91,16 @@ export function PurchaseOrderList({ tab, supplierId, onTabChange, onSupplierChan
       meta: { priority: 50, minWidth: 130 },
       cell: ({ row }) => <span className="whitespace-nowrap text-muted-foreground">{formatDay(row.original.expectedOn) ?? "—"}</span>,
     },
-    {
+    // What it cost: only with "View product costs".
+    ...(canViewCosts ? [{
       id: "total",
       header: t("colTotal"),
       meta: { numeric: true, mobile: "secondary", priority: 85, minWidth: 120 },
-      cell: ({ row }) => fmt(row.original.total),
-    },
-  ], [fmt, severalLocations, t]);
+      cell: ({ row }) => fmt(row.original.total ?? 0),
+    } satisfies ColumnDef<PurchaseOrderSummary, unknown>] : []),
+  ], [canViewCosts, fmt, severalLocations, t]);
 
-  const createButton = canEdit ? (
+  const createButton = canCreate ? (
     <Button asChild>
       <Link to="/admin/inventory/purchase-orders/new">{t("createPurchaseOrder")}</Link>
     </Button>

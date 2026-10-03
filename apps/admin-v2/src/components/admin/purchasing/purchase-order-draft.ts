@@ -44,9 +44,10 @@ export function draftFromOrder(order: PurchaseOrder | null): PurchaseOrderDraft 
     expectedOn: order?.expectedOn ?? "",
     reference: order?.reference ?? "",
     notes: order?.notes ?? "",
-    shipping: order && order.shipping > 0 ? order.shipping : null,
-    otherCosts: order && order.otherCosts > 0 ? order.otherCosts : null,
-    tax: order && order.tax > 0 ? order.tax : null,
+    // The editor opens only for staff who see costs; an amount the API left out is empty.
+    shipping: order?.shipping ? order.shipping : null,
+    otherCosts: order?.otherCosts ? order.otherCosts : null,
+    tax: order?.tax ? order.tax : null,
     lines: (order?.lines ?? []).map((line) => ({
       variantId: line.variantId,
       productId: line.productId,
@@ -54,8 +55,8 @@ export function draftFromOrder(order: PurchaseOrder | null): PurchaseOrderDraft 
       optionLabel: line.optionLabel,
       sku: line.sku,
       quantity: line.quantity,
-      unitCost: line.unitCost,
-      currentCost: line.currentCost,
+      unitCost: line.unitCost ?? null,
+      currentCost: line.currentCost ?? null,
       retired: line.retired,
     })),
   };

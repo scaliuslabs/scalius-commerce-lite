@@ -10,6 +10,8 @@ import { productMessages } from "~/i18n/products";
 import { OptionMatrixEditor } from "./OptionMatrixEditor";
 import type { OptionMatrixEditorHandle } from "./option-matrix-editor-model";
 import { SkuCostProvider, useSkuCostDraft, type SkuCostStore } from "../sku-costs";
+import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
+import { PermissionProvider } from "~/contexts/PermissionContext";
 
 const mocks = vi.hoisted(() => ({
   navigate: vi.fn(),
@@ -127,7 +129,12 @@ describe("OptionMatrixEditor cost per item", () => {
 
   function render(element: React.ReactElement) {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    return act(async () => root.render(<QueryClientProvider client={client}>{element}</QueryClientProvider>));
+    // Costs reach the editor only with "View product costs".
+    return act(async () => root.render(
+      <PermissionProvider permissions={[PERMISSIONS.PRODUCTS_VIEW_COSTS]}>
+        <QueryClientProvider client={client}>{element}</QueryClientProvider>
+      </PermissionProvider>,
+    ));
   }
 
   it("saves a changed cost of a product without options on its own, with the cost it replaces", async () => {

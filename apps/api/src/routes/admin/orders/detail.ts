@@ -24,6 +24,7 @@ import {
     readStoreDecimalPlaces,
     readStoredCustomization,
 } from "@scalius/core/modules/products";
+import { withoutSkuCost } from "@scalius/core/modules/inventory";
 import { fromMinor } from "@scalius/shared/money";
 import { presentOrderLineFulfilment } from "@scalius/core/modules/orders/browser";
 import {
@@ -1057,8 +1058,9 @@ app.openapi(getFormDataRoute, (async (c: AdminRouteContext<typeof getFormDataRou
         db,
         allVariants.map((variant) => variant.id),
     );
+    // An order editor never needs what a SKU cost (orders.view is not "View product costs").
     const variantsWithOptions = allVariants.map((variant) => ({
-        ...presentCatalogPrice(variant, storeDecimalPlaces),
+        ...withoutSkuCost(presentCatalogPrice(variant, storeDecimalPlaces)),
         selectedOptions: selectedOptionsByVariant.get(variant.id) ?? [],
     }));
     const variantsByProductId = new Map<

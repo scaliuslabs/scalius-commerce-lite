@@ -6,14 +6,14 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { MoreHorizontal } from "lucide-react";
 import { toast } from "~/lib/toast";
-import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
+import { StatusBadge } from "~/components/admin/resource/StatusBadge";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "~/components/ui/dropdown-menu";
 import { Label } from "~/components/ui/label";
-import { useHasPermission } from "~/contexts/PermissionContext";
+import { useCatalogActionPermissions } from "~/hooks/use-catalog-action-permissions";
 import { useMessages } from "~/i18n";
 import { settingsLocationsMessages } from "~/i18n/settings-locations";
 import { getServerFnError } from "~/lib/api-helpers";
@@ -32,7 +32,8 @@ function addressLine(location: InventoryLocation): string {
 
 export function LocationsManager() {
   const t = useMessages(settingsLocationsMessages);
-  const canEdit = useHasPermission(PERMISSIONS.PRODUCTS_EDIT);
+  // Inventory staff or store settings editors (the API's location write rule).
+  const { inventory: { canManageLocations: canEdit } } = useCatalogActionPermissions();
   const [showArchived, setShowArchived] = useState(false);
   const { data, isError, refetch } = useQuery(inventoryLocationsQueryOptions(showArchived));
   const [editing, setEditing] = useState<{ location: InventoryLocation | null } | null>(null);
@@ -69,7 +70,7 @@ export function LocationsManager() {
                       <span className="break-words text-body font-medium">{location.name}</span>
                       <code className="text-muted-foreground">{location.code}</code>
                       {location.isDefault ? <Badge variant="info">{t("default")}</Badge> : null}
-                      {location.status === "archived" ? <Badge variant="secondary">{t("archived")}</Badge> : null}
+                      {location.status === "archived" ? <StatusBadge status="archived">{t("archived")}</StatusBadge> : null}
                     </p>
                     {addressLine(location) ? <p className="break-words text-body">{addressLine(location)}</p> : null}
                     <p className="text-body text-muted-foreground tabular-nums">

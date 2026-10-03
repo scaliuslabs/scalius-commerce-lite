@@ -27,7 +27,7 @@ const TAB_LABEL = {
 /** Products › Transfers: stock moving between locations, newest first. */
 export function TransferList({ tab, onTabChange }: { tab: TransferTab; onTabChange: (tab: TransferTab) => void }) {
   const t = useMessages(purchasingMessages);
-  const { inventory: { canAdjustStock: canEdit } } = useCatalogActionPermissions();
+  const { inventory: { canManageOperations: canEdit } } = useCatalogActionPermissions();
   const locations = useQuery(inventoryLocationsQueryOptions());
   const activeCount = locations.data?.filter((location) => location.status === "active").length ?? 0;
   const oneLocation = locations.isSuccess && activeCount < 2;

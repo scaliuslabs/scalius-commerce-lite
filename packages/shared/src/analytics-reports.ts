@@ -49,6 +49,8 @@ export interface AnalyticsReportDefinition {
   defaultSort: { key: string; direction: "asc" | "desc" };
   /** Rows name customers: also needs the "View customers" permission. */
   requiresCustomerAccess?: true;
+  /** Rows show unit costs or profit: also needs the "View product costs" permission. */
+  requiresCostAccess?: true;
   /** What a row's id opens in the dashboard. */
   rowLink?: "product" | "variant";
 }
@@ -366,6 +368,7 @@ export const ANALYTICS_REPORTS = [
       { key: "cost_coverage", type: "percent" },
     ],
     defaultSort: { key: "gross_profit", direction: "desc" },
+    requiresCostAccess: true,
     rowLink: "product",
   },
 ] as const satisfies readonly AnalyticsReportDefinition[];

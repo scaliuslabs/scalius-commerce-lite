@@ -1,10 +1,23 @@
 // Route permissions for the inventory API.
 import { PERMISSIONS } from "../permissions";
-import type { RoutePermissionMap } from "./shared";
+import type { RoutePermission, RoutePermissionMap } from "./shared";
+
+const VIEW: RoutePermission = { permission: PERMISSIONS.INVENTORY_VIEW };
+const MANAGE: RoutePermission = { permission: PERMISSIONS.INVENTORY_MANAGE };
+// Writes that set unit costs also need to see them.
+const MANAGE_WITH_COSTS: RoutePermission = {
+  allOf: [PERMISSIONS.INVENTORY_MANAGE, PERMISSIONS.PRODUCTS_VIEW_COSTS],
+};
+// A location is store setup as much as stock: Settings and inventory staff
+// both look after it.
+const LOCATION_WRITE: RoutePermission = {
+  anyOf: [PERMISSIONS.INVENTORY_MANAGE, PERMISSIONS.SETTINGS_GENERAL_EDIT],
+};
 
 export const INVENTORY_ROUTE_PERMISSIONS: RoutePermissionMap = {
   // =============================================
-  // Inventory API
+  // Stock: product data (products.view reads, products.edit adjusts). Unit
+  // costs in these reads are left out without products.view_costs.
   // =============================================
   "/api/v1/admin/inventory": {
     GET: { permission: PERMISSIONS.PRODUCTS_VIEW },
@@ -46,84 +59,98 @@ export const INVENTORY_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/inventory/levels": {
     GET: { permission: PERMISSIONS.PRODUCTS_VIEW },
   },
-  // Inventory locations (where stock is held).
+
+  // =============================================
+  // Locations. Stock screens list them by name (products.view); their
+  // addresses and phone numbers need inventory.view or settings.general.view
+  // (the handler leaves them out otherwise).
+  // =============================================
   "/api/v1/admin/inventory/locations": {
-    GET: { permission: PERMISSIONS.PRODUCTS_VIEW },
-    POST: { permission: PERMISSIONS.PRODUCTS_EDIT },
+    GET: {
+      anyOf: [PERMISSIONS.PRODUCTS_VIEW, PERMISSIONS.INVENTORY_VIEW, PERMISSIONS.SETTINGS_GENERAL_VIEW],
+    },
+    POST: LOCATION_WRITE,
   },
   "/api/v1/admin/inventory/locations/*": {
-    PATCH: { permission: PERMISSIONS.PRODUCTS_EDIT },
+    PATCH: LOCATION_WRITE,
   },
   "/api/v1/admin/inventory/locations/*/archive": {
-    POST: { permission: PERMISSIONS.PRODUCTS_EDIT },
+    POST: LOCATION_WRITE,
   },
   "/api/v1/admin/inventory/locations/*/unarchive": {
-    POST: { permission: PERMISSIONS.PRODUCTS_EDIT },
+    POST: LOCATION_WRITE,
   },
   "/api/v1/admin/inventory/locations/*/default": {
-    POST: { permission: PERMISSIONS.PRODUCTS_EDIT },
+    POST: LOCATION_WRITE,
   },
-  // Inventory value and unit costs (0109). Costs are staff-only: whoever
-  // can see products can see what they cost.
+
+  // =============================================
+  // Inventory value and unit costs (0109): "View product costs".
+  // =============================================
   "/api/v1/admin/inventory/valuation": {
-    GET: { permission: PERMISSIONS.PRODUCTS_VIEW },
+    GET: { permission: PERMISSIONS.PRODUCTS_VIEW_COSTS },
   },
   "/api/v1/admin/inventory/costs": {
-    PUT: { permission: PERMISSIONS.PRODUCTS_EDIT },
+    PUT: { allOf: [PERMISSIONS.PRODUCTS_EDIT, PERMISSIONS.PRODUCTS_VIEW_COSTS] },
   },
+
+  // =============================================
   // Suppliers, purchase orders and transfers (0109): read with
-  // products.view; every write, receiving included, needs products.edit.
+  // inventory.view, write with inventory.manage. Purchase-order money is
+  // left out of reads without products.view_costs; the writes that set it
+  // (drafting, editing) and the supplier export need it too.
+  // =============================================
   "/api/v1/admin/inventory/suppliers": {
-    GET: { permission: PERMISSIONS.PRODUCTS_VIEW },
-    POST: { permission: PERMISSIONS.PRODUCTS_EDIT },
+    GET: VIEW,
+    POST: MANAGE,
   },
   "/api/v1/admin/inventory/suppliers/*": {
-    GET: { permission: PERMISSIONS.PRODUCTS_VIEW },
-    PATCH: { permission: PERMISSIONS.PRODUCTS_EDIT },
+    GET: VIEW,
+    PATCH: MANAGE,
   },
   "/api/v1/admin/inventory/suppliers/*/archive": {
-    POST: { permission: PERMISSIONS.PRODUCTS_EDIT },
+    POST: MANAGE,
   },
   "/api/v1/admin/inventory/suppliers/*/unarchive": {
-    POST: { permission: PERMISSIONS.PRODUCTS_EDIT },
+    POST: MANAGE,
   },
   "/api/v1/admin/inventory/purchase-orders": {
-    GET: { permission: PERMISSIONS.PRODUCTS_VIEW },
-    POST: { permission: PERMISSIONS.PRODUCTS_EDIT },
+    GET: VIEW,
+    POST: MANAGE_WITH_COSTS,
   },
   "/api/v1/admin/inventory/purchase-orders/*": {
-    GET: { permission: PERMISSIONS.PRODUCTS_VIEW },
-    PUT: { permission: PERMISSIONS.PRODUCTS_EDIT },
-    DELETE: { permission: PERMISSIONS.PRODUCTS_EDIT },
+    GET: VIEW,
+    PUT: MANAGE_WITH_COSTS,
+    DELETE: MANAGE,
   },
   "/api/v1/admin/inventory/purchase-orders/*/export": {
-    GET: { permission: PERMISSIONS.PRODUCTS_VIEW },
+    GET: { allOf: [PERMISSIONS.INVENTORY_VIEW, PERMISSIONS.PRODUCTS_VIEW_COSTS] },
   },
   "/api/v1/admin/inventory/purchase-orders/*/order": {
-    POST: { permission: PERMISSIONS.PRODUCTS_EDIT },
+    POST: MANAGE,
   },
   "/api/v1/admin/inventory/purchase-orders/*/receive": {
-    POST: { permission: PERMISSIONS.PRODUCTS_EDIT },
+    POST: MANAGE,
   },
   "/api/v1/admin/inventory/purchase-orders/*/cancel": {
-    POST: { permission: PERMISSIONS.PRODUCTS_EDIT },
+    POST: MANAGE,
   },
   "/api/v1/admin/inventory/transfers": {
-    GET: { permission: PERMISSIONS.PRODUCTS_VIEW },
-    POST: { permission: PERMISSIONS.PRODUCTS_EDIT },
+    GET: VIEW,
+    POST: MANAGE,
   },
   "/api/v1/admin/inventory/transfers/*": {
-    GET: { permission: PERMISSIONS.PRODUCTS_VIEW },
-    PUT: { permission: PERMISSIONS.PRODUCTS_EDIT },
-    DELETE: { permission: PERMISSIONS.PRODUCTS_EDIT },
+    GET: VIEW,
+    PUT: MANAGE,
+    DELETE: MANAGE,
   },
   "/api/v1/admin/inventory/transfers/*/ship": {
-    POST: { permission: PERMISSIONS.PRODUCTS_EDIT },
+    POST: MANAGE,
   },
   "/api/v1/admin/inventory/transfers/*/receive": {
-    POST: { permission: PERMISSIONS.PRODUCTS_EDIT },
+    POST: MANAGE,
   },
   "/api/v1/admin/inventory/transfers/*/cancel": {
-    POST: { permission: PERMISSIONS.PRODUCTS_EDIT },
+    POST: MANAGE,
   },
 };

@@ -52,6 +52,7 @@ import {
 import { productMerchandisingSectionResponseSchemas } from "../../schemas/product-merchandising";
 
 import { scheduleRecommendationRefreshAfterWrite } from "../../utils/catalog-jobs";
+import { assertCanWriteCosts, presentSkuCost, presentSkuCosts, productWriteSetsCosts } from "./cost-access";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -533,7 +534,9 @@ const createProductRoute = createRoute({
 
 app.openapi(createProductRoute, async (c) => {
     const db = c.get("db");
-    const result = await createProduct(db, c.req.valid("json"));
+    const data = c.req.valid("json");
+    assertCanWriteCosts(c, productWriteSetsCosts(data));
+    const result = await createProduct(db, data);
 
     scheduleRecommendationRefreshAfterWrite(c, db, [result.id]);
     return created(c, result);
@@ -796,7 +799,7 @@ app.openapi(getByIdRoute, async (c) => {
     const { id } = c.req.valid("param");
     const product = await getProductDetails(db, id);
     if (!product) throw new NotFoundError("Product not found");
-    return ok(c, product);
+    return ok(c, presentSkuCosts(c, product));
 });
 
 // ── Update Product ──
@@ -825,6 +828,7 @@ app.openapi(updateProductRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     const data = c.req.valid("json");
+    assertCanWriteCosts(c, productWriteSetsCosts(data));
     try {
         const result = await updateProduct(db, id, data, c.get("user")?.id);
 
@@ -957,7 +961,7 @@ app.openapi(createVariantRoute, async (c) => {
         const result = await createVariant(db, id, data);
         if (!result) throw new NotFoundError("Failed to create variant");
 
-        return created(c, result);
+        return created(c, presentSkuCost(c, result));
     } catch (error: unknown) {
         if (error instanceof Error && error.message?.includes("SKU")) throw new ValidationError(error.message);
         throw error;
@@ -990,7 +994,7 @@ app.openapi(listVariantsRoute, async (c) => {
     const db = c.get("db");
     const { id } = c.req.valid("param");
     const variants = await getProductVariants(db, id);
-    return ok(c, { variants });
+    return ok(c, presentSkuCosts(c, { variants }));
 });
 
 // ── Update Variant ──
@@ -1023,7 +1027,7 @@ app.openapi(updateVariantRoute, async (c) => {
         const result = await updateVariant(db, id, variantId, data, user?.id);
         if (!result) throw new NotFoundError("Variant not found");
 
-        return ok(c, result);
+        return ok(c, presentSkuCost(c, result));
     } catch (error: unknown) {
         if (error instanceof Error) {
             if (error.message === "Variant not found") throw new NotFoundError(error.message);

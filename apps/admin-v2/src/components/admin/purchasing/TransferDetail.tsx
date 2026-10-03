@@ -25,7 +25,7 @@ import { Fact, LineProduct, useUnitsText } from "./purchasing-ui";
  */
 export function TransferDetail({ transfer, onReload }: { transfer: Transfer; onReload: () => Promise<void> }) {
   const t = useMessages(purchasingMessages);
-  const { inventory: { canAdjustStock: canEdit } } = useCatalogActionPermissions();
+  const { inventory: { canManageOperations: canEdit } } = useCatalogActionPermissions();
   const unitsText = useUnitsText();
   const command = useTransferCommand();
   const keys = useOperationKeys();

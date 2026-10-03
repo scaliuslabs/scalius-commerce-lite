@@ -137,33 +137,32 @@ describe("route permissions", () => {
     });
   });
 
-  it("reads purchasing, transfers, costs and value with products.view and writes them with products.edit", () => {
-    const view: { permission: string } = { permission: PERMISSIONS.PRODUCTS_VIEW };
-    const edit: { permission: string } = { permission: PERMISSIONS.PRODUCTS_EDIT };
-    const cases: Array<[string, "GET" | "POST" | "PUT" | "PATCH" | "DELETE", { permission: string }]> = [
-      ["/api/v1/admin/inventory/valuation", "GET", view],
-      ["/api/v1/admin/inventory/costs", "PUT", edit],
+  it("reads purchasing and transfers with inventory.view and writes them with inventory.manage", () => {
+    const view = { permission: PERMISSIONS.INVENTORY_VIEW };
+    const manage = { permission: PERMISSIONS.INVENTORY_MANAGE };
+    const manageWithCosts = { allOf: [PERMISSIONS.INVENTORY_MANAGE, PERMISSIONS.PRODUCTS_VIEW_COSTS] };
+    const cases: Array<[string, "GET" | "POST" | "PUT" | "PATCH" | "DELETE", object]> = [
       ["/api/v1/admin/inventory/suppliers", "GET", view],
-      ["/api/v1/admin/inventory/suppliers", "POST", edit],
+      ["/api/v1/admin/inventory/suppliers", "POST", manage],
       ["/api/v1/admin/inventory/suppliers/sup_1", "GET", view],
-      ["/api/v1/admin/inventory/suppliers/sup_1", "PATCH", edit],
-      ["/api/v1/admin/inventory/suppliers/sup_1/archive", "POST", edit],
+      ["/api/v1/admin/inventory/suppliers/sup_1", "PATCH", manage],
+      ["/api/v1/admin/inventory/suppliers/sup_1/archive", "POST", manage],
       ["/api/v1/admin/inventory/purchase-orders", "GET", view],
-      ["/api/v1/admin/inventory/purchase-orders", "POST", edit],
+      ["/api/v1/admin/inventory/purchase-orders", "POST", manageWithCosts],
       ["/api/v1/admin/inventory/purchase-orders/po_1", "GET", view],
-      ["/api/v1/admin/inventory/purchase-orders/po_1", "PUT", edit],
-      ["/api/v1/admin/inventory/purchase-orders/po_1", "DELETE", edit],
-      ["/api/v1/admin/inventory/purchase-orders/po_1/export", "GET", view],
-      ["/api/v1/admin/inventory/purchase-orders/po_1/order", "POST", edit],
-      ["/api/v1/admin/inventory/purchase-orders/po_1/receive", "POST", edit],
-      ["/api/v1/admin/inventory/purchase-orders/po_1/cancel", "POST", edit],
+      ["/api/v1/admin/inventory/purchase-orders/po_1", "PUT", manageWithCosts],
+      ["/api/v1/admin/inventory/purchase-orders/po_1", "DELETE", manage],
+      ["/api/v1/admin/inventory/purchase-orders/po_1/export", "GET", { allOf: [PERMISSIONS.INVENTORY_VIEW, PERMISSIONS.PRODUCTS_VIEW_COSTS] }],
+      ["/api/v1/admin/inventory/purchase-orders/po_1/order", "POST", manage],
+      ["/api/v1/admin/inventory/purchase-orders/po_1/receive", "POST", manage],
+      ["/api/v1/admin/inventory/purchase-orders/po_1/cancel", "POST", manage],
       ["/api/v1/admin/inventory/transfers", "GET", view],
-      ["/api/v1/admin/inventory/transfers", "POST", edit],
+      ["/api/v1/admin/inventory/transfers", "POST", manage],
       ["/api/v1/admin/inventory/transfers/trf_1", "GET", view],
-      ["/api/v1/admin/inventory/transfers/trf_1", "PUT", edit],
-      ["/api/v1/admin/inventory/transfers/trf_1/ship", "POST", edit],
-      ["/api/v1/admin/inventory/transfers/trf_1/receive", "POST", edit],
-      ["/api/v1/admin/inventory/transfers/trf_1/cancel", "POST", edit],
+      ["/api/v1/admin/inventory/transfers/trf_1", "PUT", manage],
+      ["/api/v1/admin/inventory/transfers/trf_1/ship", "POST", manage],
+      ["/api/v1/admin/inventory/transfers/trf_1/receive", "POST", manage],
+      ["/api/v1/admin/inventory/transfers/trf_1/cancel", "POST", manage],
     ];
     for (const [path, method, expected] of cases) {
       expect(getRoutePermission(path, method), `${method} ${path}`).toEqual(expected);
@@ -172,6 +171,35 @@ describe("route permissions", () => {
     expect(getRoutePermission("/api/v1/admin/inventory/purchase-orders/po_1/receive", "GET")).toBeNull();
     expect(getRoutePermission("/api/v1/admin/inventory/valuation", "POST")).toBeNull();
     expect(getRoutePermission("/api/v1/admin/inventory/suppliers/sup_1", "DELETE")).toBeNull();
+  });
+
+  it("keeps a View products role out of purchasing, transfers, costs and location writes", () => {
+    const viewer = [PERMISSIONS.PRODUCTS_VIEW];
+    // Stock itself stays readable.
+    expect(allowed(viewer, "/api/v1/admin/inventory")).toBe(true);
+    expect(allowed(viewer, "/api/v1/admin/inventory/var_1/levels")).toBe(true);
+    expect(allowed(viewer, "/api/v1/admin/inventory/locations")).toBe(true);
+    for (const path of [
+      "/api/v1/admin/inventory/valuation",
+      "/api/v1/admin/inventory/suppliers",
+      "/api/v1/admin/inventory/purchase-orders",
+      "/api/v1/admin/inventory/purchase-orders/po_1",
+      "/api/v1/admin/inventory/transfers",
+      "/api/v1/admin/inventory/transfers/trf_1",
+    ]) expect(allowed(viewer, path), path).toBe(false);
+    expect(allowed([...viewer, PERMISSIONS.PRODUCTS_EDIT], "/api/v1/admin/inventory/costs", "PUT")).toBe(false);
+    expect(allowed([...viewer, PERMISSIONS.PRODUCTS_EDIT], "/api/v1/admin/inventory/locations", "POST")).toBe(false);
+    // Costs: View product costs reads them; changing one also needs product edit.
+    expect(allowed([...viewer, PERMISSIONS.PRODUCTS_VIEW_COSTS], "/api/v1/admin/inventory/valuation")).toBe(true);
+    expect(allowed([...viewer, PERMISSIONS.PRODUCTS_VIEW_COSTS], "/api/v1/admin/inventory/costs", "PUT")).toBe(false);
+    expect(allowed([PERMISSIONS.PRODUCTS_EDIT, PERMISSIONS.PRODUCTS_VIEW_COSTS], "/api/v1/admin/inventory/costs", "PUT")).toBe(true);
+    // Locations: their details and writes belong to inventory or store settings staff.
+    expect(allowed([PERMISSIONS.SETTINGS_GENERAL_VIEW], "/api/v1/admin/inventory/locations")).toBe(true);
+    expect(allowed([PERMISSIONS.SETTINGS_GENERAL_EDIT], "/api/v1/admin/inventory/locations", "POST")).toBe(true);
+    expect(allowed([PERMISSIONS.INVENTORY_MANAGE], "/api/v1/admin/inventory/locations/loc_1/archive", "POST")).toBe(true);
+    // Receiving and transfers need no costs; drafting a purchase order sets them.
+    expect(allowed([PERMISSIONS.INVENTORY_MANAGE], "/api/v1/admin/inventory/purchase-orders/po_1/receive", "POST")).toBe(true);
+    expect(allowed([PERMISSIONS.INVENTORY_MANAGE], "/api/v1/admin/inventory/purchase-orders", "POST")).toBe(false);
   });
 
   it("keeps hosted-payment recovery queue and export read-only", () => {
@@ -467,6 +495,36 @@ describe("page permissions", () => {
     expect(can([PERMISSIONS.GIFT_CARDS_VIEW], "/admin/gift-cards/gc_1")).toBe(true);
     expect(can([PERMISSIONS.ORDERS_VIEW], "/admin/gift-cards")).toBe(false);
     expect(can([PERMISSIONS.PRODUCTS_EDIT], "/admin/settings/warranty-policies")).toBe(true);
+  });
+
+  it("keeps a View products role out of Settings, Locations, purchasing and transfers", () => {
+    const viewer = [PERMISSIONS.PRODUCTS_VIEW];
+    expect(can(viewer, "/admin/products")).toBe(true);
+    expect(can(viewer, "/admin/inventory")).toBe(true);
+    for (const path of [
+      "/admin/settings",
+      "/admin/settings/locations",
+      "/admin/settings/store",
+      "/admin/inventory/purchase-orders",
+      "/admin/inventory/purchase-orders/po_1",
+      "/admin/inventory/purchase-orders/new",
+      "/admin/inventory/transfers",
+      "/admin/inventory/transfers/trf_1",
+      "/admin/inventory/suppliers",
+    ]) expect(can(viewer, path), path).toBe(false);
+  });
+
+  it("opens Locations to inventory or store-settings staff and purchasing to inventory staff", () => {
+    expect(can([PERMISSIONS.INVENTORY_VIEW], "/admin/settings/locations")).toBe(true);
+    expect(can([PERMISSIONS.SETTINGS_GENERAL_VIEW], "/admin/settings/locations")).toBe(true);
+    expect(can([PERMISSIONS.INVENTORY_VIEW], "/admin/settings")).toBe(true);
+    expect(can([PERMISSIONS.INVENTORY_VIEW], "/admin/inventory/purchase-orders/po_1")).toBe(true);
+    expect(can([PERMISSIONS.INVENTORY_VIEW], "/admin/inventory/transfers/trf_1/receive")).toBe(false);
+    expect(can([PERMISSIONS.INVENTORY_MANAGE], "/admin/inventory/transfers/trf_1/receive")).toBe(true);
+    expect(can([PERMISSIONS.INVENTORY_MANAGE], "/admin/inventory/transfers/new")).toBe(true);
+    // A purchase order's draft sets unit costs.
+    expect(can([PERMISSIONS.INVENTORY_MANAGE], "/admin/inventory/purchase-orders/new")).toBe(false);
+    expect(can([PERMISSIONS.INVENTORY_MANAGE, PERMISSIONS.PRODUCTS_VIEW_COSTS], "/admin/inventory/purchase-orders/new")).toBe(true);
   });
 });
 

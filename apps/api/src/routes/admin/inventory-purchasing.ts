@@ -1,11 +1,14 @@
 // Admin OpenAPI routes for purchasing and transfers (migration 0109):
 // suppliers, purchase orders (create, edit, order, receive, cancel, export)
 // and transfers between locations (create, edit, ship, receive, cancel).
-// Reads need products.view; writes products.edit (RBAC route map). Stock
-// commands (receive, ship, cancel in transit) require an Idempotency-Key;
-// edits and status changes require the document's current revision.
+// Reads need inventory.view; writes inventory.manage (RBAC route map).
+// Purchase-order money (unit costs, totals, shipping, tax) is left out for
+// callers without products.view_costs. Stock commands (receive, ship, cancel
+// in transit) require an Idempotency-Key; edits and status changes require
+// the document's current revision.
 
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import type { Context } from "hono";
 import {
   archiveSupplier,
   buildPurchaseOrderCsv,
@@ -27,7 +30,13 @@ import {
   listTransfers,
   markPurchaseOrderOrdered,
   PURCHASE_ORDER_MAX_LINES,
+  purchaseOrderReceiptWithoutCosts,
+  purchaseOrderSummaryWithoutCosts,
+  purchaseOrderWithoutCosts,
   receivePurchaseOrder,
+  type PurchaseOrderDetail,
+  type PurchaseOrderReceiptResult,
+  type PurchaseOrderSummary,
   receiveTransfer,
   shipTransfer,
   supplierInputSchema,
@@ -46,12 +55,23 @@ import {
   PURCHASE_ORDER_STATUSES,
   SUPPLIER_STATUSES,
 } from "@scalius/database/schema";
-import { ValidationError } from "../../utils/api-error";
+import { ForbiddenError, ValidationError } from "../../utils/api-error";
 import { ok } from "../../utils/api-response";
 import { conflictResponse, errorResponses, paginationSchema, successEnvelope } from "../../schemas/responses";
 import { nullableTimestampSchema, timestampSchema } from "../../schemas/timestamps";
+import { costsVisible } from "./cost-access";
 
 const TAG = "Admin - Inventory";
+
+// "View product costs": purchase-order money is shown only with it.
+const presentOrder = (c: Context, order: PurchaseOrderDetail) => costsVisible(c) ? order : purchaseOrderWithoutCosts(order);
+const presentSummary = (c: Context, summary: PurchaseOrderSummary) =>
+  costsVisible(c) ? summary : purchaseOrderSummaryWithoutCosts(summary);
+const presentReceipt = (c: Context, result: PurchaseOrderReceiptResult) =>
+  costsVisible(c) ? result : purchaseOrderReceiptWithoutCosts(result);
+/** Left out of the response without products.view_costs. */
+const costField = <T extends z.ZodTypeAny>(schema: T, description: string) =>
+  schema.optional().openapi({ description: `${description}. Left out without the View product costs permission.` });
 
 const idempotencyHeaders = z.object({
   "idempotency-key": inventoryOperationKeySchema.optional().openapi({
@@ -190,8 +210,8 @@ const purchaseOrderSummarySchema = z.object({
   lineCount: z.number().int(),
   quantity: z.number().int(),
   receivedQuantity: z.number().int(),
-  subtotal: z.number().openapi({ description: "Σ quantity × unit cost, major units" }),
-  total: z.number().openapi({ description: "Subtotal + shipping + other costs + tax" }),
+  subtotal: costField(z.number(), "Σ quantity × unit cost, major units"),
+  total: costField(z.number(), "Subtotal + shipping + other costs + tax"),
   revision: z.number().int(),
   orderedAt: nullableTimestampSchema,
   receivedAt: nullableTimestampSchema,
@@ -211,9 +231,9 @@ const purchaseOrderDetailSchema = purchaseOrderSummarySchema.extend({
   }).nullable(),
   destination: z.object({ id: z.string(), name: z.string(), code: z.string(), status: z.string() }),
   notes: z.string().nullable(),
-  shipping: z.number(),
-  otherCosts: z.number(),
-  tax: z.number(),
+  shipping: costField(z.number(), "Shipping charged by the supplier"),
+  otherCosts: costField(z.number(), "Other charges"),
+  tax: costField(z.number(), "Tax charged by the supplier"),
   createdBy: z.string().nullable(),
   lines: z.array(z.object({
     id: z.string(),
@@ -228,9 +248,9 @@ const purchaseOrderDetailSchema = purchaseOrderSummarySchema.extend({
     quantity: z.number().int(),
     receivedQuantity: z.number().int(),
     openQuantity: z.number().int(),
-    unitCost: z.number(),
-    lineTotal: z.number(),
-    currentCost: z.number().nullable().openapi({ description: "The SKU's unit cost now" }),
+    unitCost: costField(z.number(), "Unit cost on this purchase order"),
+    lineTotal: costField(z.number(), "Quantity × unit cost"),
+    currentCost: costField(z.number().nullable(), "The SKU's unit cost now"),
   })),
   receipts: z.array(z.object({
     operationKey: z.string(),
@@ -241,9 +261,9 @@ const purchaseOrderDetailSchema = purchaseOrderSummarySchema.extend({
       variantId: z.string(),
       sku: z.string(),
       quantity: z.number().int(),
-      unitCost: z.number(),
-      costBefore: z.number().nullable(),
-      costAfter: z.number().nullable(),
+      unitCost: costField(z.number(), "Unit cost received"),
+      costBefore: costField(z.number().nullable(), "The SKU's unit cost before the receipt"),
+      costAfter: costField(z.number().nullable(), "The SKU's unit cost after the receipt"),
       costUpdated: z.boolean(),
     })),
   })),
@@ -276,7 +296,10 @@ adminPurchaseOrderRoutes.openapi(createRoute({
       content: { "application/json": { schema: successEnvelope(z.object({ purchaseOrders: z.array(purchaseOrderSummarySchema), pagination: paginationSchema })) } },
     },
   },
-}), async (c) => ok(c, await listPurchaseOrders(c.get("db"), c.req.valid("query"))));
+}), async (c) => {
+  const result = await listPurchaseOrders(c.get("db"), c.req.valid("query"));
+  return ok(c, { ...result, purchaseOrders: result.purchaseOrders.map((summary) => presentSummary(c, summary)) });
+});
 
 adminPurchaseOrderRoutes.openapi(createRoute({
   method: "post",
@@ -291,7 +314,7 @@ adminPurchaseOrderRoutes.openapi(createRoute({
     400: errorResponses[400],
     404: errorResponses[404],
   },
-}), async (c) => ok(c, await createPurchaseOrder(c.get("db"), c.req.valid("json"), c.get("user")?.id)));
+}), async (c) => ok(c, presentOrder(c, await createPurchaseOrder(c.get("db"), c.req.valid("json"), c.get("user")?.id))));
 
 adminPurchaseOrderRoutes.openapi(createRoute({
   method: "get",
@@ -301,7 +324,7 @@ adminPurchaseOrderRoutes.openapi(createRoute({
   summary: "Get a purchase order with its lines and receipts",
   request: { params: poParams },
   responses: { 200: { description: "Purchase order", content: { "application/json": { schema: purchaseOrderEnvelope } } }, 404: errorResponses[404] },
-}), async (c) => ok(c, await getPurchaseOrder(c.get("db"), c.req.valid("param").purchaseOrderId)));
+}), async (c) => ok(c, presentOrder(c, await getPurchaseOrder(c.get("db"), c.req.valid("param").purchaseOrderId))));
 
 adminPurchaseOrderRoutes.openapi(createRoute({
   method: "put",
@@ -317,7 +340,7 @@ adminPurchaseOrderRoutes.openapi(createRoute({
     404: errorResponses[404],
     409: conflictResponse,
   },
-}), async (c) => ok(c, await updatePurchaseOrder(c.get("db"), c.req.valid("param").purchaseOrderId, c.req.valid("json"))));
+}), async (c) => ok(c, presentOrder(c, await updatePurchaseOrder(c.get("db"), c.req.valid("param").purchaseOrderId, c.req.valid("json")))));
 
 adminPurchaseOrderRoutes.openapi(createRoute({
   method: "post",
@@ -333,7 +356,7 @@ adminPurchaseOrderRoutes.openapi(createRoute({
     404: errorResponses[404],
     409: conflictResponse,
   },
-}), async (c) => ok(c, await markPurchaseOrderOrdered(c.get("db"), c.req.valid("param").purchaseOrderId, c.req.valid("json").expectedRevision)));
+}), async (c) => ok(c, presentOrder(c, await markPurchaseOrderOrdered(c.get("db"), c.req.valid("param").purchaseOrderId, c.req.valid("json").expectedRevision))));
 
 const receiptResultSchema = z.object({
   purchaseOrderId: z.string(),
@@ -348,9 +371,9 @@ const receiptResultSchema = z.object({
     sku: z.string(),
     quantity: z.number().int(),
     movementId: z.string(),
-    unitCost: z.number(),
-    costBefore: z.number().nullable(),
-    costAfter: z.number().nullable(),
+    unitCost: costField(z.number(), "Unit cost received"),
+    costBefore: costField(z.number().nullable(), "The SKU's unit cost before the receipt"),
+    costAfter: costField(z.number().nullable(), "The SKU's unit cost after the receipt"),
     stockAfter: z.number().int().openapi({ description: "The SKU's on-hand across every location after the receipt" }),
   })),
 });
@@ -388,8 +411,12 @@ adminPurchaseOrderRoutes.openapi(createRoute({
   },
 }), async (c) => {
   const { operationKey, ...body } = c.req.valid("json");
+  // Moving a SKU's unit cost writes a cost: only for those who can see them.
+  if (body.updateCost && !costsVisible(c)) {
+    throw new ForbiddenError("Updating unit costs needs the View product costs permission.");
+  }
   const key = operationKeyFrom(c.req.valid("header")["idempotency-key"], operationKey);
-  return ok(c, await receivePurchaseOrder(c.get("db"), c.req.valid("param").purchaseOrderId, { ...body, operationKey: key }, c.get("user")?.id));
+  return ok(c, presentReceipt(c, await receivePurchaseOrder(c.get("db"), c.req.valid("param").purchaseOrderId, { ...body, operationKey: key }, c.get("user")?.id)));
 });
 
 adminPurchaseOrderRoutes.openapi(createRoute({
@@ -405,7 +432,7 @@ adminPurchaseOrderRoutes.openapi(createRoute({
     404: errorResponses[404],
     409: conflictResponse,
   },
-}), async (c) => ok(c, await cancelPurchaseOrder(c.get("db"), c.req.valid("param").purchaseOrderId, c.req.valid("json").expectedRevision)));
+}), async (c) => ok(c, presentOrder(c, await cancelPurchaseOrder(c.get("db"), c.req.valid("param").purchaseOrderId, c.req.valid("json").expectedRevision))));
 
 adminPurchaseOrderRoutes.openapi(createRoute({
   method: "delete",

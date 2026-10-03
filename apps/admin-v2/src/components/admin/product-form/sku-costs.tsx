@@ -12,6 +12,7 @@
 // it is the one source of the costs the editor shows.
 import { createContext, useContext, useLayoutEffect, useMemo, useReducer, useRef, type MutableRefObject, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useCatalogActionPermissions } from "~/hooks/use-catalog-action-permissions";
 import { productQueryOptions, type ProductDetailDto } from "~/lib/api-query-options/products";
 import {
   costProblem,
@@ -132,8 +133,14 @@ export function useSkuCosts(): SkuCostStore | null {
   return useContext(SkuCostContext);
 }
 
+/**
+ * Costs per item reach the editor only for staff with "View product costs":
+ * without it there is no store, so no cost field, margin or cost write
+ * appears (the API leaves costs out of their reads and refuses cost writes).
+ */
 export function SkuCostProvider({ store, children }: { store: SkuCostStore; children: ReactNode }) {
-  return <SkuCostContext.Provider value={store}>{children}</SkuCostContext.Provider>;
+  const { inventory: { canViewCosts } } = useCatalogActionPermissions();
+  return <SkuCostContext.Provider value={canViewCosts ? store : null}>{children}</SkuCostContext.Provider>;
 }
 
 /**
