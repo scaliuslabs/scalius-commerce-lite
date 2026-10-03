@@ -4,6 +4,12 @@
   "sandbox": false,
   "plugins": [
     {
+      "id": "scalius.bkash",
+      "version": "0.1.0",
+      "source": "plugins/bkash",
+      "sha256": "4342a575b112db72fa16b951efc51707c1cb6dfb00b04645578403f0e5250ebe"
+    },
+    {
       "id": "scalius.bulk-discount",
       "version": "0.1.0",
       "source": "plugins/bulk-discount",
@@ -14,6 +20,12 @@
       "version": "0.3.0",
       "source": "plugins/hello",
       "sha256": "c54c837ff5a576b5cd99b25709d63a1d012f59834851fd5ecf14e4d71f4a485c"
+    },
+    {
+      "id": "scalius.nagad",
+      "version": "0.1.0",
+      "source": "plugins/nagad",
+      "sha256": "fe58d80cdd691548fd7eb2aae7d6b68d228ff182b6db9f7cbd2664072dbad42e"
     },
     {
       "id": "scalius.order-tagger",

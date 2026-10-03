@@ -5,6 +5,11 @@
 import type { BundledPluginEntry } from "./loaders/bundled";
 
 export const BUNDLED_PLUGINS: Readonly<Record<string, BundledPluginEntry>> = {
+  "scalius.bkash": {
+    version: "0.1.0",
+    sha256: "4342a575b112db72fa16b951efc51707c1cb6dfb00b04645578403f0e5250ebe",
+    load: () => import("../../../../plugins/bkash/src/index"),
+  },
   "scalius.bulk-discount": {
     version: "0.1.0",
     sha256: "ae607e7d776ea05e2572845136dbb93900bfcd50d4b0654f242d720a218d8ca0",
@@ -14,6 +19,11 @@ export const BUNDLED_PLUGINS: Readonly<Record<string, BundledPluginEntry>> = {
     version: "0.3.0",
     sha256: "c54c837ff5a576b5cd99b25709d63a1d012f59834851fd5ecf14e4d71f4a485c",
     load: () => import("../../../../plugins/hello/src/index"),
+  },
+  "scalius.nagad": {
+    version: "0.1.0",
+    sha256: "fe58d80cdd691548fd7eb2aae7d6b68d228ff182b6db9f7cbd2664072dbad42e",
+    load: () => import("../../../../plugins/nagad/src/index"),
   },
   "scalius.order-tagger": {
     version: "0.1.0",
