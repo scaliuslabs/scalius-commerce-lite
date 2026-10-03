@@ -33,6 +33,9 @@ import { CheckoutOrderError } from "../create-order";
 import { createHostedGatewayHandler } from "./hosted";
 
 const sslcommerzHandler = createHostedGatewayHandler("sslcommerz", "SSLCommerz");
+/** An app's hosted wallet (`<plugin id>:<provider id>`) runs through the same handler. */
+const BKASH = "scalius.bkash:bkash";
+const bkashHandler = createHostedGatewayHandler(BKASH, "bKash");
 import { resetStripePaymentElement, stripeHandler } from "./stripe";
 import type { CheckoutConfig, PaymentContext } from "../types";
 
@@ -59,11 +62,11 @@ function makeContext(config: CheckoutConfig = partialConfig): PaymentContext {
 }
 
 function recoveryUrl(gateway: string): string {
-  return `/order-success?orderId=order_1&payment=${gateway}&paymentType=deposit&depositAmount=50`;
+  return `/order-success?orderId=order_1&payment=${encodeURIComponent(gateway)}&paymentType=deposit&depositAmount=50`;
 }
 
 function failedRecoveryUrl(gateway: string): string {
-  return `/order-success?orderId=order_1&payment=${gateway}&result=failed&paymentType=deposit&depositAmount=50`;
+  return `/order-success?orderId=order_1&payment=${encodeURIComponent(gateway)}&result=failed&paymentType=deposit&depositAmount=50`;
 }
 
 beforeEach(() => {
@@ -89,6 +92,13 @@ describe("hosted online payment handlers", () => {
       endpoint: "/api/checkout/payment-session/sslcommerz",
       gateway: "sslcommerz",
       successBody: { gatewayUrl: "https://ssl.example.test/pay" },
+    },
+    {
+      label: "an app's bKash",
+      handler: bkashHandler,
+      endpoint: `/api/checkout/payment-session/${BKASH}`,
+      gateway: BKASH,
+      successBody: { gatewayUrl: "https://tokenized.sandbox.bka.sh/checkout" },
     },
   ])("lets the API derive payment type for $label sessions", async ({
     handler,
@@ -133,6 +143,12 @@ describe("hosted online payment handlers", () => {
       gateway: "sslcommerz",
       gatewayUrl: "https://ssl.example.test/pay",
     },
+    {
+      label: "an app's bKash",
+      handler: bkashHandler,
+      gateway: BKASH,
+      gatewayUrl: "https://tokenized.sandbox.bka.sh/checkout",
+    },
   ])("uses the fused $label session returned by order creation", async ({
     handler,
     gateway,
@@ -160,6 +176,7 @@ describe("hosted online payment handlers", () => {
 
   it.each([
     { handler: sslcommerzHandler, gateway: "sslcommerz" },
+    { handler: bkashHandler, gateway: BKASH },
   ])("falls back to the private receipt after $gateway returns an unsafe URL", async ({
     handler,
     gateway,
