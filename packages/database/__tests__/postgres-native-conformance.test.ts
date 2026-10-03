@@ -115,7 +115,9 @@ describe.runIf(serverUrl)("native PostgreSQL adapter conformance", () => {
         db.insert(customers).values({
           id: rollbackCustomerId,
           name: "Native PostgreSQL Rollback Buyer",
-          phone: `+${scope.slice(0, 23)}9`,
+          // A different length from the first buyer's phone, so the two can
+          // never collide (scope.slice(0, 23) + "9" did when char 24 was 9).
+          phone: `+${scope.slice(0, 22)}rb`,
         }),
         db.insert(customerSessions).values({
           tokenHash: tokenHashes[2]!,
