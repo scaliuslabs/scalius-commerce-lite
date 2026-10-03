@@ -7,6 +7,7 @@ import { analyticsMessages } from "~/i18n/analytics";
 import { formatPercent } from "./analytics-format";
 
 export interface BreakdownRow {
+  /** Unique within its card: one key (a channel) can have several rows (one per source). */
   key: string;
   name: string;
   /** A second line (a channel's source). */

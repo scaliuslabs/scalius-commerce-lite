@@ -266,7 +266,8 @@ export function breakdownRow(
   else if (kind === "city") name = row.key || t("token.city");
   else if (kind === "zone") name = row.label || word(`token.${row.key}`, row.key);
   else name = row.label || row.key || t("token.none");
-  return { key: row.key, name, detail, value: row.totalSales, orders: row.orders };
+  // A row is one (key, label) group in the query: a channel's key repeats per source.
+  return { key: JSON.stringify([row.key, row.label]), name, detail, value: row.totalSales, orders: row.orders };
 }
 
 function ChangeText({ current, previous, compared, upIsGood = true }: { current: number; previous: number | null | undefined; compared: string | null; upIsGood?: boolean }) {

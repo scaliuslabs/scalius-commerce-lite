@@ -335,7 +335,8 @@ const salesByCity = orderDimensionReport({
 });
 
 const salesByDeliveryZone = orderDimensionReport({
-  id: "od.zone_key",
+  // One row per group: a key (`__no_delivery`) can have several zone names, so the id carries both.
+  id: "od.zone_key || '|' || od.zone_label",
   columns: "case when od.zone_label = '' then od.zone_key else od.zone_label end as delivery_zone",
   groupBy: "od.zone_key, od.zone_label",
 });

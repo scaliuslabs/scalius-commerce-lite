@@ -4,7 +4,8 @@ import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AnalyticsOverview as OverviewData } from "~/lib/api-query-options/analytics";
-import { setLocale } from "~/i18n";
+import { setLocale, translate } from "~/i18n";
+import { analyticsMessages, type AnalyticsMessageKey } from "~/i18n/analytics";
 
 const measures = (totalSales: number, orders: number) => ({
   orders,
@@ -35,8 +36,10 @@ const overview: OverviewData = {
   current: { ...period("2026-08-01", "2026-08-03", 3000, 4), otherCurrencyOrders: 2 },
   previous: period("2026-07-29", "2026-07-31", 2000, 2),
   breakdowns: {
+    // The dashboard channel has two rows: no source, and a merchant's own label.
     channel: [
-      { key: "online_store", label: "", ...measures(2500, 3) },
+      { key: "online_store", label: "", ...measures(2000, 2) },
+      { key: "admin", label: "", ...measures(500, 1) },
       { key: "admin", label: "facebook", ...measures(500, 1) },
     ],
     paymentMethod: [{ key: "cod", label: "", ...measures(3000, 4) }],
@@ -61,7 +64,7 @@ vi.mock("@tanstack/react-router", () => ({
 vi.mock("~/hooks/use-currency", () => ({ useCurrency: () => ({ fmt: (value: number) => `৳${value}` }) }));
 vi.mock("~/hooks/use-media-query", () => ({ useMediaQuery: () => false }));
 
-import { AnalyticsOverview } from "./AnalyticsOverview";
+import { AnalyticsOverview, breakdownRow } from "./AnalyticsOverview";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -121,5 +124,46 @@ describe("analytics overview page", () => {
     const links = [...container.querySelectorAll("a")].map((link) => link.textContent);
     expect(links).toContain("View as table");
     expect(links.filter((label) => label === "View report")).toHaveLength(5);
+  });
+
+  it("lists a channel once per source, without two rows sharing a React key", () => {
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    const fresh = document.createElement("div");
+    document.body.append(fresh);
+    const freshRoot = createRoot(fresh);
+    act(() => freshRoot.render(
+      <AnalyticsOverview
+        selection={{ from: "2026-08-01", to: "2026-08-03", comparison: "previous_period", granularity: null }}
+        today="2026-08-03"
+        granularity="day"
+        onChange={vi.fn()}
+      />,
+    ));
+    const dashboardRows = [...fresh.querySelectorAll("li")].map((row) => row.textContent ?? "").filter((text) => text.startsWith("Dashboard"));
+    act(() => freshRoot.unmount());
+    fresh.remove();
+    const sameKey = errors.mock.calls.filter(([message]) => String(message).includes("same key"));
+    errors.mockRestore();
+    expect(sameKey).toEqual([]);
+    expect(dashboardRows).toHaveLength(2);
+  });
+});
+
+describe("breakdown row keys", () => {
+  const t = (key: AnalyticsMessageKey, vars?: Record<string, string | number>) => translate(analyticsMessages, key, vars);
+  const row = (key: string, label: string) => ({ key, label, ...measures(100, 1) });
+
+  it("are unique for rows that share one key but differ in label: a channel's sources, a zone's names", () => {
+    const cases: Array<[Parameters<typeof breakdownRow>[2], Array<ReturnType<typeof row>>]> = [
+      ["channel", [row("admin", ""), row("admin", "facebook"), row("admin", "phone"), row("online_store", "")]],
+      ["zone", [row("__no_delivery", ""), row("__no_delivery", "Dhaka"), row("zone_a", "Dhaka"), row("__other", "")]],
+      ["paymentMethod", [row("cod", ""), row("sslcommerz", ""), row("__other", "")]],
+      ["city", [row("", ""), row("Dhaka", "Dhaka"), row("Dhaka|", "Dhaka|")]],
+      ["location", [row("", ""), row("loc_a", "Main location"), row("loc_b", "Main location")]],
+    ];
+    for (const [kind, rows] of cases) {
+      const keys = rows.map((item) => breakdownRow(item, t, kind).key);
+      expect(new Set(keys).size, kind).toBe(keys.length);
+    }
   });
 });

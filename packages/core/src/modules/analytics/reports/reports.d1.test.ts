@@ -123,7 +123,7 @@ describe("sales reports on the known-answer store", () => {
     expect(cities.Chattogram?.values).toMatchObject({ orders: 1, total_sales: 0 });
     expect(cities[""]?.values).toMatchObject({ orders: 1, total_sales: 11_500 });
     const zones = byId((await report("sales_by_delivery_zone")).rows);
-    expect(zones.__no_delivery?.values).toMatchObject({ delivery_zone: "__no_delivery", orders: 1 });
+    expect(zones["__no_delivery|"]?.values).toMatchObject({ delivery_zone: "__no_delivery", orders: 1 });
     const locations = (await report("sales_by_location")).rows;
     expect(locations).toEqual([expect.objectContaining({ id: "loc_default", values: expect.objectContaining({ location: "Main location", orders: 6 }) })]);
   });
