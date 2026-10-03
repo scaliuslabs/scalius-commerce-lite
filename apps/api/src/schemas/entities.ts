@@ -496,6 +496,19 @@ export const orderDetailSchema = z.object({
     reasons: z.array(z.string()),
     checkedAt: timestampSchema,
   })),
+  /**
+   * Apps' holds for staff review (`order.risk` with hold), open ones first.
+   * While one is open the order is not shipped, handed over or moved on
+   * (cancelling stays possible); staff release it.
+   */
+  holds: z.array(z.object({
+    id: z.string(),
+    appId: z.string(),
+    appName: z.string(),
+    reason: z.string(),
+    placedAt: timestampSchema,
+    releasedAt: timestampSchema.nullable(),
+  })),
   status: z.string(),
   paymentStatus: z.string().nullable(),
   paymentMethod: z.string().nullable(),

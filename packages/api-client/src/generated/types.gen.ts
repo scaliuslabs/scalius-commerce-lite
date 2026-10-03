@@ -60529,6 +60529,95 @@ export type DeleteApiV1AdminOrdersByIdTimelineByEventIdResponses = {
 
 export type DeleteApiV1AdminOrdersByIdTimelineByEventIdResponse = DeleteApiV1AdminOrdersByIdTimelineByEventIdResponses[keyof DeleteApiV1AdminOrdersByIdTimelineByEventIdResponses];
 
+export type PostApiV1AdminOrdersByIdHoldsByHoldIdReleaseData = {
+    body?: never;
+    path: {
+        id: string;
+        holdId: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/orders/{id}/holds/{holdId}/release';
+};
+
+export type PostApiV1AdminOrdersByIdHoldsByHoldIdReleaseErrors = {
+    /**
+     * Validation error
+     */
+    400: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Unauthorized
+     */
+    401: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Forbidden
+     */
+    403: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Not found
+     */
+    404: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+    /**
+     * Conflict
+     */
+    409: {
+        success: false;
+        error: {
+            code: string;
+            message: string;
+            details?: unknown;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersByIdHoldsByHoldIdReleaseError = PostApiV1AdminOrdersByIdHoldsByHoldIdReleaseErrors[keyof PostApiV1AdminOrdersByIdHoldsByHoldIdReleaseErrors];
+
+export type PostApiV1AdminOrdersByIdHoldsByHoldIdReleaseResponses = {
+    /**
+     * The released hold
+     */
+    200: {
+        success: true;
+        data: {
+            id: string;
+            appId: string;
+            appName: string;
+            reason: string;
+            placedAt: string;
+            releasedAt: string | null;
+        };
+    };
+};
+
+export type PostApiV1AdminOrdersByIdHoldsByHoldIdReleaseResponse = PostApiV1AdminOrdersByIdHoldsByHoldIdReleaseResponses[keyof PostApiV1AdminOrdersByIdHoldsByHoldIdReleaseResponses];
+
 export type PostApiV1AdminOrdersByIdPaymentRecoveryLinkData = {
     body?: never;
     path: {
@@ -60721,6 +60810,14 @@ export type GetApiV1AdminOrdersByIdResponses = {
                 level: 'low' | 'medium' | 'high';
                 reasons: Array<string>;
                 checkedAt: string | number;
+            }>;
+            holds: Array<{
+                id: string;
+                appId: string;
+                appName: string;
+                reason: string;
+                placedAt: string | number;
+                releasedAt: string | number | unknown;
             }>;
             status: string;
             paymentStatus: string | null;

@@ -31,6 +31,7 @@ import {
     SHIPMENT_CLAIM_LEASE_SECONDS,
 } from "../orders/shipment-claim";
 import { bulkShipOrderSchema, type ShipmentCreationOptionsInput } from "../orders/validation";
+import { assertOrderNotOnHold, noOpenOrderHoldCondition } from "../orders/holds";
 import {
     clearShipmentClaim,
     findShipmentByRequestKey,
@@ -181,6 +182,7 @@ export async function bulkShipOrders(
                 }
             }
             validateTransition("order", order.status, OrderStatus.SHIPPED);
+            await assertOrderNotOnHold(db, orderId);
 
             const claimId = createShipmentClaimId();
             const claimResult = await db.update(orders).set({
@@ -193,6 +195,7 @@ export async function bulkShipOrders(
                 eq(orders.version, order.version),
                 eq(orders.status, order.status),
                 noActiveShipmentClaimCondition(),
+                noOpenOrderHoldCondition(orderId),
                 noActiveRefundAttemptForOrderIdCondition(orderId),
                 noActivePaymentSessionAttemptForOrderIdCondition(orderId),
             )).returning({ id: orders.id });

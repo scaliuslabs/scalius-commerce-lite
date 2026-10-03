@@ -23,6 +23,25 @@ export interface AppliedAppDiscount {
   lines: Array<{ lineId: string; amountMinor: number }>;
 }
 
+/**
+ * A write an app's `checkout.discounts` answer commits with the order: its
+ * snapshot record (the buyer's, id = customer id) at the revision the
+ * function saw (null: it did not exist). The order and the write commit in
+ * one batch or not at all, so a balance the discount spends is spent once.
+ * Built by the platform from a validated answer (size and index columns
+ * checked), never taken from the app as is.
+ */
+export interface AppStorageCommit {
+  pluginId: string;
+  collection: string;
+  id: string;
+  expectedRevision: number | null;
+  /** The record as JSON, at most the storage record size. */
+  dataJson: string;
+  /** The record's index columns under the collection's declaration. */
+  columns: Record<string, string | null>;
+}
+
 export interface CheckoutRateOption {
   rateId: string;
   name: string;

@@ -16,6 +16,7 @@ import { autoFulfillerFor, FULFILLER_REGISTRY, type AutoFulfilRuntime, type Fulf
 import { buildFulfilmentInsertStatements, deriveOrderFulfilmentStatus } from "./ledger";
 import { applyOrderStatusChange } from "../orders/status/lifecycle";
 import { checkoutDocument, type AutoFulfilMode } from "../settings/documents";
+import { listOrderHolds } from "../orders/holds";
 
 /** Queue message: hand an order's automatic lines over (ids only, no buyer data). */
 export interface OrderAutoFulfilQueueMessage {
@@ -50,7 +51,8 @@ export interface AutoFulfilResult {
     /** Auto types still waiting: no fulfiller registered (fails closed). */
     unavailableTypes: FulfillmentType[];
     /** `awaiting_confirmation`: the store hands over only after staff confirm the order. */
-    skipped: "no_auto_lines" | "unsettled" | "closed" | "awaiting_confirmation" | null;
+    /** `on_hold`: staff review an app's hold; the sweep hands it over once released. */
+    skipped: "no_auto_lines" | "unsettled" | "closed" | "awaiting_confirmation" | "on_hold" | null;
     delivered: boolean;
 }
 
@@ -109,6 +111,9 @@ export async function autoFulfilOrder(
         && !(STAFF_CONFIRMED_ORDER_STATUSES as string[]).includes(order.status)
     ) {
         return { ...result, skipped: "awaiting_confirmation" };
+    }
+    if ((await listOrderHolds(db, [orderId])).get(orderId)?.some((hold) => hold.releasedAt === null)) {
+        return { ...result, skipped: "on_hold" };
     }
 
     const fulfilledAfter = new Map(items.map((item) => [item.id, item.fulfilledQuantity]));

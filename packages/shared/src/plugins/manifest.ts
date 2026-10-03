@@ -68,6 +68,14 @@ export const PLUGIN_FUNCTION_POINTS = [
 ] as const;
 export type PluginFunctionPoint = (typeof PLUGIN_FUNCTION_POINTS)[number];
 
+/**
+ * Points where an app may stop checkout when it cannot answer
+ * (`onError: "block"`): a check the store relies on (address or stock
+ * verification, payment eligibility). Elsewhere a failure only leaves the
+ * app out.
+ */
+export const PLUGIN_BLOCKING_FUNCTION_POINTS = ["cart.validate", "checkout.payment_methods"] as const satisfies readonly PluginFunctionPoint[];
+
 /** Provider ports a plugin can fill: the same ports the platform's own adapters implement (providers.ts). */
 export const PLUGIN_PROVIDER_KINDS = PROVIDER_KINDS;
 export type PluginProviderKind = (typeof PLUGIN_PROVIDER_KINDS)[number];
@@ -200,6 +208,20 @@ export const pluginManifestSchema = z.object({
     point: z.enum(PLUGIN_FUNCTION_POINTS),
     /** Lower runs first among plugins at the same point. */
     priority: z.number().int().min(0).max(1000).default(100),
+    /**
+     * What a throw, timeout or invalid answer does: `skip` leaves the app out
+     * (fail open); `block` stops checkout with the store's buyer-safe message
+     * (cart.validate and checkout.payment_methods only).
+     */
+    onError: z.enum(["skip", "block"]).default("skip"),
+    /**
+     * checkout.discounts only: the signed-in buyer's record in this
+     * collection (record id = customer id) is passed in as `snapshot`, and
+     * the answer may `commit` a new version of it, written with the order in
+     * the same atomic batch at the revision the function saw (a spent
+     * balance can never be spent twice).
+     */
+    snapshot: z.object({ collection: name }).strict().optional(),
   }).strict()).max(PLUGIN_FUNCTION_POINTS.length).default([]),
   /**
    * Providers the app implements, grouped by port (providers/descriptors.ts).
@@ -277,6 +299,17 @@ export const pluginManifestSchema = z.object({
     if (new Set(values).size !== values.length) context.addIssue({ code: "custom", path, message: `${what} must be unique.` });
   };
   unique(manifest.functions.map((fn) => fn.point), ["functions"], "Function points");
+  manifest.functions.forEach((fn, index) => {
+    if (fn.onError === "block" && !(PLUGIN_BLOCKING_FUNCTION_POINTS as readonly string[]).includes(fn.point)) {
+      context.addIssue({ code: "custom", path: ["functions", index, "onError"], message: "Only cart.validate and checkout.payment_methods may block checkout." });
+    }
+    if (fn.snapshot && fn.point !== "checkout.discounts") {
+      context.addIssue({ code: "custom", path: ["functions", index, "snapshot"], message: "Only checkout.discounts reads a snapshot." });
+    }
+    if (fn.snapshot && !collections.has(fn.snapshot.collection)) {
+      context.addIssue({ code: "custom", path: ["functions", index, "snapshot", "collection"], message: `Storage collection ${fn.snapshot.collection} is not declared.` });
+    }
+  });
   unique(manifest.providers.map((provider) => provider.id), ["providers"], "Provider ids");
   unique(manifest.cron.map((job) => job.name), ["cron"], "Cron names");
   unique(manifest.customFields.map((field) => `${field.ownerType}:${field.key}`), ["customFields"], "Custom field keys");

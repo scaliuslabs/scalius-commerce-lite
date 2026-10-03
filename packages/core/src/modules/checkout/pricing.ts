@@ -34,6 +34,7 @@ import {
   wantsAppCart,
   type AppDiscountResolution,
   type AppliedAppDiscount,
+  type AppStorageCommit,
   type CheckoutAppFunctions,
   type CheckoutPaymentMethodOption,
   type CheckoutRateOption,
@@ -83,6 +84,8 @@ export interface StorefrontCheckoutPricing {
   bundleDiscountMinor: number;
   bundleLines: BundlePromotionInterplay["bundleLines"];
   appDiscounts: AppliedAppDiscount[];
+  /** Snapshot writes the applied app discounts commit with the order. */
+  appStorageCommits: AppStorageCommit[];
   /** The delivery charge before discounts (an app may have priced the chosen rate). */
   shippingMinor: number;
   /** The chosen rate as the buyer sees it (an app may have renamed or priced it). */
@@ -195,6 +198,7 @@ export async function priceStorefrontCheckout(
   let shippingMethod = delivery.shippingMethod;
   let platform = await platformPricing(shippingMinor);
   let appDiscounts: AppliedAppDiscount[] = [];
+  let appStorageCommits: AppStorageCommit[] = [];
   let claimedCodes: string[] = [];
   let ruleErrors: CheckoutRuleError[] = [];
   let shippingRates: CheckoutRateOption[] | null = null;
@@ -290,6 +294,7 @@ export async function priceStorefrontCheckout(
         apps,
       });
       appDiscounts = resolution.applied;
+      appStorageCommits = resolution.commits;
       claimedCodes = resolution.claimedCodes;
     }
   }
@@ -340,6 +345,7 @@ export async function priceStorefrontCheckout(
     bundleDiscountMinor: platform.bundleDiscountMinor,
     bundleLines: platform.bundleLines,
     appDiscounts,
+    appStorageCommits,
     shippingMinor,
     shippingMethod,
     taxQuote,

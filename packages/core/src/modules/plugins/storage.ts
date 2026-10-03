@@ -17,6 +17,7 @@ import type { Database } from "@scalius/database/client";
 import { buildBatchGuard, isBatchGuardError, safeBatch } from "@scalius/database/client";
 import { pluginRecords } from "@scalius/database/schema";
 import { and, asc, desc, eq, gt, gte, lt, or, sql, type SQL } from "drizzle-orm";
+import type { AppStorageCommit } from "@scalius/shared/checkout-app-facts";
 import { PluginError } from "./errors";
 import { encodeIndexTuple, indexPrefixUpperBound, indexScalar, type IndexScalar } from "./index-encoding";
 
@@ -321,6 +322,96 @@ export async function deletePluginRecord(
     .where(and(owned(pluginId, collection), eq(pluginRecords.id, recordId)))
     .returning({ id: pluginRecords.id });
   return deleted.length > 0;
+}
+
+// ── Commits with an order ────────────────────────────────────────────────
+
+/**
+ * An app's snapshot write, checked and indexed now so the order commit only
+ * has to write it (checkout.discounts `commit`). Throws the storage refusal
+ * for a record that is too large or not indexable.
+ */
+export function prepareAppStorageCommit(input: {
+  pluginId: string;
+  collection: string;
+  declaration: PluginCollectionDeclaration;
+  id: string;
+  expectedRevision: number | null;
+  record: unknown;
+}): AppStorageCommit {
+  const { data, json } = requireRecord(input.record);
+  return {
+    pluginId: input.pluginId,
+    collection: input.collection,
+    id: requireRecordId(input.id),
+    expectedRevision: input.expectedRevision,
+    dataJson: json,
+    columns: recordIndexColumns(input.declaration, data),
+  };
+}
+
+const APP_STORAGE_COMMIT_CONFLICT = "APP_STORAGE_COMMIT_CONFLICT";
+
+/**
+ * The statements of app snapshot writes for a caller's own atomic batch
+ * (the order commit): guards first (each record still at the revision its
+ * function saw), then the writes. A failed guard aborts the whole batch;
+ * `isAppStorageCommitConflict` recognizes it.
+ */
+export function appStorageCommitStatements(db: Database, commits: readonly AppStorageCommit[]): { guards: unknown[]; writes: unknown[] } {
+  const guards: unknown[] = [];
+  const writes: unknown[] = [];
+  for (const commit of commits) {
+    const target = and(owned(commit.pluginId, commit.collection), eq(pluginRecords.id, commit.id));
+    const matching = sql`SELECT 1 FROM ${pluginRecords} WHERE ${target}`;
+    guards.push(buildBatchGuard(
+      db,
+      commit.expectedRevision === null
+        ? sql`NOT EXISTS (${matching})`
+        : sql`EXISTS (${matching} AND ${pluginRecords.revision} = ${commit.expectedRevision})`,
+      APP_STORAGE_COMMIT_CONFLICT,
+    ));
+    const columns = commit.columns;
+    writes.push(db.insert(pluginRecords).values({
+      pluginId: commit.pluginId,
+      collection: commit.collection,
+      id: commit.id,
+      dataJson: commit.dataJson,
+      revision: 1,
+      idx1: columns.idx1 ?? null,
+      idx2: columns.idx2 ?? null,
+      idx3: columns.idx3 ?? null,
+      idx4: columns.idx4 ?? null,
+      uq1: columns.uq1 ?? null,
+      uq2: columns.uq2 ?? null,
+      createdAt: sql`unixepoch()`,
+      updatedAt: sql`unixepoch()`,
+    }).onConflictDoUpdate({
+      target: [pluginRecords.pluginId, pluginRecords.collection, pluginRecords.id],
+      set: {
+        dataJson: sql`excluded.data_json`,
+        revision: sql`${pluginRecords.revision} + 1`,
+        idx1: sql`excluded.idx1`,
+        idx2: sql`excluded.idx2`,
+        idx3: sql`excluded.idx3`,
+        idx4: sql`excluded.idx4`,
+        uq1: sql`excluded.uq1`,
+        uq2: sql`excluded.uq2`,
+        updatedAt: sql`excluded.updated_at`,
+      },
+    }));
+  }
+  return { guards, writes };
+}
+
+/** An app snapshot write lost its race (its record changed) or broke the collection's unique index. */
+export function isAppStorageCommitConflict(error: unknown): boolean {
+  for (let current: unknown = error, hops = 0; current && hops < 5; hops += 1) {
+    const message = current instanceof Error ? current.message : String(current);
+    if (message.includes(APP_STORAGE_COMMIT_CONFLICT) || /plugin_records[._]uq[12]/i.test(message)) return true;
+    current = current instanceof Error ? (current as Error & { cause?: unknown }).cause : undefined;
+  }
+  return false;
 }
 
 // ── Queries ──────────────────────────────────────────────────────────────

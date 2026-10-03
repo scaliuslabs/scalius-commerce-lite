@@ -60,7 +60,7 @@ describe("plugin manifest", () => {
     const result = parsePluginManifest(FULL);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.manifest.functions[0]).toEqual({ point: "checkout.discounts", priority: 100 });
+    expect(result.manifest.functions[0]).toEqual({ point: "checkout.discounts", priority: 100, onError: "skip" });
     expect(result.manifest.limits).toEqual({ cpuMs: 50, wallMs: 10_000 });
     expect(result.manifest.storefront.scripts[0]!.placement).toBe("body-end");
   });
@@ -78,6 +78,10 @@ describe("plugin manifest", () => {
     ["a page whose route is missing", { admin: { pages: [{ id: "p", title: "P", route: "nope" }] } }, "admin.pages.0.route"],
     ["a section on an admin route", { storefront: { sections: [{ type: "s", name: "S", route: "dashboard" }] } }, "storefront.sections.0.route"],
     ["an unknown key", { extra: true }, "(root)"],
+    ["a discount that blocks checkout", { functions: [{ point: "checkout.discounts", onError: "block" }] }, "functions.0.onError"],
+    ["a snapshot outside checkout.discounts", { functions: [{ point: "cart.validate", snapshot: { collection: "visits" } }] }, "functions.0.snapshot"],
+    ["a snapshot of an undeclared collection", { functions: [{ point: "checkout.discounts", snapshot: { collection: "nope" } }] }, "functions.0.snapshot.collection"],
+    ["a collection named batch", { storage: { batch: {} } }, "storage.batch"],
   ])("rejects %s", (_label, override, path) => {
     const result = parsePluginManifest({ ...FULL, ...override });
     expect(result.ok).toBe(false);

@@ -41,10 +41,13 @@ import { and, eq, isNull, sql, type AnyColumn, type SQL } from "drizzle-orm";
 import { collectionMembershipForConfig } from "../collections/collection-config";
 import { allocateMinorAmount } from "../tax/money";
 import type { TaxDiscountAllocationInput } from "../tax/types";
-import type { AppDiscountTarget, AppliedAppDiscount, CheckoutRateOption } from "@scalius/shared/checkout-app-facts";
-export type { AppDiscountTarget, AppliedAppDiscount, CheckoutRateOption };
+import type { AppDiscountTarget, AppliedAppDiscount, AppStorageCommit, CheckoutRateOption } from "@scalius/shared/checkout-app-facts";
+export type { AppDiscountTarget, AppliedAppDiscount, AppStorageCommit, CheckoutRateOption };
 
 // ── The runner checkout is given ────────────────────────────────────────────
+
+/** Checkout refused because an app registered with `onError: "block"` could not answer. */
+export const CHECKOUT_APP_UNAVAILABLE_REASON = "CHECKOUT_APP_UNAVAILABLE";
 
 export interface CheckoutAppFunctionResult<P extends PluginFunctionPoint> {
   pluginId: string;
@@ -52,6 +55,8 @@ export interface CheckoutAppFunctionResult<P extends PluginFunctionPoint> {
   appName: string;
   priority: number;
   output: PluginFunctionOutput<P>;
+  /** checkout.discounts: the snapshot write the answer commits with the order, checked by the platform. */
+  commit?: AppStorageCommit;
 }
 
 /**
@@ -305,6 +310,8 @@ export interface AppDiscountLineInput {
 
 export interface AppDiscountResolution {
   applied: AppliedAppDiscount[];
+  /** The snapshot writes of apps whose discounts applied: committed with the order, or the order fails. */
+  commits: AppStorageCommit[];
   /** Codes an app discount answered to: not "not found" any more. */
   claimedCodes: string[];
   /** Off the items, all app discounts. */
@@ -412,8 +419,11 @@ export function resolveAppDiscounts(input: {
       applied.push({ ...base, amountMinor: total, shippingAmountMinor: 0, lines });
     }
   }
+  // An app's write follows its discounts: none applied, nothing is spent.
+  const appliedApps = new Set(applied.map((discount) => discount.pluginId));
   return {
     applied,
+    commits: input.results.flatMap((result) => (result.commit && appliedApps.has(result.pluginId) ? [result.commit] : [])),
     claimedCodes: [...claimed],
     merchandiseMinor: applied.reduce((total, discount) => total + discount.amountMinor, 0),
     shippingMinor: applied.reduce((total, discount) => total + discount.shippingAmountMinor, 0),

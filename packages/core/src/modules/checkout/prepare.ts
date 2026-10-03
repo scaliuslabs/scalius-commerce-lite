@@ -731,6 +731,7 @@ export async function createStorefrontOrder(
         }),
         promotion: pricing.discount.snapshot,
         ...(pricing.appDiscounts.length > 0 ? { appDiscounts: pricing.appDiscounts } : {}),
+        ...(pricing.appStorageCommits.length > 0 ? { appStorageCommits: pricing.appStorageCommits } : {}),
         ...(giftCardsApplied
             ? {
                 giftCardRedemptions: giftCardTender.applied.map(({ giftCardId, appliedMinor }) => ({

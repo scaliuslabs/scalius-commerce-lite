@@ -116,6 +116,7 @@ export const DASHBOARD_ORDER_OPERATIONS = {
       delivery: "authenticated-handle",
     },
   },
+  "dashboard.orders.release_hold": { risk: "security", batch: "forbidden" },
   "dashboard.orders.payment_recovery_link": {
     risk: "security",
     batch: "forbidden",

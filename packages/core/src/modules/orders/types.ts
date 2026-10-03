@@ -5,7 +5,7 @@ import type { OrderNotificationType } from "../notifications/notification-types"
 import type { ActiveRefundOperationView, OrderRefundAttemptView } from "../payments/refund-attempt-views";
 import type { TaxQuote } from "../tax/types";
 import type { PromotionCheckoutSnapshot } from "../promotions/checkout-snapshot";
-import type { AppliedAppDiscount, CheckoutRateOption } from "@scalius/shared/checkout-app-facts";
+import type { AppliedAppDiscount, AppStorageCommit, CheckoutRateOption } from "@scalius/shared/checkout-app-facts";
 import type { FunctionCart } from "@scalius/shared/plugins";
 import type { CustomerRequestType } from "../settings/customer-request-policy.shared";
 import type { DeliveryMethodKind, FulfillmentType } from "@scalius/shared/fulfilment";
@@ -265,6 +265,15 @@ export interface OrderDetails extends OrderListItem {
         reasons: string[];
         checkedAt: Date;
     }>;
+    /** Apps' holds for staff review (`order.risk` with hold), open ones first. */
+    holds: Array<{
+        id: string;
+        appId: string;
+        appName: string;
+        reason: string;
+        placedAt: Date;
+        releasedAt: Date | null;
+    }>;
     items: (OrderLineFulfilmentFacts & {
         id: string;
         productId: string;
@@ -514,6 +523,12 @@ export interface StorefrontOrderCommitPayload {
      * `app_discount` facts in the commit batch. Absent means none.
      */
     appDiscounts?: AppliedAppDiscount[];
+    /**
+     * App snapshot writes (a loyalty balance the discount spends), written in
+     * the commit batch at the revision each app saw: a concurrent change
+     * fails the whole order. Each belongs to an app with an applied discount.
+     */
+    appStorageCommits?: AppStorageCommit[];
     /**
      * Gift-card debits (the hold), written in the commit batch after the
      * order; the ledger guards refuse a card that changed since the quote.

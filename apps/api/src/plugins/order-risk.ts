@@ -1,8 +1,10 @@
 // `order.risk` (docs/platform/PLUGINS.md): after an order commits, apps that
 // implement the point rate its risk. Runs in `waitUntil`, so the buyer never
 // waits; the results are advice the merchant sees on the order page (the
-// customer card, next to the courier fraud check). Nothing cancels, holds or
-// changes the order. Retried runs add nothing (one fact per order and app).
+// customer card, next to the courier fraud check). An answer with
+// `hold: true` also puts the order on hold for staff review (orders/holds.ts):
+// it is not shipped or moved on until staff release it. Nothing is ever
+// cancelled. Retried runs add nothing (one fact and one hold per order and app).
 // Every channel runs it the same way: the online store and buyer agents
 // (`runOrderRiskChecks`, from the prepared storefront order) and staff
 // orders (`runAppOrderRiskChecks`, from the manual order's cart). Callers run
@@ -12,6 +14,7 @@ import type { Database } from "@scalius/database/client";
 import type { FunctionCart } from "@scalius/shared/plugins";
 import { buildAppCartFromOrderPayload, type CheckoutAppFunctions } from "@scalius/core/modules/checkout";
 import {
+  placeAppOrderHolds,
   readOrderRiskHistory,
   recordAppRiskChecks,
   type CreateStorefrontOrderResult,
@@ -63,8 +66,11 @@ export async function runAppOrderRiskChecks(input: AppOrderRiskInput): Promise<v
       level: result.output.level,
       reasons: result.output.reasons,
     })));
+    await placeAppOrderHolds(input.db, input.orderId, results
+      .filter((result) => result.output.hold)
+      .map((result) => ({ pluginId: result.pluginId, appName: result.appName, reasons: result.output.reasons })));
   } catch (error) {
-    // Advice only: a failed check never touches the order. No order or buyer facts in the log.
+    // A failed check never touches the order (no hold either). No order or buyer facts in the log.
     console.error(`[plugins] order.risk could not be recorded: ${error instanceof Error ? error.name : "error"}`);
   }
 }

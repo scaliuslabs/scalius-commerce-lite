@@ -441,7 +441,8 @@ export class PluginHost {
     return { ok: false, value: null, error: maskPluginLogText(error, secrets), failure, ...(provider ? { provider } : {}) };
   }
 
-  private async incident(installation: PluginInstallation, source: string, message: string): Promise<void> {
+  /** A refusal of the app's output, logged for the merchant (masked against the app's secrets). */
+  async incident(installation: PluginInstallation, source: string, message: string): Promise<void> {
     const { secrets } = await this.seed(installation, false);
     await this.writeLogs(installation, [{ level: "error", source: "host", message: `${source}: ${message}` }], secrets);
   }
