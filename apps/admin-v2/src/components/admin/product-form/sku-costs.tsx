@@ -1,10 +1,11 @@
-// Cost per item in the product editor. Costs are not part of the product or
-// variant save: the page keeps the merchant's typed costs here (one store for
-// the Pricing card and the variant table), and the variant editor sends the
-// changed ones with PUT /inventory/costs right after its own save, in the same
-// Save. Each cost carries the value the merchant saw (`expectedCost`), so a
-// cost a purchase order receipt or another tab changed meanwhile refuses the
-// save instead of being overwritten.
+// Cost per item in the product editor. The page keeps the merchant's typed
+// costs here (one store for the Pricing card and the variant table), and the
+// page's Save sends the changed ones in the product's one write (`changes()`;
+// a new variant by its draft id, a new product's costs with its SKUs). Each
+// cost carries the value the merchant saw (`expectedCost`), so a cost a
+// purchase order receipt or another tab changed meanwhile refuses the save
+// instead of being overwritten. The variant editor on its own still sends them
+// with PUT /inventory/costs (`save`).
 //
 // The store lives in the route, above the variant editor, so typed costs
 // survive the editor remounting after a save (new variants get their ids), and
@@ -102,6 +103,13 @@ export interface SkuCostStore {
   problemOf: (keys: readonly string[]) => { key: string; message: string } | null;
   /** The SKUs the variant editor shows; it publishes them after each render. */
   rows: MutableRefObject<readonly SkuCostRow[]>;
+  /**
+   * The changed costs of the shown SKUs for the product's write, a new variant
+   * by its draft id (no cost to replace yet).
+   */
+  changes: () => SkuCostItem[];
+  /** After the write that carried `changes()`: those costs are saved (a new variant's arrives with the reloaded product). */
+  settle: (sent: readonly SkuCostItem[], productId: string) => void;
   /**
    * Sends the changed costs of the shown SKUs (new ones first find their ids).
    * Rejects with the banner's reason; a cost changed elsewhere is then shown
@@ -201,6 +209,29 @@ export function useSkuCostDraft(variants: readonly CostVariant[] = []): SkuCostS
         return null;
       },
       rows,
+      changes: () => {
+        const { saved, edits } = draft();
+        const keys = [...new Set(rows.current.map((row) => row.key))];
+        return keys.flatMap((key) => {
+          if (key === NEW_SIMPLE_SKU || !edits.has(key)) return [];
+          const cost = edits.get(key) ?? null;
+          const expectedCost = isUnsavedSkuKey(key) ? null : saved.get(key) ?? null;
+          return sameCost(cost, expectedCost) ? [] : [{ variantId: key, cost, expectedCost }];
+        });
+      },
+      settle: (sent, productId) => {
+        update((saved, edits) => {
+          for (const item of sent) {
+            if (!isUnsavedSkuKey(item.variantId)) saved.set(item.variantId, item.cost);
+            // A cost typed while the save was on its way stays unsaved.
+            if (edits.has(item.variantId) && sameCost(edits.get(item.variantId), item.cost)) edits.delete(item.variantId);
+          }
+        });
+        void Promise.all([
+          queryClient.invalidateQueries({ queryKey: queryKeys.inventory.all }),
+          queryClient.invalidateQueries({ queryKey: queryKeys.products.detail(productId) }),
+        ]);
+      },
       save: async (productId) => {
         let shown = rows.current;
         try {

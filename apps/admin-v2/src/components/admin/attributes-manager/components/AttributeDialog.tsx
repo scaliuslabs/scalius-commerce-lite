@@ -23,6 +23,7 @@ import { ConvertTypeDialog } from "./ConvertTypeDialog";
 import { autoHandleFor } from "~/components/admin/search-listing/SearchListingCard";
 import { ConfirmDialog } from "~/components/admin/shared/ConfirmDialog";
 import { useDirtyDialogClose } from "~/components/admin/shared/use-dirty-dialog-close";
+import { useSubmitOnce } from "~/components/admin/shared/use-submit-once";
 import { apiData } from "~/lib/api";
 import { isAdminApiConflictError } from "~/lib/admin-api-error";
 import { queryKeys } from "~/lib/query-keys";
@@ -84,6 +85,7 @@ export function AttributeDialog({ open, attribute, onClose }: AttributeDialogPro
       : checked.slug && slugInvalid ? t("handleInvalid") : null,
   };
 
+  const submitOnce = useSubmitOnce();
   const save = useMutation({
     mutationFn: () => {
       // Presets are also edited in the values editor: resend them only when changed here.
@@ -158,8 +160,9 @@ export function AttributeDialog({ open, attribute, onClose }: AttributeDialogPro
               event.preventDefault();
               setChecked({ name: true, slug: true });
               setServerError(null);
-              if (name.trim().length < 2 || slugInvalid || save.isPending) return;
-              save.mutate();
+              if (name.trim().length < 2 || slugInvalid) return;
+              // One request at a time: a double click must not create the attribute twice.
+              submitOnce(() => save.mutateAsync());
             }}
           >
             {serverError?.field === "form" ? (

@@ -234999,6 +234999,13 @@
                                 "service"
                               ],
                               "description": "physical: shipped or picked up. digital: delivered as files or licence keys after payment. service: performed, nothing delivered (no address needed)."
+                            },
+                            "cost": {
+                              "type": "number",
+                              "nullable": true,
+                              "minimum": 0,
+                              "maximum": 9000000000,
+                              "description": "Cost per item in major units of the store currency. Omit or null for none."
                             }
                           },
                           "required": [
@@ -235077,6 +235084,13 @@
                           "service"
                         ],
                         "description": "physical: shipped or picked up. digital: delivered as files or licence keys after payment. service: performed, nothing delivered (no address needed)."
+                      },
+                      "cost": {
+                        "type": "number",
+                        "nullable": true,
+                        "minimum": 0,
+                        "maximum": 9000000000,
+                        "description": "Cost per item in major units of the store currency. Omit or null for none."
                       }
                     },
                     "required": [
@@ -237447,7 +237461,7 @@
           "Admin - Products"
         ],
         "summary": "Copy a product as a new draft",
-        "description": "Copies text, pricing, media, attributes, sections, content blocks, quantity bundles, the page template, options and variants. The copy is a draft with no stock, new SKUs (…-COPY) and generated barcodes.",
+        "description": "Copies text, pricing, media, attributes, sections, content blocks, quantity bundles, the page template, EMI and tax class, custom fields (namespace custom), options and variants with their cost per item and selling settings. The copy is a draft with no stock, new SKUs (…-COPY) and generated barcodes.",
         "parameters": [
           {
             "schema": {
@@ -241277,6 +241291,7 @@
           "Admin - Products"
         ],
         "summary": "Update a product",
+        "description": "Replaces the product's details under expectedAggregateRevision; unchanged details are not rewritten. Everything else an editor Save changed goes in the same write: optionMatrix (the complete options and SKUs, as dashboard.product_options.save_matrix takes them) or defaultSku (the hidden SKU of a product without options), contentBlocks, bundles, pageTemplate, emiEligible and skuCosts (each naming the cost it replaces; a new optionMatrix row by its draft id). All of it is checked before anything is written: a refused save changes nothing.",
         "parameters": [
           {
             "schema": {
@@ -241594,6 +241609,459 @@
                       "pattern": "^pmed_[A-Za-z0-9_-]+$/u"
                     },
                     "maxItems": 250
+                  },
+                  "optionMatrix": {
+                    "type": "object",
+                    "properties": {
+                      "options": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "name": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 40
+                            },
+                            "standardMapping": {
+                              "type": "string",
+                              "enum": [
+                                "size",
+                                "color",
+                                "material",
+                                "pattern",
+                                "none"
+                              ]
+                            },
+                            "values": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  },
+                                  "value": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 100
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "value"
+                                ]
+                              },
+                              "minItems": 1,
+                              "maxItems": 150
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "name",
+                            "standardMapping",
+                            "values"
+                          ]
+                        },
+                        "minItems": 1,
+                        "maxItems": 5
+                      },
+                      "variants": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "selectedOptionValueIds": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1
+                              },
+                              "minItems": 1,
+                              "maxItems": 5
+                            },
+                            "imageId": {
+                              "type": "string",
+                              "nullable": true,
+                              "minLength": 10,
+                              "maxLength": 80,
+                              "pattern": "^pmed_[A-Za-z0-9_-]+$/u"
+                            },
+                            "sku": {
+                              "type": "string",
+                              "minLength": 3,
+                              "maxLength": 100
+                            },
+                            "price": {
+                              "type": "number",
+                              "minimum": 0,
+                              "maximum": 99999999
+                            },
+                            "stock": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 1000000,
+                              "description": "On-hand quantity. New rows default to 0; omit on saved rows to keep the current quantity."
+                            },
+                            "expectedStockVersion": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "description": "The SKU stockVersion the new quantity was based on. Required with stock."
+                            },
+                            "trackInventory": {
+                              "type": "boolean"
+                            },
+                            "weight": {
+                              "type": "number",
+                              "nullable": true,
+                              "minimum": 0,
+                              "maximum": 1000000,
+                              "description": "Weight in grams."
+                            },
+                            "barcode": {
+                              "type": "string",
+                              "nullable": true,
+                              "maxLength": 50
+                            },
+                            "barcodeType": {
+                              "type": "string",
+                              "nullable": true,
+                              "enum": [
+                                "ean13",
+                                "upc",
+                                "isbn",
+                                "gtin",
+                                "code128",
+                                "custom",
+                                null
+                              ]
+                            },
+                            "discountType": {
+                              "type": "string",
+                              "enum": [
+                                "percentage",
+                                "flat"
+                              ]
+                            },
+                            "discountPercentage": {
+                              "type": "number",
+                              "nullable": true,
+                              "minimum": 0,
+                              "maximum": 100
+                            },
+                            "discountAmount": {
+                              "type": "number",
+                              "nullable": true,
+                              "minimum": 0,
+                              "maximum": 99999999
+                            },
+                            "fulfillmentKind": {
+                              "type": "string",
+                              "enum": [
+                                "physical",
+                                "digital",
+                                "service"
+                              ],
+                              "description": "physical: shipped or picked up. digital: delivered as files or licence keys after payment. service: performed, nothing delivered (no address needed)."
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "selectedOptionValueIds",
+                            "imageId",
+                            "sku",
+                            "price",
+                            "trackInventory",
+                            "weight",
+                            "barcode",
+                            "barcodeType",
+                            "discountType",
+                            "discountPercentage",
+                            "discountAmount"
+                          ]
+                        },
+                        "minItems": 1,
+                        "maxItems": 150
+                      }
+                    },
+                    "required": [
+                      "options",
+                      "variants"
+                    ],
+                    "description": "The complete option matrix, saved in the same write as the product. Omit to keep the options and SKUs."
+                  },
+                  "defaultSku": {
+                    "type": "object",
+                    "properties": {
+                      "sku": {
+                        "type": "string",
+                        "minLength": 3,
+                        "maxLength": 100
+                      },
+                      "trackInventory": {
+                        "type": "boolean"
+                      },
+                      "stock": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 1000000,
+                        "description": "New on-hand quantity. Omit to keep the current quantity."
+                      },
+                      "expectedStockVersion": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "description": "The SKU stockVersion the new quantity was based on. Required with stock."
+                      },
+                      "barcode": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 50
+                      },
+                      "barcodeType": {
+                        "type": "string",
+                        "nullable": true,
+                        "enum": [
+                          "ean13",
+                          "upc",
+                          "isbn",
+                          "gtin",
+                          "code128",
+                          "custom",
+                          null
+                        ]
+                      },
+                      "weight": {
+                        "type": "number",
+                        "nullable": true,
+                        "minimum": 0,
+                        "maximum": 1000000,
+                        "description": "Weight in grams."
+                      }
+                    },
+                    "required": [
+                      "sku",
+                      "trackInventory",
+                      "barcode",
+                      "barcodeType",
+                      "weight"
+                    ],
+                    "description": "Edits to the hidden SKU of a product without options, saved in the same write. Not allowed with optionMatrix."
+                  },
+                  "pageTemplate": {
+                    "type": "string",
+                    "nullable": true,
+                    "pattern": "^[a-z0-9][a-z0-9-]{0,39}$",
+                    "description": "A product page template id from the theme, or null for the theme's default. Omit to keep."
+                  },
+                  "emiEligible": {
+                    "type": "boolean",
+                    "description": "Shows the store's EMI line on the product page. Omit to keep."
+                  },
+                  "contentBlocks": {
+                    "type": "array",
+                    "items": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "minLength": 8,
+                              "maxLength": 120,
+                              "pattern": "^pcb_[A-Za-z0-9_-]+$/u"
+                            },
+                            "placement": {
+                              "type": "string",
+                              "enum": [
+                                "tabs",
+                                "after-buy-box",
+                                "after-description",
+                                "before-reviews"
+                              ]
+                            },
+                            "keep": {
+                              "type": "boolean",
+                              "enum": [
+                                true
+                              ]
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "placement",
+                            "keep"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "minLength": 8,
+                              "maxLength": 120,
+                              "pattern": "^pcb_[A-Za-z0-9_-]+$/u"
+                            },
+                            "placement": {
+                              "type": "string",
+                              "enum": [
+                                "tabs",
+                                "after-buy-box",
+                                "after-description",
+                                "before-reviews"
+                              ]
+                            },
+                            "type": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 40
+                            },
+                            "version": {
+                              "type": "integer",
+                              "minimum": 1
+                            },
+                            "settings": {
+                              "type": "object",
+                              "additionalProperties": {}
+                            }
+                          },
+                          "required": [
+                            "placement",
+                            "type",
+                            "version",
+                            "settings"
+                          ],
+                          "additionalProperties": false
+                        }
+                      ]
+                    },
+                    "maxItems": 40,
+                    "description": "Every editable content block, in page order within each placement, as dashboard.products.update_section takes them. Omit to keep."
+                  },
+                  "bundles": {
+                    "type": "array",
+                    "items": {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "quantity": {
+                              "type": "integer",
+                              "minimum": 2,
+                              "maximum": 100
+                            },
+                            "discountType": {
+                              "type": "string",
+                              "enum": [
+                                "percentage"
+                              ]
+                            },
+                            "discountPercentage": {
+                              "type": "number",
+                              "minimum": 0.01,
+                              "maximum": 99.99
+                            },
+                            "label": {
+                              "type": "string",
+                              "nullable": true,
+                              "maxLength": 60
+                            },
+                            "isActive": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "quantity",
+                            "discountType",
+                            "discountPercentage",
+                            "label",
+                            "isActive"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "quantity": {
+                              "type": "integer",
+                              "minimum": 2,
+                              "maximum": 100
+                            },
+                            "discountType": {
+                              "type": "string",
+                              "enum": [
+                                "fixed_price"
+                              ]
+                            },
+                            "price": {
+                              "type": "number",
+                              "minimum": 0,
+                              "exclusiveMinimum": true,
+                              "maximum": 99999999
+                            },
+                            "label": {
+                              "type": "string",
+                              "nullable": true,
+                              "maxLength": 60
+                            },
+                            "isActive": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "quantity",
+                            "discountType",
+                            "price",
+                            "label",
+                            "isActive"
+                          ],
+                          "additionalProperties": false
+                        }
+                      ]
+                    },
+                    "maxItems": 6,
+                    "description": "Every quantity-bundle tier in display order; an empty list removes them. Omit to keep."
+                  },
+                  "skuCosts": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "variantId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 100
+                        },
+                        "cost": {
+                          "type": "number",
+                          "nullable": true,
+                          "minimum": 0,
+                          "maximum": 9000000000
+                        },
+                        "expectedCost": {
+                          "type": "number",
+                          "nullable": true,
+                          "minimum": 0,
+                          "maximum": 9000000000
+                        }
+                      },
+                      "required": [
+                        "variantId",
+                        "cost",
+                        "expectedCost"
+                      ]
+                    },
+                    "maxItems": 150,
+                    "description": "Changed costs per item. A new optionMatrix row is named by its draft id. Each names the cost it replaces; omit to keep."
                   }
                 },
                 "required": [

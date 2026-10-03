@@ -17,9 +17,9 @@
     },
     {
       "id": "scalius.order-tagger",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "source": "plugins/order-tagger",
-      "sha256": "bd1c5c6d90d226f7469d76fb74b37da7a9801ea2d948f9c47f4edde66ed2181f"
+      "sha256": "66d8d66ff7f7233918b2eb0720fde0bffa2297f387557958ef09da126c86b87a"
     },
     {
       "id": "scalius.wishlist",

@@ -226,7 +226,7 @@ function stubApi(api: Api) {
   return calls;
 }
 
-async function renderPage(component: unknown, api: Api, options: { cookie?: string; url?: string } = {}) {
+async function renderPage(component: unknown, api: Api, options: { cookie?: string; url?: string; headers?: Record<string, string> } = {}) {
   const calls = stubApi(api);
   const runtime = {
     PUBLIC_API_URL: API,
@@ -234,7 +234,8 @@ async function renderPage(component: unknown, api: Api, options: { cookie?: stri
     DASHBOARD_URL: "https://admin.shop.test",
     inflightReads: new Map(),
   };
-  const request = new Request(options.url ?? "https://shop.test/", options.cookie ? { headers: { Cookie: options.cookie } } : {});
+  const headers = { ...options.headers, ...(options.cookie ? { Cookie: options.cookie } : {}) };
+  const request = new Request(options.url ?? "https://shop.test/", { headers });
   const response = await runtimeModule.requestRuntime.run(runtime, () =>
     container.renderToResponse(component, { request, locals: {} }),
   );
@@ -277,6 +278,20 @@ describe("a theme preview of the homepage", () => {
     expect(preview.html).toContain(JSON.stringify("https://admin.shop.test"));
     expect(preview.html).not.toContain(PREVIEW_TOKEN);
     expect(preview.response.headers.get("Cache-Control")).toContain("no-store");
+  });
+
+  it("tells the merchant browsing the storefront in a tab that a draft shows, with a way out; never buyers or the editor's frame", async () => {
+    const bar = "data-theme-preview-bar";
+    const tab = await renderPage(HomePage, { document: fixedTheme(), preview: fixedTheme() }, { cookie: PREVIEW_COOKIE, headers: { "Sec-Fetch-Dest": "document" } });
+    expect(tab.html).toContain(bar);
+    expect(tab.html).toContain("Previewing unpublished theme");
+    expect(tab.html).toMatch(/<form method="post" action="\/theme-preview\/exit"[^>]*>/);
+    expect(tab.response.headers.get("Cache-Control")).toContain("no-store");
+
+    const framed = await renderPage(HomePage, { document: fixedTheme(), preview: fixedTheme() }, { cookie: PREVIEW_COOKIE, headers: { "Sec-Fetch-Dest": "iframe" } });
+    expect(framed.html).not.toContain(bar);
+    expect((await renderPage(HomePage, { document: fixedTheme() })).html).not.toContain(bar);
+    expect((await renderPage(HomePage, { document: fixedTheme(), platform: true }, { cookie: PREVIEW_COOKIE })).html).not.toContain(bar);
   });
 });
 

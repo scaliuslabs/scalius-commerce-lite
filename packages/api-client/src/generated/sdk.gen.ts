@@ -4828,7 +4828,7 @@ export const postApiV1AdminProductsBulkUpdate = <ThrowOnError extends boolean = 
 /**
  * Copy a product as a new draft
  *
- * Copies text, pricing, media, attributes, sections, content blocks, quantity bundles, the page template, options and variants. The copy is a draft with no stock, new SKUs (…-COPY) and generated barcodes.
+ * Copies text, pricing, media, attributes, sections, content blocks, quantity bundles, the page template, EMI and tax class, custom fields (namespace custom), options and variants with their cost per item and selling settings. The copy is a draft with no stock, new SKUs (…-COPY) and generated barcodes.
  */
 export const postApiV1AdminProductsByIdDuplicate = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AdminProductsByIdDuplicateData, ThrowOnError>): RequestResult<PostApiV1AdminProductsByIdDuplicateResponses, PostApiV1AdminProductsByIdDuplicateErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1AdminProductsByIdDuplicateResponses, PostApiV1AdminProductsByIdDuplicateErrors, ThrowOnError>({
     url: '/api/v1/admin/products/{id}/duplicate',
@@ -4868,6 +4868,8 @@ export const getApiV1AdminProductsById = <ThrowOnError extends boolean = false>(
 
 /**
  * Update a product
+ *
+ * Replaces the product's details under expectedAggregateRevision; unchanged details are not rewritten. Everything else an editor Save changed goes in the same write: optionMatrix (the complete options and SKUs, as dashboard.product_options.save_matrix takes them) or defaultSku (the hidden SKU of a product without options), contentBlocks, bundles, pageTemplate, emiEligible and skuCosts (each naming the cost it replaces; a new optionMatrix row by its draft id). All of it is checked before anything is written: a refused save changes nothing.
  */
 export const putApiV1AdminProductsById = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AdminProductsByIdData, ThrowOnError>): RequestResult<PutApiV1AdminProductsByIdResponses, PutApiV1AdminProductsByIdErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1AdminProductsByIdResponses, PutApiV1AdminProductsByIdErrors, ThrowOnError>({
     url: '/api/v1/admin/products/{id}',
