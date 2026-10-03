@@ -65,13 +65,15 @@ export const GET: APIRoute = async (_context: APIContext) => {
       .filter(([, landing]) => !landing.noIndex && !landing.excludeFromSitemap)
       .map(([slug]) => ({ loc: `${baseUrl}/pages/${slug}` }));
 
-    const pageUrls: SitemapUrl[] = allPages
-      .filter((page) => page.isPublished && page.slug && !page.noIndex && !page.excludeFromSitemap)
-      .map((page) => ({
-        loc: `${baseUrl}${normalizeResourceCanonicalPath('page', page.canonicalPath) ?? `/${page.slug}`}`,
-        lastmod: page.updatedAt ?? undefined,
-      }))
-      .concat(landingUrls);
+    const pageUrls: SitemapUrl[] = [
+      ...allPages
+        .filter((page) => page.isPublished && page.slug && !page.noIndex && !page.excludeFromSitemap)
+        .map((page) => ({
+          loc: `${baseUrl}${normalizeResourceCanonicalPath('page', page.canonicalPath) ?? `/${page.slug}`}`,
+          lastmod: page.updatedAt ?? undefined,
+        })),
+      ...landingUrls,
+    ];
 
     const xml = generateSitemap(pageUrls, baseUrl);
 
