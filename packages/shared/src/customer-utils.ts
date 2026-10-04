@@ -47,6 +47,36 @@ export function normalizePhoneCountryPolicy(policy: PhoneCountryPolicyInput): Re
   };
 }
 
+/**
+ * The phone countries a store accepts: the merchant's customer-country policy
+ * united with every country an active market sells to (MARKETS-DESIGN step
+ * 3b). A buyer shipping to a market must be able to give a number from there,
+ * so a market country is accepted whatever the policy says, and the policy
+ * only adds countries (include) or refuses countries no market sells to
+ * (exclude). One rule for the storefront, the API and core:
+ *
+ * - no policy (an empty list): every country, as before;
+ * - include `L`: `L` and the market countries;
+ * - exclude `X`: `X` without the market countries (nothing left: every country).
+ *
+ * `marketCountries` absent or empty leaves the policy as it is. The merchant's
+ * order is kept, market additions follow in the order given.
+ */
+export function acceptedPhoneCountryPolicy(
+  policy: PhoneCountryPolicyInput,
+  marketCountries: readonly string[] | undefined,
+): Required<PhoneCountryPolicy> {
+  const merchant = normalizePhoneCountryPolicy(policy);
+  const markets = normalizePhoneCountryCodes(marketCountries);
+  if (merchant.countries.length === 0 || markets.length === 0) return merchant;
+  if (merchant.mode === "exclude") {
+    const sold = new Set(markets);
+    return { countries: merchant.countries.filter((country) => !sold.has(country)), mode: "exclude" };
+  }
+  const listed = new Set(merchant.countries);
+  return { countries: [...merchant.countries, ...markets.filter((country) => !listed.has(country))], mode: "include" };
+}
+
 function assertParsedPhoneCountryAllowed(parsed: ParsedPhoneNumber, policy: PhoneCountryPolicyInput): void {
   const normalizedPolicy = normalizePhoneCountryPolicy(policy);
   if (normalizedPolicy.countries.length === 0) return;

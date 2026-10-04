@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  acceptedPhoneCountryPolicy,
   assertPhoneCountryAllowed,
   calculateCustomerStats,
   normalizePhoneCountryPolicy,
@@ -18,6 +19,41 @@ describe("customer commerce stats", () => {
       totalOrders: 3,
       lastOrderAt: new Date(1_800_000_000_000),
     });
+  });
+});
+
+describe("accepted phone countries (merchant policy united with the market countries)", () => {
+  it("adds every market country to an include list and keeps the merchant's order", () => {
+    expect(acceptedPhoneCountryPolicy({ countries: ["AE", "BD"], mode: "include" }, ["BD", "IN"])).toEqual({
+      countries: ["AE", "BD", "IN"],
+      mode: "include",
+    });
+  });
+
+  it("takes a market country out of an exclude list", () => {
+    expect(acceptedPhoneCountryPolicy({ countries: ["IN", "US"], mode: "exclude" }, ["BD", "IN"])).toEqual({
+      countries: ["US"],
+      mode: "exclude",
+    });
+    // Every excluded country is sold to: nothing is left to refuse.
+    expect(acceptedPhoneCountryPolicy({ countries: ["IN"], mode: "exclude" }, ["IN"])).toEqual({ countries: [], mode: "exclude" });
+  });
+
+  it("leaves an unrestricted policy and a store without market countries as they are", () => {
+    expect(acceptedPhoneCountryPolicy({ countries: [], mode: "include" }, ["IN"])).toEqual({ countries: [], mode: "include" });
+    expect(acceptedPhoneCountryPolicy({ countries: ["BD"], mode: "include" }, undefined)).toEqual({ countries: ["BD"], mode: "include" });
+    expect(acceptedPhoneCountryPolicy(["BD"], [])).toEqual({ countries: ["BD"], mode: "include" });
+  });
+
+  it("is the same list for a Bangladesh-only store whose policy names Bangladesh", () => {
+    expect(acceptedPhoneCountryPolicy({ countries: ["BD"], mode: "include" }, ["BD"])).toEqual({ countries: ["BD"], mode: "include" });
+  });
+
+  it("accepts an Indian mobile number once a market sells to India, and still refuses a country no market sells to", () => {
+    const policy = acceptedPhoneCountryPolicy({ countries: ["BD"], mode: "include" }, ["BD", "IN"]);
+    expect(validateAndFormatPhone("+919876543210", policy)).toBe("+919876543210");
+    expect(validateAndFormatPhone("098765 43210", policy, { defaultCountry: "IN" })).toBe("+919876543210");
+    expect(() => validateAndFormatPhone("+14155552671", policy)).toThrow("Phone numbers from US are not accepted");
   });
 });
 

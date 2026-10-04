@@ -45,10 +45,15 @@ import {
 import type { EmailRuntimeContext } from "../../integrations/email";
 import type { AppProviders } from "../../integrations/provider-port";
 import { assertCustomerChannelReady, phoneCodeChannel } from "./customer-code-channels";
-import { customerAuthDocument, customerCountriesDocument, getAllowedCountries } from "../settings";
+import {
+    acceptedCustomerCountries,
+    customerAuthDocument,
+    customerCountriesDocument,
+    readAcceptedCustomerCountries,
+    selectDocumentsWithSellingCountries,
+} from "../settings";
 import { formatAddressInline, usesDeliveryHierarchy } from "@scalius/shared/address";
 import { customerAddressFromRow, type CustomerAddress } from "./addresses";
-import { selectSettingsDocuments } from "../../settings-store";
 
 // ─────────────────────────────────────────
 // Constants
@@ -238,16 +243,19 @@ async function getCustomerAuthRuntimePolicy(db: Database): Promise<{
     identity: CustomerIdentitySettings;
     phoneCountryPolicy: PhoneCountryPolicy;
 }> {
-    const rows = await selectSettingsDocuments(db, [customerAuthDocument, customerCountriesDocument]);
+    // The countries the markets sell to ride in the same statement: a phone
+    // from any of them is accepted whatever the merchant's list says.
+    const { rows, sellingCountries } = await selectDocumentsWithSellingCountries(db, [customerAuthDocument, customerCountriesDocument]);
     const [auth, countries] = await Promise.all([
         customerAuthDocument.fromRows(rows),
         customerCountriesDocument.fromRows(rows),
     ]);
+    const accepted = acceptedCustomerCountries(countries.value, sellingCountries);
     return {
         identity: auth.value,
         phoneCountryPolicy: {
-            countries: countries.value.allowedCountries,
-            mode: countries.value.allowedCountriesMode,
+            countries: accepted.allowedCountries,
+            mode: accepted.allowedCountriesMode,
         },
     };
 }
@@ -994,7 +1002,7 @@ export async function updateCustomerProfile(
         throw new UnauthorizedError("Customer profile is no longer available. Please log in again.");
     }
 
-    const allowedCountriesConfig = await getAllowedCountries(db);
+    const allowedCountriesConfig = await readAcceptedCustomerCountries(db);
     if (existing.phone) {
         normalizePhoneOrThrow(existing.phone, {
             countries: allowedCountriesConfig.allowedCountries,

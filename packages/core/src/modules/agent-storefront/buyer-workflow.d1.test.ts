@@ -217,9 +217,8 @@ describe("agent storefront checkout submission on D1 storage", () => {
     expectNothingCommitted();
   });
 
-  it("prices a foreign destination with its shipping zone and never offers cash on delivery there (MARKETS-DESIGN step 3b)", async () => {
+  it("prices a foreign destination with its shipping zone and never offers cash on delivery there, accepting the market country's phone beside a Bangladesh-only policy (MARKETS-DESIGN step 3b)", async () => {
     sqlite.exec(`
-      UPDATE settings SET value = '{"allowedCountries":["BD","US"],"allowedCountriesMode":"include"}' WHERE id = 's_countries';
       INSERT INTO markets (id, handle, name, status) VALUES ('mkt_us', 'united-states', 'United States', 'active');
       INSERT INTO market_countries (country_code, market_id) VALUES ('US', 'mkt_us');
       INSERT INTO delivery_zones (id, name) VALUES ('dz_us', 'United States'), ('dz_west', 'West coast');

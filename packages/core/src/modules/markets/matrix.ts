@@ -11,6 +11,7 @@ import type { MarketMatrix, PublicMarket } from "@scalius/shared/markets";
 import { and, eq, sql, type SQL } from "drizzle-orm";
 import { deps } from "../../cache-deps";
 import { settingsDocumentsJoin, type SettingsDocumentRow } from "../../settings-store";
+import { sellingCountriesFromSql, sellingCountriesSql } from "../../utils/selling-countries";
 
 export interface MarketMatrixRead {
     matrix: MarketMatrix;
@@ -43,22 +44,10 @@ export function marketMatrixSql(): SQL<string | null> {
     ) AS matrix_market)`;
 }
 
-/**
- * The countries the active markets sell to, as one comma-separated scalar for
- * a statement a read already runs (checkout's authority row): checkout ships
- * only there (MARKETS-DESIGN step 3a). A market change advances the checkout
- * authority fence, so the quote and the commit read the same list.
- */
-export function sellingCountriesSql(): SQL<string | null> {
-    return sql<string | null>`(SELECT group_concat(selling_country.country_code, ',') FROM market_countries AS selling_country
-        INNER JOIN markets AS selling_market ON selling_market.id = selling_country.market_id
-        WHERE selling_market.status = 'active')`;
-}
-
-/** The sorted countries of a `sellingCountriesSql()` value. */
-export function sellingCountriesFromSql(value: unknown): string[] {
-    return list(value).sort();
-}
+// The countries the active markets sell to (checkout's authority row, the phone
+// countries a store accepts): settings and customers read them too, so the
+// scalar lives in a shared area both can import.
+export { sellingCountriesFromSql, sellingCountriesSql };
 
 interface MatrixEntry {
     id?: unknown;
@@ -135,15 +124,18 @@ export interface PresenceMarket {
  * the subfolder `value`, or the backup market for the root `''`) and the
  * settings documents the read needs, in ONE statement: the market row joined
  * with the documents. No row: no active market holds that subfolder (the
- * documents are moot). Declares only `mk:<id>` for the market, so a change
- * of that market (or of the presence it holds) invalidates the read.
+ * documents are moot). Declares `mk:<id>` for the market (a change of that
+ * market or of the presence it holds invalidates the read) and, because the
+ * same row carries the countries every active market sells to
+ * (`sellingCountries`, for the phone countries a store accepts), `mk:*`.
  */
 export async function readPresenceMarketWithDocuments(
     db: Database,
     value: string,
     documents: readonly { key: string }[],
-): Promise<{ market: PresenceMarket | null; documentRows: SettingsDocumentRow[] }> {
+): Promise<{ market: PresenceMarket | null; documentRows: SettingsDocumentRow[]; sellingCountries: string[] }> {
     const rows = await db.select({
+        selling: sellingCountriesSql(),
         id: markets.id,
         handle: markets.handle,
         name: markets.name,
@@ -165,7 +157,7 @@ export async function readPresenceMarketWithDocuments(
             value === "" ? eq(markets.isBackup, true) : sql`${marketPresences.value} IS NOT NULL`,
         ));
     const row = rows[0];
-    if (!row) return { market: null, documentRows: [] };
+    if (!row) return { market: null, documentRows: [], sellingCountries: [] };
     deps.market(row.id);
     return {
         market: {
@@ -178,5 +170,6 @@ export async function readPresenceMarketWithDocuments(
         documentRows: rows.flatMap((each) => each.category === null || each.value === null
             ? []
             : [{ category: each.category, value: each.value, revision: each.revision ?? 0 }]),
+        sellingCountries: sellingCountriesFromSql(row.selling),
     };
 }
