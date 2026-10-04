@@ -160,9 +160,7 @@ function buyerStateUpsert(db: Database, scope: ProductScope): SQLiteBatchItem {
         .insert(productBuyerState)
         .select(selectLiveCatalogBuyerState(db, scope.on(sql`${products.id}`), scope.pricing) as never)
         .onConflictDoUpdate({
-            // Unqualified: an insert-select renders a column target as
-            // "table"."column", which PostgreSQL refuses in ON CONFLICT.
-            target: sql.identifier("product_id") as never,
+            target: productBuyerState.productId,
             set: {
                 isPublic: excluded("is_public"),
                 categoryId: excluded("category_id"),
