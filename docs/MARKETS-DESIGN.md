@@ -552,6 +552,8 @@ and the customer import; the checkout authority and `GET /api/v1/checkout/config
 (`allowedCountries`) apply it too, so the storefront, the API and the agent
 checkout agree. The market countries ride in a statement each read already
 runs (`sellingCountriesSql()`), so D1 calls and statements do not change. The
+config read therefore declares `mk:*` beside its market's `mk:<id>`: any market
+edit revalidates it. The
 checkout phone field starts in the address form's country when the store
 accepts its numbers and follows the buyer's choice, unless the buyer picked the
 phone country or typed a number that is valid as it is. Its hint and placeholder

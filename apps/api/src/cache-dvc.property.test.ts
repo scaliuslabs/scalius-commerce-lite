@@ -275,18 +275,22 @@ describe("DVC directed scenarios", () => {
     expect(verdict).toEqual({ cached: true, valid: false, equal: false });
   }, 120_000);
 
+  const INVALID = { cached: true, valid: false, equal: false };
+  const VALID = { cached: true, valid: true, equal: true };
   it.each([
-    ["its name", "/api/v1/checkout/config?presence=en-in", "UPDATE markets SET name = 'India II' WHERE id = 'mkt_dvc_india'", false],
-    ["its country", "/api/v1/storefront/markets", "INSERT INTO market_countries (country_code, market_id) VALUES ('LK', 'mkt_dvc_india')", false],
-    ["its status", "/api/v1/storefront/markets", "UPDATE markets SET status = 'draft' WHERE id = 'mkt_dvc_india'", false],
-    ["its subfolder language", "/api/v1/storefront/layout", "UPDATE market_presences SET value = 'bn-in', locale = 'bn' WHERE id = 'mkp_dvc_india'", false],
-    // Another market's edit leaves this market's checkout config valid.
-    ["another market's country", "/api/v1/checkout/config?presence=en-in", "INSERT INTO market_countries (country_code, market_id) VALUES ('LK', 'mkt_dvc_draft')", true],
+    ["its name", "/api/v1/checkout/config?presence=en-in", "UPDATE markets SET name = 'India II' WHERE id = 'mkt_dvc_india'", INVALID],
+    ["its country", "/api/v1/storefront/markets", "INSERT INTO market_countries (country_code, market_id) VALUES ('LK', 'mkt_dvc_india')", INVALID],
+    ["its status", "/api/v1/storefront/markets", "UPDATE markets SET status = 'draft' WHERE id = 'mkt_dvc_india'", INVALID],
+    ["its subfolder language", "/api/v1/storefront/layout", "UPDATE market_presences SET value = 'bn-in', locale = 'bn' WHERE id = 'mkp_dvc_india'", INVALID],
+    // The checkout config carries the phone countries every active market sells to (`mk:*`): a market's country reaches it.
+    ["its country, in the accepted phone countries", "/api/v1/checkout/config?presence=en-in", "INSERT INTO market_countries (country_code, market_id) VALUES ('LK', 'mkt_dvc_india')", INVALID],
+    // A draft market sells nothing, so its edit renders the same config; the read still re-validates on the market list.
+    ["a draft market's country", "/api/v1/checkout/config?presence=en-in", "INSERT INTO market_countries (country_code, market_id) VALUES ('LK', 'mkt_dvc_draft')", { cached: true, valid: false, equal: true }],
     // A market edit never reaches the catalogue: every catalogue read is the same in every market.
-    ["a product read", "/api/v1/products/linen-panjabi", "UPDATE markets SET name = 'India II' WHERE id = 'mkt_dvc_india'", true],
-  ])("markets: %s", async (name, path, sql, unchanged) => {
+    ["a product read", "/api/v1/products/linen-panjabi", "UPDATE markets SET name = 'India II' WHERE id = 'mkt_dvc_india'", VALID],
+  ])("markets: %s", async (name, path, sql, expected) => {
     const verdict = await staleAfter(`scenario-markets-${name}`, path, (sqlite) => sqlite.exec(sql));
-    expect(verdict).toEqual(unchanged ? { cached: true, valid: true, equal: true } : { cached: true, valid: false, equal: false });
+    expect(verdict).toEqual(expected);
   }, 120_000);
 
   it("markets: the backup market's price increment invalidates the prices that round to it", async () => {
