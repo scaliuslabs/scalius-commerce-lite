@@ -51,6 +51,9 @@ async function postgres(): Promise<{ db: Database; client: Client }> {
   const client = new Client({ connectionString: url.toString(), types: { getTypeParser: parseBigint } });
   await client.connect();
   await client.query(canonicalPostgresSchemaSql());
+  // The canonical schema is DDL only; migration 0100 seeds the clock row every
+  // real store has. Without it the clock reads fail closed by design.
+  await client.query(`INSERT INTO cache_clock (id, seq, floor, coarse) VALUES (1, 0, 0, 0)`);
   cleanups.push(async () => {
     await client.end();
     await admin.query(`DROP DATABASE ${name} WITH (FORCE)`);
@@ -78,8 +81,7 @@ describe.runIf(postgresUrl)("S4 clock reads: PostgreSQL parity with D1", () => {
       writes.push([...new Set(Array.from({ length: width }, () => `p:${Math.floor(random() * 40)}`))]);
     }
     const d1Start = Number((sqlite.prepare("SELECT seq FROM cache_clock WHERE id = 1").get() as { seq: number }).seq);
-    // A fresh PostgreSQL schema has no clock row until its first bump: clock 0.
-    const pgStart = Number((await pg.client.query("SELECT COALESCE((SELECT seq FROM cache_clock WHERE id = 1), 0) AS seq")).rows[0].seq);
+    const pgStart = Number((await pg.client.query("SELECT seq FROM cache_clock WHERE id = 1")).rows[0].seq);
     expect(await readCommitSeq(pg.db)).toBe(pgStart);
     expect((await readValidationSnapshot(pg.db, ["store"], 0)).S).toBe(pgStart);
     expect(pgStart).toBe(d1Start);
