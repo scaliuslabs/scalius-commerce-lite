@@ -13,6 +13,7 @@
     "./schema-contract": "./src/schema-contract.ts",
     "./portability": "./src/portability.ts",
     "./types": "./src/types.ts",
+    "./testing/postgres-native": "./src/testing/postgres-native.ts",
     "./testing/sqlite-d1": "./src/testing/sqlite-d1.ts"
   },
   "scripts": {

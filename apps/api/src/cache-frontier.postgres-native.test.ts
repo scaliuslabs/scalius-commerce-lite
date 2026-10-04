@@ -4,17 +4,9 @@
 // commit seqs, through the adapter's SQLite-profile compiler. Opt-in: point
 // SCALIUS_TEST_POSTGRES_URL at a disposable local server; the test creates
 // and drops its own database.
-import { execFileSync } from "node:child_process";
-import { randomUUID } from "node:crypto";
-import { mkdtempSync, readFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { fileURLToPath } from "node:url";
-import { Client, types } from "pg";
 import { afterAll, describe, expect, it } from "vitest";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
-import { connectPostgres, createPostgresDatabase } from "@scalius/database/postgres-adapter";
-import type { Database } from "@scalius/database/client";
+import { closeNativePostgres, createNativePostgres, nativePostgresUrl } from "@scalius/database/testing/postgres-native";
 import { hashCacheDep } from "@scalius/shared/cache-frontier";
 import {
   checkHashedDependencies,
@@ -23,44 +15,9 @@ import {
   readValidationSnapshot,
 } from "./cache-frontier";
 
-const postgresUrl = process.env.SCALIUS_TEST_POSTGRES_URL?.trim();
+const postgresUrl = nativePostgresUrl();
 
-/** The canonical PostgreSQL schema, compiled by the database package's own script. */
-function canonicalPostgresSchemaSql(): string {
-  const databaseDir = fileURLToPath(new URL("../../../packages/database/", import.meta.url));
-  const out = join(mkdtempSync(join(tmpdir(), "scalius-s4-pg-schema-")), "schema.sql");
-  const tsx = fileURLToPath(new URL("../node_modules/.bin/tsx", import.meta.url));
-  execFileSync(tsx, ["scripts/postgres-schema.ts", "--out", out], { cwd: databaseDir });
-  return readFileSync(out, "utf8");
-}
-const cleanups: Array<() => Promise<void>> = [];
-afterAll(async () => {
-  for (const cleanup of cleanups.splice(0).reverse()) await cleanup();
-});
-
-const parseBigint = ((oid: number, format?: "text" | "binary") =>
-  oid === 20 ? Number : types.getTypeParser(oid, format)) as typeof types.getTypeParser;
-
-async function postgres(): Promise<{ db: Database; client: Client }> {
-  const name = `scalius_s4_${randomUUID().replaceAll("-", "")}`;
-  const admin = new Client({ connectionString: postgresUrl });
-  await admin.connect();
-  await admin.query(`CREATE DATABASE ${name}`);
-  const url = new URL(postgresUrl!);
-  url.pathname = `/${name}`;
-  const client = new Client({ connectionString: url.toString(), types: { getTypeParser: parseBigint } });
-  await client.connect();
-  await client.query(canonicalPostgresSchemaSql());
-  // The canonical schema is DDL only; migration 0100 seeds the clock row every
-  // real store has. Without it the clock reads fail closed by design.
-  await client.query(`INSERT INTO cache_clock (id, seq, floor, coarse) VALUES (1, 0, 0, 0)`);
-  cleanups.push(async () => {
-    await client.end();
-    await admin.query(`DROP DATABASE ${name} WITH (FORCE)`);
-    await admin.end();
-  });
-  return { db: createPostgresDatabase(url.toString(), { connect: connectPostgres }), client };
-}
+afterAll(closeNativePostgres);
 
 function lcg(seed: number) {
   let state = seed >>> 0;
@@ -72,7 +29,7 @@ function lcg(seed: number) {
 
 describe.runIf(postgresUrl)("S4 clock reads: PostgreSQL parity with D1", () => {
   it("answers exactly as D1 for the same bumps", async () => {
-    const pg = await postgres();
+    const pg = await createNativePostgres({ label: "frontier" });
     const { sqlite, db: d1 } = createSqliteD1Database();
     const random = lcg(20260925);
     const writes: string[][] = [];
@@ -114,7 +71,7 @@ describe.runIf(postgresUrl)("S4 clock reads: PostgreSQL parity with D1", () => {
   }, 180_000);
 
   it("reads the Platform row and real trigger bumps in the validation statement", async () => {
-    const pg = await postgres();
+    const pg = await createNativePostgres({ label: "frontier" });
     await pg.client.query(`INSERT INTO settings (id, key, value, type, category, revision) VALUES ('platform', 'document', '{"storefrontUrl":"https://shop.example"}', 'json', 'platform', 3)`);
     const before = await readValidationSnapshot(pg.db, ["set:platform:document", "store"], 0);
     expect(before.platform).toEqual({ value: '{"storefrontUrl":"https://shop.example"}', revision: 3 });
