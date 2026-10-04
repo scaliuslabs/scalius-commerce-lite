@@ -83,6 +83,7 @@ export const storeSettingsMessages = defineMessages({
     loadCurrency: "Store currency",
 
     countriesTitle: "Customer countries",
+    countriesHelp: "Countries your markets sell to are always accepted, so a buyer can give a number from where you deliver.",
     countriesRow: "Phone numbers accepted from",
     allCountries: "All countries",
     onlyCountries: "Selected countries only ({count})",
@@ -176,6 +177,7 @@ export const storeSettingsMessages = defineMessages({
     loadCurrency: "স্টোরের কারেন্সি",
 
     countriesTitle: "কাস্টমারের দেশ",
+    countriesHelp: "আপনার মার্কেট যেসব দেশে বিক্রি করে সেই দেশের নম্বর সবসময় নেওয়া হয়, তাই ডেলিভারির দেশের নম্বর দেওয়া যায়।",
     countriesRow: "যেসব দেশের ফোন নম্বর নেওয়া হবে",
     allCountries: "সব দেশ",
     onlyCountries: "শুধু বাছাই করা দেশ ({count})",

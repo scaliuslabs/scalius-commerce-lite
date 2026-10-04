@@ -23,7 +23,7 @@ export function acceptedCustomerCountries(
         { countries: countries.allowedCountries, mode: countries.allowedCountriesMode },
         sellingCountries,
     );
-    return { allowedCountries: accepted.countries, allowedCountriesMode: accepted.mode };
+    return { allowedCountries: [...accepted.countries], allowedCountriesMode: accepted.mode };
 }
 
 /**

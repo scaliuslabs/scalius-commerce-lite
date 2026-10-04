@@ -17,7 +17,6 @@ import { randomUUID } from "node:crypto";
 import type { DatabaseSync, SQLOutputValue } from "node:sqlite";
 import { Client, types } from "pg";
 
-import { compileCanonicalPostgresSchema } from "../../scripts/postgres-schema";
 import { connectPostgres, createPostgresDatabase } from "../postgres-adapter";
 import type { Database } from "../types";
 import { createMigratedSqlite } from "./sqlite-d1";
@@ -54,7 +53,19 @@ const NOT_SEEDED = new Set(["scalius_schema_migrations"]);
 const parseBigint = ((oid: number, format?: "text" | "binary") =>
   oid === 20 ? Number : types.getTypeParser(oid, format)) as typeof types.getTypeParser;
 
-let canonicalSchema: ReturnType<typeof compileCanonicalPostgresSchema> | null = null;
+/**
+ * The schema compiler is a script, outside the package's type graph (its
+ * own types target tsx, not the Worker): it is loaded by a computed specifier,
+ * so a Worker typecheck never follows it.
+ */
+const SCHEMA_SCRIPT = "../../scripts/postgres-schema";
+interface CanonicalSchema {
+  /** The tables: load the seed after this and before `postDataSql`. */
+  preDataSql: string;
+  /** The indexes and triggers. */
+  postDataSql: string;
+}
+let canonicalSchema: Promise<CanonicalSchema> | null = null;
 const open: Array<() => Promise<void>> = [];
 
 function quote(identifier: string): string {
@@ -109,7 +120,9 @@ async function loadMigrationSeed(client: Client): Promise<void> {
 export async function createNativePostgres(options: NativePostgresOptions): Promise<NativePostgres> {
   const serverUrl = nativePostgresUrl();
   if (!serverUrl) throw new Error("SCALIUS_TEST_POSTGRES_URL is not set.");
-  canonicalSchema ??= compileCanonicalPostgresSchema();
+  canonicalSchema ??= (import(/* @vite-ignore */ SCHEMA_SCRIPT) as Promise<{
+    compileCanonicalPostgresSchema(): Promise<CanonicalSchema>;
+  }>).then((script) => script.compileCanonicalPostgresSchema());
   const schema = await canonicalSchema;
 
   const name = `scalius_${options.label.replace(/[^a-z0-9]/gi, "_")}_${randomUUID().replaceAll("-", "")}`;

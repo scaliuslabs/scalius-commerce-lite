@@ -3,10 +3,12 @@
 // lib/checkout/phone-field.ts owns validation and the canonical E.164 value;
 // the international country picker loads only when a buyer opens it.
 import { getCountries, getCountryCallingCode } from "@scalius/shared/customer-utils";
+import { phoneCountryMeta, type PhoneCountryMeta } from "@scalius/shared/phone-example";
 import {
   normalizePhonePolicy,
   phoneCountryAllowed,
 } from "@/lib/checkout/phone-field";
+import { phoneHints } from "@/lib/checkout/phone-hint";
 
 interface Props {
   label: string;
@@ -26,6 +28,15 @@ interface Props {
   countryNotAcceptedMessage: string;
   countrySelectLabel: string;
   languageCode: string;
+  /**
+   * The countries the store sells to, and the one the address form starts on
+   * (the field starts in that country when the store accepts its numbers; the
+   * script then follows the buyer's choice, lib/checkout/phone-field.ts).
+   */
+  shippingCountries?: string[];
+  shippingCountry?: string;
+  /** What the hint says for a number from another country (checkout language). */
+  intl?: { help: string; pickupHelp: string; serviceHelp: string; exampleText: string };
 }
 
 const {
@@ -42,6 +53,9 @@ const {
   countryNotAcceptedMessage,
   countrySelectLabel,
   languageCode,
+  shippingCountries = [],
+  shippingCountry,
+  intl,
 } = Astro.props;
 
 const policy = normalizePhonePolicy({
@@ -50,15 +64,52 @@ const policy = normalizePhonePolicy({
 });
 type CountryCode = Parameters<typeof getCountryCallingCode>[0];
 const knownCountries = new Set<string>(getCountries());
-// Bangladesh first; otherwise the merchant's first accepted country.
-const defaultCountry = phoneCountryAllowed("BD", policy)
-  ? "BD"
-  : ((policy.mode === "include" ? policy.countries : getCountries()).find(
-      (country) => knownCountries.has(country) && phoneCountryAllowed(country, policy),
-    ) ?? "BD");
+// The country the address form starts on when its numbers are accepted; else
+// Bangladesh; else the merchant's first accepted country.
+const sold = [...new Set(shippingCountries)]
+  .filter((country) => country !== "BD" && knownCountries.has(country) && phoneCountryAllowed(country, policy))
+  .sort();
+const followed = shippingCountry === "BD" || (shippingCountry !== undefined && sold.includes(shippingCountry));
+const defaultCountry = followed && phoneCountryAllowed(shippingCountry!, policy)
+  ? shippingCountry!
+  : phoneCountryAllowed("BD", policy)
+    ? "BD"
+    : ((policy.mode === "include" ? policy.countries : getCountries()).find(
+        (country) => knownCountries.has(country) && phoneCountryAllowed(country, policy),
+      ) ?? "BD");
 // Bangladesh numbers are typed the local way (01712-345678), so the prefix
 // names the country instead of "+880", which would read as +88001….
 const callingCode = defaultCountry === "BD" ? "BD" : `+${getCountryCallingCode(defaultCountry as CountryCode)}`;
+// Each country the store sells abroad: its calling code and example number, for
+// the script to follow the shipping country without loading libphonenumber.
+const soldMeta: Record<string, PhoneCountryMeta> = {};
+for (const country of sold) {
+  const meta = phoneCountryMeta(country);
+  if (meta) soldMeta[country] = meta;
+}
+// A default country other than Bangladesh asks for the country code and shows
+// its example; Bangladesh keeps the merchant's copy as it is.
+const words = defaultCountry !== "BD" && intl
+  ? phoneHints(
+      defaultCountry,
+      {
+        help: help ?? "",
+        pickupHelp: pickupHelp ?? "",
+        serviceHelp: serviceHelp ?? "",
+        intlHelp: intl.help,
+        intlPickupHelp: intl.pickupHelp,
+        intlServiceHelp: intl.serviceHelp,
+        exampleText: intl.exampleText,
+        placeholder: placeholder ?? "",
+        label,
+      },
+      soldMeta[defaultCountry] ?? phoneCountryMeta(defaultCountry),
+    )
+  : null;
+const shownHelp = help && words ? words.hints.delivery : help;
+const shownPickupHelp = pickupHelp && words ? words.hints.pickup : pickupHelp;
+const shownServiceHelp = serviceHelp && words ? words.hints.none : serviceHelp;
+const shownPlaceholder = words ? words.placeholder : placeholder;
 const singleCountry = policy.mode === "include" && policy.countries.length === 1;
 ---
 
@@ -67,6 +118,7 @@ const singleCountry = policy.mode === "include" && policy.countries.length === 1
   data-countries={policy.countries.join(",")}
   data-country-mode={policy.mode}
   data-default-country={defaultCountry}
+  data-phone-countries={Object.keys(soldMeta).length > 0 ? JSON.stringify(soldMeta) : undefined}
   data-required-message={requiredMessage}
   data-invalid-message={invalidMessage}
   data-mobile-message={mobileMessage}
@@ -109,23 +161,23 @@ const singleCountry = policy.mode === "include" && policy.countries.length === 1
       inputmode="tel"
       autocomplete="tel"
       aria-required="true"
-      aria-describedby={help ? "customerPhone-help customerPhone-error" : "customerPhone-error"}
-      placeholder={placeholder || "Phone number"}
+      aria-describedby={shownHelp ? "customerPhone-help customerPhone-error" : "customerPhone-error"}
+      placeholder={shownPlaceholder || "Phone number"}
       class="h-full min-w-0 flex-1 border-none bg-transparent px-3 text-base text-foreground outline-none"
     />
   </div>
   {
-    help && (
+    shownHelp && (
       <p id="customerPhone-help" class="mt-1 text-sm text-muted-foreground">
-        {pickupHelp || serviceHelp ? (
+        {shownPickupHelp || shownServiceHelp ? (
           <>
             {/* The page root's delivery need and mode pick the sentence that is true. */}
-            <span class="group-data-[delivery-need=none]:hidden group-data-[delivery-mode=pickup]:hidden">{help}</span>
-            <span class="hidden group-data-[delivery-mode=pickup]:inline group-data-[delivery-need=none]:hidden">{pickupHelp || help}</span>
-            <span class="hidden group-data-[delivery-need=none]:inline">{serviceHelp || help}</span>
+            <span class="group-data-[delivery-need=none]:hidden group-data-[delivery-mode=pickup]:hidden">{shownHelp}</span>
+            <span class="hidden group-data-[delivery-mode=pickup]:inline group-data-[delivery-need=none]:hidden">{shownPickupHelp || shownHelp}</span>
+            <span class="hidden group-data-[delivery-need=none]:inline">{shownServiceHelp || shownHelp}</span>
           </>
         ) : (
-          help
+          shownHelp
         )}
       </p>
     )

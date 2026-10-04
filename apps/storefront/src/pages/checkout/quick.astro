@@ -43,6 +43,7 @@ import {
   quickCheckoutFieldErrors,
   quickCheckoutMode,
   quickCheckoutOrderForm,
+  quickCheckoutPhoneCountry,
   quickCheckoutQuoteInput,
   readQuickCheckoutForm,
   readQuickCheckoutLines,
@@ -53,6 +54,8 @@ import {
   fetchQuickCheckoutRates,
 } from "@/lib/checkout/quick-checkout-server";
 import { overlayQuotedRates } from "@/lib/checkout/shipping-methods";
+import { phoneHintCopy, phoneHints } from "@/lib/checkout/phone-hint";
+import { phoneCountryMeta } from "@scalius/shared/phone-example";
 import { cartRuleRefusal } from "@/lib/checkout/tax-quote-error-contract";
 import { shouldRejectCrossOriginCookieRequest } from "@scalius/shared/request-origin-guard";
 import {
@@ -246,9 +249,13 @@ if (!codAvailable) {
   }
 }
 
+// The phone is read in the delivery address's country: its hint, placeholder and
+// refusal speak for that country (Bangladesh keeps the merchant's copy).
+const phoneCountry = quickCheckoutPhoneCountry(form, mode);
+const phoneWords = phoneHints(phoneCountry, phoneHintCopy(copy), phoneCountry === "BD" ? null : phoneCountryMeta(phoneCountry));
 const fieldMessage: Record<QuickCheckoutFieldError, string> = {
   customerName: copy.nameTooShortText,
-  customerPhone: copy.phoneInvalidText,
+  customerPhone: phoneCountry === "BD" ? copy.phoneInvalidText : copy.phoneIntlInvalidText,
   customerEmail: copy.emailInvalidText,
   customerEmailRequired: copy.emailRequiredText,
   customerWhatsapp: copy.whatsappInvalidText,
@@ -325,8 +332,8 @@ const secondaryButtonClass =
             </div>
             <div>
               <label for="customerPhone" class={labelClass}>{copy.customerPhoneLabel}<span aria-hidden="true" class="ml-0.5 text-destructive">*</span></label>
-              <input id="customerPhone" name="customerPhone" type="tel" inputmode="tel" autocomplete="tel" maxlength="20" required value={form.customerPhone} placeholder={copy.customerPhonePlaceholder} aria-invalid={errorFor("customerPhone") ? "true" : undefined} aria-describedby="customerPhone-help customerPhone-error" class={fieldClass} />
-              <p id="customerPhone-help" class="mt-1 text-sm text-muted-foreground">{mode === "pickup" ? copy.customerPhonePickupHelp : mode === "none" ? copy.customerPhoneServiceHelp : copy.customerPhoneHelp}</p>
+              <input id="customerPhone" name="customerPhone" type="tel" inputmode="tel" autocomplete="tel" maxlength="20" required value={form.customerPhone} placeholder={phoneWords.placeholder} aria-invalid={errorFor("customerPhone") ? "true" : undefined} aria-describedby="customerPhone-help customerPhone-error" class={fieldClass} />
+              <p id="customerPhone-help" class="mt-1 text-sm text-muted-foreground">{phoneWords.hints[mode]}</p>
               {errorFor("customerPhone") && <p id="customerPhone-error" class={errorClass}>{errorFor("customerPhone")}</p>}
             </div>
             {contactFields.email !== "hidden" && (

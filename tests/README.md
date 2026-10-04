@@ -27,7 +27,7 @@ The root `vitest.config.ts` sets `globals: true` and ignores `.claude/**`. It re
 |--------|--------------|
 | `*.test.ts` | Pure logic or mocks |
 | `*.d1.test.ts` | The real migrations on an in-memory SQLite database behind a D1-compatible binding (`createSqliteD1Database` in `packages/database/src/testing/sqlite-d1.ts`) |
-| `*.postgres-native.test.ts` | A real PostgreSQL server. The tests skip unless `SCALIUS_TEST_POSTGRES_URL` points at a disposable server |
+| `*.postgres-native.test.ts` | A real PostgreSQL server. The tests skip unless `SCALIUS_TEST_POSTGRES_URL` points at a disposable server. Each one creates its own database with `createNativePostgres()` (`packages/database/src/testing/postgres-native.ts`: the canonical schema plus the rows migrations seed) and drops it in `afterAll` |
 
 ## Layout
 

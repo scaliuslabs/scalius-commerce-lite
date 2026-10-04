@@ -173,6 +173,18 @@ export function chooseQuickCheckoutRate(
   return rates.find((rate) => rate.id === chosen)?.id ?? rates[0]?.id ?? "";
 }
 
+/**
+ * The country a phone number typed without a country code is read in: the
+ * delivery address's, and Bangladesh for pickup and services (the order form
+ * posts a country only for a delivery abroad, so the server reads it so too).
+ */
+export function quickCheckoutPhoneCountry(
+  form: Pick<QuickCheckoutForm, "shippingCountryCode">,
+  mode: QuickCheckoutMode,
+): string {
+  return mode === "delivery" && isQuickCheckoutAbroad(form) ? form.shippingCountryCode : LOCATION_COUNTRY;
+}
+
 /** Another country than Bangladesh: its shipping zone matches on the region and postal code. */
 export function isQuickCheckoutAbroad(form: Pick<QuickCheckoutForm, "shippingCountryCode">): boolean {
   return form.shippingCountryCode !== LOCATION_COUNTRY;
@@ -206,7 +218,7 @@ export function quickCheckoutFieldErrors(
   const errors: QuickCheckoutFieldError[] = [];
   if (form.customerName.length < 3) errors.push("customerName");
   try {
-    validateAndFormatPhone(form.customerPhone);
+    validateAndFormatPhone(form.customerPhone, undefined, { defaultCountry: quickCheckoutPhoneCountry(form, mode) });
   } catch {
     errors.push("customerPhone");
   }
@@ -240,7 +252,7 @@ export function quickCheckoutQuoteInput(
   if (mode === "delivery" && !hasQuickCheckoutDestination(form)) return null;
   let customerPhone: string | undefined;
   try {
-    customerPhone = validateAndFormatPhone(form.customerPhone);
+    customerPhone = validateAndFormatPhone(form.customerPhone, undefined, { defaultCountry: quickCheckoutPhoneCountry(form, mode) });
   } catch {
     customerPhone = undefined;
   }

@@ -6,6 +6,7 @@ import {
   quickCheckoutFieldErrors,
   quickCheckoutMode,
   quickCheckoutOrderForm,
+  quickCheckoutPhoneCountry,
   quickCheckoutQuoteInput,
   readQuickCheckoutForm,
   readQuickCheckoutLines,
@@ -105,6 +106,24 @@ describe("checkout without JavaScript", () => {
       shippingPostalCode: "94103",
     });
     expect(order.has("city")).toBe(false);
+  });
+
+  it("reads a number typed without a country code in the delivery address's country, as the order is placed (Bangladesh for pickup)", () => {
+    const abroad = readQuickCheckoutForm(posted({
+      cartItems: line(), customerName: "India Buyer", customerPhone: "098765 43210", shippingCountryCode: "in",
+      shippingAddress: "12 MG Road", shippingLocality: "Bengaluru", expectedQuoteFingerprint: "taxq_abcdefghijklmnopqrstuv",
+    }));
+    expect(quickCheckoutPhoneCountry(abroad, "delivery")).toBe("IN");
+    expect(quickCheckoutPhoneCountry(abroad, "pickup")).toBe("BD");
+    expect(quickCheckoutFieldErrors(abroad, "delivery", 10)).toEqual([]);
+    expect(quickCheckoutQuoteInput(abroad, "delivery", "in_standard")).toMatchObject({ customerPhone: "+919876543210" });
+    // The same digits in a Bangladesh read are not a mobile number.
+    expect(quickCheckoutFieldErrors(abroad, "pickup", 10)).toEqual(["customerPhone"]);
+    expect(quickCheckoutQuoteInput(abroad, "pickup", "p1")).not.toHaveProperty("customerPhone");
+    // A Bangladesh address keeps Bangladesh's rules.
+    const home = readQuickCheckoutForm(posted({ cartItems: line(), customerName: "Home Buyer", customerPhone: "098765 43210", city: "dhaka", zone: "mirpur", shippingAddress: "House 1, Road 2" }));
+    expect(quickCheckoutPhoneCountry(home, "delivery")).toBe("BD");
+    expect(quickCheckoutFieldErrors(home, "delivery", 10)).toEqual(["customerPhone"]);
   });
 
   it("names every missing contact or address field before placing", () => {

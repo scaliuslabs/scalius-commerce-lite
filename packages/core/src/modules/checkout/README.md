@@ -164,6 +164,11 @@ language with the merchant's edits).
   `details.reason = "shipping_country_unavailable"`. The address follows its
   country's rules (`resolveStorefrontShippingAddress()`), and the phone is
   read in the address country (E.164). Bangladesh keeps City/Thana/Area.
+  The phone countries checkout accepts are the merchant's customer-country
+  policy united with the countries of the active markets
+  (`acceptedPhoneCountryPolicy()`): the authority snapshot's `allowedCountries`
+  and the config's `allowedCountries` already hold that list, so the API, the
+  agent checkout and the storefront apply one rule.
   Delivery rates come from the address's shipping zone (step 3b): the rate
   statement carries the destination country's regions, and a foreign
   destination adds its admin area and postal code. No zone means no
