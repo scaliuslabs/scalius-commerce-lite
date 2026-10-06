@@ -57,13 +57,13 @@ pnpm plugin add plugins/tally   # pack, check, record in scalius.plugins.json
 pnpm run deploy                 # compile the app into the API Worker
 ```
 
-`pnpm plugin` keeps `scalius.plugins.json` and the generated `apps/api/src/plugins/bundled.gen.ts` and `sandbox-runtime.gen.ts` in step. Do not edit them by hand. Other subcommands:
+`pnpm plugin` keeps `scalius.plugins.json` and the generated files in `apps/api/src/plugins/` in step: `bundled.gen.ts`, `sandbox-runtime.gen.ts`, `assets.gen.ts` (the listing images) and `catalog.gen.ts` (the first-party apps in `plugins/` that the lockfile does not list). Do not edit them by hand. Other subcommands:
 
 - `build [plugin id ...]` packs the listed apps (all by default) again. `list` shows each bundled app and whether it is current. `remove <plugin id>` stops bundling one.
 - `sandbox <on|off>` records whether deploys bind the Worker Loader.
 - `wrangler-config [--local] [--plan paid]` prints the API Wrangler config path. A generated config is `wrangler.deploy.gen.json` (`wrangler.local.deploy.gen.json` with `--local`); Free without the sandbox uses the committed config.
 
-After the deploy, the app shows on the Apps page as not active. A Super Admin reviews its requests and activates it.
+After the deploy, the app shows on the Apps page as not active. A Super Admin reviews its requests and activates it. A first-party app in `plugins/` that is not in `scalius.plugins.json` shows under "Available to install" with its `pnpm plugin add` command.
 
 ## Two loaders
 
@@ -92,7 +92,27 @@ An installation with `source` `bundled` uses the bundled loader. `registry` and 
 - `admin`: `pages` (10), `cards` (20), `actions` (20), `widgets` (5). Each names an admin route.
 - `storefront`: `sections` (20), `productBlocks` (10), `scripts` (5, https; their hosts join the storefront CSP), `head` and `proxy` flags.
 - `limits`: `cpuMs` 5-200 (default 50), `wallMs` 100-30,000 (default 10,000).
-- `translations.bn`: Bangla text.
+- `translations.bn`: Bangla text for `name`, `tagline`, `description` and the admin titles.
+
+### Listing
+
+These fields describe the app on the Apps page. They give no access, and a change to them needs no new approval. All are optional.
+
+- `icon`: a square SVG or PNG file in the app package, for example `assets/icon.svg`. 64 KiB or less.
+- `tagline` (100 characters): one line under the name. Keep it different from `description`.
+- `categories` (3): `payments`, `shipping`, `orders`, `inventory`, `returns`, `checkout`, `pricing`, `marketing`, `loyalty`, `store-design`, `content`, `notifications`, `analytics`, `finances`, `support`, `operations`, `compliance`. Put the main one first. The list follows the Shopify App Store subcategories.
+- `screenshots` (6): PNG, JPEG or WebP files in the app package, 512 KiB or less each.
+- `support`: `{ url?, email? }`. Give at least one.
+- `privacyPolicyUrl`, `documentationUrl`, `changelogUrl`: https addresses.
+- `countries`: ISO 3166-1 alpha-2 codes, upper case, of the countries the app serves. Leave it out for every country.
+- `minPlatformVersion`: the oldest Scalius release the app runs on (semver). A manifest that asks for a newer release than this code does not parse.
+
+Paths are relative to the app package, in lower case, without `..`. The packer reads each file and refuses it when:
+
+- its bytes do not match its type, or it is larger than its limit;
+- an SVG has elements other than drawing elements (no `script`, `foreignObject`, `image` or `a`), an `on*` attribute, a reference that is not to its own `#id`, a `url()` to another file, `@import`, a DOCTYPE or an entity.
+
+The packer adds the digests of the images to the end of the bundle as a comment. Thus the bundle SHA-256 changes when only an image changes. The API serves the images to the dashboard at `/api/v1/admin/apps/<id>/assets/<icon | screenshot-N>` on the dashboard origin. It checks each image again, and sends it with `nosniff` and `Content-Security-Policy: sandbox`. An address with the current fingerprint (`?v=`) is cached for one year. A bundled app's images are compiled into the Worker (`assets.gen.ts`). A sandboxed app's images are in R2 at `private/plugins/<id>/<version>/<sha256>/assets/<path>`; `pnpm plugin` writes them to `dist/assets/` beside `dist/plugin.js`.
 
 Activation shows a Super Admin everything the manifest asks for. An update that asks for more access stays inactive until a Super Admin approves it.
 
