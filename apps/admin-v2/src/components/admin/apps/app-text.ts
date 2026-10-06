@@ -12,11 +12,16 @@ function translationFor(translations: Translations | undefined, locale: Locale):
   return locale === "bn" ? translations?.bn ?? null : null;
 }
 
-/** An app's name and description (the Apps list, its page). */
-export function localizedApp<T extends Pick<AppSummary, "name" | "description"> & { translations?: Translations }>(app: T, locale: Locale): T {
+/** An app's name, tagline and description (the Apps list, its page). */
+export function localizedApp<T extends Pick<AppSummary, "name" | "description"> & { tagline?: string | null; translations?: Translations }>(app: T, locale: Locale): T {
   const text = translationFor(app.translations, locale);
   if (!text) return app;
-  return { ...app, name: text.name ?? app.name, description: text.description ?? app.description };
+  return {
+    ...app,
+    name: text.name ?? app.name,
+    description: text.description ?? app.description,
+    ...(app.tagline !== undefined ? { tagline: text.tagline ?? app.tagline } : {}),
+  };
 }
 
 /** An app's page: its name, description and the titles of the pages it lists. */

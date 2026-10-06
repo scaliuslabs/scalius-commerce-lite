@@ -64,6 +64,10 @@ function summary(overrides: Record<string, unknown> = {}) {
     description: "Points for every order.",
     author: { name: "Acme", url: "https://acme.example" },
     homepage: null,
+    tagline: null,
+    icon: null,
+    categories: [],
+    countries: null,
     source: "bundled",
     status: "installed",
     needsApproval: false,
@@ -92,6 +96,12 @@ const field = (overrides: Record<string, unknown>) => ({
 function detail(overrides: Record<string, unknown> = {}) {
   return {
     ...summary(),
+    screenshots: [],
+    support: null,
+    privacyPolicyUrl: null,
+    documentationUrl: null,
+    changelogUrl: null,
+    minPlatformVersion: null,
     grantKey: "grant-key-v3",
     request: grant(),
     granted: null,
@@ -241,62 +251,196 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
+function listing(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "scalius.gift-wrap",
+    name: "Gift wrap",
+    version: "1.0.0",
+    description: "Buyers ask for gift wrap at checkout.",
+    author: { name: "Scalius", url: null },
+    homepage: null,
+    tagline: "Wrap orders as gifts",
+    icon: "/api/v1/admin/apps/scalius.gift-wrap/assets/icon?v=cccccccccccccccc",
+    categories: ["orders"],
+    countries: null,
+    screenshots: ["/api/v1/admin/apps/scalius.gift-wrap/assets/screenshot-1?v=cccccccccccccccc"],
+    support: { url: "https://help.example/gift", email: null },
+    privacyPolicyUrl: null,
+    documentationUrl: null,
+    changelogUrl: "https://help.example/gift/changes",
+    minPlatformVersion: "1.0.0",
+    installCommand: "pnpm plugin add plugins/gift-wrap",
+    ...overrides,
+  };
+}
+
+const STORE = {
+  apps: [
+    summary({ id: "acme.loyalty", status: "active", tagline: "Points that bring buyers back", categories: ["loyalty", "marketing"] }),
+    summary({ id: "scalius.bkash", name: "bKash", status: "active", tagline: "Take bKash payments at checkout", categories: ["payments"], countries: ["BD"], icon: "/api/v1/admin/apps/scalius.bkash/assets/icon?v=63a5ccd16b4c0000" }),
+    summary({ id: "acme.sms", name: "SMS alerts", tagline: null, description: "Texts buyers when orders ship.", categories: ["notifications"] }),
+    summary({ id: "acme.reviews", name: "Photo reviews", needsApproval: true, categories: ["marketing"] }),
+    summary({ id: "acme.feed", name: "Product feed", status: "disabled" }),
+    summary({ id: "acme.erp", name: "ERP sync", status: "failed", categories: ["operations"] }),
+  ],
+  available: [listing()],
+  sandboxAvailable: false,
+};
+
+const rows = () => [...document.querySelectorAll("li")].map((row) => row.textContent ?? "");
+const tab = (label: string) => [...document.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find((element) => element.textContent?.startsWith(label))!;
+
 describe("Apps list", () => {
-  it("shows every app with its status and links to its page", async () => {
-    sdk.getApiV1AdminApps.mockImplementation(() =>
-      ok({
-        apps: [
-          summary({ id: "acme.loyalty", status: "active" }),
-          summary({ id: "acme.sms", name: "SMS alerts" }),
-          summary({ id: "acme.reviews", name: "Photo reviews", needsApproval: true }),
-          summary({ id: "acme.feed", name: "Product feed", status: "disabled" }),
-          summary({ id: "acme.erp", name: "ERP sync", status: "failed" }),
-        ],
-        sandboxAvailable: false,
-      }));
+  it("shows every app with its icon, status, tagline and countries, and links to its page", async () => {
+    sdk.getApiV1AdminApps.mockImplementation(() => ok(STORE));
     await render(<AppsList />, VIEWER);
     await vi.waitFor(() => expect(text()).toContain("ERP sync"));
 
-    const rows = [...document.querySelectorAll("li")].map((row) => row.textContent ?? "");
-    expect(rows[0]).toContain("Loyalty points");
-    expect(rows[0]).toContain("Active");
-    expect(rows[0]).toContain("Version 1.2.0 · by Acme");
-    expect(rows[1]).toContain("Not active");
-    expect(rows[2]).toContain("Update needs approval");
-    expect(rows[3]).toContain("Off");
-    expect(rows[4]).toContain("Failed");
+    const list = rows();
+    expect(list[0]).toContain("Loyalty points");
+    expect(list[0]).toContain("Active");
+    expect(list[0]).toContain("Points that bring buyers back");
+    expect(list[1]).toContain("Available in Bangladesh");
+    // No tagline: the description stands in.
+    expect(list[2]).toContain("Not active");
+    expect(list[2]).toContain("Texts buyers when orders ship.");
+    expect(list[3]).toContain("Update available");
+    expect(list[4]).toContain("Off");
+    expect(list[5]).toContain("Failed");
+    expect(list[6]).toContain("Gift wrap");
+    expect(list[6]).toContain("Not installed");
+    // Countries show only when an app serves some of them.
+    expect(list.filter((row) => row.includes("Available in"))).toHaveLength(1);
     expect(document.querySelector('a[href="/admin/apps/acme.erp"]')?.textContent).toContain("ERP sync");
+    const bkashIcon = document.querySelector('a[href="/admin/apps/scalius.bkash"] img');
+    expect(bkashIcon?.getAttribute("src")).toBe("/api/v1/admin/apps/scalius.bkash/assets/icon?v=63a5ccd16b4c0000");
+    expect(bkashIcon?.getAttribute("alt")).toBe("");
   });
 
-  it("shows the checkout points each app implements, in checkout order", async () => {
-    sdk.getApiV1AdminApps.mockImplementation(() =>
-      ok({
-        apps: [
-          summary({
-            id: "acme.bulk",
-            name: "Bulk discount",
-            functions: [{ point: "order.risk", priority: 20 }, { point: "checkout.discounts", priority: 10 }],
-          }),
-          summary({ id: "acme.sms", name: "SMS alerts" }),
-        ],
-        sandboxAvailable: false,
-      }));
+  it("counts each view and shows only its apps", async () => {
+    sdk.getApiV1AdminApps.mockImplementation(() => ok(STORE));
     await render(<AppsList />, VIEWER);
-    await vi.waitFor(() => expect(text()).toContain("SMS alerts"));
+    await vi.waitFor(() => expect(text()).toContain("ERP sync"));
 
-    const [bulk, sms] = [...document.querySelectorAll("li")];
-    expect(bulk!.textContent).toMatch(/CheckoutDiscountsOrder risk/);
-    expect(sms!.textContent).not.toContain("Checkout");
+    expect([...document.querySelectorAll('[role="tab"]')].map((element) => element.textContent)).toEqual([
+      "All7", "Active2", "Installed, not active3", "Updates available1", "Available to install1",
+    ]);
+    await click(tab("Installed, not active"));
+    expect(rows()).toHaveLength(3);
+    expect(text()).toContain("Product feed");
+    expect(text()).not.toContain("Photo reviews");
+    await click(tab("Updates available"));
+    expect(rows()).toHaveLength(1);
+    expect(text()).toContain("Photo reviews");
+    expect(tab("Updates available").getAttribute("aria-selected")).toBe("true");
+  });
+
+  it("searches names, taglines and category names, and clears the filters when nothing matches", async () => {
+    sdk.getApiV1AdminApps.mockImplementation(() => ok(STORE));
+    await render(<AppsList />, VIEWER);
+    await vi.waitFor(() => expect(text()).toContain("ERP sync"));
+    const search = document.querySelector<HTMLInputElement>('input[aria-label="Search apps"]')!;
+
+    await type(search, "bkash");
+    expect(rows()).toHaveLength(1);
+    await type(search, "gifts");
+    expect(rows().map((row) => row.slice(0, 9))).toEqual(["Gift wrap"]);
+    await type(search, "customer loyalty");
+    expect(rows()).toHaveLength(1);
+    expect(text()).toContain("Loyalty points");
+
+    await type(search, "nothing like this");
+    expect(text()).toContain("No apps match these filters");
+    await click(button("Clear filters"));
+    expect(search.value).toBe("");
+    expect(rows()).toHaveLength(7);
+  });
+
+  it("offers only the categories its apps use, and filters by one", async () => {
+    sdk.getApiV1AdminApps.mockImplementation(() => ok(STORE));
+    await render(<AppsList />, VIEWER);
+    await vi.waitFor(() => expect(text()).toContain("ERP sync"));
+    const trigger = document.querySelector<HTMLButtonElement>('button[aria-label="Category"]')!;
+    expect(trigger.textContent).toContain("All categories");
+
+    await click(trigger);
+    const options = [...document.querySelectorAll('[role="option"]')].map((option) => option.textContent);
+    expect(options).toEqual(["All categories", "Payments", "Orders", "Marketing", "Customer loyalty", "Notifications", "Operations"]);
+    await click([...document.querySelectorAll<HTMLElement>('[role="option"]')].find((option) => option.textContent === "Marketing")!);
+    expect(rows().map((row) => row.slice(0, 13))).toEqual(["Loyalty point", "Photo reviews"]);
+  });
+
+  it("opens an available app's listing with the command that adds it", async () => {
+    sdk.getApiV1AdminApps.mockImplementation(() => ok(STORE));
+    await render(<AppsList />, VIEWER);
+    await vi.waitFor(() => expect(text()).toContain("Gift wrap"));
+
+    await click([...document.querySelectorAll<HTMLButtonElement>("li button")].find((element) => element.textContent?.includes("Gift wrap"))!);
+    await vi.waitFor(() => expect(dialog()?.textContent).toContain("Install Gift wrap"));
+    const listingText = dialog().textContent ?? "";
+    expect(listingText).toContain("by Scalius");
+    expect(listingText).toContain("Wrap orders as gifts");
+    expect(listingText).toContain("Every country");
+    expect(listingText).toContain("Scalius 1.0.0 or later");
+    expect(dialog().querySelector("code")?.textContent).toBe("pnpm plugin add plugins/gift-wrap");
+    expect(dialog().querySelector('img[alt="Gift wrap screenshot 1"]')).not.toBeNull();
+    expect(dialog().querySelector('a[href="https://help.example/gift/changes"]')).not.toBeNull();
   });
 
   it("says what appears here when nothing is installed", async () => {
-    sdk.getApiV1AdminApps.mockImplementation(() => ok({ apps: [], sandboxAvailable: false }));
+    sdk.getApiV1AdminApps.mockImplementation(() => ok({ apps: [], available: [], sandboxAvailable: false }));
     await render(<AppsList />, VIEWER);
     await vi.waitFor(() => expect(text()).toContain("No apps installed"));
+  });
+
+  it("speaks Bangla, the app's own text included", async () => {
+    setLocale("bn");
+    sdk.getApiV1AdminApps.mockImplementation(() => ok({
+      ...STORE,
+      apps: [summary({ id: "scalius.bkash", name: "bKash", tagline: "Take bKash payments", categories: ["payments"], countries: ["BD"], translations: { bn: { name: "বিকাশ", tagline: "চেকআউটে বিকাশ পেমেন্ট নিন" } } })],
+    }));
+    await render(<AppsList />, VIEWER);
+    await vi.waitFor(() => expect(text()).toContain("বিকাশ"));
+    expect(text()).toContain("চেকআউটে বিকাশ পেমেন্ট নিন");
+    expect(text()).toContain("ইনস্টল করা যায়");
+    expect(text()).toContain("যেসব দেশে চলে:");
   });
 });
 
 describe("App page", () => {
+  it("shows the app's listing: icon, tagline, screenshots, categories, countries, links and changelog", async () => {
+    await renderApp(detail({
+      icon: "/api/v1/admin/apps/acme.loyalty/assets/icon?v=aaaaaaaaaaaaaaaa",
+      tagline: "Points that bring buyers back",
+      categories: ["loyalty", "marketing"],
+      countries: ["BD", "IN"],
+      screenshots: ["/api/v1/admin/apps/acme.loyalty/assets/screenshot-1?v=aaaaaaaaaaaaaaaa"],
+      support: { url: null, email: "help@acme.example" },
+      documentationUrl: "https://acme.example/docs",
+      privacyPolicyUrl: "https://acme.example/privacy",
+      changelogUrl: "https://acme.example/changes",
+      minPlatformVersion: "1.0.0",
+    }), VIEWER);
+
+    expect(document.querySelector("h1 img")?.getAttribute("src")).toBe("/api/v1/admin/apps/acme.loyalty/assets/icon?v=aaaaaaaaaaaaaaaa");
+    expect(text()).toContain("Points that bring buyers back");
+    expect(text()).toContain("Customer loyalty, Marketing");
+    expect(text()).toContain("Bangladesh, India");
+    expect(text()).toContain("Scalius 1.0.0 or later");
+    expect(document.querySelector('img[alt="Loyalty points screenshot 1"]')).not.toBeNull();
+    for (const href of ["mailto:help@acme.example", "https://acme.example/docs", "https://acme.example/privacy", "https://acme.example/changes"]) {
+      expect(document.querySelector(`a[href="${href}"]`), href).not.toBeNull();
+    }
+  });
+
+  it("says an app without a country list serves every country and shows no empty links", async () => {
+    await renderApp(detail(), VIEWER);
+    expect(text()).toContain("Every country");
+    expect(text()).not.toContain("Changelog");
+    expect(text()).not.toContain("Screenshots");
+    expect(document.querySelector("h1 img")).toBeNull();
+  });
+
   it("lists the access the app asks for in plain words", async () => {
     await renderApp(detail(), VIEWER);
 

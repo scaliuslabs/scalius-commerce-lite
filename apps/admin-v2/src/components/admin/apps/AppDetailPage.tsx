@@ -1,8 +1,10 @@
-// One installed app: what it is, what it may do, its settings, its scheduled
+// One installed app (Shopify's app details): its icon and name, what it is
+// (tagline, description, screenshots, developer, categories, countries,
+// links, version and changelog), what it may do, its settings, its scheduled
 // jobs and its activity. Everything is drawn from the API's description of
 // the app; no app code runs in the dashboard. A Super Admin activates (or
 // approves an update); managers change settings, deactivate and uninstall.
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { ChevronDown, CircleAlert, TriangleAlert } from "lucide-react";
 import { PageHeader } from "~/components/admin/resource/PageHeader";
@@ -28,6 +30,8 @@ import { formatDuration, formatWhen } from "../settings/webhooks/webhook-format"
 import { AppAccess } from "./AppAccess";
 import { checkoutFunctions, isKnownFunctionPoint } from "./app-functions";
 import { AppActivity } from "./AppActivity";
+import { AppIcon } from "./AppIcon";
+import { AppListingFacts, AppScreenshots, Fact } from "./AppListingParts";
 import { ActivateAppDialog, DeactivateAppDialog, UninstallAppDialog } from "./AppDialogs";
 import { AppSettingsForm } from "./AppSettingsForm";
 import { AppStatusBadge } from "./app-status";
@@ -37,23 +41,7 @@ type DialogName = "activate" | "deactivate" | "uninstall" | null;
 
 const JOB_VARIANT = { running: "info", succeeded: "success", failed: "destructive" } as const;
 
-function Fact({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="flex flex-col gap-0.5">
-      <dt className="text-body text-muted-foreground">{label}</dt>
-      <dd className="break-words text-body">{children}</dd>
-    </div>
-  );
-}
-
-function ExternalLink({ href, children }: { href: string; children: ReactNode }) {
-  return (
-    <a href={href} target="_blank" rel="noopener noreferrer" className="text-link hover:underline">
-      {children}
-    </a>
-  );
-}
-
+/** Shopify's app details: what it is (tagline, description, screenshots), then the listing's facts and this install's. */
 function Overview({ app }: { app: AppDetail }) {
   const t = useMessages(installedAppsMessages);
   const pages = app.admin.pages;
@@ -65,15 +53,10 @@ function Overview({ app }: { app: AppDetail }) {
         <CardTitle>{t("overviewTitle")}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        {app.tagline ? <p className="text-body font-medium">{app.tagline}</p> : null}
         {app.description ? <p className="whitespace-pre-wrap break-words text-body">{app.description}</p> : null}
-        <dl className="grid gap-4 sm:grid-cols-2">
-          <Fact label={t("developer")}>
-            {app.author.url ? <ExternalLink href={app.author.url}>{app.author.name}</ExternalLink> : app.author.name}
-          </Fact>
-          <Fact label={t("version")}><span className="font-mono">{app.version}</span></Fact>
-          {app.homepage ? (
-            <Fact label={t("website")}><ExternalLink href={app.homepage}>{app.homepage}</ExternalLink></Fact>
-          ) : null}
+        <AppScreenshots app={app} />
+        <AppListingFacts app={app}>
           <Fact label={t("runsIn")}>{t(app.runtime === "bundled" ? "runtime_bundled" : "runtime_sandbox")}</Fact>
           <Fact label={t("approvedBy")}>{app.activatedBy?.name ?? t("notApproved")}</Fact>
           {app.activatedAt ? <Fact label={t("activeSince")}>{formatWhen(app.activatedAt) ?? "—"}</Fact> : null}
@@ -90,7 +73,7 @@ function Overview({ app }: { app: AppDetail }) {
               </ul>
             </Fact>
           ) : null}
-        </dl>
+        </AppListingFacts>
       </CardContent>
     </Card>
   );
@@ -192,7 +175,17 @@ function AppPage({ app }: { app: AppDetail }) {
 
   return (
     <div className="mx-auto max-w-4xl">
-      <PageHeader backTo="/admin/apps" title={app.name} badge={<AppStatusBadge app={app} />} actions={actions} />
+      <PageHeader
+        backTo="/admin/apps"
+        title={(
+          <span className="flex items-center gap-3">
+            <AppIcon src={app.icon} />
+            {app.name}
+          </span>
+        )}
+        badge={<AppStatusBadge app={app} />}
+        actions={actions}
+      />
       <div className="space-y-4">
         <SaveErrorBanner />
         {app.status === "failed" ? (

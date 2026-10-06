@@ -21,6 +21,7 @@ import type {
   AppDetail,
   AppEventDelivery,
   AppGrant,
+  AppListing,
   AppLogLine,
   AppSettingField,
   AppSummary,
@@ -29,7 +30,10 @@ import { AdminApiResponseError } from "../admin-api-error";
 import { apiData } from "../api";
 import { queryKeys } from "../query-keys";
 
-export type { AppAdminSurfaces, AppDetail, AppEventDelivery, AppGrant, AppLogLine, AppSettingField, AppSummary };
+export type { AppAdminSurfaces, AppDetail, AppEventDelivery, AppGrant, AppListing, AppLogLine, AppSettingField, AppSummary };
+
+/** The categories an app lists itself under (the manifest's enum). */
+export type AppCategory = AppSummary["categories"][number];
 
 /** The checkout points an app can implement, in the order checkout reaches them. */
 export const APP_FUNCTION_POINTS = ["cart.validate", "checkout.discounts", "checkout.shipping_rates", "checkout.payment_methods", "order.risk"] as const;

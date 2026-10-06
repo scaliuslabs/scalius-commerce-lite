@@ -1,8 +1,11 @@
 import { cn } from "@scalius/shared/utils";
+import { formatNumber } from "~/i18n";
 
 export interface IndexTab<T extends string> {
   value: T;
   label: string;
+  /** A count after the label (Polaris Tabs' `badge`). */
+  badge?: number;
 }
 
 interface IndexTabsProps<T extends string> {
@@ -31,6 +34,7 @@ export function IndexTabs<T extends string>({ tabs, value, onChange, label }: In
             )}
           >
             {tab.label}
+            {tab.badge !== undefined ? <span className="ms-1.5 tabular-nums text-muted-foreground">{formatNumber(tab.badge)}</span> : null}
           </button>
         );
       })}
