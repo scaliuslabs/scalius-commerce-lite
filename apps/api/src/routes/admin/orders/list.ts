@@ -16,13 +16,14 @@ import { ValidationError } from "../../../utils/api-error";
 import { ok } from "../../../utils/api-response";
 import { keysetPaginatedEnvelope, keysetQuerySchema, errorResponses } from "../../../schemas/responses";
 import { orderSummarySchema, productSummarySchema } from "../../../schemas/entities";
-import { parseBangladeshDateOnlyBoundary } from "../order-date-filter";
+import { parseStoreDateOnlyBoundary } from "../order-date-filter";
 import {
     ORDER_CHANNELS,
     ORDER_CHANNEL_SOURCE_MAX_LENGTH,
     ORDER_CHANNEL_SOURCE_PATTERN,
 } from "@scalius/shared/order-channel";
 import { commerceCalendarDateKey } from "@scalius/shared/commerce-time";
+import { storeTimeZoneOf } from "../../../utils/store-time-zone";
 import { isPaymentMethodId } from "@scalius/core/modules/payments";
 import {
     type OrderPaymentRecoveryFilter,
@@ -269,8 +270,8 @@ app.openapi(listOrdersRoute, async (c) => {
         showArchived: query.archived === "true",
         sort: effectiveSort,
         order: query.order as "asc" | "desc",
-        startDate: parseBangladeshDateOnlyBoundary(query.startDate, "start"),
-        endDate: parseBangladeshDateOnlyBoundary(query.endDate, "end")
+        startDate: parseStoreDateOnlyBoundary(query.startDate, "start", storeTimeZoneOf(c.env)),
+        endDate: parseStoreDateOnlyBoundary(query.endDate, "end", storeTimeZoneOf(c.env))
     });
     return ok(c, projectOrderListResult(result));
 });
@@ -334,7 +335,7 @@ app.openapi(exportOrdersRoute, async (c) => {
     if (ids && ids.length > 100) throw new ValidationError("Export at most 100 selected orders at a time.");
     const maxRows = Math.min(query.maxRows, ORDER_EXPORT_MAX_ROWS);
     const effectiveSort: OrderListSort = exportSort(query.sort);
-    const csvBuilder = createOrdersCsvArtifactBuilder(query.format);
+    const csvBuilder = createOrdersCsvArtifactBuilder(query.format, storeTimeZoneOf(c.env));
     let exportedRows = 0;
     let after: string | undefined;
     // Rows remain beyond the file; the list's own total is only a capped count.
@@ -360,8 +361,8 @@ app.openapi(exportOrdersRoute, async (c) => {
             showArchived: query.archived === "true",
             sort: effectiveSort,
             order: query.order,
-            startDate: parseBangladeshDateOnlyBoundary(query.startDate, "start"),
-            endDate: parseBangladeshDateOnlyBoundary(query.endDate, "end"),
+            startDate: parseStoreDateOnlyBoundary(query.startDate, "start", storeTimeZoneOf(c.env)),
+            endDate: parseStoreDateOnlyBoundary(query.endDate, "end", storeTimeZoneOf(c.env)),
         });
         counted = { total: result.pagination.total, totalIsCapped: result.pagination.totalIsCapped };
         const details = await loadOrderExportDetails(db, result.orders.map((order) => order.id));
@@ -402,7 +403,7 @@ app.openapi(exportOrdersRoute, async (c) => {
         : moreRows
             ? "rows"
             : "none";
-    const filename = `orders-${commerceCalendarDateKey()}.csv`;
+    const filename = `orders-${commerceCalendarDateKey(storeTimeZoneOf(c.env))}.csv`;
     return c.body(csvStream(artifact.chunks), 200, {
         "Content-Type": "text/csv; charset=utf-8",
         "Content-Disposition": `attachment; filename="${filename}"`,
@@ -473,8 +474,8 @@ app.openapi(paymentRecoveryListRoute, async (c) => {
         paymentRecovery: query.state as OrderPaymentRecoveryFilter,
         sort: effectiveSort,
         order: query.order as "asc" | "desc",
-        startDate: parseBangladeshDateOnlyBoundary(query.startDate, "start"),
-        endDate: parseBangladeshDateOnlyBoundary(query.endDate, "end"),
+        startDate: parseStoreDateOnlyBoundary(query.startDate, "start", storeTimeZoneOf(c.env)),
+        endDate: parseStoreDateOnlyBoundary(query.endDate, "end", storeTimeZoneOf(c.env)),
     });
     return ok(c, projectOrderListResult(result));
 });
@@ -546,8 +547,8 @@ app.openapi(paymentRecoveryExportRoute, async (c) => {
             showArchived: query.archived === "true",
             sort: effectiveSort,
             order: query.order as "asc" | "desc",
-            startDate: parseBangladeshDateOnlyBoundary(query.startDate, "start"),
-            endDate: parseBangladeshDateOnlyBoundary(query.endDate, "end"),
+            startDate: parseStoreDateOnlyBoundary(query.startDate, "start", storeTimeZoneOf(c.env)),
+            endDate: parseStoreDateOnlyBoundary(query.endDate, "end", storeTimeZoneOf(c.env)),
         });
         counted = { total: result.pagination.total, totalIsCapped: result.pagination.totalIsCapped };
         for (const order of result.orders) {
@@ -572,7 +573,7 @@ app.openapi(paymentRecoveryExportRoute, async (c) => {
         : moreRows
             ? "rows"
             : "none";
-    const filename = `payment-recovery-${commerceCalendarDateKey()}.csv`;
+    const filename = `payment-recovery-${commerceCalendarDateKey(storeTimeZoneOf(c.env))}.csv`;
     return c.body(csvStream(artifact.chunks), 200, {
         "Content-Type": "text/csv; charset=utf-8",
         "Content-Disposition": `attachment; filename="${filename}"`,

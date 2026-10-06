@@ -34,6 +34,7 @@ import {
   queuePostDeployProjectionRebuild,
   runNightlyCatalogMaintenance,
 } from "./scheduled/catalog-projections";
+import { storeTimeZoneOf } from "./utils/store-time-zone";
 
 export const INVENTORY_EXPIRY_SWEEP_LIMIT = 50;
 export const STALE_INCOMPLETE_ORDER_SWEEP_LIMIT = 25;
@@ -698,7 +699,7 @@ async function runScheduledMaintenanceInner(
 
   // Once a day: sales stats, the queued projection rebuild and a bounded
   // recommendation refresh (scheduled/catalog-projections.ts).
-  if (isNightlyCatalogTick(runContext.scheduledAt)) {
+  if (isNightlyCatalogTick(runContext.scheduledAt, storeTimeZoneOf(env))) {
     // Logged by `timed`; a failure must not block the media backfill below.
     const nightly = await timed("nightly_catalog_maintenance", () =>
       runNightlyCatalogMaintenance(db, env, runContext.scheduledAt!),

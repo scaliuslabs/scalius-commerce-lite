@@ -18,6 +18,7 @@ import { PERMISSIONS } from "@scalius/core/auth/rbac/permissions";
 import { ok } from "../../utils/api-response";
 import { successEnvelope } from "../../schemas/responses";
 import { timestampSchema } from "../../schemas/timestamps";
+import { storeTimeZoneOf } from "../../utils/store-time-zone";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const DASHBOARD_RECENT_ORDER_LIMIT = 11;
@@ -113,6 +114,7 @@ app.openapi(dashboardHomeSummaryRoute, async (c) => {
     const { stats, recentOrders } = await getDashboardHomeSummary(
         c.get("db"),
         access.orders ? DASHBOARD_RECENT_ORDER_LIMIT : 0,
+        storeTimeZoneOf(c.env),
     );
     return ok(c, {
         stats: {
@@ -164,7 +166,7 @@ const dashboardActivityRoute = createRoute({
 app.openapi(dashboardActivityRoute, async (c) => {
     const { days } = c.req.valid("query");
     const { sales } = homeAccess(c);
-    const activity = await getDailyActivityData(c.get("db"), days);
+    const activity = await getDailyActivityData(c.get("db"), days, storeTimeZoneOf(c.env));
 
     return ok(c, {
         dailyActivityData: activity.slice(0, 90).map((entry) => ({

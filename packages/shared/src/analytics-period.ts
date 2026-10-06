@@ -1,10 +1,11 @@
-// Analytics periods on the merchant calendar (Asia/Dhaka, no DST): inclusive
+// Analytics periods on the merchant calendar (the store's time zone): inclusive
 // YYYY-MM-DD ranges, comparison periods, presets and day/week/month buckets.
-// Pure and host-timezone independent, shared by the API (which validates and
-// queries) and the dashboard (which picks and labels ranges).
+// Date keys are zone-free; only `analyticsInstantRange` and `analyticsToday`
+// read the zone. Pure and host-timezone independent, shared by the API (which
+// validates and queries) and the dashboard (which picks and labels ranges).
 import {
-  COMMERCE_UTC_OFFSET_SECONDS,
   commerceCalendarDateKey,
+  commerceDayStart,
   shiftCommerceCalendarDateKey,
 } from "./commerce-time";
 
@@ -107,11 +108,12 @@ export function validateAnalyticsRange(range: { from?: unknown; to?: unknown }):
   return { from: range.from, to: range.to };
 }
 
-/** Exact UTC bounds of a merchant-day range. */
-export function analyticsInstantRange(range: AnalyticsRange): AnalyticsInstantRange {
-  const start = analyticsEpochDay(range.from) * DAY_SECONDS - COMMERCE_UTC_OFFSET_SECONDS;
-  const endExclusive = (analyticsEpochDay(range.to) + 1) * DAY_SECONDS - COMMERCE_UTC_OFFSET_SECONDS;
-  return { start, endExclusive };
+/** Exact UTC bounds of a merchant-day range in the store's zone (daylight saving included). */
+export function analyticsInstantRange(range: AnalyticsRange, timeZone: string): AnalyticsInstantRange {
+  return {
+    start: commerceDayStart(timeZone, range.from),
+    endExclusive: commerceDayStart(timeZone, shiftCommerceCalendarDateKey(range.to, 1)),
+  };
 }
 
 function shiftYear(dateKey: string, years: number): string {
@@ -141,8 +143,8 @@ export function analyticsComparisonRange(
 }
 
 /** Today in the merchant calendar. */
-export function analyticsToday(now: Date | number = new Date()): string {
-  return commerceCalendarDateKey(now);
+export function analyticsToday(timeZone: string, now: Date | number = new Date()): string {
+  return commerceCalendarDateKey(timeZone, now);
 }
 
 export function analyticsPresetRange(preset: AnalyticsPreset, today: string): AnalyticsRange {

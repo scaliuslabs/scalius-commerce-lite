@@ -3,6 +3,7 @@ import { formatOrderShippingAddress } from "../shipping-address";
 import type { InvoiceDocument, InvoiceOrderItemSnapshot } from "./snapshot";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { ServiceUnavailableError } from "../../../errors";
+import { commerceCalendarDateKey } from "@scalius/shared/commerce-time";
 
 export const MAX_PRINTABLE_INVOICE_BYTES = 65_536;
 
@@ -58,7 +59,11 @@ function itemProperties(
   }).join("");
 }
 
-export function renderPrintableInvoice(document: InvoiceDocument): string {
+export function renderPrintableInvoice(
+  document: InvoiceDocument,
+  /** The store's zone: the issue date is the store's calendar day. */
+  timeZone: string,
+): string {
   const { order, businessInfo } = document;
   const decimals = order.currencyDecimalPlaces ?? 2;
   // A Bangladesh address reads as it always has (line, area, thana, city);
@@ -68,9 +73,10 @@ export function renderPrintableInvoice(document: InvoiceDocument): string {
   const shipToHeading = address ? "Ship to" : order.shippingMethodName ? "Pickup" : "Delivery";
   const shipToText = address || (order.shippingMethodName ? html(order.shippingMethodName) : "No delivery needed");
   const issuedAt = document.issuedAt ?? order.createdAt;
-  const date = new Date(typeof issuedAt === "number" && issuedAt < 1_000_000_000_000 ? issuedAt * 1000 : issuedAt)
-    .toISOString()
-    .slice(0, 10);
+  const date = commerceCalendarDateKey(
+    timeZone,
+    new Date(typeof issuedAt === "number" && issuedAt < 1_000_000_000_000 ? issuedAt * 1000 : issuedAt),
+  );
   const rows = order.items.map((item) => `
     <tr><td>${html(item.productName || item.productId)}${item.variantLabel ? `<small>${html(item.variantLabel)}</small>` : ""}${itemProperties(item, order.currencyCode, decimals)}</td>
     <td>${item.quantity}${item.returnedQuantity ? `<small>${item.returnedQuantity} returned</small>` : ""}</td><td>${formatMoney(item.unitPriceMinor ?? Math.round(item.price * (10 ** decimals)), order.currencyCode, decimals, true)}</td>

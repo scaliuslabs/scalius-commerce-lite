@@ -237,7 +237,7 @@ describe("sign-in forms keep credentials out of URLs", () => {
     const [request] = sdk.postApiV1Setup.mock.calls[0] as [{ body: unknown; headers: Record<string, string> }];
     expect(JSON.stringify(request.body)).not.toContain("setup-key-value");
     expect(Object.values(request.headers)).toEqual(["setup-key-value"]);
-    expect(navigate).toHaveBeenCalledWith({ to: "/admin" });
+    expect(navigate).toHaveBeenCalledWith({ to: "/admin/welcome" });
   });
 
   it("verifies a typed 2FA code without putting it anywhere but the request", async () => {

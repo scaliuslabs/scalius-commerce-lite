@@ -428,7 +428,7 @@ describe("dashboard order lifecycle on D1 storage", () => {
         sqlite.exec(`UPDATE orders SET created_at = 1790292481 WHERE id = '${id}'`); // 2026-09-24 23:28 UTC
         const [row] = (await listOrders(db, { ids: [id] })).orders;
         const details = await loadOrderExportDetails(db, [id]);
-        const builder = createOrdersCsvArtifactBuilder("summary");
+        const builder = createOrdersCsvArtifactBuilder("summary", "Asia/Dhaka");
         builder.append({
             ...row!,
             subtotalAmount: 2400,
@@ -440,7 +440,7 @@ describe("dashboard order lifecycle on D1 storage", () => {
             lines: details.get(id)!.lines,
         });
         const csv = builder.finish().chunks.join("");
-        expect(formatCommerceDateTime(1790292481)).toBe("2026-09-25 05:28");
+        expect(formatCommerceDateTime(1790292481, "Asia/Dhaka")).toBe("2026-09-25 05:28");
         expect(csv).toContain('"#1001","2026-09-25 05:28","Rahim Uddin","01712345601"');
         expect(csv).toContain('"Confirmed","Unpaid","Cash on delivery","Unfulfilled"');
         expect(csv).toContain('"3 × Kurta"');

@@ -18,6 +18,7 @@ import {
   type AnalyticsPreset,
   type AnalyticsRange,
 } from "@scalius/shared/analytics-period";
+import { getStoreTimeZone } from "~/lib/store-time-zone";
 
 export interface AnalyticsSelection extends AnalyticsRange {
   comparison: AnalyticsComparison;
@@ -108,7 +109,7 @@ export function defaultAnalyticsSelection(today: string): AnalyticsSelection {
 export function resolveAnalyticsSelection(
   search: AnalyticsSearch,
   saved: AnalyticsSelection | null,
-  today: string = analyticsToday(),
+  today: string = analyticsToday(getStoreTimeZone()),
 ): AnalyticsSelection {
   const base = saved ?? defaultAnalyticsSelection(today);
   return {

@@ -411,3 +411,31 @@ export async function resetBackupPriceIncrement(db: Database, currencyCode: stri
         .where(and(eq(markets.id, BACKUP_MARKET_ID), sql`${markets.priceIncrementMinor} IS NOT ${next}`));
     return next !== previousIncrementMinor;
 }
+
+/**
+ * The writes that turn the backup market into a new store's own country
+ * (store setup, onboarding domain): its name and handle, its one country,
+ * the root presence's language and the currency's price increment. They join
+ * the caller's guarded batch; the revision moves past 1, so the market reads
+ * as configured afterwards.
+ */
+export function backupMarketSetupWrites(db: Database, setup: {
+    name: string;
+    handle: string;
+    countryCode: string;
+    locale: string;
+    priceIncrementMinor: number;
+}): SQLiteBatchItem[] {
+    return [
+        db.update(markets).set({
+            name: cleanName(setup.name),
+            handle: cleanHandle(setup.handle),
+            priceIncrementMinor: setup.priceIncrementMinor,
+            revision: sql`${markets.revision} + 1`,
+            updatedAt: sql`unixepoch()`,
+        }).where(eq(markets.id, BACKUP_MARKET_ID)),
+        ...countryWrites(db, BACKUP_MARKET_ID, cleanCountries([setup.countryCode])),
+        db.update(marketPresences).set({ locale: setup.locale })
+            .where(and(eq(marketPresences.marketId, BACKUP_MARKET_ID), eq(marketPresences.kind, "subfolder"), eq(marketPresences.value, ""))),
+    ];
+}

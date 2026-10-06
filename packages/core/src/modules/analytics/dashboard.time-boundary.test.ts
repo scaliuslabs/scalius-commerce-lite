@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getDailyActivityData, getDashboardHomeSummary } from "./dashboard.service";
 
-const summaryStats = async (db: Database) => (await getDashboardHomeSummary(db, 0)).stats;
+const summaryStats = async (db: Database) => (await getDashboardHomeSummary(db, 0, "Asia/Dhaka")).stats;
 
 function epoch(value: string): number {
   return Date.parse(value) / 1000;
@@ -112,7 +112,7 @@ describe("dashboard merchant calendar boundaries", () => {
     sqlite.prepare("INSERT INTO customers (id, name, phone, created_at) VALUES (?, 'Buyer', '+8801711111111', ?)")
       .run("customer_today", epoch("2026-08-13T18:00:01.000Z"));
 
-    const activity = await getDailyActivityData(db, 2);
+    const activity = await getDailyActivityData(db, 2, "Asia/Dhaka");
 
     expect(activity).toHaveLength(2);
     expect(activity).toEqual([
@@ -121,12 +121,29 @@ describe("dashboard merchant calendar boundaries", () => {
     ]);
   });
 
+  it("groups by the store's day across a daylight saving change", async () => {
+    // New York falls back on 2026-11-01 at 06:00 UTC, so 1 November runs
+    // 04:00 UTC (EDT midnight) to 05:00 UTC on 2 November (EST midnight).
+    insertOrder("ny_oct31_late", 10, "processing", "2026-11-01T03:59:59.000Z");
+    insertOrder("ny_nov1_start", 20, "processing", "2026-11-01T04:00:00.000Z");
+    insertOrder("ny_nov1_end", 40, "processing", "2026-11-02T04:59:59.000Z");
+    insertOrder("ny_nov2_start", 80, "processing", "2026-11-02T05:00:00.000Z");
+
+    const activity = await getDailyActivityData(db, 3, "America/New_York", new Date("2026-11-02T12:00:00.000Z"));
+
+    expect(activity).toEqual([
+      { date: "2026-10-31", orders: 1, revenue: 10, newCustomers: 0 },
+      { date: "2026-11-01", orders: 2, revenue: 60, newCustomers: 0 },
+      { date: "2026-11-02", orders: 1, revenue: 80, newCustomers: 0 },
+    ]);
+  });
+
   it("counts cancelled and returned orders while excluding them from order value", async () => {
     insertOrder("daily_pending", 100, "pending", "2026-08-13T18:30:00.000Z");
     insertOrder("daily_cancelled", 50, "cancelled", "2026-08-13T19:30:00.000Z");
     insertOrder("daily_returned", 25, "returned", "2026-08-13T20:30:00.000Z");
 
-    const activity = await getDailyActivityData(db, 1);
+    const activity = await getDailyActivityData(db, 1, "Asia/Dhaka");
 
     expect(activity).toEqual([
       { date: "2026-08-14", orders: 3, revenue: 100, newCustomers: 0 },
@@ -134,7 +151,7 @@ describe("dashboard merchant calendar boundaries", () => {
   });
 
   it("returns exactly the requested number of rows including today", async () => {
-    const activity = await getDailyActivityData(db, 90);
+    const activity = await getDailyActivityData(db, 90, "Asia/Dhaka");
 
     expect(activity).toHaveLength(90);
     expect(activity[0]?.date).toBe("2026-05-17");

@@ -16,6 +16,7 @@
  * dates are formatted with `Intl` for the active locale.
  */
 import { useCallback, useSyncExternalStore } from "react";
+import { getStoreTimeZone, useStoreTimeZone } from "~/lib/store-time-zone";
 
 export type Locale = "en" | "bn";
 
@@ -97,11 +98,15 @@ export function translate<K extends string>(catalog: MessageCatalog<K>, key: K, 
 /** Returns `t(key, vars)` for one catalog; re-renders when the locale changes. */
 export function useMessages<K extends string>(catalog: MessageCatalog<K>): (key: K, vars?: Vars) => string {
   const locale = useLocale();
-  // Stable per catalog and language, so memoised columns and callbacks that
-  // use it survive re-renders.
+  // Dates in copy are store time: a screen re-renders once the store's zone
+  // is known (`formatDateTime` reads it), like a language change.
+  const timeZone = useStoreTimeZone();
+  // Stable per catalog, language and zone, so memoised columns and callbacks
+  // that use it survive re-renders.
   return useCallback(
     (key: K, vars?: Vars) => interpolate(catalog[locale][key] ?? catalog.en[key], vars),
-    [catalog, locale],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [catalog, locale, timeZone],
   );
 }
 
@@ -122,5 +127,5 @@ export function formatNumber(value: number, options?: Intl.NumberFormatOptions):
 export function formatDateTime(date: Date, options?: Intl.DateTimeFormatOptions): string {
   // Bangla has no localised AM/PM in Intl ("৫:৫২ AM"), so bn shows the 24-hour clock.
   const clock: Intl.DateTimeFormatOptions = current === "bn" ? { hourCycle: "h23" } : {};
-  return new Intl.DateTimeFormat(dateLocale(), { timeZone: "Asia/Dhaka", ...clock, ...options }).format(date);
+  return new Intl.DateTimeFormat(dateLocale(), { timeZone: getStoreTimeZone(), ...clock, ...options }).format(date);
 }

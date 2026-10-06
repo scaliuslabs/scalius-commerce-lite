@@ -1,5 +1,5 @@
 import { usesDeliveryHierarchy } from "@scalius/shared/address";
-import { COMMERCE_UTC_OFFSET_SECONDS } from "@scalius/shared/commerce-time";
+import { timeZoneOffsetSeconds } from "@scalius/shared/commerce-time";
 import { formatPhoneForProvider } from "@scalius/shared/customer-utils";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { formatMoney } from "@scalius/shared/currency";
@@ -173,15 +173,16 @@ function label(labels: Record<string, string>, value: string | null | undefined)
   return labels[value] ?? value.replace(/_/g, " ");
 }
 
-/** "2026-09-24 05:28" in store time (Asia/Dhaka), so orders land on the right day. */
-export function formatCommerceDateTime(value: unknown): string {
+/** "2026-09-24 05:28" in store time (the store's zone), so orders land on the right day. */
+export function formatCommerceDateTime(value: unknown, timeZone: string): string {
   const date = value instanceof Date
     ? value
     : typeof value === "number"
       ? new Date(value < 10_000_000_000 ? value * 1000 : value)
       : typeof value === "string" ? new Date(value) : null;
   if (!date || !Number.isFinite(date.getTime())) return "";
-  return new Date(date.getTime() + COMMERCE_UTC_OFFSET_SECONDS * 1000)
+  const seconds = Math.floor(date.getTime() / 1000);
+  return new Date((seconds + timeZoneOffsetSeconds(timeZone, seconds)) * 1000)
     .toISOString()
     .slice(0, 16)
     .replace("T", " ");
@@ -269,7 +270,7 @@ function deliveryMethodLabel(order: OrderCsvRow): string {
   return "Delivery";
 }
 
-function orderColumns(order: OrderCsvRow): unknown[] {
+function orderColumns(order: OrderCsvRow, timeZone: string): unknown[] {
   // Pickup and no-ship orders have no address; never print a stale one.
   const ships = order.requiresShipping !== false;
   // Bangladesh fills Area, Thana and City from its delivery locations; another
@@ -278,7 +279,7 @@ function orderColumns(order: OrderCsvRow): unknown[] {
   const bangladesh = usesDeliveryHierarchy(order.shippingCountryCode);
   return [
     formatOrderNumber(order.orderNumber, order.id),
-    formatCommerceDateTime(order.createdAt),
+    formatCommerceDateTime(order.createdAt, timeZone),
     order.customerName,
     order.customerPhone ? formatPhoneForProvider(order.customerPhone) : "",
     order.customerEmail,
@@ -332,7 +333,9 @@ const ORDER_HEADERS = [
  * delivery, either one row per order or one row per item (ORD-11).
  */
 export function createOrdersCsvArtifactBuilder(
-  format: OrderCsvFormat = "summary",
+  format: OrderCsvFormat,
+  /** The store's zone: dates are store time. */
+  timeZone: string,
   maxBytes = ORDER_CSV_ARTIFACT_MAX_BYTES,
 ) {
   if (format === "items") {
@@ -341,7 +344,7 @@ export function createOrdersCsvArtifactBuilder(
       "Delivery charge", "Discount", "Order total", "Paid", "Refunded", "Cash to collect",
       ...ADDRESS_TAIL_HEADERS,
     ], (order) => (order.lines.length > 0 ? order.lines : [null]).map((line, index) => [
-      ...orderColumns(order),
+      ...orderColumns(order, timeZone),
       line?.productName ?? "",
       line?.variantLabel ?? "",
       line?.properties?.join("; ") ?? "",
@@ -363,7 +366,7 @@ export function createOrdersCsvArtifactBuilder(
     "Total", "Paid", "Refunded", "Cash to collect", "Cash on delivery", "Note",
     ...ADDRESS_TAIL_HEADERS,
   ], (order) => [[
-    ...orderColumns(order),
+    ...orderColumns(order, timeZone),
     order.lines.map(describeLine).join("; "),
     order.lines.reduce((sum, line) => sum + line.quantity, 0),
     order.subtotalAmount,

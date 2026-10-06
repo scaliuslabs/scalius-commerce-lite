@@ -14,6 +14,7 @@ import type { BatchItem } from "drizzle-orm/batch";
 import { nanoid } from "nanoid";
 
 import { customerSegmentMembership, readSegmentDefinitions } from "../customers";
+import { currentStoreTimeZone } from "../../utils/store-time-zone";
 import { priceIncrementForCurrency } from "../settings";
 import { readStoreCurrency } from "../markets";
 import {
@@ -172,7 +173,7 @@ export async function matchCustomerSegments(
         db,
         customerId,
         unique.map((id) => ({ id, definition: definitions.get(id) ?? null })),
-        { nowSeconds },
+        { nowSeconds, timeZone: currentStoreTimeZone() },
     );
 }
 

@@ -8,12 +8,13 @@ import { and, sql, desc } from "drizzle-orm";
 import { fromMinor } from "@scalius/shared/money";
 import { DEFAULT_CURRENCY, getDecimalPlaces } from "@scalius/shared/currency";
 import {
-    COMMERCE_UTC_OFFSET_SECONDS,
     commerceCalendarDateKey,
-    commerceCalendarDayBounds,
+    commerceDayStart,
     commerceMonthBounds,
     shiftCommerceCalendarDateKey,
+    zoneOffsetSchedule,
 } from "@scalius/shared/commerce-time";
+import { merchantDaySql } from "./reports/sales-sql";
 import { retryTransientD1 } from "../../utils/transient-d1";
 
 const DASHBOARD_QUERY_RETRY_DELAYS_MS = [150, 350, 750] as const;
@@ -115,8 +116,8 @@ function calculateGrowth(current: number, previous: number): number | null {
     return ((current - previous) / previous) * 100;
 }
 
-function getDashboardMonthBounds() {
-    const bounds = commerceMonthBounds();
+function getDashboardMonthBounds(timeZone: string) {
+    const bounds = commerceMonthBounds(timeZone);
     const firstDayOfMonthTs = bounds.currentMonthStart;
     const firstDayOfLastMonthTs = bounds.previousMonthStart;
 
@@ -238,8 +239,8 @@ function mapDashboardSummaryStats([
  * the same provider-neutral batch contract is used by TursoDB and PostgreSQL.
  * `recentOrderLimit` 0 skips the order feed (and its customer names) entirely.
  */
-export async function getDashboardHomeSummary(db: Database, recentOrderLimit: number) {
-    const monthBounds = getDashboardMonthBounds();
+export async function getDashboardHomeSummary(db: Database, recentOrderLimit: number, timeZone: string) {
+    const monthBounds = getDashboardMonthBounds(timeZone);
     const queries = getDashboardSummaryQueries(db, monthBounds);
     const [
         totalProductsArr,
@@ -274,20 +275,21 @@ export async function getDashboardHomeSummary(db: Database, recentOrderLimit: nu
  * Returns per-day order counts, order value, and new customer counts for the
  * last N days (filling in zero-rows for days with no data).
  */
-export async function getDailyActivityData(db: Database, days: number) {
+export async function getDailyActivityData(db: Database, days: number, timeZone: string, now: Date = new Date()) {
     if (!Number.isInteger(days) || days < 1 || days > 90) {
         throw new RangeError("Dashboard activity days must be between 1 and 90.");
     }
 
-    const endDateKey = commerceCalendarDateKey();
+    const endDateKey = commerceCalendarDateKey(timeZone, now);
     const startDateKey = shiftCommerceCalendarDateKey(endDateKey, -(days - 1));
-    const startDateTs = commerceCalendarDayBounds(startDateKey).start;
-    // Integer epoch-day bucketing is supported identically by SQLite/Turso and
-    // PostgreSQL and avoids relying on a database session timezone.
-    const merchantDay = (column: typeof orders.createdAt | typeof customers.createdAt) =>
-        sql<number>`cast((${column} + ${COMMERCE_UTC_OFFSET_SECONDS}) / 86400 as integer)`;
-    const orderDay = merchantDay(orders.createdAt);
-    const customerDay = merchantDay(customers.createdAt);
+    const startDateTs = commerceDayStart(timeZone, startDateKey);
+    const endExclusive = commerceDayStart(timeZone, shiftCommerceCalendarDateKey(endDateKey, 1));
+    // Integer epoch-day bucketing in the store's zone (each daylight saving
+    // change a literal): identical on SQLite/Turso and PostgreSQL, never a
+    // database session timezone.
+    const offsets = zoneOffsetSchedule(timeZone, startDateTs, endExclusive);
+    const orderDay = sql<number>`${merchantDaySql(`"orders"."created_at"`, offsets)}`;
+    const customerDay = sql<number>`${merchantDaySql(`"customers"."created_at"`, offsets)}`;
 
     const [dailyOrderData, dailyCustomerData] = await runDashboardQuery(
         `daily_activity_${days}d`,

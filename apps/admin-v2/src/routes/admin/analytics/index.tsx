@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { analyticsToday } from "@scalius/shared/analytics-period";
+import { getStoreTimeZone } from "~/lib/store-time-zone";
 import { AnalyticsOverview } from "~/components/admin/analytics/AnalyticsOverview";
 import { useAnalyticsSelection } from "~/components/admin/analytics/AnalyticsToolbar";
 import {
@@ -17,7 +18,7 @@ export const Route = createFileRoute("/admin/analytics/")({
   loaderDeps: ({ search }) => search,
   // The overview read starts with the navigation, for the range the page will show.
   loader: ({ context: { queryClient, user }, deps }) => {
-    const today = analyticsToday();
+    const today = analyticsToday(getStoreTimeZone());
     const selection = resolveAnalyticsSelection(deps, readSavedSelection(user?.id, today), today);
     void queryClient.prefetchQuery(analyticsOverviewQueryOptions({
       from: selection.from,

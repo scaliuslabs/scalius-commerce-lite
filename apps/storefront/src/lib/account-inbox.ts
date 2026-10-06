@@ -8,6 +8,7 @@
 // URLs carry only opaque ids (order, `cnv_`, `att_`), a message sequence
 // number, a list cursor and one short status flag from STATUS_FLAGS.
 
+import { storeTimeZone } from "./store-time-zone";
 import { escapeHtml } from "@scalius/shared/html-escape";
 import {
   CONVERSATION_ATTACHMENT_UPLOAD_TYPES,
@@ -233,20 +234,19 @@ export function checkAttachmentFiles(entries: Iterable<FormDataEntryValue>): Att
 // Presentation
 // ---------------------------------------------------------------------------
 
-const DATE_PARTS = new Intl.DateTimeFormat("en-US", {
-  day: "numeric",
-  month: "short",
-  year: "numeric",
-  hour: "numeric",
-  minute: "2-digit",
-  hour12: true,
-  timeZone: "Asia/Dhaka",
-});
-
-/** "24 Sep 2026, 5:46 PM" in Bangladesh time, like the order pages. */
-export function formatConversationTime(unixSeconds: number | null | undefined): string {
+/** "24 Sep 2026, 5:46 PM" in the store's time zone, like the order pages. */
+export function formatConversationTime(unixSeconds: number | null | undefined, timeZone: string = storeTimeZone()): string {
   if (typeof unixSeconds !== "number" || !Number.isFinite(unixSeconds) || unixSeconds <= 0) return "";
-  const part = Object.fromEntries(DATE_PARTS.formatToParts(new Date(unixSeconds * 1000)).map(({ type, value }) => [type, value]));
+  const parts = new Intl.DateTimeFormat("en-US", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+    timeZone,
+  }).formatToParts(new Date(unixSeconds * 1000));
+  const part = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
   return `${part.day} ${part.month} ${part.year}, ${part.hour}:${part.minute} ${part.dayPeriod}`;
 }
 

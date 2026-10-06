@@ -47,8 +47,8 @@ export interface AnalyticsRangeQuery {
 }
 
 /** A requested range, or the last 30 days of the store calendar. */
-export function resolveAnalyticsRange(query: AnalyticsRangeQuery, now: Date = new Date()): AnalyticsRange {
-  if (!query.from && !query.to) return analyticsPresetRange("last_30_days", analyticsToday(now));
+export function resolveAnalyticsRange(query: AnalyticsRangeQuery, timeZone: string, now: Date = new Date()): AnalyticsRange {
+  if (!query.from && !query.to) return analyticsPresetRange("last_30_days", analyticsToday(timeZone, now));
   try {
     return validateAnalyticsRange({ from: query.from ?? query.to, to: query.to ?? query.from });
   } catch (error: unknown) {
@@ -92,12 +92,12 @@ export interface ReportRequest extends AnalyticsRangeQuery {
   pageSize?: number;
 }
 
-function resolveReportParams(report: AnalyticsReportDefinition, query: ReportRequest, now: Date): {
+function resolveReportParams(report: AnalyticsReportDefinition, query: ReportRequest, ctx: AnalyticsContext): {
   range: AnalyticsRange | null;
   granularity: AnalyticsGranularity | null;
   sort: Partial<ReportSort>;
 } {
-  const range = report.period === "range" ? resolveAnalyticsRange(query, now) : null;
+  const range = report.period === "range" ? resolveAnalyticsRange(query, ctx.timeZone, ctx.now) : null;
   return {
     range,
     granularity: report.granularity && range ? resolveAnalyticsGranularity(range, query.granularity) : null,
@@ -116,7 +116,7 @@ export async function getAnalyticsReportPage(
 ): Promise<ReportPage> {
   const report = analyticsReport(reportId);
   await assertReportAvailable(ctx, report, access);
-  const params = resolveReportParams(report, query, ctx.now);
+  const params = resolveReportParams(report, query, ctx);
   return runReportPage(ctx, reportId, REPORT_IMPLEMENTATIONS[reportId], {
     ...params,
     page: query.page ?? 1,
@@ -143,7 +143,7 @@ export async function exportAnalyticsReportCsv(
 ): Promise<ReportCsvExport> {
   const report = analyticsReport(reportId);
   await assertReportAvailable(ctx, report, access);
-  const params = resolveReportParams(report, query, ctx.now);
+  const params = resolveReportParams(report, query, ctx);
   const builder = createReportCsvBuilder(report, ctx.currency);
   let totalRows = 0;
   let exported = 0;
@@ -168,7 +168,7 @@ export async function exportAnalyticsReportCsv(
   if (totals && truncatedBy !== "bytes" && report.columns.some((column) => column.summable)) {
     if (!builder.appendTotals(totals)) truncatedBy = "bytes";
   }
-  const suffix = params.range ? `${params.range.from}_${params.range.to}` : analyticsToday(ctx.now);
+  const suffix = params.range ? `${params.range.from}_${params.range.to}` : analyticsToday(ctx.timeZone, ctx.now);
   return {
     artifact: builder.finish(),
     report,
@@ -187,7 +187,7 @@ export async function getAnalyticsOverviewForRequest(
   ctx: AnalyticsContext,
   query: OverviewRequest,
 ): Promise<AnalyticsOverview> {
-  const range = resolveAnalyticsRange(query, ctx.now);
+  const range = resolveAnalyticsRange(query, ctx.timeZone, ctx.now);
   const comparison: AnalyticsComparison = query.comparison === "previous_year" || query.comparison === "none"
     ? query.comparison
     : "previous_period";

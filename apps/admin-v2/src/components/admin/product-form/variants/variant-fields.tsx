@@ -1,4 +1,5 @@
 // The fields of one variant, shared by the simple-product inventory card and the variant table.
+import { WeightInput, useWeightUnit } from "./WeightInput";
 import React from "react";
 import { ImageIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -301,6 +302,7 @@ export function AdvancedSkuFields({ variant, name, issueFor, onChange, cost }: {
   cost?: SkuCostField | null;
 }) {
   const t = useMessages(productMessages);
+  const weightUnit = useWeightUnit();
   const isUnsavedSku = variant.id.startsWith("draft_");
   const errorOf = (field: DraftIssueField) => issueFor(variant.id, field);
   // What the product kind allows: a gift card has no discount, weight or quantity tracking.
@@ -351,13 +353,13 @@ export function AdvancedSkuFields({ variant, name, issueFor, onChange, cost }: {
         )}
       </Field>
       {showWeight ? (
-        <Field label={t("weightGrams")} error={errorOf("weight")}>
+        <Field label={t("weightGrams", { unit: weightUnit })} error={errorOf("weight")}>
           {(invalid) => (
-            <NumberInput
-              value={variant.weight}
+            <WeightInput
+              grams={variant.weight}
               aria-invalid={invalid}
-              aria-label={t("weightFor", { name })}
-              onValueChange={(weight) => onChange({ weight })}
+              aria-label={t("weightFor", { name, unit: weightUnit })}
+              onGramsChange={(weight) => onChange({ weight })}
             />
           )}
         </Field>

@@ -199,6 +199,8 @@ export interface LayoutData {
   };
   /** Merchant CSP sources (Settings -> Security), comma-separated. */
   cspAllowedDomains?: string;
+  /** The store's IANA time zone (Settings -> Store details): buyer-facing dates use it. */
+  timeZone?: string;
   /** Published policy pages linked in Settings -> Policies, in kind order. */
   policies?: Array<{
     kind: "refund" | "privacy" | "terms" | "shipping" | "contact";

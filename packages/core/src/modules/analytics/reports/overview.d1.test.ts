@@ -18,7 +18,7 @@ afterEach(() => {
 });
 
 async function overview(comparison: "previous_period" | "previous_year" | "none" = "previous_period", granularity: "day" | "week" | "month" = "day") {
-  const ctx = await createAnalyticsContext(f.db);
+  const ctx = await createAnalyticsContext(f.db, "Asia/Dhaka");
   return getAnalyticsOverview(ctx, { range: AUGUST, comparison, granularity });
 }
 

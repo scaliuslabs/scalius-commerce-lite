@@ -16,7 +16,7 @@ Use the dashboard audience for merchant evidence. Keep the storefront audience s
 
 ## Report truthful evidence
 
-- Treat date-only and daily/monthly metrics as the merchant calendar in `Asia/Dhaka`. For “today,” preserve the returned merchant date key; do not reinterpret it in the agent host timezone. Treat absolute timestamps as UTC instants.
+- Treat date-only and daily/monthly metrics as the merchant calendar in the store time zone (`dashboard.settings.store_defaults_get`, also `timeZone` on the analytics overview). For “today,” preserve the returned merchant date key; do not reinterpret it in the agent host timezone. Treat absolute timestamps as UTC instants.
 - State the requested period and currency. Distinguish counts, booked gross revenue, collected cash, net settlement, and queue size; never relabel one as another.
 - Prefer authoritative aggregates. Paginate within declared bounds and never total or rank a partial page as though complete.
 - Preserve returned queue filters and state. Distinguish all recovery work from only actionable failures, and distinguish saved/configured methods from active, usable checkout readiness.

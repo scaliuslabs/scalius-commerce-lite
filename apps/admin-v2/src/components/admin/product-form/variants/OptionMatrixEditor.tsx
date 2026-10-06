@@ -1,4 +1,5 @@
 import React from "react";
+import { WeightInput, useWeightUnit } from "./WeightInput";
 import { createPortal } from "react-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, Plus, Trash2, X } from "lucide-react";
@@ -7,7 +8,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { NumberInput } from "@/components/ui/number-input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { cn } from "@scalius/shared/utils";
 import { MAX_PRODUCT_OPTION_AXES, MAX_PRODUCT_OPTION_COMBINATIONS } from "@scalius/shared/product-options";
@@ -140,6 +140,7 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
   fulfilmentMode = "physical",
 }, ref) {
   const t = useMessages(productMessages);
+  const weightUnit = useWeightUnit();
   const d = useMessages(digitalMessages);
   const queryClient = useQueryClient();
   const defaultSku = savedVariants.find((variant) => variant.isDefault && !variant.deletedAt);
@@ -746,12 +747,12 @@ export const OptionMatrixEditor = React.forwardRef<OptionMatrixEditorHandle, Opt
   // Only what is packed is weighed (never a download, a service or a gift card).
   const simpleWeight = kindRules.showWeight ? (
     <div className="grid gap-3 sm:grid-cols-2">
-      <Field label={t("weightGrams")} error={issueFor(undefined, "weight")}>
+      <Field label={t("weightGrams", { unit: weightUnit })} error={issueFor(undefined, "weight")}>
         {(invalid) => (
-          <NumberInput
-            value={simpleSku.weight}
+          <WeightInput
+            grams={simpleSku.weight}
             aria-invalid={invalid}
-            onValueChange={(weight) => updateSimple({ weight })}
+            onGramsChange={(weight) => updateSimple({ weight })}
           />
         )}
       </Field>

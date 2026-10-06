@@ -35,6 +35,7 @@ import { fromMinor } from "@scalius/shared/money";
 import { ok } from "../../utils/api-response";
 import { errorResponses, successEnvelope } from "../../schemas/responses";
 import { REPORT_CSV_MAX_BYTES } from "@scalius/core/modules/analytics";
+import { storeTimeZoneOf } from "../../utils/store-time-zone";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -56,7 +57,7 @@ const dateKey = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const rangeSchema = z.object({ from: dateKey, to: dateKey });
 
 const rangeQuery = {
-  from: dateKey.optional().openapi({ description: "First day (YYYY-MM-DD, store calendar, Asia/Dhaka). Defaults to the last 30 days." }),
+  from: dateKey.optional().openapi({ description: "First day (YYYY-MM-DD, store calendar: the store time zone). Defaults to the last 30 days." }),
   to: dateKey.optional().openapi({ description: "Last day, inclusive (YYYY-MM-DD). At most 731 days after `from`." }),
   granularity: z.enum(ANALYTICS_GRANULARITIES).optional().openapi({
     description: "Time buckets: day (ranges up to 92 days), week (Sunday weeks) or month. Defaults by range length.",
@@ -123,6 +124,8 @@ const currencySchema = z.object({ code: z.string().length(3), decimalPlaces: z.n
 
 const overviewSchema = z.object({
   currency: currencySchema,
+  /** The store's IANA time zone: every day, week and month is a store calendar one in it. */
+  timeZone: z.string().max(64),
   granularity: z.enum(ANALYTICS_GRANULARITIES),
   comparison: z.enum(ANALYTICS_COMPARISONS),
   current: periodSchema,
@@ -320,11 +323,12 @@ const overviewRoute = createRoute({
 
 app.openapi(overviewRoute, async (c) => {
   const query = c.req.valid("query");
-  const ctx = await createAnalyticsContext(c.get("db"));
+  const ctx = await createAnalyticsContext(c.get("db"), storeTimeZoneOf(c.env));
   const overview = await getAnalyticsOverviewForRequest(ctx, query);
   const decimals = overview.currency.decimalPlaces;
   return ok(c, {
     currency: overview.currency,
+    timeZone: ctx.timeZone,
     granularity: overview.granularity,
     comparison: overview.comparison,
     current: periodView(overview.current, decimals),
@@ -355,7 +359,7 @@ const catalogRoute = createRoute({
 });
 
 app.openapi(catalogRoute, async (c) => {
-  const ctx = await createAnalyticsContext(c.get("db"));
+  const ctx = await createAnalyticsContext(c.get("db"), storeTimeZoneOf(c.env));
   const reports = await listAnalyticsReports(ctx, access(c));
   return ok(c, {
     reports: reports.map((report) => ({
@@ -397,7 +401,7 @@ const reportRoute = createRoute({
 app.openapi(reportRoute, async (c) => {
   const { reportId } = c.req.valid("param");
   const query = c.req.valid("query");
-  const ctx = await createAnalyticsContext(c.get("db"));
+  const ctx = await createAnalyticsContext(c.get("db"), storeTimeZoneOf(c.env));
   const page = await getAnalyticsReportPage(ctx, reportId, query, access(c));
   const decimals = ctx.currency.decimalPlaces;
   return ok(c, {
@@ -462,7 +466,7 @@ function csvStream(chunks: readonly string[]): ReadableStream<Uint8Array> {
 app.openapi(exportRoute, async (c) => {
   const { reportId } = c.req.valid("param");
   const query = c.req.valid("query");
-  const ctx = await createAnalyticsContext(c.get("db"));
+  const ctx = await createAnalyticsContext(c.get("db"), storeTimeZoneOf(c.env));
   const exported = await exportAnalyticsReportCsv(ctx, reportId, query, access(c));
   return c.body(csvStream(exported.artifact.chunks), 200, {
     "Content-Type": "text/csv; charset=utf-8",

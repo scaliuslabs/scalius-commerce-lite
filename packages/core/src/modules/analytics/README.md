@@ -69,8 +69,8 @@ All paths start with `/api/v1/admin`.
 
 Home's sales numbers (total sales, orders, average order value, return-to-sender rate, trend) come from the Analytics overview for staff with `dashboard.analytics`. The two reads below serve order counts and the recent-order feed. Their "revenue" is the booked-gross figure: the shop-currency totals (`total_shop_minor`, the order money chain) of orders that are not cancelled or returned. They never sum presentment totals in mixed currencies.
 
-- `getDashboardHomeSummary(db, recentOrderLimit)`: one provider batch with product and customer counts, current-month and last-month orders and revenue, growth, an order-status breakdown and the newest orders. A limit of `0` skips the order feed. The route uses 11.
-- `getDailyActivityData(db, days)`: per merchant day `date`, `orders`, `revenue`, `newCustomers`, zero-filled. `days` is 1 to 90.
+- `getDashboardHomeSummary(db, recentOrderLimit, timeZone)`: one provider batch with product and customer counts, current-month and last-month orders and revenue, growth, an order-status breakdown and the newest orders. A limit of `0` skips the order feed. The route uses 11.
+- `getDailyActivityData(db, days, timeZone)`: per merchant day `date`, `orders`, `revenue`, `newCustomers`, zero-filled. `days` is 1 to 90.
 - The route returns every revenue value as `null` without `dashboard.analytics`, and an empty order feed without `orders.view`.
 
 ## Analytics overview and reports
@@ -118,7 +118,7 @@ Cash on delivery:
 
 ### Attribution and time
 
-- Every figure belongs to the order's placement day on the store calendar (Asia/Dhaka, UTC+6, no DST). That includes later returns and refunds, so a period's numbers move as its orders resolve, and they reconcile with the Orders list filtered by date.
+- Every figure belongs to the order's placement day on the store calendar: the store time zone, daylight saving included ([STORE-DEFAULTS.md](../../../../../docs/STORE-DEFAULTS.md)). That includes later returns and refunds, so a period's numbers move as its orders resolve, and they reconcile with the Orders list filtered by date.
 - A range is at most 731 days. Day buckets work up to 92 days, so an overview fits one 64 KB agent response. Longer ranges use Sunday weeks or calendar months.
 - The comparison is the same number of days just before, or the same days a year earlier (29 February becomes 28 February).
 - A request without dates reads the last 30 days (presets: `analytics-period.ts`). Snapshot reports (stock) read the store as it is now.

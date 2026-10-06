@@ -681,6 +681,17 @@ for app providers (the port and the snapshot's calculation id are ready).
 Duties and import taxes. Tax registration numbers on invoices. Customer tax
 exemptions. Tax overrides per collection.
 
+## Store setup (G1a)
+
+A fresh install no longer stays "Bangladesh". After the first admin, the
+"Tell us about your store" step sets the backup market from the store's
+country: its name and handle, its one country, the root language and the
+currency's default price increment, with the shop currency, the store time
+zone and the units, in one guarded batch. It runs only while the store has
+no order and the backup market is as migration 0112 created it (revision 1,
+the only market). It creates no tax region and no shipping zone. Details:
+[STORE-DEFAULTS.md](STORE-DEFAULTS.md).
+
 ## Non-goals in this wave
 
 Duties calculation, merchant-of-record, B2B company locations (later through

@@ -3,6 +3,7 @@ import { Checkbox } from "~/components/ui/checkbox";
 import { translate } from "~/i18n";
 import { resourceMessages } from "~/i18n/resource";
 import { formatDateShort as formatDate } from "@scalius/shared/timestamps";
+import { getStoreTimeZone } from "~/lib/store-time-zone";
 import { DataTableColumnHeader } from "../DataTableColumnHeader";
 import { DataTableRowActions, type ExtraAction } from "../DataTableRowActions";
 
@@ -97,7 +98,7 @@ export function createDateColumn<T extends TableRowData>(
       : () => <span className="text-caption">{title}</span>,
     cell: ({ row }) => (
       <span className="text-body text-muted-foreground" suppressHydrationWarning>
-        {formatDate((row.original as Record<string, unknown>)[field] as string | Date | null)}
+        {formatDate((row.original as Record<string, unknown>)[field] as string | Date | null, getStoreTimeZone())}
       </span>
     ),
     enableSorting: sortable,

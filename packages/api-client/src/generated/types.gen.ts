@@ -5479,6 +5479,7 @@ export type GetApiV1StorefrontLayoutResponses = {
                 dashboardUrl: string;
                 mediaUrl: string;
             };
+            timeZone: string;
             cspAllowedDomains: string;
             policies: Array<{
                 kind: 'refund' | 'privacy' | 'terms' | 'shipping' | 'contact';
@@ -30075,7 +30076,7 @@ export type GetApiV1AdminReportsOverviewData = {
     path?: never;
     query?: {
         /**
-         * First day (YYYY-MM-DD, store calendar, Asia/Dhaka). Defaults to the last 30 days.
+         * First day (YYYY-MM-DD, store calendar: the store time zone). Defaults to the last 30 days.
          */
         from?: string;
         /**
@@ -30134,6 +30135,7 @@ export type GetApiV1AdminReportsOverviewResponses = {
                 code: string;
                 decimalPlaces: number;
             };
+            timeZone: string;
             granularity: 'day' | 'week' | 'month';
             comparison: 'previous_period' | 'previous_year' | 'none';
             current: {
@@ -30392,7 +30394,7 @@ export type GetApiV1AdminReportsByReportIdData = {
     };
     query?: {
         /**
-         * First day (YYYY-MM-DD, store calendar, Asia/Dhaka). Defaults to the last 30 days.
+         * First day (YYYY-MM-DD, store calendar: the store time zone). Defaults to the last 30 days.
          */
         from?: string;
         /**
@@ -30513,7 +30515,7 @@ export type GetApiV1AdminReportsByReportIdExportData = {
     };
     query?: {
         /**
-         * First day (YYYY-MM-DD, store calendar, Asia/Dhaka). Defaults to the last 30 days.
+         * First day (YYYY-MM-DD, store calendar: the store time zone). Defaults to the last 30 days.
          */
         from?: string;
         /**
@@ -34867,6 +34869,304 @@ export type PutApiV1AdminSettingsPlatformResponses = {
 };
 
 export type PutApiV1AdminSettingsPlatformResponse = PutApiV1AdminSettingsPlatformResponses[keyof PutApiV1AdminSettingsPlatformResponses];
+
+export type GetApiV1AdminSettingsStoreDefaultsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/store-defaults';
+};
+
+export type GetApiV1AdminSettingsStoreDefaultsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminSettingsStoreDefaultsError = GetApiV1AdminSettingsStoreDefaultsErrors[keyof GetApiV1AdminSettingsStoreDefaultsErrors];
+
+export type GetApiV1AdminSettingsStoreDefaultsResponses = {
+    /**
+     * Store defaults
+     */
+    200: {
+        success: true;
+        data: {
+            timeZone: string;
+            /**
+             * metric (kilograms, grams) or imperial (pounds, ounces).
+             */
+            unitSystem: 'metric' | 'imperial';
+            /**
+             * The unit the dashboard shows and accepts weights in: kg or g for metric, lb or oz for imperial. Weights are stored in grams.
+             */
+            weightUnit: 'g' | 'kg' | 'oz' | 'lb';
+            revision: number;
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsStoreDefaultsResponse = GetApiV1AdminSettingsStoreDefaultsResponses[keyof GetApiV1AdminSettingsStoreDefaultsResponses];
+
+export type PostApiV1AdminSettingsStoreDefaultsData = {
+    body: {
+        expectedRevision: number;
+        /**
+         * An IANA time zone, such as America/New_York or Asia/Dhaka. Days, weeks and months of reports, date filters and scheduled app jobs are store calendar days in it; daylight saving time is followed.
+         */
+        timeZone?: string;
+        /**
+         * metric (kilograms, grams) or imperial (pounds, ounces).
+         */
+        unitSystem?: 'metric' | 'imperial';
+        /**
+         * The unit the dashboard shows and accepts weights in: kg or g for metric, lb or oz for imperial. Weights are stored in grams.
+         */
+        weightUnit?: 'g' | 'kg' | 'oz' | 'lb';
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/store-defaults';
+};
+
+export type PostApiV1AdminSettingsStoreDefaultsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminSettingsStoreDefaultsError = PostApiV1AdminSettingsStoreDefaultsErrors[keyof PostApiV1AdminSettingsStoreDefaultsErrors];
+
+export type PostApiV1AdminSettingsStoreDefaultsResponses = {
+    /**
+     * Store defaults saved
+     */
+    200: {
+        success: true;
+        data: {
+            timeZone: string;
+            /**
+             * metric (kilograms, grams) or imperial (pounds, ounces).
+             */
+            unitSystem: 'metric' | 'imperial';
+            /**
+             * The unit the dashboard shows and accepts weights in: kg or g for metric, lb or oz for imperial. Weights are stored in grams.
+             */
+            weightUnit: 'g' | 'kg' | 'oz' | 'lb';
+            revision: number;
+        };
+    };
+};
+
+export type PostApiV1AdminSettingsStoreDefaultsResponse = PostApiV1AdminSettingsStoreDefaultsResponses[keyof PostApiV1AdminSettingsStoreDefaultsResponses];
+
+export type GetApiV1AdminSettingsStoreSetupData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/store-setup';
+};
+
+export type GetApiV1AdminSettingsStoreSetupErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminSettingsStoreSetupError = GetApiV1AdminSettingsStoreSetupErrors[keyof GetApiV1AdminSettingsStoreSetupErrors];
+
+export type GetApiV1AdminSettingsStoreSetupResponses = {
+    /**
+     * Store setup status
+     */
+    200: {
+        success: true;
+        data: {
+            /**
+             * True while the store is new: no order yet, and Settings → Markets untouched.
+             */
+            needed: boolean;
+            done: 'has_orders' | 'markets_configured' | null;
+            current: {
+                storeName: string;
+                countryCode: string;
+                currencyCode: 'USD' | 'EUR' | 'GBP' | 'JPY' | 'CHF' | 'CAD' | 'AUD' | 'NZD' | 'CNY' | 'HKD' | 'SGD' | 'SEK' | 'NOK' | 'DKK' | 'MXN' | 'BRL' | 'BDT' | 'INR' | 'PKR' | 'LKR' | 'NPR' | 'AFN' | 'BTN' | 'MVR' | 'MYR' | 'PHP' | 'THB' | 'IDR' | 'VND' | 'MMK' | 'KHR' | 'LAK' | 'BND' | 'KRW' | 'TWD' | 'MNT' | 'KPW' | 'MOP' | 'AED' | 'SAR' | 'QAR' | 'KWD' | 'BHD' | 'OMR' | 'JOD' | 'IQD' | 'IRR' | 'YER' | 'LBP' | 'SYP' | 'ILS' | 'KZT' | 'UZS' | 'KGS' | 'TJS' | 'TMT' | 'GEL' | 'AMD' | 'AZN' | 'TRY' | 'RUB' | 'UAH' | 'PLN' | 'CZK' | 'HUF' | 'RON' | 'BGN' | 'HRK' | 'RSD' | 'BAM' | 'MKD' | 'ALL' | 'MDL' | 'BYN' | 'ISK' | 'ARS' | 'CLP' | 'COP' | 'PEN' | 'UYU' | 'PYG' | 'BOB' | 'VES' | 'GYD' | 'SRD' | 'TTD' | 'JMD' | 'BBD' | 'BSD' | 'BZD' | 'CRC' | 'CUP' | 'DOP' | 'GTQ' | 'HNL' | 'HTG' | 'NIO' | 'PAB' | 'AWG' | 'ANG' | 'KYD' | 'BMD' | 'XCD' | 'FKP' | 'NGN' | 'GHS' | 'XOF' | 'GMD' | 'GNF' | 'SLL' | 'LRD' | 'CVE' | 'MRU' | 'KES' | 'TZS' | 'UGX' | 'RWF' | 'BIF' | 'ETB' | 'SOS' | 'ERN' | 'DJF' | 'SDG' | 'SSP' | 'SCR' | 'KMF' | 'MGA' | 'MUR' | 'XAF' | 'CDF' | 'ZAR' | 'BWP' | 'LSL' | 'SZL' | 'NAD' | 'MWK' | 'ZMW' | 'MZN' | 'AOA' | 'ZWL' | 'EGP' | 'DZD' | 'MAD' | 'TND' | 'LYD' | 'STN' | 'FJD' | 'PGK' | 'WST' | 'TOP' | 'VUV' | 'SBD' | 'XPF' | 'XDR' | 'XAG' | 'XAU';
+                locale: string;
+                timeZone: string;
+                /**
+                 * metric (kilograms, grams) or imperial (pounds, ounces).
+                 */
+                unitSystem: 'metric' | 'imperial';
+                /**
+                 * The unit the dashboard shows and accepts weights in: kg or g for metric, lb or oz for imperial. Weights are stored in grams.
+                 */
+                weightUnit: 'g' | 'kg' | 'oz' | 'lb';
+            };
+            /**
+             * Products or delivery methods exist, so setup keeps the current currency.
+             */
+            currencyLocked: boolean;
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsStoreSetupResponse = GetApiV1AdminSettingsStoreSetupResponses[keyof GetApiV1AdminSettingsStoreSetupResponses];
+
+export type PostApiV1AdminSettingsStoreSetupData = {
+    body: {
+        storeName: string;
+        /**
+         * ISO 3166-1 alpha-2, such as US or BD.
+         */
+        countryCode: string;
+        currencyCode?: string;
+        /**
+         * The storefront's language: en or bn.
+         */
+        locale?: string;
+        /**
+         * An IANA time zone, such as America/New_York or Asia/Dhaka. Days, weeks and months of reports, date filters and scheduled app jobs are store calendar days in it; daylight saving time is followed.
+         */
+        timeZone: string;
+        /**
+         * metric (kilograms, grams) or imperial (pounds, ounces).
+         */
+        unitSystem?: 'metric' | 'imperial';
+        /**
+         * The unit the dashboard shows and accepts weights in: kg or g for metric, lb or oz for imperial. Weights are stored in grams.
+         */
+        weightUnit?: 'g' | 'kg' | 'oz' | 'lb';
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/store-setup';
+};
+
+export type PostApiV1AdminSettingsStoreSetupErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminSettingsStoreSetupError = PostApiV1AdminSettingsStoreSetupErrors[keyof PostApiV1AdminSettingsStoreSetupErrors];
+
+export type PostApiV1AdminSettingsStoreSetupResponses = {
+    /**
+     * Store set up
+     */
+    200: {
+        success: true;
+        data: {
+            storeName: string;
+            countryCode: string;
+            currencyCode: 'USD' | 'EUR' | 'GBP' | 'JPY' | 'CHF' | 'CAD' | 'AUD' | 'NZD' | 'CNY' | 'HKD' | 'SGD' | 'SEK' | 'NOK' | 'DKK' | 'MXN' | 'BRL' | 'BDT' | 'INR' | 'PKR' | 'LKR' | 'NPR' | 'AFN' | 'BTN' | 'MVR' | 'MYR' | 'PHP' | 'THB' | 'IDR' | 'VND' | 'MMK' | 'KHR' | 'LAK' | 'BND' | 'KRW' | 'TWD' | 'MNT' | 'KPW' | 'MOP' | 'AED' | 'SAR' | 'QAR' | 'KWD' | 'BHD' | 'OMR' | 'JOD' | 'IQD' | 'IRR' | 'YER' | 'LBP' | 'SYP' | 'ILS' | 'KZT' | 'UZS' | 'KGS' | 'TJS' | 'TMT' | 'GEL' | 'AMD' | 'AZN' | 'TRY' | 'RUB' | 'UAH' | 'PLN' | 'CZK' | 'HUF' | 'RON' | 'BGN' | 'HRK' | 'RSD' | 'BAM' | 'MKD' | 'ALL' | 'MDL' | 'BYN' | 'ISK' | 'ARS' | 'CLP' | 'COP' | 'PEN' | 'UYU' | 'PYG' | 'BOB' | 'VES' | 'GYD' | 'SRD' | 'TTD' | 'JMD' | 'BBD' | 'BSD' | 'BZD' | 'CRC' | 'CUP' | 'DOP' | 'GTQ' | 'HNL' | 'HTG' | 'NIO' | 'PAB' | 'AWG' | 'ANG' | 'KYD' | 'BMD' | 'XCD' | 'FKP' | 'NGN' | 'GHS' | 'XOF' | 'GMD' | 'GNF' | 'SLL' | 'LRD' | 'CVE' | 'MRU' | 'KES' | 'TZS' | 'UGX' | 'RWF' | 'BIF' | 'ETB' | 'SOS' | 'ERN' | 'DJF' | 'SDG' | 'SSP' | 'SCR' | 'KMF' | 'MGA' | 'MUR' | 'XAF' | 'CDF' | 'ZAR' | 'BWP' | 'LSL' | 'SZL' | 'NAD' | 'MWK' | 'ZMW' | 'MZN' | 'AOA' | 'ZWL' | 'EGP' | 'DZD' | 'MAD' | 'TND' | 'LYD' | 'STN' | 'FJD' | 'PGK' | 'WST' | 'TOP' | 'VUV' | 'SBD' | 'XPF' | 'XDR' | 'XAG' | 'XAU';
+            locale: string;
+            timeZone: string;
+            /**
+             * metric (kilograms, grams) or imperial (pounds, ounces).
+             */
+            unitSystem: 'metric' | 'imperial';
+            /**
+             * The unit the dashboard shows and accepts weights in: kg or g for metric, lb or oz for imperial. Weights are stored in grams.
+             */
+            weightUnit: 'g' | 'kg' | 'oz' | 'lb';
+        };
+    };
+};
+
+export type PostApiV1AdminSettingsStoreSetupResponse = PostApiV1AdminSettingsStoreSetupResponses[keyof PostApiV1AdminSettingsStoreSetupResponses];
 
 export type GetApiV1AdminSettingsShippingMethodsData = {
     body?: never;
@@ -58908,6 +59208,15 @@ export type PostApiV1SetupData = {
         name: string;
         email: string;
         password: string;
+        store?: {
+            storeName: string;
+            countryCode: string;
+            currencyCode?: string;
+            locale?: string;
+            timeZone: string;
+            unitSystem?: 'metric' | 'imperial';
+            weightUnit?: 'g' | 'kg' | 'oz' | 'lb';
+        };
     };
     path?: never;
     query?: never;
@@ -58974,6 +59283,7 @@ export type PostApiV1SetupResponses = {
         data: {
             message: string;
             userId: string;
+            storeSetup: 'applied' | 'skipped' | 'not_requested';
         };
     };
 };

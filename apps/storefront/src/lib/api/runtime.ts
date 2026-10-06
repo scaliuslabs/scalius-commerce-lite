@@ -25,6 +25,7 @@ import {
   normalizePlatformOriginUrl,
   publicRequestOrigin,
 } from "@scalius/shared/platform-config";
+import { isValidTimeZone } from "@scalius/shared/commerce-time";
 import {
   deriveRuntimeSecret,
   readMasterSecret,
@@ -62,6 +63,8 @@ export interface StorefrontRuntime {
   API_TOKEN?: string;
   /** Merchant CSP sources from the layout payload (Settings -> Security). */
   CSP_ALLOWED_DOMAINS?: string;
+  /** The store's IANA time zone from the layout payload (Settings -> Store details). */
+  STORE_TIME_ZONE?: string;
   /**
    * The subfolder presence this render is in (`en-in`), from the header only
    * the gateway sets; absent for the root (the backup market).
@@ -210,7 +213,7 @@ function optional(value: string | null | undefined): string | undefined {
  * empty storefront setting keeps the request origin.
  */
 export function applyPlatformOrigins(
-  layout: Pick<LayoutData, "platform" | "cspAllowedDomains"> | null | undefined,
+  layout: Pick<LayoutData, "platform" | "cspAllowedDomains" | "timeZone"> | null | undefined,
 ): void {
   const store = getRuntime();
   if (!store) return;
@@ -230,6 +233,13 @@ export function applyPlatformOrigins(
   const cspAllowedDomains = layout?.cspAllowedDomains;
   store.CSP_ALLOWED_DOMAINS =
     typeof cspAllowedDomains === "string" ? cspAllowedDomains : "";
+  const timeZone = layout?.timeZone;
+  store.STORE_TIME_ZONE = isValidTimeZone(timeZone) ? timeZone : undefined;
+}
+
+/** The store's time zone seeded from this request's layout payload, if any. */
+export function getRuntimeStoreTimeZone(): string | undefined {
+  return getRuntime()?.STORE_TIME_ZONE;
 }
 
 /** Merchant CSP sources seeded from this request's layout payload. */

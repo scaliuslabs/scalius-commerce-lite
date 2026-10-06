@@ -4,8 +4,10 @@
 // for the latest slot at or before now; a slot runs at most once (claimed in
 // `plugin_cron_runs`), so a schedule finer than the platform tick coalesces to
 // one run per tick and a missed tick runs only its latest slot, never a
-// backlog. Pure and import-free: the manifest parser and the API share it.
-// Part of the versioned plugin API.
+// backlog. Pure (its only import is the merchant calendar): the manifest
+// parser and the API share it. Part of the versioned plugin API.
+
+import { commerceWallTimeToEpoch, timeZoneOffsetSeconds } from "../commerce-time";
 
 /** One parsed field: `allowed[value]` for every value in the field's range. */
 interface CronField {
@@ -111,19 +113,24 @@ const MINUTE_MS = 60_000;
 /**
  * The latest minute at or before `nowMs` the schedule fires at, as epoch
  * milliseconds, searching back at most `lookbackMinutes`; null when none.
- * `offsetMinutes` is the store's UTC offset (the schedule's wall clock).
+ * The schedule reads the store's wall clock in `timeZone`: across a daylight
+ * saving change, a wall time the clocks skip runs just after the gap, and one
+ * they repeat runs once (the earlier).
  */
 export function latestPluginCronSlot(
   schedule: PluginCronSchedule,
   nowMs: number,
-  options: { offsetMinutes: number; lookbackMinutes: number },
+  options: { timeZone: string; lookbackMinutes: number },
 ): number | null {
-  const offsetMs = options.offsetMinutes * MINUTE_MS;
+  const { timeZone } = options;
   const newest = Math.floor(nowMs / MINUTE_MS) * MINUTE_MS;
   const oldest = newest - options.lookbackMinutes * MINUTE_MS;
-  // Walk back in wall-clock time, skipping whole months, days and hours that cannot match.
-  let local = newest + offsetMs;
-  while (local - offsetMs >= oldest) {
+  const wallOf = (instantMs: number) => instantMs + timeZoneOffsetSeconds(timeZone, instantMs / 1000) * 1000;
+  // Walk back in wall-clock time, skipping whole months, days and hours that
+  // cannot match; an hour of margin covers a daylight saving change.
+  let local = wallOf(newest);
+  const oldestLocal = wallOf(oldest) - 60 * MINUTE_MS;
+  while (local >= oldestLocal) {
     const date = new Date(local);
     if (!schedule.month.allowed[date.getUTCMonth() + 1]) {
       // The last minute of the previous month.
@@ -142,7 +149,17 @@ export function latestPluginCronSlot(
       local -= MINUTE_MS;
       continue;
     }
-    return local - offsetMs;
+    const instant = commerceWallTimeToEpoch(
+      timeZone,
+      date.toISOString().slice(0, 10),
+      date.getUTCHours(),
+      date.getUTCMinutes(),
+    );
+    if (instant === null || instant * 1000 > newest) {
+      local -= MINUTE_MS;
+      continue;
+    }
+    return instant * 1000 >= oldest ? instant * 1000 : null;
   }
   return null;
 }

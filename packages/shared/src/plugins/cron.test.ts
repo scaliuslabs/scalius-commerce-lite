@@ -2,11 +2,10 @@ import { describe, expect, it } from "vitest";
 import { isPluginCronSchedule, latestPluginCronSlot, parsePluginCronSchedule, type PluginCronSchedule } from "./cron";
 import { parsePluginManifest, pluginGrantAdditions, pluginGrantExpands, pluginGrantRequest } from "./manifest";
 
-const DHAKA = 6 * 60;
 const at = (iso: string) => Date.parse(iso);
-const slot = (expression: string, nowIso: string, lookbackMinutes = 24 * 60, offsetMinutes = DHAKA) => {
+const slot = (expression: string, nowIso: string, lookbackMinutes = 24 * 60, timeZone = "Asia/Dhaka") => {
   const schedule = parsePluginCronSchedule(expression) as PluginCronSchedule;
-  const found = latestPluginCronSlot(schedule, at(nowIso), { offsetMinutes, lookbackMinutes });
+  const found = latestPluginCronSlot(schedule, at(nowIso), { timeZone, lookbackMinutes });
   return found === null ? null : new Date(found).toISOString();
 };
 
@@ -27,6 +26,16 @@ describe("plugin cron schedules", () => {
     expect(slot("0 3 * * *", "2026-10-01T20:59:59.000Z")).toBe("2026-09-30T21:00:00.000Z");
     expect(slot("*/15 * * * *", "2026-10-02T10:07:30.000Z")).toBe("2026-10-02T10:00:00.000Z");
     expect(slot("* * * * *", "2026-10-02T10:07:30.000Z")).toBe("2026-10-02T10:07:00.000Z");
+  });
+
+  it("follows the store's daylight saving time", () => {
+    // 03:00 in New York is 07:00 UTC in summer (EDT) and 08:00 UTC in winter (EST).
+    expect(slot("0 3 * * *", "2026-07-01T12:00:00.000Z", 24 * 60, "America/New_York")).toBe("2026-07-01T07:00:00.000Z");
+    expect(slot("0 3 * * *", "2026-01-15T12:00:00.000Z", 24 * 60, "America/New_York")).toBe("2026-01-15T08:00:00.000Z");
+    // 02:30 does not exist on 2026-03-08 (02:00 → 03:00): the slot runs just after the gap.
+    expect(slot("30 2 * * *", "2026-03-08T12:00:00.000Z", 24 * 60, "America/New_York")).toBe("2026-03-08T07:30:00.000Z");
+    // 01:30 happens twice on 2026-11-01: the earlier one (EDT) runs.
+    expect(slot("30 1 * * *", "2026-11-01T12:00:00.000Z", 24 * 60, "America/New_York")).toBe("2026-11-01T05:30:00.000Z");
   });
 
   it("applies day-of-month OR day-of-week when both are restricted, AND otherwise", () => {

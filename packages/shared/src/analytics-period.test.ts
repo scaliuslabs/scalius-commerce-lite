@@ -17,11 +17,21 @@ import { ANALYTICS_ENUM_VALUES, ANALYTICS_REPORTS, isAnalyticsReportId } from ".
 
 describe("analytics periods on the merchant calendar", () => {
   it("bounds a range by Dhaka midnights, independent of the host timezone", () => {
-    expect(analyticsInstantRange({ from: "2026-08-01", to: "2026-08-31" })).toEqual({
+    expect(analyticsInstantRange({ from: "2026-08-01", to: "2026-08-31" }, "Asia/Dhaka")).toEqual({
       start: Date.parse("2026-07-31T18:00:00.000Z") / 1000,
       endExclusive: Date.parse("2026-08-31T18:00:00.000Z") / 1000,
     });
-    expect(analyticsToday(new Date("2026-08-13T18:00:00.000Z"))).toBe("2026-08-14");
+    expect(analyticsToday("Asia/Dhaka", new Date("2026-08-13T18:00:00.000Z"))).toBe("2026-08-14");
+  });
+
+  it("bounds a range by the store's midnights across daylight saving time", () => {
+    // London: GMT until 29 March 2026 01:00 UTC, then BST (UTC+1).
+    expect(analyticsInstantRange({ from: "2026-03-01", to: "2026-03-31" }, "Europe/London")).toEqual({
+      start: Date.parse("2026-03-01T00:00:00.000Z") / 1000,
+      endExclusive: Date.parse("2026-03-31T23:00:00.000Z") / 1000,
+    });
+    // 03:30 UTC on 1 Nov is still 31 Oct in Los Angeles (PDT, UTC-7).
+    expect(analyticsToday("America/Los_Angeles", new Date("2026-11-01T03:30:00.000Z"))).toBe("2026-10-31");
   });
 
   it("validates real dates, order and the two-year cap", () => {

@@ -1,7 +1,13 @@
 // Formatting utilities for media manager
 
-import { formatDate, formatDate as formatDateTime } from "@scalius/shared/timestamps";
-export { formatDate, formatDateTime };
+import { formatDate as formatStoreDate } from "@scalius/shared/timestamps";
+import { getStoreTimeZone } from "~/lib/store-time-zone";
+
+/** A media timestamp in store time. */
+export function formatDate(value: Date | number | string | null | undefined): string {
+  return formatStoreDate(value, getStoreTimeZone());
+}
+export { formatDate as formatDateTime };
 
 export function formatFileSize(bytes: number): string {
   if (bytes === 0) return "0 Bytes";

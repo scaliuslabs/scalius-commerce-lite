@@ -8,7 +8,7 @@ import { defaultPriceIncrementMinor, isWholeUnitIncrement } from "@scalius/share
 
 import type { DiscountMessageKey } from "~/i18n/discounts";
 import type { DiscountInput, DiscountRecord } from "~/lib/api-query-options/discounts";
-import { ADMIN_TIME_ZONE } from "~/lib/admin-time";
+import { getStoreTimeZone } from "~/lib/store-time-zone";
 import type { DiscountType } from "./discount-kinds";
 
 export type DiscountClass = "product" | "order" | "shipping";
@@ -77,7 +77,7 @@ export const MAX_CUSTOMER_SEGMENTS = 5;
 
 function partsIn(epochMs: number) {
   const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: ADMIN_TIME_ZONE,
+    timeZone: getStoreTimeZone(),
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -89,7 +89,7 @@ function partsIn(epochMs: number) {
   return { date: `${value("year")}-${value("month")}-${value("day")}`, time: `${value("hour")}:${value("minute")}` };
 }
 
-/** Store (Asia/Dhaka) wall time → epoch seconds; null when not a real time. */
+/** Store wall time (the store's zone) → epoch seconds; null when not a real time (a daylight saving gap). */
 export function storeTimeToEpoch(date: string, time: string): number | null {
   const d = LOCAL_DATE.exec(date);
   const t = LOCAL_TIME.exec(time || "00:00");
@@ -434,7 +434,7 @@ export function draftToInput(draft: DiscountDraft, currencyCode: string): Discou
     },
     startsAtEpochSeconds: storeTimeToEpoch(draft.startDate, draft.startTime),
     endsAtEpochSeconds: draft.hasEnd ? storeTimeToEpoch(draft.endDate, draft.endTime) : null,
-    timezone: ADMIN_TIME_ZONE,
+    timezone: getStoreTimeZone(),
     maxRedemptions: isCode && draft.limitTotal ? positiveInteger(draft.totalUses) : null,
     maxRedemptionsPerCustomer: isCode && draft.oncePerCustomer ? 1 : null,
     maxDiscountSpendMinor: isCode ? draft.spendBudgetMinor : null,

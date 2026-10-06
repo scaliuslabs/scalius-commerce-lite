@@ -4,9 +4,9 @@ import { formatDateTime } from "~/i18n";
 /** A YYYY-MM-DD day (expected arrival) in the dashboard language, or null. */
 export function formatDay(value: string | null | undefined): string | null {
   if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
-  // Noon UTC is the same calendar day in Dhaka (UTC+6).
+  // A date-only key: noon UTC formatted in UTC is that day in any store zone.
   const date = new Date(`${value}T12:00:00Z`);
-  return Number.isNaN(date.getTime()) ? null : formatDateTime(date, { dateStyle: "medium" });
+  return Number.isNaN(date.getTime()) ? null : formatDateTime(date, { dateStyle: "medium", timeZone: "UTC" });
 }
 
 /** An API timestamp with date and time, or null. */

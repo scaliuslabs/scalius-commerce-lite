@@ -92,7 +92,7 @@ afterAll(() => {
 
 describe(`analytics on a generated store (${ORDERS} orders)`, () => {
   it("serves the overview for a month and a year without scanning whole tables", async () => {
-    const ctx = await createAnalyticsContext(database.db, NOW);
+    const ctx = await createAnalyticsContext(database.db, "Asia/Dhaka", NOW);
     const month = await measure("overview 30 days", () => getAnalyticsOverviewForRequest(ctx, { ...MONTH }));
     const year = await measure("overview 365 days", () => getAnalyticsOverviewForRequest(ctx, { ...YEAR }));
     expect(month.current.totals.orders).toBeGreaterThan(0);
@@ -107,7 +107,7 @@ describe(`analytics on a generated store (${ORDERS} orders)`, () => {
   it.each(ANALYTICS_REPORTS.map((report) => report.id).filter((id) => id !== "profit_by_product"))(
     "runs %s for a year in bounded statements",
     async (reportId) => {
-      const ctx = await createAnalyticsContext(database.db, NOW);
+      const ctx = await createAnalyticsContext(database.db, "Asia/Dhaka", NOW);
       const page = await measure(`report ${reportId}`, () =>
         getAnalyticsReportPage(ctx, reportId as AnalyticsReportId, { ...YEAR, page: 1, pageSize: 50 }, { customers: true, costs: true }));
       expect(page.rows.length).toBeLessThanOrEqual(50);
@@ -118,7 +118,7 @@ describe(`analytics on a generated store (${ORDERS} orders)`, () => {
   );
 
   it("exports the largest report as bounded CSV reads", async () => {
-    const ctx = await createAnalyticsContext(database.db, NOW);
+    const ctx = await createAnalyticsContext(database.db, "Asia/Dhaka", NOW);
     const exported = await measure("export sales_by_variant", () =>
       exportAnalyticsReportCsv(ctx, "sales_by_variant", { ...YEAR }, { customers: true, costs: true }));
     expect(exported.artifact.rowCount).toBeGreaterThan(1);

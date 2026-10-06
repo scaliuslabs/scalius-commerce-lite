@@ -125,7 +125,7 @@ describe("digital SKUs in the variant editor", () => {
     const inventory = slot("inventory-slot");
     expect(inventory.textContent).toContain(p("inventory"));
     expect(inventory.querySelector(`input[aria-label="${p("quantity")}"]`)).not.toBeNull();
-    expect(slot("shipping-slot").textContent).toContain(p("weightGrams"));
+    expect(slot("shipping-slot").textContent).toContain(p("weightGrams", { unit: "g" }));
     // The variants card keeps only the options.
     expect(slot("variants-card").textContent).not.toContain(p("trackQuantity"));
     expect(slot("variants-card").textContent).toContain(p("addOptions"));

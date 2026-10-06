@@ -61,6 +61,7 @@ import { optionalProductCardFacts } from "../schemas/product-card-facts";
 import { marketMatrixSchema } from "../schemas/markets";
 import { readMarketMatrix } from "@scalius/core/modules/markets";
 import { publicPageDetailSchema } from "../schemas/custom-fields";
+import { storeTimeZoneOf } from "../utils/store-time-zone";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
 const storefrontProductCardSchema = z.object({
@@ -320,6 +321,8 @@ const layoutDataSchema = z.object({
     dashboardUrl: z.string(),
     mediaUrl: z.string(),
   }),
+  /** The store's IANA time zone (Settings -> Store details): buyer-facing dates are shown in it. */
+  timeZone: z.string().max(64),
   /** Merchant CSP sources (Settings -> Security), comma-separated. */
   cspAllowedDomains: z.string(),
   /**
@@ -568,6 +571,9 @@ app.openapi(layoutRoute, async (c) => {
       dashboardUrl: platform.dashboardUrl,
       mediaUrl: platform.mediaUrl,
     },
+    // From the tracked platform row inside a dependency scope, so a saved
+    // time zone advances this page's `set:platform:document` dependency.
+    timeZone: storeTimeZoneOf(c.env),
   } as unknown as LayoutData);
 });
 

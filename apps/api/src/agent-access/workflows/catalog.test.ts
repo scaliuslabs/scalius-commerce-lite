@@ -70,7 +70,7 @@ describe("agent workflow catalog", () => {
       "operations.thirty-day-booked-brief.v1",
       "theme.draft-landing-page.v1",
     ]);
-    expect(catalog.routes).toHaveLength(70);
+    expect(catalog.routes).toHaveLength(72);
     expect(catalog.controls).toHaveLength(30);
     for (const route of catalog.routes) {
       expect(Buffer.byteLength(JSON.stringify(route)), route.id).toBeLessThanOrEqual(2 * 1024);
@@ -547,7 +547,7 @@ describe("agent workflow catalog", () => {
       expect(serialized).not.toContain(unsafe);
     }
     expect(brief.verification.find((item) => item.id === "activity")?.proves[0])
-      .toContain("Exactly 30 Asia/Dhaka calendar-day rows including zero days");
+      .toContain("Exactly 30 store-calendar-day rows including zero days");
     expect(brief.verification.find((item) => item.id === "currency"))
       .toMatchObject({ responsePointers: ["/data/currencyCode", "/data/currencySymbol"] });
 

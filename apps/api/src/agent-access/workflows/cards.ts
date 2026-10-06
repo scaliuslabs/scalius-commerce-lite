@@ -599,7 +599,7 @@ export const DAILY_OPERATING_SNAPSHOT_WORKFLOW: AgentWorkflowCard = {
       required: true,
       defaultValue: 1,
       source: { kind: "constant", value: 1 },
-      nonInferenceRule: "Keep Asia/Dhaka keys; ignore host timezone.",
+      nonInferenceRule: "Keep store-calendar keys (the store time zone); ignore host timezone.",
     },
     {
       id: "currency",
@@ -617,7 +617,7 @@ export const DAILY_OPERATING_SNAPSHOT_WORKFLOW: AgentWorkflowCard = {
       title: "Activity and queues",
       summary: "Merchant-day activity, currency, and queues.",
       dependsOn: [],
-      stopConditions: ["Use pagination and Asia/Dhaka dates."],
+      stopConditions: ["Use pagination and store-calendar dates."],
       steps: [
         {
           id: "daily",
@@ -1082,7 +1082,7 @@ export const THIRTY_DAY_BOOKED_OPERATIONS_BRIEF_WORKFLOW: AgentWorkflowCard = {
       surface: "dashboard",
       operationId: "dashboard.home.activity",
       responsePointers: ["/data/dailyActivityData"],
-      proves: ["Exactly 30 Asia/Dhaka calendar-day rows including zero days; booked, not paid or settled."],
+      proves: ["Exactly 30 store-calendar-day rows including zero days; booked, not paid or settled."],
       bounds: { maxCalls: 1, maxItems: 30, maxResponseBytes: 32_768 },
     },
     {

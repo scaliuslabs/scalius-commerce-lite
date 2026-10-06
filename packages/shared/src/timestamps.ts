@@ -4,7 +4,7 @@
 // NOTE: For Drizzle schema defaults, use UNIX_NOW from @scalius/database/schema (shared.ts).
 // These utilities are for service/application-layer timestamp operations.
 
-import { COMMERCE_TIME_ZONE } from "./commerce-time";
+import { DEFAULT_STORE_TIME_ZONE } from "./store-defaults";
 
 /** Convert Unix epoch seconds to ISO 8601 string for API responses */
 export function toISOString(unixSeconds: number): string {
@@ -47,6 +47,8 @@ export function unixToDate(
  */
 export function formatDate(
   date: Date | number | string | null | undefined,
+  /** The store's zone (Settings → Store details → Store defaults). */
+  timeZone: string = DEFAULT_STORE_TIME_ZONE,
 ): string {
   if (date === null || date === undefined) return "N/A";
 
@@ -68,7 +70,7 @@ export function formatDate(
       hour: "numeric",
       minute: "2-digit",
       hour12: true,
-      timeZone: COMMERCE_TIME_ZONE,
+      timeZone,
     });
   } catch (error: unknown) {
     console.error("Error formatting date:", error);
@@ -82,6 +84,8 @@ export function formatDate(
  */
 export function formatDateShort(
   date: Date | number | string | null | undefined,
+  /** The store's zone (Settings → Store details → Store defaults). */
+  timeZone: string = DEFAULT_STORE_TIME_ZONE,
 ): string {
   if (date === null || date === undefined) return "N/A";
 
@@ -97,7 +101,7 @@ export function formatDateShort(
     year: "numeric",
     month: "short",
     day: "numeric",
-    timeZone: COMMERCE_TIME_ZONE,
+    timeZone,
   });
 }
 
@@ -108,6 +112,8 @@ export function formatDateShort(
  */
 export function formatRelativeDate(
   date: Date | number | string | null | undefined,
+  /** The store's zone (Settings → Store details → Store defaults). */
+  timeZone: string = DEFAULT_STORE_TIME_ZONE,
 ): string {
   if (date === null || date === undefined) return "\u2014";
 
@@ -138,7 +144,7 @@ export function formatRelativeDate(
       hour: "numeric",
       minute: "2-digit",
       hour12: true,
-      timeZone: COMMERCE_TIME_ZONE,
+      timeZone,
     });
   }
 
@@ -149,7 +155,7 @@ export function formatRelativeDate(
     hour: "numeric",
     minute: "2-digit",
     hour12: true,
-    timeZone: COMMERCE_TIME_ZONE,
+    timeZone,
   });
 }
 
@@ -159,6 +165,8 @@ export function formatRelativeDate(
  */
 export function formatDateVerbose(
   date: Date | number | string | null | undefined,
+  /** The store's zone (Settings → Store details → Store defaults). */
+  timeZone: string = DEFAULT_STORE_TIME_ZONE,
 ): string {
   if (date === null || date === undefined) return "\u2014";
 
@@ -180,6 +188,6 @@ export function formatDateVerbose(
     second: "2-digit",
     hour12: true,
     timeZoneName: "short",
-    timeZone: COMMERCE_TIME_ZONE,
+    timeZone,
   });
 }

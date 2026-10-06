@@ -146,8 +146,8 @@ function reference(facts: Facts, condition: CustomerSegmentCondition): boolean {
         switch (filter.op) {
             case "within_last": return value >= NOW - filter.days * DAY;
             case "not_within_last": return value < NOW - filter.days * DAY;
-            case "on_or_after": return value >= commerceCalendarDayBounds(filter.date).start;
-            case "before": return value < commerceCalendarDayBounds(filter.date).start;
+            case "on_or_after": return value >= commerceCalendarDayBounds("Asia/Dhaka", filter.date).start;
+            case "before": return value < commerceCalendarDayBounds("Asia/Dhaka", filter.date).start;
         }
     };
     switch (condition.field) {
@@ -242,9 +242,9 @@ describe("customer segments", () => {
                 afterId = page.at(-1)!;
             }
             expect(members, JSON.stringify(definition)).toEqual(expected);
-            expect(await countSegmentMembers(db, definition, { nowSeconds: NOW })).toEqual({ count: expected.length, capped: false });
+            expect(await countSegmentMembers(db, definition, { nowSeconds: NOW, timeZone: "Asia/Dhaka" })).toEqual({ count: expected.length, capped: false });
             const probe = facts[Math.floor(next() * facts.length)]!;
-            const membership = await customerSegmentMembership(db, probe.id, [{ id: "seg_probe", definition }], { nowSeconds: NOW });
+            const membership = await customerSegmentMembership(db, probe.id, [{ id: "seg_probe", definition }], { nowSeconds: NOW, timeZone: "Asia/Dhaka" });
             expect(membership.has("seg_probe"), `${probe.id} ${JSON.stringify(definition)}`).toBe(expected.includes(probe.id));
         }
     }, 120_000);

@@ -144,6 +144,8 @@ const PAGE_PERMISSION_MAP: Record<string, PagePermissionConfig> = {
   // Settings list: each page is gated by the permission its cards read with.
   "/admin/settings": { anyOf: [...SETTINGS_PAGE_PERMISSIONS] },
   "/admin/settings/store": { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+  // The new-store setup step writes store settings.
+  "/admin/welcome": { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
   "/admin/settings/users": { anyOf: [...TEAM_PAGE_PERMISSIONS] },
   "/admin/settings/payments": { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
   "/admin/settings/checkout": { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },

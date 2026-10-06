@@ -1,5 +1,7 @@
 import { z } from "zod";
 import { isIncrementMultipleMinor, priceIncrementMessage } from "@scalius/shared/money";
+import { isValidTimeZone } from "@scalius/shared/commerce-time";
+import { currentStoreTimeZone } from "../../utils/store-time-zone";
 
 import { checkPromotionRule, PROMOTION_CUSTOMER_SEGMENT_LIMIT, PROMOTION_SCOPE_LIMIT } from "./promotions.evaluator";
 
@@ -101,7 +103,8 @@ const promotionRuleShape = {
     }).strict().default({ product: false, order: false, shipping: false }),
     startsAtEpochSeconds: z.number().int().nonnegative().nullable().default(null),
     endsAtEpochSeconds: z.number().int().nonnegative().nullable().default(null),
-    timezone: z.string().trim().min(1).max(80).default("Asia/Dhaka"),
+    /** The schedule's zone: the store's (Settings → Store details) unless the form sends one. */
+    timezone: z.string().trim().min(1).max(80).default(() => currentStoreTimeZone()),
     maxRedemptions: z.number().int().positive().nullable().default(null),
     maxRedemptionsPerCustomer: z.number().int().positive().nullable().default(null),
     maxDiscountSpendMinor: positiveMinorSchema.nullable().default(null),
@@ -165,10 +168,8 @@ function refinePromotionRule(
     if (new Set(rule.customerSegmentIds).size !== rule.customerSegmentIds.length) {
         context.addIssue({ code: "custom", path: ["customerSegmentIds"], message: "Choose each customer segment once." });
     }
-    try {
-        new Intl.DateTimeFormat("en", { timeZone: rule.timezone }).format(0);
-    } catch {
-        context.addIssue({ code: "custom", path: ["timezone"], message: "Use a valid time zone, such as Asia/Dhaka." });
+    if (!isValidTimeZone(rule.timezone)) {
+        context.addIssue({ code: "custom", path: ["timezone"], message: "Use a valid time zone, such as Europe/London." });
     }
 }
 

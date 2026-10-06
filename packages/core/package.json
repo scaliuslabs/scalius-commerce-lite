@@ -46,6 +46,7 @@
     "./modules/navigation": "./src/modules/navigation/index.ts",
     "./modules/notifications": "./src/modules/notifications/index.ts",
     "./modules/notifications/browser": "./src/modules/notifications/browser.ts",
+    "./modules/onboarding": "./src/modules/onboarding/index.ts",
     "./modules/order-kernel": "./src/modules/order-kernel/index.ts",
     "./modules/order-kernel/browser": "./src/modules/order-kernel/browser.ts",
     "./modules/orders": "./src/modules/orders/index.ts",

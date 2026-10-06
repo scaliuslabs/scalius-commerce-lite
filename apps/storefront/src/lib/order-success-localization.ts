@@ -1,3 +1,4 @@
+import { storeTimeZone } from "./store-time-zone";
 import type {
   OrderReceiptSupportRequest,
   OrderReceiptSupportRequestType,
@@ -16,6 +17,7 @@ function normalize(value: string | null | undefined): string {
 export function formatOrderReceiptDate(
   value: string | null | undefined,
   languageCode: string,
+  timeZone: string = storeTimeZone(),
 ): string | null {
   if (!value) return null;
   const date = new Date(value);
@@ -23,7 +25,7 @@ export function formatOrderReceiptDate(
   const options: Intl.DateTimeFormatOptions = {
     dateStyle: "medium",
     timeStyle: "short",
-    timeZone: "Asia/Dhaka",
+    timeZone,
   };
   try {
     return new Intl.DateTimeFormat(checkoutLanguageBaseCode(languageCode), options).format(date);

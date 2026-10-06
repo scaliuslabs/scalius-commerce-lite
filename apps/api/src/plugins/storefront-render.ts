@@ -25,7 +25,7 @@ import type { Database } from "@scalius/database/client";
 import { deps } from "@scalius/core/cache-deps";
 import type { PluginInstallation } from "@scalius/core/modules/plugins";
 import { readPluginRenderContext, type PluginRenderStoreFacts } from "@scalius/core/modules/storefront";
-import { COMMERCE_TIME_ZONE } from "@scalius/shared/commerce-time";
+import { storeTimeZoneOf } from "../utils/store-time-zone";
 import {
   EMPTY_PLUGIN_HEAD,
   PLUGIN_RENDER_CONCURRENCY,
@@ -120,7 +120,7 @@ export async function renderAppSurfaces(requests: readonly AppSurfaceRequest[], 
       ctx: options.ctx,
       db: options.db,
       ...(options.loaderFor ? { loaderFor: options.loaderFor } : {}),
-      store: async () => ({ ...store, url: options.env.STOREFRONT_URL?.trim() || null, timezone: COMMERCE_TIME_ZONE }),
+      store: async () => ({ ...store, url: options.env.STOREFRONT_URL?.trim() || null, timezone: storeTimeZoneOf(options.env) }),
     }));
     return host;
   };

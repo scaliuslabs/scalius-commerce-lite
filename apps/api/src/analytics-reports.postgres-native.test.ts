@@ -68,8 +68,8 @@ describe.runIf(postgresUrl)("analytics: PostgreSQL parity with D1", () => {
     const pg = await createNativePostgres({ label: "analytics" });
     await copyStore(fixture.sqlite, pg.client);
 
-    const d1Context = await createAnalyticsContext(fixture.db, NOW);
-    const pgContext = await createAnalyticsContext(pg.db, NOW);
+    const d1Context = await createAnalyticsContext(fixture.db, "Asia/Dhaka", NOW);
+    const pgContext = await createAnalyticsContext(pg.db, "Asia/Dhaka", NOW);
     // The copy landed.
     expect((await getAnalyticsOverviewForRequest(pgContext, { ...AUGUST })).current.totals).toMatchObject({ orders: 6, totalSales: 276_700 });
     for (const comparison of ["previous_period", "previous_year"] as const) {

@@ -1,6 +1,7 @@
 // Pure presentation rules for the Gift cards pages (Wave B §4, §9.1). No
 // code material ever passes through here: staff see the last 4 only.
 import { commerceCalendarDateKey, commerceCalendarDayBounds } from "@scalius/shared/commerce-time";
+import { getStoreTimeZone } from "~/lib/store-time-zone";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { toMinor } from "@scalius/shared/money";
 import { normalizeBdMobile, toLatinDigits } from "@scalius/shared/phone-input";
@@ -45,12 +46,12 @@ function epochSeconds(value: GiftCardTimestamp): number | null {
 }
 
 /**
- * The last store day (Asia/Dhaka, YYYY-MM-DD) a card can be used. Cards expire
+ * The last store day (the store's zone, YYYY-MM-DD) a card can be used. Cards expire
  * at an instant; one that expires at midnight is last usable the day before.
  */
 export function giftCardLastDay(expiresAt: GiftCardTimestamp): string | null {
   const seconds = epochSeconds(expiresAt);
-  return seconds === null ? null : commerceCalendarDateKey((seconds - 1) * 1_000);
+  return seconds === null ? null : commerceCalendarDateKey(getStoreTimeZone(), (seconds - 1) * 1_000);
 }
 
 /** The last usable day as a medium date in the dashboard language. */
@@ -59,10 +60,10 @@ export function formatGiftCardLastDay(expiresAt: GiftCardTimestamp): string | nu
   return seconds === null ? null : formatDateTime(new Date((seconds - 1) * 1_000), { dateStyle: "medium" });
 }
 
-/** A chosen last day → the ISO instant it ends (the next Dhaka midnight), or null when not a date. */
+/** A chosen last day → the ISO instant it ends (the next store midnight), or null when not a date. */
 export function giftCardExpiresAtFromDay(day: string): string | null {
   try {
-    return new Date((commerceCalendarDayBounds(day).end + 1) * 1_000).toISOString();
+    return new Date((commerceCalendarDayBounds(getStoreTimeZone(), day).end + 1) * 1_000).toISOString();
   } catch {
     return null;
   }
@@ -70,7 +71,7 @@ export function giftCardExpiresAtFromDay(day: string): string | null {
 
 /** Today in the store's time zone, for the expiry field's `min`. */
 export function todayStoreDay(now: Date | number = Date.now()): string {
-  return commerceCalendarDateKey(now);
+  return commerceCalendarDateKey(getStoreTimeZone(), now);
 }
 
 /** An expiry day must be today or later (a card that ends today still works until midnight). */

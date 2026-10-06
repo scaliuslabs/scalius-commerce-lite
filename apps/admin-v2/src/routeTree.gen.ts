@@ -21,6 +21,7 @@ import { Route as AdminAccountRouteImport } from './routes/admin/account'
 import { Route as AdminAttributesRouteImport } from './routes/admin/attributes'
 import { Route as AdminMediaRouteImport } from './routes/admin/media'
 import { Route as AdminSettingsRouteRouteImport } from './routes/admin/settings/route'
+import { Route as AdminWelcomeRouteImport } from './routes/admin/welcome'
 import { Route as AuthForgotPasswordRouteImport } from './routes/auth/forgot-password'
 import { Route as AuthLoginRouteImport } from './routes/auth/login'
 import { Route as AuthResetPasswordRouteImport } from './routes/auth/reset-password'
@@ -174,6 +175,11 @@ const AdminMediaRoute = AdminMediaRouteImport.update({
 const AdminSettingsRouteRoute = AdminSettingsRouteRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminWelcomeRoute = AdminWelcomeRouteImport.update({
+  id: '/welcome',
+  path: '/welcome',
   getParentRoute: () => AdminRoute,
 } as any)
 const AuthForgotPasswordRoute = AuthForgotPasswordRouteImport.update({
@@ -700,6 +706,7 @@ export interface FileRoutesByFullPath {
   '/admin/account': typeof AdminAccountRoute
   '/admin/attributes': typeof AdminAttributesRoute
   '/admin/media': typeof AdminMediaRoute
+  '/admin/welcome': typeof AdminWelcomeRoute
   '/auth/forgot-password': typeof AuthForgotPasswordRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/reset-password': typeof AuthResetPasswordRoute
@@ -806,6 +813,7 @@ export interface FileRoutesByTo {
   '/admin/account': typeof AdminAccountRoute
   '/admin/attributes': typeof AdminAttributesRoute
   '/admin/media': typeof AdminMediaRoute
+  '/admin/welcome': typeof AdminWelcomeRoute
   '/auth/forgot-password': typeof AuthForgotPasswordRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/reset-password': typeof AuthResetPasswordRoute
@@ -914,6 +922,7 @@ export interface FileRoutesById {
   '/admin/account': typeof AdminAccountRoute
   '/admin/attributes': typeof AdminAttributesRoute
   '/admin/media': typeof AdminMediaRoute
+  '/admin/welcome': typeof AdminWelcomeRoute
   '/auth/forgot-password': typeof AuthForgotPasswordRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/reset-password': typeof AuthResetPasswordRoute
@@ -1024,6 +1033,7 @@ export interface FileRouteTypes {
     | '/admin/account'
     | '/admin/attributes'
     | '/admin/media'
+    | '/admin/welcome'
     | '/auth/forgot-password'
     | '/auth/login'
     | '/auth/reset-password'
@@ -1130,6 +1140,7 @@ export interface FileRouteTypes {
     | '/admin/account'
     | '/admin/attributes'
     | '/admin/media'
+    | '/admin/welcome'
     | '/auth/forgot-password'
     | '/auth/login'
     | '/auth/reset-password'
@@ -1237,6 +1248,7 @@ export interface FileRouteTypes {
     | '/admin/account'
     | '/admin/attributes'
     | '/admin/media'
+    | '/admin/welcome'
     | '/auth/forgot-password'
     | '/auth/login'
     | '/auth/reset-password'
@@ -1428,6 +1440,13 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/admin/settings'
       preLoaderRoute: typeof AdminSettingsRouteRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/welcome': {
+      id: '/admin/welcome'
+      path: '/welcome'
+      fullPath: '/admin/welcome'
+      preLoaderRoute: typeof AdminWelcomeRouteImport
       parentRoute: typeof AdminRoute
     }
     '/auth/forgot-password': {
@@ -2187,6 +2206,7 @@ interface AdminRouteChildren {
   AdminAccountRoute: typeof AdminAccountRoute
   AdminAttributesRoute: typeof AdminAttributesRoute
   AdminMediaRoute: typeof AdminMediaRoute
+  AdminWelcomeRoute: typeof AdminWelcomeRoute
   AdminIndexRoute: typeof AdminIndexRoute
   AdminAppsPluginIdRoute: typeof AdminAppsPluginIdRoute
   AdminArticlesNewRoute: typeof AdminArticlesNewRoute
@@ -2255,6 +2275,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminAccountRoute: AdminAccountRoute,
   AdminAttributesRoute: AdminAttributesRoute,
   AdminMediaRoute: AdminMediaRoute,
+  AdminWelcomeRoute: AdminWelcomeRoute,
   AdminIndexRoute: AdminIndexRoute,
   AdminAppsPluginIdRoute: AdminAppsPluginIdRoute,
   AdminArticlesNewRoute: AdminArticlesNewRoute,

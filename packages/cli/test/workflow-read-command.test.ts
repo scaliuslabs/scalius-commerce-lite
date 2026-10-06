@@ -9,7 +9,7 @@ import type { OpenApiDocument } from "../src/types.js";
 import { createTestRuntime, validToken } from "./helpers.js";
 
 const DAILY_RULES = [
-  "Interpret activity.daily.bookedRevenue as Asia/Dhaka order-day booked gross, not collected cash, profit, or net settlement.",
+  "Interpret activity.daily.bookedRevenue as store-calendar order-day booked gross, not collected cash, profit, or net settlement.",
   "No authoritative merchant-day collected-cash or net-settlement aggregate exists; report it unavailable, never zero or inferred.",
   "activity.paymentRecovery.total is all recoverable hosted-payment work; activity.paymentNeedsAttention.total is the actionable failed/stale subset; both are current non-transactional backlogs, not daily metrics.",
   "Never subtract the recovery totals because their parallel reads can observe different instants.",

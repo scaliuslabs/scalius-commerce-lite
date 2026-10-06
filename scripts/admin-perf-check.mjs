@@ -34,7 +34,9 @@ export const BUNDLE_BUDGETS = {
   routeDefault: 360,
   routes: {
     "auth/login.tsx": 168,
-    "admin/index.tsx": 206,
+    // +1 (global G1a): the setup guide's "Tell us about your store" and taxes
+    // steps, and the store time zone every date in the shell is formatted in.
+    "admin/index.tsx": 207,
     "admin/orders/_list/index.tsx": 290,
     // Wave B: gift-card tenders, digital and gift-card line cards, refund to a gift card.
     // +1 (catalogue dashboard): the Brands link and its search words in the shell.
