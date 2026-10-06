@@ -9,7 +9,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { afterAll, describe, expect, it, vi } from "vitest";
 
-import { closeNativePostgres, createNativePostgres, nativePostgresUrl } from "@scalius/database/testing/postgres-native";
+import { closeNativePostgres, createNativePostgres, nativePostgresUrl, NATIVE_POSTGRES_TEST_TIMEOUT } from "@scalius/database/testing/postgres-native";
 import { productBuyerState, productFacetValues } from "@scalius/database/schema";
 import { asc } from "drizzle-orm";
 
@@ -55,7 +55,7 @@ const base = {
     additionalInfo: [],
 };
 
-describe.runIf(postgresUrl)("catalogue projections on PostgreSQL", () => {
+describe.runIf(postgresUrl)("catalogue projections on PostgreSQL", { timeout: NATIVE_POSTGRES_TEST_TIMEOUT }, () => {
     it("keeps and reads the buyer state and facet rows like D1", async () => {
         const { db, client } = await createNativePostgres({ label: "projections" });
         await client.query(`

@@ -6,7 +6,7 @@
 // its own database.
 import { afterAll, describe, expect, it } from "vitest";
 
-import { closeNativePostgres, createNativePostgres, nativePostgresUrl } from "@scalius/database/testing/postgres-native";
+import { closeNativePostgres, createNativePostgres, nativePostgresUrl, NATIVE_POSTGRES_TEST_TIMEOUT } from "@scalius/database/testing/postgres-native";
 import { ValidationError } from "@scalius/core/errors";
 
 import { bulkDeleteCategories, updateCategoryStatus } from "./categories.service";
@@ -15,7 +15,7 @@ const postgresUrl = nativePostgresUrl();
 
 afterAll(closeNativePostgres);
 
-describe.runIf(postgresUrl)("category guards on PostgreSQL", () => {
+describe.runIf(postgresUrl)("category guards on PostgreSQL", { timeout: NATIVE_POSTGRES_TEST_TIMEOUT }, () => {
     it("blocks hiding or deleting a category an active dynamic collection reads, and prunes an inactive one", async () => {
         const { db, client } = await createNativePostgres({ label: "categories" });
         await client.query(`

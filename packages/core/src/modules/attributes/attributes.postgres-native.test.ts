@@ -7,7 +7,7 @@
 // drops its own database.
 import { afterAll, describe, expect, it } from "vitest";
 
-import { closeNativePostgres, createNativePostgres, nativePostgresUrl } from "@scalius/database/testing/postgres-native";
+import { closeNativePostgres, createNativePostgres, nativePostgresUrl, NATIVE_POSTGRES_TEST_TIMEOUT } from "@scalius/database/testing/postgres-native";
 
 import { convertAttributeValueType } from "./attribute-types";
 import { deleteAttributeValueRow, listAttributeValueRows, reorderAttributeValueRows, updateAttributeValueRow } from "./attribute-values";
@@ -43,7 +43,7 @@ const base = {
     price: 250,
 };
 
-describe.runIf(postgresUrl)("typed attributes on PostgreSQL", () => {
+describe.runIf(postgresUrl)("typed attributes on PostgreSQL", { timeout: NATIVE_POSTGRES_TEST_TIMEOUT }, () => {
     it("writes, converts and renames typed values like D1", async () => {
         const { db, client } = await createNativePostgres({ label: "attributes" });
         const refresh: CatalogProjectionRefresh = (ids) => catalogProjectionRefreshStatements(db, ids);

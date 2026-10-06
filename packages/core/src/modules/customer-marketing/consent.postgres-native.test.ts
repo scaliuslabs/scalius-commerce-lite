@@ -6,7 +6,7 @@
 // disposable server; the test creates and drops its own database.
 import { afterAll, describe, expect, it } from "vitest";
 
-import { closeNativePostgres, createNativePostgres, nativePostgresUrl } from "@scalius/database/testing/postgres-native";
+import { closeNativePostgres, createNativePostgres, nativePostgresUrl, NATIVE_POSTGRES_TEST_TIMEOUT } from "@scalius/database/testing/postgres-native";
 
 import { applyConsentChanges, confirmMarketingOptIn, getCustomerMarketingConsents, listCustomerConsentEvents } from "./consent";
 import { deriveOptInToken, hashOptInToken } from "./links";
@@ -16,7 +16,7 @@ const env = { SCALIUS_SECRET: "test-master-secret-that-is-long-enough-123456", L
 
 afterAll(closeNativePostgres);
 
-describe.runIf(postgresUrl)("marketing consent on PostgreSQL", () => {
+describe.runIf(postgresUrl)("marketing consent on PostgreSQL", { timeout: NATIVE_POSTGRES_TEST_TIMEOUT }, () => {
     it("moves through subscribe, no-op repeat, unsubscribe and resubscribe, with one audit event per change", async () => {
         const { db, client } = await createNativePostgres({ label: "consent" });
         await client.query(`INSERT INTO customers (id, name, phone, email, origin) VALUES ('cust_guest', 'Rahim', '+8801711111111', NULL, 'order')`);

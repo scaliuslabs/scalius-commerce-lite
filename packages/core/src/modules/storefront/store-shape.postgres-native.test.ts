@@ -4,7 +4,7 @@
 // drops its own database.
 import { afterAll, describe, expect, it } from "vitest";
 
-import { closeNativePostgres, createNativePostgres, nativePostgresUrl } from "@scalius/database/testing/postgres-native";
+import { closeNativePostgres, createNativePostgres, nativePostgresUrl, NATIVE_POSTGRES_TEST_TIMEOUT } from "@scalius/database/testing/postgres-native";
 import { rebuildCatalogProjections } from "../products/catalog-projections";
 import { readStoreShape } from "./store-shape";
 import { STORE_SHAPE_EXPECTED, STORE_SHAPE_PRODUCTS, STORE_SHAPE_TREE } from "./store-shape.fixture";
@@ -13,7 +13,7 @@ const postgresUrl = nativePostgresUrl();
 
 afterAll(closeNativePostgres);
 
-describe.skipIf(!postgresUrl)("store shape on PostgreSQL", () => {
+describe.skipIf(!postgresUrl)("store shape on PostgreSQL", { timeout: NATIVE_POSTGRES_TEST_TIMEOUT }, () => {
   it("reads the same facts as D1", async () => {
     const { db, client } = await createNativePostgres({ label: "store_shape" });
 

@@ -21,6 +21,14 @@ import { connectPostgres, createPostgresDatabase } from "../postgres-adapter";
 import type { Database } from "../types";
 import { createMigratedSqlite } from "./sqlite-d1";
 
+/**
+ * Each test builds its own database from the canonical schema plus the
+ * migration seed, which takes longer than vitest's default 5 s. A suite gives
+ * its `describe` this timeout (`{ timeout: NATIVE_POSTGRES_TEST_TIMEOUT }`)
+ * so the set passes without a `--testTimeout` flag.
+ */
+export const NATIVE_POSTGRES_TEST_TIMEOUT = 180_000;
+
 /** The disposable server's URL, or undefined (the suites then skip). */
 export function nativePostgresUrl(): string | undefined {
   return process.env.SCALIUS_TEST_POSTGRES_URL?.trim() || undefined;

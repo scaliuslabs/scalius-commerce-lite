@@ -4,7 +4,7 @@
 // test creates and drops its own database.
 import { afterAll, describe, expect, it } from "vitest";
 
-import { closeNativePostgres, createNativePostgres, nativePostgresUrl } from "@scalius/database/testing/postgres-native";
+import { closeNativePostgres, createNativePostgres, nativePostgresUrl, NATIVE_POSTGRES_TEST_TIMEOUT } from "@scalius/database/testing/postgres-native";
 import { DEFAULT_STOREFRONT_THEME, storefrontTemplateTheme } from "@scalius/shared/storefront-theme";
 import {
   createThemePreviewSession,
@@ -19,7 +19,7 @@ const postgresUrl = nativePostgresUrl();
 
 afterAll(closeNativePostgres);
 
-describe.skipIf(!postgresUrl)("theme workflow on PostgreSQL", () => {
+describe.skipIf(!postgresUrl)("theme workflow on PostgreSQL", { timeout: NATIVE_POSTGRES_TEST_TIMEOUT }, () => {
   it("prunes history in the publish batch and resolves previews to the current draft", async () => {
     const { db, client } = await createNativePostgres({ label: "theme" });
 

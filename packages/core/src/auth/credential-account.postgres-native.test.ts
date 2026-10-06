@@ -8,6 +8,7 @@ import {
   closeNativePostgres,
   createNativePostgres,
   nativePostgresUrl,
+  NATIVE_POSTGRES_TEST_TIMEOUT,
 } from "@scalius/database/testing/postgres-native";
 import {
   account,
@@ -29,7 +30,7 @@ import { ConflictError } from "../errors";
 // normal test runs stay offline. The suite creates its own database and drops it.
 afterAll(closeNativePostgres);
 
-describe.runIf(nativePostgresUrl())("native PostgreSQL credential conformance", () => {
+describe.runIf(nativePostgresUrl())("native PostgreSQL credential conformance", { timeout: NATIVE_POSTGRES_TEST_TIMEOUT }, () => {
   it("atomically creates a Better Auth-compatible invited administrator", async () => {
     const { db } = await createNativePostgres({ label: "credential" });
     const scope = randomUUID().replaceAll("-", "");
