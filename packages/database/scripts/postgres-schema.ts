@@ -472,13 +472,13 @@ export async function compileCanonicalPostgresSchema(
     // constraint triggers that lock the clock at commit), generated from the
     // same registry as the SQLite ones; the SQLite clock triggers have none.
     const cacheDepFunction = triggerDefinitions.some((definition) =>
-      typeof cacheDepPostgresTrigger(definition.name) === "string")
+      typeof cacheDepPostgresTrigger(definition.name, definition.sql) === "string")
       ? [`${CACHE_DEP_POSTGRES_BUMP_FUNCTION};`]
       : [];
     // Event outbox triggers likewise have a generated PostgreSQL form
     // (jsonb facts and a PostgreSQL event id), not the generic compilation.
     const compiledTriggers = triggerDefinitions.flatMap((definition) => {
-      const cacheDep = cacheDepPostgresTrigger(definition.name);
+      const cacheDep = cacheDepPostgresTrigger(definition.name, definition.sql);
       if (cacheDep === null) return [];
       return [cacheDep ?? eventOutboxPostgresTrigger(definition.name, definition.sql) ?? compileSqliteTriggerForPostgres(definition)];
     });

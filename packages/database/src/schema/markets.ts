@@ -40,6 +40,11 @@ export const markets = sqliteTable("markets", {
      * currency, so they have none (NULL) and use the backup market's.
      */
     priceIncrementMinor: integer("price_increment_minor"),
+    /**
+     * Whether the market's prices include tax (MARKETS-DESIGN D8, migration
+     * 0116): checkout and the order's tax snapshot read the order's market.
+     */
+    pricesIncludeTax: integer("prices_include_tax", { mode: "boolean" }).notNull().default(false),
     /** Optimistic concurrency of the market aggregate (row, countries, presences). */
     revision: integer("revision").notNull().default(1),
     createdAt: integer("created_at", { mode: "timestamp" })

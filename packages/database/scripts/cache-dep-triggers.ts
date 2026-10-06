@@ -66,6 +66,7 @@ export const CACHE_DEP_LATER_TABLES: Readonly<Record<string, string>> = {
   market_countries: "0112_markets",
   market_presences: "0112_markets",
   delivery_zone_regions: "0114_shipping_zones",
+  tax_regions: "0116_tax_regions",
 };
 /**
  * Triggers added after their table's migration, by trigger name: the table's
@@ -79,6 +80,29 @@ export const CACHE_DEP_LATER_TRIGGERS: Readonly<Record<string, string>> = {
   cdep_market_countries_selling_ins: "0115_selling_countries_dependency",
   cdep_market_countries_selling_del: "0115_selling_countries_dependency",
   cdep_market_countries_selling_upd: "0115_selling_countries_dependency",
+  // Tax regions (0116) rebuild tax_rates (its triggers go with the old table)
+  // and drop tax_settings.prices_include_tax (its update guard names it).
+  cdep_tax_rates_ins: "0116_tax_regions",
+  cdep_tax_rates_del: "0116_tax_regions",
+  cdep_tax_rates_upd: "0116_tax_regions",
+  cdep_tax_settings_upd: "0116_tax_regions",
+};
+
+/**
+ * Baseline tables whose columns changed after deployed 0100, with the
+ * columns 0100 saw: 0100 renders their triggers over these (it is immutable),
+ * and the migration that changed the columns reinstalls the triggers that
+ * name them (`CACHE_DEP_LATER_TRIGGERS`).
+ */
+export const CACHE_DEP_BASELINE_COLUMNS: Readonly<Record<string, readonly string[]>> = {
+  tax_rates: [
+    "id", "tax_class_id", "name", "rate_bps", "jurisdiction_type", "jurisdiction_id", "jurisdiction_label",
+    "priority", "is_compound", "is_active", "version", "created_at", "updated_at", "deleted_at",
+  ],
+  tax_settings: [
+    "id", "enabled", "prices_include_tax", "tax_shipping", "default_tax_class_id", "shipping_tax_class_id",
+    "display_label", "version", "created_at", "updated_at",
+  ],
 };
 const isBaselineTable = (table: string) => !PROJECTION_TABLES.has(table) && !(table in CACHE_DEP_LATER_TABLES);
 
@@ -242,7 +266,12 @@ for (const [table, retired] of Object.entries(CACHE_DEP_RETIRED_TABLES)) {
   if (!tableColumns.has(table)) tableColumns.set(table, [...retired.columns]);
 }
 
+/** While rendering deployed 0100: the columns it saw (`CACHE_DEP_BASELINE_COLUMNS`). */
+let renderingBaseline = false;
+
 function columnsOf(table: string): string[] {
+  const frozen = renderingBaseline ? CACHE_DEP_BASELINE_COLUMNS[table] : undefined;
+  if (frozen) return [...frozen];
   const columns = tableColumns.get(table);
   if (!columns) throw new Error(`Cache dependency registry names unknown table ${table}.`);
   return columns;
@@ -514,7 +543,19 @@ export function generateCacheDepTriggers(options: { withRetired?: boolean } = {}
 
 const generated = generateCacheDepTriggers();
 const generatedWithRetired = generateCacheDepTriggers({ withRetired: true });
+/** Deployed 0100's triggers: with its retired tables and the columns it saw. */
+const generatedBaseline = (() => {
+  renderingBaseline = true;
+  try {
+    return generateCacheDepTriggers({ withRetired: true });
+  } finally {
+    renderingBaseline = false;
+  }
+})();
 const postgresByName = new Map(generatedWithRetired.map((trigger) => [trigger.name, trigger.postgres]));
+const baselineByName = new Map(generatedBaseline
+  .filter((trigger) => trigger.table in CACHE_DEP_BASELINE_COLUMNS)
+  .map((trigger) => [trigger.name, trigger]));
 
 /** The trigger names a retired table's drop removes (its SQLite triggers go with the table). */
 export function retiredCacheDepTriggerNames(migration?: string): string[] {
@@ -535,8 +576,12 @@ export function retiredCacheDepFunctionDrops(migration: string): string[] {
  * PostgreSQL schema compiler: a string for a per-table trigger, `null` for
  * the SQLite-only clock triggers, `undefined` for any other trigger.
  */
-export function cacheDepPostgresTrigger(name: string): string | null | undefined {
+export function cacheDepPostgresTrigger(name: string, installedSqlite?: string): string | null | undefined {
   if ((CACHE_DEP_CLOCK_TRIGGERS as readonly string[]).includes(name)) return null;
+  // A schema compiled before the migration that changed a baseline table's
+  // columns still holds 0100's trigger: its PostgreSQL form names those columns.
+  const baseline = baselineByName.get(name);
+  if (baseline && installedSqlite !== undefined && installedSqlite.trim() === baseline.sqlite) return `${baseline.postgres};`;
   const postgresSql = postgresByName.get(name);
   return postgresSql === undefined ? undefined : `${postgresSql};`;
 }
@@ -551,7 +596,7 @@ function sourceSha256(statements: readonly string[]): string {
 
 /** Both migration files, byte for byte. */
 export function renderCacheDepMigration(): { sqlite: string; postgres: string } {
-  const baseline = generatedWithRetired.filter((trigger) => isBaselineTable(trigger.table));
+  const baseline = generatedBaseline.filter((trigger) => isBaselineTable(trigger.table));
   const sqliteBody = [...TABLES_SQLITE, ...CLOCK_TRIGGERS_SQLITE, ...baseline.map((trigger) => trigger.sqlite)];
   const sqliteStatements = sqliteBody.map((statement, index) => `${index === 0 ? `${HEADER}\n` : ""}${statement};`);
   const sha = sourceSha256(sqliteStatements);

@@ -17,7 +17,9 @@ describe("canonical schema hygiene", () => {
         RETIRED_PRE_CONSOLIDATION_TABLES.has(table));
 
       expect(d1Tables).toEqual(tursoTables);
-      expect(d1Tables).toHaveLength(176);
+      expect(d1Tables).toHaveLength(177);
+      // 0116: where the merchant collects tax.
+      expect(d1Tables).toContain("tax_regions");
       // 0114: the regions shipping zones serve.
       expect(d1Tables).toContain("delivery_zone_regions");
       // 0113: the customer address book.

@@ -106,7 +106,9 @@ describe("0100_cache_dependencies", () => {
       + readFileSync(CACHE_DEP_PROJECTION_MIGRATION_PATHS.postgres, "utf8")
       + [...new Set([...Object.values(CACHE_DEP_LATER_TABLES), ...Object.values(CACHE_DEP_LATER_TRIGGERS)])]
         .map((name) => readFileSync(join(import.meta.dirname, `../migrations/postgres/${name}.sql`), "utf8")).join("");
-    const names = [...sidecar.matchAll(/CREATE CONSTRAINT TRIGGER "([a-z0-9_]+)"/g)].map((match) => match[1]).sort();
+    // A later migration that rebuilds a baseline table reinstalls its triggers
+    // (CACHE_DEP_LATER_TRIGGERS): each name counts once.
+    const names = [...new Set([...sidecar.matchAll(/CREATE CONSTRAINT TRIGGER "([a-z0-9_]+)"/g)].map((match) => match[1]))].sort();
     // Deployed 0100 still installs a retired table's triggers; the migration
     // that drops the table drops them (and their functions) on PostgreSQL.
     const retired = new Set(retiredCacheDepTriggerNames());

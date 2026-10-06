@@ -516,6 +516,17 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 6,
         postgresStatements: 6,
       },
+      {
+        version: 116,
+        name: "0116_tax_regions",
+        // Tax regions with their guards, fence and generated cache triggers,
+        // the Bangladesh regions from today's rates, tax_rates without its
+        // jurisdiction columns (rebuilt on SQLite, altered on PostgreSQL),
+        // the market's tax flag moved from tax_settings, the store-wide
+        // provider and the snapshot columns: one statement each.
+        sqliteStatements: 40,
+        postgresStatements: 46,
+      },
     ]);
   });
 
@@ -680,6 +691,7 @@ describe("provider-neutral schema upgrades", () => {
           { version: 113, name: "0113_country_aware_addresses" },
           { version: 114, name: "0114_shipping_zones" },
           { version: 115, name: "0115_selling_countries_dependency" },
+          { version: 116, name: "0116_tax_regions" },
         ],
       });
     } finally {

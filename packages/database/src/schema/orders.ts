@@ -702,6 +702,10 @@ export const orderTaxSnapshots = sqliteTable("order_tax_snapshots", {
     calculationVersion: text("calculation_version").notNull(),
     destinationSnapshot: text("destination_snapshot").notNull(),
     rateSnapshot: text("rate_snapshot").notNull(),
+    /** The tax provider that calculated (`system` or an app's id), migration 0116. */
+    providerId: text("provider_id").notNull().default("system"),
+    /** An app provider's calculation, committed or voided with the order; null for `system`. */
+    providerCalculationId: text("provider_calculation_id"),
     createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(UNIX_NOW),
 }, (table) => [
     index("order_tax_snapshots_created_idx").on(table.createdAt),
@@ -720,8 +724,18 @@ export const orderItemTaxSnapshots = sqliteTable("order_item_tax_snapshots", {
         .references(() => orders.id, { onDelete: "cascade" }),
     taxClassId: text("tax_class_id"),
     taxClassName: text("tax_class_name"),
+    /** The order's market's flag when it was placed. */
     pricesIncludeTax: integer("prices_include_tax", { mode: "boolean" }).notNull(),
     rateSnapshot: text("rate_snapshot").notNull(),
+    /**
+     * The jurisdiction (migration 0116): the country taxed and the region
+     * whose rates applied (null: no region matched, or an app provider
+     * decided). Null on lines placed before 0116.
+     */
+    countryCode: text("country_code"),
+    taxRegionId: text("tax_region_id"),
+    /** The tax provider that calculated (`system` or an app's id). */
+    providerId: text("provider_id").notNull().default("system"),
     createdAt: integer("created_at", { mode: "timestamp" }).notNull().default(UNIX_NOW),
 }, (table) => [
     index("order_item_tax_snapshots_order_idx").on(table.orderId),

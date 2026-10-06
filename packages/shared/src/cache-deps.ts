@@ -648,6 +648,12 @@ const CACHE_DEP_TABLE_RULES = {
   tax_classes: { kinds: ["tax"], noise: ["version", "updated_at"], rules: everyChange([{ dep: "tax" }]) },
   tax_rates: { kinds: ["tax"], noise: ["version", "updated_at"], rules: everyChange([{ dep: "tax" }]) },
   tax_settings: { kinds: ["tax"], noise: ["version", "updated_at"], rules: everyChange([{ dep: "tax" }]) },
+  tax_regions: {
+    kinds: ["tax"],
+    noise: ["version", "created_at", "updated_at"],
+    note: "Where the merchant collects tax and with which provider (MARKETS-DESIGN step 3c). No cached read outputs tax today: the live quote reads it under the checkout fence.",
+    rules: everyChange([{ dep: "tax" }]),
+  },
   promotions: { kinds: ["promo"], noise: ["revision", "updated_at"], rules: everyChange(own("promo")) },
   promotion_codes: {
     kinds: ["promo"],
@@ -756,7 +762,9 @@ const CACHE_DEP_TABLE_RULES = {
   // --- Markets (docs/MARKETS-DESIGN.md D4) -----------------------------------------
   markets: {
     kinds: ["mk"],
-    noise: ["revision", "created_at", "updated_at"],
+    // `prices_include_tax` (0116) is output only by the live tax quote and the
+    // order, which read it under the checkout fence; no cached read shows it.
+    noise: ["revision", "created_at", "updated_at", "prices_include_tax"],
     note: "Readers of one market (a keyed public read) declare `mk:<id>`; the presence matrix (layout, sitemap index, the gateway's buyer-choice redirect) `mk:*`. Prices read the backup market's increment through `storePriceIncrementSql`, which declares `mk:backup`: only a change of that increment advances it, so editing markets never invalidates the catalogue.",
     rules: [
       ...everyChange(own("mk")),
