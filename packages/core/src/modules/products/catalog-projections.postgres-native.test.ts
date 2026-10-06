@@ -4,17 +4,12 @@
 // profile compiler on a real PostgreSQL server, and give the same answers as
 // on D1. Opt-in: point SCALIUS_TEST_POSTGRES_URL at a disposable server; the
 // test creates and drops its own database.
-import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { mkdtempSync, readFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { Client } from "pg";
 import { afterAll, describe, expect, it, vi } from "vitest";
 
-import { connectPostgres, createPostgresDatabase } from "@scalius/database/postgres-adapter";
-import type { Database } from "@scalius/database/client";
+import { closeNativePostgres, createNativePostgres, nativePostgresUrl, NATIVE_POSTGRES_TEST_TIMEOUT } from "@scalius/database/testing/postgres-native";
 import { productBuyerState, productFacetValues } from "@scalius/database/schema";
 import { asc } from "drizzle-orm";
 
@@ -39,39 +34,9 @@ vi.mock("../inventory/alerts", async (importOriginal) => ({
     checkAndAlertLowStock: vi.fn(async () => ({ isLow: false, alertCreated: false })),
 }));
 
-const postgresUrl = process.env.SCALIUS_TEST_POSTGRES_URL?.trim();
+const postgresUrl = nativePostgresUrl();
 
-/** The canonical PostgreSQL schema, compiled by the database package's own script. */
-function canonicalPostgresSchemaSql(): string {
-    const databaseDir = fileURLToPath(new URL("../../../../database/", import.meta.url));
-    const out = join(mkdtempSync(join(tmpdir(), "scalius-pg-schema-")), "schema.sql");
-    const tsx = fileURLToPath(new URL("../../../../../apps/api/node_modules/.bin/tsx", import.meta.url));
-    execFileSync(tsx, ["scripts/postgres-schema.ts", "--out", out], { cwd: databaseDir });
-    return readFileSync(out, "utf8");
-}
-const cleanups: Array<() => Promise<void>> = [];
-afterAll(async () => {
-    for (const cleanup of cleanups.splice(0).reverse()) await cleanup();
-});
-
-async function freshDatabase(): Promise<{ db: Database; client: Client }> {
-    const name = `scalius_projections_${randomUUID().replaceAll("-", "")}`;
-    const admin = new Client({ connectionString: postgresUrl });
-    await admin.connect();
-    await admin.query(`CREATE DATABASE ${name}`);
-    const url = new URL(postgresUrl!);
-    url.pathname = `/${name}`;
-    const client = new Client({ connectionString: url.toString() });
-    await client.connect();
-    await client.query(canonicalPostgresSchemaSql());
-    const db = createPostgresDatabase(url.toString(), { connect: connectPostgres });
-    cleanups.push(async () => {
-        await client.end();
-        await admin.query(`DROP DATABASE ${name} WITH (FORCE)`);
-        await admin.end();
-    });
-    return { db, client };
-}
+afterAll(closeNativePostgres);
 
 const base = {
     description: "A product for the PostgreSQL projection parity test.",
@@ -90,9 +55,9 @@ const base = {
     additionalInfo: [],
 };
 
-describe.runIf(postgresUrl)("catalogue projections on PostgreSQL", () => {
+describe.runIf(postgresUrl)("catalogue projections on PostgreSQL", { timeout: NATIVE_POSTGRES_TEST_TIMEOUT }, () => {
     it("keeps and reads the buyer state and facet rows like D1", async () => {
-        const { db, client } = await freshDatabase();
+        const { db, client } = await createNativePostgres({ label: "projections" });
         await client.query(`
             INSERT INTO categories (id, name, slug, status) VALUES ('cat_a', 'Shirts', 'shirts', 'published');
             INSERT INTO product_attributes (id, name, slug, filterable) VALUES ('attr_material', 'Material', 'material', 1);

@@ -694,6 +694,7 @@ function CountryFields() {
 
   return (
     <>
+      <p className="text-body text-muted-foreground">{t("countriesHelp")}</p>
       <RadioGroup
         value={values.allowedCountriesMode}
         onValueChange={(mode) => setValue("allowedCountriesMode", mode as CountryMode)}

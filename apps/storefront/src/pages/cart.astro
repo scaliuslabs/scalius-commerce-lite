@@ -547,6 +547,14 @@ const marketingConsent = marketingConsentCheckbox(checkoutConfig, lang.code);
                     countryNotAcceptedMessage={copy.phoneCountryNotAcceptedText}
                     countrySelectLabel={copy.phoneCountryLabelText}
                     languageCode={lang.code}
+                    shippingCountries={shippingCountries}
+                    shippingCountry={shippingCountry}
+                    intl={{
+                      help: copy.customerPhoneIntlHelp,
+                      pickupHelp: copy.customerPhoneIntlPickupHelp,
+                      serviceHelp: copy.customerPhoneIntlServiceHelp,
+                      exampleText: copy.customerPhoneExampleText,
+                    }}
                   />
                 </div>
 
@@ -982,6 +990,7 @@ const marketingConsent = marketingConsentCheckbox(checkoutConfig, lang.code);
     initCheckoutPhoneField,
     loadCheckoutPhoneValidator,
   } from "@/lib/checkout/phone-field";
+  import { phoneHintCopy } from "@/lib/checkout/phone-hint";
   import {
     clearCheckoutFormDraft,
     discardCheckoutFormDraftOfOtherOwner,
@@ -1110,7 +1119,7 @@ const marketingConsent = marketingConsentCheckbox(checkoutConfig, lang.code);
   // buyer, and a signed-in buyer's draft never outlives their sign-out.
   if (!isSignedIn()) discardCheckoutFormDraftOfOtherOwner("guest");
 
-  initCheckoutPhoneField(cartPageSignal);
+  initCheckoutPhoneField(cartPageSignal, { copy: phoneHintCopy(checkoutCopy) });
 
   void initCartFunctionality();
 

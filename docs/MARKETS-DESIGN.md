@@ -335,7 +335,8 @@ and localizes the response.
 
 **DVC** (D4). New key kind `mk`: `mk:<market id>` (a market's row, countries
 and presences), `mk:*` (the presence matrix) and `mk:backup` (only the backup
-market's `price_increment_minor`; every price reader declares it).
+market's `price_increment_minor`; every price reader declares it) and `mk:selling`
+(the countries the active markets sell to; the checkout config declares it).
 `PUBLIC_API_CACHE_ROUTES` gives every public read a `market` field, keyed or
 invariant with its reason. This is the one list of market-invariant reads.
 Only `/api/v1/checkout/config` is keyed: presence pages add `?presence=`, and
@@ -540,6 +541,30 @@ regenerated.
 (later table, migration 0114). The property and race gate reports zero
 findings. It also found a stale product page part (`product_buyer_state`
 delete): the product page EMI read now joins only public rows.
+
+**Phone countries.** A buyer who ships to a market's country must be able to
+give a number from there. The phone countries a store accepts are the merchant's
+customer-country policy united with the countries of the active markets
+(`acceptedPhoneCountryPolicy()`, `@scalius/shared/customer-utils`): include `L`
+accepts `L` and the market countries; exclude `X` refuses `X` without the
+market countries; no policy accepts every country. `readAcceptedCustomerCountries()`
+(settings) is the one reader for staff orders and customers, customer sign-in
+and the customer import; the checkout authority and `GET /api/v1/checkout/config`
+(`allowedCountries`) apply it too, so the storefront, the API and the agent
+checkout agree. The market countries ride in a statement each read already
+runs (`sellingCountriesSql()`), so D1 calls and statements do not change. The
+config read therefore declares `mk:selling` beside its market's `mk:<id>`.
+`mk:selling` (migration 0115) is the set of countries the active markets sell to:
+it advances when a country of an active market is added, moved or removed, when
+a market's status changes or an active market is deleted, and never for a
+rename, a handle or a presence edit. A rename of one market leaves every other
+market's checkout config valid. The
+checkout phone field starts in the address form's country when the store
+accepts its numbers and follows the buyer's choice, unless the buyer picked the
+phone country or typed a number that is valid as it is. Its hint and placeholder
+are the country's: Bangladesh keeps the merchant's text, another country asks
+for the country code and shows a libphonenumber example (`phone-hint.ts`). A
+store that sells only to Bangladesh renders the same phone field, byte for byte.
 
 **Left for later.** Rate conditions (weight, order value), a "Rest of the
 world" zone, carrier-calculated rates, per-market delivery methods, a

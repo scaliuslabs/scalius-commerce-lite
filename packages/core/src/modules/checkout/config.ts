@@ -27,13 +27,15 @@ import {
 import { getCheckoutReadiness } from "./readiness";
 import { getOfferedCustomerIdentity } from "../customers";
 import {
+  acceptedCustomerCountries,
   checkoutDocument,
   currencyDocument,
   customerAuthDocument,
   customerCountriesDocument,
   marketingConsentDocument,
+  selectDocumentsWithSellingCountries,
 } from "../settings";
-import { selectSettingsDocuments } from "../../settings-store";
+import type { SettingsDocumentRow } from "../../settings-store";
 import { readPresenceMarketWithDocuments, type PresenceMarket } from "../markets";
 import { NotFoundError } from "../../errors";
 
@@ -46,6 +48,11 @@ export interface CheckoutConfig {
     checkoutMode: string;
     partialPaymentEnabled: boolean;
     partialPaymentAmount: number;
+    /**
+     * The phone countries checkout accepts: the merchant's customer-country
+     * policy united with every country an active market sells to
+     * (`acceptedPhoneCountryPolicy`). An empty list accepts every country.
+     */
     allowedCountries: string[];
     allowedCountriesMode: "include" | "exclude";
     currency: {
@@ -98,24 +105,29 @@ export async function getCheckoutConfig(
         customerCountriesDocument,
         marketingConsentDocument,
     ];
-    let rows: Awaited<ReturnType<typeof selectSettingsDocuments>>;
+    let rows: SettingsDocumentRow[];
+    let sellingCountries: string[];
     let market: PresenceMarket | undefined;
     if (presence === undefined) {
-        rows = await selectSettingsDocuments(db, documents);
+        ({ rows, sellingCountries } = await selectDocumentsWithSellingCountries(db, documents));
     } else {
         const read = await readPresenceMarketWithDocuments(db, presence, documents);
         // No active market holds the presence: a 404, and nothing else is read.
         if (!read.market) throw new NotFoundError("Market not found");
         rows = read.documentRows;
+        sellingCountries = read.sellingCountries;
         market = read.market;
     }
-    const [checkout, currency, customerAuth, allowedCountriesConfig, marketing] = await Promise.all([
+    const [checkout, currency, customerAuth, merchantCountries, marketing] = await Promise.all([
         checkoutDocument.fromRows(rows).then((result) => result.value),
         currencyDocument.fromRows(rows).then((result) => result.value),
         customerAuthDocument.fromRows(rows).then((result) => result.value),
         customerCountriesDocument.fromRows(rows).then((result) => result.value),
         marketingConsentDocument.fromRows(rows).then((result) => result.value),
     ]);
+    // What the storefront's phone field and sign-in dialog apply: the merchant's
+    // policy and the countries the markets sell to, as one list.
+    const allowedCountriesConfig = acceptedCustomerCountries(merchantCountries, sellingCountries);
     const marketingConsent = {
         enabled: marketing.checkout.enabled,
         channels: [...marketing.checkout.channels],

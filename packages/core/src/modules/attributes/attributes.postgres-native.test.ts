@@ -5,17 +5,9 @@
 // the facet projection equal to a rebuild. Opt-in: point
 // SCALIUS_TEST_POSTGRES_URL at a disposable server; the test creates and
 // drops its own database.
-import { execFileSync } from "node:child_process";
-import { randomUUID } from "node:crypto";
-import { mkdtempSync, readFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { fileURLToPath } from "node:url";
-import { Client } from "pg";
 import { afterAll, describe, expect, it } from "vitest";
 
-import { connectPostgres, createPostgresDatabase } from "@scalius/database/postgres-adapter";
-import type { Database } from "@scalius/database/client";
+import { closeNativePostgres, createNativePostgres, nativePostgresUrl, NATIVE_POSTGRES_TEST_TIMEOUT } from "@scalius/database/testing/postgres-native";
 
 import { convertAttributeValueType } from "./attribute-types";
 import { deleteAttributeValueRow, listAttributeValueRows, reorderAttributeValueRows, updateAttributeValueRow } from "./attribute-values";
@@ -27,39 +19,9 @@ import { catalogProjectionRefreshStatements, rebuildCatalogProjections } from ".
 import { createProduct } from "../product-admin/write";
 import { createProductSchema } from "../product-admin/validation";
 
-const postgresUrl = process.env.SCALIUS_TEST_POSTGRES_URL?.trim();
+const postgresUrl = nativePostgresUrl();
 
-function canonicalPostgresSchemaSql(): string {
-    const databaseDir = fileURLToPath(new URL("../../../../database/", import.meta.url));
-    const out = join(mkdtempSync(join(tmpdir(), "scalius-pg-schema-")), "schema.sql");
-    const tsx = fileURLToPath(new URL("../../../../../apps/api/node_modules/.bin/tsx", import.meta.url));
-    execFileSync(tsx, ["scripts/postgres-schema.ts", "--out", out], { cwd: databaseDir });
-    return readFileSync(out, "utf8");
-}
-
-const cleanups: Array<() => Promise<void>> = [];
-afterAll(async () => {
-    for (const cleanup of cleanups.splice(0).reverse()) await cleanup();
-});
-
-async function freshDatabase(): Promise<{ db: Database; client: Client }> {
-    const name = `scalius_attributes_${randomUUID().replaceAll("-", "")}`;
-    const admin = new Client({ connectionString: postgresUrl });
-    await admin.connect();
-    await admin.query(`CREATE DATABASE ${name}`);
-    const url = new URL(postgresUrl!);
-    url.pathname = `/${name}`;
-    const client = new Client({ connectionString: url.toString() });
-    await client.connect();
-    await client.query(canonicalPostgresSchemaSql());
-    const db = createPostgresDatabase(url.toString(), { connect: connectPostgres });
-    cleanups.push(async () => {
-        await client.end();
-        await admin.query(`DROP DATABASE ${name} WITH (FORCE)`);
-        await admin.end();
-    });
-    return { db, client };
-}
+afterAll(closeNativePostgres);
 
 const base = {
     description: "A product for the PostgreSQL attribute parity test.",
@@ -81,9 +43,9 @@ const base = {
     price: 250,
 };
 
-describe.runIf(postgresUrl)("typed attributes on PostgreSQL", () => {
+describe.runIf(postgresUrl)("typed attributes on PostgreSQL", { timeout: NATIVE_POSTGRES_TEST_TIMEOUT }, () => {
     it("writes, converts and renames typed values like D1", async () => {
-        const { db, client } = await freshDatabase();
+        const { db, client } = await createNativePostgres({ label: "attributes" });
         const refresh: CatalogProjectionRefresh = (ids) => catalogProjectionRefreshStatements(db, ids);
         const facets = async () => JSON.stringify((await client.query(
             "SELECT owner_id, facet_key, value_key, value_label, value_number, sort_order FROM product_facet_values ORDER BY owner_id, facet_key",

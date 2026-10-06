@@ -1,7 +1,13 @@
 // @vitest-environment happy-dom
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  BANGLA_CHECKOUT_LANGUAGE_DATA,
+  ENGLISH_CHECKOUT_LANGUAGE_DATA,
+  type CheckoutLanguageData,
+} from "@scalius/shared/checkout-language";
 import { validateStorefrontPhone } from "@/lib/phone-country-policy";
+import { phoneHintCopy } from "./phone-hint";
 import { readCheckoutFormDraft, writeCheckoutFormDraft } from "./session-state";
 import {
   checkoutPhoneResult,
@@ -45,6 +51,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.unstubAllGlobals();
   controller.abort();
   document.body.innerHTML = "";
   sessionStorage.clear();
@@ -217,4 +224,177 @@ describe("checkout phone field", () => {
     }));
     expect(error.textContent).toBe("Required");
   });
+});
+
+describe("the field follows the shipping country", () => {
+  const english = ENGLISH_CHECKOUT_LANGUAGE_DATA;
+  const india = { code: "+91", example: "+91 81234 56789", national: "081234 56789" };
+  const bangladeshHints = [english.customerPhoneHelp, english.customerPhonePickupHelp, english.customerPhoneServiceHelp];
+  const indiaHints = [
+    `${english.customerPhoneIntlHelp} Example: ${india.example}`,
+    `${english.customerPhoneIntlPickupHelp} Example: ${india.example}`,
+    `${english.customerPhoneIntlServiceHelp} Example: ${india.example}`,
+  ];
+
+  /** The markup the server writes for a store that sells to Bangladesh and India (components/CheckoutPhoneField.astro). */
+  function renderStore(options: { serverCountry?: "BD" | "IN"; shippingValue?: string; withCopy?: boolean } = {}) {
+    const serverCountry = options.serverCountry ?? "BD";
+    const hints = serverCountry === "BD" ? bangladeshHints : indiaHints;
+    document.body.innerHTML = `<form id="checkoutForm">
+      <select data-shipping-country name="shippingCountryCode">
+        <option value="BD">Bangladesh</option><option value="IN">India</option><option value="US">United States</option>
+      </select>
+      <div id="customerPhone-field" data-countries="BD,IN" data-country-mode="include" data-default-country="${serverCountry}"
+        data-phone-countries='${JSON.stringify({ IN: india })}'
+        data-invalid-message="Invalid" data-mobile-message="Not a mobile" data-required-message="Required" data-country-message="Not accepted">
+        <input type="hidden" name="customerPhone" value="" data-e164-value="" />
+        <div data-phone-box>
+          <button type="button" data-phone-country><span data-phone-code>${serverCountry === "BD" ? "BD" : "+91"}</span></button>
+          <input id="customerPhone-input" placeholder="${serverCountry === "BD" ? english.customerPhonePlaceholder : india.national}" />
+        </div>
+        <p id="customerPhone-help"><span>${hints[0]}</span><span>${hints[1]}</span><span>${hints[2]}</span></p>
+        <p id="customerPhone-error" class="hidden"></p>
+      </div>
+    </form>`;
+    const select = document.querySelector<HTMLSelectElement>("select[data-shipping-country]")!;
+    select.value = options.shippingValue ?? serverCountry;
+    initCheckoutPhoneField(controller.signal, options.withCopy === false ? {} : { copy: phoneHintCopy(english) });
+    return {
+      select,
+      input: document.getElementById("customerPhone-input") as HTMLInputElement,
+      canonical: document.querySelector<HTMLInputElement>('input[name="customerPhone"]')!,
+      badge: () => document.querySelector("[data-phone-code]")!.textContent,
+      sentences: () => [...document.querySelectorAll("#customerPhone-help > span")].map((span) => span.textContent),
+    };
+  }
+
+  const choose = (select: HTMLSelectElement, country: string) => {
+    select.value = country;
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  };
+
+  it("moves to the chosen country's code, hint and example, and back to the Bangladesh text", () => {
+    const field = renderStore();
+
+    choose(field.select, "IN");
+    expect(field.badge()).toBe("+91");
+    expect(field.sentences()).toEqual(indiaHints);
+    expect(field.input.placeholder).toBe(india.national);
+
+    choose(field.select, "BD");
+    expect(field.badge()).toBe("BD");
+    expect(field.sentences()).toEqual(bangladeshHints);
+    expect(field.input.placeholder).toBe(english.customerPhonePlaceholder);
+  });
+
+  it("reads a number typed without a country code in the chosen country", async () => {
+    const field = renderStore();
+    choose(field.select, "IN");
+
+    type(field.input, "098765 43210");
+    await loadCheckoutPhoneValidator();
+    expect(checkoutPhoneResult()).toEqual({ ok: true, value: "+919876543210" });
+    type(field.input, "098765 43210");
+    expect(field.canonical.value).toBe("+919876543210");
+    expect(submittedPhone()).toBe("+919876543210");
+  });
+
+  it("never rewrites a number that is already valid where it was typed", () => {
+    const field = renderStore();
+    type(field.input, "01712345678");
+    expect(field.canonical.value).toBe("+8801712345678");
+
+    choose(field.select, "IN");
+
+    expect(field.badge()).toBe("BD");
+    expect(field.sentences()).toEqual(bangladeshHints);
+    expect(field.input.value).toBe("01712345678");
+    expect(field.canonical.value).toBe("+8801712345678");
+  });
+
+  it("reads a half-typed or foreign-looking number in the new country instead of keeping it invalid", async () => {
+    const field = renderStore();
+    // Not a Bangladesh mobile number, so nothing is valid yet.
+    type(field.input, "98765 43210");
+    expect(field.canonical.value).toBe("");
+
+    choose(field.select, "IN");
+    await loadCheckoutPhoneValidator();
+    type(field.input, "98765 43210");
+
+    expect(field.badge()).toBe("+91");
+    expect(field.input.value).toBe("98765 43210");
+    expect(field.canonical.value).toBe("+919876543210");
+  });
+
+  it("keeps the country the buyer picked for the phone, whatever the address says", async () => {
+    // happy-dom's globals lack the Option constructor the picker builds its list with.
+    vi.stubGlobal("Option", function Option(text: string, value: string) {
+      const option = document.createElement("option");
+      option.textContent = text;
+      option.value = value;
+      return option;
+    });
+    const field = renderStore();
+    document.querySelector<HTMLButtonElement>("[data-phone-country]")!.click();
+    await loadCheckoutPhoneValidator();
+    await new Promise((resolve) => setTimeout(resolve));
+    const picker = document.querySelector<HTMLSelectElement>("select[data-phone-country-select]")!;
+    picker.value = "IN";
+    picker.dispatchEvent(new Event("change"));
+    expect(field.badge()).toBe("+91");
+    expect(field.sentences()).toEqual(indiaHints);
+
+    choose(field.select, "BD");
+    expect(field.badge()).toBe("+91");
+    expect(field.sentences()).toEqual(indiaHints);
+  });
+
+  it("starts on the country a browser restored the address select to", () => {
+    const field = renderStore({ serverCountry: "IN", shippingValue: "BD" });
+
+    expect(field.badge()).toBe("BD");
+    expect(field.sentences()).toEqual(bangladeshHints);
+    expect(field.input.placeholder).toBe(english.customerPhonePlaceholder);
+  });
+
+  it("ignores a country the server did not describe", () => {
+    const field = renderStore();
+
+    choose(field.select, "US");
+
+    expect(field.badge()).toBe("BD");
+    expect(field.sentences()).toEqual(bangladeshHints);
+  });
+
+  it("moves the country but leaves the words alone without the language copy", () => {
+    const field = renderStore({ withCopy: false });
+
+    choose(field.select, "IN");
+
+    expect(field.badge()).toBe("+91");
+    expect(field.sentences()).toEqual(bangladeshHints);
+  });
+
+  it("speaks the checkout language of the page", () => {
+    const bangla = renderStoreWith(BANGLA_CHECKOUT_LANGUAGE_DATA);
+
+    choose(bangla.select, "IN");
+
+    expect(bangla.sentences()[0]).toBe(`${BANGLA_CHECKOUT_LANGUAGE_DATA.customerPhoneIntlHelp} উদাহরণ: ${india.example}`);
+  });
+
+  function renderStoreWith(language: CheckoutLanguageData) {
+    document.body.innerHTML = `<form><select data-shipping-country name="shippingCountryCode"><option value="BD">BD</option><option value="IN">IN</option></select>
+      <div id="customerPhone-field" data-countries="BD,IN" data-country-mode="include" data-default-country="BD" data-phone-countries='${JSON.stringify({ IN: india })}'>
+        <input type="hidden" name="customerPhone" value="" />
+        <div data-phone-box><span data-phone-code>BD</span><input id="customerPhone-input" /></div>
+        <p id="customerPhone-help"><span>a</span><span>b</span><span>c</span></p>
+      </div></form>`;
+    initCheckoutPhoneField(controller.signal, { copy: phoneHintCopy(language) });
+    return {
+      select: document.querySelector<HTMLSelectElement>("select[data-shipping-country]")!,
+      sentences: () => [...document.querySelectorAll("#customerPhone-help > span")].map((span) => span.textContent),
+    };
+  }
 });

@@ -98,15 +98,15 @@ function activeDynamicCollectionCategoryReferenceCondition(
         ${collections.deletedAt} IS NULL
         AND ${collections.isActive} = 1
         AND CASE
-            WHEN json_valid(${collections.config}) = 1
+            WHEN json_valid(${collections.config})
              AND json_type(${collections.config}, '$.categoryIds') = 'array'
              AND json_extract(${collections.config}, '$.source') = 'dynamic'
-            THEN EXISTS (
+            THEN CASE WHEN EXISTS (
                 SELECT 1
                 FROM json_each(${collections.config}, '$.categoryIds') AS membership
                 INNER JOIN json_each(${JSON.stringify(claims)}) AS target
                     ON CAST(membership.value AS TEXT) = CAST(json_extract(target.value, '$.id') AS TEXT)
-            )
+            ) THEN 1 ELSE 0 END
             ELSE 0
         END = 1
     `;
@@ -882,16 +882,16 @@ export async function bulkDeleteCategories(
             .from(collections)
             .where(sql`
                 CASE
-                    WHEN json_valid(${collections.config}) = 0 THEN 1
+                    WHEN NOT json_valid(${collections.config}) THEN 1
                     WHEN json_type(${collections.config}, '$.categoryIds') IS NOT NULL
                          AND json_type(${collections.config}, '$.categoryIds') <> 'array'
                     THEN 1
-                    ELSE EXISTS (
+                    ELSE CASE WHEN EXISTS (
                         SELECT 1
                         FROM json_each(${collections.config}, '$.categoryIds') AS membership
                         INNER JOIN json_each(${JSON.stringify(claims)}) AS target
                             ON CAST(membership.value AS TEXT) = CAST(json_extract(target.value, '$.id') AS TEXT)
-                    )
+                    ) THEN 1 ELSE 0 END
                 END = 1
             `)
             .all();

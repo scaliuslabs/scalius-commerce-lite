@@ -19,7 +19,7 @@ export function quickAddEligibleSql(buyer: {
         AND ${products.isGiftCard} = 0
         AND (CASE
             WHEN ${products.customizationSchema} IS NULL THEN 1
-            WHEN json_valid(${products.customizationSchema}) = 1 THEN
+            WHEN json_valid(${products.customizationSchema}) THEN
                 CASE WHEN json_type(${products.customizationSchema}) = 'object'
                     AND json_type(${products.customizationSchema}, '$.fields') = 'array'
                     AND json_array_length(${products.customizationSchema}, '$.fields') = 0

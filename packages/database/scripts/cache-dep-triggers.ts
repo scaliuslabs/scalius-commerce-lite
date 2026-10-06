@@ -67,6 +67,19 @@ export const CACHE_DEP_LATER_TABLES: Readonly<Record<string, string>> = {
   market_presences: "0112_markets",
   delivery_zone_regions: "0114_shipping_zones",
 };
+/**
+ * Triggers added after their table's migration, by trigger name: the table's
+ * own migration stays byte for byte (it is deployed), so a rule registered
+ * later installs its trigger in the migration named here.
+ */
+export const CACHE_DEP_LATER_TRIGGERS: Readonly<Record<string, string>> = {
+  // The set of countries the active markets sell to (`mk:selling`).
+  cdep_markets_selling_upd: "0115_selling_countries_dependency",
+  cdep_markets_selling_del: "0115_selling_countries_dependency",
+  cdep_market_countries_selling_ins: "0115_selling_countries_dependency",
+  cdep_market_countries_selling_del: "0115_selling_countries_dependency",
+  cdep_market_countries_selling_upd: "0115_selling_countries_dependency",
+};
 const isBaselineTable = (table: string) => !PROJECTION_TABLES.has(table) && !(table in CACHE_DEP_LATER_TABLES);
 
 export interface RetiredCacheDepTable {
@@ -579,7 +592,8 @@ export function renderCacheDepProjectionMigration(): { sqlite: string; postgres:
 }
 /** The generated triggers a later migration (by name) installs, in registry order. */
 export function cacheDepTriggersForMigration(name: string): GeneratedCacheDepTrigger[] {
-  return generated.filter((trigger) => CACHE_DEP_LATER_TABLES[trigger.table] === name);
+  return generated.filter((trigger) =>
+    (CACHE_DEP_LATER_TRIGGERS[trigger.name] ?? CACHE_DEP_LATER_TABLES[trigger.table]) === name);
 }
 
 export const CACHE_DEP_PROJECTION_MIGRATION_PATHS = {

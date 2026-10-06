@@ -513,6 +513,26 @@ describe("phone sign-in (R3-SB-07)", () => {
       .resolves.toMatchObject({ message: "We sent you a code." });
   });
 
+  it("takes a phone from any country an active market sells to, beside a Bangladesh-only policy", async () => {
+    sqlite.exec(`
+      INSERT INTO settings (id, key, value, type, category)
+        VALUES ('countries', 'document', '{"allowedCountries":["BD"],"allowedCountriesMode":"include"}', 'json', 'customer_countries');
+      INSERT INTO markets (id, handle, name, status) VALUES ('mkt_india', 'india', 'India', 'active');
+      INSERT INTO market_countries (country_code, market_id) VALUES ('IN', 'mkt_india');
+    `);
+    await saveSmsSettings(db, { activeProvider: "bdbulksms", bdbulksmsToken: "merchant-token-4821" }, KEY);
+    await customerAuthDocument.write(db, { email: "optional", whatsapp: "off", channels: ["email", "sms"] });
+    const phoneCodeFor = (identifier: string, ip: string) =>
+      sendOtp(db, { method: "phone", identifier, ip, encryptionKey: KEY, credentialEncryptionKey: KEY });
+
+    await expect(phoneCodeFor("+919876543210", "203.0.113.210")).resolves.toMatchObject({ message: "We sent you a code." });
+    await expect(phoneCodeFor("+14155552671", "203.0.113.211")).rejects.toThrow("Phone numbers from US are not accepted");
+    // A buyer from India can also finish an email sign-up with an Indian phone.
+    const email = "indian.buyer@example.test";
+    const code = await sendEmailCode(email);
+    await expect(verifyEmail(email, code, { name: "Indian Buyer", phone: "+919876543210" })).resolves.toMatchObject({ status: "signed_in" });
+  });
+
   it("fails closed when the chosen channel can't send, without falling back", async () => {
     await customerAuthDocument.write(db, { email: "required", whatsapp: "same_as_phone", channels: ["whatsapp", "sms"] });
     await saveSmsSettings(db, { activeProvider: "bdbulksms", bdbulksmsToken: "merchant-token-4821" }, KEY);

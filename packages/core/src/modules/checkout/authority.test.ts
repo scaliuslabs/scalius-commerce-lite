@@ -194,6 +194,20 @@ describe("storefront checkout authority read", () => {
     expect(isTrustedStorefrontTaxAuthority(snapshot.taxAuthority)).toBe(true);
   });
 
+  it("accepts the phone countries of every market on top of the merchant's list, in the same read", async () => {
+    const rows = authorityRows();
+    rows[8] = [{ ...rows[8]![0]!, sellingCountries: "BD,IN" }];
+    const fixture = createMockDatabase(rows);
+
+    const snapshot = await loadStorefrontCheckoutAuthority(fixture.db, input);
+
+    expect(fixture.batch).toHaveBeenCalledOnce();
+    expect(fixture.batches[0]).toHaveLength(12);
+    expect(snapshot.shippingCountries).toEqual(["BD", "IN"]);
+    // The merchant lists Bangladesh alone; India is sold to, so its numbers are accepted.
+    expect(snapshot.allowedCountries).toEqual({ allowedCountries: ["BD", "IN"], allowedCountriesMode: "include" });
+  });
+
   it("keeps a 99-line checkout below D1's 100-parameter statement limit", async () => {
     const fixture = createMockDatabase();
     const manyItems = Array.from({ length: 99 }, (_, index) => ({

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  compileSqliteConflictTargets,
   compileSqliteStatementForPostgres,
   normalizePostgresParameters,
   normalizePostgresResultObjects,
@@ -217,5 +218,39 @@ describe("PostgreSQL SQLite-profile compiler", () => {
         `FUNCTION public.${functionName}`,
       );
     }
+  });
+});
+
+describe("PostgreSQL ON CONFLICT targets", () => {
+  it("strips the table qualifier Drizzle writes in a conflict target, and nothing else", () => {
+    const compiled = compileSqliteStatementForPostgres(
+      'insert into "product_sales_stats" ("product_id", "sold_30d") SELECT s.product_id, 1 FROM "orders" AS s '
+        + 'on conflict ("product_sales_stats"."product_id") do update set "sold_30d" = excluded.sold_30d '
+        + 'where "product_sales_stats"."sold_30d" <> excluded.sold_30d',
+      0,
+    );
+
+    expect(compiled.sql).toContain('on conflict ("product_id") do update');
+    // The SET and WHERE of the upsert, and the select, keep their qualified names.
+    expect(compiled.sql).toContain('set "sold_30d" = excluded.sold_30d where "product_sales_stats"."sold_30d" <> excluded.sold_30d');
+    expect(compiled.sql).toContain("SELECT s.product_id");
+  });
+
+  it.each([
+    ['on conflict ("t"."a", "t"."b") do nothing', 'on conflict ("a", "b") do nothing'],
+    // Quote styles are converted later, by the statement compiler.
+    ["ON CONFLICT (`t`.`a`) DO NOTHING", "ON CONFLICT (`a`) DO NOTHING"],
+    ['on  conflict\n("main"."t"."a") do nothing', 'on  conflict\n("a") do nothing'],
+    ['on conflict (lower("t"."a")) do nothing', 'on conflict (lower("a")) do nothing'],
+    ['on conflict ("a") do nothing', 'on conflict ("a") do nothing'],
+    ["on conflict do nothing", "on conflict do nothing"],
+  ])("%s", (input, expected) => {
+    expect(compileSqliteConflictTargets(input)).toBe(expected);
+  });
+
+  it("leaves literals, comments and identifiers that merely contain the words alone", () => {
+    const text = "select 'on conflict (\"t\".\"a\")', \"on conflict (x.y)\" from t /* on conflict (a.b) */ -- on conflict (a.b)\n";
+    expect(compileSqliteConflictTargets(text)).toBe(text);
+    expect(compileSqliteConflictTargets("select non_conflict (t.a) from t")).toBe("select non_conflict (t.a) from t");
   });
 });

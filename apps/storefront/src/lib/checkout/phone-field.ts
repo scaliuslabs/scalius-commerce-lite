@@ -1,6 +1,14 @@
 // Checkout phone field controller for the server-rendered markup in
 // components/CheckoutPhoneField.astro.
 //
+// The field starts in the country of the address form and follows it: choosing
+// another shipping country the store accepts numbers from moves the field's
+// country (its badge, hint and placeholder, and the country a number typed
+// without a country code is read in), unless the buyer picked a phone country
+// themselves or has already typed a number that is valid as it is. A typed
+// number is never rewritten. Without a shipping country select (a store that
+// sells to one country) the field stays where the server put it.
+//
 // Bangladesh numbers are decided by a tiny fast path: only mobile numbers
 // (01[3-9] + 8 digits) are accepted, landlines and 012… are refused. Numbers
 // from other countries (and the country picker) lazy-load
@@ -11,7 +19,9 @@
 // `customerPhone` input (also exposed as `data-e164-value`); it stays empty
 // until the visible number validates.
 import type { PhoneCountryPolicy } from "@scalius/shared/customer-utils";
+import type { PhoneCountryMeta } from "@scalius/shared/phone-example";
 import { compactPhone } from "@scalius/shared/phone-input";
+import { phoneHints, type PhoneHintCopy } from "./phone-hint";
 import {
   readCheckoutFormDraft,
   syncCheckoutTransferSession,
@@ -118,8 +128,29 @@ export async function loadCheckoutPhoneValidator(): Promise<void> {
   await loadIntl();
 }
 
+export interface CheckoutPhoneFieldOptions {
+  /**
+   * The words the field says per country (the page's checkout language).
+   * Without them the hint and placeholder stay as the server rendered them.
+   */
+  copy?: PhoneHintCopy;
+}
+
+/** The calling code and example of each country the store sells abroad, as the server wrote them. */
+function readSoldCountries(value: string | undefined): Record<string, PhoneCountryMeta> {
+  if (!value) return {};
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as Record<string, PhoneCountryMeta>)
+      : {};
+  } catch {
+    return {};
+  }
+}
+
 /** Wires the server-rendered phone field. Safe to call once per page run. */
-export function initCheckoutPhoneField(signal?: AbortSignal): void {
+export function initCheckoutPhoneField(signal?: AbortSignal, options: CheckoutPhoneFieldOptions = {}): void {
   const root = document.getElementById("customerPhone-field");
   const input = document.getElementById("customerPhone-input") as HTMLInputElement | null;
   const canonical = root?.querySelector<HTMLInputElement>('input[name="customerPhone"]');
@@ -139,8 +170,11 @@ export function initCheckoutPhoneField(signal?: AbortSignal): void {
       data.countryMessage ||
       "This store does not accept phone numbers from that country.",
   };
+  const soldCountries = readSoldCountries(data.phoneCountries);
   let country = data.defaultCountry || "BD";
   let buyerHasEdited = false;
+  // Set when the buyer opens the country picker: their choice then sticks.
+  let pickedCountry = false;
 
   const result = (): CheckoutPhoneResult => {
     const quick = quickValidatePhone(input.value, policy, country);
@@ -175,6 +209,41 @@ export function initCheckoutPhoneField(signal?: AbortSignal): void {
   const persist = (value: string) => {
     writeCheckoutFormDraft({ ...(readCheckoutFormDraft() ?? {}), customerPhone: value });
     syncCheckoutTransferSession({ customerPhone: value });
+  };
+
+  /** Writes the hint (its delivery, pickup and no-delivery sentences) and the placeholder for a country. */
+  const showCountryWords = (next: string, meta: PhoneCountryMeta | null) => {
+    if (!options.copy) return;
+    const words = phoneHints(next, options.copy, meta);
+    const help = document.getElementById("customerPhone-help");
+    if (help) {
+      const sentences = Array.from(help.children).filter((child) => child.tagName === "SPAN");
+      if (sentences.length === 3) {
+        sentences[0]!.textContent = words.hints.delivery;
+        sentences[1]!.textContent = words.hints.pickup;
+        sentences[2]!.textContent = words.hints.none;
+      } else {
+        help.textContent = words.hints.delivery;
+      }
+    }
+    input.placeholder = words.placeholder;
+  };
+
+  // Follows the address form's country select. A buyer's own picker choice, and
+  // a number that is valid as typed, keep the field where it is.
+  const followShippingCountry = (next: string) => {
+    if (pickedCountry || next === country || !phoneCountryAllowed(next, policy)) return;
+    const meta = next === "BD" ? null : soldCountries[next];
+    if (next !== "BD" && !meta) return;
+    const typed = result();
+    if (input.value.trim() && (typed.ok || typed.pending)) return;
+    country = next;
+    const code = root.querySelector("[data-phone-code]");
+    // Bangladesh is typed locally (01…), so it shows the country, not +880.
+    if (code) code.textContent = next === "BD" ? "BD" : meta!.code;
+    showCountryWords(next, meta ?? null);
+    const current = syncCanonical();
+    if (input.value.trim()) persist(current.ok ? current.value : "");
   };
 
   // Resolves numbers the fast path cannot decide once the validator arrives.
@@ -280,6 +349,20 @@ export function initCheckoutPhoneField(signal?: AbortSignal): void {
     { signal },
   );
 
+  document.addEventListener(
+    "change",
+    (event) => {
+      const target = event.target as Element | null;
+      if (target?.matches?.("select[data-shipping-country]")) {
+        followShippingCountry((target as HTMLSelectElement).value);
+      }
+    },
+    { signal },
+  );
+  // A browser may restore the country select before this script runs.
+  const shippingSelect = document.querySelector<HTMLSelectElement>("select[data-shipping-country]");
+  if (shippingSelect) followShippingCountry(shippingSelect.value);
+
   const button = root.querySelector<HTMLButtonElement>("[data-phone-country]");
   button?.addEventListener(
     "click",
@@ -296,9 +379,11 @@ export function initCheckoutPhoneField(signal?: AbortSignal): void {
         "change",
         () => {
           country = select.value;
+          pickedCountry = true;
           const code = button.querySelector("[data-phone-code]");
           // Bangladesh is typed locally (01…), so it shows the country, not +880.
           if (code) code.textContent = country === "BD" ? "BD" : intl.callingCode(country);
+          showCountryWords(country, country === "BD" ? null : soldCountries[country] ?? intl.phoneCountryMeta(country));
           buyerHasEdited = true;
           const current = syncCanonical();
           persist(current.ok ? current.value : "");

@@ -95,6 +95,41 @@ describe("getCheckoutConfig", () => {
         });
     });
 
+    it("serves the accepted phone countries: the merchant's list united with the countries the markets sell to", async () => {
+        const { db, sqlite } = createSqliteD1Database();
+        await checkoutDocument.write(db, {});
+        await currencyDocument.write(db, { currencyCode: "bdt", currencySymbol: "৳" } as never);
+        sqlite.exec(`
+            INSERT INTO settings (id, key, value, type, category)
+              VALUES ('countries', 'document', '{"allowedCountries":["BD"],"allowedCountriesMode":"include"}', 'json', 'customer_countries');
+            INSERT INTO delivery_zones (id, name) VALUES ('dz_bd', 'Bangladesh');
+            INSERT INTO delivery_zone_regions (country_code, zone_id) VALUES ('BD', 'dz_bd');
+            INSERT INTO shipping_methods (id, name, fee_minor, is_active, zone_id) VALUES ('sm_1', 'Standard', 6000, 1, 'dz_bd');
+            INSERT INTO delivery_locations (id, name, type, parent_id, external_ids, metadata, is_active)
+              VALUES ('city_1', 'Dhaka', 'city', NULL, '{}', '{}', 1), ('zone_1', 'Dhanmondi', 'zone', 'city_1', '{}', '{}', 1);
+        `);
+
+        // A store that sells only to Bangladesh keeps the merchant's list as it is.
+        expect(await getCheckoutConfig(db)).toMatchObject({ allowedCountries: ["BD"], allowedCountriesMode: "include" });
+
+        sqlite.exec(`
+            INSERT INTO markets (id, handle, name, status) VALUES ('mkt_india', 'india', 'India', 'active');
+            INSERT INTO market_countries (country_code, market_id) VALUES ('IN', 'mkt_india');
+            INSERT INTO market_presences (id, market_id, kind, value, locale) VALUES ('mp_india', 'mkt_india', 'subfolder', 'en-in', 'en');
+        `);
+        for (const presence of [undefined, "", "en-in"]) {
+            expect(await getCheckoutConfig(db, undefined, undefined, undefined, undefined, presence), `presence ${presence}`)
+                .toMatchObject({ allowedCountries: ["BD", "IN"], allowedCountriesMode: "include" });
+        }
+
+        // A draft market sells nothing; an unrestricted policy stays unrestricted.
+        sqlite.exec("UPDATE markets SET status = 'draft' WHERE id = 'mkt_india'");
+        expect(await getCheckoutConfig(db)).toMatchObject({ allowedCountries: ["BD"] });
+        sqlite.exec(`UPDATE markets SET status = 'active' WHERE id = 'mkt_india';
+            UPDATE settings SET value = '{"allowedCountries":[],"allowedCountriesMode":"include"}' WHERE id = 'countries'`);
+        expect(await getCheckoutConfig(db)).toMatchObject({ allowedCountries: [], allowedCountriesMode: "include" });
+    });
+
     it("fails closed when persisted checkout currency is unsupported", async () => {
         mockGatewaySnapshot({
             enabledMethods: ["cod"],

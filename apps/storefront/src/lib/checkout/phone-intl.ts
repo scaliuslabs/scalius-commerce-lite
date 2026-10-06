@@ -8,6 +8,7 @@ import {
   type PhoneCountryPolicy,
 } from "@scalius/shared/customer-utils";
 import { validateStorefrontPhone } from "@/lib/phone-country-policy";
+import { phoneCountryMeta } from "@scalius/shared/phone-example";
 import { toLatinDigits } from "@scalius/shared/phone-input";
 import type { CheckoutPhoneResult } from "./phone-field";
 
@@ -35,6 +36,9 @@ export function validateInternationalPhone(
         : "invalid",
   };
 }
+
+/** A country's calling code and example number, for a country the store does not sell to (the picker's). */
+export { phoneCountryMeta };
 
 export function callingCode(country: string): string {
   return `+${getCountryCallingCode(country as CountryCode)}`;

@@ -35,7 +35,7 @@ A document is `settings(category = <document key>, key = 'document', type = 'jso
 | `media` | image optimization / delivery hosts | -- |
 | `business` | company, TIN, logo, address, invoice prefix/logo | -- |
 | `currency` | `currencyCode`, `currencySymbol` | -- |
-| `customer_countries` | `allowedCountries`, `allowedCountriesMode` | -- |
+| `customer_countries` | `allowedCountries`, `allowedCountriesMode` (the merchant's policy; the phone countries a store accepts are this list united with its markets' countries, `readAcceptedCustomerCountries()`) | -- |
 | `checkout` | `guestCheckoutEnabled`, `checkoutMode`, `partialPaymentEnabled`, `partialPaymentAmount` (admin CAS revision) | -- |
 | `customer_auth` | Customer accounts: `email` / `whatsapp` collection and code `channels` (any other shape resets to defaults) | -- |
 | `customer_requests` | buyer self-service request policy | -- |

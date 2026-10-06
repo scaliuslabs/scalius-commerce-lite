@@ -4,16 +4,9 @@
 // as on D1 through the adapter's SQLite-profile compiler. Opt-in: point
 // SCALIUS_TEST_POSTGRES_URL at a disposable local server; the test creates
 // and drops its own database.
-import { execFileSync } from "node:child_process";
-import { randomUUID } from "node:crypto";
-import { mkdtempSync, readFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { fileURLToPath } from "node:url";
-import { Client, types } from "pg";
+import type { Client } from "pg";
 import { afterAll, describe, expect, it, vi } from "vitest";
-import { connectPostgres, createPostgresDatabase } from "@scalius/database/postgres-adapter";
-import type { Database } from "@scalius/database/client";
+import { closeNativePostgres, createNativePostgres, nativePostgresUrl } from "@scalius/database/testing/postgres-native";
 import { ANALYTICS_REPORTS, type AnalyticsReportId } from "@scalius/shared/analytics-reports";
 import {
   createAnalyticsContext,
@@ -27,24 +20,10 @@ import {
   seedKnownAnswerStore,
 } from "../../../packages/core/src/modules/analytics/reports/metrics.fixture-store";
 
-const postgresUrl = process.env.SCALIUS_TEST_POSTGRES_URL?.trim();
+const postgresUrl = nativePostgresUrl();
 const NOW = new Date("2026-09-01T06:00:00+06:00");
 
-function canonicalPostgresSchemaSql(): string {
-  const databaseDir = fileURLToPath(new URL("../../../packages/database/", import.meta.url));
-  const out = join(mkdtempSync(join(tmpdir(), "scalius-analytics-pg-schema-")), "schema.sql");
-  const tsx = fileURLToPath(new URL("../node_modules/.bin/tsx", import.meta.url));
-  execFileSync(tsx, ["scripts/postgres-schema.ts", "--out", out], { cwd: databaseDir });
-  return readFileSync(out, "utf8");
-}
-
-const parseBigint = ((oid: number, format?: "text" | "binary") =>
-  oid === 20 ? Number : types.getTypeParser(oid, format)) as typeof types.getTypeParser;
-
-const cleanups: Array<() => Promise<void>> = [];
-afterAll(async () => {
-  for (const cleanup of cleanups.splice(0).reverse()) await cleanup();
-});
+afterAll(closeNativePostgres);
 
 /** Every SQLite table with rows, copied into PostgreSQL with triggers off (the rows already passed them on D1). */
 async function copyStore(sqlite: import("node:sqlite").DatabaseSync, client: Client) {
@@ -70,24 +49,6 @@ async function copyStore(sqlite: import("node:sqlite").DatabaseSync, client: Cli
   await client.query("SET session_replication_role = DEFAULT");
 }
 
-async function postgres(): Promise<{ db: Database; client: Client }> {
-  const name = `scalius_analytics_${randomUUID().replaceAll("-", "")}`;
-  const admin = new Client({ connectionString: postgresUrl });
-  await admin.connect();
-  await admin.query(`CREATE DATABASE ${name}`);
-  const url = new URL(postgresUrl!);
-  url.pathname = `/${name}`;
-  const client = new Client({ connectionString: url.toString(), types: { getTypeParser: parseBigint } });
-  await client.connect();
-  await client.query(canonicalPostgresSchemaSql());
-  cleanups.push(async () => {
-    await client.end();
-    await admin.query(`DROP DATABASE ${name} WITH (FORCE)`);
-    await admin.end();
-  });
-  return { db: createPostgresDatabase(url.toString(), { connect: connectPostgres }), client };
-}
-
 /** Floats rounded so numeric and REAL division agree; everything else exact. */
 function normalize(value: unknown): unknown {
   if (typeof value === "number" && !Number.isInteger(value)) return Math.round(value * 1e6) / 1e6;
@@ -104,7 +65,7 @@ describe.runIf(postgresUrl)("analytics: PostgreSQL parity with D1", () => {
     const fixture = createAnalyticsFixture();
     seedKnownAnswerStore(fixture);
     seedKnownAnswerExtras(fixture);
-    const pg = await postgres();
+    const pg = await createNativePostgres({ label: "analytics" });
     await copyStore(fixture.sqlite, pg.client);
 
     const d1Context = await createAnalyticsContext(fixture.db, NOW);

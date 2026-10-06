@@ -26,7 +26,7 @@ import { nanoid } from "nanoid";
 import { validateAndFormatPhone } from "@scalius/shared/customer-utils";
 import { CUSTOMER_TAGS_PER_CUSTOMER_MAX, type MarketingChannel } from "@scalius/shared/customer-marketing";
 import type { CustomerImportBatch, CustomerImportItem } from "@scalius/shared/store-transfer/customers";
-import { getAllowedCountries } from "../settings";
+import { readAcceptedCustomerCountries } from "../settings";
 import { customerAddressColumns, resolveAddressFromRows, type AddressValidationError } from "../customers";
 import {
   type ConsentChange,
@@ -198,7 +198,7 @@ export async function importCustomers(
 ): Promise<CustomerImportResponse> {
   const budget = context.budget ?? new ImportBudget();
   const actorId = context.actorId ?? null;
-  const [existing, countries] = await Promise.all([readExisting(db, batch.items), getAllowedCountries(db)]);
+  const [existing, countries] = await Promise.all([readExisting(db, batch.items), readAcceptedCustomerCountries(db)]);
   const results: CustomerImportResult[] = [];
   const writes: PlannedWrite[] = [];
   let stoppedEarly = false;

@@ -9,6 +9,7 @@ import {
   resolveActivePaymentMethodsFromRows,
 } from "../payments";
 import {
+  acceptedCustomerCountries,
   checkoutDocument,
   currencyDocument,
   type CurrencySettings,
@@ -98,6 +99,7 @@ export interface StorefrontCheckoutAuthoritySnapshot {
     cartValidation: StorefrontCartValidationResult;
     deliveryPreflight: StorefrontDeliveryPreflightResult;
     checkoutSettings: StorefrontCheckoutSettingsAuthority;
+    /** The phone countries checkout accepts: the merchant's policy united with `shippingCountries`. */
     allowedCountries: CustomerCountries;
     /** The countries the active markets sell to, sorted: checkout ships only there. */
     shippingCountries: string[];
@@ -307,8 +309,10 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
             // Staff order emails go to the notification settings' recipient list.
             const staffEmailRecipients = (notificationsRead.value as { staffEmailRecipients?: unknown[] })
                 .staffEmailRecipients ?? [];
-            const allowedCountries = countriesRead.value;
             const shippingCountries = sellingCountriesFromSql(sideEffectSettings?.sellingCountries);
+            // The phone countries checkout accepts: the merchant's list united
+            // with the countries the markets sell to (one rule, in settings).
+            const allowedCountries = acceptedCustomerCountries(countriesRead.value, shippingCountries);
             let activePaymentMethods: PaymentMethodsConfig;
             try {
                 activePaymentMethods = await resolveActivePaymentMethodsFromRows(

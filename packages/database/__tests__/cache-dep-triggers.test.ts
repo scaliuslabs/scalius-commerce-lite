@@ -20,6 +20,7 @@ import {
 import {
   CACHE_DEP_CLOCK_TRIGGERS,
   CACHE_DEP_LATER_TABLES,
+  CACHE_DEP_LATER_TRIGGERS,
   CACHE_DEP_RETIRED_TABLES,
   retiredCacheDepFunctionDrops,
   retiredCacheDepTriggerNames,
@@ -103,7 +104,7 @@ describe("0100_cache_dependencies", () => {
   it("has a PostgreSQL trigger for every rule in the sidecar", () => {
     const sidecar = readFileSync(CACHE_DEP_MIGRATION_PATHS.postgres, "utf8")
       + readFileSync(CACHE_DEP_PROJECTION_MIGRATION_PATHS.postgres, "utf8")
-      + [...new Set(Object.values(CACHE_DEP_LATER_TABLES))]
+      + [...new Set([...Object.values(CACHE_DEP_LATER_TABLES), ...Object.values(CACHE_DEP_LATER_TRIGGERS)])]
         .map((name) => readFileSync(join(import.meta.dirname, `../migrations/postgres/${name}.sql`), "utf8")).join("");
     const names = [...sidecar.matchAll(/CREATE CONSTRAINT TRIGGER "([a-z0-9_]+)"/g)].map((match) => match[1]).sort();
     // Deployed 0100 still installs a retired table's triggers; the migration

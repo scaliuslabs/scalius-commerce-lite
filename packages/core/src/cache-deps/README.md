@@ -46,13 +46,13 @@ lo:<facet>:<scope>   lf:<scope>   srch
 c|b|col|pg|attr|promo : <id> or *    (categories, brands, collections, CMS pages, attributes, promotions)
 m:<mediaId>   set:<category>:<key>   theme   nav:<menuId> or nav:*
 ship  loc  tax  lang  an   cf:<ownerType>   plg:<pluginId> or plg:*   plgs:<pluginId>:<collection>
-mk:<marketId>   mk:*   mk:backup
+mk:<marketId>   mk:*   mk:backup   mk:selling
 t:<table>   store
 ```
 
 - `p` advances on any buyer-visible fact of the product (page, card, JSON-LD, feed row). `lm` covers membership and newest order of a public product set, sitemap and feed flags and lastmods, and the store-shape counts (`lm:shape`). `lo` facets are `price`, `band`, `disc`, `name`, `rating` and `sale` (scope `all` only).
 - `sold` advances only when the visible sold count changes (10 or more units in 30 days), `popular` only at 2 or more units. `recommendation-signals` advances on any order or order line change, and only the live ranking fallback reads it.
-- `mk:<marketId>` advances on any change of a market's row, countries or presences, and `mk:*` on any market change (the active presence matrix). `mk:backup` advances only when the backup market's `price_increment_minor` changes. Every reader that prices at the increment declares it (`deps.backupMarketPricing()`).
+- `mk:<marketId>` advances on any change of a market's row, countries or presences, and `mk:*` on any market change (the active presence matrix). `mk:backup` advances only when the backup market's `price_increment_minor` changes. Every reader that prices at the increment declares it (`deps.backupMarketPricing()`). `mk:selling` is the set of countries the active markets sell to (`deps.sellingCountries()`): it advances when a country of an active market or a market's status changes, never for a rename or a presence edit; the checkout config declares it beside its own `mk:<id>`.
 - `t:<table>` is the coarse fallback for any buyer-visible change of the table. `store` is everything.
 
 ### Market-keyed and market-invariant reads
