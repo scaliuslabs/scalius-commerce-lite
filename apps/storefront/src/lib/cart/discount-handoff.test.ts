@@ -1,53 +1,13 @@
 // @vitest-environment happy-dom
 
-import { readFileSync } from "node:fs";
-import ts from "typescript";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ENGLISH_CHECKOUT_LANGUAGE_DATA, formatCheckoutLanguageText } from "@scalius/shared/checkout-language";
-import {
-  cartHasFreeDeliveryItem,
-  cartItemsSubtotal,
-  cartNeedsDeliveryMethod,
-  cartStore,
-  createCartItemKey,
-  getEffectiveCartShippingFee,
-  type CartStore,
-} from "../../store/cart";
-import { enhanceShippingMethods, type DeliveryRate } from "../checkout/shipping-methods";
-import { formatMoney } from "@scalius/shared/currency";
-import { enhanceLocationSelects, fetchLocationOptions } from "../checkout/location-select";
-import {
-  checkoutPhoneResult,
-  initCheckoutPhoneField,
-  loadCheckoutPhoneValidator,
-} from "../checkout/phone-field";
-import {
-  clearCheckoutFormDraft,
-  discardCheckoutFormDraftOfOtherOwner,
-  readCheckoutFormDraft,
-  readHostedPaymentRecoverySession,
-  syncCheckoutTransferSession,
-  writeCheckoutFormDraft,
-  writeCheckoutTransferSession,
-} from "../checkout/session-state";
-import { rememberSubmittedCart } from "../checkout/receipt-finalization";
-import { findNamedCheckoutControl } from "../checkout/form-controls";
-import { shippingCountryName } from "../checkout/shipping-country";
-import { enhanceShippingCountry } from "../checkout/country-address";
-import { pagePath } from "../presence-url";
-import { checkoutInformationFields, enhanceCheckoutFields, setFieldError } from "../checkout/field-validation";
-import {
-  applyCheckoutDeliveryMode,
-  checkoutAddressForMode,
-  readCheckoutDeliveryMode,
-} from "../checkout/delivery-mode";
-import { storefrontSourcePath } from "../test-source-paths";
-import {
-  initCartFunctionality,
-  isDiscountValidationPending,
-  updateCheckoutButtonState,
-} from "./client";
+import { cartStore, createCartItemKey, type CartStore } from "../../store/cart";
+import type { DeliveryRate } from "../checkout/shipping-methods";
+import { readCheckoutFormDraft } from "../checkout/session-state";
+import { initCartFunctionality } from "./client";
+import { runCartPageScript } from "./cart-page-harness";
 import type { CheckoutTaxQuote } from "../checkout/tax-quote-contract";
 
 const apiMocks = vi.hoisted(() => ({
@@ -97,24 +57,6 @@ const CART_STATE: CartStore = {
   totalAmount: 100,
   discountCodes: [],
 };
-
-const cartPageSource = readFileSync(
-  storefrontSourcePath("pages", "cart.astro"),
-  "utf8",
-);
-const cartPageAst = ts.createSourceFile(
-  "cart.ts",
-  cartPageSource.split("<script>")[1]!.split("</script>")[0]!,
-  ts.ScriptTarget.ES2022,
-  true,
-);
-const cartPageStatements = cartPageAst.statements
-  .filter((statement) => !ts.isImportDeclaration(statement))
-  .map((statement) => statement.getFullText(cartPageAst))
-  .join("\n");
-const cartPageScript = ts.transpileModule(cartPageStatements, {
-  compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
-}).outputText;
 
 let pageController: AbortController | undefined;
 
@@ -227,53 +169,15 @@ function taxQuote(): CheckoutTaxQuote {
 
 async function startCartPage(): Promise<void> {
   let initialization!: Promise<void>;
-  const dependencies = {
+  runCartPageScript({
     initCartFunctionality: () => initialization = initCartFunctionality(),
-    isDiscountValidationPending,
     resumeCartPageFromHistory: () => Promise.resolve(),
-    updateCheckoutButtonState,
     getCustomerSession: apiMocks.getCustomerSession,
-    readHostedPaymentRecoverySession,
-    writeCheckoutTransferSession,
-    readCheckoutFormDraft,
-    writeCheckoutFormDraft,
-    syncCheckoutTransferSession,
-    clearCheckoutFormDraft,
-    discardCheckoutFormDraftOfOtherOwner,
-    rememberSubmittedCart,
-    cartHasFreeDeliveryItem,
-    cartNeedsDeliveryMethod,
-    cartStore,
-    enhanceShippingMethods,
-    applyCheckoutDeliveryMode,
-    checkoutAddressForMode,
-    readCheckoutDeliveryMode,
     fetchDeliveryRates: deliveryRates,
-    cartItemsSubtotal,
-    formatMoney,
     browserApiUrl: (path: string) => path,
-    enhanceLocationSelects,
-    fetchLocationOptions,
-    getEffectiveCartShippingFee,
-    checkoutPhoneResult,
-    initCheckoutPhoneField,
-    loadCheckoutPhoneValidator,
-    findNamedCheckoutControl,
-    checkoutInformationFields,
-    enhanceCheckoutFields,
-    setFieldError,
     hideCheckoutLoadingOverlay: vi.fn(),
     showCheckoutLoadingOverlay: vi.fn(),
-    // The page's presence rule for the checkout link (a root page here).
-    pagePath,
-    formatCheckoutLanguageText,
-    shippingCountryName,
-    enhanceShippingCountry,
-  };
-  new Function(
-    ...Object.keys(dependencies),
-    cartPageScript,
-  )(...Object.values(dependencies));
+  });
   document.dispatchEvent(new Event("DOMContentLoaded"));
   pageController = window.__scaliusCartPageAbortController;
   await initialization;

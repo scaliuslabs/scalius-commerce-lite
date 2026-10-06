@@ -1,35 +1,14 @@
 // @vitest-environment happy-dom
 
-import { readFileSync } from "node:fs";
-import ts from "typescript";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ENGLISH_CHECKOUT_LANGUAGE_DATA } from "@scalius/shared/checkout-language";
 import type { AuthState } from "../api/customer-auth";
-import { findNamedCheckoutControl } from "../checkout/form-controls";
-import {
-  clearCheckoutFormDraft,
-  discardCheckoutFormDraftOfOtherOwner,
-  readCheckoutFormDraft,
-  syncCheckoutTransferSession,
-  writeCheckoutFormDraft,
-} from "../checkout/session-state";
-import { cartHasFreeDeliveryItem, cartItemsSubtotal, cartStore, getEffectiveCartShippingFee } from "../../store/cart";
-import { enhanceShippingMethods } from "../checkout/shipping-methods";
-import { formatMoney } from "@scalius/shared/currency";
-import { enhanceLocationSelects, fetchLocationOptions } from "../checkout/location-select";
-import { initCheckoutPhoneField } from "../checkout/phone-field";
-import { storefrontSourcePath } from "../test-source-paths";
+import { readCheckoutFormDraft, writeCheckoutFormDraft } from "../checkout/session-state";
+import { runCartPageScript } from "./cart-page-harness";
 
 // Execute the real cart draft/autofill listeners with a deferred session read.
 // Keep the page's submission/payment side effects outside this focused harness.
-const cartSource = readFileSync(storefrontSourcePath("pages", "cart.astro"), "utf8");
-const scriptSource = cartSource.split("<script>")[1]!.split("// ── Submit ──")[0]!;
-const parsedScript = ts.createSourceFile("cart.ts", scriptSource, ts.ScriptTarget.ES2022, true);
-const script = ts.transpileModule(
-  parsedScript.statements.filter((statement) => !ts.isImportDeclaration(statement))
-    .map((statement) => statement.getFullText(parsedScript)).join("\n"),
-  { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } },
-).outputText;
+const SCRIPT_END = "// ── Submit ──";
 
 const customer = {
   name: "Test customer", phone: "+8801712345678", email: "customer@example.test",
@@ -47,28 +26,15 @@ function control(name: string) {
 }
 
 function startCart() {
-  const dependencies = {
-    initCartFunctionality: () => Promise.resolve(),
-    getCustomerSession: () => new Promise<AuthState>((resolve) => { resolveSession = resolve; }),
-    cartHasFreeDeliveryItem,
-    cartStore,
-    enhanceShippingMethods,
-    fetchDeliveryRates: vi.fn(async () => []),
-    cartItemsSubtotal,
-    formatMoney,
-    enhanceLocationSelects,
-    fetchLocationOptions,
-    getEffectiveCartShippingFee,
-    readCheckoutFormDraft,
-    writeCheckoutFormDraft,
-    syncCheckoutTransferSession,
-    clearCheckoutFormDraft,
-    discardCheckoutFormDraftOfOtherOwner,
-    browserApiUrl: (path: string) => path,
-    findNamedCheckoutControl,
-    initCheckoutPhoneField,
-  };
-  captureDraft = new Function(...Object.keys(dependencies), `${script}\nreturn persistCheckoutFormDraftNow;`)(...Object.values(dependencies));
+  captureDraft = runCartPageScript(
+    {
+      initCartFunctionality: () => Promise.resolve(),
+      getCustomerSession: () => new Promise<AuthState>((resolve) => { resolveSession = resolve; }),
+      fetchDeliveryRates: vi.fn(async () => []),
+      browserApiUrl: (path: string) => path,
+    },
+    { stopBefore: SCRIPT_END, returning: "persistCheckoutFormDraftNow" },
+  ) as typeof captureDraft;
 }
 
 async function finishSession() {
