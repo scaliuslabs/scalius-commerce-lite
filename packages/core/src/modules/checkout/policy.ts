@@ -18,7 +18,8 @@ export interface StorefrontCheckoutSettingsSnapshot {
 }
 
 export function assertStorefrontCheckoutPolicy(
-  customerPhone: string,
+  /** Null for an order placed without a phone (the shared contact rule decides later). */
+  customerPhone: string | null,
   paymentMethod: CheckoutPaymentMethodId,
   authority: Pick<
     StorefrontCheckoutAuthoritySnapshot,
@@ -35,10 +36,12 @@ export function assertStorefrontCheckoutPolicy(
   };
 
   try {
-    assertPhoneCountryAllowed(customerPhone, {
-      countries: authority.allowedCountries.allowedCountries,
-      mode: authority.allowedCountries.allowedCountriesMode,
-    });
+    if (customerPhone) {
+      assertPhoneCountryAllowed(customerPhone, {
+        countries: authority.allowedCountries.allowedCountries,
+        mode: authority.allowedCountries.allowedCountriesMode,
+      });
+    }
   } catch (error) {
     throw new ValidationError(
       error instanceof Error ? error.message : "Phone number is not accepted for checkout.",
@@ -66,7 +69,7 @@ export function assertStorefrontCheckoutPolicy(
 }
 
 export function assertGuestStorefrontCheckoutPolicy(
-  customerPhone: string,
+  customerPhone: string | null,
   paymentMethod: CheckoutPaymentMethodId,
   authority: Pick<
     StorefrontCheckoutAuthoritySnapshot,

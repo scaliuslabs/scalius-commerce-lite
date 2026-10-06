@@ -58,7 +58,7 @@ export function OrderDetailsDialog({ order, open, onOpenChange }: {
   type Values = z.input<typeof schema>;
   const values = (): Values => ({
     customerName: order.customerName,
-    customerPhone: order.customerPhone,
+    customerPhone: order.customerPhone ?? "",
     customerEmail: order.customerEmail ?? "",
   });
   const form = useForm<Values>({ resolver: zodResolver(schema), mode: "onBlur", defaultValues: values() });

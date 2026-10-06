@@ -499,7 +499,7 @@ describe("merchant changes are attributed and reversible (R3-ORD-13, R3-ORD-17)"
 
 describe("phone sign-in (R3-SB-07)", () => {
   it("is offered only when the store chose a phone channel in Customer accounts", async () => {
-    const emailOnly = { email: "required", whatsapp: "off", channels: ["email"] } as const;
+    const emailOnly = { email: "required", whatsapp: "off", channels: ["email"], phoneOptionalForDigital: false } as const;
     await saveSmsSettings(db, { activeProvider: "bdbulksms", bdbulksmsToken: "merchant-token-4821" }, KEY);
     // SMS can send, but the merchant didn't choose it: it is never added.
     expect((await getOfferedCustomerIdentity(db, { ...emailOnly, channels: [...emailOnly.channels] }, { encryptionKey: KEY })).channels)

@@ -2,7 +2,7 @@
 // Storefront order creation — validates and prepares orders for queue dispatch.
 
 import type { Database } from "@scalius/database/client";
-import { resolveCheckoutContact, type CheckoutContactFieldSettings } from "./contact-fields";
+import { assertOrderContact, resolveCheckoutContact, type CheckoutContactFieldSettings } from "./contact-fields";
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
 import { defaultPriceIncrementMinor, type PricingCurrency } from "@scalius/shared/currency-policy";
 import { fromMinor } from "@scalius/shared/money";
@@ -125,7 +125,10 @@ export interface StorefrontDeliveryDestination {
 
 export interface StorefrontCheckoutPolicySnapshot {
     partialPaymentEnabled: boolean;
-    /** The countries the active markets sell to (the authority read); a shipped order must go to one. */
+    /**
+     * The countries the active markets sell to (the authority read); a shipped
+     * order must go to one, and an order with nothing to ship is placed in one.
+     */
     shippingCountries?: readonly string[];
     /** Customer accounts contact fields from the checkout authority read. */
     contactFields?: CheckoutContactFieldSettings;
@@ -368,6 +371,19 @@ export function assertStorefrontLineFulfilment(
     return types;
 }
 
+/**
+ * The country of an order with no address: the one the buyer's market sells
+ * to, as the storefront sends it. Only a country an active market sells to
+ * counts; anything else is unknown (Bangladesh for the contact rule).
+ */
+function orderCountryWithoutShipping(
+    countryCode: string | null | undefined,
+    sellingCountries: readonly string[] | undefined,
+): string | null {
+    const country = countryCode?.trim().toUpperCase();
+    return country && sellingCountries?.includes(country) ? country : null;
+}
+
 /** `details.reason` when no active market sells to the shipping country. */
 export const SHIPPING_COUNTRY_UNAVAILABLE_REASON = "shipping_country_unavailable";
 
@@ -593,7 +609,8 @@ export async function createStorefrontOrder(
         );
     }
 
-    // Customer accounts decides which contacts checkout keeps (phone always).
+    // Customer accounts decides which contacts checkout keeps; whether this
+    // order needs a phone is decided once its lines and payment are known.
     const contact = resolveCheckoutContact(checkoutPolicySnapshot?.contactFields, data);
 
     if (prevalidatedCart && !isTrustedStorefrontCartValidationResult(prevalidatedCart)) {
@@ -795,6 +812,18 @@ export async function createStorefrontOrder(
             ? "This store takes an advance payment online. Pay the rest online, or cover the whole order with gift cards."
             : "Advance deposit is required. COD cannot be selected for the full amount directly.");
     }
+    // The one contact rule (orderContactNeeds): a phone unless the merchant
+    // opted in and the order is only digital or service lines, paid in full
+    // online, outside Bangladesh; then email is required.
+    assertOrderContact(checkoutPolicySnapshot?.contactFields, {
+        customerPhone: data.customerPhone,
+        customerEmail: contact.customerEmail,
+        lines: cartValidation.items,
+        paymentMethod,
+        depositPlan: isPartialEnabled && !giftCardsApplied,
+        countryCode: deliveryPreflight.address?.countryCode
+            ?? orderCountryWithoutShipping(data.shippingCountryCode, checkoutPolicySnapshot?.shippingCountries),
+    });
     if (giftCardsApplied) {
         // A gateway charges the remainder: below its minimum it cannot.
         const limits = (appOptions.paymentProviders ?? BUILT_IN_PAYMENT_PROVIDERS).get(paymentMethod)?.amountLimits;

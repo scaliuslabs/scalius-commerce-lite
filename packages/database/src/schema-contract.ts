@@ -22,8 +22,8 @@ export const DATABASE_SCHEMA_LEGACY_BASELINE = {
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA = {
-  version: 116,
-  name: "0116_tax_regions",
+  version: 117,
+  name: "0117_phoneless_guest_customers",
 } as const;
 
 export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
@@ -361,6 +361,11 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
     version: 116,
     name: "0116_tax_regions",
     sourceSha256: "53d7b81d453e5b766329f75c5ad260282fb3b1e2aabd2295904112ea0e887410",
+  },
+  {
+    version: 117,
+    name: "0117_phoneless_guest_customers",
+    sourceSha256: "338a5618e830be7296da04d94e3c574293dfa849d917258fa64d5fe589cdbd6e",
   },
 ] as const;
 

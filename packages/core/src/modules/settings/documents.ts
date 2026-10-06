@@ -310,6 +310,7 @@ export const customerAuthDocument = defineSettingsDocument<CustomerAuthSettings>
       email: z.enum(["required", "optional", "hidden"]),
       whatsapp: z.enum(["off", "same_as_phone", "separate"]),
       channels: z.array(z.enum(["email", "sms", "whatsapp"])).min(1).max(3),
+      phoneOptionalForDigital: z.boolean(),
     }),
   ) as unknown as z.ZodType<CustomerAuthSettings>,
   defaults: { ...DEFAULT_CUSTOMER_IDENTITY, channels: [...DEFAULT_CUSTOMER_IDENTITY.channels] },

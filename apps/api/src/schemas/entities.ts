@@ -389,7 +389,7 @@ export const customerAddressSchema = z.object({
 export const orderSummarySchema = z.object({
   id: z.string(),
   customerName: z.string(),
-  customerPhone: z.string(),
+  customerPhone: z.string().nullable().openapi({ description: "E.164; null for an order placed without a phone (only digital or service lines, Customer accounts opt-in)." }),
   customerEmail: z.string().nullable(),
   customerId: z.string().nullable(),
   totalAmount: z.number(),
@@ -514,7 +514,7 @@ export const orderSupportRequestSchema = z.object({
 export const orderDetailSchema = z.object({
   id: z.string(),
   customerName: z.string(),
-  customerPhone: z.string(),
+  customerPhone: z.string().nullable().openapi({ description: "E.164; null for an order placed without a phone (only digital or service lines, Customer accounts opt-in)." }),
   customerEmail: z.string().nullable(),
   /** A separate WhatsApp number when Customer accounts collects one; null means the phone. */
   customerWhatsapp: z.string().nullable(),
@@ -523,7 +523,7 @@ export const orderDetailSchema = z.object({
   customerRecord: z.object({
     id: z.string(),
     name: z.string(),
-    phone: z.string(),
+    phone: z.string().nullable(),
     kind: z.enum(["account", "guest", "merchant"]),
   }).nullable(),
   totalAmount: z.number(),
@@ -702,7 +702,8 @@ export const customerSummarySchema = z.object({
   id: z.string(),
   name: z.string(),
   email: z.string().nullable(),
-  phone: z.string(),
+  /** E.164; null for a customer without a phone (keyed by email). */
+  phone: z.string().nullable(),
   /** The default address (a staff order prefills it); null without one. */
   defaultAddress: z.object({
     countryCode: z.string(),
@@ -734,7 +735,8 @@ export const customerDetailSchema = z.object({
   id: z.string(),
   name: z.string(),
   email: z.string().nullable(),
-  phone: z.string(),
+  /** E.164; null for a customer without a phone (keyed by email). */
+  phone: z.string().nullable(),
   accountClaimedAt: nullableTimestampSchema,
   ...customerTitleFields,
   totalOrders: z.number(),

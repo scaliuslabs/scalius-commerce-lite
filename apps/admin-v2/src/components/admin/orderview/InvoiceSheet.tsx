@@ -127,7 +127,7 @@ export function InvoiceSheet({ document }: { document: InvoiceDocument }) {
           <h2>{t("invoice.billTo")}</h2>
           <p className="strong">{order.customerName}</p>
           {/* Local format, as the customer writes it: 01712345678. */}
-          <p>{localPhone(order.customerPhone)}</p>
+          {order.customerPhone ? <p>{localPhone(order.customerPhone)}</p> : null}
           {order.customerEmail ? <p>{order.customerEmail}</p> : null}
           <p>{formatShippingAddress(order, countryName)}</p>
         </div>

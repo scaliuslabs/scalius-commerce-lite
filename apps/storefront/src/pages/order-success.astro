@@ -859,7 +859,7 @@ const orderRecommendations = order && showsSuccessHero && !statusView
       accountLinked={order.accountLinked}
       accountPrefill={{
         name: order.customerName,
-        phone: order.customerPhone,
+        ...(order.customerPhone ? { phone: order.customerPhone } : {}),
         ...(order.customerEmail ? { email: order.customerEmail } : {}),
       }}
       supportRequests={order.supportRequests}

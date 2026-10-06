@@ -96,7 +96,7 @@ export async function createSession(input: PaymentSessionInput, ctx: PluginConte
   const client = createBkashClient(ctx, input.requestTimeoutMs);
   const reply = await client.post("create", {
     mode: "0011",
-    payerReference: payerReferenceOf(input.buyer.phone),
+    payerReference: input.buyer.phone ? payerReferenceOf(input.buyer.phone) : " ",
     // bKash sends the buyer back here with paymentID and status appended, whatever the outcome.
     callbackURL: input.urls.success,
     amount: input.wireAmount.decimal,

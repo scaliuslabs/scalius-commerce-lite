@@ -221,7 +221,7 @@ describe("getCheckoutConfig", () => {
             authVerificationMethod: "sms_otp",
             policy: { otpChannels: ["sms"] },
         }));
-        expect(config.customerIdentity).toEqual({ email: "optional", whatsapp: "off", channels: [] });
+        expect(config.customerIdentity).toEqual({ email: "optional", whatsapp: "off", channels: [], phoneOptionalForDigital: false });
     });
 
     it("publishes the merchant's fields and only chosen channels that can send", async () => {
@@ -232,7 +232,7 @@ describe("getCheckoutConfig", () => {
             channels: ["email", "whatsapp"],
         }));
         // No provider can send here (no credential key): nothing is offered, and nothing is added.
-        expect(config.customerIdentity).toEqual({ email: "optional", whatsapp: "separate", channels: [] });
+        expect(config.customerIdentity).toEqual({ email: "optional", whatsapp: "separate", channels: [], phoneOptionalForDigital: false });
     });
 
     it("still requires the individual gateway settings to be enabled", async () => {

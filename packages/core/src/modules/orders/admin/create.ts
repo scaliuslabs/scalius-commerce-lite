@@ -16,7 +16,7 @@ import {
 import { prepareStockReservationBatch } from "../../inventory";
 import type { ReservationEntry } from "../../inventory";
 import { sql, eq } from "drizzle-orm";
-import { guestRecordForPhone } from "../../customers";
+import { guestRecordForContact } from "../../customers";
 import { generateOrderId } from "@scalius/shared/order-utils";
 import { orderMoneyChainColumns } from "@scalius/shared/money-chain";
 import { normalizeOrderChannelSource } from "@scalius/shared/order-channel-source";
@@ -165,7 +165,7 @@ export async function createManualOrder(
         const existingCustomer = await db
             .select()
             .from(customers)
-            .where(guestRecordForPhone(data.customerPhone))
+            .where(guestRecordForContact({ phone: data.customerPhone }))
             .get();
         const reservationEntries: ReservationEntry[] = trackedItems
             .filter((item) => item.inventoryTracked)

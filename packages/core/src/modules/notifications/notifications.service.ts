@@ -628,6 +628,21 @@ export async function sendOrderNotificationEmail(
     const receiptEnabled = Boolean(db && options.outboxId);
     const receiptDb = receiptEnabled ? db : undefined;
     const outboxId = options.outboxId;
+    // The order's phone, read once for SMS and WhatsApp (null: placed without one).
+    const orderPhone = once(async () => db
+        ? (await db.select({ customerPhone: orders.customerPhone }).from(orders).where(eq(orders.id, orderId)).get())?.customerPhone ?? null
+        : null);
+
+    // An order placed without a phone (the shared contact rule then required
+    // its email) hears by email where the merchant chose SMS or WhatsApp.
+    if (
+        email
+        && !enabledChannels.includes("email")
+        && enabledChannels.some((channel) => channel === "sms" || channel === "whatsapp")
+        && !(await orderPhone().catch(() => "unknown"))
+    ) {
+        enabledChannels = ["email", ...enabledChannels];
+    }
 
     // The merchant turned this message off: the order's log says so ("Not sent")
     // instead of showing the message as sent.
@@ -721,10 +736,7 @@ export async function sendOrderNotificationEmail(
     if (enabledChannels.includes("sms")) {
         try {
             const { getActiveSmsProvider, getSmsProviderReadiness } = await import("../../integrations/sms");
-            const orderRow = db
-                ? await db.select({ customerPhone: orders.customerPhone }).from(orders).where(eq(orders.id, orderId)).get()
-                : undefined;
-            const customerPhone = orderRow?.customerPhone;
+            const customerPhone = await orderPhone();
 
             if (!customerPhone) {
                 if (receiptDb && outboxId) {
@@ -889,10 +901,7 @@ export async function sendOrderNotificationEmail(
 
     if (enabledChannels.includes("whatsapp")) {
         try {
-            const orderRow = db
-                ? await db.select({ customerPhone: orders.customerPhone }).from(orders).where(eq(orders.id, orderId)).get()
-                : undefined;
-            const customerPhone = orderRow?.customerPhone;
+            const customerPhone = await orderPhone();
 
             if (!customerPhone) {
                 if (receiptDb && outboxId) {

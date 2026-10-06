@@ -785,8 +785,8 @@ export interface OrderReceipt extends OrderFulfilmentFacts {
   /** Short per-store number ("#1001"); absent until every order has one. */
   orderNumber?: number | null;
   customerName: string;
-  /** The phone the courier calls; the receipt is proof-gated to its buyer. */
-  customerPhone: string;
+  /** The phone the courier calls (null: placed without one); the receipt is proof-gated to its buyer. */
+  customerPhone: string | null;
   customerEmail: string | null;
   /** True when the order is saved to a customer account. */
   accountLinked: boolean;

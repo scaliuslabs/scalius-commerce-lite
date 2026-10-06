@@ -100,9 +100,12 @@ function mergeShipmentMetadata(
  * country.
  */
 function shipmentRecipient(order: Order): CourierShipmentInput["recipient"] {
+  // A shipped order always has a phone (the shared contact rule); fail closed if not.
+  const phone = order.shippingPhone ?? order.customerPhone;
+  if (!phone) throw new ValidationError("This order has no phone number for the courier. Add one to the order first.");
   return {
     name: order.shippingName ?? order.customerName,
-    phone: order.shippingPhone ?? order.customerPhone,
+    phone,
     address: [order.shippingAddress, order.shippingAddressLine2].filter(Boolean).join(", "),
     cityId: order.city ?? null,
     zoneId: order.zone ?? null,

@@ -25,7 +25,7 @@ function CustomerPage() {
         id: data.id,
         name: data.name,
         email: data.email,
-        phone: data.phone,
+        phone: data.phone ?? "",
       }}
     />
   );

@@ -70,7 +70,16 @@ function toCustomerInput(values: CustomerFormValues): ApiBody<typeof postApiV1Ad
   return {
     name: values.name,
     email: values.email,
-    phone: values.phone,
+    // Empty: a customer without a phone (a new one only; a saved phone stays).
+    phone: values.phone || null,
+  };
+}
+
+function toCustomerUpdate(values: CustomerFormValues): ApiBody<typeof putApiV1AdminCustomersById> {
+  return {
+    name: values.name,
+    email: values.email,
+    ...(values.phone ? { phone: values.phone } : {}),
   };
 }
 
@@ -114,6 +123,8 @@ export function CustomerForm({ defaultValues, isEdit = false, record }: Customer
     },
   });
 
+  // A saved phone can be changed, never removed; a new or phoneless customer may leave it empty.
+  const phoneRequired = isEdit && Boolean(record?.phone);
   const address = useWatch({ control: form.control, name: "address" });
   const skipAddressValidation = useWatch({ control: form.control, name: "skipAddressValidation" }) ?? false;
   const addressErrors = useAddressErrors(addressProblems, address?.countryCode ?? "BD");
@@ -122,7 +133,7 @@ export function CustomerForm({ defaultValues, isEdit = false, record }: Customer
     isEdit,
     entityId: defaultValues?.id,
     createFn: (data) => apiData(postApiV1AdminCustomers({ body: toNewCustomerInput(data) })),
-    updateFn: (data) => apiData(putApiV1AdminCustomersById({ path: { id: data.id }, body: toCustomerInput(data) })),
+    updateFn: (data) => apiData(putApiV1AdminCustomersById({ path: { id: data.id }, body: toCustomerUpdate(data) })),
     invalidateKeys: [queryKeys.customers.all, queryKeys.dashboard.all],
     onSuccess: (result) => {
       const id = (result as Partial<ApiResult<typeof postApiV1AdminCustomers>>).id;
@@ -178,9 +189,10 @@ export function CustomerForm({ defaultValues, isEdit = false, record }: Customer
                       setPhoneConflict(null);
                       field.onChange(value);
                     }}
-                    required
+                    required={phoneRequired}
                   />
                 </FormControl>
+                {phoneRequired ? null : <FormDescription>{t("phoneOptionalHint")}</FormDescription>}
                 <FormMessage />
                 {phoneConflict ? <PhoneUsedBy customer={phoneConflict} /> : null}
               </FormItem>

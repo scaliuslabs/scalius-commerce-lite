@@ -37,6 +37,12 @@ interface Props {
   shippingCountry?: string;
   /** What the hint says for a number from another country (checkout language). */
   intl?: { help: string; pickupHelp: string; serviceHelp: string; exampleText: string };
+  /**
+   * Only when the store lets digital and service orders go without a phone
+   * (Customer accounts): the label and hint shown while the page root's
+   * `data-phone-need` is "optional" (lib/checkout/contact-need.ts).
+   */
+  optional?: { label: string; help: string };
 }
 
 const {
@@ -56,6 +62,7 @@ const {
   shippingCountries = [],
   shippingCountry,
   intl,
+  optional,
 } = Astro.props;
 
 const policy = normalizePhonePolicy({
@@ -130,8 +137,19 @@ const singleCountry = policy.mode === "include" && policy.countries.length === 1
     for="customerPhone-input"
     class="mb-1 block text-sm font-medium text-foreground"
   >
-    {label}
-    <span aria-hidden="true" class="ml-0.5 text-destructive">*</span>
+    {
+      optional ? (
+        <>
+          <span class="group-data-[phone-need=optional]:hidden">{label}<span aria-hidden="true" class="ml-0.5 text-destructive">*</span></span>
+          <span class="hidden group-data-[phone-need=optional]:inline">{optional.label}</span>
+        </>
+      ) : (
+        <>
+          {label}
+          <span aria-hidden="true" class="ml-0.5 text-destructive">*</span>
+        </>
+      )
+    }
   </label>
   <input type="hidden" name="customerPhone" value="" data-e164-value="" />
   <div
@@ -168,7 +186,7 @@ const singleCountry = policy.mode === "include" && policy.countries.length === 1
   </div>
   {
     shownHelp && (
-      <p id="customerPhone-help" class="mt-1 text-sm text-muted-foreground">
+      <p id="customerPhone-help" class={optional ? "mt-1 text-sm text-muted-foreground group-data-[phone-need=optional]:hidden" : "mt-1 text-sm text-muted-foreground"}>
         {shownPickupHelp || shownServiceHelp ? (
           <>
             {/* The page root's delivery need and mode pick the sentence that is true. */}
@@ -179,6 +197,13 @@ const singleCountry = policy.mode === "include" && policy.countries.length === 1
         ) : (
           shownHelp
         )}
+      </p>
+    )
+  }
+  {
+    optional && (
+      <p id="customerPhone-optional-help" class="mt-1 hidden text-sm text-muted-foreground group-data-[phone-need=optional]:block">
+        {optional.help}
       </p>
     )
   }

@@ -46,7 +46,7 @@ beforeEach(() => {
   root = createRoot(host);
   window.__CHECKOUT_CONFIG__ = {
     allowedCountries: ["BD"],
-    customerIdentity: { email: "required", whatsapp: "off", channels: ["email"] },
+    customerIdentity: { email: "required", whatsapp: "off", channels: ["email"], phoneOptionalForDigital: false },
   } as unknown as CheckoutConfig;
 });
 
@@ -320,7 +320,7 @@ describe("sign-in dialog", () => {
   ])("with sign-in channels %j, says phone sign-in isn't available: %s", async (otpChannels, noted) => {
     window.__CHECKOUT_CONFIG__ = {
       allowedCountries: ["BD"],
-      customerIdentity: { email: "optional", whatsapp: "same_as_phone", channels: otpChannels },
+      customerIdentity: { email: "optional", whatsapp: "same_as_phone", channels: otpChannels, phoneOptionalForDigital: false },
     } as unknown as CheckoutConfig;
     await open();
 
@@ -332,7 +332,7 @@ describe("sign-in dialog", () => {
   it("says sign-in codes are unavailable when no chosen channel can send (fail closed)", async () => {
     window.__CHECKOUT_CONFIG__ = {
       allowedCountries: ["BD"],
-      customerIdentity: { email: "required", whatsapp: "off", channels: [] },
+      customerIdentity: { email: "required", whatsapp: "off", channels: [], phoneOptionalForDigital: false },
     } as unknown as CheckoutConfig;
     await open();
     expect(host.querySelector("[data-sign-in-unavailable]")?.textContent?.trim())

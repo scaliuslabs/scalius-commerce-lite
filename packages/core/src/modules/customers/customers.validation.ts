@@ -37,17 +37,23 @@ export const customerAddressInputSchema = addressInputSchema.extend({
     skipValidation: z.boolean().optional(),
 }).strict();
 
-/** Schema for creating a new customer (POST /api/customers) */
+/**
+ * Schema for creating a new customer (POST /api/customers). The phone may be
+ * null only for a customer with an email, when the store lets digital and
+ * service orders go without a phone (Settings → Customer accounts).
+ */
 export const createCustomerSchema = z.object({
     name: z.string().min(3).max(100),
     email: z.email().nullable(),
-    phone: phoneNumberSchema,
+    phone: phoneNumberSchema.nullable(),
     /** The first address, which becomes the default. */
     address: addressInputSchema.extend({ skipValidation: z.boolean().optional() }).strict().nullable().optional(),
 });
 
-/** Schema for updating an existing customer (PUT /api/customers/:id): contact only. */
-export const updateCustomerSchema = createCustomerSchema.omit({ address: true }).partial();
+/** Schema for updating an existing customer (PUT /api/customers/:id): contact only. A phone can be set, never removed. */
+export const updateCustomerSchema = createCustomerSchema.omit({ address: true, phone: true }).partial().extend({
+    phone: phoneNumberSchema.optional(),
+});
 
 export type AddressInputBody = z.infer<typeof addressInputSchema>;
 export type CustomerAddressInputBody = z.infer<typeof customerAddressInputSchema>;

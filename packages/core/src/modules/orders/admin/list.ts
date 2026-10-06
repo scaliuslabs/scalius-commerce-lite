@@ -494,7 +494,7 @@ export async function listOrders(db: Database, options: {
     const batchResult = await db.batch(statements as any) as any;
     const countArr = batchResult[0] as { count: number }[];
     const fetched = batchResult[1] as ({
-        id: string; customerName: string; customerPhone: string; customerEmail: string | null;
+        id: string; customerName: string; customerPhone: string | null; customerEmail: string | null;
         customerId: string | null;
         currencyDecimalPlaces: number; totalAmountMinor: number; shippingAmountMinor: number;
         discountAmountMinor: number; paidAmountMinor: number; balanceDueMinor: number;

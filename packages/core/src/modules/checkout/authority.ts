@@ -400,6 +400,7 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
                             contactFields: {
                                 email: identityRead.value.email,
                                 whatsapp: identityRead.value.whatsapp,
+                                phoneOptionalForDigital: identityRead.value.phoneOptionalForDigital,
                             },
                             activePaymentMethods,
                             taxAuthority,

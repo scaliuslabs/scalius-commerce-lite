@@ -151,7 +151,7 @@ type PaymentSessionOrderRow = {
   customerId: string | null;
   accountOwnerCustomerId: string | null;
   customerName: string;
-  customerPhone: string;
+  customerPhone: string | null;
   customerEmail: string | null;
   /** Null when nothing ships; the gateway address is optional. */
   shippingAddress: string | null;
@@ -330,7 +330,7 @@ async function createPaymentSessionForOrder(
         wireAmount: encoded.wire,
         buyer: {
           name: order.customerName,
-          phone: order.customerPhone,
+          phone: order.customerPhone ?? undefined,
           email: order.customerEmail ?? undefined,
           address: order.shippingAddress ?? undefined,
           city: order.shippingLocality ?? order.cityName ?? undefined,

@@ -2,6 +2,7 @@ import {
   DEFAULT_CUSTOMER_IDENTITY,
   channelRequestMethod,
   isCustomerAuthOtpChannel,
+  newAccountPhoneNeed,
   type CustomerAuthOtpChannel,
   type CustomerAuthRequestMethod,
   type CustomerIdentitySettings,
@@ -62,7 +63,8 @@ export function resolveCustomerAuthUi(
     available: requestOptions.length > 0,
     phoneSignIn: requestOptions.some((option) => option.method === "phone"),
     newAccount: {
-      phone: requestMethod === "phone" ? "hidden" : "required",
+      // An email sign-up skips the phone only with the store's opt-in (orders still ask when they need it).
+      phone: requestMethod === "phone" ? "hidden" : newAccountPhoneNeed(identity, requestMethod),
       email: requestMethod === "email" ? "hidden" : identity.email,
     },
   };

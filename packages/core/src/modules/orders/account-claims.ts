@@ -1,3 +1,4 @@
+import { phoneOrNull } from "@scalius/shared/customer-auth-policy";
 import type { Database } from "@scalius/database/client";
 import { orders } from "@scalius/database/schema";
 import { and, eq, isNull, or, sql, type SQL } from "drizzle-orm";
@@ -52,13 +53,10 @@ function normalizeEmail(value: string | null | undefined): string {
   return (value ?? "").trim().toLowerCase();
 }
 
-function normalizePhone(value: string | null | undefined): string {
-  return (value ?? "").trim();
-}
 
 function immutableContactConditions(input: ClaimGuestOrderToAccountInput): SQL[] {
   const conditions: SQL[] = [];
-  const phone = normalizePhone(input.customerPhone);
+  const phone = phoneOrNull(input.customerPhone);
   const email = normalizeEmail(input.customerEmail);
   if (phone) conditions.push(eq(orders.customerPhone, phone));
   if (email) conditions.push(sql`lower(trim(${orders.customerEmail})) = ${email}`);
@@ -100,9 +98,10 @@ export async function claimGuestOrderToAccount(
   if (contactConditions.length === 0) {
     throw new ForbiddenError(CONTACT_MISMATCH_MESSAGE);
   }
+  // A phone matches only a phone: an order placed without one never matches by it.
+  const phone = phoneOrNull(input.customerPhone);
   const contactMatches = (
-    normalizePhone(input.customerPhone) !== "" &&
-    normalizePhone(input.customerPhone) === normalizePhone(order.customerPhone)
+    phone !== null && phone === phoneOrNull(order.customerPhone)
   ) || (
     normalizeEmail(input.customerEmail) !== "" &&
     normalizeEmail(input.customerEmail) === normalizeEmail(order.customerEmail)

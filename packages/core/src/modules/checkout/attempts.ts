@@ -339,7 +339,7 @@ function normalizeCheckoutRequest(input: CreateStorefrontOrderInput): Record<str
     version: 4,
     expectedQuoteFingerprint: input.expectedQuoteFingerprint,
     customerName: input.customerName.trim(),
-    customerPhone: input.customerPhone.trim(),
+    customerPhone: input.customerPhone?.trim() || null,
     customerEmail: input.customerEmail?.trim().toLowerCase() ?? null,
     shippingCountryCode: input.shippingCountryCode?.trim().toUpperCase() || null,
     shippingAddress: input.shippingAddress?.trim() || null,

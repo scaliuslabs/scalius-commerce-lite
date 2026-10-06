@@ -527,6 +527,14 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 40,
         postgresStatements: 46,
       },
+      {
+        version: 117,
+        name: "0117_phoneless_guest_customers",
+        // The guest-phone index rebuilt to skip phoneless records, the
+        // phoneless guest-email index and the ledger row.
+        sqliteStatements: 4,
+        postgresStatements: 4,
+      },
     ]);
   });
 
@@ -692,6 +700,7 @@ describe("provider-neutral schema upgrades", () => {
           { version: 114, name: "0114_shipping_zones" },
           { version: 115, name: "0115_selling_countries_dependency" },
           { version: 116, name: "0116_tax_regions" },
+          { version: 117, name: "0117_phoneless_guest_customers" },
         ],
       });
     } finally {

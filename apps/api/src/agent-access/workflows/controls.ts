@@ -650,7 +650,7 @@ export const AGENT_WORKFLOW_CONTROLS = [
     id: "dashboard.phone-required-invariant",
     surface: "dashboard",
     title: "Keep customer phone mandatory",
-    summary: "Bangladesh checkout has no supported setting that makes customer phone optional.",
+    summary: "Customer phone stays mandatory for Bangladesh, delivery, pickup, cash and deposit orders. The only opt-in (Customer accounts) covers digital or service orders outside Bangladesh.",
     examples: ["Make customer phone optional before enabling checkout."],
     tags: ["checkout", "phone", "identity"],
     disposition: "refuse",
@@ -668,8 +668,9 @@ export const AGENT_WORKFLOW_CONTROLS = [
     requiresConfirmation: true,
     requiresVerification: true,
     rules: [
-      "Customer phone is a mandatory platform invariant; do not invent or imply a disabling setting.",
-      "Make no setup write while the request requires optional phone collection.",
+      "Customer phone is a mandatory platform invariant for every order placed in Bangladesh, delivered, picked up, or paid by cash or deposit; do not invent or imply a setting that changes this.",
+      "The Customer accounts opt-in (customerIdentity.phoneOptionalForDigital) affects only orders of digital or service lines paid in full online outside Bangladesh; it requires email instead.",
+      "Make no setup write while the request requires optional phone collection for those orders.",
     ],
   },
   {

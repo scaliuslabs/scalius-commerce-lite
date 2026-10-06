@@ -14,6 +14,9 @@ export const ENGLISH_CHECKOUT_LANGUAGE_DATA = {
   customerPhoneIntlPickupHelp: "Include your country code. We call this number when your order is ready to pick up.",
   customerPhoneIntlServiceHelp: "Include your country code. We send your order updates to this number.",
   customerPhoneExampleText: "Example: {example}",
+  // Only when the store lets digital and service orders go without a phone (Customer accounts).
+  customerPhoneOptionalLabel: "Phone number (optional)",
+  customerPhoneOptionalHelp: "Not needed for this order. We send your receipt and downloads to your email.",
   phoneCountryLabelText: "Phone number country",
   customerEmailLabel: "Email (optional)",
   customerEmailPlaceholder: "Enter your email address",
@@ -730,6 +733,8 @@ export const BANGLA_CHECKOUT_LANGUAGE_DATA: CheckoutLanguageData = {
   customerPhoneIntlPickupHelp: "কান্ট্রি কোডসহ নম্বর লিখুন। অর্ডার নেওয়ার জন্য তৈরি হলে আমরা এই নম্বরে কল করব।",
   customerPhoneIntlServiceHelp: "কান্ট্রি কোডসহ নম্বর লিখুন। অর্ডারের আপডেট এই নম্বরে পাঠানো হবে।",
   customerPhoneExampleText: "উদাহরণ: {example}",
+  customerPhoneOptionalLabel: "ফোন নম্বর (ঐচ্ছিক)",
+  customerPhoneOptionalHelp: "এই অর্ডারে লাগবে না। রসিদ ও ডাউনলোড আপনার ইমেইলে পাঠানো হবে।",
   phoneCountryLabelText: "ফোন নম্বরের দেশ",
   customerEmailLabel: "ইমেইল (ঐচ্ছিক)",
   customerEmailPlaceholder: "আপনার ইমেইল ঠিকানা লিখুন",

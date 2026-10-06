@@ -58,6 +58,8 @@ function EditOrderPage() {
       products,
       defaultValues: {
         ...saved,
+        // An order placed without a phone: staff add one to amend it (a cash order needs it).
+        customerPhone: saved.customerPhone ?? "",
         shippingCountryCode: saved.shippingCountryCode ?? "BD",
         shippingAddress: saved.shippingAddress ?? "",
         shippingAddressLine2: saved.shippingAddressLine2 ?? "",

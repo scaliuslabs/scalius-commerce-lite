@@ -566,6 +566,15 @@ are the country's: Bangladesh keeps the merchant's text, another country asks
 for the country code and shows a libphonenumber example (`phone-hint.ts`). A
 store that sells only to Bangladesh renders the same phone field, byte for byte.
 
+**Orders without a phone (2026-10-07).** With the Customer accounts opt-in, an
+order of only digital or service lines, paid in full online and placed outside
+Bangladesh, may go without a phone; e-mail is then required
+(`orderContactNeeds()`, `@scalius/shared/customer-auth-policy`). Such an order
+has no address, so it sends its market's country as `shippingCountryCode`
+(the cart's `orderCountryCode` field, the agent context's country). The API
+counts only a country an active market sells to; none means Bangladesh, where a
+phone is always required. A store that has not opted in sends nothing new.
+
 **Left for later.** Rate conditions (weight, order value), a "Rest of the
 world" zone, carrier-calculated rates, per-market delivery methods, a
 country rule for staff cash on delivery, tax regions (3c) and address

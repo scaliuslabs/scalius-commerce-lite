@@ -48,6 +48,11 @@ import {
 } from "../checkout/phone-field";
 import { phoneHintCopy } from "../checkout/phone-hint";
 import {
+  applyCheckoutContactNeeds,
+  checkoutContactNeeds,
+  readCheckoutPhoneNeed,
+} from "../checkout/contact-need";
+import {
   clearCheckoutFormDraft,
   discardCheckoutFormDraftOfOtherOwner,
   readCheckoutFormDraft,
@@ -73,6 +78,7 @@ import {
 
 /** The real export behind every value the page script imports. */
 const realImports: Record<string, unknown> = {
+  applyCheckoutContactNeeds,
   applyCheckoutDeliveryMode,
   browserApiUrl,
   cartHasFreeDeliveryItem,
@@ -80,6 +86,7 @@ const realImports: Record<string, unknown> = {
   cartNeedsDeliveryMethod,
   cartStore,
   checkoutAddressForMode,
+  checkoutContactNeeds,
   checkoutInformationFields,
   checkoutPhoneResult,
   clearCheckoutFormDraft,
@@ -104,6 +111,7 @@ const realImports: Record<string, unknown> = {
   phoneHintCopy,
   readCheckoutDeliveryMode,
   readCheckoutFormDraft,
+  readCheckoutPhoneNeed,
   readHostedPaymentRecoverySession,
   readStoredGiftCards,
   refreshCartBlockingState,

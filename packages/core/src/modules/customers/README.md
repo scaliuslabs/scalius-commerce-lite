@@ -14,12 +14,13 @@ A phone or e-mail typed at checkout or sign-up is a claim. It never claims, rena
 | Kind (`customerKind`) | Meaning |
 | --- | --- |
 | `account` | `accountClaimedAt` is set. A buyer signed up by code. |
-| `guest` | A record made at checkout (`origin = order`), keyed by phone. It can hold several people's orders. |
+| `guest` | A record made at checkout (`origin = order`), keyed by phone. It can hold several people's orders. A guest without a phone is keyed by its e-mail. |
 | `merchant` | Made or named in the dashboard (`origin = merchant`). |
 
-- Unique indexes on `customers`: `customers_verified_phone_unique`, `customers_verified_email_unique` (`lower(email)`) and `customers_guest_phone_unique`. Only a proven identifier or a guest phone is unique.
-- `phoneVerifiedAt`, `emailVerifiedAt`, `accountClaimedAt` and `lastAuthenticatedAt` are set only by code proof. Admin writes never infer verification. `customers.phone` is not null: it is the contact given, a claim until proven.
-- Order filing (`chooseOrderCustomer`): the account that verified the phone, else the account that verified the e-mail, else the phone's guest record, else a new guest record. An order an account owns is filed under that account (`orders.customer_id = orders.account_owner_customer_id`).
+- Unique indexes on `customers`: `customers_verified_phone_unique`, `customers_verified_email_unique` (`lower(email)`), `customers_guest_phone_unique` (guests with a phone) and `customers_guest_email_unique` (`lower(email)` of guests without a phone, migration 0117). Only a proven identifier, a guest phone or a phoneless guest's e-mail is unique.
+- `phoneVerifiedAt`, `emailVerifiedAt`, `accountClaimedAt` and `lastAuthenticatedAt` are set only by code proof. Admin writes never infer verification. `customers.phone` is the contact given, a claim until proven.
+- A contact without a phone: `customers.phone`, `customer_history.phone` and `orders.customer_phone` stay NOT NULL and store `NO_PHONE` (`''`). The column type (`contactPhone`) reads it back as null, and writes use `storedPhone()`. Raw SQL uses `contactPhoneSql()`. No code compares a phone with `''` (a guard test checks this). Search, merge and "same phone" links never match two phoneless records.
+- Order filing (`chooseOrderCustomer`): the account that verified the phone, else the account that verified the e-mail, else the phone's guest record (without a phone: the e-mail's phoneless guest record), else a new guest record. An order an account owns is filed under that account (`orders.customer_id = orders.account_owner_customer_id`).
 - After an account proves a contact, `buildVerifiedContactOrderLink` moves every unowned order with that contact into the account and writes `order_moved_out` and `order_moved_in` history rows. A guest record left with no orders is retired (`deleted_at`, `merged_into_customer_id`). Its tags, custom fields and marketing consent move to the account.
 
 ## Sign in by code (`customer-auth.service.ts`)
@@ -43,7 +44,7 @@ The queue consumer (`apps/api/src/queue-consumer.ts`) decrypts the delivery targ
 1. Find the owner of the proven identifier (`resolveProofOwner`): an e-mail resolves only to an account whose e-mail is verified, a phone only to an account whose phone is verified.
 2. Owner found: consume the code atomically, set `emailVerifiedAt` or `phoneVerifiedAt` and `lastAuthenticatedAt`, and create the session.
 3. No owner: check the code without using it up (it stays valid 10 minutes). A closed (soft-deleted) account gets "contact the store". Otherwise the route returns `needs_account_details` with a `suggestion` read from the latest order placed with that contact.
-4. The second call carries `account` (`name`, `phone`, `email`, `saveOrderAddress`). The name and phone are required (an e-mail sign-up must give a phone), and the e-mail is required when `customer_auth.email` is `required`. One batch inserts the customer (`origin = account`), a `signed_up` history row, the session and the verified-contact order link. With `saveOrderAddress`, the same batch copies the latest order's address snapshot as the first (default) address.
+4. The second call carries `account` (`name`, `phone`, `email`, `saveOrderAddress`). The name is required. An e-mail sign-up gives a phone unless the store opted in to orders without a phone (`newAccountPhoneNeed`). The e-mail is required when `customer_auth.email` is `required`. One batch inserts the customer (`origin = account`), a `signed_up` history row, the session and the verified-contact order link. With `saveOrderAddress`, the same batch copies the latest order's address snapshot as the first (default) address.
 
 A phone typed during an e-mail sign-up is only a contact. Proving it by code links its orders: `POST /phone/send-code` and `POST /phone/verify`.
 
@@ -91,12 +92,13 @@ Send limits (`customer-auth-rate-limit.ts`) use the D1 table `customer_auth_otp_
 The `customer_auth` settings document (Settings > Customer accounts, defined in `settings/documents.ts`, policy in `@scalius/shared/customer-auth-policy`) is the one source for checkout fields and code channels:
 
 ```text
-{ email: required | optional | hidden, whatsapp: off | same_as_phone | separate, channels: (email | sms | whatsapp)[] }
+{ email: required | optional | hidden, whatsapp: off | same_as_phone | separate, channels: (email | sms | whatsapp)[], phoneOptionalForDigital: boolean }
 ```
 
-The default is `{ email: optional, whatsapp: off, channels: [email] }`.
+The default is `{ email: optional, whatsapp: off, channels: [email], phoneOptionalForDigital: false }`. A document saved before the opt-in existed reads it as `false`.
 
-- Phone collection is mandatory for customer identity and checkout in Bangladesh. No merchant setting disables it.
+- The phone rule is `orderContactNeeds()` in `@scalius/shared/customer-auth-policy` (owner decision 2026-10-07). An order needs a phone when a line is delivered or picked up, when it is paid in cash or by deposit, when it is placed in Bangladesh (its shipping country, else its market's), or when the merchant has not opted in. With the opt-in (`phoneOptionalForDigital`), an order of only digital, service or gift-card lines, paid in full online outside Bangladesh, may go without a phone, and e-mail is then required. The opt-in needs checkout to ask for e-mail and e-mail codes to be on (`customerIdentityProblem`).
+- Bangladesh orders always need a phone. Phone collection stays mandatory for Bangladesh customer identity and checkout.
 - A channel can be chosen only when checkout collects its contact (`isChannelCollected`). `isCustomerAuthChannelReady` checks the provider (e-mail or SMS provider readiness, or the WhatsApp token and phone-number ID). It needs `CREDENTIAL_ENCRYPTION_KEY` and returns false on any read error.
 - `getCustomerSignInReadiness` blocks checkout only when guest checkout is off and no chosen channel can send. `getOfferedCustomerIdentity` returns the chosen channels that can send now and never adds one.
 - Order codes go only to a contact saved on the order (`listOrderCodeOptions`, `chooseOrderCodeChannel`).
@@ -104,7 +106,7 @@ The default is `{ email: optional, whatsapp: off, channels: [email] }`.
 ## Admin records (`customers.service.ts`)
 
 - **List.** Keyset (`after`, `before`) with `page` for the first rows only (1,000 on Free, 10,000 on Paid; `PAGE_TOO_DEEP` beyond). Search: FTS5 `customers_fts` (name, phone, e-mail) plus a phone `LIKE`. Filters: `tag`, `segment`, `subscribed`. Trash hides merged guest records.
-- **Create** makes a `merchant` customer, refuses a phone another active customer uses, applies the `customer_countries` policy and writes a `created` history row. **Update** writes nothing when no field changes, otherwise an `updated` row. Naming a guest record makes it `merchant`.
+- **Create** makes a `merchant` customer, refuses a phone another active customer uses, applies the `customer_countries` policy and writes a `created` history row. Without a phone, it needs an e-mail no other phoneless customer uses and the store's opt-in. A saved phone can be changed but not removed. **Update** writes nothing when no field changes, otherwise an `updated` row. Naming a guest record makes it `merchant`.
 - **Soft delete** sets `deleted_at`, revokes sessions and writes `deleted`. **Restore** clears `deleted_at` and writes `restored`. A merged guest record cannot be restored.
 - **Permanent delete** is refused when any order has the customer as `customer_id` or `account_owner_customer_id`. Otherwise it deletes sessions, history and the customer. Bulk delete is soft (no history rows) or permanent (same guard).
 - `customer_order_stats` supplies order facts for the list, sorting, segments and export. Triggers on `orders` recompute a customer's row; application code never writes it. It counts real orders only (not `incomplete`, not deleted) and positive paid spend in minor units. `customers.total_orders` and `last_order_at` are counters that `checkout/commit.ts` and `orders/admin/*` write. Spend has no column.

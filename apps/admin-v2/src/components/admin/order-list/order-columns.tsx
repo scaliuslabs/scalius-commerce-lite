@@ -151,9 +151,16 @@ function CustomerCell({ order }: { order: OrderListItem }) {
     <div data-part="customer" className="flex items-center gap-1">
       <div className="min-w-0 flex-1">
         <Line text={order.customerName} className="font-medium" />
-        <Line text={formatPhoneForDisplay(order.customerPhone)} className="font-mono text-muted-foreground" />
+        {order.customerPhone ? (
+          <Line text={formatPhoneForDisplay(order.customerPhone)} className="font-mono text-muted-foreground" />
+        ) : (
+          <Line text={order.customerEmail ?? ""} className="text-muted-foreground" />
+        )}
       </div>
-      <LazyFraudCheckIndicator phone={order.customerPhone} customerName={order.customerName} countryCode={order.shippingCountryCode} compact />
+      {/* The courier history check needs a phone; an order placed without one shows none. */}
+      {order.customerPhone ? (
+        <LazyFraudCheckIndicator phone={order.customerPhone} customerName={order.customerName} countryCode={order.shippingCountryCode} compact />
+      ) : null}
     </div>
   );
 }

@@ -102,9 +102,10 @@ export function OrderCustomerCard({ order }: { order: Order }) {
   const t = useMessages(orderDetailMessages);
   const actions = useOrderActionPermissions();
   const [editing, setEditing] = useState(false);
-  const contact = customerContactLinks(order.customerPhone);
+  // An order placed without a phone (a digital or service order) has no call, SMS or fraud check.
+  const contact = order.customerPhone ? customerContactLinks(order.customerPhone) : null;
   // WhatsApp goes to the separate number the buyer gave, when there is one.
-  const whatsappLink = order.customerWhatsapp ? customerContactLinks(order.customerWhatsapp).whatsapp : contact.whatsapp;
+  const whatsappLink = order.customerWhatsapp ? customerContactLinks(order.customerWhatsapp).whatsapp : contact?.whatsapp ?? null;
   const address = formatShippingAddress(order, countryName);
   // The recipient when the order ships to someone other than its contact.
   const recipient = [order.shippingName, order.shippingCompany].filter(Boolean).join(", ");
@@ -133,11 +134,19 @@ export function OrderCustomerCard({ order }: { order: Order }) {
               params={{ customerId: record.id }}
               className="block text-link hover:underline"
             >
-              {record.kind === "guest" ? t("customer.guestRecord", { phone: formatPhoneForDisplay(record.phone) }) : record.name}
+              {record.kind !== "guest"
+                ? record.name
+                : record.phone
+                  ? t("customer.guestRecord", { phone: formatPhoneForDisplay(record.phone) })
+                  : t("customer.guestRecordEmail", { email: order.customerEmail ?? "" })}
             </Link>
           ) : null}
           {orderedAs ? <p className="text-muted-foreground">{t("customer.orderedAs", { name: order.customerName })}</p> : null}
-          <p className="font-mono text-muted-foreground">{formatPhoneForDisplay(order.customerPhone)}</p>
+          {order.customerPhone ? (
+            <p className="font-mono text-muted-foreground">{formatPhoneForDisplay(order.customerPhone)}</p>
+          ) : (
+            <p className="text-muted-foreground">{t("customer.noPhone")}</p>
+          )}
           {order.customerWhatsapp ? (
             <p className="font-mono text-muted-foreground">{t("contact.whatsapp")}: {formatPhoneForDisplay(order.customerWhatsapp)}</p>
           ) : null}
@@ -146,10 +155,12 @@ export function OrderCustomerCard({ order }: { order: Order }) {
               {order.customerEmail}
             </a>
           ) : null}
-          <div className="flex flex-wrap gap-2 pt-2">
-            <Button variant="outline" size="sm" asChild>
-              <a href={contact.call} aria-label={t("contact.callName", { name: order.customerName })}>{t("contact.call")}</a>
-            </Button>
+          <div className="flex flex-wrap gap-2 pt-2 empty:hidden">
+            {contact ? (
+              <Button variant="outline" size="sm" asChild>
+                <a href={contact.call} aria-label={t("contact.callName", { name: order.customerName })}>{t("contact.call")}</a>
+              </Button>
+            ) : null}
             {whatsappLink ? (
               <Button variant="outline" size="sm" asChild>
                 <a href={whatsappLink} target="_blank" rel="noopener noreferrer" aria-label={t("contact.whatsappName", { name: order.customerName })}>
@@ -157,9 +168,11 @@ export function OrderCustomerCard({ order }: { order: Order }) {
                 </a>
               </Button>
             ) : null}
-            <Button variant="outline" size="sm" asChild>
-              <a href={contact.sms} aria-label={t("contact.smsName", { name: order.customerName })}>{t("contact.sms")}</a>
-            </Button>
+            {contact ? (
+              <Button variant="outline" size="sm" asChild>
+                <a href={contact.sms} aria-label={t("contact.smsName", { name: order.customerName })}>{t("contact.sms")}</a>
+              </Button>
+            ) : null}
           </div>
         </section>
         <section className="space-y-1 px-6 py-4">
@@ -176,9 +189,12 @@ export function OrderCustomerCard({ order }: { order: Order }) {
           <section className="flex items-center justify-between gap-3 px-6 py-4">
             <div>
               <h2 className="font-semibold">{t("fraud.title")}</h2>
-              <p className="text-muted-foreground">{t("fraud.help")}</p>
+              {/* The courier history is looked up by phone: without one the check is skipped, with the reason. */}
+              <p className="text-muted-foreground">{t(order.customerPhone ? "fraud.help" : "fraud.noPhone")}</p>
             </div>
-            <LazyFraudCheckIndicator phone={order.customerPhone} customerName={order.customerName} countryCode={order.shippingCountryCode} />
+            {order.customerPhone ? (
+              <LazyFraudCheckIndicator phone={order.customerPhone} customerName={order.customerName} countryCode={order.shippingCountryCode} />
+            ) : null}
           </section>
         ) : null}
         {order.appRiskChecks.length > 0 || released.length > 0 ? <AppRiskChecks checks={order.appRiskChecks} released={released} /> : null}

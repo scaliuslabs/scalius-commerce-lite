@@ -20,7 +20,7 @@ const UTF8_BOM = "\uFEFF";
 export interface OrderCsvSummary {
   id: string;
   customerName: string;
-  customerPhone: string;
+  customerPhone: string | null;
   customerEmail: string | null;
   city: string | null;
   zone: string | null;
@@ -215,7 +215,7 @@ export interface OrderCsvRow {
   orderNumber: number | null;
   createdAt: unknown;
   customerName: string;
-  customerPhone: string;
+  customerPhone: string | null;
   customerEmail: string | null;
   /** Null when nothing ships (pickup, service-only or digital orders). */
   shippingAddress: string | null;
@@ -280,7 +280,7 @@ function orderColumns(order: OrderCsvRow): unknown[] {
     formatOrderNumber(order.orderNumber, order.id),
     formatCommerceDateTime(order.createdAt),
     order.customerName,
-    formatPhoneForProvider(order.customerPhone),
+    order.customerPhone ? formatPhoneForProvider(order.customerPhone) : "",
     order.customerEmail,
     ships ? [order.shippingAddress, order.shippingAddressLine2].filter(Boolean).join(", ") : "",
     ships ? (bangladesh ? order.areaName : order.shippingDependentLocality) : "",

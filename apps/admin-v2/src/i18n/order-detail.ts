@@ -43,6 +43,8 @@ export const orderDetailMessages = defineMessages({
 
     "customer.title": "Customer",
     "customer.guestRecord": "Guest orders for {phone}",
+    "customer.guestRecordEmail": "Guest orders for {email}",
+    "customer.noPhone": "No phone number (digital or service order)",
     "customer.orderedAs": "Ordered as {name}",
     "address.title": "Delivery address",
     "address.none": "No address",
@@ -50,6 +52,7 @@ export const orderDetailMessages = defineMessages({
     "address.notCheckedHelp": "Saved without checking it against the country's address format.",
     "fraud.title": "Courier fraud check",
     "fraud.help": "See this phone's delivery history.",
+    "fraud.noPhone": "Skipped: this order has no phone number, and the delivery history is looked up by phone.",
     "appRisk.title": "Risk checks by apps",
     "appRisk.advice": "Apps' risk checks are advice only. Nothing was cancelled automatically; you decide what to do with this order.",
     "appRisk.low": "Low risk",
@@ -645,6 +648,8 @@ export const orderDetailMessages = defineMessages({
 
     "customer.title": "কাস্টমার",
     "customer.guestRecord": "{phone} নম্বরের অতিথি অর্ডার",
+    "customer.guestRecordEmail": "{email} ইমেইলের অতিথি অর্ডার",
+    "customer.noPhone": "ফোন নম্বর নেই (ডিজিটাল বা সার্ভিস অর্ডার)",
     "customer.orderedAs": "অর্ডার করা হয়েছে {name} নামে",
     "address.title": "ডেলিভারি ঠিকানা",
     "address.none": "ঠিকানা নেই",
@@ -652,6 +657,7 @@ export const orderDetailMessages = defineMessages({
     "address.notCheckedHelp": "দেশের ঠিকানার ফরম্যাটের সঙ্গে না মিলিয়ে সংরক্ষণ করা হয়েছে।",
     "fraud.title": "কুরিয়ার ফ্রড চেক",
     "fraud.help": "এই নম্বরের ডেলিভারি ইতিহাস দেখুন।",
+    "fraud.noPhone": "বাদ দেওয়া হয়েছে: এই অর্ডারে ফোন নম্বর নেই, আর ডেলিভারি ইতিহাস ফোন নম্বর দিয়ে খোঁজা হয়।",
     "appRisk.title": "অ্যাপের ঝুঁকি যাচাই",
     "appRisk.advice": "অ্যাপের ঝুঁকি যাচাই শুধু পরামর্শ। নিজে থেকে কিছু বাতিল হয়নি; এই অর্ডার নিয়ে কী করবেন তা আপনি ঠিক করবেন।",
     "appRisk.low": "কম ঝুঁকি",

@@ -7,6 +7,7 @@
 // customer identity in Bangladesh), so a newsletter signup always carries a
 // phone and may add an e-mail; there is no separate subscriber identity.
 
+import { phoneOrNull } from "./customer-auth-policy";
 import { z } from "zod";
 import { sha256Hex } from "./hash";
 
@@ -59,8 +60,7 @@ export function marketingConsentContact(channel: MarketingChannel, customer: { e
     const email = customer.email?.trim().toLowerCase();
     return email ? email : null;
   }
-  const phone = customer.phone?.trim();
-  return phone ? phone : null;
+  return phoneOrNull(customer.phone);
 }
 
 /** The status a reader shows for a stored row against the customer's current address. */

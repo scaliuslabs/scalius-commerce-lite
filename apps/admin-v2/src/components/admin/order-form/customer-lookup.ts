@@ -17,7 +17,8 @@ export interface SavedAddress {
 export interface SavedCustomer {
   name: string;
   email: string | null;
-  phone: string;
+  /** Null for a customer without a phone (never matched by phone). */
+  phone: string | null;
   /** The address book's default address. */
   defaultAddress: SavedAddress | null;
   totalOrders: number;
@@ -64,7 +65,7 @@ export function findCustomerByPhone<T extends SavedCustomer>(
 ): T | null {
   const e164 = toE164Phone(rawPhone);
   if (!e164) return null;
-  return customers.find((customer) => toE164Phone(customer.phone) === e164) ?? null;
+  return customers.find((customer) => customer.phone !== null && toE164Phone(customer.phone) === e164) ?? null;
 }
 
 /**

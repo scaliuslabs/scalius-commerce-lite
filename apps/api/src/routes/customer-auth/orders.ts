@@ -218,7 +218,7 @@ const customerOrderDetailSchema = z.object({
     notes: z.string().nullable(),
     statusLabel: z.string(),
     customerName: z.string(),
-    customerPhone: z.string(),
+    customerPhone: z.string().nullable().openapi({ description: "E.164; null for an order placed without a phone (only digital or service lines, Customer accounts opt-in)." }),
     createdAt: nullableTimestampSchema,
     updatedAt: nullableTimestampSchema,
   }).passthrough(),

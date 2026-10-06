@@ -129,6 +129,14 @@ describe("agent storefront checkout submission on D1 storage", () => {
     expect(sqlite.prepare("SELECT COUNT(*) AS count FROM customers").get()).toEqual({ count: 1 });
   });
 
+  it("lets a signed-in account without a phone order with the order's own phone", async () => {
+    signIn();
+    sqlite.exec("UPDATE customers SET phone = '' WHERE id = 'cust_account'");
+    const { response } = await submit();
+    expect(sqlite.prepare("SELECT customer_id, customer_phone FROM orders WHERE id = ?").get(response.orderId))
+      .toEqual({ customer_id: "cust_account", customer_phone: DELIVERY_PHONE });
+  });
+
   it("never files a guest's order under an account whose phone was only typed, not proven", async () => {
     const { response } = await submit({ customerPhone: ACCOUNT_PHONE });
 
@@ -144,10 +152,19 @@ describe("agent storefront checkout submission on D1 storage", () => {
       sqlite.exec(`UPDATE customer_sessions SET revoked_at = unixepoch();
         UPDATE settings SET value = json_set(value, '$.guestCheckoutEnabled', json('false')) WHERE category = 'checkout';`);
     }, {}, UnauthorizedError, "Please sign in before checkout."],
-    ["a signed-in account without a phone", () => {
-      signIn();
-      sqlite.exec("UPDATE customers SET phone = '' WHERE id = 'cust_account'");
-    }, {}, ValidationError, "missing its required phone number"],
+    // The shared contact rule (orderContactNeeds): a store that has not opted in needs a phone.
+    ["an order without a phone", () => {}, { customerPhone: null, customerEmail: "buyer@example.test" }, ValidationError,
+      "Enter your phone number."],
+    // Opted in, but a service paid in cash, placed in Bangladesh, still needs one.
+    ["an opted-in cash service order without a phone", () => {
+      sqlite.exec(`
+        INSERT INTO settings (id, key, value, type, category) VALUES ('s_auth', 'document',
+          '{"email":"optional","whatsapp":"off","channels":["email"],"phoneOptionalForDigital":true}', 'json', 'customer_auth');
+        UPDATE product_variants SET fulfillment_kind = 'service';
+        UPDATE agent_storefront_contexts SET city_id = NULL, zone_id = NULL, shipping_method_id = NULL;
+      `);
+    }, { customerPhone: null, customerEmail: "buyer@example.test", shippingAddress: null }, ValidationError,
+      "Enter your phone number."],
     ["a delivery phone from a disallowed country", () => {}, { customerPhone: "+919876543210" }, ValidationError,
       "Phone numbers from IN are not accepted"],
   ] as const)("refuses %s before any checkout write", async (_case, arrange, overrides, errorType, message) => {

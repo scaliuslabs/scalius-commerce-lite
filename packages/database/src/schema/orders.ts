@@ -11,7 +11,7 @@ import { customers } from "./customers";
 import { products, productVariants } from "./products";
 import { media } from "./media";
 import { inventoryLocations, inventoryMovements } from "./inventory";
-import { UNIX_NOW } from "./shared";
+import { UNIX_NOW, contactPhone } from "./shared";
 import { user } from "./auth";
 import { conversations } from "./conversations";
 import { warrantyPolicyRevisions } from "./warranty";
@@ -39,7 +39,8 @@ export const orders = sqliteTable("orders", {
      */
     orderNumber: integer("order_number"),
     customerName: text("customer_name").notNull(),
-    customerPhone: text("customer_phone").notNull(),
+    /** Null for an order placed without a phone (stored as '', `contactPhone`). */
+    customerPhone: contactPhone("customer_phone").notNull(),
     customerEmail: text("customer_email"),
     /** Separate WhatsApp number, when Customer accounts collects one; null means the phone. */
     customerWhatsapp: text("customer_whatsapp"),

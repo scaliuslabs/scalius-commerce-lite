@@ -2464,7 +2464,9 @@ describe("create order commit/KV ordering", () => {
     expect(mocks.commitStorefrontOrderPayload).toHaveBeenCalledOnce();
   });
 
-  it("rejects authenticated checkout if the customer session has no phone proof", async () => {
+  it("lets a signed-in account without a phone check out with the order's own phone", async () => {
+    // The order's contact follows the shared rule (orderContactNeeds); the
+    // account's phone (none here: an e-mail sign-up with the opt-in) is not it.
     mocks.getCustomerBySession.mockResolvedValue({
       token: "session_3",
       email: "buyer@example.com",
@@ -2488,15 +2490,51 @@ describe("create order commit/KV ordering", () => {
       { CACHE: kv } as never,
     );
 
-    expect(response.status).toBe(400);
-    expect(await response.json()).toMatchObject({
-      success: false,
-      error: {
-        message: "Your signed-in account is missing its required phone number. Update your profile and try again.",
+    expect(response.status, await response.clone().text()).toBe(201);
+    expect(mocks.createStorefrontOrder).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ customerPhone: "+8801712345678" }),
+      expect.any(String),
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+      { customerId: "customer_3", source: "authenticated" },
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+    );
+  });
+
+  it("passes an empty phone on as null, for the shared contact rule to decide", async () => {
+    const { app, kv } = createTestApp();
+
+    const response = await app.request(
+      "/api/v1/orders",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...validOrderBody, customerPhone: "", customerEmail: "buyer@example.com" }),
       },
-    });
-    expect(mocks.limiter.limit).not.toHaveBeenCalled();
-    expect(mocks.createStorefrontOrder).not.toHaveBeenCalled();
+      { CACHE: kv } as never,
+    );
+
+    expect(response.status, await response.clone().text()).toBe(201);
+    expect(mocks.createStorefrontOrder).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ customerPhone: null, customerEmail: "buyer@example.com" }),
+      expect.any(String),
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+      undefined,
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+    );
   });
 
   it("rejects COD order creation when checkout mode is gateways only", async () => {

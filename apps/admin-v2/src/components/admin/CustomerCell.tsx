@@ -18,7 +18,11 @@ export function CustomerCell({ customer, to }: { customer: CustomerTitleInput; t
       {customer.kind === "guest" ? (
         detail ? <span className="block truncate text-muted-foreground">{detail}</span> : null
       ) : (
-        <span className="block truncate whitespace-nowrap font-mono text-muted-foreground">{formatPhoneForDisplay(customer.phone)}</span>
+        customer.phone ? (
+          <span className="block truncate whitespace-nowrap font-mono text-muted-foreground">{formatPhoneForDisplay(customer.phone)}</span>
+        ) : customer.email ? (
+          <span className="block truncate text-muted-foreground">{customer.email}</span>
+        ) : null
       )}
     </div>
   );

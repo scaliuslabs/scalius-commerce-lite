@@ -240,7 +240,10 @@ const checkoutSubmitSchema = z.object({
   }),
   idempotencyKey: checkoutIdempotencyKeySchema.optional(),
   customerName: z.string().trim().min(3).max(100),
-  customerPhone: agentCustomerPhoneSchema,
+  customerPhone: agentCustomerPhoneSchema.nullable().optional().openapi({
+    description: "Customer phone number. Use international E.164 form to avoid country ambiguity (for example, +8801712345678). Required unless the store lets this order go without a phone: only digital or service lines, paid in full online, outside Bangladesh (Customer accounts opt-in). customerEmail is then required.",
+    example: "+8801712345678",
+  }),
   customerEmail: z.email().nullable(),
   shippingAddress: z.string().trim().min(10).max(500).nullable().optional().openapi({
     description: "Street address. Required only when a line ships; omit it for a pickup method or a cart with nothing physical (services).",
@@ -740,7 +743,7 @@ app.openapi(submitCheckoutRoute, async (c) => {
     c.get("db"),
     principal.grantId,
     contextId,
-    { ...checkoutInput, idempotencyKey },
+    { ...checkoutInput, customerPhone: checkoutInput.customerPhone ?? null, idempotencyKey },
     {
       requestUrl: new URL(
         `/api/v1/storefront/agent-contexts/${encodeURIComponent(contextId)}/checkout/submit`,

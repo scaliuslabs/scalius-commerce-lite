@@ -5,6 +5,7 @@ import {
   CUSTOMER_AUTH_OTP_CHANNELS,
   EMAIL_COLLECTION_MODES,
   WHATSAPP_COLLECTION_MODES,
+  customerIdentityProblem,
   isChannelCollected,
   type CustomerAuthOtpChannel,
   type CustomerIdentitySettings,
@@ -60,7 +61,12 @@ export function CustomerSignInCard() {
       apiData(postApiV1AdminSettingsAuth({
         body: {
           expectedRevision: { customerAuth: expectedRevision.customerAuth },
-          customerIdentity: { email: identity.email, whatsapp: identity.whatsapp, channels: [...identity.channels] },
+          customerIdentity: {
+            email: identity.email,
+            whatsapp: identity.whatsapp,
+            channels: [...identity.channels],
+            phoneOptionalForDigital: identity.phoneOptionalForDigital,
+          },
         },
       })),
     invalidateQueryKeys: [authQuery.queryKey],
@@ -71,7 +77,8 @@ export function CustomerSignInCard() {
     isValid: ({ identity }) =>
       Boolean(identity) &&
       identity.channels.length > 0 &&
-      identity.channels.every((channel) => channelReady(channel) && isChannelCollected(identity, channel)),
+      identity.channels.every((channel) => channelReady(channel) && isChannelCollected(identity, channel)) &&
+      customerIdentityProblem(identity) === null,
   });
   if (isLoadError) return <SettingsLoadFailure title={t("loadSignIn")} onRetry={refetch} />;
   if (!values.identity) return <SettingsCardLoading />;
@@ -79,13 +86,35 @@ export function CustomerSignInCard() {
   const set = (next: CustomerIdentitySettings) => setValue("identity", next);
   const emailCodes = identity.channels.includes("email");
   const whatsappCodes = identity.channels.includes("whatsapp");
+  const phoneless = identity.phoneOptionalForDigital;
+  // A buyer without a phone is reached by email: it must be asked, with email codes on.
+  const phonelessAllowed = identity.email !== "hidden" && emailCodes;
 
   return (
     <>
       <SettingsCard id="customerFields" title={t("contactTitle")} description={t("contactDescription")}>
-        <div className="flex min-h-11 items-center justify-between gap-4 text-body">
-          <span className="font-medium">{t("phoneField")}</span>
-          <span className="text-muted-foreground">{t("phoneLocked")}</span>
+        <div className="space-y-1">
+          <div className="flex min-h-11 items-center justify-between gap-4 text-body">
+            <span className="font-medium">{t("phoneField")}</span>
+            <span className="text-muted-foreground">{t(phoneless ? "phoneDigitalOptional" : "phoneLocked")}</span>
+          </div>
+          <label className="flex min-h-11 items-start gap-3 py-3 text-body">
+            <Checkbox
+              className="mt-0.5"
+              checked={phoneless}
+              disabled={!canEdit || (!phoneless && !phonelessAllowed)}
+              onCheckedChange={(checked) => set({ ...identity, phoneOptionalForDigital: checked === true })}
+            />
+            <span className="space-y-1">
+              <span className="block">{t("phoneOptionalDigital")}</span>
+              <span className="block text-muted-foreground">{t("phoneOptionalDigitalHelp")}</span>
+            </span>
+          </label>
+          {!phonelessAllowed ? (
+            <p role={phoneless ? "alert" : undefined} className={`pb-1 pl-7 text-body ${phoneless ? "text-destructive" : "text-muted-foreground"}`}>
+              {t("phoneOptionalNeedsEmail")}
+            </p>
+          ) : null}
         </div>
         <div className="border-t border-border pt-3">
         <fieldset className="space-y-1">
@@ -97,12 +126,13 @@ export function CustomerSignInCard() {
           >
             {EMAIL_COLLECTION_MODES.map((mode) => (
               <label key={mode} className="flex min-h-11 items-start gap-3 py-3 text-body">
-                <RadioGroupItem className="mt-0.5" value={mode} disabled={mode === "hidden" && emailCodes} />
+                <RadioGroupItem className="mt-0.5" value={mode} disabled={mode === "hidden" && (emailCodes || phoneless)} />
                 {t(EMAIL_LABEL[mode])}
               </label>
             ))}
           </RadioGroup>
           {emailCodes ? <p className="text-body text-muted-foreground">{t("emailInUse")}</p> : null}
+          {phoneless ? <p className="text-body text-muted-foreground">{t("emailNeededForPhoneless")}</p> : null}
         </fieldset>
         </div>
         <div className="border-t border-border pt-3">
@@ -132,8 +162,11 @@ export function CustomerSignInCard() {
             const on = identity.channels.includes(channel);
             const collected = isChannelCollected(identity, channel);
             const ready = channelReady(channel);
-            // Off channels can be turned on only when they could send; the last one can't be turned off.
-            const disabled = !canEdit || (on ? identity.channels.length === 1 : !collected || !ready);
+            // Off channels can be turned on only when they could send; the last one can't be
+            // turned off, nor email codes while orders may have no phone.
+            const disabled = !canEdit || (on
+              ? identity.channels.length === 1 || (channel === "email" && phoneless)
+              : !collected || !ready);
             const hint = !collected
               ? t(channel === "email" ? "needEmailField" : "needWhatsappField")
               : !ready

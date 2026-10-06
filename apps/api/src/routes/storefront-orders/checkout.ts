@@ -110,11 +110,14 @@ function createCheckoutDiagnostics(env: Env): {
 async function enforceCheckoutRateLimits(
   env: Env,
   request: Request,
-  customerPhone: string,
+  contact: { customerPhone: string | null; customerEmail: string | null },
 ): Promise<void> {
+  // The buyer's phone, or their email for an order placed without one.
   const [ipAllowed, phoneAllowed] = await Promise.all([
     isWithinRateLimit(env, "RL_STANDARD", "checkout-ip", getClientIp(request)),
-    isWithinRateLimit(env, "RL_STRICT", "checkout-phone", customerPhone),
+    contact.customerPhone
+      ? isWithinRateLimit(env, "RL_STRICT", "checkout-phone", contact.customerPhone)
+      : isWithinRateLimit(env, "RL_STRICT", "checkout-email", contact.customerEmail?.trim().toLowerCase() ?? ""),
   ]);
   if (!ipAllowed || !phoneAllowed) {
     throw new RateLimitError("Too many order requests. Please try again later.");
@@ -127,7 +130,7 @@ async function assertCheckoutOrderPolicy(
     get: (key: "db") => Database;
     req: { header: (name: string) => string | undefined };
   },
-  customerPhone: string,
+  customerPhone: string | null,
   paymentMethod: CheckoutPaymentMethodId,
   authority: Pick<
     StorefrontCheckoutAuthoritySnapshot,
@@ -168,12 +171,6 @@ async function assertCheckoutOrderPolicy(
     throw new UnauthorizedError("Please sign in before checkout.");
   }
 
-  if (!session.phone) {
-    throw new ValidationError(
-      "Your signed-in account is missing its required phone number. Update your profile and try again.",
-    );
-  }
-
   return {
     customerIdentity: {
       customerId: session.customerId,
@@ -189,14 +186,16 @@ async function assertCheckoutOrderPolicy(
  * hold. Prepare refuses `gift_card` unless the cards cover the whole order.
  */
 function assertGiftCardCheckoutPolicy(
-  customerPhone: string,
+  customerPhone: string | null,
   authority: Pick<StorefrontCheckoutAuthoritySnapshot, "checkoutSettings" | "allowedCountries">,
 ): CheckoutSettingsSnapshot {
   try {
-    assertPhoneCountryAllowed(customerPhone, {
-      countries: authority.allowedCountries.allowedCountries,
-      mode: authority.allowedCountries.allowedCountriesMode,
-    });
+    if (customerPhone) {
+      assertPhoneCountryAllowed(customerPhone, {
+        countries: authority.allowedCountries.allowedCountries,
+        mode: authority.allowedCountries.allowedCountriesMode,
+      });
+    }
   } catch (error) {
     throw new ValidationError(
       error instanceof Error ? error.message : "Phone number is not accepted for checkout.",
@@ -226,8 +225,14 @@ const createOrderSchema = z.object({
     .string()
     .min(3, "Customer name must be at least 3 characters")
     .max(100, "Customer name must be less than 100 characters"),
-  /** Read in the shipping country (`shippingCountryCode`): a national number there becomes E.164. */
-  customerPhone: z.string().trim().min(7, "Phone number too short").max(32, "Phone number too long"),
+  /**
+   * Read in the shipping country (`shippingCountryCode`): a national number
+   * there becomes E.164. Null or empty only when the shared contact rule
+   * lets the order go without one (Customer accounts opt-in, only digital or
+   * service lines, paid in full online, outside Bangladesh); email is then
+   * required. Otherwise the order is refused (`details.reason: phone_required`).
+   */
+  customerPhone: z.string().trim().max(32, "Phone number too long").nullable().optional(),
   customerEmail: z.email().nullable(),
   /** Kept only when Customer accounts asks for a separate WhatsApp number. */
   customerWhatsapp: z.string().trim().max(32).nullable().optional(),
@@ -235,7 +240,8 @@ const createOrderSchema = z.object({
    * The shipping country (MARKETS-DESIGN D7): one an active market sells to.
    * Absent means Bangladesh, whose City/Thana/Area form sends `city`, `zone`
    * and `area` instead of a locality. Another country sends what its rules
-   * require (GET /api/v1/address-rules/{countryCode}).
+   * require (GET /api/v1/address-rules/{countryCode}). An order with nothing
+   * to ship sends its market's country here, without an address.
    */
   shippingCountryCode: z.string().trim().length(2).nullable().optional(),
   /**
@@ -312,10 +318,18 @@ const createOrderSchema = z.object({
   }
   refineDeliveryLine(order, context);
 }).transform((order, context) => {
-  // The phone is customer identity and the code-sign-in channel: always
-  // required, read as E.164 in the address country (MARKETS-DESIGN D7).
+  // The phone is customer identity and the code-sign-in channel, read as
+  // E.164 in the address country (MARKETS-DESIGN D7). Whether this order may
+  // go without one is the shared contact rule, applied once its lines and
+  // payment are known (core checkout `assertOrderContact`).
+  const rawPhone = order.customerPhone?.trim() || null;
+  if (!rawPhone) return { ...order, customerPhone: null };
+  if (rawPhone.length < 7) {
+    context.addIssue({ code: "custom", path: ["customerPhone"], message: "Phone number too short" });
+    return z.NEVER;
+  }
   try {
-    return { ...order, customerPhone: validateAndFormatPhone(order.customerPhone, undefined, { defaultCountry: order.shippingCountryCode }) };
+    return { ...order, customerPhone: validateAndFormatPhone(rawPhone, undefined, { defaultCountry: order.shippingCountryCode }) };
   } catch (error: unknown) {
     context.addIssue({
       code: "custom",
@@ -587,7 +601,7 @@ app.openapi(createOrderRoute, async (c) => {
 
     // Only authoritative, policy-valid checkouts consume buyer rate-limit
     // budget. All database writes still remain in the single commit below.
-    await enforceCheckoutRateLimits(c.env, c.req.raw, data.customerPhone);
+    await enforceCheckoutRateLimits(c.env, c.req.raw, data);
     diagnostics?.mark("rate_limit");
 
     const executionCtx = getOptionalExecutionContext(c);

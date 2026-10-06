@@ -13,7 +13,7 @@ const SETTLEMENTS: readonly RefundSettlement[] = ["original", "store_credit"];
 
 /** Where a store-credit card goes: the order's email, else its phone (the API picks the same). */
 export function storeCreditContact(order: Pick<Order, "customerEmail" | "customerPhone">): string {
-  return order.customerEmail?.trim() || order.customerPhone;
+  return order.customerEmail?.trim() || order.customerPhone || "";
 }
 
 export function RefundSettlementField({ order, value, onChange, disabled }: {

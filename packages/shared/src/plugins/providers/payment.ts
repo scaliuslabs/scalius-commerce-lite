@@ -73,7 +73,8 @@ export const paymentSessionInputSchema = z.object({
   wireAmount: providerWireAmountSchema,
   buyer: z.object({
     name: z.string().max(200),
-    phone: z.string().max(40),
+    /** Absent for an order placed without a phone (a digital or service order outside Bangladesh); email is then present. */
+    phone: z.string().max(40).optional(),
     email: z.string().max(320).optional(),
     address: z.string().max(2000).optional(),
     city: z.string().max(200).optional(),

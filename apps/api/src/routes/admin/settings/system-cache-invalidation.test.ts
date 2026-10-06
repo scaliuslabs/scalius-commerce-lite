@@ -411,7 +411,7 @@ describe("system settings write behavior", () => {
     const { app, env, executionCtx, database } = await createTestApp();
 
     const response = await requestJson(app, env, executionCtx, "/auth", {
-      customerIdentity: { email: "optional", whatsapp: "off", channels: ["sms"] },
+      customerIdentity: { email: "optional", whatsapp: "off", channels: ["sms"], phoneOptionalForDigital: false },
     });
 
     expect(response.status, await response.clone().text()).toBe(400);
@@ -441,7 +441,7 @@ describe("system settings write behavior", () => {
     const { app, env, executionCtx, database } = await createTestApp();
 
     const response = await requestJson(app, env, executionCtx, "/auth", {
-      customerIdentity: { email: "required", whatsapp: "off", channels: ["email"] },
+      customerIdentity: { email: "required", whatsapp: "off", channels: ["email"], phoneOptionalForDigital: false },
     });
 
     expect(response.status, await response.clone().text()).toBe(400);
@@ -454,7 +454,7 @@ describe("system settings write behavior", () => {
     const { app, env, executionCtx, database } = await createTestApp();
 
     const response = await requestJson(app, env, executionCtx, "/auth", {
-      customerIdentity: { email: "required", whatsapp: "off", channels: ["email"] },
+      customerIdentity: { email: "required", whatsapp: "off", channels: ["email"], phoneOptionalForDigital: false },
     });
 
     expect(response.status, await response.clone().text()).toBe(200);
@@ -464,14 +464,14 @@ describe("system settings write behavior", () => {
       encryptionKey: CREDENTIAL_KEY,
       appProviders: expect.objectContaining({ resolve: expect.any(Function) }),
     });
-    expect(stored(database, "customer_auth")).toEqual({ email: "required", whatsapp: "off", channels: ["email"] });
+    expect(stored(database, "customer_auth")).toEqual({ email: "required", whatsapp: "off", channels: ["email"], phoneOptionalForDigital: false });
   });
 
   it("rejects WhatsApp customer auth policy before writes when WhatsApp is not ready", async () => {
     const { app, env, executionCtx, database } = await createTestApp();
 
     const response = await requestJson(app, env, executionCtx, "/auth", {
-      customerIdentity: { email: "optional", whatsapp: "same_as_phone", channels: ["whatsapp"] },
+      customerIdentity: { email: "optional", whatsapp: "same_as_phone", channels: ["whatsapp"], phoneOptionalForDigital: false },
     });
 
     expect(response.status, await response.clone().text()).toBe(400);
@@ -485,7 +485,7 @@ describe("system settings write behavior", () => {
     (env as Record<string, unknown>).JWT_SECRET = "jwt-fallback-key";
 
     const response = await requestJson(app, env, executionCtx, "/auth", {
-      customerIdentity: { email: "optional", whatsapp: "same_as_phone", channels: ["whatsapp"] },
+      customerIdentity: { email: "optional", whatsapp: "same_as_phone", channels: ["whatsapp"], phoneOptionalForDigital: false },
       whatsappAccessToken: "EAAG_meta_token",
       whatsappPhoneNumberId: "phone_id_1",
       whatsappTemplateName: "auth_otp",

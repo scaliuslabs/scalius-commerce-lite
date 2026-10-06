@@ -25,8 +25,9 @@ import {
     updateCustomerAddress,
 } from "@scalius/core/modules/customers";
 import { fromMinor } from "@scalius/shared/money";
-import { customers, customerHistory, orders, user } from "@scalius/database/schema";
-import { eq, sql, isNull, and } from "drizzle-orm";
+import { contactPhoneSql, customers, customerHistory, orders, user } from "@scalius/database/schema";
+import { phoneOrNull } from "@scalius/shared/customer-auth-policy";
+import { eq, sql, isNull, isNotNull, and } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import { NotFoundError } from "../../utils/api-error";
 import { customerListFilterQuery, customerListFiltersFromQuery } from "./customer-marketing";
@@ -88,7 +89,7 @@ const customerHistoryEntrySchema = z.object({
     relatedCustomer: z.object({
         id: z.string(),
         name: z.string(),
-        phone: z.string(),
+        phone: z.string().nullable(),
         kind: z.enum(["account", "guest", "merchant"]),
     }).nullable(),
     createdAt: timestampSchema,
@@ -567,6 +568,8 @@ app.openapi(getHistoryRoute, async (c) => {
             .from(samePhone)
             .innerJoin(customers, eq(customers.id, id))
             .where(and(
+                // Customers without a phone never share one.
+                isNotNull(contactPhoneSql(customers.phone)),
                 eq(samePhone.phone, customers.phone),
                 sql`${samePhone.id} != ${id}`,
                 isNull(samePhone.deletedAt),
@@ -583,7 +586,7 @@ app.openapi(getHistoryRoute, async (c) => {
         kind: customerKind({ accountClaimedAt: customer.accountClaimedAt, origin }),
         deletedAt: customer.deletedAt ? new Date(customer.deletedAt * 1000) : null,
         mergedInto: mergedIntoId ? { id: mergedIntoId, name: mergedIntoName ?? "" } : null,
-        samePhone: samePhoneRows.map((row) => ({ id: row.id, name: row.name, phone: row.phone, kind: customerKind(row) })),
+        samePhone: samePhoneRows.flatMap((row) => row.phone ? [{ id: row.id, name: row.name, phone: row.phone, kind: customerKind(row) }] : []),
         totalSpent: paidSpendAmount({ totalSpentMinor, spendDecimalPlaces }),
         accountClaimedAt: customer.accountClaimedAt ? new Date(customer.accountClaimedAt * 1000) : null,
         lastOrderAt: customer.lastOrderAt ? new Date(customer.lastOrderAt * 1000) : null,
@@ -602,7 +605,7 @@ app.openapi(getHistoryRoute, async (c) => {
             ? {
                 id: relatedCustomerId,
                 name: relatedCustomerName ?? "",
-                phone: relatedCustomerPhone ?? "",
+                phone: phoneOrNull(relatedCustomerPhone),
                 kind: customerKind({ accountClaimedAt: relatedCustomerClaimedAt, origin: relatedCustomerOrigin }),
             }
             : null,

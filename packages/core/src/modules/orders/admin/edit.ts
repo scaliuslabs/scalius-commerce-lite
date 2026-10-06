@@ -2,7 +2,7 @@
 import { safeBatch, type Database } from "@scalius/database/client";
 import { orders, customerAddresses, customers, deliveryShipments, firstCustomerAddressId, FulfillmentStatus } from "@scalius/database/schema";
 import { sql, eq, inArray, isNull, and } from "drizzle-orm";
-import { customerAddressColumns, guestRecordForPhone, resolveAddress } from "../../customers";
+import { customerAddressColumns, guestRecordForContact, resolveAddress } from "../../customers";
 import { orderAddressInput, orderShippingAddressColumns } from "../shipping-address";
 import { nanoid } from "nanoid";
 import type { UpdateOrderDetailsInput } from "../validation";
@@ -84,7 +84,7 @@ export async function updateOrderDetails(
     // edit only changes the order's own contact snapshot.
     if (!order.accountOwnerCustomerId && (next.customerPhone !== order.customerPhone || !customerId)) {
         const existingCustomer = await db.select({ id: customers.id }).from(customers)
-            .where(guestRecordForPhone(next.customerPhone)).get();
+            .where(guestRecordForContact({ phone: next.customerPhone })).get();
         customerId = existingCustomer?.id ?? `cust_${nanoid()}`;
         if (!existingCustomer) newCustomerId = customerId;
     }

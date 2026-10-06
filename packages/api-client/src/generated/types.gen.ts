@@ -6605,9 +6605,9 @@ export type PostApiV1StorefrontAgentContextsByContextIdCheckoutSubmitData = {
         idempotencyKey?: string;
         customerName: string;
         /**
-         * Customer phone number. Use international E.164 form to avoid country ambiguity (for example, +8801712345678).
+         * Customer phone number. Use international E.164 form to avoid country ambiguity (for example, +8801712345678). Required unless the store lets this order go without a phone: only digital or service lines, paid in full online, outside Bangladesh (Customer accounts opt-in). customerEmail is then required.
          */
-        customerPhone: string;
+        customerPhone?: string | null;
         customerEmail: string | null;
         /**
          * Street address. Required only when a line ships; omit it for a pickup method or a cart with nothing physical (services).
@@ -8222,6 +8222,7 @@ export type GetApiV1CheckoutConfigResponses = {
                 email: 'required' | 'optional' | 'hidden';
                 whatsapp: 'off' | 'same_as_phone' | 'separate';
                 channels: Array<'email' | 'sms' | 'whatsapp'>;
+                phoneOptionalForDigital: boolean;
             };
             checkoutMode: 'guest_cod_only' | 'gateways_only' | 'all';
             partialPaymentEnabled: boolean;
@@ -9237,7 +9238,10 @@ export type GetApiV1CustomerAuthOrdersByIdResponses = {
                 notes: string | null;
                 statusLabel: string;
                 customerName: string;
-                customerPhone: string;
+                /**
+                 * E.164; null for an order placed without a phone (only digital or service lines, Customer accounts opt-in).
+                 */
+                customerPhone: string | null;
                 createdAt: NullableTimestamp;
                 updatedAt: NullableTimestamp;
                 [key: string]: unknown;
@@ -15217,7 +15221,7 @@ export type GetApiV1OrdersReceiptByIdResponses = {
                 id: string;
                 orderNumber: number | null;
                 customerName: string;
-                customerPhone: string;
+                customerPhone: string | null;
                 customerEmail: string | null;
                 accountLinked: boolean;
                 shippingAddress: string | null;
@@ -16029,7 +16033,7 @@ export type PostApiV1OrdersData = {
          */
         expectedQuoteFingerprint: string;
         customerName: string;
-        customerPhone: string;
+        customerPhone?: string | null;
         customerEmail: string | null;
         customerWhatsapp?: string | null;
         shippingCountryCode?: string | null;
@@ -20694,7 +20698,7 @@ export type PostApiV1AdminCustomersSegmentsPreviewResponses = {
                 id: string;
                 name: string;
                 email: string | null;
-                phone: string;
+                phone: string | null;
                 defaultAddress: {
                     countryCode: string;
                     line1: string | null;
@@ -21248,7 +21252,7 @@ export type GetApiV1AdminCustomersResponses = {
                 id: string;
                 name: string;
                 email: string | null;
-                phone: string;
+                phone: string | null;
                 defaultAddress: {
                     countryCode: string;
                     line1: string | null;
@@ -21318,7 +21322,7 @@ export type PostApiV1AdminCustomersData = {
     body: {
         name: string;
         email: string | null;
-        phone: string;
+        phone: string | null;
         address?: {
             countryCode?: string | null;
             name?: string | null;
@@ -21478,7 +21482,7 @@ export type GetApiV1AdminCustomersByIdResponses = {
             id: string;
             name: string;
             email: string | null;
-            phone: string;
+            phone: string | null;
             accountClaimedAt: NullableTimestamp;
             kind: 'account' | 'guest' | 'merchant';
             latestOrderName: string | null;
@@ -22055,7 +22059,7 @@ export type GetApiV1AdminCustomersByIdHistoryResponses = {
                 id: string;
                 name: string;
                 email: string | null;
-                phone: string;
+                phone: string | null;
                 accountClaimedAt: NullableTimestamp;
                 kind: 'account' | 'guest' | 'merchant';
                 latestOrderName: string | null;
@@ -22097,7 +22101,7 @@ export type GetApiV1AdminCustomersByIdHistoryResponses = {
                 relatedCustomer: {
                     id: string;
                     name: string;
-                    phone: string;
+                    phone: string | null;
                     kind: 'account' | 'guest' | 'merchant';
                 } | null;
                 createdAt: string | number;
@@ -34181,6 +34185,10 @@ export type GetApiV1AdminSettingsAuthResponses = {
                 email: 'required' | 'optional' | 'hidden';
                 whatsapp: 'off' | 'same_as_phone' | 'separate';
                 channels: Array<'email' | 'sms' | 'whatsapp'>;
+                /**
+                 * Phone is optional for orders made only of digital or service lines, paid in full online, outside Bangladesh. Email is then required. Off by default.
+                 */
+                phoneOptionalForDigital: boolean;
             };
             whatsappAccessToken: string;
             whatsappPhoneNumberId: string;
@@ -34201,6 +34209,10 @@ export type PostApiV1AdminSettingsAuthData = {
             email: 'required' | 'optional' | 'hidden';
             whatsapp: 'off' | 'same_as_phone' | 'separate';
             channels: Array<'email' | 'sms' | 'whatsapp'>;
+            /**
+             * Phone is optional for orders made only of digital or service lines, paid in full online, outside Bangladesh. Email is then required. Off by default.
+             */
+            phoneOptionalForDigital: boolean;
         };
         whatsappAccessToken?: string;
         whatsappPhoneNumberId?: string | null;
@@ -39342,7 +39354,10 @@ export type GetApiV1AdminOrdersByIdInvoiceResponses = {
                 orderNumber?: number | null;
                 version: number;
                 customerName: string;
-                customerPhone: string;
+                /**
+                 * E.164; null for an order placed without a phone (only digital or service lines, Customer accounts opt-in).
+                 */
+                customerPhone: string | null;
                 customerEmail: string | null;
                 customerId: string | null;
                 shippingAddress: string | null;
@@ -39515,7 +39530,10 @@ export type PostApiV1AdminOrdersByIdInvoiceResponses = {
                 orderNumber?: number | null;
                 version: number;
                 customerName: string;
-                customerPhone: string;
+                /**
+                 * E.164; null for an order placed without a phone (only digital or service lines, Customer accounts opt-in).
+                 */
+                customerPhone: string | null;
                 customerEmail: string | null;
                 customerId: string | null;
                 shippingAddress: string | null;
@@ -40635,7 +40653,10 @@ export type GetApiV1AdminOrdersResponses = {
             orders: Array<{
                 id: string;
                 customerName: string;
-                customerPhone: string;
+                /**
+                 * E.164; null for an order placed without a phone (only digital or service lines, Customer accounts opt-in).
+                 */
+                customerPhone: string | null;
                 customerEmail: string | null;
                 customerId: string | null;
                 totalAmount: number;
@@ -41060,7 +41081,10 @@ export type GetApiV1AdminOrdersPaymentRecoveryResponses = {
             orders: Array<{
                 id: string;
                 customerName: string;
-                customerPhone: string;
+                /**
+                 * E.164; null for an order placed without a phone (only digital or service lines, Customer accounts opt-in).
+                 */
+                customerPhone: string | null;
                 customerEmail: string | null;
                 customerId: string | null;
                 totalAmount: number;
@@ -42131,14 +42155,17 @@ export type GetApiV1AdminOrdersByIdResponses = {
         data: {
             id: string;
             customerName: string;
-            customerPhone: string;
+            /**
+             * E.164; null for an order placed without a phone (only digital or service lines, Customer accounts opt-in).
+             */
+            customerPhone: string | null;
             customerEmail: string | null;
             customerWhatsapp: string | null;
             customerId: string | null;
             customerRecord: {
                 id: string;
                 name: string;
-                phone: string;
+                phone: string | null;
                 kind: 'account' | 'guest' | 'merchant';
             } | null;
             totalAmount: number;
@@ -42956,7 +42983,10 @@ export type GetApiV1AdminOrdersByIdFormDataResponses = {
                 orderNumber: number | null;
                 version: number;
                 customerName: string;
-                customerPhone: string;
+                /**
+                 * E.164; null for an order placed without a phone (only digital or service lines, Customer accounts opt-in).
+                 */
+                customerPhone: string | null;
                 customerEmail: string | null;
                 shippingAddress: string | null;
                 shippingAddressLine2: string | null;
@@ -43081,7 +43111,10 @@ export type GetApiV1AdminOrdersByIdFormDataResponses = {
                 orderNumber: number | null;
                 version: number;
                 customerName: string;
-                customerPhone: string;
+                /**
+                 * E.164; null for an order placed without a phone (only digital or service lines, Customer accounts opt-in).
+                 */
+                customerPhone: string | null;
                 customerEmail: string | null;
                 shippingAddress: string | null;
                 shippingAddressLine2: string | null;

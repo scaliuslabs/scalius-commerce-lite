@@ -271,7 +271,7 @@ const orderFormDataSchema = z.object({
     orderNumber: z.number().int().nullable(),
     version: z.number().int().min(1),
     customerName: z.string(),
-    customerPhone: z.string(),
+    customerPhone: z.string().nullable().openapi({ description: "E.164; null for an order placed without a phone (only digital or service lines, Customer accounts opt-in)." }),
     customerEmail: z.string().nullable(),
     /**
      * The shipping-address snapshot; null fields when nothing ships (pickup or

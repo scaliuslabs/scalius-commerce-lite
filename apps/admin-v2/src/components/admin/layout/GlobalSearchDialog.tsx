@@ -224,10 +224,10 @@ export function GlobalSearchDialog({ nav, canOpen, goKeys, open, setOpen }: Glob
         return {
           id: `u:${customer.id}`,
           label: title,
-          detail: guest ? detail ?? undefined : formatPhoneForDisplay(customer.phone),
+          detail: guest ? detail ?? undefined : customer.phone ? formatPhoneForDisplay(customer.phone) : customer.email ?? undefined,
           to: `/admin/customers/${customer.id}/edit`,
           icon: UserRound,
-          titledByPhone: guest,
+          titledByPhone: guest && customer.phone !== null,
         };
       }),
       ...discountMatches.slice(0, PER_TYPE).map((discount) => ({

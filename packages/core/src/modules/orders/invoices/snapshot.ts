@@ -42,7 +42,7 @@ export interface InvoiceOrderSnapshot {
   orderNumber?: number | null;
   version: number;
   customerName: string;
-  customerPhone: string;
+  customerPhone: string | null;
   customerEmail: string | null;
   customerId: string | null;
   shippingAddress: string | null;

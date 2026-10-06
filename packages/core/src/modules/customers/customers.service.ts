@@ -16,7 +16,8 @@ import { sql, isNull, inArray, desc, eq, and, or, type SQL, type SQLWrapper } fr
 import { alias } from "drizzle-orm/sqlite-core";
 import { nanoid } from "nanoid";
 import { fromMinor } from "@scalius/shared/money";
-import { customerKind } from "./customer-identity";
+import { customerKind, guestRecordForContact, normalizeContactEmail } from "./customer-identity";
+import { storedPhone } from "@scalius/shared/customer-auth-policy";
 import { currentMarketingContactSql, segmentWhereSql } from "./customer-segments";
 import {
     MARKETING_CHANNELS,
@@ -37,7 +38,7 @@ import {
 } from "../../utils/keyset";
 import type { Database } from "@scalius/database/client";
 import { NotFoundError, ValidationError } from "@scalius/core/errors";
-import { validateCustomerPhoneCountry } from "../settings";
+import { customerAuthDocument, validateCustomerPhoneCountry } from "../settings";
 import { customerAddressColumns, listCustomerAddresses, resolveAddress } from "./addresses";
 
 // Re-export schemas from the canonical validation module
@@ -259,7 +260,7 @@ export async function listCustomers(
     if (positionWhere) statements.push(countProbe(positionWhere));
     const batchResult = await db.batch(statements as unknown as Parameters<Database["batch"]>[0]) as unknown as [
         { count: number }[],
-        { id: string; name: string; email: string | null; phone: string; defaultCountryCode: string | null; defaultLine1: string | null; defaultLine2: string | null; defaultDependentLocality: string | null; defaultLocality: string | null; defaultAdminArea: string | null; defaultPostalCode: string | null; defaultCity: string | null; defaultZone: string | null; defaultArea: string | null; defaultCityName: string | null; defaultZoneName: string | null; defaultAreaName: string | null; accountClaimedAt: number | null; origin: string; latestOrderName: string | null; totalOrders: number; totalSpentMinor: number; spendDecimalPlaces: number; lastOrderAt: number | null; createdAt: number; updatedAt: number; keysetValue: number | string | null }[],
+        { id: string; name: string; email: string | null; phone: string | null; defaultCountryCode: string | null; defaultLine1: string | null; defaultLine2: string | null; defaultDependentLocality: string | null; defaultLocality: string | null; defaultAdminArea: string | null; defaultPostalCode: string | null; defaultCity: string | null; defaultZone: string | null; defaultArea: string | null; defaultCityName: string | null; defaultZoneName: string | null; defaultAreaName: string | null; accountClaimedAt: number | null; origin: string; latestOrderName: string | null; totalOrders: number; totalSpentMinor: number; spendDecimalPlaces: number; lastOrderAt: number | null; createdAt: number; updatedAt: number; keysetValue: number | string | null }[],
         { count: number }[]?,
     ];
     const { rows: results, pageInfo, pageStart } = plan.finish(batchResult[1], batchResult[2]?.[0]?.count);
@@ -314,9 +315,13 @@ export async function createCustomer(
     data: CreateCustomerInput,
     actorId: string | null = null,
 ): Promise<{ id: string }> {
-    await validateCustomerPhoneCountry(db, data.phone);
-    const existing = await findActiveCustomerWithPhone(db, data.phone);
-    if (existing) throw new ValidationError("Customer with this phone number already exists", { customer: existing });
+    if (data.phone) {
+        await validateCustomerPhoneCountry(db, data.phone);
+        const existing = await findActiveCustomerWithPhone(db, data.phone);
+        if (existing) throw new ValidationError("Customer with this phone number already exists", { customer: existing });
+    } else {
+        await assertPhonelessCustomerAllowed(db, data.email);
+    }
     // The first address (Shopify's new-customer form) is the default of the new address book.
     const address = data.address
         ? await resolveAddress(db, data.address, { skipValidation: data.address.skipValidation === true })
@@ -328,7 +333,7 @@ export async function createCustomer(
             id: customerId,
             name: data.name,
             email: data.email,
-            phone: data.phone,
+            phone: storedPhone(data.phone),
             origin: "merchant",
             totalOrders: 0,
             createdAt: sql`unixepoch()`,
@@ -339,7 +344,7 @@ export async function createCustomer(
             customerId,
             name: data.name,
             email: data.email,
-            phone: data.phone,
+            phone: storedPhone(data.phone),
             changeType: "created",
             actor: "staff",
             actorId,
@@ -433,17 +438,27 @@ export async function updateCustomer(
         email: data.email !== undefined ? data.email : existing.email,
         phone: data.phone ?? existing.phone,
     };
+    // A customer without a phone is keyed by its email: it keeps one, unique among them.
+    if (!next.phone && !existing.accountClaimedAt && normalizeContactEmail(next.email) !== normalizeContactEmail(existing.email)) {
+        const email = normalizeContactEmail(next.email);
+        if (!email) throw new ValidationError("A customer without a phone needs an email address.", { field: "email" });
+        const taken = await db.select({ id: customers.id }).from(customers)
+            .where(and(guestRecordForContact({ phone: null, email }), sql`${customers.id} != ${id}`))
+            .get();
+        if (taken) throw new ValidationError("A customer without a phone already uses this email address.", { field: "email" });
+    }
     // A save that changes nothing writes nothing: no bumped timestamp, no empty "Updated" entry.
     if ((Object.keys(next) as Array<keyof typeof next>).every((key) => (next[key] ?? null) === (existing[key] ?? null))) return;
 
     // Naming a checkout guest record in the dashboard makes it the merchant's customer.
     const origin = !existing.accountClaimedAt && next.name !== existing.name ? { origin: "merchant" as const } : {};
     await db.batch([
-        db.update(customers).set({ ...next, ...origin, updatedAt: sql`unixepoch()` }).where(eq(customers.id, id)),
+        db.update(customers).set({ ...next, phone: storedPhone(next.phone), ...origin, updatedAt: sql`unixepoch()` }).where(eq(customers.id, id)),
         db.insert(customerHistory).values({
             id: "hist_" + nanoid(),
             customerId: id,
             ...next,
+            phone: storedPhone(next.phone),
             changeType: "updated",
             actor: "staff",
             actorId,
@@ -468,7 +483,7 @@ export async function deleteCustomer(db: Database, id: string, actorId: string |
             customerId: id,
             name: existing.name,
             email: existing.email,
-            phone: existing.phone,
+            phone: storedPhone(existing.phone),
             changeType: "deleted",
             actor: "staff",
             actorId,
@@ -509,13 +524,40 @@ export async function restoreCustomer(db: Database, id: string, actorId: string 
             customerId: id,
             name: existing.name,
             email: existing.email,
-            phone: existing.phone,
+            phone: storedPhone(existing.phone),
             changeType: "restored",
             actor: "staff",
             actorId,
             createdAt: sql`unixepoch()`,
         }),
     ] as Parameters<Database["batch"]>[0]);
+}
+
+/**
+ * A customer without a phone (Shopify keys such a customer by email): only
+ * when the store lets digital and service orders go without a phone, with an
+ * email that no other phoneless customer record uses (migration 0117).
+ */
+async function assertPhonelessCustomerAllowed(db: Database, email: string | null | undefined): Promise<void> {
+    const normalized = normalizeContactEmail(email);
+    if (!normalized) throw new ValidationError("Enter a phone number or an email address.", { field: "phone" });
+    const identity = await customerAuthDocument.read(db);
+    if (!identity.phoneOptionalForDigital) {
+        throw new ValidationError(
+            "Enter a phone number. A customer without one needs Settings → Customer accounts to let digital and service orders go without a phone.",
+            { field: "phone" },
+        );
+    }
+    const existing = await db.select({ id: customers.id, name: customers.name, phone: customers.phone, accountClaimedAt: customers.accountClaimedAt, origin: customers.origin })
+        .from(customers)
+        .where(guestRecordForContact({ phone: null, email: normalized }))
+        .get();
+    if (existing) {
+        throw new ValidationError("A customer without a phone already uses this email address.", {
+            field: "email",
+            customer: { id: existing.id, name: existing.name, phone: existing.phone, kind: customerKind(existing) },
+        });
+    }
 }
 
 /** The active customer already using a phone, for a dashboard "uses this phone" link. */

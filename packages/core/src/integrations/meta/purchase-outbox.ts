@@ -10,6 +10,7 @@ import {
 import { and, asc, eq, inArray, lte, or, sql, type SQL } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import { fromMinor } from "@scalius/shared/money";
+import { phoneOrNull } from "@scalius/shared/customer-auth-policy";
 
 import { sendCapiEvent, type SendCapiEventResult } from "./conversions-api";
 
@@ -113,8 +114,10 @@ export function buildMetaPurchaseEvent(options: BuildMetaPurchaseEventOptions) {
     const contentIds = items.map((item) => item.variantId || item.productId);
     // The buyer's country is the order's shipping country (Bangladesh when
     // nothing ships, as before country-aware addresses).
+    // An order placed without a phone sends none.
+    const phone = phoneOrNull(order.customerPhone);
     const userData: Record<string, unknown> = {
-        ph: order.customerPhone,
+        ...(phone ? { ph: phone } : {}),
         country: (order.shippingCountryCode ?? "BD").toLowerCase(),
     };
 

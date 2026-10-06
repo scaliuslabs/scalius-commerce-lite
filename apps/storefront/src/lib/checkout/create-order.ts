@@ -185,7 +185,8 @@ export async function createOrder(
     checkoutRequestId,
     expectedQuoteFingerprint,
     customerName: readString(checkoutData.customerName),
-    customerPhone: readString(checkoutData.customerPhone),
+    // Empty only when the shared contact rule lets this order go without a phone (the API decides).
+    customerPhone: readOptionalString(checkoutData.customerPhone),
     customerEmail: readOptionalString(checkoutData.customerEmail),
     customerWhatsapp: readOptionalString(checkoutData.customerWhatsapp),
     ...address,

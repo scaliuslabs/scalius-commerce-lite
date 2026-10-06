@@ -41,7 +41,7 @@ describe("customer sign-in", () => {
       envelope({ email: ready, sms: { status: "incomplete", issues: [] }, whatsapp: { status: "incomplete", issues: [] } }));
     sdk.getApiV1AdminSettingsAuth.mockImplementation(() => envelope({
       revision: { customerAuth: 3, whatsapp: 0 },
-      customerIdentity: { email: "optional", whatsapp: "off", channels: ["email"] },
+      customerIdentity: { email: "optional", whatsapp: "off", channels: ["email"], phoneOptionalForDigital: false },
     }));
     sdk.postApiV1AdminSettingsAuth.mockImplementation(() => envelope({ message: "ok", revision: { customerAuth: 4, whatsapp: 0 } }));
   });

@@ -91,7 +91,7 @@ type RecoveryOrderContact = {
     id: string;
     orderNumber: number | null;
     customerName: string | null;
-    customerPhone: string;
+    customerPhone: string | null;
     customerEmail: string | null;
     customerWhatsapp: string | null;
 };

@@ -86,8 +86,8 @@ const orderReceiptSchema = z.object({
   /** Short per-store order number shown as "#1001"; null only for orders placed before numbering. */
   orderNumber: z.number().int().nullable(),
   customerName: z.string(),
-  /** The phone the courier calls. The receipt is proof-gated, so the buyer sees their own contact. */
-  customerPhone: z.string(),
+  /** The phone the courier calls (null: placed without one). The receipt is proof-gated, so the buyer sees their own contact. */
+  customerPhone: z.string().nullable(),
   customerEmail: z.string().nullable(),
   /** True when the order is saved to a customer account. */
   accountLinked: z.boolean(),

@@ -79,7 +79,8 @@ export function OrderView({ order }: { order: Order }) {
   const navigate = useNavigate();
   const openOrder = (id: string | null | undefined) => (id ? () => void navigate({ to: "/admin/orders/$orderId", params: { orderId: id } }) : null);
   usePagerShortcuts({ previous: openOrder(neighbours?.previous), next: openOrder(neighbours?.next) });
-  const contact = customerContactLinks(order.customerPhone);
+  // An order placed without a phone (a digital or service order) has no call or WhatsApp link.
+  const contact = order.customerPhone ? customerContactLinks(order.customerPhone) : null;
   const name = formatOrderNumber(order.orderNumber, order.id);
   const archived = Boolean(order.archivedAt);
   const canEditCustomData = usePermissions().hasPermission(PERMISSIONS.ORDERS_EDIT);
@@ -257,13 +258,15 @@ export function OrderView({ order }: { order: Order }) {
         </div>
 
         <PhoneActionBar>
-          <Button variant="outline" size={primary ? "icon" : "lg"} className={primary ? "shrink-0" : "flex-1"} asChild>
-            <a href={contact.call} aria-label={t("contact.callName", { name: order.customerName })}>
-              <Phone className="size-4" />
-              {primary ? null : t("contact.call")}
-            </a>
-          </Button>
-          {contact.whatsapp ? (
+          {contact ? (
+            <Button variant="outline" size={primary ? "icon" : "lg"} className={primary ? "shrink-0" : "flex-1"} asChild>
+              <a href={contact.call} aria-label={t("contact.callName", { name: order.customerName })}>
+                <Phone className="size-4" />
+                {primary ? null : t("contact.call")}
+              </a>
+            </Button>
+          ) : null}
+          {contact?.whatsapp ? (
             <Button variant="outline" size={primary ? "icon" : "lg"} className={primary ? "shrink-0" : "flex-1"} asChild>
               <a href={contact.whatsapp} target="_blank" rel="noopener noreferrer" aria-label={t("contact.whatsappName", { name: order.customerName })}>
                 <MessageCircle className="size-4" />

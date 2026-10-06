@@ -186,7 +186,8 @@ export interface Order {
   id: string;
   version: number;
   customerName: string;
-  customerPhone: string;
+  /** Null for an order placed without a phone (a digital or service order). */
+  customerPhone: string | null;
   customerEmail: string | null;
   /** A separate WhatsApp number; null means the phone. */
   customerWhatsapp?: string | null;
@@ -292,7 +293,8 @@ export interface OrderCustomerRecord {
   id: string;
   name: string;
   kind: "account" | "guest" | "merchant";
-  phone: string;
+  /** Null for a record without a phone (keyed by email). */
+  phone: string | null;
 }
 
 /** A saving on the order: a promotion's, or one an app gave at checkout (`checkout.discounts`). */

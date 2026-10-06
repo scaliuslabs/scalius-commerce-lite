@@ -87,7 +87,8 @@ export interface AgentStorefrontCheckoutSubmitInput {
   expectedQuoteFingerprint: string;
   idempotencyKey: string;
   customerName: string;
-  customerPhone: string;
+  /** Null only when the shared contact rule lets the order go without one (then email is required). */
+  customerPhone: string | null;
   customerEmail: string | null;
   /** Required only when a line ships (not for pickup or a cart with nothing physical). */
   shippingAddress?: string | null;
@@ -171,7 +172,7 @@ export async function buildAgentStorefrontCheckoutRequestHash(
     expectedRevision: input.expectedRevision,
     expectedQuoteFingerprint: input.expectedQuoteFingerprint,
     customerName: input.customerName.trim(),
-    customerPhone: input.customerPhone.trim(),
+    customerPhone: input.customerPhone?.trim() || null,
     customerEmail: input.customerEmail?.trim().toLowerCase() ?? null,
     shippingAddress: input.shippingAddress?.trim() || null,
     // Only when sent, so a Bangladesh submit hashes as before.
@@ -400,11 +401,6 @@ export async function submitAgentStorefrontCheckout(
   const checkoutSettings = customer
     ? assertStorefrontCheckoutPolicy(input.customerPhone, input.paymentMethod, authority, paymentProviders)
     : assertGuestStorefrontCheckoutPolicy(input.customerPhone, input.paymentMethod, authority, paymentProviders);
-  if (customer && !customer.phone) {
-    throw new ValidationError(
-      "The authorized customer account is missing its required phone number.",
-    );
-  }
   const gatewayCurrencyIssue = isOnlinePaymentMethod(input.paymentMethod)
     ? paymentProviders.currencyIssue(input.paymentMethod, authority.currency.currencyCode)
     : null;
@@ -421,7 +417,10 @@ export async function submitAgentStorefrontCheckout(
     // is its delivery rate's (MARKETS-DESIGN step 3b): the order's country,
     // Bangladesh's City/Thana/Area or another country's admin area and
     // postal code are the ones the rate was priced for.
-    shippingCountryCode: delivery.address?.countryCode ?? null,
+    // With nothing to ship, the context's market country places the order for
+    // the shared contact rule, only when the store lets such orders go without a phone.
+    shippingCountryCode: delivery.address?.countryCode
+      ?? (authority.contactFields.phoneOptionalForDigital && !delivery.fulfilment.requiresShipping ? owned.countryCode ?? null : null),
     shippingAddress: delivery.fulfilment.requiresShipping ? shippingAddress : null,
     ...(delivery.fulfilment.requiresShipping && delivery.address?.countryCode !== DELIVERY_HIERARCHY_COUNTRY
       ? {

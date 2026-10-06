@@ -422,3 +422,60 @@ describe.each(["d1", "turso"] as const)("Wave A lines at the storefront commit (
     expect(line).toMatchObject({ properties_price_minor: 2_000, base_unit_price_minor: 8_000, unit_price_minor: 10_000 });
   });
 });
+
+// Phone optional for digital and service orders (owner decision 2026-10-07,
+// migration 0117): a phoneless order stores NO_PHONE, reads back null, and
+// its guest record is keyed by email, never shared through ''.
+describe.each(["d1", "turso"] as const)("orders placed without a phone (%s)", (provider) => {
+  const phoneless = (key: string, email: string) => {
+    const prepared = prepare(key, { paymentMethod: "stripe", status: "incomplete" });
+    Object.assign(prepared.payload.orderData, {
+      customerPhone: null,
+      customerEmail: email,
+      shippingAddress: null, city: null, zone: null, area: null, cityName: null, zoneName: null,
+      requiresShipping: false,
+      shippingMethodKind: null,
+    });
+    prepared.payload.items[0]!.fulfillmentType = "service";
+    return prepared;
+  };
+  const customerOf = (orderId: string) => sqlite!.prepare(
+    "SELECT c.id, c.phone, c.email, c.account_claimed_at FROM orders o JOIN customers c ON c.id = o.customer_id WHERE o.id = ?",
+  ).get(orderId) as { id: string; phone: string; email: string; account_claimed_at: number | null };
+
+  it("keys each phoneless guest record by its email", async () => {
+    const db = openStore(provider, 10);
+    const first = phoneless("pl1", "Buyer@Example.test");
+    await commitStorefrontOrderPayload(db, first.payload, first.commit);
+    const second = phoneless("pl2", "buyer@example.test");
+    await commitStorefrontOrderPayload(db, second.payload, second.commit);
+    const other = phoneless("pl3", "other@example.test");
+    await commitStorefrontOrderPayload(db, other.payload, other.commit);
+
+    const a = customerOf(first.payload.orderData.id);
+    expect(a).toMatchObject({ phone: "", email: "Buyer@Example.test", account_claimed_at: null });
+    expect(customerOf(second.payload.orderData.id).id).toBe(a.id);
+    expect(customerOf(other.payload.orderData.id).id).not.toBe(a.id);
+    expect(sqlite!.prepare("SELECT customer_phone FROM orders WHERE id = ?").get(first.payload.orderData.id))
+      .toEqual({ customer_phone: "" });
+    expect(sqlite!.prepare("SELECT total_orders FROM customers WHERE id = ?").get(a.id)).toEqual({ total_orders: 2 });
+  });
+
+  it("files a phoneless order under the account that proved its email, and a phone order apart", async () => {
+    const db = openStore(provider, 10);
+    sqlite!.exec(`INSERT INTO customers (id, name, email, phone, origin, account_claimed_at, email_verified_at)
+      VALUES ('cust_acc', 'Account', 'proven@example.test', '', 'account', unixepoch(), unixepoch())`);
+    const viaEmail = phoneless("pl4", "PROVEN@example.test");
+    await commitStorefrontOrderPayload(db, viaEmail.payload, viaEmail.commit);
+    expect(customerOf(viaEmail.payload.orderData.id).id).toBe("cust_acc");
+
+    // A phone order is keyed by its phone, never by the phoneless record of its email.
+    const guest = phoneless("pl5", "solo@example.test");
+    await commitStorefrontOrderPayload(db, guest.payload, guest.commit);
+    const withPhone = prepare("pl6", { phone: "+8801711000006" });
+    withPhone.payload.orderData.customerEmail = "solo@example.test";
+    await commitStorefrontOrderPayload(db, withPhone.payload, withPhone.commit);
+    expect(customerOf(withPhone.payload.orderData.id)).toMatchObject({ phone: "+8801711000006" });
+    expect(customerOf(withPhone.payload.orderData.id).id).not.toBe(customerOf(guest.payload.orderData.id).id);
+  });
+});

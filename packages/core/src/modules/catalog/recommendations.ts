@@ -29,7 +29,7 @@
 // Freshness: stored lists declare rec:<source>; live fallback declares the
 // recommendation-signals key and the next included order's ranking-window
 // exit. No arbitrary age limit applies to a quiet store's recommendations.
-import { productRecommendations, products } from "@scalius/database/schema";
+import { contactPhoneSql, productRecommendations, products } from "@scalius/database/schema";
 import type { Database } from "@scalius/database/client";
 import { and, asc, desc, eq, sql, type SQL } from "drizzle-orm";
 import { unixToDate } from "@scalius/shared/utils";
@@ -126,6 +126,14 @@ function normalizeLimit(limit: number | undefined): number {
 
 function realOrder(alias: string): SQL {
     return sql.raw(`${alias}.status IN ${REAL_ORDER_STATUSES_SQL} AND ${alias}.deleted_at IS NULL`);
+}
+
+/**
+ * One buyer of an order: its phone, or its email when it was placed without
+ * one (a phoneless order never counts as one shared buyer).
+ */
+function buyerSql(alias: string): SQL {
+    return sql`COALESCE(${contactPhoneSql(sql.raw(`${alias}.customer_phone`))}, lower(trim(${sql.raw(`${alias}.customer_email`)})))`;
 }
 
 /** A stored collection id list, or an empty list for a malformed config (json_each fails closed on Postgres). */
@@ -296,7 +304,7 @@ export async function rankRecommendationRows(
 
     const coPurchase = sql`(
         SELECT rec_peer_line.product_id AS product_id,
-               COUNT(DISTINCT rec_co_order.customer_phone) AS buyers
+               COUNT(DISTINCT ${buyerSql("rec_co_order")}) AS buyers
         FROM order_items AS rec_source_line
         CROSS JOIN orders AS rec_co_order
         CROSS JOIN order_items AS rec_peer_line
@@ -331,7 +339,7 @@ export async function rankRecommendationRows(
 
     const popular = sql`(
         SELECT rec_popular_line.product_id AS product_id,
-               COUNT(DISTINCT rec_popular_order.customer_phone) AS buyers
+               COUNT(DISTINCT ${buyerSql("rec_popular_order")}) AS buyers
         FROM orders AS rec_popular_order
         INNER JOIN order_items AS rec_popular_line ON rec_popular_line.order_id = rec_popular_order.id
         WHERE ${realOrder("rec_popular_order")}

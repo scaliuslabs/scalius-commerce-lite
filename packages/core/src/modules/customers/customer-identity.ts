@@ -11,6 +11,7 @@
 import { and, eq, isNotNull, isNull, ne, or, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import { safeBatch, type Database } from "@scalius/database/client";
+import { NO_PHONE, phoneOrNull } from "@scalius/shared/customer-auth-policy";
 import {
     customerHistory,
     customerMarketingConsentEvents,
@@ -34,13 +35,15 @@ export function customerKind(row: { accountClaimedAt: unknown; origin: string | 
 }
 
 export interface OrderContact {
-    phone: string;
+    /** Null for a contact without a phone (a digital or service order); email then identifies it. */
+    phone: string | null;
     email?: string | null;
 }
 
 export interface ContactCustomerCandidate {
     id: string;
-    phone: string;
+    /** Null for a record without a phone. */
+    phone: string | null;
     email: string | null;
     accountClaimedAt: Date | null;
     phoneVerifiedAt: Date | null;
@@ -74,22 +77,39 @@ export function normalizeContactEmail(email: string | null | undefined): string 
     return normalized || null;
 }
 
-/** The one active guest record keyed by a phone (unique; never an account). */
-export function guestRecordForPhone(phone: string): SQL {
-    return and(eq(customers.phone, phone), isNull(customers.accountClaimedAt), isNull(customers.deletedAt))!;
+/**
+ * The one active guest record of a contact (unique; never an account): keyed
+ * by its phone, or by its email when it has no phone (migration 0117). A
+ * contact with neither matches nothing.
+ */
+export function guestRecordForContact(contact: OrderContact): SQL {
+    const phone = phoneOrNull(contact.phone);
+    if (phone) return and(eq(customers.phone, phone), isNull(customers.accountClaimedAt), isNull(customers.deletedAt))!;
+    const email = normalizeContactEmail(contact.email);
+    if (!email) return sql`0`;
+    return and(
+        eq(customers.phone, NO_PHONE),
+        sql`lower(${customers.email}) = ${email}`,
+        isNull(customers.accountClaimedAt),
+        isNull(customers.deletedAt),
+    )!;
 }
 
 /**
  * The only rows a guest order's contact can resolve to: the account that
  * proved this phone, the account that proved this email, and the one guest
- * record keyed by this phone. Batchable (one read in the checkout batch).
+ * record keyed by this phone (or, without a phone, by this email).
+ * Batchable (one read in the checkout batch).
  */
 export function selectContactCustomerCandidates(db: Database, contact: OrderContact) {
     const email = normalizeContactEmail(contact.email);
-    const matches: SQL[] = [
-        and(eq(customers.phone, contact.phone), isNotNull(customers.phoneVerifiedAt), isNotNull(customers.accountClaimedAt))!,
-        and(eq(customers.phone, contact.phone), isNull(customers.accountClaimedAt))!,
-    ];
+    const phone = phoneOrNull(contact.phone);
+    const matches: SQL[] = phone
+        ? [
+            and(eq(customers.phone, phone), isNotNull(customers.phoneVerifiedAt), isNotNull(customers.accountClaimedAt))!,
+            and(eq(customers.phone, phone), isNull(customers.accountClaimedAt))!,
+        ]
+        : [];
     if (email) {
         matches.push(and(
             sql`lower(${customers.email}) = ${email}`,
@@ -97,6 +117,11 @@ export function selectContactCustomerCandidates(db: Database, contact: OrderCont
             isNotNull(customers.accountClaimedAt),
         )!);
     }
+    // Without a phone, the email's phoneless guest record (never one with a phone).
+    if (!phone && email) {
+        matches.push(and(eq(customers.phone, NO_PHONE), sql`lower(${customers.email}) = ${email}`, isNull(customers.accountClaimedAt))!);
+    }
+    if (matches.length === 0) matches.push(sql`0`);
     return db
         .select({
             id: customers.id,
@@ -120,13 +145,19 @@ export function chooseOrderCustomer(
     contact: OrderContact,
 ): OrderCustomerChoice | null {
     const email = normalizeContactEmail(contact.email);
-    const byPhone = candidates.find((row) => row.accountClaimedAt && row.phoneVerifiedAt && row.phone === contact.phone);
+    const phone = phoneOrNull(contact.phone);
+    const byPhone = phone
+        ? candidates.find((row) => row.accountClaimedAt && row.phoneVerifiedAt && row.phone === phone)
+        : undefined;
     if (byPhone) return { customerId: byPhone.id, accountOwnerCustomerId: byPhone.id, linkedBy: "phone" };
     const byEmail = email
         ? candidates.find((row) => row.accountClaimedAt && row.emailVerifiedAt && normalizeContactEmail(row.email) === email)
         : undefined;
     if (byEmail) return { customerId: byEmail.id, accountOwnerCustomerId: byEmail.id, linkedBy: "email" };
-    const guest = candidates.find((row) => !row.accountClaimedAt && row.phone === contact.phone);
+    // The guest record keyed by the phone; without one, the phoneless record keyed by the email.
+    const guest = candidates.find((row) => !row.accountClaimedAt && (phone
+        ? row.phone === phone
+        : phoneOrNull(row.phone) === null && email !== null && normalizeContactEmail(row.email) === email));
     return guest ? { customerId: guest.id, accountOwnerCustomerId: null, linkedBy: null } : null;
 }
 
@@ -144,7 +175,7 @@ export function buildVerifiedContactOrderLink(
     db: Database,
     input: { customerId: string; email?: string | null; phone?: string | null },
 ) {
-    const phone = input.phone?.trim() || null;
+    const phone = phoneOrNull(input.phone);
     const email = normalizeContactEmail(input.email);
     const phoneMatch = phone ? sql`${orders.customerPhone} = ${phone}` : null;
     const emailMatch = email ? sql`lower(trim(${orders.customerEmail})) = ${email}` : null;

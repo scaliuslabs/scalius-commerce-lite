@@ -99,7 +99,8 @@ function useReturningCustomer() {
       }
       if (fill.zone !== undefined) form.setValue("zone", fill.zone, set);
       if (fill.area !== undefined) form.setValue("area", fill.area, set);
-      setFilledFor({ phone: customer.phone, filled: Object.keys(fill).length > 0 });
+      // Found by its phone, so it has one.
+      setFilledFor({ phone: customer.phone ?? "", filled: Object.keys(fill).length > 0 });
     })();
     return () => {
       cancelled = true;

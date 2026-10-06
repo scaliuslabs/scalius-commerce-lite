@@ -97,7 +97,7 @@ describe("settings revision contract", () => {
     // that depends on them: refused as a whole.
     const tabB = await request("POST", "/auth", {
       expectedRevision: { customerAuth: 0, whatsapp: 0 },
-      customerIdentity: { email: "optional", whatsapp: "same_as_phone", channels: ["whatsapp"] },
+      customerIdentity: { email: "optional", whatsapp: "same_as_phone", channels: ["whatsapp"], phoneOptionalForDigital: false },
       whatsappAccessToken: "EAAG_tab_b_token",
       whatsappPhoneNumberId: "phone_id_b",
       whatsappTemplateName: "auth_otp",
@@ -117,7 +117,7 @@ describe("settings revision contract", () => {
     // A document the save touches must carry its revision.
     expect((await request("POST", "/auth", {
       expectedRevision: { whatsapp: 1 },
-      customerIdentity: { email: "optional", whatsapp: "same_as_phone", channels: ["whatsapp"] },
+      customerIdentity: { email: "optional", whatsapp: "same_as_phone", channels: ["whatsapp"], phoneOptionalForDigital: false },
     })).status).toBe(400);
   });
 });

@@ -74,7 +74,8 @@ type Existing = {
   id: string;
   name: string;
   email: string | null;
-  phone: string;
+  /** Null for a customer without a phone (matched by email only). */
+  phone: string | null;
   /** The customer has a saved address (an import fills an empty address book only). */
   hasAddress: number;
   accountClaimedAt: unknown;
@@ -113,6 +114,7 @@ async function readExisting(db: Database, items: readonly CustomerImportItem[]) 
   ]);
   const byPhone = new Map<string, Existing>();
   for (const row of phoneRows) {
+    if (!row.phone) continue;
     const current = byPhone.get(row.phone);
     // The account that proved the phone, else the phone's guest record.
     if (!current || (!current.accountClaimedAt && row.accountClaimedAt)) byPhone.set(row.phone, row);

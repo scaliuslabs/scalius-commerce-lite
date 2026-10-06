@@ -72,7 +72,9 @@ export const OrderMobileCard = memo(function OrderMobileCard({
         </span>
         <span className="flex items-center justify-between gap-3 text-body">
           <span className="min-w-0 truncate">{order.customerName}</span>
-          <span className="shrink-0 font-mono text-muted-foreground">{formatPhoneForDisplay(order.customerPhone)}</span>
+          {order.customerPhone ? (
+            <span className="shrink-0 font-mono text-muted-foreground">{formatPhoneForDisplay(order.customerPhone)}</span>
+          ) : null}
         </span>
         <span className="flex flex-wrap items-center gap-1">
           <Badge variant={statusBadgeVariant(order.status, "order")}>{orderStatusLabel(to, order.status)}</Badge>

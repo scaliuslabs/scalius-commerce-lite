@@ -8,10 +8,12 @@
  * - `none`: nothing physical was bought (services): no delivery method, no
  *   fee, no address — "we'll send updates to your phone".
  *
- * Phone is required on every path. The form's mode is only what the buyer
- * chose: the API decides from the SKUs and the rate's kind, and ignores an
- * address sent for a pickup or service order. The same tables drive the
- * browser field checks and the no-JS form path (`lib/cart/server.ts`).
+ * Phone is required on every path unless the shared contact rule lets a
+ * `none` cart go without one (lib/checkout/contact-need.ts). The form's mode
+ * is only what the buyer chose: the API decides from the SKUs and the rate's
+ * kind, and ignores an address sent for a pickup or service order. The same
+ * tables drive the browser field checks and the no-JS form path
+ * (`lib/cart/server.ts`).
  */
 import type { DeliveryMethodKind } from "@scalius/shared/fulfilment";
 import { isLocationCountry, readForeignAddressFields, shippingCountryOf } from "./shipping-country";
@@ -107,8 +109,14 @@ const NO_ADDRESS: CheckoutAddressFields = {
  */
 export function checkoutAddressForMode(
   mode: CheckoutDeliveryMode,
-  values: Partial<Record<keyof CheckoutAddressFields, unknown>>,
+  values: Partial<Record<keyof CheckoutAddressFields | "orderCountryCode", unknown>>,
 ): CheckoutAddressFields {
+  // Nothing ships: no address. A store that lets such orders go without a
+  // phone posts the market's country (`orderCountryCode`), which places the
+  // order for the contact rule; Bangladesh sends none, as before.
+  if (mode === "none" && typeof values.orderCountryCode === "string" && !isLocationCountry(values.orderCountryCode)) {
+    return { ...NO_ADDRESS, shippingCountryCode: shippingCountryOf(values.orderCountryCode) };
+  }
   if (mode !== "delivery") return { ...NO_ADDRESS };
   const text = (value: unknown) => {
     if (typeof value !== "string") return null;

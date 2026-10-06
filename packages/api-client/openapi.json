@@ -25453,9 +25453,10 @@
                   },
                   "customerPhone": {
                     "type": "string",
+                    "nullable": true,
                     "minLength": 7,
                     "maxLength": 16,
-                    "description": "Customer phone number. Use international E.164 form to avoid country ambiguity (for example, +8801712345678).",
+                    "description": "Customer phone number. Use international E.164 form to avoid country ambiguity (for example, +8801712345678). Required unless the store lets this order go without a phone: only digital or service lines, paid in full online, outside Bangladesh (Customer accounts opt-in). customerEmail is then required.",
                     "example": "+8801712345678"
                   },
                   "customerEmail": {
@@ -25503,7 +25504,6 @@
                   "expectedRevision",
                   "expectedQuoteFingerprint",
                   "customerName",
-                  "customerPhone",
                   "customerEmail",
                   "notes",
                   "paymentMethod"
@@ -30493,12 +30493,16 @@
                                 ]
                               },
                               "maxItems": 3
+                            },
+                            "phoneOptionalForDigital": {
+                              "type": "boolean"
                             }
                           },
                           "required": [
                             "email",
                             "whatsapp",
-                            "channels"
+                            "channels",
+                            "phoneOptionalForDigital"
                           ]
                         },
                         "checkoutMode": {
@@ -33725,7 +33729,9 @@
                               "type": "string"
                             },
                             "customerPhone": {
-                              "type": "string"
+                              "type": "string",
+                              "nullable": true,
+                              "description": "E.164; null for an order placed without a phone (only digital or service lines, Customer accounts opt-in)."
                             },
                             "createdAt": {
                               "$ref": "#/components/schemas/NullableTimestamp"
@@ -53778,7 +53784,8 @@
                               "type": "string"
                             },
                             "customerPhone": {
-                              "type": "string"
+                              "type": "string",
+                              "nullable": true
                             },
                             "customerEmail": {
                               "type": "string",
@@ -56842,7 +56849,7 @@
                   },
                   "customerPhone": {
                     "type": "string",
-                    "minLength": 7,
+                    "nullable": true,
                     "maxLength": 32
                   },
                   "customerEmail": {
@@ -57058,7 +57065,6 @@
                   "checkoutRequestId",
                   "expectedQuoteFingerprint",
                   "customerName",
-                  "customerPhone",
                   "customerEmail",
                   "notes",
                   "items",
@@ -71374,7 +71380,8 @@
                                 "nullable": true
                               },
                               "phone": {
-                                "type": "string"
+                                "type": "string",
+                                "nullable": true
                               },
                               "defaultAddress": {
                                 "type": "object",
@@ -73243,7 +73250,8 @@
                                 "nullable": true
                               },
                               "phone": {
-                                "type": "string"
+                                "type": "string",
+                                "nullable": true
                               },
                               "defaultAddress": {
                                 "type": "object",
@@ -73562,6 +73570,7 @@
                   },
                   "phone": {
                     "type": "string",
+                    "nullable": true,
                     "minLength": 7,
                     "maxLength": 16
                   },
@@ -73891,7 +73900,8 @@
                           "nullable": true
                         },
                         "phone": {
-                          "type": "string"
+                          "type": "string",
+                          "nullable": true
                         },
                         "accountClaimedAt": {
                           "$ref": "#/components/schemas/NullableTimestamp"
@@ -75959,7 +75969,8 @@
                               "nullable": true
                             },
                             "phone": {
-                              "type": "string"
+                              "type": "string",
+                              "nullable": true
                             },
                             "accountClaimedAt": {
                               "$ref": "#/components/schemas/NullableTimestamp"
@@ -76155,7 +76166,8 @@
                                     "type": "string"
                                   },
                                   "phone": {
-                                    "type": "string"
+                                    "type": "string",
+                                    "nullable": true
                                   },
                                   "kind": {
                                     "type": "string",
@@ -117814,12 +117826,17 @@
                               },
                               "minItems": 1,
                               "maxItems": 3
+                            },
+                            "phoneOptionalForDigital": {
+                              "type": "boolean",
+                              "description": "Phone is optional for orders made only of digital or service lines, paid in full online, outside Bangladesh. Email is then required. Off by default."
                             }
                           },
                           "required": [
                             "email",
                             "whatsapp",
-                            "channels"
+                            "channels",
+                            "phoneOptionalForDigital"
                           ],
                           "additionalProperties": false
                         },
@@ -118001,12 +118018,17 @@
                         },
                         "minItems": 1,
                         "maxItems": 3
+                      },
+                      "phoneOptionalForDigital": {
+                        "type": "boolean",
+                        "description": "Phone is optional for orders made only of digital or service lines, paid in full online, outside Bangladesh. Email is then required. Off by default."
                       }
                     },
                     "required": [
                       "email",
                       "whatsapp",
-                      "channels"
+                      "channels",
+                      "phoneOptionalForDigital"
                     ],
                     "additionalProperties": false
                   },
@@ -135562,7 +135584,9 @@
                               "type": "string"
                             },
                             "customerPhone": {
-                              "type": "string"
+                              "type": "string",
+                              "nullable": true,
+                              "description": "E.164; null for an order placed without a phone (only digital or service lines, Customer accounts opt-in)."
                             },
                             "customerEmail": {
                               "type": "string",
@@ -136239,7 +136263,9 @@
                               "type": "string"
                             },
                             "customerPhone": {
-                              "type": "string"
+                              "type": "string",
+                              "nullable": true,
+                              "description": "E.164; null for an order placed without a phone (only digital or service lines, Customer accounts opt-in)."
                             },
                             "customerEmail": {
                               "type": "string",
@@ -140153,7 +140179,9 @@
                                 "type": "string"
                               },
                               "customerPhone": {
-                                "type": "string"
+                                "type": "string",
+                                "nullable": true,
+                                "description": "E.164; null for an order placed without a phone (only digital or service lines, Customer accounts opt-in)."
                               },
                               "customerEmail": {
                                 "type": "string",
@@ -141680,7 +141708,9 @@
                                 "type": "string"
                               },
                               "customerPhone": {
-                                "type": "string"
+                                "type": "string",
+                                "nullable": true,
+                                "description": "E.164; null for an order placed without a phone (only digital or service lines, Customer accounts opt-in)."
                               },
                               "customerEmail": {
                                 "type": "string",
@@ -145451,7 +145481,9 @@
                           "type": "string"
                         },
                         "customerPhone": {
-                          "type": "string"
+                          "type": "string",
+                          "nullable": true,
+                          "description": "E.164; null for an order placed without a phone (only digital or service lines, Customer accounts opt-in)."
                         },
                         "customerEmail": {
                           "type": "string",
@@ -145476,7 +145508,8 @@
                               "type": "string"
                             },
                             "phone": {
-                              "type": "string"
+                              "type": "string",
+                              "nullable": true
                             },
                             "kind": {
                               "type": "string",
@@ -149000,7 +149033,9 @@
                               "type": "string"
                             },
                             "customerPhone": {
-                              "type": "string"
+                              "type": "string",
+                              "nullable": true,
+                              "description": "E.164; null for an order placed without a phone (only digital or service lines, Customer accounts opt-in)."
                             },
                             "customerEmail": {
                               "type": "string",
@@ -149571,7 +149606,9 @@
                               "type": "string"
                             },
                             "customerPhone": {
-                              "type": "string"
+                              "type": "string",
+                              "nullable": true,
+                              "description": "E.164; null for an order placed without a phone (only digital or service lines, Customer accounts opt-in)."
                             },
                             "customerEmail": {
                               "type": "string",
@@ -206490,7 +206527,7 @@
         "id": "dashboard.phone-required-invariant",
         "surface": "dashboard",
         "title": "Keep customer phone mandatory",
-        "summary": "Bangladesh checkout has no supported setting that makes customer phone optional.",
+        "summary": "Customer phone stays mandatory for Bangladesh, delivery, pickup, cash and deposit orders. The only opt-in (Customer accounts) covers digital or service orders outside Bangladesh.",
         "examples": [
           "Make customer phone optional before enabling checkout."
         ],
@@ -206542,8 +206579,9 @@
         "requiresConfirmation": true,
         "requiresVerification": true,
         "rules": [
-          "Customer phone is a mandatory platform invariant; do not invent or imply a disabling setting.",
-          "Make no setup write while the request requires optional phone collection."
+          "Customer phone is a mandatory platform invariant for every order placed in Bangladesh, delivered, picked up, or paid by cash or deposit; do not invent or imply a setting that changes this.",
+          "The Customer accounts opt-in (customerIdentity.phoneOptionalForDigital) affects only orders of digital or service lines paid in full online outside Bangladesh; it requires email instead.",
+          "Make no setup write while the request requires optional phone collection for those orders."
         ]
       },
       {

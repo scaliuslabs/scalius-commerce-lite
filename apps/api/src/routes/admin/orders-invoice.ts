@@ -50,7 +50,7 @@ const invoiceOrderSchema = z.object({
   orderNumber: z.number().int().nullable().optional(),
   version: z.number().int().positive(),
   customerName: z.string(),
-  customerPhone: z.string(),
+  customerPhone: z.string().nullable().openapi({ description: "E.164; null for an order placed without a phone (only digital or service lines, Customer accounts opt-in)." }),
   customerEmail: z.string().nullable(),
   customerId: z.string().nullable(),
   shippingAddress: z.string().nullable(),

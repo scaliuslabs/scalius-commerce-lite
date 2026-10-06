@@ -5,7 +5,7 @@
 
 import { sqliteTable, text, integer, index, uniqueIndex, check } from "drizzle-orm/sqlite-core";
 import { sql, type InferSelectModel } from "drizzle-orm";
-import { UNIX_NOW } from "./shared";
+import { UNIX_NOW, contactPhone } from "./shared";
 
 export const customers = sqliteTable("customers", {
     id: text("id").primaryKey(),
@@ -15,8 +15,11 @@ export const customers = sqliteTable("customers", {
      * The contact the buyer gave; a claim until proven by code. Only a proven
      * phone is unique (one account per verified phone), plus one guest record
      * per phone for the merchant's CRM. Typed phones never block anyone.
+     * '' (`NO_PHONE` in @scalius/shared/customer-auth-policy) is a contact
+     * without a phone (a digital or service order, migration 0117): its guest
+     * record is keyed by email instead, and it is read back as null.
      */
-    phone: text("phone").notNull(),
+    phone: contactPhone("phone").notNull(),
     // Addresses live in the address book (`customer_addresses`, migration 0113).
     accountClaimedAt: integer("account_claimed_at", { mode: "timestamp" }),
     phoneVerifiedAt: integer("phone_verified_at", { mode: "timestamp" }),
@@ -56,7 +59,11 @@ export const customers = sqliteTable("customers", {
         .where(sql`${table.emailVerifiedAt} IS NOT NULL AND ${table.deletedAt} IS NULL`),
     uniqueIndex("customers_guest_phone_unique")
         .on(table.phone)
-        .where(sql`${table.accountClaimedAt} IS NULL AND ${table.deletedAt} IS NULL`),
+        .where(sql`${table.accountClaimedAt} IS NULL AND ${table.deletedAt} IS NULL AND ${table.phone} <> ''`),
+    // A guest record without a phone (NO_PHONE) is keyed by its email, as Shopify keys guests.
+    uniqueIndex("customers_guest_email_unique")
+        .on(sql`lower(${table.email})`)
+        .where(sql`${table.phone} = '' AND ${table.accountClaimedAt} IS NULL AND ${table.deletedAt} IS NULL`),
     index("customers_dashboard_activity_idx").on(table.deletedAt, table.createdAt),
 ]);
 
@@ -145,7 +152,7 @@ export const customerHistory = sqliteTable("customer_history", {
         .references(() => customers.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     email: text("email"),
-    phone: text("phone").notNull(),
+    phone: contactPhone("phone").notNull(),
     /**
      * signed_up: an account was created (or a guest record claimed) by a code.
      * order_linked: `orderId` was filed to this account at checkout by a verified contact.

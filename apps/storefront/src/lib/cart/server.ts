@@ -240,8 +240,9 @@ export async function processOrder(
     // Validate cart item shape and value ranges (defense against crafted form data)
     const cartItemsArray = parseCartItems(cartItems);
 
-    // Phone and name are required on every path (phone is how Bangladesh
-    // checkout identifies the buyer); the rest depends on the path below.
+    // Phone and name are required on every path: this form places cash
+    // orders only, and the shared contact rule (orderContactNeeds) always
+    // needs a phone for them. The rest depends on the path below.
     if (!customerName || !customerPhone || cartItemsArray.length === 0) {
       throw new Error(
         "Please fill in all required fields and add items to your cart.",

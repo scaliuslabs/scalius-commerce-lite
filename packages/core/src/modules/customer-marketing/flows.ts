@@ -257,7 +257,7 @@ export async function recordCheckoutMarketingConsent(
         customerId: string;
         /** The signed-in account, when the buyer was signed in. */
         signedInCustomerId: string | null;
-        order: { phone: string; email: string | null; whatsapp: string | null };
+        order: { phone: string | null; email: string | null; whatsapp: string | null };
         language: string | null | undefined;
     },
     runtime: ConsentRuntime,
@@ -292,7 +292,7 @@ export async function recordCheckoutMarketingConsent(
 export async function checkoutConsentChanges(input: {
     settings: MarketingConsentSettings;
     language: string | null | undefined;
-    order: { phone: string; email: string | null; whatsapp: string | null };
+    order: { phone: string | null; email: string | null; whatsapp: string | null };
     signedInVerifiedEmail: string | null;
 }): Promise<ConsentChange[]> {
     if (!input.settings.checkout.enabled) return [];

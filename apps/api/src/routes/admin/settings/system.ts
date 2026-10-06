@@ -225,11 +225,18 @@ export function getInheritedSecuritySources(
     ];
 }
 
-/** Settings → Customer accounts. Phone is always collected and required. */
+/**
+ * Settings → Customer accounts. Phone is required unless the merchant opts in
+ * (`phoneOptionalForDigital`) and the order is only digital or service lines
+ * (`orderContactNeeds` in @scalius/shared/customer-auth-policy).
+ */
 const customerIdentitySchema = z.object({
     email: z.enum(EMAIL_COLLECTION_MODES),
     whatsapp: z.enum(WHATSAPP_COLLECTION_MODES),
     channels: z.array(z.enum(CUSTOMER_AUTH_OTP_CHANNELS)).min(1).max(3),
+    phoneOptionalForDigital: z.boolean().openapi({
+        description: "Phone is optional for orders made only of digital or service lines, paid in full online, outside Bangladesh. Email is then required. Off by default.",
+    }),
 }).strict();
 
 const CHANNEL_NOT_READY: Record<CustomerAuthOtpChannel, string> = {

@@ -1236,7 +1236,7 @@ async function prepareStoreCredit(
             id: string;
             customerName: string;
             customerEmail: string | null;
-            customerPhone: string;
+            customerPhone: string | null;
             accountOwnerCustomerId: string | null;
         };
         encryptionKey: string | undefined;

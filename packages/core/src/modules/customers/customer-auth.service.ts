@@ -38,7 +38,10 @@ import {
 import { buildVerifiedContactOrderLink, signedUpHistory } from "./customer-identity";
 import { validateAndFormatPhone, type PhoneCountryPolicy } from "@scalius/shared/customer-utils";
 import {
+    newAccountPhoneNeed,
+    phoneOrNull,
     resolveSignInChannel,
+    storedPhone,
     type CustomerAuthOtpChannel,
     type CustomerIdentitySettings,
 } from "@scalius/shared/customer-auth-policy";
@@ -344,7 +347,7 @@ function buildCustomerAuthProfile(row: CustomerRow, addressRow: CustomerAddressR
     return {
         name: row.name,
         email: row.email ?? "",
-        phone: row.phone,
+        phone: phoneOrNull(row.phone) ?? undefined,
         customerId: row.id,
         defaultAddress,
         profileComplete: isCompleteDeliveryAddress(defaultAddress),
@@ -598,9 +601,10 @@ export async function getAccountPhoneVerificationPrompt(
     appProviders?: AppProviders,
 ): Promise<{ phone: string } | null> {
     const account = await getActiveCustomerById(db, accountId);
-    if (!account?.accountClaimedAt || account.phoneVerifiedAt || !account.phone) return null;
+    const phone = phoneOrNull(account?.phone);
+    if (!account?.accountClaimedAt || account.phoneVerifiedAt || !phone) return null;
     const { identity } = await getCustomerAuthRuntimePolicy(db);
-    return await phoneCodeChannel(db, identity, credentialEncryptionKey, appProviders) ? { phone: account.phone } : null;
+    return await phoneCodeChannel(db, identity, credentialEncryptionKey, appProviders) ? { phone } : null;
 }
 
 /** Sends a code to the signed-in account's own (unproven) phone. */
@@ -611,11 +615,13 @@ export async function sendAccountPhoneCode(
     const account = await getActiveCustomerById(db, input.accountId);
     if (!account?.accountClaimedAt) throw new UnauthorizedError("Please sign in again.");
     if (account.phoneVerifiedAt) throw new ConflictError("Your phone number is already verified.");
+    const phone = phoneOrNull(account.phone);
+    if (!phone) throw new ValidationError("Add a phone number to your account first.");
     const { identity } = await getCustomerAuthRuntimePolicy(db);
     const channel = await phoneCodeChannel(db, identity, input.credentialEncryptionKey, input.appProviders);
     if (!channel) throw new ServiceUnavailableError("Text message codes aren't available right now.");
-    const sent = await sendOtp(db, { ...input, method: "phone", identifier: account.phone, channel });
-    return { ...sent, message: `We sent a code to ${formatAccountPhone(account.phone)}.` };
+    const sent = await sendOtp(db, { ...input, method: "phone", identifier: phone, channel });
+    return { ...sent, message: `We sent a code to ${formatAccountPhone(phone)}.` };
 }
 
 function formatAccountPhone(phone: string): string {
@@ -636,28 +642,30 @@ export async function verifyAccountPhoneCode(
     if (!input.code?.trim()) throw new ValidationError("Enter the 6-digit code.");
     const account = await getActiveCustomerById(db, input.accountId);
     if (!account?.accountClaimedAt) throw new UnauthorizedError("Please sign in again.");
+    const phone = phoneOrNull(account.phone);
+    if (!phone) throw new ValidationError("Add a phone number to your account first.");
     const { identity } = await getCustomerAuthRuntimePolicy(db);
     const channel = resolveSignInChannel(identity.channels, "phone");
     if (!channel) throw new ValidationError("There's no active code. Send a new code.");
-    const otpKey = await buildCustomerAuthOtpStorageKey(channel, account.phone, input.encryptionKey);
+    const otpKey = await buildCustomerAuthOtpStorageKey(channel, phone, input.encryptionKey);
     await claimCustomerAuthOtpChallenge(db, {
         otpKey,
         method: "phone",
         channel,
-        identifier: account.phone,
+        identifier: phone,
         code: input.code,
         encryptionKey: input.encryptionKey,
     });
 
     const [otherOwner, joining] = await Promise.all([
         db.select({ id: customers.id }).from(customers).where(and(
-            eq(customers.phone, account.phone),
+            eq(customers.phone, phone),
             isNotNull(customers.phoneVerifiedAt),
             isNotNull(customers.accountClaimedAt),
             isNull(customers.deletedAt),
         )).get(),
         db.select({ count: sql<number>`count(*)` }).from(orders).where(and(
-            eq(orders.customerPhone, account.phone),
+            eq(orders.customerPhone, phone),
             isNull(orders.accountOwnerCustomerId),
             isNull(orders.deletedAt),
         )).get(),
@@ -668,7 +676,7 @@ export async function verifyAccountPhoneCode(
 
     const statements: SQLiteBatchItem[] = [
         db.update(customers).set(proofUpdate("phone")).where(eq(customers.id, account.id)) as SQLiteBatchItem,
-        ...buildVerifiedContactOrderLink(db, { customerId: account.id, phone: account.phone }) as SQLiteBatchItem[],
+        ...buildVerifiedContactOrderLink(db, { customerId: account.id, phone }) as SQLiteBatchItem[],
     ];
     try {
         await safeBatch(db, statements as unknown as Parameters<typeof safeBatch>[1]);
@@ -768,7 +776,7 @@ function suggestNewAccount(order: LatestContactOrder | null): NewAccountSuggesti
     const address = order.shippingAddress?.trim();
     return {
         name: order.customerName?.trim() || null,
-        phone: order.customerPhone?.trim() || null,
+        phone: phoneOrNull(order.customerPhone),
         email: order.customerEmail?.trim() || null,
         address: address
             ? {
@@ -805,7 +813,11 @@ async function prepareNewAccount(
     const phone = input.method === "phone"
         ? identifier
         : input.account.phone?.trim() ? normalizePhoneOrThrow(input.account.phone, phoneCountryPolicy) : null;
-    if (!phone) throw new ValidationError("Enter your phone number.");
+    // An email sign-up may skip the phone only with the merchant's opt-in
+    // (each order still asks for one when it needs it).
+    if (!phone && newAccountPhoneNeed(identity, input.method) === "required") {
+        throw new ValidationError("Enter your phone number.");
+    }
 
     const now = new Date();
     const proof = {
@@ -822,7 +834,7 @@ async function prepareNewAccount(
         id: `cust_${nanoid()}`,
         name,
         email,
-        phone,
+        phone: storedPhone(phone),
         origin: "account",
         ...proof,
         createdAt: now,

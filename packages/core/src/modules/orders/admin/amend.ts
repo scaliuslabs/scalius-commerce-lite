@@ -33,7 +33,7 @@ import {
     type ReservationEntry,
 } from "../../inventory";
 import { sql, eq, inArray, isNull, and } from "drizzle-orm";
-import { customerAddressColumns, guestRecordForPhone, type ResolvedAddress } from "../../customers";
+import { customerAddressColumns, guestRecordForContact, type ResolvedAddress } from "../../customers";
 import { orderShippingAddressColumns, resolveOrderAddress } from "../shipping-address";
 import { fromMinor } from "@scalius/shared/money";
 import { orderShopAmounts } from "@scalius/shared/money-chain";
@@ -408,7 +408,7 @@ export async function confirmManualOrderAmendment(
     // edit only changes the order's own contact snapshot.
     if (!order.accountOwnerCustomerId && (data.customerPhone !== order.customerPhone || !customerId)) {
         const existingCustomer = await db.select({ id: customers.id }).from(customers)
-            .where(guestRecordForPhone(data.customerPhone)).get();
+            .where(guestRecordForContact({ phone: data.customerPhone })).get();
         customerId = existingCustomer?.id ?? `cust_${nanoid()}`;
         if (!existingCustomer) newCustomerId = customerId;
     }

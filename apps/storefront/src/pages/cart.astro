@@ -96,8 +96,11 @@ const checkoutUnavailableMessage =
   checkoutLanguageResponse?.languageData.checkoutUnavailableMessage ||
   ENGLISH_CHECKOUT_LANGUAGE_DATA.checkoutUnavailableMessage;
 const codOnly = !checkoutUnavailable && isCodOnly(checkoutConfig);
-// Settings → Customer accounts decides the contact fields (phone always).
+// Settings → Customer accounts decides the contact fields. With its opt-in, a
+// cart of digital or service lines may go without a phone (email is then
+// required); the page script decides per cart (lib/checkout/contact-need.ts).
 const contactFields = checkoutContactFields(checkoutConfig.customerIdentity ?? DEFAULT_CUSTOMER_IDENTITY);
+const phoneOptionalForDigital = checkoutConfig.customerIdentity?.phoneOptionalForDigital === true;
 const allowedCountriesMode = checkoutConfig?.allowedCountriesMode || "include";
 const lang: CheckoutLanguageData = checkoutLanguageResponse || {
   id: "fallback",
@@ -555,15 +558,28 @@ const marketingConsent = marketingConsentCheckbox(checkoutConfig, lang.code);
                       serviceHelp: copy.customerPhoneIntlServiceHelp,
                       exampleText: copy.customerPhoneExampleText,
                     }}
+                    optional={phoneOptionalForDigital ? { label: copy.customerPhoneOptionalLabel, help: copy.customerPhoneOptionalHelp } : undefined}
                   />
+                  {/* The order's country when nothing ships: the market's (the contact rule reads it). */}
+                  {phoneOptionalForDigital && <input type="hidden" name="orderCountryCode" value={shippingCountry} />}
                 </div>
 
                 {
                   contactFields.email !== "hidden" && (
                     <div class="sm:col-span-2">
                       <label for="customerEmail" class={labelClass}>
-                        {contactFields.email === "required" ? copy.customerEmailRequiredLabel : copy.customerEmailLabel}
-                        {contactFields.email === "required" && <span aria-hidden="true" class="ml-0.5 text-destructive">*</span>}
+                        {phoneOptionalForDigital && contactFields.email === "optional" ? (
+                          <>
+                            {/* Required while the phone is optional (data-phone-need on the page root). */}
+                            <span class="group-data-[phone-need=optional]:hidden">{copy.customerEmailLabel}</span>
+                            <span class="hidden group-data-[phone-need=optional]:inline">{copy.customerEmailRequiredLabel}<span aria-hidden="true" class="ml-0.5 text-destructive">*</span></span>
+                          </>
+                        ) : (
+                          <>
+                            {contactFields.email === "required" ? copy.customerEmailRequiredLabel : copy.customerEmailLabel}
+                            {contactFields.email === "required" && <span aria-hidden="true" class="ml-0.5 text-destructive">*</span>}
+                          </>
+                        )}
                       </label>
                       <input
                         type="email"
@@ -992,6 +1008,12 @@ const marketingConsent = marketingConsentCheckbox(checkoutConfig, lang.code);
   } from "@/lib/checkout/phone-field";
   import { phoneHintCopy } from "@/lib/checkout/phone-hint";
   import {
+    applyCheckoutContactNeeds,
+    checkoutContactNeeds,
+    readCheckoutPhoneNeed,
+  } from "@/lib/checkout/contact-need";
+  import type { CheckoutConfig } from "@/lib/checkout/types";
+  import {
     clearCheckoutFormDraft,
     discardCheckoutFormDraftOfOtherOwner,
     readCheckoutFormDraft,
@@ -1149,12 +1171,29 @@ const marketingConsent = marketingConsentCheckbox(checkoutConfig, lang.code);
   // The checkout path follows the cart (nothing physical: no delivery
   // section) and the buyer's Delivery/Pickup choice; the address fields are
   // left out of the form unless delivering.
+  // Customer accounts' opt-in: a cart of digital or service lines may go
+  // without a phone (email is then required). Off: the page stays as rendered.
+  const contactConfig = window.__CHECKOUT_CONFIG__ as CheckoutConfig | undefined;
+  const syncContactNeeds = () => {
+    const identity = contactConfig?.customerIdentity;
+    if (!identity?.phoneOptionalForDigital) return;
+    const orderCountry = document.querySelector<HTMLInputElement>('input[name="orderCountryCode"]')?.value || null;
+    applyCheckoutContactNeeds(checkoutContactNeeds({
+      identity,
+      lines: Object.values(cartStore.get().items),
+      cashEnabled: (contactConfig?.gateways ?? []).some((gateway) => gateway.flow === "cod"),
+      partialPaymentEnabled: contactConfig?.partialPaymentEnabled === true,
+      // A cart that ships is placed where it goes; the rule then needs a phone anyway.
+      countryCode: readCheckoutDeliveryMode() === "none" ? orderCountry : null,
+    }));
+  };
   const syncDeliveryPath = () => {
     const root = document.getElementById("cartPageRoot");
     const { items } = cartStore.get();
     const need = Object.keys(items).length === 0 || cartNeedsDeliveryMethod(items) ? "method" : "none";
     if (root && root.dataset.deliveryNeed !== need) root.dataset.deliveryNeed = need;
     void shippingMethods?.setMode(applyCheckoutDeliveryMode(document));
+    syncContactNeeds();
   };
   syncDeliveryPath();
   document.addEventListener("cart-updated", syncDeliveryPath, { signal: cartPageSignal });
@@ -1744,7 +1783,8 @@ const marketingConsent = marketingConsentCheckbox(checkoutConfig, lang.code);
     const validateInformation = (): boolean => {
       const firstField = fields.validateAll();
       const phone = checkoutPhoneResult();
-      const phoneMessage = phone.ok
+      // An empty phone is fine when this cart may go without one (a typed one must still be valid).
+      const phoneMessage = phone.ok || (phone.message === "required" && readCheckoutPhoneNeed() === "optional")
         ? ""
         : phone.message === "required"
           ? checkoutCopy.phoneRequiredText

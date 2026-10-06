@@ -46,7 +46,7 @@ export interface OrderMessageContext {
  * country's prints in its own format, then the country name.
  */
 function shippingAddressLines(order: {
-    customerName: string; customerPhone: string; shippingName: string | null; shippingPhone: string | null;
+    customerName: string; customerPhone: string | null; shippingName: string | null; shippingPhone: string | null;
     shippingAddress: string | null; shippingAddressLine2: string | null; shippingCountryCode: string | null;
     shippingDependentLocality: string | null; shippingLocality: string | null; shippingAdminArea: string | null;
     shippingPostalCode: string | null; shippingCompany: string | null;

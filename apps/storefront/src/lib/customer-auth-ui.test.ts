@@ -4,7 +4,7 @@ import { checkContact, checkNewAccount, formatWait, resolveCustomerAuthUi } from
 
 describe("customer sign-in UI model", () => {
   it("offers Email and Phone when the store enables both, and asks new buyers only for missing contacts", () => {
-    const both = { email: "optional", whatsapp: "off", channels: ["email", "sms"] } as const;
+    const both = { email: "optional", whatsapp: "off", channels: ["email", "sms"], phoneOptionalForDigital: false } as const;
     const email = resolveCustomerAuthUi({ ...both, channels: [...both.channels] });
     expect(email.showMethodSwitcher).toBe(true);
     expect(email.requestMethod).toBe("email");
@@ -16,12 +16,20 @@ describe("customer sign-in UI model", () => {
   });
 
   it("follows a store that requires email for phone sign-ups", () => {
-    const ui = resolveCustomerAuthUi({ email: "required", whatsapp: "off", channels: ["sms"] });
+    const ui = resolveCustomerAuthUi({ email: "required", whatsapp: "off", channels: ["sms"], phoneOptionalForDigital: false });
     expect(ui.showMethodSwitcher).toBe(false);
     expect(ui.newAccount).toEqual({ phone: "hidden", email: "required" });
     expect(checkNewAccount(ui, { name: "Rahim", phone: "", email: "" })).toEqual({
       ok: false, errors: [{ field: "email", message: "Enter your email address." }],
     });
+  });
+
+  it("lets an email sign-up skip the phone only with the store's opt-in", () => {
+    const optIn = resolveCustomerAuthUi({ email: "optional", whatsapp: "off", channels: ["email"], phoneOptionalForDigital: true });
+    expect(optIn.newAccount).toEqual({ phone: "optional", email: "hidden" });
+    expect(checkNewAccount(optIn, { name: "Rahim", phone: "", email: "" })).toEqual({ ok: true, account: { name: "Rahim" } });
+    const bySms = resolveCustomerAuthUi({ email: "optional", whatsapp: "off", channels: ["email", "sms"], phoneOptionalForDigital: true }, "sms");
+    expect(bySms.newAccount.phone).toBe("hidden");
   });
 
   it("accepts Bangla digits and any spacing for phones, and explains bad input", () => {
@@ -35,7 +43,7 @@ describe("customer sign-in UI model", () => {
   });
 
   it("validates the new-account details for an email sign-up", () => {
-    const ui = resolveCustomerAuthUi({ email: "required", whatsapp: "off", channels: ["email"] });
+    const ui = resolveCustomerAuthUi({ email: "required", whatsapp: "off", channels: ["email"], phoneOptionalForDigital: false });
     expect(checkNewAccount(ui, { name: " ", phone: "", email: "" })).toEqual({
       ok: false,
       errors: [

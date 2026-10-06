@@ -190,7 +190,7 @@ export interface OrderShippingAddressFields {
 export interface OrderListItem {
     id: string;
     customerName: string;
-    customerPhone: string;
+    customerPhone: string | null;
     customerEmail: string | null;
     customerId: string | null;
     totalAmount: number;
@@ -271,7 +271,7 @@ export interface OrderDetails extends OrderListItem {
     /** The order thread, once the buyer or staff started one. */
     conversation: { id: string; unread: boolean } | null;
     /** The customer record the order is filed under; its title can differ from the order's own name. */
-    customerRecord: { id: string; name: string; phone: string; kind: "account" | "guest" | "merchant" } | null;
+    customerRecord: { id: string; name: string; phone: string | null; kind: "account" | "guest" | "merchant" } | null;
     balanceDue: number | null;
     deletedAt: Date | null;
     currencyCode: string | null;
@@ -361,7 +361,12 @@ export interface CreateStorefrontOrderInput {
     checkoutRequestId: string;
     expectedQuoteFingerprint: string;
     customerName: string;
-    customerPhone: string;
+    /**
+     * E.164, or null for an order the shared contact rule lets go without a
+     * phone (`orderContactNeeds`): only digital or service lines, paid in
+     * full online, outside Bangladesh, with the merchant's opt-in.
+     */
+    customerPhone: string | null;
     customerEmail: string | null;
     /** A separate WhatsApp number, kept only when Customer accounts asks for one. */
     customerWhatsapp?: string | null;
@@ -487,7 +492,8 @@ export interface StorefrontOrderCommitPayload {
     orderData: OrderShippingAddressFields & {
         id: string;
         customerName: string;
-        customerPhone: string;
+        /** Null without a phone; stored as NO_PHONE (`storedPhone`). */
+        customerPhone: string | null;
         customerEmail: string | null;
         customerWhatsapp?: string | null;
         notes: string | null;

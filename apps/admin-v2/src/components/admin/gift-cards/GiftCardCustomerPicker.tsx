@@ -13,7 +13,7 @@ const loadCustomers: SearchableSelectLoader = async ({ search, page, signal }) =
   return {
     options: result.customers.map((customer) => ({
       value: customer.id,
-      label: customer.name || customer.phone,
+      label: customer.name || customer.phone || customer.email || "",
       description: [customer.phone, customer.email].filter(Boolean).join(" · "),
     })),
     hasMore: page < result.pagination.totalPages,

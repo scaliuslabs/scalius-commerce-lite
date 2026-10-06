@@ -21,6 +21,7 @@ import {
 } from "@scalius/database/schema";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
+import { storedPhone } from "@scalius/shared/customer-auth-policy";
 import type { OrderChannel } from "@scalius/shared/order-channel";
 import { orderMoneyChainColumns } from "@scalius/shared/money-chain";
 import { ConflictError, ServiceUnavailableError, ValidationError } from "../../errors";
@@ -154,7 +155,7 @@ function checkoutGuardError(error: unknown): Error | null {
     return null;
 }
 
-/** Two guest checkouts raced to create the same phone's guest record. */
+/** Two guest checkouts raced to create the same phone's (or phoneless email's) guest record. */
 function isCustomerPhoneConstraintError(error: unknown): boolean {
     let current = error;
     for (let depth = 0; depth < 5 && current; depth += 1) {
@@ -166,6 +167,7 @@ function isCustomerPhoneConstraintError(error: unknown): boolean {
         if (
             message.includes("UNIQUE constraint failed: customers.phone")
             || message.includes("customers_guest_phone_unique")
+            || message.includes("customers_guest_email_unique")
         ) {
             return true;
         }
@@ -353,7 +355,7 @@ function buildOrderWriteBatch(
                 id: customer.id,
                 name: od.customerName,
                 email: od.customerEmail,
-                phone: od.customerPhone,
+                phone: storedPhone(od.customerPhone),
                 totalOrders: 1,
                 lastOrderAt: sql`unixepoch()`,
                 createdAt: sql`unixepoch()`,
@@ -366,7 +368,7 @@ function buildOrderWriteBatch(
                 customerId: customer.id,
                 name: od.customerName,
                 email: od.customerEmail,
-                phone: od.customerPhone,
+                phone: storedPhone(od.customerPhone),
                 changeType: "created",
                 actor: "buyer",
                 createdAt: sql`unixepoch()`,
@@ -398,7 +400,7 @@ function buildOrderWriteBatch(
             orderNumber: nextOrderNumberSql(),
             id: od.id,
             customerName: od.customerName,
-            customerPhone: od.customerPhone,
+            customerPhone: storedPhone(od.customerPhone),
             customerEmail: od.customerEmail,
             customerWhatsapp: od.customerWhatsapp ?? null,
             // The address snapshot (a guest record's first one also seeds its

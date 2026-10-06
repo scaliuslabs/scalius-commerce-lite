@@ -62,7 +62,7 @@ function tagCheckoutError(error: unknown, code: string): unknown {
 export async function loadStorefrontCheckoutReads<TResponse>(
     db: Database,
     identity: CheckoutAttemptIdentity,
-    authorityInput: StorefrontCheckoutAuthorityInput & { customerPhone: string; customerEmail?: string | null },
+    authorityInput: StorefrontCheckoutAuthorityInput & { customerPhone: string | null; customerEmail?: string | null },
     credentialEncryptionKey?: string,
     options: { paymentProviders?: (registrations: readonly RegisteredPlugin[]) => PaymentProviders } = {},
 ): Promise<{

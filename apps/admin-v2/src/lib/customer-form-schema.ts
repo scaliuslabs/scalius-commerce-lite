@@ -17,7 +17,11 @@ export const customerFormSchema = z.object({
   id: z.string().optional(),
   name: z.string().min(3, says("nameLength")).max(100, says("nameLength")),
   email: z.email(says("emailInvalid")).nullable(),
-  phone: phoneNumberSchema,
+  /**
+   * Empty only for a customer with an email, when the store lets digital and
+   * service orders go without a phone (the API checks the setting).
+   */
+  phone: z.literal("").or(phoneNumberSchema),
   /**
    * New customers only: the first address (the default), its country's
    * fields (`AddressFields`). The API checks it against the country's rules;

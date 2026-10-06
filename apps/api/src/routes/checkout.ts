@@ -45,6 +45,8 @@ const checkoutConfigSchema = z.object({
     email: z.enum(["required", "optional", "hidden"]),
     whatsapp: z.enum(["off", "same_as_phone", "separate"]),
     channels: z.array(z.enum(["email", "sms", "whatsapp"])).max(3),
+    /** The merchant's opt-in: phone may be optional for digital/service-only orders (`orderContactNeeds`). */
+    phoneOptionalForDigital: z.boolean(),
   }),
   checkoutMode: z.enum(["guest_cod_only", "gateways_only", "all"]),
   partialPaymentEnabled: z.boolean(),
