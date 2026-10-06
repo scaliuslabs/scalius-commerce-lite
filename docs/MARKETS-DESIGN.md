@@ -571,6 +571,107 @@ world" zone, carrier-calculated rates, per-market delivery methods, a
 country rule for staff cash on delivery, tax regions (3c) and address
 autocomplete.
 
+## Step 3c implemented
+
+A store that sells only to Bangladesh behaves as before: the same tax
+amounts, rounding, labels and rate snapshots for the same addresses, and the
+same D1 calls and statements in every free-plan budget scenario.
+
+**Regions** (D8, Stripe Tax's rule). A store collects tax only where it has a
+tax region. A country region (`tax_regions`) is the registration. A
+sub-region of it is an admin area (the address rules' code), a postal prefix
+or, in Bangladesh, a City, Thana or Area place. An address in a country
+without a region pays no tax, and no provider is asked. One rule
+(`tax/region-match.ts`, browser safe) orders an address's regions most
+specific first, as shipping zones do: Bangladesh place (area, thana, city),
+postal prefixes (longest first), admin area, country. For a line's tax class,
+the most specific region with rates of that class applies. A combinable rate
+(Medusa's `is_combinable`) also applies the next broader region's rates of
+the class, and so on, while every applied rate is combinable. Priority and
+compound layers work as before. An order without an address (pickup,
+service, digital) is taxed in the country of the default inventory location,
+on that country's region only.
+
+**Schema.** Migration `0116_tax_regions` (D1/Turso file, PostgreSQL sidecar,
+ledger digest, schema contract 116, Drizzle snapshot):
+
+- adds `tax_regions` (one region per scope). Triggers refuse a sub-region
+  without its country region (`TAX_REGION_COUNTRY_REQUIRED`), a changed scope
+  (`TAX_REGION_SCOPE_IMMUTABLE`) and a country deleted before its regions
+  (`TAX_REGION_HAS_SUBREGIONS`);
+- rebuilds `tax_rates` with `tax_region_id` and `combinable`, without the
+  jurisdiction columns and soft deletion. Rates are deleted outright; orders
+  keep their own copy;
+- moves today's rates into Bangladesh regions: a store-wide rate to the region
+  BD (`txreg_bd`), a place rate to its place's region, combinable. So the same
+  rates stack for the same addresses as before;
+- moves `prices_include_tax` from `tax_settings` to every market (each takes
+  today's value) and adds `tax_settings.provider_id` (`system` by default);
+- adds `country_code`, `tax_region_id` and `provider_id` to
+  `order_item_tax_snapshots`, and `provider_id` and `provider_calculation_id`
+  to `order_tax_snapshots`.
+
+Region, rate and market-flag writes advance the checkout authority revision
+and the `tax` cache dependency.
+
+**Provider port.** The tax port is `calculate`, then `commit`, `void` or
+`refund`, each idempotent. The built-in system provider (`system`,
+`SYSTEM_TAX_PROVIDER`) implements it: `calculate` applies the merchant's rates
+by region, and `commit`, `void` and `refund` are no-ops that return a stable
+document id. An app's `defineTaxProvider` implements the same port. The rule
+that selects the provider: the address's country region names one, else the
+store-wide provider applies. `system` binds to the tax authority without a
+read. An app id resolves through the request's `AppProviders`, so a store on
+`system` reads no plugin table. Checkout fails closed: if the selected app is
+not installed, not ready, fails or answers wrongly, the quote and the order are
+refused (`tax_unavailable`). It never charges zero tax instead. The platform
+rounds an app's tax half-up to the price increment and refuses an included
+tax larger than the price. After an order commits, an app's calculation is
+committed with the order id as its idempotency key. The port gained `refund`,
+`shippingTaxCode`, `locationIds` and named tax lines (`name`, `rateRef`). All
+changes are additive.
+
+**Prices include tax** per market. Checkout, staff orders and the order's tax
+snapshot read the order's market: the active market of the shipping country,
+else the backup market. The checkout authority still reads tax in three
+statements. The settings row carries each active market's flag and the origin
+country, and the rate statement joins the regions. Order snapshot rows record
+the new facts with the same bound parameters per line. The flag, the country
+and the provider are SQL literals, so a 99-line order writes the same
+statements. The order's destination and rate snapshots keep their shape.
+
+**Dashboard.** Settings → Taxes follows Shopify's "Taxes and duties":
+
+- Tax collection, with the store-wide tax service (only when an app offers
+  one);
+- Regions: each country, with its rates, regions and service. A country
+  opens its page on the same screen (`?region=`), with its service, every
+  rate and where it applies, its regions (Bangladesh places; other countries'
+  states or postal codes) and "Stop collecting tax";
+- tax groups and overrides, as before.
+
+The sample order takes any country's address. Each market's page shows
+"Prices include tax". Copy is in English and Bangla. Bundle budgets did not
+change.
+
+**Agents and MCP.** New registry rows: `dashboard.taxes.regions_list`,
+`_get`, `_create`, `_update` (a country's provider) and `_delete`
+(destructive). Rates take `taxRegionId` and `combinable`; tax settings take
+`providerId`; markets take `pricesIncludeTax`. The tax workflow and the SDK
+are regenerated.
+
+**DVC.** `tax_regions` is registered with dependency `tax` (migration 0116).
+`markets.prices_include_tax` is noise: only the live quote and the order show
+it, and they read it under the checkout fence. No cached read shows tax. The
+generator keeps the columns `0100` saw for `tax_rates` and `tax_settings`
+(`CACHE_DEP_BASELINE_COLUMNS`). Migration 0116 reinstalls their generated
+triggers. The property and race gate reports zero findings.
+
+**Left for later.** Calling `void` on cancellation and `refund` on a refund
+for app providers (the port and the snapshot's calculation id are ready).
+Duties and import taxes. Tax registration numbers on invoices. Customer tax
+exemptions. Tax overrides per collection.
+
 ## Non-goals in this wave
 
 Duties calculation, merchant-of-record, B2B company locations (later through

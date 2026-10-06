@@ -107,19 +107,19 @@ D1 holds FTS5 virtual tables (with sync triggers and a `unicode61` tokenizer) fo
 
 Two trigger families come from generators, not from hand-written SQL:
 
-- **DVC dependency triggers.** `packages/shared/src/cache-deps.ts` is the registry of buyer-visible tables. `scripts/cache-dep-triggers.ts` generates one trigger per registered rule (`cdep_*`) plus the clock triggers. Each table is registered or listed in `CACHE_DEP_EXEMPT_TABLES`. Migration `0100_cache_dependencies` is immutable. `pnpm --filter @scalius/database exec tsx scripts/cache-dep-triggers.ts --write` rewrites only `0101_cache_ordering_dependencies`. A table registered later has a hand-assembled migration that must contain the generated statements verbatim: `CACHE_DEP_LATER_TABLES` maps each table to its migration (`0104`, `0108`, `0110`, `0112`, `0114`). A rule added later to a deployed table installs its trigger in a newer migration: `CACHE_DEP_LATER_TRIGGERS` maps the trigger name (`0115`, the `mk:selling` triggers). `__tests__/cache-dep-triggers.test.ts` keeps the generator and the migrations equal. See the [cache-deps README](../core/src/cache-deps/README.md).
+- **DVC dependency triggers.** `packages/shared/src/cache-deps.ts` is the registry of buyer-visible tables. `scripts/cache-dep-triggers.ts` generates one trigger per registered rule (`cdep_*`) plus the clock triggers. Each table is registered or listed in `CACHE_DEP_EXEMPT_TABLES`. Migration `0100_cache_dependencies` is immutable. `pnpm --filter @scalius/database exec tsx scripts/cache-dep-triggers.ts --write` rewrites only `0101_cache_ordering_dependencies`. A table registered later has a hand-assembled migration that must contain the generated statements verbatim: `CACHE_DEP_LATER_TABLES` maps each table to its migration (`0104`, `0108`, `0110`, `0112`, `0114`, `0116`). A rule added later to a deployed table installs its trigger in a newer migration: `CACHE_DEP_LATER_TRIGGERS` maps the trigger name (`0115`, the `mk:selling` triggers). A later migration that changes a baseline table's columns reinstalls its triggers the same way, and `CACHE_DEP_BASELINE_COLUMNS` keeps the columns `0100` saw (`0116` rebuilt `tax_rates` and dropped `tax_settings.prices_include_tax`). `__tests__/cache-dep-triggers.test.ts` keeps the generator and the migrations equal. See the [cache-deps README](../core/src/cache-deps/README.md).
 - **Event outbox triggers.** `scripts/event-outbox-triggers.ts` generates the `evt_*` triggers. Each writes one `event_outbox` row in the same transaction as the domain write. `0103_order_channel_event_outbox` installs them, and `EVENT_TRIGGER_MIGRATIONS` maps later triggers to `0108` and `0109`. `__tests__/event-outbox.test.ts` requires each migration to contain the generated statements verbatim. The event catalog is `@scalius/shared/events`.
 
 Both generators emit a PostgreSQL form. Remote D1 rejects a trigger body that embeds `SELECT CASE WHEN`, so the guard goes in the trigger `WHEN` clause and the body is one statement.
 
 ## Migrations
 
-`migrations/` holds 116 SQL files, `0000` to `0115`. The latest is `0115_selling_countries_dependency`. `0000_blushing_jack_power.sql` is the baseline and holds the raw SQL Drizzle cannot express (FTS5, partial indexes, guard triggers). Never delete or squash a released migration. Installed D1 databases depend on Wrangler's history, and installed TursoDB and PostgreSQL databases depend on the release ledger.
+`migrations/` holds 117 SQL files, `0000` to `0116`. The latest is `0116_tax_regions`. `0000_blushing_jack_power.sql` is the baseline and holds the raw SQL Drizzle cannot express (FTS5, partial indexes, guard triggers). Never delete or squash a released migration. Installed D1 databases depend on Wrangler's history, and installed TursoDB and PostgreSQL databases depend on the release ledger.
 
 | Path | Content |
 |------|---------|
 | `migrations/NNNN_<name>.sql` | The canonical SQLite SQL (D1 and TursoDB) |
-| `migrations/postgres/NNNN_<name>.sql` | The transaction-safe PostgreSQL sidecar (`0050` to `0114`, 65 files) |
+| `migrations/postgres/NNNN_<name>.sql` | The transaction-safe PostgreSQL sidecar (`0050` to `0116`, 67 files) |
 | `migrations/meta/` | Drizzle journal and snapshots |
 
 ### Release ledger
