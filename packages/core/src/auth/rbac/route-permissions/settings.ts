@@ -16,6 +16,16 @@ export const SETTINGS_ROUTE_PERMISSIONS: RoutePermissionMap = {
     GET: { anyOf: ANY_STAFF },
     POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
   },
+  // Store defaults (time zone, units): every staff screen formats dates and weights with them.
+  "/api/v1/admin/settings/store-defaults": {
+    GET: { anyOf: ANY_STAFF },
+    POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
+  },
+  // The new-store setup step (country, currency, language, time zone, units).
+  "/api/v1/admin/settings/store-setup": {
+    GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },
+    POST: { permission: PERMISSIONS.SETTINGS_GENERAL_EDIT },
+  },
   // Settings → Markets: countries, web presences and the backup market's price increment.
   "/api/v1/admin/settings/markets": {
     GET: { permission: PERMISSIONS.SETTINGS_GENERAL_VIEW },

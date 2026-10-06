@@ -1,4 +1,5 @@
-// One analytics request's context: the store currency, read once per request. Nothing here outlives the
+// One analytics request's context: the store currency, read once per request, and the store's time zone
+// (resolved at Worker entry with the platform settings, so it costs no read). Nothing here outlives the
 // request (no module state): a Worker isolate serves many stores' requests.
 import type { Database } from "@scalius/database/client";
 import { type StoreCurrency } from "../../settings";
@@ -9,11 +10,13 @@ export interface AnalyticsContext {
   db: Database;
   /** Reports sum one currency: the store's. Orders in any other are counted, never added. */
   currency: StoreCurrency;
+  /** The store's IANA zone: every merchant day, week and month is a day in it. */
+  timeZone: string;
   now: Date;
 }
 
-export async function createAnalyticsContext(db: Database, now: Date = new Date()): Promise<AnalyticsContext> {
-  return { db, currency: await readStoreCurrency(db), now };
+export async function createAnalyticsContext(db: Database, timeZone: string, now: Date = new Date()): Promise<AnalyticsContext> {
+  return { db, currency: await readStoreCurrency(db), timeZone, now };
 }
 
 const ANALYTICS_RETRY_DELAYS_MS = [150, 350] as const;

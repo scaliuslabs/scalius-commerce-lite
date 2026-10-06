@@ -33,7 +33,7 @@ export const analyticsMessages = defineMessages({
     "granularity.week": "Week",
     "granularity.month": "Month",
     rangeTooLong: "Choose at most two years.",
-    storeTime: "Store time (Asia/Dhaka)",
+    storeTime: "Store time ({zone})",
     // KPIs
     "kpi.totalSales": "Total sales",
     "kpi.grossSales": "Gross sales",
@@ -335,7 +335,7 @@ export const analyticsMessages = defineMessages({
     "granularity.week": "সপ্তাহ",
     "granularity.month": "মাস",
     rangeTooLong: "সর্বোচ্চ দুই বছর বাছুন।",
-    storeTime: "স্টোরের সময় (ঢাকা)",
+    storeTime: "স্টোরের সময় ({zone})",
     "kpi.totalSales": "মোট বিক্রি",
     "kpi.grossSales": "গ্রস বিক্রি",
     "kpi.discounts": "ছাড়",

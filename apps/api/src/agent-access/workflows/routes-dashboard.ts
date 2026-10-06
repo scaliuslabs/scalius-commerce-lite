@@ -25,7 +25,7 @@ export const DASHBOARD_AGENT_WORKFLOW_ROUTES = [
     requiresConfirmation: false,
     requiresVerification: false,
     rules: [
-      "brief.daily.activity is exactly 30 Asia/Dhaka calendar days including zero days; bookedRevenue is booked gross, not paid/settled/net/margin.",
+      "brief.daily.activity is exactly 30 store calendar days (the store time zone) including zero days; bookedRevenue is booked gross, not paid/settled/net/margin.",
       "brief.currency is saved currency; missing fails the brief.",
       "Stock, abandoned, and recovery totals are current snapshots, not period metrics or cohorts.",
       "paymentRecovery.total is all recoverable hosted-payment work; paymentNeedsAttention.total is actionable failed/stale work. Snapshots can race; never subtract.",
@@ -60,7 +60,7 @@ export const DASHBOARD_AGENT_WORKFLOW_ROUTES = [
     requiresConfirmation: false,
     requiresVerification: false,
     rules: [
-      "Interpret activity.daily.bookedRevenue as Asia/Dhaka order-day booked gross, not collected cash, profit, or net settlement.",
+      "Interpret activity.daily.bookedRevenue as store-calendar order-day booked gross, not collected cash, profit, or net settlement.",
       "No authoritative merchant-day collected-cash or net-settlement aggregate exists; report it unavailable, never zero or inferred.",
       "activity.paymentRecovery.total is all recoverable hosted-payment work; activity.paymentNeedsAttention.total is the actionable failed/stale subset; both are current non-transactional backlogs, not daily metrics.",
       "Never subtract the recovery totals because their parallel reads can observe different instants.",
@@ -103,7 +103,7 @@ export const DASHBOARD_AGENT_WORKFLOW_ROUTES = [
     requiresConfirmation: false,
     requiresVerification: false,
     rules: [
-      "Dates are inclusive Asia/Dhaka calendar days (from/to YYYY-MM-DD, at most 731 days); state the range and comparison you used.",
+      "Dates are inclusive store calendar days in the store time zone (from/to YYYY-MM-DD, at most 731 days); state the range and comparison you used.",
       "Gross sales exclude shipping, taxes and gift cards; net sales = gross − discounts − returns; total sales = net + shipping + taxes. Never call gross sales profit or collected cash.",
       "Orders count by placement date; cancelled and incomplete orders are excluded (cancellations only in the cancellation rate); returns and refunds count against the order's own date.",
       "Read dashboard.reports.list first; a report with available=false is unavailable (customer_access or unit_cost): say so, never approximate it.",
@@ -1259,6 +1259,53 @@ export const DASHBOARD_AGENT_WORKFLOW_ROUTES = [
       "Read the current storefront URL before replacement.",
       "Require an absolute HTTPS URL for the merchant's intended origin.",
       "Confirm the write, then probe canonical discovery surfaces.",
+    ],
+  },
+  {
+    id: "dashboard.store-defaults",
+    surface: "dashboard",
+    kind: "write",
+    title: "Change the store time zone or units",
+    summary: "Read and update the store's time zone, unit system and default weight unit (Settings -> Store details -> Store defaults).",
+    examples: [
+      "Change the store time zone to America/New_York.",
+      "Show weights in pounds: switch the store to the imperial system.",
+    ],
+    tags: ["settings", "timezone", "time zone", "units", "weight", "metric", "imperial"],
+    operationIds: [
+      "dashboard.settings.store_defaults_get",
+      "dashboard.settings.store_defaults_update",
+    ],
+    requiresFacts: true,
+    requiresConfirmation: true,
+    requiresVerification: true,
+    rules: [
+      "Read the store defaults and their revision; save only the requested fields at that revision.",
+      "A time zone is an IANA name; report days, date filters and scheduled app jobs follow it, daylight saving included. Orders keep their instants.",
+      "Weights are stored in grams; the unit changes only how the dashboard shows and accepts them.",
+    ],
+  },
+  {
+    id: "dashboard.store-setup",
+    surface: "dashboard",
+    kind: "mixed",
+    title: "Set up a new store",
+    summary: "Name a new store and set its country, currency, language, time zone and units in one write.",
+    examples: [
+      "Set up my new store: Acme, in the United States, USD, English, America/Chicago.",
+    ],
+    tags: ["onboarding", "setup", "country", "currency", "timezone"],
+    operationIds: [
+      "dashboard.settings.store_setup_get",
+      "dashboard.settings.store_setup_apply",
+    ],
+    requiresFacts: true,
+    requiresConfirmation: true,
+    requiresVerification: true,
+    rules: [
+      "Read the setup status first; when it is not needed, stop and use Settings -> Store details and Settings -> Markets instead.",
+      "Require the store name, country and time zone; currency and units default to the country's.",
+      "Setup creates no tax region and no shipping zone; say what remains.",
     ],
   },
   {

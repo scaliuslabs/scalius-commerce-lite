@@ -21852,6 +21852,10 @@
                             "mediaUrl"
                           ]
                         },
+                        "timeZone": {
+                          "type": "string",
+                          "maxLength": 64
+                        },
                         "cspAllowedDomains": {
                           "type": "string"
                         },
@@ -22073,6 +22077,7 @@
                         "business",
                         "seo",
                         "platform",
+                        "timeZone",
                         "cspAllowedDomains",
                         "policies",
                         "storefrontCopy",
@@ -103631,10 +103636,10 @@
             "schema": {
               "type": "string",
               "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
-              "description": "First day (YYYY-MM-DD, store calendar, Asia/Dhaka). Defaults to the last 30 days."
+              "description": "First day (YYYY-MM-DD, store calendar: the store time zone). Defaults to the last 30 days."
             },
             "required": false,
-            "description": "First day (YYYY-MM-DD, store calendar, Asia/Dhaka). Defaults to the last 30 days.",
+            "description": "First day (YYYY-MM-DD, store calendar: the store time zone). Defaults to the last 30 days.",
             "name": "from",
             "in": "query"
           },
@@ -103713,6 +103718,10 @@
                             "code",
                             "decimalPlaces"
                           ]
+                        },
+                        "timeZone": {
+                          "type": "string",
+                          "maxLength": 64
                         },
                         "granularity": {
                           "type": "string",
@@ -104460,6 +104469,7 @@
                       },
                       "required": [
                         "currency",
+                        "timeZone",
                         "granularity",
                         "comparison",
                         "current",
@@ -104903,10 +104913,10 @@
             "schema": {
               "type": "string",
               "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
-              "description": "First day (YYYY-MM-DD, store calendar, Asia/Dhaka). Defaults to the last 30 days."
+              "description": "First day (YYYY-MM-DD, store calendar: the store time zone). Defaults to the last 30 days."
             },
             "required": false,
-            "description": "First day (YYYY-MM-DD, store calendar, Asia/Dhaka). Defaults to the last 30 days.",
+            "description": "First day (YYYY-MM-DD, store calendar: the store time zone). Defaults to the last 30 days.",
             "name": "from",
             "in": "query"
           },
@@ -105438,10 +105448,10 @@
             "schema": {
               "type": "string",
               "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
-              "description": "First day (YYYY-MM-DD, store calendar, Asia/Dhaka). Defaults to the last 30 days."
+              "description": "First day (YYYY-MM-DD, store calendar: the store time zone). Defaults to the last 30 days."
             },
             "required": false,
-            "description": "First day (YYYY-MM-DD, store calendar, Asia/Dhaka). Defaults to the last 30 days.",
+            "description": "First day (YYYY-MM-DD, store calendar: the store time zone). Defaults to the last 30 days.",
             "name": "from",
             "in": "query"
           },
@@ -120036,6 +120046,1240 @@
           "batch": "sequential",
           "transport": "json",
           "maximumResponseBytes": 16384,
+          "maxRequestBytes": 16384,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "settings.general.edit"
+        }
+      }
+    },
+    "/api/v1/admin/settings/store-defaults": {
+      "get": {
+        "tags": [
+          "Admin - Settings"
+        ],
+        "summary": "Get store defaults",
+        "description": "The store's time zone, unit system and default weight unit (Settings → Store details → Store defaults).",
+        "operationId": "dashboard.settings.store_defaults_get",
+        "responses": {
+          "200": {
+            "description": "Store defaults",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "timeZone": {
+                          "type": "string",
+                          "maxLength": 64
+                        },
+                        "unitSystem": {
+                          "type": "string",
+                          "enum": [
+                            "metric",
+                            "imperial"
+                          ],
+                          "description": "metric (kilograms, grams) or imperial (pounds, ounces)."
+                        },
+                        "weightUnit": {
+                          "type": "string",
+                          "enum": [
+                            "g",
+                            "kg",
+                            "oz",
+                            "lb"
+                          ],
+                          "description": "The unit the dashboard shows and accepts weights in: kg or g for metric, lb or oz for imperial. Weights are stored in grams."
+                        },
+                        "revision": {
+                          "type": "integer",
+                          "minimum": 0
+                        }
+                      },
+                      "required": [
+                        "timeZone",
+                        "unitSystem",
+                        "weightUnit",
+                        "revision"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 8192,
+          "maxRequestBytes": 16384,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "anyOf",
+          "permissions": [
+            "agent_access.manage",
+            "agent_access.view",
+            "analytics.create",
+            "analytics.edit",
+            "analytics.toggle",
+            "analytics.view",
+            "apps.manage",
+            "apps.use",
+            "apps.view",
+            "attributes.create",
+            "attributes.delete",
+            "attributes.edit",
+            "attributes.view",
+            "categories.create",
+            "categories.delete",
+            "categories.edit",
+            "categories.permanent_delete",
+            "categories.restore",
+            "categories.view",
+            "collections.create",
+            "collections.delete",
+            "collections.edit",
+            "collections.restore",
+            "collections.toggle_status",
+            "collections.view",
+            "conversations.reply",
+            "conversations.view",
+            "customers.create",
+            "customers.delete",
+            "customers.edit",
+            "customers.sync",
+            "customers.view",
+            "customers.view_history",
+            "dashboard.analytics",
+            "dashboard.view",
+            "discounts.create",
+            "discounts.delete",
+            "discounts.edit",
+            "discounts.toggle_status",
+            "discounts.view",
+            "gift_cards.manage",
+            "gift_cards.view",
+            "inventory.manage",
+            "inventory.view",
+            "media.delete",
+            "media.manage_folders",
+            "media.upload",
+            "media.view",
+            "orders.change_status",
+            "orders.create",
+            "orders.delete",
+            "orders.edit",
+            "orders.issue_invoice",
+            "orders.manage_shipments",
+            "orders.refund",
+            "orders.restore",
+            "orders.view",
+            "pages.create",
+            "pages.delete",
+            "pages.edit",
+            "pages.publish",
+            "pages.view",
+            "products.bulk_operations",
+            "products.create",
+            "products.delete",
+            "products.edit",
+            "products.permanent_delete",
+            "products.restore",
+            "products.view",
+            "products.view_costs",
+            "reviews.moderate",
+            "reviews.view",
+            "settings.cache.manage",
+            "settings.cache.view",
+            "settings.delivery_locations.edit",
+            "settings.delivery_locations.view",
+            "settings.delivery_providers.edit",
+            "settings.delivery_providers.view",
+            "settings.footer.edit",
+            "settings.fraud_checker.edit",
+            "settings.fraud_checker.view",
+            "settings.general.edit",
+            "settings.general.view",
+            "settings.header.edit",
+            "settings.notifications.edit",
+            "settings.seo.edit",
+            "settings.shipping_methods.edit",
+            "settings.shipping_methods.view",
+            "taxes.manage",
+            "taxes.view",
+            "team.manage",
+            "team.manage_roles",
+            "team.view",
+            "webhooks.manage",
+            "webhooks.view"
+          ]
+        }
+      },
+      "post": {
+        "tags": [
+          "Admin - Settings"
+        ],
+        "summary": "Save store defaults",
+        "description": "Change the store's time zone, unit system or default weight unit. A new unit system without a weight unit uses the system's default (kg, lb). Past orders keep their instants; reports regroup them by the new zone's days.",
+        "operationId": "dashboard.settings.store_defaults_update",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "timeZone": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64,
+                    "description": "An IANA time zone, such as America/New_York or Asia/Dhaka. Days, weeks and months of reports, date filters and scheduled app jobs are store calendar days in it; daylight saving time is followed."
+                  },
+                  "unitSystem": {
+                    "type": "string",
+                    "enum": [
+                      "metric",
+                      "imperial"
+                    ],
+                    "description": "metric (kilograms, grams) or imperial (pounds, ounces)."
+                  },
+                  "weightUnit": {
+                    "type": "string",
+                    "enum": [
+                      "g",
+                      "kg",
+                      "oz",
+                      "lb"
+                    ],
+                    "description": "The unit the dashboard shows and accepts weights in: kg or g for metric, lb or oz for imperial. Weights are stored in grams."
+                  }
+                },
+                "required": [
+                  "expectedRevision"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Store defaults saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "timeZone": {
+                          "type": "string",
+                          "maxLength": 64
+                        },
+                        "unitSystem": {
+                          "type": "string",
+                          "enum": [
+                            "metric",
+                            "imperial"
+                          ],
+                          "description": "metric (kilograms, grams) or imperial (pounds, ounces)."
+                        },
+                        "weightUnit": {
+                          "type": "string",
+                          "enum": [
+                            "g",
+                            "kg",
+                            "oz",
+                            "lb"
+                          ],
+                          "description": "The unit the dashboard shows and accepts weights in: kg or g for metric, lb or oz for imperial. Weights are stored in grams."
+                        },
+                        "revision": {
+                          "type": "integer",
+                          "minimum": 0
+                        }
+                      },
+                      "required": [
+                        "timeZone",
+                        "unitSystem",
+                        "weightUnit",
+                        "revision"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "required",
+          "batch": "sequential",
+          "transport": "json",
+          "maximumResponseBytes": 8192,
+          "maxRequestBytes": 16384,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "settings.general.edit"
+        }
+      }
+    },
+    "/api/v1/admin/settings/store-setup": {
+      "get": {
+        "tags": [
+          "Admin - Settings"
+        ],
+        "summary": "Get store setup status",
+        "description": "Whether the new-store setup step still applies, and the store's current name, country, currency, language, time zone and units.",
+        "operationId": "dashboard.settings.store_setup_get",
+        "responses": {
+          "200": {
+            "description": "Store setup status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "needed": {
+                          "type": "boolean",
+                          "description": "True while the store is new: no order yet, and Settings → Markets untouched."
+                        },
+                        "done": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": [
+                            "has_orders",
+                            "markets_configured",
+                            null
+                          ]
+                        },
+                        "current": {
+                          "type": "object",
+                          "properties": {
+                            "storeName": {
+                              "type": "string",
+                              "maxLength": 120
+                            },
+                            "countryCode": {
+                              "type": "string",
+                              "minLength": 2,
+                              "maxLength": 2
+                            },
+                            "currencyCode": {
+                              "type": "string",
+                              "enum": [
+                                "USD",
+                                "EUR",
+                                "GBP",
+                                "JPY",
+                                "CHF",
+                                "CAD",
+                                "AUD",
+                                "NZD",
+                                "CNY",
+                                "HKD",
+                                "SGD",
+                                "SEK",
+                                "NOK",
+                                "DKK",
+                                "MXN",
+                                "BRL",
+                                "BDT",
+                                "INR",
+                                "PKR",
+                                "LKR",
+                                "NPR",
+                                "AFN",
+                                "BTN",
+                                "MVR",
+                                "MYR",
+                                "PHP",
+                                "THB",
+                                "IDR",
+                                "VND",
+                                "MMK",
+                                "KHR",
+                                "LAK",
+                                "BND",
+                                "KRW",
+                                "TWD",
+                                "MNT",
+                                "KPW",
+                                "MOP",
+                                "AED",
+                                "SAR",
+                                "QAR",
+                                "KWD",
+                                "BHD",
+                                "OMR",
+                                "JOD",
+                                "IQD",
+                                "IRR",
+                                "YER",
+                                "LBP",
+                                "SYP",
+                                "ILS",
+                                "KZT",
+                                "UZS",
+                                "KGS",
+                                "TJS",
+                                "TMT",
+                                "GEL",
+                                "AMD",
+                                "AZN",
+                                "TRY",
+                                "RUB",
+                                "UAH",
+                                "PLN",
+                                "CZK",
+                                "HUF",
+                                "RON",
+                                "BGN",
+                                "HRK",
+                                "RSD",
+                                "BAM",
+                                "MKD",
+                                "ALL",
+                                "MDL",
+                                "BYN",
+                                "ISK",
+                                "ARS",
+                                "CLP",
+                                "COP",
+                                "PEN",
+                                "UYU",
+                                "PYG",
+                                "BOB",
+                                "VES",
+                                "GYD",
+                                "SRD",
+                                "TTD",
+                                "JMD",
+                                "BBD",
+                                "BSD",
+                                "BZD",
+                                "CRC",
+                                "CUP",
+                                "DOP",
+                                "GTQ",
+                                "HNL",
+                                "HTG",
+                                "NIO",
+                                "PAB",
+                                "AWG",
+                                "ANG",
+                                "KYD",
+                                "BMD",
+                                "XCD",
+                                "FKP",
+                                "NGN",
+                                "GHS",
+                                "XOF",
+                                "GMD",
+                                "GNF",
+                                "SLL",
+                                "LRD",
+                                "CVE",
+                                "MRU",
+                                "KES",
+                                "TZS",
+                                "UGX",
+                                "RWF",
+                                "BIF",
+                                "ETB",
+                                "SOS",
+                                "ERN",
+                                "DJF",
+                                "SDG",
+                                "SSP",
+                                "SCR",
+                                "KMF",
+                                "MGA",
+                                "MUR",
+                                "XAF",
+                                "CDF",
+                                "ZAR",
+                                "BWP",
+                                "LSL",
+                                "SZL",
+                                "NAD",
+                                "MWK",
+                                "ZMW",
+                                "MZN",
+                                "AOA",
+                                "ZWL",
+                                "EGP",
+                                "DZD",
+                                "MAD",
+                                "TND",
+                                "LYD",
+                                "STN",
+                                "FJD",
+                                "PGK",
+                                "WST",
+                                "TOP",
+                                "VUV",
+                                "SBD",
+                                "XPF",
+                                "XDR",
+                                "XAG",
+                                "XAU"
+                              ]
+                            },
+                            "locale": {
+                              "type": "string",
+                              "minLength": 2,
+                              "maxLength": 2
+                            },
+                            "timeZone": {
+                              "type": "string",
+                              "maxLength": 64
+                            },
+                            "unitSystem": {
+                              "type": "string",
+                              "enum": [
+                                "metric",
+                                "imperial"
+                              ],
+                              "description": "metric (kilograms, grams) or imperial (pounds, ounces)."
+                            },
+                            "weightUnit": {
+                              "type": "string",
+                              "enum": [
+                                "g",
+                                "kg",
+                                "oz",
+                                "lb"
+                              ],
+                              "description": "The unit the dashboard shows and accepts weights in: kg or g for metric, lb or oz for imperial. Weights are stored in grams."
+                            }
+                          },
+                          "required": [
+                            "storeName",
+                            "countryCode",
+                            "currencyCode",
+                            "locale",
+                            "timeZone",
+                            "unitSystem",
+                            "weightUnit"
+                          ]
+                        },
+                        "currencyLocked": {
+                          "type": "boolean",
+                          "description": "Products or delivery methods exist, so setup keeps the current currency."
+                        }
+                      },
+                      "required": [
+                        "needed",
+                        "done",
+                        "current",
+                        "currencyLocked"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 8192,
+          "maxRequestBytes": 16384,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "settings.general.view"
+        }
+      },
+      "post": {
+        "tags": [
+          "Admin - Settings"
+        ],
+        "summary": "Set up a new store",
+        "description": "Name a new store and set its country (the backup market's one country), currency (default: the country's), store language, time zone and units (default: the country's system) in one write. Creates no tax region and no shipping zone. A store that has an order or edited markets answers 409 STORE_SETUP_DONE and nothing changes.",
+        "operationId": "dashboard.settings.store_setup_apply",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "storeName": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  "countryCode": {
+                    "type": "string",
+                    "minLength": 2,
+                    "maxLength": 2,
+                    "description": "ISO 3166-1 alpha-2, such as US or BD."
+                  },
+                  "currencyCode": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 3
+                  },
+                  "locale": {
+                    "type": "string",
+                    "minLength": 2,
+                    "maxLength": 2,
+                    "description": "The storefront's language: en or bn."
+                  },
+                  "timeZone": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64,
+                    "description": "An IANA time zone, such as America/New_York or Asia/Dhaka. Days, weeks and months of reports, date filters and scheduled app jobs are store calendar days in it; daylight saving time is followed."
+                  },
+                  "unitSystem": {
+                    "type": "string",
+                    "enum": [
+                      "metric",
+                      "imperial"
+                    ],
+                    "description": "metric (kilograms, grams) or imperial (pounds, ounces)."
+                  },
+                  "weightUnit": {
+                    "type": "string",
+                    "enum": [
+                      "g",
+                      "kg",
+                      "oz",
+                      "lb"
+                    ],
+                    "description": "The unit the dashboard shows and accepts weights in: kg or g for metric, lb or oz for imperial. Weights are stored in grams."
+                  }
+                },
+                "required": [
+                  "storeName",
+                  "countryCode",
+                  "timeZone"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Store set up",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "storeName": {
+                          "type": "string",
+                          "maxLength": 120
+                        },
+                        "countryCode": {
+                          "type": "string",
+                          "minLength": 2,
+                          "maxLength": 2
+                        },
+                        "currencyCode": {
+                          "type": "string",
+                          "enum": [
+                            "USD",
+                            "EUR",
+                            "GBP",
+                            "JPY",
+                            "CHF",
+                            "CAD",
+                            "AUD",
+                            "NZD",
+                            "CNY",
+                            "HKD",
+                            "SGD",
+                            "SEK",
+                            "NOK",
+                            "DKK",
+                            "MXN",
+                            "BRL",
+                            "BDT",
+                            "INR",
+                            "PKR",
+                            "LKR",
+                            "NPR",
+                            "AFN",
+                            "BTN",
+                            "MVR",
+                            "MYR",
+                            "PHP",
+                            "THB",
+                            "IDR",
+                            "VND",
+                            "MMK",
+                            "KHR",
+                            "LAK",
+                            "BND",
+                            "KRW",
+                            "TWD",
+                            "MNT",
+                            "KPW",
+                            "MOP",
+                            "AED",
+                            "SAR",
+                            "QAR",
+                            "KWD",
+                            "BHD",
+                            "OMR",
+                            "JOD",
+                            "IQD",
+                            "IRR",
+                            "YER",
+                            "LBP",
+                            "SYP",
+                            "ILS",
+                            "KZT",
+                            "UZS",
+                            "KGS",
+                            "TJS",
+                            "TMT",
+                            "GEL",
+                            "AMD",
+                            "AZN",
+                            "TRY",
+                            "RUB",
+                            "UAH",
+                            "PLN",
+                            "CZK",
+                            "HUF",
+                            "RON",
+                            "BGN",
+                            "HRK",
+                            "RSD",
+                            "BAM",
+                            "MKD",
+                            "ALL",
+                            "MDL",
+                            "BYN",
+                            "ISK",
+                            "ARS",
+                            "CLP",
+                            "COP",
+                            "PEN",
+                            "UYU",
+                            "PYG",
+                            "BOB",
+                            "VES",
+                            "GYD",
+                            "SRD",
+                            "TTD",
+                            "JMD",
+                            "BBD",
+                            "BSD",
+                            "BZD",
+                            "CRC",
+                            "CUP",
+                            "DOP",
+                            "GTQ",
+                            "HNL",
+                            "HTG",
+                            "NIO",
+                            "PAB",
+                            "AWG",
+                            "ANG",
+                            "KYD",
+                            "BMD",
+                            "XCD",
+                            "FKP",
+                            "NGN",
+                            "GHS",
+                            "XOF",
+                            "GMD",
+                            "GNF",
+                            "SLL",
+                            "LRD",
+                            "CVE",
+                            "MRU",
+                            "KES",
+                            "TZS",
+                            "UGX",
+                            "RWF",
+                            "BIF",
+                            "ETB",
+                            "SOS",
+                            "ERN",
+                            "DJF",
+                            "SDG",
+                            "SSP",
+                            "SCR",
+                            "KMF",
+                            "MGA",
+                            "MUR",
+                            "XAF",
+                            "CDF",
+                            "ZAR",
+                            "BWP",
+                            "LSL",
+                            "SZL",
+                            "NAD",
+                            "MWK",
+                            "ZMW",
+                            "MZN",
+                            "AOA",
+                            "ZWL",
+                            "EGP",
+                            "DZD",
+                            "MAD",
+                            "TND",
+                            "LYD",
+                            "STN",
+                            "FJD",
+                            "PGK",
+                            "WST",
+                            "TOP",
+                            "VUV",
+                            "SBD",
+                            "XPF",
+                            "XDR",
+                            "XAG",
+                            "XAU"
+                          ]
+                        },
+                        "locale": {
+                          "type": "string",
+                          "minLength": 2,
+                          "maxLength": 2
+                        },
+                        "timeZone": {
+                          "type": "string",
+                          "maxLength": 64
+                        },
+                        "unitSystem": {
+                          "type": "string",
+                          "enum": [
+                            "metric",
+                            "imperial"
+                          ],
+                          "description": "metric (kilograms, grams) or imperial (pounds, ounces)."
+                        },
+                        "weightUnit": {
+                          "type": "string",
+                          "enum": [
+                            "g",
+                            "kg",
+                            "oz",
+                            "lb"
+                          ],
+                          "description": "The unit the dashboard shows and accepts weights in: kg or g for metric, lb or oz for imperial. Weights are stored in grams."
+                        }
+                      },
+                      "required": [
+                        "storeName",
+                        "countryCode",
+                        "currencyCode",
+                        "locale",
+                        "timeZone",
+                        "unitSystem",
+                        "weightUnit"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "sequential",
+          "transport": "json",
+          "maximumResponseBytes": 8192,
           "maxRequestBytes": 16384,
           "sensitiveOutput": false,
           "oneTimeSecretOutput": false
@@ -200835,6 +202079,57 @@
                     "type": "string",
                     "minLength": 12,
                     "maxLength": 128
+                  },
+                  "store": {
+                    "type": "object",
+                    "properties": {
+                      "storeName": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                      },
+                      "countryCode": {
+                        "type": "string",
+                        "minLength": 2,
+                        "maxLength": 2
+                      },
+                      "currencyCode": {
+                        "type": "string",
+                        "minLength": 3,
+                        "maxLength": 3
+                      },
+                      "locale": {
+                        "type": "string",
+                        "minLength": 2,
+                        "maxLength": 2
+                      },
+                      "timeZone": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64
+                      },
+                      "unitSystem": {
+                        "type": "string",
+                        "enum": [
+                          "metric",
+                          "imperial"
+                        ]
+                      },
+                      "weightUnit": {
+                        "type": "string",
+                        "enum": [
+                          "g",
+                          "kg",
+                          "oz",
+                          "lb"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "storeName",
+                      "countryCode",
+                      "timeZone"
+                    ]
                   }
                 },
                 "required": [
@@ -200868,11 +202163,20 @@
                         },
                         "userId": {
                           "type": "string"
+                        },
+                        "storeSetup": {
+                          "type": "string",
+                          "enum": [
+                            "applied",
+                            "skipped",
+                            "not_requested"
+                          ]
                         }
                       },
                       "required": [
                         "message",
-                        "userId"
+                        "userId",
+                        "storeSetup"
                       ]
                     }
                   },
@@ -202614,7 +203918,7 @@
               "kind": "constant",
               "value": 1
             },
-            "nonInferenceRule": "Keep Asia/Dhaka keys; ignore host timezone."
+            "nonInferenceRule": "Keep store-calendar keys (the store time zone); ignore host timezone."
           },
           {
             "id": "currency",
@@ -202637,7 +203941,7 @@
             "summary": "Merchant-day activity, currency, and queues.",
             "dependsOn": [],
             "stopConditions": [
-              "Use pagination and Asia/Dhaka dates."
+              "Use pagination and store-calendar dates."
             ],
             "steps": [
               {
@@ -203600,7 +204904,7 @@
               "/data/dailyActivityData"
             ],
             "proves": [
-              "Exactly 30 Asia/Dhaka calendar-day rows including zero days; booked, not paid or settled."
+              "Exactly 30 store-calendar-day rows including zero days; booked, not paid or settled."
             ],
             "bounds": {
               "maxCalls": 1,
@@ -204397,7 +205701,7 @@
         "requiresConfirmation": false,
         "requiresVerification": false,
         "rules": [
-          "Interpret activity.daily.bookedRevenue as Asia/Dhaka order-day booked gross, not collected cash, profit, or net settlement.",
+          "Interpret activity.daily.bookedRevenue as store-calendar order-day booked gross, not collected cash, profit, or net settlement.",
           "No authoritative merchant-day collected-cash or net-settlement aggregate exists; report it unavailable, never zero or inferred.",
           "activity.paymentRecovery.total is all recoverable hosted-payment work; activity.paymentNeedsAttention.total is the actionable failed/stale subset; both are current non-transactional backlogs, not daily metrics.",
           "Never subtract the recovery totals because their parallel reads can observe different instants.",
@@ -205199,7 +206503,7 @@
         "requiresConfirmation": false,
         "requiresVerification": false,
         "rules": [
-          "Dates are inclusive Asia/Dhaka calendar days (from/to YYYY-MM-DD, at most 731 days); state the range and comparison you used.",
+          "Dates are inclusive store calendar days in the store time zone (from/to YYYY-MM-DD, at most 731 days); state the range and comparison you used.",
           "Gross sales exclude shipping, taxes and gift cards; net sales = gross − discounts − returns; total sales = net + shipping + taxes. Never call gross sales profit or collected cash.",
           "Orders count by placement date; cancelled and incomplete orders are excluded (cancellations only in the cancellation rate); returns and refunds count against the order's own date.",
           "Read dashboard.reports.list first; a report with available=false is unavailable (customer_access or unit_cost): say so, never approximate it.",
@@ -205262,6 +206566,38 @@
         ]
       },
       {
+        "id": "dashboard.store-defaults",
+        "surface": "dashboard",
+        "kind": "write",
+        "title": "Change the store time zone or units",
+        "summary": "Read and update the store's time zone, unit system and default weight unit (Settings -> Store details -> Store defaults).",
+        "examples": [
+          "Change the store time zone to America/New_York.",
+          "Show weights in pounds: switch the store to the imperial system."
+        ],
+        "tags": [
+          "settings",
+          "timezone",
+          "time zone",
+          "units",
+          "weight",
+          "metric",
+          "imperial"
+        ],
+        "operationIds": [
+          "dashboard.settings.store_defaults_get",
+          "dashboard.settings.store_defaults_update"
+        ],
+        "requiresFacts": true,
+        "requiresConfirmation": true,
+        "requiresVerification": true,
+        "rules": [
+          "Read the store defaults and their revision; save only the requested fields at that revision.",
+          "A time zone is an IANA name; report days, date filters and scheduled app jobs follow it, daylight saving included. Orders keep their instants.",
+          "Weights are stored in grams; the unit changes only how the dashboard shows and accepts them."
+        ]
+      },
+      {
         "id": "dashboard.store-migration",
         "surface": "dashboard",
         "kind": "mixed",
@@ -205296,6 +206632,35 @@
           "Send at most 50 products, 20 image jobs or 100 customers or inventory rows per request; when `processed` is less than what was sent, send the rest again. Re-sending items is safe.",
           "Never invent marketing consent: mark a channel true only when the source says the customer agreed, and say where in `consentEvidence`.",
           "Report items that failed with their reasons; do not retry them unchanged."
+        ]
+      },
+      {
+        "id": "dashboard.store-setup",
+        "surface": "dashboard",
+        "kind": "mixed",
+        "title": "Set up a new store",
+        "summary": "Name a new store and set its country, currency, language, time zone and units in one write.",
+        "examples": [
+          "Set up my new store: Acme, in the United States, USD, English, America/Chicago."
+        ],
+        "tags": [
+          "onboarding",
+          "setup",
+          "country",
+          "currency",
+          "timezone"
+        ],
+        "operationIds": [
+          "dashboard.settings.store_setup_get",
+          "dashboard.settings.store_setup_apply"
+        ],
+        "requiresFacts": true,
+        "requiresConfirmation": true,
+        "requiresVerification": true,
+        "rules": [
+          "Read the setup status first; when it is not needed, stop and use Settings -> Store details and Settings -> Markets instead.",
+          "Require the store name, country and time zone; currency and units default to the country's.",
+          "Setup creates no tax region and no shipping zone; say what remains."
         ]
       },
       {
@@ -205556,7 +206921,7 @@
         "requiresConfirmation": false,
         "requiresVerification": false,
         "rules": [
-          "brief.daily.activity is exactly 30 Asia/Dhaka calendar days including zero days; bookedRevenue is booked gross, not paid/settled/net/margin.",
+          "brief.daily.activity is exactly 30 store calendar days (the store time zone) including zero days; bookedRevenue is booked gross, not paid/settled/net/margin.",
           "brief.currency is saved currency; missing fails the brief.",
           "Stock, abandoned, and recovery totals are current snapshots, not period metrics or cohorts.",
           "paymentRecovery.total is all recoverable hosted-payment work; paymentNeedsAttention.total is actionable failed/stale work. Snapshots can race; never subtract.",
@@ -207157,7 +208522,7 @@
         "requiresVerification": false,
         "rules": [
           "Offer the fixed PII-free read: booked daily activity plus current stock-risk, abandoned, and recovery totals.",
-          "Exact statuses need an Asia/Dhaka range and archived-order policy in a separate report.",
+          "Exact statuses need a store-calendar range and archived-order policy in a separate report.",
           "Paid/collected/settled cash, top SKUs, margin, and traffic/conversion are unavailable; never infer or return zero.",
           "Queue evidence is totals only; never raw order, checkout, recovery, or customer rows.",
           "Ask for the fixed subset, status facts, or separate work; no write or window coercion."
@@ -207677,12 +209042,12 @@
         ]
       },
       {
-        "id": "dashboard.timezone-fixed-invariant",
+        "id": "dashboard.timezone-separate-review",
         "surface": "dashboard",
-        "title": "Do not invent a timezone setting",
-        "summary": "Merchant-calendar semantics are fixed to Asia/Dhaka and expose no writable timezone setting.",
+        "title": "Change the store time zone on its own",
+        "summary": "The store time zone is a Store defaults change that regroups every report day; it is never part of the checkout setup.",
         "examples": [
-          "Change the store timezone setting to Asia/Dhaka."
+          "Set up checkout and also change the store timezone setting to Asia/Dhaka."
         ],
         "tags": [
           "settings",
@@ -207690,18 +209055,25 @@
           "calendar"
         ],
         "disposition": "ask",
-        "reasonCode": "timezone_setting_unavailable",
+        "reasonCode": "timezone_change_requires_separate_review",
         "trigger": {
           "allOf": [
             [
               "timezone",
               "timezone setting",
-              "store timezone"
+              "store timezone",
+              "time zone"
             ],
             [
               "change",
               "set",
               "update"
+            ],
+            [
+              "checkout",
+              "cod",
+              "sslcommerz",
+              "guest"
             ]
           ],
           "ignoreWhenNegated": true
@@ -207712,7 +209084,8 @@
           "dashboard.checkout.readiness_get",
           "dashboard.payments.methods_get",
           "dashboard.shipping_methods.list",
-          "storefront.checkout.get_config"
+          "storefront.checkout.get_config",
+          "dashboard.settings.store_defaults_get"
         ],
         "forbiddenOperationIds": [
           "dashboard.settings.currency_update",
@@ -207727,14 +209100,15 @@
           "dashboard.seo.settings_update",
           "dashboard.analytics.create",
           "dashboard.analytics.update",
-          "dashboard.analytics.set_active"
+          "dashboard.analytics.set_active",
+          "dashboard.settings.store_defaults_update"
         ],
         "requiresFacts": true,
         "requiresConfirmation": true,
         "requiresVerification": true,
         "rules": [
-          "State that merchant-calendar behavior is fixed to Asia/Dhaka; no writable timezone operation exists.",
-          "Make no setup write until the merchant accepts the fixed invariant without a timezone mutation."
+          "The time zone is a separate Store defaults write (dashboard.settings.store_defaults_update) that regroups report days; review it on its own.",
+          "Make no setup write while the request bundles a time zone change."
         ]
       },
       {
@@ -211745,6 +213119,38 @@
           "mode": "curated",
           "workflowIds": [
             "dashboard.storefront-origin"
+          ]
+        },
+        {
+          "operationId": "dashboard.settings.store_defaults_get",
+          "surface": "dashboard",
+          "mode": "curated",
+          "workflowIds": [
+            "dashboard.store-defaults"
+          ]
+        },
+        {
+          "operationId": "dashboard.settings.store_defaults_update",
+          "surface": "dashboard",
+          "mode": "curated",
+          "workflowIds": [
+            "dashboard.store-defaults"
+          ]
+        },
+        {
+          "operationId": "dashboard.settings.store_setup_apply",
+          "surface": "dashboard",
+          "mode": "curated",
+          "workflowIds": [
+            "dashboard.store-setup"
+          ]
+        },
+        {
+          "operationId": "dashboard.settings.store_setup_get",
+          "surface": "dashboard",
+          "mode": "curated",
+          "workflowIds": [
+            "dashboard.store-setup"
           ]
         },
         {

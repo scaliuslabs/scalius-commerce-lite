@@ -39,8 +39,11 @@ function invoice(): InvoiceDocument {
 
 describe("printable invoice artifact", () => {
   it("renders one bounded self-contained document with escaped buyer data", () => {
-    const artifact = renderPrintableInvoice(invoice());
+    const artifact = renderPrintableInvoice(invoice(), "Asia/Dhaka");
     expect(artifact).toContain("<!doctype html>");
+    // Issued 2023-11-14 22:13 UTC: the store's calendar day, not UTC's.
+    expect(artifact).toContain("<p>2023-11-15</p>");
+    expect(renderPrintableInvoice(invoice(), "America/New_York")).toContain("<p>2023-11-14</p>");
     expect(artifact).toContain("Scalius &lt;Store&gt;");
     expect(artifact).toContain("Buyer &lt;script&gt;");
     expect(artifact).toContain("BDT 110.00");
@@ -58,9 +61,9 @@ describe("printable invoice artifact", () => {
     document.order.shippingMethodBaseAmountMinor = null;
     document.order.shippingFeeWaived = null;
 
-    const artifact = renderPrintableInvoice(document);
+    const artifact = renderPrintableInvoice(document, "Asia/Dhaka");
 
-    expect(artifact).toContain("<span>Shipping</span>");
+    expect(artifact, "Asia/Dhaka").toContain("<span>Shipping</span>");
     expect(artifact).not.toContain("Delivery —");
   });
 
@@ -72,9 +75,9 @@ describe("printable invoice artifact", () => {
       { label: "Note", displayValue: "y".repeat(500), priceMinor: 0 },
     ];
 
-    const artifact = renderPrintableInvoice(document);
+    const artifact = renderPrintableInvoice(document, "Asia/Dhaka");
 
-    expect(artifact).toContain("<small>Engraving: &lt;b&gt;Anika&lt;/b&gt; &amp; co (+BDT 200.00)</small>");
+    expect(artifact, "Asia/Dhaka").toContain("<small>Engraving: &lt;b&gt;Anika&lt;/b&gt; &amp; co (+BDT 200.00)</small>");
     expect(artifact).toContain("<small>Fit: Slim</small>");
     expect(artifact).toContain(`<small>Note: ${"y".repeat(199)}…</small>`);
     expect(artifact).not.toContain("<b>Anika</b>");
@@ -87,6 +90,6 @@ describe("printable invoice artifact", () => {
       id: `oi_${index}`,
       productName: "x".repeat(200),
     }));
-    expect(() => renderPrintableInvoice(document)).toThrow("safe artifact size limit");
+    expect(() => renderPrintableInvoice(document, "Asia/Dhaka")).toThrow("safe artifact size limit");
   });
 });

@@ -1,5 +1,5 @@
 // Nightly catalogue maintenance, run from the 15-minute cron once a day
-// (the first tick at or after 20:00 UTC, 02:00 in Dhaka):
+// (the first tick at or after 02:00 store time: 20:00 UTC for Dhaka):
 //
 // 1. `product_sales_stats` from the last 30 days of real order lines (the
 //    home page's "popular" list and the recommendation ranking's signal);
@@ -15,9 +15,10 @@ import {
   refreshProductSalesStats,
 } from "@scalius/core/modules/catalog";
 import { enqueueCatalogProjectionRebuild, enqueueRecommendationRefresh } from "../utils/catalog-jobs";
+import { commerceCalendarDateKey, commerceWallTimeToEpoch } from "@scalius/shared/commerce-time";
 
-/** UTC hour whose first cron tick runs the nightly pass. */
-export const NIGHTLY_CATALOG_UTC_HOUR = 20;
+/** The store-time hour whose first cron tick runs the nightly pass. */
+export const NIGHTLY_CATALOG_STORE_HOUR = 2;
 /** The cron fires every 15 minutes: exactly one tick falls in this window. */
 const NIGHTLY_WINDOW_MINUTES = 15;
 /**
@@ -54,10 +55,14 @@ export async function queuePostDeployProjectionRebuild(env: Env): Promise<boolea
   return true;
 }
 
-export function isNightlyCatalogTick(scheduledTime: number | undefined): boolean {
+/**
+ * Whether a tick is the night's first: 02:00 in the store's zone, or just
+ * after the gap on a night the clocks skip 02:00 (daylight saving).
+ */
+export function isNightlyCatalogTick(scheduledTime: number | undefined, timeZone: string): boolean {
   if (typeof scheduledTime !== "number" || !Number.isFinite(scheduledTime)) return false;
-  const at = new Date(scheduledTime);
-  return at.getUTCHours() === NIGHTLY_CATALOG_UTC_HOUR && at.getUTCMinutes() < NIGHTLY_WINDOW_MINUTES;
+  const start = commerceWallTimeToEpoch(timeZone, commerceCalendarDateKey(timeZone, scheduledTime), NIGHTLY_CATALOG_STORE_HOUR, 0);
+  return start !== null && scheduledTime >= start * 1000 && scheduledTime < (start + NIGHTLY_WINDOW_MINUTES * 60) * 1000;
 }
 
 export async function runNightlyCatalogMaintenance(

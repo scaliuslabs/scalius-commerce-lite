@@ -6,6 +6,7 @@ import {
   type AnalyticsGranularity,
   type AnalyticsRange,
 } from "@scalius/shared/analytics-period";
+import { getStoreTimeZone } from "~/lib/store-time-zone";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { useMessages } from "~/i18n";
 import { analyticsMessages } from "~/i18n/analytics";
@@ -26,7 +27,7 @@ import {
  * time and returns the URL search to navigate to.
  */
 export function useAnalyticsSelection(search: AnalyticsSearch, userId: string | null | undefined) {
-  const today = useMemo(() => analyticsToday(), []);
+  const today = useMemo(() => analyticsToday(getStoreTimeZone()), []);
   const saved = useMemo(() => readSavedSelection(userId, today), [userId, today]);
   const selection = resolveAnalyticsSelection(search, saved, today);
   return {

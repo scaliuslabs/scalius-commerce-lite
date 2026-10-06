@@ -45,6 +45,9 @@ const PRODUCTION_CONFIG: PlatformConfig = {
   corsAllowedOrigins: ["https://mobile.example.com"],
   setupTokenRequired: false,
   identityHandoff: { ...EMPTY_IDENTITY_HANDOFF_CONFIG },
+  timeZone: "Asia/Dhaka",
+  unitSystem: "metric",
+  weightUnit: "g",
 };
 
 describe("platform config constants", () => {
@@ -67,6 +70,9 @@ describe("platform config constants", () => {
         jwksUrl: "",
         localLoginDisabled: false,
       },
+      timeZone: "Asia/Dhaka",
+      unitSystem: "metric",
+      weightUnit: "g",
     });
     expect(EMPTY_PLATFORM_CONFIG).toEqual({
       storefrontUrl: "",
@@ -83,6 +89,9 @@ describe("platform config constants", () => {
         jwksUrl: "",
         localLoginDisabled: false,
       },
+      timeZone: "Asia/Dhaka",
+      unitSystem: "metric",
+      weightUnit: "g",
     });
     expect(Object.isFrozen(EMPTY_IDENTITY_HANDOFF_CONFIG)).toBe(true);
     const fresh = emptyPlatformConfig();
@@ -266,7 +275,18 @@ describe("normalizePlatformConfig", () => {
       setupTokenRequired: false,
       identityHandoff: { ...EMPTY_IDENTITY_HANDOFF_CONFIG },
       corsAllowedOrigins: ["https://mobile.example.com"],
+      timeZone: "Asia/Dhaka",
+      unitSystem: "metric",
+      weightUnit: "g",
     });
+  });
+
+  it("keeps the store defaults: a real zone, a unit system and one of its weight units", () => {
+    expect(normalizePlatformConfig({ timeZone: "America/New_York", unitSystem: "imperial", weightUnit: "oz" }))
+      .toMatchObject({ timeZone: "America/New_York", unitSystem: "imperial", weightUnit: "oz" });
+    expect(normalizePlatformConfig({ timeZone: "Mars/Base", unitSystem: "imperial", weightUnit: "kg" }))
+      .toMatchObject({ timeZone: "Asia/Dhaka", unitSystem: "imperial", weightUnit: "lb" });
+    expect(normalizePlatformConfig({ unitSystem: "cubits" })).toMatchObject({ unitSystem: "metric", weightUnit: "g" });
   });
 
   it("returns the empty configuration for non-object input", () => {

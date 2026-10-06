@@ -185,7 +185,7 @@ const locationId = /* @__PURE__ */ (() => z.string().trim().min(1).max(128))();
 
 /**
  * A date filter: relative (`within_last` / `not_within_last` N days) or
- * absolute (`on_or_after` / `before` a merchant calendar date, Asia/Dhaka).
+ * absolute (`on_or_after` / `before` a merchant calendar date in the store time zone).
  * A customer without the date (never ordered) never matches a date filter;
  * "never ordered" is `orders_count` with `max: 0`.
  */

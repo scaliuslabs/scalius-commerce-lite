@@ -17,6 +17,7 @@ import { getDecimalPlaces, formatMoney } from "@scalius/shared/currency";
 import { fromMinor } from "@scalius/shared/money";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { getCredentialEncryptionKey } from "../utils/encryption-key";
+import { storeTimeZoneOf } from "../utils/store-time-zone";
 
 export interface GiftCardIssuedContentInput {
   giftCardId: string;
@@ -34,13 +35,14 @@ export interface GiftCardIssuedContent {
   extraTemplateData: NotificationExtraTemplateData;
 }
 
-function formatExpiry(epochSeconds: number | null): string {
+/** The card's last usable day in the store's time zone. */
+function formatExpiry(epochSeconds: number | null, timeZone: string): string {
   if (epochSeconds === null) return "";
   return new Date(epochSeconds * 1000).toLocaleDateString("en-GB", {
     day: "numeric",
     month: "short",
     year: "numeric",
-    timeZone: "Asia/Dhaka",
+    timeZone,
   });
 }
 
@@ -68,7 +70,7 @@ export async function resolveGiftCardIssuedContent(
     extraTemplateData: {
       gift_card_code: message.code,
       gift_card_value: formatMoney(fromMinor(message.amountMinor, getDecimalPlaces(message.currencyCode)), { code: message.currencyCode }),
-      gift_card_expires: formatExpiry(message.expiresAt),
+      gift_card_expires: formatExpiry(message.expiresAt, storeTimeZoneOf(env)),
       gift_card_message: message.message ?? "",
       gift_card_sender: message.senderName ?? "",
       gift_card_link: storeLink(env),

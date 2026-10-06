@@ -84,7 +84,9 @@ export function SetupForm({ setupTokenRequired = false }: { setupTokenRequired?:
         await navigate({ to: "/auth/two-factor" });
         return;
       }
-      await navigate({ to: error ? "/auth/login" : "/admin" });
+      // A new store's first stop is "Tell us about your store" (it sends a
+      // store that is already set up on to Home).
+      await navigate({ to: error ? "/auth/login" : "/admin/welcome" });
     } catch {
       await navigate({ to: "/auth/login" });
     }

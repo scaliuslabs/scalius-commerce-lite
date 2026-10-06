@@ -142,7 +142,7 @@ describe("order channel on D1 storage", () => {
         const walkIn = await createOrder(db, input({ channelSource: "walk_in" }), "admin_1");
         const result = await listOrders(db, { sort: "createdAt", order: "asc" });
         const details = await loadOrderExportDetails(db, result.orders.map((order) => order.id));
-        const builder = createOrdersCsvArtifactBuilder("summary");
+        const builder = createOrdersCsvArtifactBuilder("summary", "Asia/Dhaka");
         for (const order of result.orders) {
             const detail = details.get(order.id)!;
             builder.append({

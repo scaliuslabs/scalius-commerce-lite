@@ -1,8 +1,9 @@
 // src/modules/platform/document.ts
-// The `platform` settings document: the deployment's public origins, CORS and
-// identity handoff (Settings -> Platform). Read at Worker entry through its KV
-// mirror, so it lives here, beside its only service, rather than in the
-// settings domain.
+// The `platform` settings document: the deployment's public origins, CORS,
+// identity handoff (Settings -> Platform) and the store defaults every
+// invocation may need (time zone, units; Settings -> Store details). Read at
+// Worker entry through its KV mirror, so it lives here, beside its services,
+// rather than in the settings domain.
 
 import { z } from "zod";
 import {
@@ -36,6 +37,10 @@ export const platformDocument = defineSettingsDocument<PlatformConfig>({
         jwksUrl: z.string().default(""),
         localLoginDisabled: z.boolean().default(false),
       }),
+      // Store defaults: an unknown value reads as the default, never as an invalid document.
+      timeZone: z.unknown(),
+      unitSystem: z.unknown(),
+      weightUnit: z.unknown(),
     })
     .transform((value) => normalizePlatformConfig(value)),
   defaults: emptyPlatformConfig(),

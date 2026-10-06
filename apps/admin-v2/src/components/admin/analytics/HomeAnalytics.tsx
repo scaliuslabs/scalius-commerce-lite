@@ -8,6 +8,7 @@ import {
   defaultAnalyticsGranularity,
   type AnalyticsPreset,
 } from "@scalius/shared/analytics-period";
+import { getStoreTimeZone } from "~/lib/store-time-zone";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Skeleton } from "~/components/ui/skeleton";
@@ -22,7 +23,7 @@ import { formatBucketLabel, formatPercent, formatRangeLabel } from "./analytics-
 const HOME_PRESETS: AnalyticsPreset[] = ["today", "last_7_days", "last_30_days"];
 
 /** Home's overview read for a preset: the same numbers the Analytics page shows. */
-export function homeOverviewQuery(preset: AnalyticsPreset, today: string = analyticsToday()) {
+export function homeOverviewQuery(preset: AnalyticsPreset, today: string = analyticsToday(getStoreTimeZone())) {
   const range = analyticsPresetRange(preset, today);
   return analyticsOverviewQueryOptions({
     ...range,
@@ -39,7 +40,7 @@ export function homeOverviewQuery(preset: AnalyticsPreset, today: string = analy
 export function HomeAnalytics() {
   const t = useMessages(analyticsMessages);
   const { fmt } = useCurrency();
-  const today = useMemo(() => analyticsToday(), []);
+  const today = useMemo(() => analyticsToday(getStoreTimeZone()), []);
   const [preset, setPreset] = useState<AnalyticsPreset>("last_30_days");
   const overview = useQuery(homeOverviewQuery(preset, today));
   const data = overview.data;

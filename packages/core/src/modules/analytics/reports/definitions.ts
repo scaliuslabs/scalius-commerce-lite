@@ -13,6 +13,7 @@ import {
   type AnalyticsRange,
 } from "@scalius/shared/analytics-period";
 import type { AnalyticsReportId } from "@scalius/shared/analytics-reports";
+import { commerceCalendarDateKey } from "@scalius/shared/commerce-time";
 import { collectionMembershipForConfig } from "../../collections";
 import {
   buildNeedsRestockCondition,
@@ -31,6 +32,7 @@ import {
   orderMetricsCtes,
   salesLinesCtes,
   salesOrdersCte,
+  scopeOffsets,
   type SalesLineOptions,
 } from "./sales-sql";
 import { num, type AnalyticsContext } from "./context";
@@ -57,9 +59,19 @@ function requireGranularity(params: ReportParams): AnalyticsGranularity {
   return params.granularity ?? "day";
 }
 
+/** A range's exact instants in the store's zone. */
+function rangeInstants(ctx: AnalyticsContext, range: AnalyticsRange) {
+  return analyticsInstantRange(range, ctx.timeZone);
+}
+
+/** The merchant day of a column whose values lie inside the range. */
+function rangeDaySql(ctx: AnalyticsContext, range: AnalyticsRange, column: string): SQL {
+  return merchantDaySql(column, scopeOffsets(ctx.timeZone, rangeInstants(ctx, range)));
+}
+
 /** The sales CTE chain for a range: `so`, `sl`/`sv`/`lv`, `lo`/`om`. */
 function salesCtes(ctx: AnalyticsContext, range: AnalyticsRange, options: SalesLineOptions = {}): SQL {
-  const scope = { ...analyticsInstantRange(range), currency: ctx.currency.code };
+  const scope = { ...rangeInstants(ctx, range), currency: ctx.currency.code };
   return sql`${salesOrdersCte(scope)}, ${salesLinesCtes(options)}, ${orderMetricsCtes()}`;
 }
 
@@ -147,8 +159,9 @@ function bucketKeyOf(value: unknown): string {
   return analyticsDateKeyFromEpochDay(num(value));
 }
 
-function dateOf(value: ReportCell | undefined): ReportCell {
-  return value === null || value === undefined || value === "" ? null : analyticsDateKeyFromEpochDay(num(value));
+/** The merchant date of an epoch-second cell, in the store's zone. */
+function dateOf(value: ReportCell | undefined, ctx: AnalyticsContext): ReportCell {
+  return value === null || value === undefined || value === "" ? null : commerceCalendarDateKey(ctx.timeZone, num(value) * 1000);
 }
 
 // ─── Sales ──────────────────────────────────────────────────────────────────
@@ -170,7 +183,7 @@ const salesOverTime: ReportImplementation = {
   async rows(ctx, params) {
     const range = requireRange(params);
     const granularity = requireGranularity(params);
-    const bucket = bucketStartSql(merchantDaySql("om.created_at"), granularity, range);
+    const bucket = bucketStartSql(rangeDaySql(ctx, range, "om.created_at"), granularity, range);
     const rows = await selectRows(ctx, sql`with ${salesCtes(ctx, range)}
       select ${bucket} as bucket, ${orderMeasuresSql("om")}
       from om group by ${bucket}`, ["bucket", ...ORDER_MEASURE_FIELDS]);
@@ -373,7 +386,7 @@ const customersTop: SqlReport = {
           cg.orders as orders, cg.total_sales as total_sales, cg.net_sales as net_sales,
           case when cg.orders > 0 then (cg.gross_sales - cg.discounts) * 1.0 / cg.orders end as average_order_value,
           cg.gross_sales as gross_sales, cg.discounts as discounts,
-          ${merchantDaySql(`coalesce(case
+          coalesce(case
             when cg.customer_id is not null then (
               select min(p.created_at) from orders p
               where p.customer_id = cg.customer_id and p.deleted_at is null
@@ -382,15 +395,17 @@ const customersTop: SqlReport = {
               select min(p.created_at) from orders p
               where p.customer_phone = cg.order_phone and p.customer_id is null and p.deleted_at is null
                 and p.status not in ('incomplete', 'cancelled'))
-          end, cg.first_in_range)`)} as first_order,
-          ${merchantDaySql("cg.last_in_range")} as last_order
+          end, cg.first_in_range) as first_order,
+          cg.last_in_range as last_order
         from cg left join customers cust on cust.id = cg.customer_id`,
     };
   },
-  finishRow(values) {
+  // First and last order arrive as instants (the first may predate the
+  // range, any offset of the zone): dated here, in the store's zone.
+  finishRow(values, ctx) {
     values.average_order_value = averageOrderValueMinor(num(values.gross_sales), num(values.discounts), num(values.orders));
-    values.first_order = dateOf(values.first_order);
-    values.last_order = dateOf(values.last_order);
+    values.first_order = dateOf(values.first_order, ctx);
+    values.last_order = dateOf(values.last_order, ctx);
   },
 };
 
@@ -403,7 +418,7 @@ const customersOverTime: ReportImplementation = {
   async rows(ctx, params) {
     const range = requireRange(params);
     const granularity = requireGranularity(params);
-    const bucket = bucketStartSql(merchantDaySql("cf.created_at"), granularity, range);
+    const bucket = bucketStartSql(rangeDaySql(ctx, range, "cf.created_at"), granularity, range);
     const fields = ["bucket", "customers", "new_customers", "orders", "new_customer_sales"] as const;
     const rows = await selectRows(ctx, sql`with ${salesCtes(ctx, range)},
       cf as (
@@ -557,7 +572,7 @@ const inventorySellThrough: SqlReport = {
 // ─── Finance ────────────────────────────────────────────────────────────────
 
 function ordersInRange(ctx: AnalyticsContext, range: AnalyticsRange): SQL {
-  const { start, endExclusive } = analyticsInstantRange(range);
+  const { start, endExclusive } = rangeInstants(ctx, range);
   return sql`o.deleted_at is null and o.created_at >= ${start} and o.created_at < ${endExclusive}
     and o.currency_code = ${ctx.currency.code} and o.shop_currency = ${ctx.currency.code}`;
 }
@@ -631,7 +646,7 @@ const financeCod: ReportImplementation = {
   kind: "rows",
   async rows(ctx, params) {
     const range = requireRange(params);
-    const scope = { ...analyticsInstantRange(range), currency: ctx.currency.code };
+    const scope = { ...rangeInstants(ctx, range), currency: ctx.currency.code };
     const fields = ["cod_state", "orders", "order_value", "collected", "outstanding"] as const;
     const rows = await selectRows(ctx, sql`with ${salesOrdersCte(scope)},
       cs as (
@@ -689,7 +704,7 @@ const financeGiftCards: ReportImplementation = {
   kind: "rows",
   async rows(ctx, params) {
     const range = requireRange(params);
-    const { start, endExclusive } = analyticsInstantRange(range);
+    const { start, endExclusive } = rangeInstants(ctx, range);
     const now = Math.floor(ctx.now.getTime() / 1000);
     const currency = ctx.currency.code;
     const rows = await selectRows(ctx, sql`select 'outstanding_balance' as measure, count(*) as cards,
@@ -823,8 +838,8 @@ const abandonedCheckouts: ReportImplementation = {
   async rows(ctx, params) {
     const range = requireRange(params);
     const granularity = requireGranularity(params);
-    const { start, endExclusive } = analyticsInstantRange(range);
-    const bucket = bucketStartSql(merchantDaySql("ac.created_at"), granularity, range);
+    const { start, endExclusive } = rangeInstants(ctx, range);
+    const bucket = bucketStartSql(rangeDaySql(ctx, range, "ac.created_at"), granularity, range);
     const window = ABANDONED_RECOVERY_WINDOW_DAYS * DAY_SECONDS;
     const fields = ["bucket", "abandoned", "reachable", "recovered", "recovered_sales"] as const;
     const rows = await selectRows(ctx, sql`with ac as (

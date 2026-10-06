@@ -7,6 +7,7 @@ import { cors } from "hono/cors";
 import { errorResponseFromError, logApiError } from "../utils/api-response";
 import { RateLimitError } from "../utils/api-error";
 import { withTrackedPlatformEnv } from "./runtime-env";
+import { withStoreTimeZone } from "@scalius/core/utils/store-time-zone";
 import { eventDispatchMiddleware } from "../middleware/event-dispatch";
 import {
   getRequestCorrelation,
@@ -63,9 +64,11 @@ function configureApiApp(app: Hono<{ Bindings: Env }>): void {
     // (media URL, store URL, CORS) from the tracked settings row, never the
     // KV hint composed at Worker entry. Outside a scope nothing changes.
     c.env = await withTrackedPlatformEnv(c.env as Env, db, c.req.url);
-    await withPublicMediaUrl(
-      getR2PublicUrl(c.env, c.req.url),
-      () => next(),
+    // The store's time zone (Platform settings) for deep merchant-calendar
+    // reads such as a segment's date filter inside checkout pricing.
+    await withStoreTimeZone(
+      c.env.PLATFORM_CONFIG?.timeZone,
+      () => withPublicMediaUrl(getR2PublicUrl(c.env, c.req.url), () => next()),
     );
   });
 

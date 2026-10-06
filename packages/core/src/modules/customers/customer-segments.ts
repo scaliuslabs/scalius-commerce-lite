@@ -18,7 +18,8 @@ import {
     promotionCustomerSegments,
     promotions,
 } from "@scalius/database/schema";
-import { commerceCalendarDayBounds } from "@scalius/shared/commerce-time";
+import { commerceDayStart } from "@scalius/shared/commerce-time";
+import { currentStoreTimeZone } from "../../utils/store-time-zone";
 import {
     CUSTOMER_SEGMENT_COUNT_CAP,
     canonicalSegmentDefinitionJson,
@@ -37,9 +38,11 @@ const DAY_SECONDS = 24 * 60 * 60;
 export interface SegmentEvaluationContext {
     /** Epoch seconds that relative date filters count back from. */
     nowSeconds: number;
+    /** The store's zone: a calendar-date filter starts at that day's first instant in it. */
+    timeZone: string;
 }
 
-const now = (): SegmentEvaluationContext => ({ nowSeconds: Math.floor(Date.now() / 1000) });
+const now = (): SegmentEvaluationContext => ({ nowSeconds: Math.floor(Date.now() / 1000), timeZone: currentStoreTimeZone() });
 
 /**
  * The outer customer row, spelled out for correlated subqueries: drizzle
@@ -65,9 +68,9 @@ function dateFilterSql(column: SQL, filter: CustomerSegmentDateFilter, context: 
         case "not_within_last":
             return sql`${column} < ${context.nowSeconds - filter.days * DAY_SECONDS}`;
         case "on_or_after":
-            return sql`${column} >= ${commerceCalendarDayBounds(filter.date).start}`;
+            return sql`${column} >= ${commerceDayStart(context.timeZone, filter.date)}`;
         case "before":
-            return sql`${column} < ${commerceCalendarDayBounds(filter.date).start}`;
+            return sql`${column} < ${commerceDayStart(context.timeZone, filter.date)}`;
     }
 }
 
@@ -193,7 +196,7 @@ export async function listSegmentMemberIds(
     options: { afterId?: string | null; limit?: number } & Partial<SegmentEvaluationContext> = {},
 ): Promise<string[]> {
     const limit = Math.min(Math.max(options.limit ?? 100, 1), 500);
-    const context = { nowSeconds: options.nowSeconds ?? now().nowSeconds };
+    const context = { ...now(), ...options.nowSeconds === undefined ? {} : { nowSeconds: options.nowSeconds }, ...options.timeZone === undefined ? {} : { timeZone: options.timeZone } };
     const rows = await fromCustomers(db)
         .where(and(segmentWhereSql(definition, context), options.afterId ? sql`${customers.id} > ${options.afterId}` : undefined))
         .orderBy(asc(customers.id))

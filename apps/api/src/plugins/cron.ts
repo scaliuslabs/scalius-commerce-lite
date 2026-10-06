@@ -24,9 +24,9 @@ import {
   listActiveCronJobs,
   releasePluginCronRun,
 } from "@scalius/core/modules/plugins";
-import { COMMERCE_UTC_OFFSET_SECONDS } from "@scalius/shared/commerce-time";
 import { latestPluginCronSlot, parsePluginCronSchedule } from "@scalius/shared/plugins/cron";
 import type { PluginHostOptions } from "./host";
+import { storeTimeZoneOf } from "../utils/store-time-zone";
 
 export const PLUGIN_CRON_MAX_RUNS_PER_TICK = 10;
 /** No run starts this long after the tick began (each run is bounded by its own wall time). */
@@ -68,7 +68,7 @@ export async function runDuePluginCron(options: {
     const schedule = declared ? parsePluginCronSchedule(declared.schedule) : null;
     if (!schedule || typeof schedule === "string") continue;
     const slotMs = latestPluginCronSlot(schedule, nowMs, {
-      offsetMinutes: COMMERCE_UTC_OFFSET_SECONDS / 60,
+      timeZone: storeTimeZoneOf(options.env),
       lookbackMinutes: PLUGIN_CRON_LOOKBACK_MINUTES,
     });
     if (slotMs === null) continue;

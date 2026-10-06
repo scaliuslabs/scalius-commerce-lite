@@ -1,7 +1,7 @@
 import { lazy, Suspense, type ReactNode } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronRight, CreditCard, ImageOff, Inbox, Menu, Package, Palette, Store, Truck } from "lucide-react";
+import { ChevronRight, CreditCard, Globe, ImageOff, Inbox, Menu, Package, Palette, Receipt, Store, Truck } from "lucide-react";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { unixToDate } from "@scalius/shared/timestamps";
 import { Button } from "~/components/ui/button";
@@ -16,6 +16,7 @@ import { usePermissions } from "~/contexts/PermissionContext";
 import { useCurrency } from "~/hooks/use-currency";
 import { canAccessAdminPath } from "~/lib/admin-access";
 import { RouteErrorComponent } from "~/lib/route-error";
+import { getStoreTimeZone } from "~/lib/store-time-zone";
 import {
   HOME_FEED_STALE_TIME_MS,
   dashboardActivityQueryOptions,
@@ -24,6 +25,7 @@ import {
   homeOpenOrdersQueryOptions,
 } from "~/lib/api-query-options/dashboard-home";
 import { currencySettingsQueryOptions } from "~/lib/api-query-options/currency";
+import { storeSetupQueryOptions } from "~/lib/api-query-options/store-defaults";
 import { countFeedGaps, feedDiagnosticsQueryOptions, navigationPlacementsQueryOptions } from "~/lib/api-query-options/online-store";
 import { formatDateTime, formatNumber, useMessages } from "~/i18n";
 import { homeMessages } from "~/i18n/home";
@@ -72,8 +74,9 @@ function HomeAnalyticsSkeleton() {
   );
 }
 
-/** Today's date in store time (Asia/Dhaka) as YYYY-MM-DD, matching the activity feed. */
-const storeToday = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dhaka" }).format(new Date());
+
+/** Today's date in store time as YYYY-MM-DD, matching the activity feed. */
+const storeToday = () => new Intl.DateTimeFormat("en-CA", { timeZone: getStoreTimeZone() }).format(new Date());
 
 function HomePage() {
   const t = useMessages(homeMessages);
@@ -254,17 +257,26 @@ function TodoLink({ to, search, icon, children }: { to: string; search?: Record<
   );
 }
 
-const SETUP: ReadonlyArray<{ to: string; icon: typeof Package; title: HomeKey; body: HomeKey; action: HomeKey }> = [
+type SetupStep = { to: string; icon: typeof Package; title: HomeKey; body: HomeKey; action: HomeKey };
+
+/** "Tell us about your store": first, while the store is new (no order, markets untouched). */
+const ABOUT_STEP: SetupStep = { to: "/admin/welcome", icon: Globe, title: "setupAbout", body: "setupAboutBody", action: "setupAboutAction" };
+
+const SETUP: ReadonlyArray<SetupStep> = [
   { to: "/admin/products/new", icon: Package, title: "setupProduct", body: "setupProductBody", action: "setupProductAction" },
   { to: "/admin/online-store/theme", icon: Palette, title: "setupTheme", body: "setupThemeBody", action: "setupThemeAction" },
   { to: "/admin/settings/payments", icon: CreditCard, title: "setupPayments", body: "setupPaymentsBody", action: "setupPaymentsAction" },
   { to: "/admin/settings/store", icon: Store, title: "setupStore", body: "setupStoreBody", action: "setupStoreAction" },
+  // Setup creates no shipping zone and no tax region: these two say what is next.
   { to: "/admin/settings/shipping", icon: Truck, title: "setupShipping", body: "setupShippingBody", action: "setupShippingAction" },
+  { to: "/admin/settings/taxes", icon: Receipt, title: "setupTaxes", body: "setupTaxesBody", action: "setupTaxesAction" },
 ];
 
 /** A store with no products and no orders yet: Shopify's setup cards. */
 function SetupCards({ canOpen }: { canOpen: (to: string) => boolean }) {
   const t = useMessages(homeMessages);
+  const setup = useQuery({ ...storeSetupQueryOptions(), enabled: canOpen(ABOUT_STEP.to) });
+  const steps = setup.data?.needed ? [ABOUT_STEP, ...SETUP] : SETUP;
   return (
     <div className="mx-auto max-w-3xl space-y-4 pb-8">
       <div>
@@ -272,7 +284,7 @@ function SetupCards({ canOpen }: { canOpen: (to: string) => boolean }) {
         <p className="text-body text-muted-foreground">{t("welcomeBody")}</p>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
-        {SETUP.filter((step) => canOpen(step.to)).map((step) => (
+        {steps.filter((step) => canOpen(step.to)).map((step) => (
           <Card key={step.to}>
             <CardHeader className="space-y-3">
               <step.icon className="h-5 w-5 text-muted-foreground" />

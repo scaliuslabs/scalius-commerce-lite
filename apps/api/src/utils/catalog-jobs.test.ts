@@ -136,11 +136,21 @@ describe.each(["free", "paid"] as const satisfies readonly WorkersPlan[])("catal
 
 describe("nightly catalogue maintenance", () => {
   it("runs on the first tick of the night only", () => {
-    expect(isNightlyCatalogTick(Date.UTC(2026, 8, 25, 20, 0))).toBe(true);
-    expect(isNightlyCatalogTick(Date.UTC(2026, 8, 25, 20, 14, 59))).toBe(true);
-    expect(isNightlyCatalogTick(Date.UTC(2026, 8, 25, 20, 15))).toBe(false);
-    expect(isNightlyCatalogTick(Date.UTC(2026, 8, 25, 8, 0))).toBe(false);
-    expect(isNightlyCatalogTick(undefined)).toBe(false);
+    // 02:00 in Dhaka is 20:00 UTC.
+    expect(isNightlyCatalogTick(Date.UTC(2026, 8, 25, 20, 0), "Asia/Dhaka")).toBe(true);
+    expect(isNightlyCatalogTick(Date.UTC(2026, 8, 25, 20, 14, 59), "Asia/Dhaka")).toBe(true);
+    expect(isNightlyCatalogTick(Date.UTC(2026, 8, 25, 20, 15), "Asia/Dhaka")).toBe(false);
+    expect(isNightlyCatalogTick(Date.UTC(2026, 8, 25, 8, 0), "Asia/Dhaka")).toBe(false);
+    expect(isNightlyCatalogTick(undefined, "Asia/Dhaka")).toBe(false);
+  });
+
+  it("runs at the store's 02:00, daylight saving included", () => {
+    // New York: 02:00 EDT is 06:00 UTC; 02:00 EST is 07:00 UTC.
+    expect(isNightlyCatalogTick(Date.UTC(2026, 6, 1, 6, 0), "America/New_York")).toBe(true);
+    expect(isNightlyCatalogTick(Date.UTC(2026, 0, 15, 7, 0), "America/New_York")).toBe(true);
+    expect(isNightlyCatalogTick(Date.UTC(2026, 0, 15, 6, 0), "America/New_York")).toBe(false);
+    // 8 March 2026 skips 02:00: the night runs at 03:00 EDT (07:00 UTC).
+    expect(isNightlyCatalogTick(Date.UTC(2026, 2, 8, 7, 0), "America/New_York")).toBe(true);
   });
 
   it("refreshes sales stats, queues the rebuild and the never-computed recommendation lists", async () => {

@@ -41,6 +41,7 @@ import { advancedSettingsMessages } from "~/i18n/settings-advanced";
 import { ConfirmDialog } from "../shared/ConfirmDialog";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
 import { SettingsCard, SettingsDialog, SettingsField, SettingsRow, SettingsCardLoading } from "./SettingsPage";
+import { queryKeys } from "~/lib/query-keys";
 
 type Platform = Omit<ApiResult<typeof getApiV1AdminSettingsPlatform>, "revision">;
 type Handoff = Platform["identityHandoff"];
@@ -260,6 +261,8 @@ function usePlatformForm(pick: (draft: Platform) => Partial<Platform>, isValid?:
       apiData(putApiV1AdminSettingsPlatform({ body: { ...pick(draft), expectedRevision } })),
     resolveSavedValues: (payload) => payload,
     defaultValues: {} as Platform,
+    // The store defaults share the platform document's revision.
+    invalidateQueryKeys: [queryKeys.settings.storeDefaults()],
     errorMessage: common("saveFailed"),
     canEdit: useCanEdit(),
     isValid,

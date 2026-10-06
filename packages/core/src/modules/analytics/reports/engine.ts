@@ -72,7 +72,7 @@ export interface SqlReport {
   /** Columns that sort by an expression over `q` instead of `q.<key>`. */
   sortExpressions?: Record<string, string>;
   /** Fills computed cells (average order value, rates) after the read. */
-  finishRow?(values: Record<string, ReportCell>): void;
+  finishRow?(values: Record<string, ReportCell>, ctx: AnalyticsContext): void;
   /** Fills computed totals from the summed ones. */
   finishTotals?(totals: Record<string, ReportCell>, params: ReportParams): void;
 }
@@ -200,7 +200,7 @@ async function runSqlReport(
     notes: built.notes ?? [],
     rows: rows.map((row) => {
       const values = Object.fromEntries(report.columns.map((column) => [column.key, cellOf(column, row[column.key])]));
-      impl.finishRow?.(values);
+      impl.finishRow?.(values, ctx);
       return report.rowLink
         ? { id: String(row.id ?? ""), values, productId: row.link_product_id == null ? null : String(row.link_product_id) }
         : { id: String(row.id ?? ""), values };

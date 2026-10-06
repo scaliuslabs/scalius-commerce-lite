@@ -8,7 +8,9 @@
  *   pnpm dev:admin:status
  *
  * This is intentionally local-only. It creates admins through the real
- * /api/v1/setup endpoint so Better Auth owns password hashing.
+ * /api/v1/setup endpoint so Better Auth owns password hashing. The same
+ * request sets up the new store (country, currency, time zone, units: the
+ * dashboard's "Tell us about your store" step); Bangladesh by default.
  */
 
 import { execFileSync, spawn } from "child_process";
@@ -42,6 +44,8 @@ const defaults = {
   email: process.env.LOCAL_ADMIN_EMAIL || "admin@local.scalius.test",
   password: process.env.LOCAL_ADMIN_PASSWORD || "ScaliusLocal123!",
   name: process.env.LOCAL_ADMIN_NAME || "Local Admin",
+  country: process.env.LOCAL_STORE_COUNTRY || "BD",
+  storeName: process.env.LOCAL_STORE_NAME || "Scalius Local",
   wranglerState: resolveLocalStatePath(root, process.env.SCALIUS_WRANGLER_STATE),
 };
 
@@ -57,7 +61,7 @@ if (!validCommands.has(command)) {
 }
 
 try {
-  assertStringOptions(options, ["api", "email", "password", "name", "state"]);
+  assertStringOptions(options, ["api", "email", "password", "name", "state", "country", "store-name", "time-zone", "currency"]);
 } catch (error) {
   console.error(error instanceof Error ? error.message : String(error));
   process.exit(1);
@@ -68,6 +72,10 @@ const config = {
   email: options.email || defaults.email,
   password: options.password || defaults.password,
   name: options.name || defaults.name,
+  country: String(options.country || defaults.country).trim().toUpperCase(),
+  storeName: options["store-name"] || defaults.storeName,
+  timeZone: options["time-zone"] || null,
+  currency: options.currency || null,
   noStart: Boolean(options["no-start"]),
   skipMigrations: Boolean(options["skip-migrations"] || options["no-migrate"]),
   wranglerState: resolveLocalStatePath(root, options.state || defaults.wranglerState),
@@ -125,6 +133,10 @@ Options:
   --email <email>       Admin email (default: ${defaults.email})
   --password <value>    Admin password, 12+ chars (or LOCAL_ADMIN_PASSWORD)
   --name <name>         Admin name (default: ${defaults.name})
+  --country <code>      The new store's country, ISO 3166-1 alpha-2 (default: ${defaults.country})
+  --store-name <name>   The new store's name (default: ${defaults.storeName})
+  --time-zone <zone>    IANA time zone (default: Asia/Dhaka for BD, else this machine's)
+  --currency <code>     Currency (default: the country's)
   --api <url>           Local API origin (default: ${defaults.apiBaseUrl})
   --state <path>        Wrangler local state path; relative paths resolve from repo root
   --no-start            Require API to already be running
@@ -132,6 +144,7 @@ Options:
 
 Environment overrides:
   LOCAL_ADMIN_EMAIL, LOCAL_ADMIN_PASSWORD, LOCAL_ADMIN_NAME, LOCAL_API_BASE_URL,
+  LOCAL_STORE_COUNTRY, LOCAL_STORE_NAME,
   SCALIUS_WRANGLER_STATE
 `);
 }
@@ -249,16 +262,34 @@ async function createAdmin({ allowExisting }) {
     throw new Error("Admin still exists after auth reset.");
   }
 
-  await requestJson("POST", "/api/v1/setup", {
+  const result = await requestJson("POST", "/api/v1/setup", {
     name: config.name,
     email: config.email,
     password: config.password,
+    store: storeSetup(),
   });
 
   console.log("\nLocal admin ready:");
   console.log(`  Admin URL: ${devOrigins().dashboardUrl}/admin`);
   console.log(`  Email:     ${config.email}`);
+  console.log(`  Store:     ${config.storeName}, ${config.country} (${result?.storeSetup ?? "not_requested"})`);
   console.log("  Password:  use the value supplied through --password or LOCAL_ADMIN_PASSWORD");
+}
+
+/**
+ * The new store's setup: the country's currency and units (the API derives
+ * them), and its time zone (Bangladesh: Asia/Dhaka; elsewhere this machine's
+ * unless --time-zone names one).
+ */
+function storeSetup() {
+  const timeZone = config.timeZone
+    || (config.country === "BD" ? "Asia/Dhaka" : Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC");
+  return {
+    storeName: config.storeName,
+    countryCode: config.country,
+    timeZone,
+    ...(config.currency ? { currencyCode: String(config.currency).toUpperCase() } : {}),
+  };
 }
 
 async function requestJson(method, path, body) {

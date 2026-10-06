@@ -1,4 +1,5 @@
 import { formatDate } from "@scalius/shared/timestamps";
+import { getStoreTimeZone } from "~/lib/store-time-zone";
 import { cn } from "@scalius/shared/utils";
 
 interface ShipmentMetadataDisplayProps {
@@ -97,7 +98,7 @@ export function ShipmentMetadataDisplay({ metadata, className }: ShipmentMetadat
       {lastWebhookAt && (
         <div className="flex justify-between gap-4 border-t pt-1">
           <dt className="text-muted-foreground">Last update</dt>
-          <dd className="text-muted-foreground">{formatDate(lastWebhookAt)}</dd>
+          <dd className="text-muted-foreground">{formatDate(lastWebhookAt, getStoreTimeZone())}</dd>
         </div>
       )}
     </dl>

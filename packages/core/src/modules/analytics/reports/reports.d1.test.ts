@@ -30,7 +30,7 @@ afterEach(() => {
 });
 
 async function report(id: AnalyticsReportId, query: ReportRequest = {}, access: AnalyticsAccess = FULL_ACCESS) {
-  const ctx = await createAnalyticsContext(f.db, NOW);
+  const ctx = await createAnalyticsContext(f.db, "Asia/Dhaka", NOW);
   return getAnalyticsReportPage(ctx, id, { ...AUGUST, pageSize: 100, ...query }, access);
 }
 
@@ -248,7 +248,7 @@ describe("finance, tax and operations reports", () => {
 
 describe("profit (unit costs recorded at the time of sale)", () => {
   it("uses only the sale-time cost and reports coverage", async () => {
-    const ctx = await createAnalyticsContext(f.db, NOW);
+    const ctx = await createAnalyticsContext(f.db, "Asia/Dhaka", NOW);
     expect((await listAnalyticsReports(ctx, FULL_ACCESS)).find((entry) => entry.id === "profit_by_product"))
       .toMatchObject({ available: true, unavailableReason: null });
     f.sqlite.exec("UPDATE order_items SET unit_cost_minor = 30000 WHERE product_id = 'prod_a'");
@@ -263,7 +263,7 @@ describe("profit (unit costs recorded at the time of sale)", () => {
   });
 
   it("needs the View product costs permission", async () => {
-    const ctx = await createAnalyticsContext(f.db, NOW);
+    const ctx = await createAnalyticsContext(f.db, "Asia/Dhaka", NOW);
     const noCosts: AnalyticsAccess = { customers: true, costs: false };
     expect((await listAnalyticsReports(ctx, noCosts)).find((entry) => entry.id === "profit_by_product"))
       .toMatchObject({ available: false, unavailableReason: "cost_access" });
@@ -276,7 +276,7 @@ describe("profit (unit costs recorded at the time of sale)", () => {
 
 describe("CSV export", () => {
   it("writes headings with the currency, decimal amounts and a totals row", async () => {
-    const ctx = await createAnalyticsContext(f.db, NOW);
+    const ctx = await createAnalyticsContext(f.db, "Asia/Dhaka", NOW);
     const result = await exportAnalyticsReportCsv(ctx, "sales_by_product", { ...AUGUST }, FULL_ACCESS);
     const csv = result.artifact.chunks.join("");
     expect(csv.startsWith("﻿\"Product\",\"Orders\",\"Net items sold\",\"Gross sales (BDT)\"")).toBe(true);
@@ -287,7 +287,7 @@ describe("CSV export", () => {
   });
 
   it("words enums and placeholders in English", async () => {
-    const ctx = await createAnalyticsContext(f.db, NOW);
+    const ctx = await createAnalyticsContext(f.db, "Asia/Dhaka", NOW);
     const csv = (await exportAnalyticsReportCsv(ctx, "finance_cod", { ...AUGUST }, FULL_ACCESS)).artifact.chunks.join("");
     expect(csv).toContain("\"Returned to sender\"");
     const zones = (await exportAnalyticsReportCsv(ctx, "sales_by_delivery_zone", { ...AUGUST }, FULL_ACCESS)).artifact.chunks.join("");
@@ -295,7 +295,7 @@ describe("CSV export", () => {
   });
 
   it("refuses customer exports without the permission", async () => {
-    const ctx = await createAnalyticsContext(f.db, NOW);
+    const ctx = await createAnalyticsContext(f.db, "Asia/Dhaka", NOW);
     await expect(exportAnalyticsReportCsv(ctx, "customers_top", { ...AUGUST }, { customers: false, costs: true })).rejects.toMatchObject({ status: 403 });
   });
 });
@@ -304,8 +304,8 @@ describe("TursoDB parity", () => {
   it("answers the overview and every report exactly as D1 on the same rows", async () => {
     const turso = createSqliteTursoDatabase(f.sqlite);
     const [onD1, onTurso] = await Promise.all([
-      createAnalyticsContext(f.db, NOW),
-      createAnalyticsContext(turso, NOW),
+      createAnalyticsContext(f.db, "Asia/Dhaka", NOW),
+      createAnalyticsContext(turso, "Asia/Dhaka", NOW),
     ]);
     expect(await getAnalyticsOverviewForRequest(onTurso, { ...AUGUST })).toEqual(await getAnalyticsOverviewForRequest(onD1, { ...AUGUST }));
     for (const definition of ANALYTICS_REPORTS) {

@@ -1,37 +1,36 @@
 import { unixToDate } from "@scalius/shared/timestamps";
 import {
-  COMMERCE_TIME_ZONE,
   commerceCalendarDateKey,
   formatCommerceCalendarDate,
 } from "@scalius/shared/commerce-time";
-
-export const ADMIN_TIME_ZONE = COMMERCE_TIME_ZONE;
+import { getStoreTimeZone } from "./store-time-zone";
 
 export type AdminTimestamp = Date | string | number;
 
-const ADMIN_TIMESTAMP_FORMATTER = new Intl.DateTimeFormat("en-US", {
-  timeZone: ADMIN_TIME_ZONE,
-  year: "numeric",
-  month: "short",
-  day: "numeric",
-  hour: "numeric",
-  minute: "2-digit",
-  hour12: true,
-});
+// Formatters per zone: the store's zone is one value for the tab's life, but
+// can change once (the store-defaults read, a saved setting).
+const FORMATTERS = new Map<string, { timestamp: Intl.DateTimeFormat; date: Intl.DateTimeFormat; time: Intl.DateTimeFormat }>();
 
-const ADMIN_DATE_FORMATTER = new Intl.DateTimeFormat("en-US", {
-  timeZone: ADMIN_TIME_ZONE,
-  year: "numeric",
-  month: "short",
-  day: "numeric",
-});
-
-const ADMIN_TIME_FORMATTER = new Intl.DateTimeFormat("en-US", {
-  timeZone: ADMIN_TIME_ZONE,
-  hour: "2-digit",
-  minute: "2-digit",
-  second: "2-digit",
-});
+function formatters(timeZone: string) {
+  let found = FORMATTERS.get(timeZone);
+  if (!found) {
+    found = {
+      timestamp: new Intl.DateTimeFormat("en-US", {
+        timeZone,
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+      }),
+      date: new Intl.DateTimeFormat("en-US", { timeZone, year: "numeric", month: "short", day: "numeric" }),
+      time: new Intl.DateTimeFormat("en-US", { timeZone, hour: "2-digit", minute: "2-digit", second: "2-digit" }),
+    };
+    FORMATTERS.set(timeZone, found);
+  }
+  return found;
+}
 
 function toAdminDate(
   value: AdminTimestamp | null | undefined,
@@ -40,25 +39,26 @@ function toAdminDate(
   return date && Number.isFinite(date.getTime()) ? date : null;
 }
 
+/** "Jul 19, 2026, 2:53 AM" in store time. */
 export function formatAdminTimestamp(
   value: AdminTimestamp | null | undefined,
 ): string | null {
   const date = toAdminDate(value);
-  return date ? ADMIN_TIMESTAMP_FORMATTER.format(date) : null;
+  return date ? formatters(getStoreTimeZone()).timestamp.format(date) : null;
 }
 
 export function formatAdminDate(
   value: AdminTimestamp | null | undefined,
 ): string | null {
   const date = toAdminDate(value);
-  return date ? ADMIN_DATE_FORMATTER.format(date) : null;
+  return date ? formatters(getStoreTimeZone()).date.format(date) : null;
 }
 
 export function formatAdminTime(
   value: AdminTimestamp | null | undefined,
 ): string | null {
   const date = toAdminDate(value);
-  return date ? ADMIN_TIME_FORMATTER.format(date) : null;
+  return date ? formatters(getStoreTimeZone()).time.format(date) : null;
 }
 
 export function formatAdminCalendarDate(
@@ -68,6 +68,7 @@ export function formatAdminCalendarDate(
   return formatCommerceCalendarDate(value, options);
 }
 
+/** Today (or an instant's day) on the store calendar, as YYYY-MM-DD. */
 export function adminCalendarDateKey(value: Date | number = new Date()): string {
-  return commerceCalendarDateKey(value);
+  return commerceCalendarDateKey(getStoreTimeZone(), value);
 }

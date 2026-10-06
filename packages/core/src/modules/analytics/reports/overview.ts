@@ -20,6 +20,7 @@ import {
 import {
   hasPriorSalesOrderSql,
   merchantDaySql,
+  scopeOffsets,
   orderIdentitySql,
   orderMeasuresSql,
   orderMetricsCtes,
@@ -198,7 +199,7 @@ const ZEROS = sql.raw("0 as x1, 0 as x2, 0 as x3, 0 as x4");
 
 /** The single statement for one period (see the file comment). */
 function overviewStatement(ctx: AnalyticsContext, range: AnalyticsRange): SQL {
-  const instants = analyticsInstantRange(range);
+  const instants = analyticsInstantRange(range, ctx.timeZone);
   const scope: SalesScope = { ...instants, currency: ctx.currency.code };
   const measures = orderMeasuresSql("ox");
   return sql`with ${salesOrdersCte(scope)},
@@ -210,7 +211,7 @@ function overviewStatement(ctx: AnalyticsContext, range: AnalyticsRange): SQL {
     ox as materialized (
       select om.status, om.payment_method, om.channel, om.channel_source, om.city_name,
         om.gross, om.disc, om.returns, om.shipping, om.taxes, om.net_units,
-        ${merchantDaySql("om.created_at")} as day,
+        ${merchantDaySql("om.created_at", scopeOffsets(ctx.timeZone, instants))} as day,
         ${orderIdentitySql("om")} as identity,
         om.customer_id, om.customer_phone,
         case when om.payment_method = 'cod' then 1 else 0 end as cod,

@@ -49,9 +49,10 @@ import { successEnvelope, paginationSchema, errorResponses, conflictResponse } f
 import { enqueueCatalogProjectionRebuild } from "../../utils/catalog-jobs";
 
 import { nullableTimestampSchema, timestampSchema } from "../../schemas/timestamps";
-import { parseBangladeshDateOnlyBoundary } from "./order-date-filter";
+import { parseStoreDateOnlyBoundary } from "./order-date-filter";
 import { presentSkuCost } from "./cost-access";
 import { commerceCalendarDateKey } from "@scalius/shared/commerce-time";
+import { storeTimeZoneOf } from "../../utils/store-time-zone";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -332,8 +333,8 @@ app.openapi(listRoute, async (c) => {
     const db = c.get("db");
     const query = c.req.valid("query");
     try {
-        const movementStartDate = parseBangladeshDateOnlyBoundary(query.movementStartDate, "start");
-        const movementEndDate = parseBangladeshDateOnlyBoundary(query.movementEndDate, "end");
+        const movementStartDate = parseStoreDateOnlyBoundary(query.movementStartDate, "start", storeTimeZoneOf(c.env));
+        const movementEndDate = parseStoreDateOnlyBoundary(query.movementEndDate, "end", storeTimeZoneOf(c.env));
         if (query.movementStartDate && !movementStartDate) throw new ValidationError("Invalid movement start date");
         if (query.movementEndDate && !movementEndDate) throw new ValidationError("Invalid movement end date");
         if (movementStartDate && movementEndDate && movementStartDate > movementEndDate) {
@@ -404,8 +405,8 @@ const movementsExportRoute = createRoute({
 app.openapi(movementsExportRoute, async (c) => {
     const db = c.get("db");
     const input = c.req.valid("json");
-    const startDate = parseBangladeshDateOnlyBoundary(input.movementStartDate, "start");
-    const endDate = parseBangladeshDateOnlyBoundary(input.movementEndDate, "end");
+    const startDate = parseStoreDateOnlyBoundary(input.movementStartDate, "start", storeTimeZoneOf(c.env));
+    const endDate = parseStoreDateOnlyBoundary(input.movementEndDate, "end", storeTimeZoneOf(c.env));
     if (input.movementStartDate && !startDate) throw new ValidationError("Invalid movement start date");
     if (input.movementEndDate && !endDate) throw new ValidationError("Invalid movement end date");
     if (startDate && endDate && startDate > endDate) {
@@ -420,7 +421,7 @@ app.openapi(movementsExportRoute, async (c) => {
         endDate,
         maxRows: input.maxRows,
     });
-    const filename = `inventory-movements-${commerceCalendarDateKey()}.csv`;
+    const filename = `inventory-movements-${commerceCalendarDateKey(storeTimeZoneOf(c.env))}.csv`;
     c.header("Content-Type", artifact.contentType);
     c.header("Content-Disposition", `attachment; filename="${filename}"`);
     c.header("Content-Length", String(artifact.byteLength));
@@ -630,7 +631,7 @@ app.openapi(labelArtifactRoute, async (c) => {
         if (error instanceof Error) throw new ValidationError(error.message);
         throw error;
     }
-    const filename = `barcode-labels-${commerceCalendarDateKey()}.${artifact.extension}`;
+    const filename = `barcode-labels-${commerceCalendarDateKey(storeTimeZoneOf(c.env))}.${artifact.extension}`;
     c.header("Content-Type", artifact.contentType);
     c.header("Content-Disposition", `attachment; filename="${filename}"`);
     c.header("Cache-Control", "private, no-store");

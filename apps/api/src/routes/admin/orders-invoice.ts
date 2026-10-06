@@ -14,6 +14,7 @@ import {
   successEnvelope,
 } from "../../schemas/responses";
 import { resolveCanonicalIdempotencyKey } from "./idempotency-key";
+import { storeTimeZoneOf } from "../../utils/store-time-zone";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -252,7 +253,7 @@ app.openapi(printInvoiceRoute, async (c) => {
   const basename = (document.invoiceNumber ?? `draft-${document.order.id}`)
     .replace(/[^a-zA-Z0-9._-]/g, "-")
     .slice(0, 100);
-  const artifact = renderPrintableInvoice(document);
+  const artifact = renderPrintableInvoice(document, storeTimeZoneOf(c.env));
   const artifactBytes = new TextEncoder().encode(artifact).byteLength;
   return c.html(artifact, 200, {
     "Cache-Control": "private, no-store",

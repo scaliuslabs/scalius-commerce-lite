@@ -11,6 +11,16 @@
  */
 
 import { readiness, readinessIssue, type Readiness } from "./readiness";
+import {
+  DEFAULT_STORE_TIME_ZONE,
+  DEFAULT_UNIT_SYSTEM,
+  normalizeTimeZone,
+  DEFAULT_WEIGHT_UNIT,
+  normalizeUnitSystem,
+  normalizeWeightUnit,
+  type UnitSystem,
+  type WeightUnit,
+} from "./store-defaults";
 
 /**
  * Opt-in trusted external identity handoff for the dashboard. Off unless an
@@ -52,6 +62,16 @@ export interface PlatformConfig {
   /** Require the derived `ADMIN_SETUP_TOKEN` header on `POST /api/v1/setup`. */
   setupTokenRequired: boolean;
   identityHandoff: IdentityHandoffConfig;
+  /**
+   * Store defaults every invocation may need (Settings → Store details →
+   * Store defaults), resolved with the origins at Worker entry so no request
+   * spends a database read on them: the store's IANA time zone (the merchant
+   * calendar of reports, date filters and scheduled windows), its unit system
+   * and its default weight unit (weights are stored in grams).
+   */
+  timeZone: string;
+  unitSystem: UnitSystem;
+  weightUnit: WeightUnit;
 }
 
 export type PlatformUrlKey = "storefrontUrl" | "apiUrl" | "dashboardUrl" | "mediaUrl";
@@ -80,6 +100,9 @@ export const EMPTY_PLATFORM_CONFIG: Readonly<PlatformConfig> = Object.freeze({
   corsAllowedOrigins: [] as string[],
   setupTokenRequired: false,
   identityHandoff: EMPTY_IDENTITY_HANDOFF_CONFIG,
+  timeZone: DEFAULT_STORE_TIME_ZONE,
+  unitSystem: DEFAULT_UNIT_SYSTEM,
+  weightUnit: DEFAULT_WEIGHT_UNIT,
 });
 
 /** Fresh, mutable copy of the empty configuration for callers that build one. */
@@ -107,6 +130,9 @@ export const LOCAL_DEVELOPMENT_PLATFORM_CONFIG: Readonly<PlatformConfig> = Objec
   corsAllowedOrigins: [] as string[],
   setupTokenRequired: false,
   identityHandoff: EMPTY_IDENTITY_HANDOFF_CONFIG,
+  timeZone: DEFAULT_STORE_TIME_ZONE,
+  unitSystem: DEFAULT_UNIT_SYSTEM,
+  weightUnit: DEFAULT_WEIGHT_UNIT,
 });
 
 export const PLATFORM_URL_MAX_LENGTH = 2_048;
@@ -369,6 +395,21 @@ export function normalizePlatformConfig(raw: unknown): PlatformConfig {
     corsAllowedOrigins: normalizeCorsOrigins(source.corsAllowedOrigins),
     setupTokenRequired: source.setupTokenRequired === true,
     identityHandoff: normalizeIdentityHandoffConfig(source.identityHandoff),
+    ...normalizeStoreDefaults(source),
+  };
+}
+
+/** The store-default fields of a platform document: unknown values read as the defaults. */
+export function normalizeStoreDefaults(source: {
+  timeZone?: unknown;
+  unitSystem?: unknown;
+  weightUnit?: unknown;
+}): Pick<PlatformConfig, "timeZone" | "unitSystem" | "weightUnit"> {
+  const unitSystem = normalizeUnitSystem(source.unitSystem);
+  return {
+    timeZone: normalizeTimeZone(source.timeZone),
+    unitSystem,
+    weightUnit: normalizeWeightUnit(source.weightUnit, unitSystem),
   };
 }
 

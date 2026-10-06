@@ -32,6 +32,9 @@ const PRODUCTION_CONFIG = {
     jwksUrl: "",
     localLoginDisabled: false,
   },
+  timeZone: "Asia/Dhaka",
+  unitSystem: "metric",
+  weightUnit: "g",
 };
 
 /** Minimal drizzle-shaped database: awaiting the query reads the platform document. */

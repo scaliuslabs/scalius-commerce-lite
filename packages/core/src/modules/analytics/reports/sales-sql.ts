@@ -10,7 +10,7 @@
 // two-argument min/max, `= 1` on boolean columns (bigint on PostgreSQL),
 // lowercase snake_case aliases (PostgreSQL folds unquoted identifiers).
 import { sql, type SQL } from "drizzle-orm";
-import { COMMERCE_UTC_OFFSET_SECONDS } from "@scalius/shared/commerce-time";
+import { zoneOffsetSchedule, type ZoneOffsetSchedule } from "@scalius/shared/commerce-time";
 import {
   analyticsBuckets,
   analyticsEpochDay,
@@ -45,9 +45,28 @@ const NON_SALES = sql.raw(quoted(NON_SALES_STATUSES));
 const REVERSED = sql.raw(quoted(REVERSED_STATUSES));
 const COUNTED_RETURNS = sql.raw(quoted(COUNTED_RETURN_STATUSES));
 
-/** The merchant calendar day (days since 1970-01-01) of an epoch-second column. */
-export function merchantDaySql(column: string): SQL {
-  return sql.raw(`cast((${column} + ${COMMERCE_UTC_OFFSET_SECONDS}) / 86400 as integer)`);
+/**
+ * The store zone's offsets over a scope's instants: what `merchantDaySql`
+ * maps those instants with. A zone without daylight saving (Asia/Dhaka) has
+ * one offset; a US or EU zone adds each change inside the scope.
+ */
+export function scopeOffsets(timeZone: string, scope: AnalyticsInstantRange): ZoneOffsetSchedule {
+  return zoneOffsetSchedule(timeZone, scope.start, scope.endExclusive);
+}
+
+/**
+ * The merchant calendar day (days since 1970-01-01) of an epoch-second column
+ * whose values lie inside the scope the offsets were computed for: the local
+ * wall time (instant + the zone's offset at that instant) divided into days.
+ * Each offset change is an integer literal computed from a validated range,
+ * so the statement binds nothing and runs the same on D1, TursoDB and
+ * PostgreSQL; a single-offset zone reads `cast((col + offset) / 86400 as integer)`.
+ */
+export function merchantDaySql(column: string, offsets: ZoneOffsetSchedule): SQL {
+  const offset = offsets.changes.length === 0
+    ? String(offsets.initialOffset)
+    : `case${[...offsets.changes].reverse().map((change) => ` when ${column} >= ${change.at} then ${change.offset}`).join("")} else ${offsets.initialOffset} end`;
+  return sql.raw(`cast((${column} + ${offset}) / 86400 as integer)`);
 }
 
 /**

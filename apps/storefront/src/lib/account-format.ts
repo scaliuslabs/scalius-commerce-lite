@@ -1,6 +1,7 @@
 // Display rules shared by the account pages: one date format, one money format,
 // one place order, one payment line and the buyer's words for open requests.
 
+import { storeTimeZone } from "./store-time-zone";
 import { formatMoney } from "@/lib/currency";
 import { shippingCountryName } from "@/lib/checkout/shipping-country";
 import { getOrderPaymentPresentation } from "@/lib/order-success-state";
@@ -28,21 +29,23 @@ export function orderPaymentLine(order: PaymentFacts): {
   return { method: payment.methodLabel, state, balanceDue: payment.balanceDue, balanceLabel: payment.balanceLabel };
 }
 
-const DATE_PARTS = new Intl.DateTimeFormat("en-US", {
-  day: "numeric",
-  month: "short",
-  year: "numeric",
-  hour: "numeric",
-  minute: "2-digit",
-  hour12: true,
-  timeZone: "Asia/Dhaka",
-});
-
-/** "24 Sep 2026, 5:46 AM" in Bangladesh time, or "24 Sep 2026" without the time. */
-export function formatAccountDate(iso: string | null | undefined, options: { time?: boolean } = {}): string {
+/** "24 Sep 2026, 5:46 AM" in the store's time zone, or "24 Sep 2026" without the time. */
+export function formatAccountDate(
+  iso: string | null | undefined,
+  options: { time?: boolean; timeZone?: string } = {},
+): string {
   const date = iso ? new Date(iso) : null;
   if (!date || Number.isNaN(date.getTime())) return "";
-  const part = Object.fromEntries(DATE_PARTS.formatToParts(date).map(({ type, value }) => [type, value]));
+  const parts = new Intl.DateTimeFormat("en-US", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+    timeZone: options.timeZone ?? storeTimeZone(),
+  }).formatToParts(date);
+  const part = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
   const day = `${part.day} ${part.month} ${part.year}`;
   return options.time === false ? day : `${day}, ${part.hour}:${part.minute} ${part.dayPeriod}`;
 }

@@ -7,6 +7,8 @@ import {
   getApiV1AdminSettingsPlatform,
   postApiV1AdminSettingsBusiness,
   postApiV1AdminSettingsCurrency,
+  postApiV1AdminSettingsStoreDefaults,
+  getApiV1AdminSettingsStoreDefaults,
   putApiV1AdminSettingsAllowedCountries,
   putApiV1AdminSettingsPlatform,
 } from "@scalius/api-client/sdk";
@@ -34,6 +36,10 @@ import { useSettingsForm } from "~/hooks/use-settings-form";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { apiData, type ApiResult } from "~/lib/api";
 import { normalizeCurrencySettingsInput, type CurrencySettingsPayload } from "~/lib/api-query-options/currency";
+import { storeDefaultsQueryOptions, type StoreDefaultsPayload } from "~/lib/api-query-options/store-defaults";
+import { setStoreTimeZone } from "~/lib/store-time-zone";
+import { timeZoneLabel, timeZoneOptions } from "~/lib/time-zone-options";
+import { SYSTEM_WEIGHT_UNITS, type UnitSystem, type WeightUnit } from "@scalius/shared/store-defaults";
 import { marketKeys } from "~/lib/api-query-options/markets";
 import {
   businessQuery,
@@ -487,7 +493,7 @@ function WebAddressFields() {
         body: { ...Object.fromEntries(URL_KEYS.map((key) => [key, draft[key].trim()])), expectedRevision },
       })),
     resolveSavedValues: (payload) => payload,
-    invalidateQueryKeys: [queryKeys.settings.storefrontUrl(), queryKeys.settings.security()],
+    invalidateQueryKeys: [queryKeys.settings.storefrontUrl(), queryKeys.settings.security(), queryKeys.settings.storeDefaults()],
     defaultValues: {} as Platform,
     errorMessage: common("saveFailed"),
     canEdit: useCanEditStore(),
@@ -644,6 +650,88 @@ function CurrencyFields() {
   );
 }
 
+// ── Time zone and units ─────────────────────────────────────────────────
+
+const storeDefaultsQuery = storeDefaultsQueryOptions();
+const STORE_DEFAULTS_FALLBACK: StoreDefaultsPayload = { timeZone: "Asia/Dhaka", unitSystem: "metric", weightUnit: "g", revision: 0 };
+
+function useStoreDefaultsForm() {
+  const common = useMessages(settingsMessages);
+  return useSettingsForm<StoreDefaultsPayload>({
+    queryKey: storeDefaultsQuery.queryKey,
+    fetchFn: () => apiData(getApiV1AdminSettingsStoreDefaults()),
+    saveFn: async (draft, expectedRevision) => {
+      const saved = await apiData(postApiV1AdminSettingsStoreDefaults({
+        body: { expectedRevision, timeZone: draft.timeZone, unitSystem: draft.unitSystem, weightUnit: draft.weightUnit },
+      }));
+      setStoreTimeZone(saved.timeZone);
+      return saved;
+    },
+    defaultValues: STORE_DEFAULTS_FALLBACK,
+    // The platform document holds them: the web addresses card reloads its revision.
+    invalidateQueryKeys: [platformQuery.queryKey, queryKeys.settings.storefrontUrl()],
+    errorMessage: common("saveFailed"),
+    canEdit: useCanEditStore(),
+  });
+}
+
+function TimeZoneFields() {
+  const t = useMessages(storeSettingsMessages);
+  const { values, setValue } = useStoreDefaultsForm();
+  const options = useMemo(() => timeZoneOptions(values.timeZone, getLocale()), [values.timeZone]);
+  return (
+    <SettingsField id="store-time-zone" label={t("timeZoneRow")} help={t("timeZoneHelp")}>
+      <SearchableSelect
+        id="store-time-zone"
+        value={values.timeZone}
+        options={options}
+        searchPlaceholder={t("timeZoneSearch")}
+        emptyMessage={t("timeZoneNone")}
+        triggerClassName="w-full"
+        onValueChange={(zone) => setValue("timeZone", zone)}
+      />
+    </SettingsField>
+  );
+}
+
+function UnitFields() {
+  const t = useMessages(storeSettingsMessages);
+  const { values, setValues } = useStoreDefaultsForm();
+  const units = SYSTEM_WEIGHT_UNITS[values.unitSystem];
+  return (
+    <>
+      <SettingsField id="store-unit-system" label={t("unitSystemRow")}>
+        <RadioGroup
+          id="store-unit-system"
+          value={values.unitSystem}
+          onValueChange={(system) => setValues((draft) => ({
+            ...draft,
+            unitSystem: system as UnitSystem,
+            // A new system starts at its default unit, as in Shopify.
+            weightUnit: system === draft.unitSystem ? draft.weightUnit : SYSTEM_WEIGHT_UNITS[system as UnitSystem][0]!,
+          }))}
+        >
+          {(["metric", "imperial"] as const).map((system) => (
+            <label key={system} className="flex min-h-11 items-center gap-2 text-body md:min-h-9">
+              <RadioGroupItem value={system} />
+              {t(system)}
+            </label>
+          ))}
+        </RadioGroup>
+      </SettingsField>
+      <SettingsField id="store-weight-unit" label={t("weightUnitRow")} help={t("unitsHelp")}>
+        <SearchableSelect
+          id="store-weight-unit"
+          value={values.weightUnit}
+          options={units.map((unit) => ({ value: unit, label: t(`unit_${unit}`) }))}
+          triggerClassName="w-full"
+          onValueChange={(unit) => setValues((draft) => ({ ...draft, weightUnit: unit as WeightUnit }))}
+        />
+      </SettingsField>
+    </>
+  );
+}
+
 // ── Customer countries ──────────────────────────────────────────────────
 
 function countryName(code: string): string {
@@ -762,6 +850,7 @@ export function StoreDefaultsCard() {
   const canEdit = useCanEditStore();
   const currency = useQuery(currencyQuery);
   const countries = useQuery(countriesQuery);
+  const defaults = useQuery(storeDefaultsQuery);
   if (currency.isError) {
     return <SettingsLoadFailure title={t("loadCurrency")} onRetry={currency.refetch} />;
   }
@@ -770,8 +859,13 @@ export function StoreDefaultsCard() {
     return <SettingsLoadFailure title={t("loadCountries")} onRetry={countries.refetch} />;
   }
   if (!countries.data) return <SettingsCardLoading />;
+  if (defaults.isError) {
+    return <SettingsLoadFailure title={t("loadStoreDefaults")} onRetry={defaults.refetch} />;
+  }
+  if (!defaults.data) return <SettingsCardLoading />;
   const { allowedCountries, allowedCountriesMode } = countries.data;
   const code = currency.data.currencyCode;
+  const { timeZone, unitSystem, weightUnit } = defaults.data;
   return (
     <SettingsCard id="storeDefaults"
       title={t("defaultsTitle")}
@@ -788,6 +882,30 @@ export function StoreDefaultsCard() {
             }
           >
             <CurrencyFields />
+          </SettingsDialog>
+          <SettingsDialog
+            title={t("unitsTitle")}
+            trigger={
+              <SettingsRow
+                label={t("unitSystemRow")}
+                disabled={!canEdit}
+                value={`${t(unitSystem)} · ${t(`unit_${weightUnit}`)}`}
+              />
+            }
+          >
+            <UnitFields />
+          </SettingsDialog>
+          <SettingsDialog
+            title={t("timeZoneTitle")}
+            trigger={
+              <SettingsRow
+                label={t("timeZoneRow")}
+                disabled={!canEdit}
+                value={timeZoneLabel(timeZone)}
+              />
+            }
+          >
+            <TimeZoneFields />
           </SettingsDialog>
           <SettingsDialog
             title={t("countriesTitle")}

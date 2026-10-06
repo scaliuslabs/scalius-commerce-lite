@@ -17,6 +17,7 @@ import {
   resolvePlatformConfig,
   savePlatformSettings,
 } from "./platform-settings.service";
+import { getStoreDefaults, saveStoreDefaults } from "./store-defaults.service";
 
 const PLATFORM_CONFIG_CACHE_KEY = "settings:platform";
 
@@ -29,6 +30,8 @@ const PRODUCTION_PATCH = {
   corsAllowedOrigins: ["https://mobile.example.com"],
 };
 
+const STORE_DEFAULTS = { timeZone: "Asia/Dhaka", unitSystem: "metric", weightUnit: "g" } as const;
+
 const AUTOMATION_DEFAULTS = {
   setupTokenRequired: false,
   identityHandoff: {
@@ -38,6 +41,7 @@ const AUTOMATION_DEFAULTS = {
     jwksUrl: "",
     localLoginDisabled: false,
   },
+  ...STORE_DEFAULTS,
 };
 
 function createKv(initial: Record<string, string> = {}) {
@@ -136,6 +140,7 @@ describe("platform settings storage", () => {
         jwksUrl: "https://idp.example.com/.well-known/jwks.json",
         localLoginDisabled: false,
       },
+      ...STORE_DEFAULTS,
     });
     await expect(getPlatformSettings(db)).resolves.toEqual(saved);
 
@@ -450,5 +455,20 @@ describe("resolvePlatformConfig", () => {
 
     expect(resolved).toEqual({ ...EMPTY_PLATFORM_CONFIG });
     expect(kv.put).not.toHaveBeenCalled();
+  });
+
+  it("saves the store defaults beside the origins, never touching them", async () => {
+    await savePlatformSettings(db, PRODUCTION_PATCH);
+    const { revision } = await getStoreDefaults(db);
+
+    const saved = await saveStoreDefaults(db, { timeZone: "America/New_York", unitSystem: "imperial" }, null, { expectedRevision: revision });
+
+    expect(saved).toEqual({ timeZone: "America/New_York", unitSystem: "imperial", weightUnit: "lb", revision: revision + 1 });
+    await expect(getPlatformSettings(db)).resolves.toMatchObject({ ...PRODUCTION_PATCH, timeZone: "America/New_York", weightUnit: "lb" });
+    await expect(saveStoreDefaults(db, { weightUnit: "oz" }, null, { expectedRevision: revision + 1 }))
+      .resolves.toMatchObject({ unitSystem: "imperial", weightUnit: "oz" });
+    await expect(saveStoreDefaults(db, { timeZone: "Mars/Olympus" }, null)).rejects.toThrow(/time zone/);
+    await expect(saveStoreDefaults(db, { weightUnit: "kg" }, null)).rejects.toThrow(/imperial/);
+    await expect(saveStoreDefaults(db, { timeZone: "UTC" }, null, { expectedRevision: revision })).rejects.toThrow(/changed in another session/);
   });
 });

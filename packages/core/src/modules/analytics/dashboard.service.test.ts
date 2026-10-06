@@ -49,7 +49,7 @@ describe("dashboard query observability", () => {
             }],
         ]);
 
-        const result = await getDashboardHomeSummary(db, 11);
+        const result = await getDashboardHomeSummary(db, 11, "Asia/Dhaka");
 
         expect(batch).toHaveBeenCalledOnce();
         expect(batch.mock.calls[0]?.[0]).toHaveLength(5);
@@ -97,7 +97,7 @@ describe("dashboard query observability", () => {
             [{ count: 0, revenueMinor: null, currencyDecimalPlaces: 2 }],
         ]);
 
-        const result = await getDashboardHomeSummary(db, 0);
+        const result = await getDashboardHomeSummary(db, 0, "Asia/Dhaka");
 
         expect(batch.mock.calls[0]?.[0]).toHaveLength(4);
         expect(result.recentOrders).toEqual([]);

@@ -270,6 +270,9 @@ describe("API readiness route", () => {
             jwksUrl: "",
             localLoginDisabled: false,
           },
+          timeZone: "Asia/Dhaka",
+          unitSystem: "metric",
+          weightUnit: "g",
         },
       }),
     );
@@ -307,6 +310,9 @@ describe("API readiness route", () => {
           jwksUrl: "",
           localLoginDisabled: false,
         },
+        timeZone: "Asia/Dhaka",
+        unitSystem: "metric",
+        weightUnit: "g",
       },
     });
 

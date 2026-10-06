@@ -74,6 +74,10 @@ import {
     createAccountSessionCommandIdFactory,
     presentAccountSession,
 } from "./account-session-presentation";
+import { STORE_NAME_MAX_LENGTH, applyStoreSetup } from "@scalius/core/modules/onboarding";
+import { TIME_ZONE_MAX_LENGTH, isValidTimeZone } from "@scalius/shared/commerce-time";
+import { UNIT_SYSTEMS, WEIGHT_UNITS } from "@scalius/shared/store-defaults";
+import { enqueueCatalogProjectionRebuild } from "../../utils/catalog-jobs";
 const app = new OpenAPIHono<{ Bindings: Env }>();
 const ADMIN_USER_ENRICHMENT_CHUNK_SIZE = 90;
 const ADMIN_USER_PAGE_LIMIT = 2;
@@ -2252,8 +2256,45 @@ const setupSchema = z.object({
     email: z.string().email(),
     password: z.string()
         .min(AUTH_PASSWORD_MIN_LENGTH, `Password must be at least ${AUTH_PASSWORD_MIN_LENGTH} characters`)
-        .max(AUTH_PASSWORD_MAX_LENGTH, `Password must be at most ${AUTH_PASSWORD_MAX_LENGTH} characters`)
+        .max(AUTH_PASSWORD_MAX_LENGTH, `Password must be at most ${AUTH_PASSWORD_MAX_LENGTH} characters`),
+    /**
+     * Optional headless store setup (scripts, automated installs): applied
+     * right after the first admin exists, exactly like the dashboard's
+     * "Tell us about your store" step. Without it the dashboard asks.
+     */
+    store: z.object({
+        storeName: z.string().trim().min(1).max(STORE_NAME_MAX_LENGTH),
+        countryCode: z.string().trim().length(2),
+        currencyCode: z.string().trim().length(3).optional(),
+        locale: z.string().trim().length(2).optional(),
+        timeZone: z.string().trim().min(1).max(TIME_ZONE_MAX_LENGTH)
+            .refine(isValidTimeZone, "Use an IANA time zone, such as Europe/London."),
+        unitSystem: z.enum(UNIT_SYSTEMS).optional(),
+        weightUnit: z.enum(WEIGHT_UNITS).optional(),
+    }).optional(),
 });
+
+/**
+ * The optional store setup of a first-admin request, after the admin exists.
+ * The admin is never undone for it: a refusal (not a new store, a bad
+ * country) is reported as skipped and the dashboard step stays available.
+ */
+async function applySetupStore(
+    c: Context<{ Bindings: Env }>,
+    store: z.infer<typeof setupSchema>["store"],
+): Promise<"applied" | "skipped" | "not_requested"> {
+    if (!store) return "not_requested";
+    try {
+        const result = await applyStoreSetup(c.get("db"), store, c.env.CACHE);
+        if (result.priceIncrementChanged) {
+            await enqueueCatalogProjectionRebuild(c.env.JOBS_QUEUE).catch(() => undefined);
+        }
+        return "applied";
+    } catch (error: unknown) {
+        console.warn("[setup] store setup skipped:", error instanceof Error ? error.message.slice(0, 200) : "unknown");
+        return "skipped";
+    }
+}
 
 async function verifyExistingSetupAccountPassword(
     auth: ReturnType<typeof createAuth>,
@@ -2281,7 +2322,12 @@ const setupRoute = createRoute({
         body: { content: { "application/json": { schema: setupSchema } } }
     },
     responses: {
-        201: { description: "Admin account created", content: { "application/json": { schema: successEnvelope(z.object({ message: z.string(), userId: z.string() })) } } },
+        201: { description: "Admin account created", content: { "application/json": { schema: successEnvelope(z.object({
+            message: z.string(),
+            userId: z.string(),
+            /** Whether the optional `store` setup was applied. */
+            storeSetup: z.enum(["applied", "skipped", "not_requested"]),
+        })) } } },
         ...errorResponses,
     }
 });
@@ -2308,7 +2354,7 @@ setupApp.openapi(setupRoute, async (c) => {
 
     const auth = createAuth(env, { appProviders: requestAppProviders(c) });
 
-    const { name, email, password } = c.req.valid("json");
+    const { name, email, password, store } = c.req.valid("json");
     const normalizedEmail = email.trim().toLowerCase();
     let setupClaim: ClaimedAdminSetup | null = null;
     let promotedUserId: string | null = null;
@@ -2340,7 +2386,8 @@ setupApp.openapi(setupRoute, async (c) => {
             const { autoSeedRbacIfNeeded } = await import("@scalius/core/auth/rbac/auto-seed");
             await autoSeedRbacIfNeeded(db, kv);
 
-            return created(c, { message: "Admin account created successfully", userId: credential.userId });
+            const storeSetup = await applySetupStore(c, store);
+            return created(c, { message: "Admin account created successfully", userId: credential.userId, storeSetup });
         } catch (error: unknown) {
             if (!isCredentialIdentityConflictError(error)) {
                 throw error;
@@ -2386,7 +2433,8 @@ setupApp.openapi(setupRoute, async (c) => {
             const { autoSeedRbacIfNeeded } = await import("@scalius/core/auth/rbac/auto-seed");
             await autoSeedRbacIfNeeded(db, kv);
 
-            return created(c, { message: "Admin account recovered successfully", userId: existingUser.id });
+            const storeSetup = await applySetupStore(c, store);
+            return created(c, { message: "Admin account recovered successfully", userId: existingUser.id, storeSetup });
         }
     } catch (error) {
         if (setupClaim) {

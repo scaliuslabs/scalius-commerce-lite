@@ -22,7 +22,7 @@ import {
 } from "@scalius/core/modules/plugins";
 import { readStoreIdentity } from "@scalius/core/modules/notifications";
 import { readStoreCurrency } from "@scalius/core/modules/markets";
-import { COMMERCE_TIME_ZONE } from "@scalius/shared/commerce-time";
+import { storeTimeZoneOf } from "../utils/store-time-zone";
 import {
   PLUGIN_FUNCTION_SCHEMAS,
   pluginHandlerInventory,
@@ -312,7 +312,7 @@ export class PluginHost {
       url: this.env.STOREFRONT_URL?.trim() || null,
       currency: currency.code,
       decimalPlaces: currency.decimalPlaces,
-      timezone: COMMERCE_TIME_ZONE,
+      timezone: storeTimeZoneOf(this.env),
       locale: identity.language === "bn" ? "bn-BD" : "en",
     }));
     return this.storeInfo;
@@ -330,7 +330,7 @@ export class PluginHost {
     return {
       seed: {
         plugin: { id: installation.pluginId, version: installation.version },
-        store: store ?? { name: "", url: null, currency: "", decimalPlaces: 0, timezone: COMMERCE_TIME_ZONE, locale: "en" },
+        store: store ?? { name: "", url: null, currency: "", decimalPlaces: 0, timezone: storeTimeZoneOf(this.env), locale: "en" },
         settings: settings.values,
         collections: Object.keys(installation.manifest.storage),
         inventory: pluginHandlerInventory(installation.manifest),

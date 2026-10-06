@@ -22,6 +22,7 @@ import {
 } from "~/lib/admin-access";
 import { withDashboardBasePath } from "~/lib/dashboard-base-path";
 import { storefrontUrlQueryOptions } from "~/lib/api-query-options/storefront-url";
+import { syncStoreDefaults } from "~/lib/api-query-options/store-defaults";
 import { useWarmEverydayRouteCode } from "~/lib/warm-route-code";
 import { useMessages } from "~/i18n";
 import { shellMessages } from "~/i18n/shell";
@@ -42,9 +43,11 @@ export const Route = createFileRoute("/admin")({
     }
     return authContext;
   },
-  // The navigation's "View store" eye and store row: read alongside the page's own data.
+  // The navigation's "View store" eye and store row, and the store's time
+  // zone and units (every date and weight): read alongside the page's own data.
   loader: ({ context: { queryClient } }) => {
     void queryClient.prefetchQuery(storefrontUrlQueryOptions());
+    void syncStoreDefaults(queryClient).catch(() => undefined);
   },
   component: AdminLayout,
 });
@@ -67,7 +70,9 @@ function AdminLayout() {
   const nav = useMemo(() => visibleNav(canOpen, appPages), [canOpen, appPages]);
   useWarmEverydayRouteCode(canOpen);
   // The theme editor is a workspace of its own (Shopify's): the frame steps aside.
-  const fullWindow = Boolean(useMatchRoute()({ to: "/admin/online-store/theme/editor" }));
+  // So is the new-store setup step (Shopify's "Tell us about your store").
+  const matchRoute = useMatchRoute();
+  const fullWindow = Boolean(matchRoute({ to: "/admin/online-store/theme/editor" }) || matchRoute({ to: "/admin/welcome" }));
 
   if (fullWindow) {
     return (
