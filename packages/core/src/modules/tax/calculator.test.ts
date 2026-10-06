@@ -5,7 +5,7 @@ import {
     buildStorefrontTaxAllocationLineId,
 } from "./discount-allocation";
 import { allocateMinorAmount } from "./money";
-import type { CalculateTaxQuoteInput, TaxRateDefinition } from "./types";
+import type { CalculateTaxQuoteInput, TaxRateDefinition, TaxRegionDefinition } from "./types";
 
 const destination = {
     city: "city-1",
@@ -16,7 +16,13 @@ const destination = {
     areaName: "Area",
 };
 
-function rate(overrides: Partial<TaxRateDefinition> = {}): TaxRateDefinition {
+/** A rate as a store before tax regions (0116) kept it: store-wide or one City/Thana/Area. */
+interface LegacyRate extends Omit<TaxRateDefinition, "taxRegionId" | "combinable"> {
+    jurisdictionType: "all" | "city" | "zone" | "area";
+    jurisdictionId: string | null;
+}
+
+function rate(overrides: Partial<LegacyRate> = {}): LegacyRate {
     return {
         id: "rate-a",
         taxClassId: "class-standard",
@@ -24,28 +30,48 @@ function rate(overrides: Partial<TaxRateDefinition> = {}): TaxRateDefinition {
         rateBps: 1_500,
         jurisdictionType: "all",
         jurisdictionId: null,
-        jurisdictionLabel: null,
         priority: 0,
         isCompound: false,
         ...overrides,
     };
 }
 
+/**
+ * Migration 0116's rule: a store-wide rate is the region BD's, a place's
+ * rate its place region's, combinable. These tests ran on the store-wide
+ * rate model and must give the same results on the regions it becomes.
+ */
+function backfill(legacy: readonly LegacyRate[]): { regions: TaxRegionDefinition[]; rates: TaxRateDefinition[] } {
+    const regions = new Map<string, TaxRegionDefinition>([["txreg_bd", {
+        id: "txreg_bd", countryCode: "BD", adminArea: null, postalPrefix: null, placeType: null, placeId: null, providerId: null,
+    }]]);
+    const rates = legacy.map(({ jurisdictionType, jurisdictionId, ...rest }): TaxRateDefinition => {
+        if (jurisdictionType === "all") return { ...rest, taxRegionId: "txreg_bd", combinable: false };
+        const id = `txreg_bd_${jurisdictionId}`;
+        regions.set(id, { id, countryCode: "BD", adminArea: null, postalPrefix: null, placeType: jurisdictionType, placeId: jurisdictionId, providerId: null });
+        return { ...rest, taxRegionId: id, combinable: true };
+    });
+    return { regions: [...regions.values()], rates };
+}
+
+type TestInput = Omit<CalculateTaxQuoteInput, "rates" | "regions"> & { rates: LegacyRate[] };
+
 // Minor-unit precision is exercised in USD; whole-taka rounding has its own tests.
-function input(overrides: Partial<CalculateTaxQuoteInput> = {}): CalculateTaxQuoteInput {
+function testInput(overrides: Partial<TestInput> = {}): TestInput {
     return {
         currencyCode: "USD",
         decimalPlaces: 2,
         priceIncrementMinor: 1,
         settings: {
             enabled: true,
-            pricesIncludeTax: false,
             taxShipping: false,
             defaultTaxClassId: "class-standard",
             shippingTaxClassId: null,
             displayLabel: "VAT",
+            providerId: "system",
             version: 3,
         },
+        pricesIncludeTax: false,
         classes: [
             { id: "class-standard", name: "Standard", isExempt: false },
             { id: "class-exempt", name: "Exempt", isExempt: true },
@@ -64,6 +90,11 @@ function input(overrides: Partial<CalculateTaxQuoteInput> = {}): CalculateTaxQuo
         discountMinor: 0,
         ...overrides,
     };
+}
+
+function input(overrides: Partial<TestInput> = {}): CalculateTaxQuoteInput {
+    const { rates, ...rest } = testInput(overrides);
+    return { ...rest, ...backfill(rates) };
 }
 
 describe("tax minor-unit money", () => {
@@ -96,7 +127,7 @@ describe("tax minor-unit money", () => {
 describe("calculateTaxQuote", () => {
     it("defaults an unconfigured or disabled store to zero tax", () => {
         const quote = calculateTaxQuote(input({
-            settings: { ...input().settings, enabled: false, version: 0 },
+            settings: { ...testInput().settings, enabled: false, version: 0 },
         }));
         expect(quote.taxMinor).toBe(0);
         expect(quote.totalMinor).toBe(10_000);
@@ -116,25 +147,25 @@ describe("calculateTaxQuote", () => {
     });
 
     it("rounds BDT tax to whole taka so a COD total is whole taka", () => {
-        const bdt = (overrides: Partial<CalculateTaxQuoteInput>) => calculateTaxQuote(input({ currencyCode: "BDT", priceIncrementMinor: 100, ...overrides }));
+        const bdt = (overrides: Partial<TestInput>) => calculateTaxQuote(input({ currencyCode: "BDT", priceIncrementMinor: 100, ...overrides }));
         // 15% of ৳3,208.53 would be ৳481.28; it is ৳481.
-        const exclusive = bdt({ lines: [{ ...input().lines[0]!, unitPriceMinor: 320_853 }] });
+        const exclusive = bdt({ lines: [{ ...testInput().lines[0]!, unitPriceMinor: 320_853 }] });
         expect(exclusive.taxMinor).toBe(48_100);
         expect(exclusive.totalMinor % 100).toBe(53);
-        const whole = bdt({ lines: [{ ...input().lines[0]!, unitPriceMinor: 320_900 }] });
+        const whole = bdt({ lines: [{ ...testInput().lines[0]!, unitPriceMinor: 320_900 }] });
         expect(whole.taxMinor % 100).toBe(0);
         expect(whole.totalMinor % 100).toBe(0);
         // Prices including 15% VAT: ৳1,000 contains ৳130.43, shown as ৳130.
         const inclusive = bdt({
-            settings: { ...input().settings, pricesIncludeTax: true },
-            lines: [{ ...input().lines[0]!, unitPriceMinor: 100_000 }],
+            pricesIncludeTax: true,
+            lines: [{ ...testInput().lines[0]!, unitPriceMinor: 100_000 }],
         });
         expect(inclusive.lines[0]).toMatchObject({ taxMinor: 13_000, taxableAmountMinor: 87_000, totalMinor: 100_000 });
         expect(inclusive.totalMinor).toBe(100_000);
         // An order discount spread over lines stays whole taka per line.
         const lines = [
-            { ...input().lines[0]!, lineId: "a", unitPriceMinor: 25_000 },
-            { ...input().lines[0]!, lineId: "b", unitPriceMinor: 15_000 },
+            { ...testInput().lines[0]!, lineId: "a", unitPriceMinor: 25_000 },
+            { ...testInput().lines[0]!, lineId: "b", unitPriceMinor: 15_000 },
         ];
         const discounted = bdt({ lines, discountMinor: 3_300 });
         expect(discounted.lines.map((line) => line.discountMinor)).toEqual([2_100, 1_200]);
@@ -143,9 +174,9 @@ describe("calculateTaxQuote", () => {
 
     it("extracts inclusive tax without inflating buyer totals", () => {
         const quote = calculateTaxQuote(input({
-            settings: { ...input().settings, pricesIncludeTax: true },
+            pricesIncludeTax: true,
             lines: [{
-                ...input().lines[0]!,
+                ...testInput().lines[0]!,
                 unitPriceMinor: 11_500,
             }],
         }));
@@ -194,8 +225,8 @@ describe("calculateTaxQuote", () => {
 
     it("extracts inclusive equal-priority layers without hidden same-layer compounding", () => {
         const quote = calculateTaxQuote(input({
-            settings: { ...input().settings, pricesIncludeTax: true },
-            lines: [{ ...input().lines[0]!, unitPriceMinor: 11_500 }],
+            pricesIncludeTax: true,
+            lines: [{ ...testInput().lines[0]!, unitPriceMinor: 11_500 }],
             rates: [
                 rate({ id: "z-compound", rateBps: 500, priority: 10, isCompound: true }),
                 rate({ id: "a-standard", rateBps: 1_000, priority: 10 }),
@@ -240,9 +271,9 @@ describe("calculateTaxQuote", () => {
 
     it("keeps exempt classes and untaxed shipping at zero", () => {
         const quote = calculateTaxQuote(input({
-            lines: [{ ...input().lines[0]!, taxClassId: "class-exempt" }],
+            lines: [{ ...testInput().lines[0]!, taxClassId: "class-exempt" }],
             shippingMinor: 5_000,
-            settings: { ...input().settings, taxShipping: false },
+            settings: { ...testInput().settings, taxShipping: false },
         }));
         expect(quote.lines[0]?.taxMinor).toBe(0);
         expect(quote.shipping.taxMinor).toBe(0);
@@ -251,7 +282,7 @@ describe("calculateTaxQuote", () => {
 
     it("G7: a tax-exempt line (a gift card) takes no rate whatever its class, exclusive or inclusive", () => {
         const lines = [
-            input().lines[0]!,
+            testInput().lines[0]!,
             { lineId: "line-gc", productId: "product-gc", variantId: "variant-gc", unitPriceMinor: 50_000, quantity: 2, taxClassId: "class-standard", taxExempt: true },
         ];
         const exclusive = calculateTaxQuote(input({ lines }));
@@ -260,7 +291,7 @@ describe("calculateTaxQuote", () => {
             ["line-gc", null, 0, 0, 100_000],
         ]);
         expect(exclusive.totalMinor).toBe(111_500);
-        const inclusive = calculateTaxQuote(input({ lines, settings: { ...input().settings, pricesIncludeTax: true } }));
+        const inclusive = calculateTaxQuote(input({ lines, pricesIncludeTax: true }));
         expect(inclusive.lines[1]).toMatchObject({ taxClassId: null, taxMinor: 0, totalMinor: 100_000, components: [] });
         expect(inclusive.totalMinor).toBe(110_000);
     });
@@ -269,7 +300,7 @@ describe("calculateTaxQuote", () => {
         const quote = calculateTaxQuote(input({
             shippingMinor: 2_000,
             settings: {
-                ...input().settings,
+                ...testInput().settings,
                 taxShipping: true,
                 shippingTaxClassId: "class-standard",
             },
@@ -290,7 +321,7 @@ describe("calculateTaxQuote", () => {
             discountMinor: discount.discountMinor,
             discountAllocation: discount.allocation,
             settings: {
-                ...input().settings,
+                ...testInput().settings,
                 taxShipping: true,
                 shippingTaxClassId: "class-standard",
             },
@@ -323,8 +354,8 @@ describe("calculateTaxQuote", () => {
                 rate({ id: "high", taxClassId: "class-high", rateBps: 2_000 }),
             ],
             lines: [
-                { ...input().lines[0]!, lineId: "line-low", productId: "product-low", taxClassId: "class-low" },
-                { ...input().lines[0]!, lineId: "line-high", productId: "product-high", taxClassId: "class-high" },
+                { ...testInput().lines[0]!, lineId: "line-low", productId: "product-low", taxClassId: "class-low" },
+                { ...testInput().lines[0]!, lineId: "line-high", productId: "product-high", taxClassId: "class-high" },
             ],
             discountMinor: discount.discountMinor,
             discountAllocation: discount.allocation,
@@ -364,7 +395,7 @@ describe("calculateTaxQuote", () => {
             ],
             lines: [
                 {
-                    ...input().lines[0]!,
+                    ...testInput().lines[0]!,
                     lineId: lowLineId,
                     productId: "product-low",
                     variantId: "variant-low",
@@ -372,7 +403,7 @@ describe("calculateTaxQuote", () => {
                     taxClassId: "class-low",
                 },
                 {
-                    ...input().lines[0]!,
+                    ...testInput().lines[0]!,
                     lineId: highLineId,
                     productId: "product-high",
                     variantId: "variant-high",
@@ -415,8 +446,8 @@ describe("calculateTaxQuote", () => {
 
     it("reconciles inclusive compound rounding so component sums equal the tax snapshot", () => {
         const quote = calculateTaxQuote(input({
-            settings: { ...input().settings, pricesIncludeTax: true },
-            lines: [{ ...input().lines[0]!, unitPriceMinor: 10_157 }],
+            pricesIncludeTax: true,
+            lines: [{ ...testInput().lines[0]!, unitPriceMinor: 10_157 }],
             rates: [
                 rate({ id: "first", rateBps: 333, priority: 1 }),
                 rate({ id: "second", rateBps: 277, priority: 2, isCompound: true }),

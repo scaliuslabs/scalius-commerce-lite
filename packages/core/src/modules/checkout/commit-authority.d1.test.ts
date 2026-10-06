@@ -107,6 +107,7 @@ function createPayload(checkoutAuthorityRevision: number): StorefrontOrderCommit
       taxMinor: 0,
       totalMinor: 26_000,
       destination: { city: "city_1", zone: "zone_1", area: null },
+      jurisdiction: { countryCode: "BD", providerId: "system", calculationId: null },
       lines: [{
         lineId: "cart:0:variant_1",
         productId: "prod_1",
@@ -121,6 +122,7 @@ function createPayload(checkoutAuthorityRevision: number): StorefrontOrderCommit
         taxMinor: 0,
         totalMinor: 20_000,
         components: [],
+        taxRegionId: null,
       }],
       shipping: {
         taxClassId: null,
@@ -131,6 +133,7 @@ function createPayload(checkoutAuthorityRevision: number): StorefrontOrderCommit
         taxMinor: 0,
         totalMinor: 6_000,
         components: [],
+        taxRegionId: null,
       },
     },
   };

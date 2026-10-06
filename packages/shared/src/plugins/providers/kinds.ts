@@ -31,12 +31,18 @@ export const PROVIDER_OPERATIONS = {
   sms: { required: ["send"], optional: ["deliveryStatus", "testConnection"] },
   email: { required: ["send"], optional: ["deliveryStatus", "testConnection"] },
   fraud: { required: ["check"], optional: ["testConnection"] },
-  tax: { required: ["calculate"], optional: ["commit", "void", "testConnection"] },
+  tax: { required: ["calculate"], optional: ["commit", "void", "refund", "testConnection"] },
 } as const satisfies Record<ProviderKind, { required: readonly string[]; optional: readonly string[] }>;
 
 export type ProviderOperationName<K extends ProviderKind> =
   | (typeof PROVIDER_OPERATIONS)[K]["required"][number]
   | (typeof PROVIDER_OPERATIONS)[K]["optional"][number];
+
+/**
+ * The built-in tax provider: the merchant's rates by tax region
+ * (MARKETS-DESIGN D8). App tax providers are `<plugin id>:<provider id>`.
+ */
+export const SYSTEM_TAX_PROVIDER_ID = "system";
 
 export function isProviderOperation(kind: ProviderKind, operation: string): boolean {
   const operations = PROVIDER_OPERATIONS[kind];

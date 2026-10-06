@@ -30,6 +30,7 @@ const quote: TaxQuote = {
     zoneName: "Adabor",
     areaName: null,
   },
+  jurisdiction: { countryCode: "BD", providerId: "system", calculationId: null },
   lines: [{
     lineId: "checkout:0:variant_black",
     productId: "product_abcd",
@@ -44,6 +45,7 @@ const quote: TaxQuote = {
     taxMinor: 0,
     totalMinor: 95_000,
     components: [],
+    taxRegionId: null,
   }],
   shipping: {
     taxClassId: null,
@@ -54,6 +56,7 @@ const quote: TaxQuote = {
     taxMinor: 0,
     totalMinor: 0,
     components: [],
+    taxRegionId: null,
   },
 };
 

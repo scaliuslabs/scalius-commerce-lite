@@ -35,6 +35,8 @@ import {
     resolveAdminOrderCreateAttempt,
 } from "./create-attempts";
 import { prepareManualOrderQuote } from "./quote";
+import type { AppProviders } from "../../../integrations/provider-port";
+import { ORDER_ITEM_TAX_SNAPSHOT_PARAMETERS_PER_ROW, orderItemTaxSnapshotColumns, orderTaxSnapshotColumns } from "../../tax";
 import { orderMarketIdSql } from "../../markets";
 import { orderShippingAddressColumns, orderShippingAddressInsertColumns, resolveOrderAddress } from "../shipping-address";
 import type { SQLiteBatchItem } from "./shared";
@@ -66,7 +68,7 @@ export interface CreateManualOrderResult {
 // Bound values per multi-row insert row (drizzle binds every column,
 // defaults included); D1 allows 100 per statement.
 const ORDER_ITEM_INSERT_PARAMETERS_PER_ROW = 21;
-const ORDER_ITEM_TAX_INSERT_PARAMETERS_PER_ROW = 6;
+const ORDER_ITEM_TAX_INSERT_PARAMETERS_PER_ROW = ORDER_ITEM_TAX_SNAPSHOT_PARAMETERS_PER_ROW;
 
 // ─────────────────────────────────────────
 // Write operations
@@ -102,8 +104,12 @@ export async function createManualOrder(
     db: Database,
     data: CreateOrderInput,
     actorId: string | null,
-    /** The apps' checkout functions, injected by the API (checkout's `createManualOrderAppFunctions`). */
-    options: { apps?: ManualOrderAppFunctions } = {},
+    /**
+     * The apps' checkout functions, injected by the API (checkout's
+     * `createManualOrderAppFunctions`), and the request's app providers (an
+     * app tax provider).
+     */
+    options: { apps?: ManualOrderAppFunctions; appProviders?: AppProviders } = {},
 ): Promise<CreateManualOrderResult> {
     const replayed = (response: { id: string }): CreateManualOrderResult => ({ response, committed: null });
     const attemptIdentity = await buildAdminOrderCreateAttemptIdentity(data, actorId);
@@ -125,7 +131,7 @@ export async function createManualOrder(
     // response still replays. Fresh requests validate before claiming, which
     // lets a merchant correct a rejected phone without burning the request key.
     const prepared = await (async () => {
-        const manualQuote = await prepareManualOrderQuote(db, data, undefined, undefined, { apps: options.apps });
+        const manualQuote = await prepareManualOrderQuote(db, data, undefined, undefined, { apps: options.apps, appProviders: options.appProviders });
         const {
             locationNames: { cityName, zoneName, areaName },
             trackedItems,
@@ -395,10 +401,7 @@ export async function createManualOrder(
         const itemTaxRows = preparedOrderItems.map(({ id, lineTax }) => ({
             orderItemId: id,
             orderId,
-            taxClassId: lineTax.taxClassId,
-            taxClassName: lineTax.taxClassName,
-            pricesIncludeTax: taxQuote.pricesIncludeTax,
-            rateSnapshot: JSON.stringify(lineTax.components),
+            ...orderItemTaxSnapshotColumns(taxQuote, lineTax),
             createdAt: sql`unixepoch()`,
         }));
         for (const chunk of chunkRowsForD1(
@@ -412,23 +415,7 @@ export async function createManualOrder(
     writeBatch.push(
         db.insert(orderTaxSnapshots).values({
             orderId,
-            currencyCode: taxQuote.currencyCode,
-            decimalPlaces: taxQuote.decimalPlaces,
-            displayLabel: taxQuote.displayLabel,
-            pricesIncludeTax: taxQuote.pricesIncludeTax,
-            shippingTaxed: taxQuote.shippingTaxed,
-            settingsVersion: taxQuote.settingsVersion,
-            calculationVersion: taxQuote.calculationVersion,
-            destinationSnapshot: JSON.stringify(taxQuote.destination),
-            rateSnapshot: JSON.stringify({
-                lines: taxQuote.lines.map((line) => ({
-                    lineId: line.lineId,
-                    taxClassId: line.taxClassId,
-                    taxClassName: line.taxClassName,
-                    components: line.components,
-                })),
-                shipping: taxQuote.shipping,
-            }),
+            ...orderTaxSnapshotColumns(taxQuote),
             createdAt: sql`unixepoch()`,
         }),
     );

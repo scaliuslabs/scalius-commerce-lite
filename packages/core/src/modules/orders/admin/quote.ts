@@ -1,4 +1,5 @@
 // Manual order quotes: SKU resolution, inventory facts and money for staff-created orders.
+import type { AppProviders } from "../../../integrations/provider-port";
 import type { Database } from "@scalius/database/client";
 import { products, productVariants, shippingMethods } from "@scalius/database/schema";
 import { orderPricePolicy, storeCurrencyCodeSql, toStoreMinor } from "../../settings";
@@ -236,6 +237,8 @@ export interface ManualOrderQuoteOptions {
      * order an app discounted is not amendable.
      */
     apps?: ManualOrderAppFunctions;
+    /** The request's app providers: an app tax provider is asked through them (none: it fails closed). */
+    appProviders?: AppProviders;
 }
 
 /** No app work: the staff discount and charge stand as entered. */
@@ -463,12 +466,17 @@ export async function prepareManualOrderQuote(
     };
     const appPricing = options.apps ? await options.apps.price(appInput) : withoutApps(appInput);
     const taxQuote = await calculateStorefrontTaxQuote(db, {
-        // No address (pickup, service): only store-wide rates apply.
+        // No address (pickup, service): taxed where the store ships from.
         destination: {
             city: address?.city ?? null,
             zone: address?.zone ?? null,
             area: address?.area ?? null,
             ...locationNames,
+            ...(shippingCountryCode ? {
+                countryCode: shippingCountryCode,
+                adminArea: data.shippingAdminArea ?? null,
+                postalCode: data.shippingPostalCode ?? null,
+            } : {}),
         },
         lines: manualOrderTaxLines(trackedItems, allocationLineIds),
         shippingMinor: appPricing.shippingMinor,
@@ -481,7 +489,7 @@ export async function prepareManualOrderQuote(
             decimalPlaces: currency.decimalPlaces,
             priceIncrementMinor: currency.priceIncrementMinor,
         },
-    });
+    }, undefined, { apps: options.appProviders });
     // A staff order is cash on delivery, which collects cash amounts (whole
     // taka in BDT): a total it cannot collect exactly is refused here, so the
     // quote, the create and the amendment all say so before anything commits.
@@ -511,9 +519,9 @@ export async function prepareManualOrderQuote(
 export async function quoteManualOrder(
     db: Database,
     data: QuoteManualOrderInput,
-    options: Pick<ManualOrderQuoteOptions, "apps"> = {},
+    options: Pick<ManualOrderQuoteOptions, "apps" | "appProviders"> = {},
 ): Promise<ManualOrderQuote> {
-    return (await prepareManualOrderQuote(db, data, undefined, undefined, { apps: options.apps })).quote;
+    return (await prepareManualOrderQuote(db, data, undefined, undefined, { apps: options.apps, appProviders: options.appProviders })).quote;
 }
 
 interface AdminOrderSkuIssue {

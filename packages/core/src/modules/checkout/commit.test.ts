@@ -122,6 +122,7 @@ function createPayload(overrides: Partial<StorefrontOrderCommitPayload> = {}): S
       taxMinor: 0,
       totalMinor: 20_000,
       destination: { city: "city_1", zone: "zone_1", area: null },
+      jurisdiction: { countryCode: "BD", providerId: "system", calculationId: null },
       lines: [{
         lineId: "cart:0:variant_1",
         productId: "prod_1",
@@ -136,6 +137,7 @@ function createPayload(overrides: Partial<StorefrontOrderCommitPayload> = {}): S
         taxMinor: 0,
         totalMinor: 15_000,
         components: [],
+        taxRegionId: null,
       }],
       shipping: {
         taxClassId: null,
@@ -146,6 +148,7 @@ function createPayload(overrides: Partial<StorefrontOrderCommitPayload> = {}): S
         taxMinor: 0,
         totalMinor: 6_000,
         components: [],
+        taxRegionId: null,
       },
     },
     ...overrides,

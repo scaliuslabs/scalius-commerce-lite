@@ -10,26 +10,35 @@ import {
     products,
     taxClasses,
     taxRates,
+    taxRegions,
     taxSettings,
 } from "@scalius/database/schema";
 import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
-import { and, asc, eq, isNull, like, or, sql } from "drizzle-orm";
+import { matchAdminArea } from "@scalius/shared/address";
+import { addressRulesFor } from "@scalius/shared/address-metadata";
+import { DELIVERY_HIERARCHY_COUNTRY, normalizeMarketCountry } from "@scalius/shared/markets";
+import { isQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
+import { and, asc, eq, isNull, like, ne, or, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import { nanoid } from "nanoid";
-import type { TaxJurisdictionType } from "./types";
+import { isCountryTaxRegion, normalizeTaxPostalPrefix } from "./region-match";
+import { SYSTEM_TAX_PROVIDER_ID, type TaxPlaceType } from "./types";
 
 const DEFAULT_SETTINGS = {
     id: "default" as const,
     enabled: false,
-    pricesIncludeTax: false,
     taxShipping: false,
     defaultTaxClassId: null,
     shippingTaxClassId: null,
     displayLabel: "Tax",
+    providerId: SYSTEM_TAX_PROVIDER_ID,
     version: 0,
     createdAt: null,
     updatedAt: null,
 };
+
+/** Longest postal prefix a tax region may hold (as shipping zones). */
+export const MAX_TAX_POSTAL_PREFIX_LENGTH = 10;
 
 const TAX_CONFIGURATION_READINESS_CONFLICT = "TAX_CONFIGURATION_READINESS_CONFLICT";
 const TAX_CONFIGURATION_READINESS_MESSAGE =
@@ -38,11 +47,12 @@ const TAX_CONFIGURATION_READINESS_MESSAGE =
 export interface UpdateTaxSettingsInput {
     expectedVersion: number;
     enabled: boolean;
-    pricesIncludeTax: boolean;
     taxShipping: boolean;
     defaultTaxClassId: string | null;
     shippingTaxClassId: string | null;
     displayLabel: string;
+    /** `system` or an app's `<plugin id>:<provider id>`; absent keeps the saved one. */
+    providerId?: string;
 }
 
 export interface CreateTaxClassInput {
@@ -57,14 +67,31 @@ export interface UpdateTaxClassInput extends CreateTaxClassInput {
 
 export interface CreateTaxRateInput {
     taxClassId: string;
+    taxRegionId: string;
     name: string;
     rateBps: number;
-    jurisdictionType: TaxJurisdictionType;
-    jurisdictionId?: string | null;
-    jurisdictionLabel?: string | null;
     priority?: number;
     isCompound?: boolean;
+    /** Applies with the broader regions' rates of its class (default: replaces them). */
+    combinable?: boolean;
     isActive?: boolean;
+}
+
+export interface CreateTaxRegionInput {
+    countryCode: string;
+    /** An admin area of the country's address rules (not Bangladesh). */
+    adminArea?: string | null;
+    /** Postal codes that start with it (not Bangladesh). */
+    postalPrefix?: string | null;
+    /** A Bangladesh delivery location (City, Thana or Area). */
+    placeId?: string | null;
+    /** A country region's provider; null or absent: the store-wide one. */
+    providerId?: string | null;
+}
+
+export interface UpdateTaxRegionInput {
+    expectedVersion: number;
+    providerId: string | null;
 }
 
 export interface UpdateTaxRateInput extends Partial<CreateTaxRateInput> {
@@ -84,35 +111,26 @@ function normalizeDescription(value: string | null | undefined): string | null {
     return normalized;
 }
 
+/** An error's message with its causes' (a driver error wraps the constraint's words). */
+function errorMessages(error: unknown): string {
+    const messages: string[] = [];
+    for (let current: unknown = error, depth = 0; current && depth < 4; depth += 1) {
+        messages.push(current instanceof Error ? current.message : String(current));
+        current = current instanceof Error ? current.cause : null;
+    }
+    return messages.join(" | ");
+}
+
 function isTaxClassNameConstraint(error: unknown): boolean {
     const message = error instanceof Error ? error.message : String(error);
     return /tax_classes_active_name_ci_unique|unique constraint.*tax_classes/i.test(message);
 }
 
-async function resolveJurisdiction(
-    db: Database,
-    input: Pick<CreateTaxRateInput, "jurisdictionType" | "jurisdictionId" | "jurisdictionLabel">,
-) {
-    if (input.jurisdictionType === "all") {
-        return { jurisdictionId: null, jurisdictionLabel: null };
-    }
-    const jurisdictionId = input.jurisdictionId?.trim() || "";
-    if (!jurisdictionId || jurisdictionId.length > 180) {
-        throw new ValidationError("A valid destination identifier is required for scoped tax rates.");
-    }
-    const location = await db.select({
-        id: deliveryLocations.id,
-        name: deliveryLocations.name,
-    }).from(deliveryLocations).where(and(
-        eq(deliveryLocations.id, jurisdictionId),
-        eq(deliveryLocations.type, input.jurisdictionType),
-        eq(deliveryLocations.isActive, true),
-        isNull(deliveryLocations.deletedAt),
-    )).get();
-    if (!location) {
-        throw new ValidationError(`Choose an active ${input.jurisdictionType} from the configured delivery locations.`);
-    }
-    return { jurisdictionId: location.id, jurisdictionLabel: location.name };
+/** A provider id as tax settings and regions store it: `system` or an app's qualified id. */
+export function normalizeTaxProviderId(value: string | null | undefined, label = "Tax provider"): string {
+    const id = value?.trim() ?? "";
+    if (id === SYSTEM_TAX_PROVIDER_ID || isQualifiedProviderId(id)) return id;
+    throw new ValidationError(`${label} is not a known tax provider.`);
 }
 
 type ActiveTaxClass = Pick<typeof taxClasses.$inferSelect, "id" | "name" | "isExempt">;
@@ -147,7 +165,6 @@ async function assertClassCanCalculateTax(
         .where(and(
             eq(taxRates.taxClassId, taxClass.id),
             eq(taxRates.isActive, true),
-            isNull(taxRates.deletedAt),
         ))
         .get();
     if (!activeRate) {
@@ -167,6 +184,7 @@ function buildTaxConfigurationReadinessGuard(db: Database) {
     const settings = {
         id: sql.raw('"tax_settings"."id"'),
         enabled: sql.raw('"tax_settings"."enabled"'),
+        providerId: sql.raw('"tax_settings"."provider_id"'),
         taxShipping: sql.raw('"tax_settings"."tax_shipping"'),
         defaultTaxClassId: sql.raw('"tax_settings"."default_tax_class_id"'),
         shippingTaxClassId: sql.raw('"tax_settings"."shipping_tax_class_id"'),
@@ -179,13 +197,13 @@ function buildTaxConfigurationReadinessGuard(db: Database) {
     const rate = {
         taxClassId: sql.raw('"tax_rates"."tax_class_id"'),
         isActive: sql.raw('"tax_rates"."is_active"'),
-        deletedAt: sql.raw('"tax_rates"."deleted_at"'),
     };
     return buildBatchGuard(db, sql`
             NOT EXISTS (
                 SELECT 1 FROM ${taxSettings}
                 WHERE ${settings.id} = 'default'
                   AND ${settings.enabled} = 1
+                  AND ${settings.providerId} = 'system'
             ) OR EXISTS (
                 SELECT 1 FROM ${taxSettings}
                 WHERE ${settings.id} = 'default'
@@ -200,7 +218,6 @@ function buildTaxConfigurationReadinessGuard(db: Database) {
                                 SELECT 1 FROM ${taxRates}
                                 WHERE ${rate.taxClassId} = ${taxClass.id}
                                   AND ${rate.isActive} = 1
-                                  AND ${rate.deletedAt} IS NULL
                             )
                         )
                   )
@@ -219,7 +236,6 @@ function buildTaxConfigurationReadinessGuard(db: Database) {
                                     SELECT 1 FROM ${taxRates}
                                     WHERE ${rate.taxClassId} = ${taxClass.id}
                                       AND ${rate.isActive} = 1
-                                      AND ${rate.deletedAt} IS NULL
                                 )
                             )
                       )
@@ -251,10 +267,11 @@ async function executeTaxConfigurationGuardedMutation<TMutation extends BatchIte
 }
 
 export async function getTaxConfiguration(db: Database) {
-    const [settings, classes, rates, jurisdictions] = await db.batch([
+    const [settings, classes, regions, rates, jurisdictions] = await db.batch([
         db.select().from(taxSettings).where(eq(taxSettings.id, "default")),
         db.select().from(taxClasses).where(isNull(taxClasses.deletedAt)).orderBy(asc(taxClasses.name)),
-        db.select().from(taxRates).where(isNull(taxRates.deletedAt)).orderBy(
+        selectTaxRegions(db),
+        db.select().from(taxRates).orderBy(
             asc(taxRates.taxClassId),
             asc(taxRates.priority),
             asc(taxRates.id),
@@ -272,6 +289,7 @@ export async function getTaxConfiguration(db: Database) {
     return {
         settings: settings[0] ?? DEFAULT_SETTINGS,
         classes,
+        regions: sortTaxRegions(regions.map(toTaxRegionRecord)),
         rates,
         jurisdictions,
     };
@@ -312,15 +330,13 @@ export async function listTaxRates(db: Database, input: {
     limit: number;
     search?: string;
     taxClassId?: string;
+    taxRegionId?: string;
 }) {
     const search = input.search?.trim();
     const where = and(
-        isNull(taxRates.deletedAt),
         input.taxClassId ? eq(taxRates.taxClassId, input.taxClassId) : undefined,
-        search ? or(
-            like(taxRates.name, `%${search}%`),
-            like(taxRates.jurisdictionLabel, `%${search}%`),
-        ) : undefined,
+        input.taxRegionId ? eq(taxRates.taxRegionId, input.taxRegionId) : undefined,
+        search ? like(taxRates.name, `%${search}%`) : undefined,
     );
     const [items, totalRow] = await Promise.all([
         db.select().from(taxRates).where(where).orderBy(
@@ -368,6 +384,8 @@ export async function listTaxJurisdictions(db: Database, input: {
 
 export async function updateTaxSettings(db: Database, input: UpdateTaxSettingsInput) {
     const displayLabel = normalizeName(input.displayLabel, "Tax label", 80);
+    // Absent: the saved provider stays (the readiness guard reads it).
+    const providerId = input.providerId === undefined ? undefined : normalizeTaxProviderId(input.providerId);
     const [defaultTaxClass, shippingTaxClass] = await Promise.all([
         assertActiveTaxClass(db, input.defaultTaxClassId, "Default tax class"),
         assertActiveTaxClass(db, input.shippingTaxClassId, "Shipping tax class"),
@@ -378,7 +396,9 @@ export async function updateTaxSettings(db: Database, input: UpdateTaxSettingsIn
     if (input.taxShipping && !input.shippingTaxClassId && !input.defaultTaxClassId) {
         throw new ValidationError("Choose a shipping or default tax class before taxing shipping.");
     }
-    if (input.enabled && defaultTaxClass) {
+    // An app provider calculates without local rates; the system provider needs them.
+    // (An omitted provider keeps the saved one: the readiness guard below checks it.)
+    if (input.enabled && defaultTaxClass && providerId === SYSTEM_TAX_PROVIDER_ID) {
         await assertClassCanCalculateTax(db, defaultTaxClass, "product");
         const effectiveShippingClass = input.taxShipping
             ? shippingTaxClass ?? defaultTaxClass
@@ -392,11 +412,11 @@ export async function updateTaxSettings(db: Database, input: UpdateTaxSettingsIn
         const insert = db.insert(taxSettings).values({
             id: "default",
             enabled: input.enabled,
-            pricesIncludeTax: input.pricesIncludeTax,
             taxShipping: input.taxShipping,
             defaultTaxClassId: input.defaultTaxClassId,
             shippingTaxClassId: input.shippingTaxClassId,
             displayLabel,
+            providerId: providerId ?? SYSTEM_TAX_PROVIDER_ID,
             version: 1,
             createdAt: sql`unixepoch()`,
             updatedAt: sql`unixepoch()`,
@@ -410,11 +430,11 @@ export async function updateTaxSettings(db: Database, input: UpdateTaxSettingsIn
 
     const update = db.update(taxSettings).set({
         enabled: input.enabled,
-        pricesIncludeTax: input.pricesIncludeTax,
         taxShipping: input.taxShipping,
         defaultTaxClassId: input.defaultTaxClassId,
         shippingTaxClassId: input.shippingTaxClassId,
         displayLabel,
+        ...(providerId === undefined ? {} : { providerId }),
         version: sql`${taxSettings.version} + 1`,
         updatedAt: sql`unixepoch()`,
     }).where(and(
@@ -509,7 +529,7 @@ export async function deleteTaxClass(db: Database, id: string, expectedVersion: 
         eq(taxClasses.id, id),
         isNull(taxClasses.deletedAt),
         eq(taxClasses.version, expectedVersion),
-        sql`NOT EXISTS (SELECT 1 FROM ${taxRates} WHERE ${taxRates.taxClassId} = ${id} AND ${taxRates.deletedAt} IS NULL)`,
+        sql`NOT EXISTS (SELECT 1 FROM ${taxRates} WHERE ${taxRates.taxClassId} = ${id})`,
         sql`NOT EXISTS (SELECT 1 FROM ${products} WHERE ${products.taxClassId} = ${id})`,
         sql`NOT EXISTS (SELECT 1 FROM ${productVariants} WHERE ${productVariants.taxClassId} = ${id})`,
         sql`NOT EXISTS (SELECT 1 FROM ${taxSettings} WHERE ${taxSettings.defaultTaxClassId} = ${id} OR ${taxSettings.shippingTaxClassId} = ${id})`,
@@ -522,18 +542,24 @@ export async function deleteTaxClass(db: Database, id: string, expectedVersion: 
     throw new ConflictError("Remove this class from settings, products, SKUs, and active rates before deleting it.");
 }
 
+async function requireTaxRegion(db: Database, id: string) {
+    const region = await db.select({ id: taxRegions.id }).from(taxRegions).where(eq(taxRegions.id, id)).get();
+    if (!region) throw new ValidationError("Choose a tax region.");
+    return region;
+}
+
 export async function createTaxRate(db: Database, input: CreateTaxRateInput) {
     await assertActiveTaxClass(db, input.taxClassId, "Tax class");
-    const scope = await resolveJurisdiction(db, input);
+    await requireTaxRegion(db, input.taxRegionId);
     const rows = await db.insert(taxRates).values({
         id: `taxr_${nanoid()}`,
         taxClassId: input.taxClassId,
+        taxRegionId: input.taxRegionId,
         name: normalizeName(input.name, "Rate name"),
         rateBps: input.rateBps,
-        jurisdictionType: input.jurisdictionType,
-        ...scope,
         priority: input.priority ?? 0,
         isCompound: input.isCompound ?? false,
+        combinable: input.combinable ?? false,
         isActive: input.isActive ?? true,
         createdAt: sql`unixepoch()`,
         updatedAt: sql`unixepoch()`,
@@ -542,33 +568,29 @@ export async function createTaxRate(db: Database, input: CreateTaxRateInput) {
 }
 
 export async function updateTaxRate(db: Database, id: string, input: UpdateTaxRateInput) {
-    const current = await db.select().from(taxRates).where(and(eq(taxRates.id, id), isNull(taxRates.deletedAt))).get();
+    const current = await db.select().from(taxRates).where(eq(taxRates.id, id)).get();
     if (!current) throw new NotFoundError("Tax rate not found.");
     if (current.version !== input.expectedVersion) throw new ConflictError("Tax rate changed. Reload and try again.");
     const taxClassId = input.taxClassId ?? current.taxClassId;
     await assertActiveTaxClass(db, taxClassId, "Tax class");
-    const jurisdictionType = input.jurisdictionType ?? current.jurisdictionType;
-    const scope = await resolveJurisdiction(db, {
-        jurisdictionType,
-        jurisdictionId: input.jurisdictionId === undefined ? current.jurisdictionId : input.jurisdictionId,
-        jurisdictionLabel: input.jurisdictionLabel === undefined ? current.jurisdictionLabel : input.jurisdictionLabel,
-    });
+    const taxRegionId = input.taxRegionId ?? current.taxRegionId;
+    if (taxRegionId !== current.taxRegionId) await requireTaxRegion(db, taxRegionId);
     const nextIsActive = input.isActive ?? current.isActive;
     const removesActiveCoverage = current.isActive && (
         !nextIsActive || taxClassId !== current.taxClassId
     );
     const update = db.update(taxRates).set({
         taxClassId,
+        taxRegionId,
         name: input.name === undefined ? current.name : normalizeName(input.name, "Rate name"),
         rateBps: input.rateBps ?? current.rateBps,
-        jurisdictionType,
-        ...scope,
         priority: input.priority ?? current.priority,
         isCompound: input.isCompound ?? current.isCompound,
-        isActive: input.isActive ?? current.isActive,
+        combinable: input.combinable ?? current.combinable,
+        isActive: nextIsActive,
         version: sql`${taxRates.version} + 1`,
         updatedAt: sql`unixepoch()`,
-    }).where(and(eq(taxRates.id, id), eq(taxRates.version, input.expectedVersion), isNull(taxRates.deletedAt))).returning();
+    }).where(and(eq(taxRates.id, id), eq(taxRates.version, input.expectedVersion))).returning();
     const rows = removesActiveCoverage
         ? await executeTaxConfigurationGuardedMutation(db, update)
         : await update;
@@ -576,32 +598,257 @@ export async function updateTaxRate(db: Database, id: string, input: UpdateTaxRa
     return rows[0];
 }
 
+/** Removes a rate (orders keep their own copy of it). */
 export async function deleteTaxRate(db: Database, id: string, expectedVersion: number) {
-    const current = await db.select().from(taxRates).where(and(
-        eq(taxRates.id, id),
-        isNull(taxRates.deletedAt),
-    )).get();
-    if (!current) {
-        const exists = await db.select({ id: taxRates.id }).from(taxRates).where(eq(taxRates.id, id)).get();
-        if (!exists) throw new NotFoundError("Tax rate not found.");
-        throw new ConflictError("Tax rate changed. Reload and try again.");
-    }
+    const current = await db.select().from(taxRates).where(eq(taxRates.id, id)).get();
+    if (!current) throw new NotFoundError("Tax rate not found.");
     if (current.version !== expectedVersion) {
         throw new ConflictError("Tax rate changed. Reload and try again.");
     }
-    const update = db.update(taxRates).set({
-        deletedAt: sql`unixepoch()`,
-        isActive: false,
-        version: sql`${taxRates.version} + 1`,
-        updatedAt: sql`unixepoch()`,
-    }).where(and(
-        eq(taxRates.id, id),
-        eq(taxRates.version, expectedVersion),
-        isNull(taxRates.deletedAt),
-    )).returning();
+    const remove = db.delete(taxRates)
+        .where(and(eq(taxRates.id, id), eq(taxRates.version, expectedVersion)))
+        .returning();
     const rows = current.isActive
-        ? await executeTaxConfigurationGuardedMutation(db, update)
-        : await update;
+        ? await executeTaxConfigurationGuardedMutation(db, remove)
+        : await remove;
     if (rows[0]) return rows[0];
     throw new ConflictError("Tax rate changed. Reload and try again.");
+}
+
+// ── Regions ─────────────────────────────────────────────────────────────
+
+/** Every region with its rate count and, for a Bangladesh place, the place's name. */
+function selectTaxRegions(db: Database) {
+    return db.select({
+        id: taxRegions.id,
+        countryCode: taxRegions.countryCode,
+        adminArea: taxRegions.adminArea,
+        postalPrefix: taxRegions.postalPrefix,
+        placeType: taxRegions.placeType,
+        placeId: taxRegions.placeId,
+        placeName: deliveryLocations.name,
+        providerId: taxRegions.providerId,
+        version: taxRegions.version,
+        rateCount: sql<number>`(SELECT count(*) FROM ${taxRates} WHERE ${taxRates.taxRegionId} = ${taxRegions.id})`,
+        createdAt: taxRegions.createdAt,
+        updatedAt: taxRegions.updatedAt,
+    })
+        .from(taxRegions)
+        .leftJoin(deliveryLocations, eq(deliveryLocations.id, taxRegions.placeId))
+        .orderBy(asc(taxRegions.countryCode), asc(taxRegions.id));
+}
+
+const KIND_ORDER = { country: 0, admin_area: 1, postal_prefix: 2, place: 3 } as const;
+const PLACE_ORDER = { city: 0, zone: 1, area: 2 } as const;
+
+/** Each country, then its admin areas, postal prefixes and places (cities, thanas, areas), by name. */
+function sortTaxRegions(regions: TaxRegionRecord[]): TaxRegionRecord[] {
+    const label = (region: TaxRegionRecord) => region.adminArea ?? region.postalPrefix ?? region.placeName ?? region.placeId ?? "";
+    return regions.sort((left, right) =>
+        left.countryCode.localeCompare(right.countryCode)
+        || KIND_ORDER[left.kind] - KIND_ORDER[right.kind]
+        || (left.placeType && right.placeType ? PLACE_ORDER[left.placeType] - PLACE_ORDER[right.placeType] : 0)
+        || label(left).localeCompare(label(right))
+        || left.id.localeCompare(right.id));
+}
+
+type TaxRegionRow = Awaited<ReturnType<typeof selectTaxRegions>>[number];
+
+/** A region as the dashboard and agents read it. */
+export interface TaxRegionRecord {
+    id: string;
+    countryCode: string;
+    /** `country`: the registration; the others are its sub-regions. */
+    kind: "country" | "admin_area" | "postal_prefix" | "place";
+    adminArea: string | null;
+    postalPrefix: string | null;
+    placeType: TaxPlaceType | null;
+    placeId: string | null;
+    placeName: string | null;
+    /** A country's provider; null: the store-wide one. */
+    providerId: string | null;
+    rateCount: number;
+    version: number;
+    createdAt: unknown;
+    updatedAt: unknown;
+}
+
+function toTaxRegionRecord(row: TaxRegionRow): TaxRegionRecord {
+    const kind = row.placeId ? "place" : row.postalPrefix ? "postal_prefix" : row.adminArea ? "admin_area" : "country";
+    return {
+        id: row.id,
+        countryCode: row.countryCode,
+        kind,
+        adminArea: row.adminArea || null,
+        postalPrefix: row.postalPrefix || null,
+        placeType: row.placeType ?? null,
+        placeId: row.placeId ?? null,
+        placeName: row.placeName ?? null,
+        providerId: row.providerId ?? null,
+        rateCount: Number(row.rateCount ?? 0),
+        version: row.version,
+        createdAt: row.createdAt,
+        updatedAt: row.updatedAt,
+    };
+}
+
+/** Every region, countries first within their country; `countryCode` keeps one country's. */
+export async function listTaxRegions(db: Database, input: { countryCode?: string } = {}): Promise<TaxRegionRecord[]> {
+    const country = input.countryCode ? normalizeMarketCountry(input.countryCode) : null;
+    const rows = await selectTaxRegions(db);
+    return sortTaxRegions(rows.map(toTaxRegionRecord)).filter((region) => !country || region.countryCode === country);
+}
+
+/** A region with its rates and, for a country, its sub-regions and theirs. */
+export async function getTaxRegion(db: Database, id: string) {
+    const [regionRows, rates] = await db.batch([
+        selectTaxRegions(db),
+        db.select().from(taxRates).orderBy(asc(taxRates.priority), asc(taxRates.id)),
+    ]);
+    const regions = sortTaxRegions(regionRows.map(toTaxRegionRecord));
+    const region = regions.find((candidate) => candidate.id === id);
+    if (!region) throw new NotFoundError("Tax region not found.");
+    const subRegions = region.kind === "country"
+        ? regions.filter((candidate) => candidate.countryCode === region.countryCode && candidate.kind !== "country")
+        : [];
+    const ids = new Set([region.id, ...subRegions.map((candidate) => candidate.id)]);
+    return { region, subRegions, rates: rates.filter((rate) => ids.has(rate.taxRegionId)) };
+}
+
+async function readTaxRegion(db: Database, id: string): Promise<TaxRegionRecord> {
+    const region = (await listTaxRegions(db)).find((candidate) => candidate.id === id);
+    if (!region) throw new NotFoundError("Tax region not found.");
+    return region;
+}
+
+/**
+ * Adds a region. A country region is the registration; a sub-region needs
+ * it. Bangladesh's sub-regions are its delivery locations; another
+ * country's are an admin area of its address rules or a postal prefix.
+ */
+export async function createTaxRegion(db: Database, input: CreateTaxRegionInput): Promise<TaxRegionRecord> {
+    const countryCode = normalizeMarketCountry(input.countryCode);
+    const rules = countryCode ? addressRulesFor(countryCode) : null;
+    if (!countryCode || !rules) throw new ValidationError("Choose a country from the list.");
+    const adminAreaText = input.adminArea?.trim() || "";
+    const postalText = input.postalPrefix?.trim() || "";
+    const placeId = input.placeId?.trim() || "";
+    if ([adminAreaText, postalText, placeId].filter(Boolean).length > 1) {
+        throw new ValidationError("Choose one region, postal code prefix or place.");
+    }
+    if (countryCode === DELIVERY_HIERARCHY_COUNTRY && (adminAreaText || postalText)) {
+        throw new ValidationError("Choose Bangladesh cities, thanas or areas.");
+    }
+    if (countryCode !== DELIVERY_HIERARCHY_COUNTRY && placeId) {
+        throw new ValidationError("Only Bangladesh regions are cities, thanas or areas.");
+    }
+    let adminArea = "";
+    if (adminAreaText) {
+        const match = matchAdminArea(rules, adminAreaText);
+        if (!match) throw new ValidationError("Choose a region from the list.");
+        adminArea = match.code;
+    }
+    const postalPrefix = normalizeTaxPostalPrefix(postalText);
+    if (postalText && (!postalPrefix || postalPrefix.length > MAX_TAX_POSTAL_PREFIX_LENGTH)) {
+        throw new ValidationError(`Enter 1 to ${MAX_TAX_POSTAL_PREFIX_LENGTH} letters or digits.`);
+    }
+    let placeType: TaxPlaceType | null = null;
+    if (placeId) {
+        const place = await db.select({ type: deliveryLocations.type }).from(deliveryLocations).where(and(
+            eq(deliveryLocations.id, placeId),
+            eq(deliveryLocations.isActive, true),
+            isNull(deliveryLocations.deletedAt),
+        )).get();
+        if (!place) throw new ValidationError("Choose an active city, thana or area from the delivery locations.");
+        placeType = place.type as TaxPlaceType;
+    }
+    const isCountry = !adminArea && !postalPrefix && !placeId;
+    const providerId = input.providerId == null ? null : normalizeTaxProviderId(input.providerId);
+    if (providerId !== null && !isCountry) {
+        throw new ValidationError("Only a country chooses its tax provider; its regions use it.");
+    }
+    if (!isCountry) {
+        const country = await db.select({ id: taxRegions.id }).from(taxRegions).where(and(
+            eq(taxRegions.countryCode, countryCode),
+            eq(taxRegions.adminArea, ""),
+            eq(taxRegions.postalPrefix, ""),
+            isNull(taxRegions.placeId),
+        )).get();
+        if (!country) throw new ValidationError("Add the country before its regions.");
+    }
+    const id = `txreg_${nanoid()}`;
+    try {
+        await db.insert(taxRegions).values({
+            id,
+            countryCode,
+            adminArea,
+            postalPrefix,
+            placeType,
+            placeId: placeId || null,
+            providerId,
+            createdAt: sql`unixepoch()`,
+            updatedAt: sql`unixepoch()`,
+        });
+    } catch (error) {
+        const message = errorMessages(error);
+        if (/tax_regions_scope_unique|UNIQUE|duplicate key/i.test(message)) {
+            throw new ConflictError("Tax is already set up for this region.");
+        }
+        if (/TAX_REGION_COUNTRY_REQUIRED/.test(message)) throw new ValidationError("Add the country before its regions.");
+        throw error;
+    }
+    return readTaxRegion(db, id);
+}
+
+/** A country's tax provider (null: the store-wide one). */
+export async function updateTaxRegion(db: Database, id: string, input: UpdateTaxRegionInput): Promise<TaxRegionRecord> {
+    const current = await db.select().from(taxRegions).where(eq(taxRegions.id, id)).get();
+    if (!current) throw new NotFoundError("Tax region not found.");
+    const providerId = input.providerId === null ? null : normalizeTaxProviderId(input.providerId);
+    if (providerId !== null && !isCountryTaxRegion({ adminArea: current.adminArea, postalPrefix: current.postalPrefix, placeId: current.placeId })) {
+        throw new ValidationError("Only a country chooses its tax provider; its regions use it.");
+    }
+    const rows = await db.update(taxRegions).set({
+        providerId,
+        version: sql`${taxRegions.version} + 1`,
+        updatedAt: sql`unixepoch()`,
+    }).where(and(eq(taxRegions.id, id), eq(taxRegions.version, input.expectedVersion))).returning({ id: taxRegions.id });
+    if (!rows[0]) throw new ConflictError("Tax region changed. Reload and try again.");
+    return readTaxRegion(db, id);
+}
+
+/**
+ * Stops collecting tax in a region: its rates go with it, and a country
+ * takes its regions along. Refused while tax is on and a taxed default or
+ * shipping class would be left without an active rate.
+ */
+export async function deleteTaxRegion(db: Database, id: string, expectedVersion: number) {
+    const current = await db.select().from(taxRegions).where(eq(taxRegions.id, id)).get();
+    if (!current) throw new NotFoundError("Tax region not found.");
+    if (current.version !== expectedVersion) throw new ConflictError("Tax region changed. Reload and try again.");
+    const isCountry = isCountryTaxRegion({ adminArea: current.adminArea, postalPrefix: current.postalPrefix, placeId: current.placeId });
+    const removeRegion = db.delete(taxRegions)
+        .where(and(eq(taxRegions.id, id), eq(taxRegions.version, expectedVersion)))
+        .returning({ id: taxRegions.id });
+    // A country's regions go first: the database refuses a country with regions left.
+    const statements: BatchItem<"sqlite">[] = [
+        ...(isCountry ? [db.delete(taxRegions).where(and(
+            eq(taxRegions.countryCode, current.countryCode),
+            or(ne(taxRegions.adminArea, ""), ne(taxRegions.postalPrefix, ""), sql`${taxRegions.placeId} IS NOT NULL`),
+        ))] : []),
+        removeRegion,
+        buildTaxConfigurationReadinessGuard(db),
+    ];
+    let results: unknown[];
+    try {
+        results = [...await safeBatch(db, statements as unknown as readonly [BatchItem<"sqlite">, ...BatchItem<"sqlite">[]])];
+    } catch (error) {
+        if (isTaxConfigurationReadinessConflict(error)) {
+            throw new ConflictError(TAX_CONFIGURATION_READINESS_MESSAGE);
+        }
+        throw error;
+    }
+    const removed = results[isCountry ? 1 : 0] as Array<{ id: string }> | undefined;
+    if (!removed?.[0]) throw new ConflictError("Tax region changed. Reload and try again.");
+    return { id, countryCode: current.countryCode };
 }

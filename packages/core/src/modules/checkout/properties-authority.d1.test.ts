@@ -113,6 +113,7 @@ function payloadFor(checkoutAuthorityRevision: number, orderId: string, checkout
       taxMinor: 0,
       totalMinor: 18_000,
       destination: { city: "city_1", zone: "zone_1", area: null },
+      jurisdiction: { countryCode: "BD", providerId: "system", calculationId: null },
       lines: [{
         lineId: "cart:0:variant_1",
         productId: "prod_1",
@@ -127,6 +128,7 @@ function payloadFor(checkoutAuthorityRevision: number, orderId: string, checkout
         taxMinor: 0,
         totalMinor: 12_000,
         components: [],
+        taxRegionId: null,
       }],
       shipping: {
         taxClassId: null,
@@ -137,6 +139,7 @@ function payloadFor(checkoutAuthorityRevision: number, orderId: string, checkout
         taxMinor: 0,
         totalMinor: 6_000,
         components: [],
+        taxRegionId: null,
       },
     },
   };

@@ -46,11 +46,14 @@ function seedCatalog(pricesIncludeTax: boolean): void {
     VALUES ('city_1', 'Dhaka', 'city', NULL, '{}', '{}', 1), ('zone_1', 'North', 'zone', 'city_1', '{}', '{}', 1);
     INSERT INTO tax_classes (id, name) VALUES ('tax_standard', 'Standard');
     INSERT OR REPLACE INTO tax_settings
-      (id, enabled, prices_include_tax, tax_shipping, default_tax_class_id, display_label, version)
-    VALUES ('default', 1, ${pricesIncludeTax ? 1 : 0}, 0, 'tax_standard', 'VAT', 1);
+      (id, enabled, tax_shipping, default_tax_class_id, display_label, version)
+    VALUES ('default', 1, 0, 'tax_standard', 'VAT', 1);
+    UPDATE markets SET prices_include_tax = ${pricesIncludeTax ? 1 : 0} WHERE is_backup = 1;
+    INSERT INTO tax_regions (id, country_code) VALUES ('txreg_bd', 'BD');
+    INSERT INTO tax_regions (id, country_code, place_type, place_id) VALUES ('txreg_bd_zone_1', 'BD', 'zone', 'zone_1');
     INSERT INTO tax_rates
-      (id, tax_class_id, name, rate_bps, jurisdiction_type, jurisdiction_id, jurisdiction_label, is_active)
-    VALUES ('tax_north', 'tax_standard', 'North VAT', 1000, 'zone', 'zone_1', 'North', 1);
+      (id, tax_class_id, tax_region_id, name, rate_bps, combinable, is_active)
+    VALUES ('tax_north', 'tax_standard', 'txreg_bd_zone_1', 'North VAT', 1000, 1, 1);
     INSERT INTO products (id, name, slug, price_minor, discount_type, discount_bps, is_active)
     VALUES ('tee', 'Tee', 'tee', 999, 'percentage', 1250, 1);
     INSERT INTO product_variants (id, product_id, sku, price_minor, stock, is_default, track_inventory)

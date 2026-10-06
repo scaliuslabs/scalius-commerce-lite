@@ -63,6 +63,10 @@ export type {
   ProviderWireAmount,
   SmsSend,
   SmsSendInput,
+  TaxAddress,
+  TaxCalculateInput,
+  TaxCalculation,
+  TaxCalculationLine,
 } from "@scalius/shared/plugins/providers";
 export type {
   PluginManifest,
@@ -149,5 +153,9 @@ export const defineSmsProvider = provider("sms");
 export const defineEmailProvider = provider("email");
 /** A phone lookup the merchant runs from the order page. */
 export const defineFraudProvider = provider("fraud");
-/** Tax calculation (contract only in this API version: the platform does not call it yet). */
+/**
+ * Tax calculation: the same port as the built-in `system` provider. A
+ * merchant selects it store-wide or for one country (Settings → Taxes);
+ * checkout refuses to place an order while it cannot answer.
+ */
 export const defineTaxProvider = provider("tax");

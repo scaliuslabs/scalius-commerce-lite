@@ -44,11 +44,13 @@ describe("manual COD order amendments on D1 storage", () => {
         ('zone_2', 'South', 'zone', 'city_1', '{}', '{}', 1);
       INSERT INTO tax_classes (id, name) VALUES ('tax_standard', 'Standard');
       INSERT OR REPLACE INTO tax_settings
-        (id, enabled, prices_include_tax, tax_shipping, default_tax_class_id, display_label, version)
-      VALUES ('default', 1, 0, 0, 'tax_standard', 'Tax', 1);
+        (id, enabled, tax_shipping, default_tax_class_id, display_label, version)
+      VALUES ('default', 1, 0, 'tax_standard', 'Tax', 1);
+      INSERT INTO tax_regions (id, country_code) VALUES ('txreg_bd', 'BD');
+      INSERT INTO tax_regions (id, country_code, place_type, place_id) VALUES ('txreg_bd_zone_2', 'BD', 'zone', 'zone_2');
       INSERT INTO tax_rates
-        (id, tax_class_id, name, rate_bps, jurisdiction_type, jurisdiction_id, jurisdiction_label, is_active)
-      VALUES ('tax_south', 'tax_standard', 'South tax', 1000, 'zone', 'zone_2', 'South', 1);
+        (id, tax_class_id, tax_region_id, name, rate_bps, combinable, is_active)
+      VALUES ('tax_south', 'tax_standard', 'txreg_bd_zone_2', 'South tax', 1000, 1, 1);
       INSERT INTO products (id, name, slug, price_minor, is_active)
       VALUES
         ('product_1', 'Test product', 'test-product', 10000, 1),

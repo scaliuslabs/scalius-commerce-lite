@@ -7,6 +7,7 @@
 // pricing: no extra read and no app call.
 import type { Database } from "@scalius/database/client";
 import type { FunctionCart } from "@scalius/shared/plugins";
+import type { AppProviders } from "../../integrations/provider-port";
 import { fromMinor } from "@scalius/shared/money";
 import type { PricingCurrency } from "@scalius/shared/currency-policy";
 import { ValidationError } from "@scalius/core/errors";
@@ -77,6 +78,8 @@ export interface StorefrontCheckoutPricingInput {
   currency: PricingCurrency;
   taxAuthority?: StorefrontTaxAuthoritySnapshot;
   apps?: CheckoutAppFunctions;
+  /** The request's app providers: an app tax provider is asked through them (none: it fails closed). */
+  appProviders?: AppProviders;
   channel: FunctionCart["channel"];
   /** The buyer's destination, to list the options a shipping-rates app may adjust. */
   location?: {
@@ -336,15 +339,21 @@ export async function priceStorefrontCheckout(
     : quote;
   const discount = withoutClaimed(platform.discount);
 
+  // No address (pickup, service, digital): taxed where the store ships from.
+  const taxAddress = delivery.fulfilment.requiresShipping ? delivery.address : null;
   const taxQuoteInput = {
-    // No address (pickup, service, digital): only store-wide rates apply.
     destination: {
-      city: delivery.fulfilment.requiresShipping ? delivery.address?.city ?? null : null,
-      zone: delivery.fulfilment.requiresShipping ? delivery.address?.zone ?? null : null,
-      area: delivery.fulfilment.requiresShipping ? delivery.address?.area ?? null : null,
+      city: taxAddress?.city ?? null,
+      zone: taxAddress?.zone ?? null,
+      area: taxAddress?.area ?? null,
       cityName: delivery.cityName,
       zoneName: delivery.zoneName,
       areaName: delivery.areaName,
+      ...(taxAddress ? {
+        countryCode: destinationCountry(taxAddress),
+        adminArea: taxAddress.adminArea ?? null,
+        postalCode: taxAddress.postalCode ?? null,
+      } : {}),
     },
     lines: cartValidation.items.map((item, position) => ({
       lineId: lineIds[position]!,
@@ -361,9 +370,7 @@ export async function priceStorefrontCheckout(
     promotionDiscountAllocation: combineDiscountAllocations(platform.allocation, appDiscounts),
     currency,
   };
-  const taxQuote = input.taxAuthority
-    ? await calculateStorefrontTaxQuote(db, taxQuoteInput, input.taxAuthority)
-    : await calculateStorefrontTaxQuote(db, taxQuoteInput);
+  const taxQuote = await calculateStorefrontTaxQuote(db, taxQuoteInput, input.taxAuthority, { apps: input.appProviders });
 
   return {
     lineIds,

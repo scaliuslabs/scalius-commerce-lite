@@ -23,6 +23,7 @@ import { BUILT_IN_PAYMENT_PROVIDERS, CASH_ON_DELIVERY_AMOUNT_REASON, type Paymen
 import { assertDiscountCodesApplied } from "../promotions";
 import { PAYMENT_METHOD_UNAVAILABLE_REASON, type CheckoutAppFunctions } from "./app-functions";
 import { assertNoCheckoutRuleErrors, priceStorefrontCheckout } from "./pricing";
+import type { AppProviders } from "../../integrations/provider-port";
 import {
     PaymentMethod,
     PaymentStatus,
@@ -578,7 +579,13 @@ export async function createStorefrontOrder(
      * channel they see, and the request's payment gateways (built-in only
      * when absent).
      */
-    appOptions: { apps?: CheckoutAppFunctions; channel?: "online_store" | "agent"; paymentProviders?: PaymentProviders } = {},
+    appOptions: {
+        apps?: CheckoutAppFunctions;
+        channel?: "online_store" | "agent";
+        paymentProviders?: PaymentProviders;
+        /** The request's app providers (an app tax provider). */
+        appProviders?: AppProviders;
+    } = {},
 ): Promise<CreateStorefrontOrderResult> {
     if (data.items.length > MAX_ORDER_LINE_ITEMS) {
         throw new ValidationError(
@@ -730,6 +737,7 @@ export async function createStorefrontOrder(
         currency: requestCurrency,
         taxAuthority: taxAuthoritySnapshot,
         apps: appOptions.apps,
+        appProviders: appOptions.appProviders,
         channel: appOptions.channel ?? "online_store",
         location: {
             countryCode: deliveryPreflight.address?.countryCode ?? data.shippingCountryCode ?? null,

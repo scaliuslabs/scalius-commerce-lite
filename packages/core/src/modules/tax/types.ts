@@ -1,9 +1,22 @@
-export type TaxJurisdictionType = "all" | "city" | "zone" | "area";
+/** A Bangladesh delivery location kind a tax region may be. */
+export type TaxPlaceType = "city" | "zone" | "area";
 
 /**
- * Where the order is taxed. An order that ships nothing (pickup, service,
- * digital) has no address: city and zone are null, and only store-wide
- * (`all`) rates apply.
+ * How a quote component's rate is scoped, as order snapshots record it:
+ * `all` is a whole country, `city`/`zone`/`area` a Bangladesh place,
+ * `admin_area` and `postal_prefix` a part of another country, `provider` a
+ * tax an app provider calculated.
+ */
+export type TaxJurisdictionType = "all" | TaxPlaceType | "admin_area" | "postal_prefix" | "provider";
+
+export { SYSTEM_TAX_PROVIDER_ID } from "@scalius/shared/plugins/providers/kinds";
+
+/**
+ * Where the order is taxed. The six City/Thana/Area fields are the order's
+ * destination snapshot. `countryCode`, `adminArea` and `postalCode` locate
+ * an address of another country. An order that ships nothing (pickup,
+ * service, digital) has no address: it is taxed where the store ships from
+ * (the default inventory location's country).
  */
 export interface TaxDestination {
     city: string | null;
@@ -12,15 +25,23 @@ export interface TaxDestination {
     cityName?: string | null;
     zoneName?: string | null;
     areaName?: string | null;
+    /** ISO 3166-1 alpha-2; absent with a city: Bangladesh; absent without one: no address. */
+    countryCode?: string | null;
+    adminArea?: string | null;
+    postalCode?: string | null;
 }
+
+/** The destination snapshot an order keeps (the Bangladesh hierarchy fields). */
+export type TaxDestinationSnapshot = Pick<TaxDestination, "city" | "zone" | "area" | "cityName" | "zoneName" | "areaName">;
 
 export interface TaxSettingsDefinition {
     enabled: boolean;
-    pricesIncludeTax: boolean;
     taxShipping: boolean;
     defaultTaxClassId: string | null;
     shippingTaxClassId: string | null;
     displayLabel: string;
+    /** The store-wide provider: `system` or an app's `<plugin id>:<provider id>`. */
+    providerId: string;
     version: number;
 }
 
@@ -30,16 +51,41 @@ export interface TaxClassDefinition {
     isExempt: boolean;
 }
 
+/**
+ * Where the merchant collects tax: a whole country (the registration), or
+ * one admin area, postal prefix or Bangladesh place of it.
+ */
+export interface TaxRegionDefinition {
+    id: string;
+    countryCode: string;
+    /** '' or null: none. */
+    adminArea: string | null;
+    /** '' or null: none. */
+    postalPrefix: string | null;
+    placeType: TaxPlaceType | null;
+    placeId: string | null;
+    /** A country region's provider; null: the store-wide one. */
+    providerId: string | null;
+}
+
 export interface TaxRateDefinition {
     id: string;
     taxClassId: string;
+    taxRegionId: string;
     name: string;
     rateBps: number;
-    jurisdictionType: TaxJurisdictionType;
-    jurisdictionId: string | null;
-    jurisdictionLabel: string | null;
     priority: number;
     isCompound: boolean;
+    /** Applies with the broader regions' rates of its class instead of replacing them. */
+    combinable: boolean;
+}
+
+/** Whether each market's prices include tax, by the countries it sells to. */
+export interface TaxMarketInclusion {
+    /** The backup market's flag: every country no active market sells to. */
+    backup: boolean;
+    /** Country → its active market's flag. */
+    countries: Readonly<Record<string, boolean>>;
 }
 
 export interface TaxQuoteLineInput {
@@ -86,6 +132,8 @@ export interface TaxQuoteLine {
     taxMinor: number;
     totalMinor: number;
     components: TaxComponentSnapshot[];
+    /** The most specific region whose rates applied; null: none, or an app provider decided. */
+    taxRegionId: string | null;
 }
 
 export interface TaxQuoteShipping {
@@ -97,6 +145,17 @@ export interface TaxQuoteShipping {
     taxMinor: number;
     totalMinor: number;
     components: TaxComponentSnapshot[];
+    taxRegionId: string | null;
+}
+
+/** Where tax was decided and by whom. */
+export interface TaxJurisdiction {
+    /** The country taxed: the address's, else where the store ships from. */
+    countryCode: string;
+    /** The provider that calculated (`system` or an app's id). */
+    providerId: string;
+    /** An app provider's calculation, committed with the order; null for `system`. */
+    calculationId: string | null;
 }
 
 export interface TaxQuote {
@@ -115,7 +174,8 @@ export interface TaxQuote {
     taxableMinor: number;
     taxMinor: number;
     totalMinor: number;
-    destination: TaxDestination;
+    destination: TaxDestinationSnapshot;
+    jurisdiction: TaxJurisdiction;
     lines: TaxQuoteLine[];
     shipping: TaxQuoteShipping;
 }
@@ -129,11 +189,19 @@ export interface CalculateTaxQuoteInput {
      */
     priceIncrementMinor: number;
     settings: TaxSettingsDefinition;
+    /** The order's market's flag. */
+    pricesIncludeTax: boolean;
     classes: TaxClassDefinition[];
+    regions: TaxRegionDefinition[];
+    /** Active rates. */
     rates: TaxRateDefinition[];
     destination: TaxDestination;
+    /** Where the store ships from (an address-less order is taxed there); null: Bangladesh. */
+    originCountry?: string | null;
     lines: TaxQuoteLineInput[];
     shippingMinor: number;
     discountMinor: number;
     discountAllocation?: TaxDiscountAllocationInput;
+    /** Stable per priced cart (the provider's idempotency key); absent: derived from the input. */
+    idempotencyKey?: string;
 }

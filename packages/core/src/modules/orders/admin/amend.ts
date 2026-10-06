@@ -47,6 +47,8 @@ import { recordOrderEvent } from "../timeline";
 import { resolveOrderCurrencySnapshot } from "../../payments";
 import { validateCustomerPhoneCountry } from "../../settings";
 import type { TaxQuote } from "../../tax/browser";
+import type { AppProviders } from "../../../integrations/provider-port";
+import { orderItemTaxSnapshotColumns, orderTaxSnapshotColumns } from "../../tax";
 import { sha256Hex } from "@scalius/shared/hash";
 import { stableStringify } from "./create-attempts";
 import { type ManualOrderQuote, type PreparedManualOrderQuote, prepareManualOrderQuote } from "./quote";
@@ -205,6 +207,8 @@ export async function previewManualOrderAmendment(
     db: Database,
     orderId: string,
     data: PreviewManualOrderAmendmentInput,
+    /** The request's app providers (an app tax provider). */
+    options: { appProviders?: AppProviders } = {},
 ): Promise<ManualOrderAmendmentPreview> {
     const order = await requireAmendableOrder(db, orderId, data.expectedVersion);
     if (data.customerPhone !== order.customerPhone) {
@@ -215,7 +219,7 @@ export async function previewManualOrderAmendment(
         data,
         resolveOrderCurrencySnapshot(order),
         await loadRetainedUnitPrices(db, orderId),
-        { fixedDeliveryMethodKind: amendmentDeliveryMethodKind(order) },
+        { fixedDeliveryMethodKind: amendmentDeliveryMethodKind(order), appProviders: options.appProviders },
     );
     requireAmendmentAddress(data, prepared);
     const quoteFingerprint = await buildManualOrderAmendmentQuoteFingerprint(prepared.taxQuote);
@@ -303,6 +307,8 @@ export async function confirmManualOrderAmendment(
     orderId: string,
     data: ConfirmManualOrderAmendmentInput,
     actorId: string | null,
+    /** The request's app providers (an app tax provider). */
+    options: { appProviders?: AppProviders } = {},
 ): Promise<ManualOrderAmendmentResult> {
     const actorScope = actorId ?? "unknown-admin";
     const keyHash = await sha256Hex(`${actorScope}:${data.requestKey.trim()}`);
@@ -321,7 +327,7 @@ export async function confirmManualOrderAmendment(
         data,
         resolveOrderCurrencySnapshot(order),
         await loadRetainedUnitPrices(db, orderId),
-        { fixedDeliveryMethodKind: amendmentDeliveryMethodKind(order) },
+        { fixedDeliveryMethodKind: amendmentDeliveryMethodKind(order), appProviders: options.appProviders },
     );
     const shippingAddress = requireAmendmentAddress(data, prepared);
     const currentQuoteFingerprint = await buildManualOrderAmendmentQuoteFingerprint(prepared.taxQuote);
@@ -562,10 +568,7 @@ export async function confirmManualOrderAmendment(
                     eq(orderItems.orderId, orderId),
                 )),
                 db.update(orderItemTaxSnapshots).set({
-                    taxClassId: preparedItem.lineTax.taxClassId,
-                    taxClassName: preparedItem.lineTax.taxClassName,
-                    pricesIncludeTax: prepared.taxQuote.pricesIncludeTax,
-                    rateSnapshot: JSON.stringify(preparedItem.lineTax.components),
+                    ...orderItemTaxSnapshotColumns(prepared.taxQuote, preparedItem.lineTax),
                     createdAt: sql`unixepoch()`,
                 }).where(and(
                     eq(orderItemTaxSnapshots.orderItemId, preparedItem.id),
@@ -587,10 +590,7 @@ export async function confirmManualOrderAmendment(
                 db.insert(orderItemTaxSnapshots).values({
                     orderItemId: preparedItem.id,
                     orderId,
-                    taxClassId: preparedItem.lineTax.taxClassId,
-                    taxClassName: preparedItem.lineTax.taxClassName,
-                    pricesIncludeTax: prepared.taxQuote.pricesIncludeTax,
-                    rateSnapshot: JSON.stringify(preparedItem.lineTax.components),
+                    ...orderItemTaxSnapshotColumns(prepared.taxQuote, preparedItem.lineTax),
                     createdAt: sql`unixepoch()`,
                 }),
             );
@@ -607,23 +607,7 @@ export async function confirmManualOrderAmendment(
     }
     statements.push(
         db.update(orderTaxSnapshots).set({
-            currencyCode: prepared.taxQuote.currencyCode,
-            decimalPlaces: prepared.taxQuote.decimalPlaces,
-            displayLabel: prepared.taxQuote.displayLabel,
-            pricesIncludeTax: prepared.taxQuote.pricesIncludeTax,
-            shippingTaxed: prepared.taxQuote.shippingTaxed,
-            settingsVersion: prepared.taxQuote.settingsVersion,
-            calculationVersion: prepared.taxQuote.calculationVersion,
-            destinationSnapshot: JSON.stringify(prepared.taxQuote.destination),
-            rateSnapshot: JSON.stringify({
-                lines: prepared.taxQuote.lines.map((line) => ({
-                    lineId: line.lineId,
-                    taxClassId: line.taxClassId,
-                    taxClassName: line.taxClassName,
-                    components: line.components,
-                })),
-                shipping: prepared.taxQuote.shipping,
-            }),
+            ...orderTaxSnapshotColumns(prepared.taxQuote),
             createdAt: sql`unixepoch()`,
         }).where(eq(orderTaxSnapshots.orderId, orderId)),
         db.update(codTracking).set({ updatedAt: sql`unixepoch()` })

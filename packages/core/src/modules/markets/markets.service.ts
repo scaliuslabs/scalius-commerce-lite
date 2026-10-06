@@ -59,6 +59,8 @@ export interface MarketRecord {
     /** The price increment its prices use: the backup market's own, inherited by every other market. */
     priceIncrementMinor: number;
     priceIncrementInherited: boolean;
+    /** Whether its prices include tax (MARKETS-DESIGN D8): checkout and the order's tax snapshot read it. */
+    pricesIncludeTax: boolean;
     /** A market that took orders is never deleted; set it to draft instead. */
     hasOrders: boolean;
     createdAt: Date;
@@ -73,6 +75,8 @@ export interface MarketInput {
     countries: readonly string[];
     /** A subfolder presence (`en-in` with locale `en`), or null for none. */
     presence: MarketPresenceRecord | null;
+    /** Absent: the backup market's. */
+    pricesIncludeTax?: boolean;
 }
 
 export interface MarketUpdate {
@@ -85,6 +89,7 @@ export interface MarketUpdate {
     presence?: MarketPresenceRecord | null;
     /** Backup market only. */
     priceIncrementMinor?: number;
+    pricesIncludeTax?: boolean;
 }
 
 const KNOWN_COUNTRIES: ReadonlySet<string> = new Set(getCountries());
@@ -126,6 +131,7 @@ async function loadRecords(db: Database, ids?: readonly string[]): Promise<Marke
             currencyCode: currency.code,
             priceIncrementMinor: row.isBackup ? resolvePriceIncrementMinor(currency.code, row.priceIncrementMinor) : backupIncrement,
             priceIncrementInherited: !row.isBackup,
+            pricesIncludeTax: Boolean(row.pricesIncludeTax),
             hasOrders: orderRows.some((each) => each.marketId === row.id),
             createdAt: row.createdAt,
             updatedAt: row.updatedAt,
@@ -289,9 +295,13 @@ export async function createMarket(db: Database, input: MarketInput): Promise<Ma
     await Promise.all([assertCountriesFree(db, countries, null), assertPresenceFree(db, presence, null)]);
     const handle = input.handle ? cleanHandle(input.handle) : await derivedHandle(db, name);
     const id = `mkt_${nanoid(16)}`;
+    // A new market prices like the backup market until the merchant says otherwise.
+    const pricesIncludeTax = input.pricesIncludeTax === undefined
+        ? sql`coalesce((SELECT backup_market.prices_include_tax FROM markets AS backup_market WHERE backup_market.is_backup = 1), 0)`
+        : input.pricesIncludeTax;
     try {
         await safeBatch(db, [
-            db.insert(markets).values({ id, handle, name, status: input.status, isBackup: false, priceIncrementMinor: null, revision: 1 }),
+            db.insert(markets).values({ id, handle, name, status: input.status, isBackup: false, priceIncrementMinor: null, pricesIncludeTax, revision: 1 }),
             ...countryWrites(db, id, countries),
             ...(presence ? [db.insert(marketPresences).values({ id: `mkp_${nanoid(16)}`, marketId: id, kind: "subfolder", ...presence })] : []),
         ] as never);
@@ -360,6 +370,7 @@ export async function updateMarket(db: Database, id: string, update: MarketUpdat
         handle,
         status,
         ...(priceIncrementMinor === null ? {} : { priceIncrementMinor }),
+        ...(update.pricesIncludeTax === undefined ? {} : { pricesIncludeTax: update.pricesIncludeTax }),
         revision: sql`${markets.revision} + 1`,
         updatedAt: sql`unixepoch()`,
     }).where(eq(markets.id, id)));

@@ -16,6 +16,7 @@ function createTaxDb(): Database {
   const emptyRows: unknown[] = [];
   const chain = {
     where: () => chain,
+    leftJoin: () => chain,
     orderBy: async () => emptyRows,
     get: async () => null,
     then: (resolve: (value: unknown[]) => unknown, reject?: (reason: unknown) => unknown) =>

@@ -17,11 +17,11 @@ import { updateTaxClassification } from "../product-admin/tax-classification";
 const taxSettingsInput = {
   expectedVersion: 1,
   enabled: true,
-  pricesIncludeTax: false,
   taxShipping: false,
   defaultTaxClassId: "taxc_standard",
   shippingTaxClassId: null,
   displayLabel: "Tax",
+  providerId: "system",
 };
 
 function createSettingsDb(getResults: unknown[]) {
@@ -61,16 +61,14 @@ function createRateMutationDb({
     taxClassId: "taxc_standard",
     name: "Standard rate",
     rateBps: 1_500,
-    jurisdictionType: "all" as const,
-    jurisdictionId: null,
-    jurisdictionLabel: null,
+    taxRegionId: "txreg_bd",
     priority: 0,
     isCompound: false,
+    combinable: false,
     isActive: currentIsActive,
     version: 1,
     createdAt: new Date(0),
     updatedAt: new Date(0),
-    deletedAt: null,
   };
   const getResults = [
     current,
@@ -89,11 +87,12 @@ function createRateMutationDb({
   const where = vi.fn(() => ({ returning }));
   const set = vi.fn(() => ({ where }));
   const update = vi.fn(() => ({ set }));
+  const remove = vi.fn(() => ({ where }));
   const batch = vi.fn(async ([mutation]: [Promise<unknown>]) => {
     if (guardError) throw guardError;
     return [await mutation, [{ batchGuard: 1 }]];
   });
-  return { db: { select, update, batch }, batch, set, update };
+  return { db: { select, update, delete: remove, batch }, batch, set, update };
 }
 
 function createRateDb(location: { id: string; name: string } | null) {
@@ -111,16 +110,14 @@ function createRateDb(location: { id: string; name: string } | null) {
     taxClassId: "taxc_standard",
     name: "Dhaka rate",
     rateBps: 500,
-    jurisdictionType: "city",
-    jurisdictionId: "city_1",
-    jurisdictionLabel: "Dhaka",
+    taxRegionId: "txreg_bd_city_1",
     priority: 0,
     isCompound: false,
+    combinable: false,
     isActive: true,
     version: 1,
     createdAt: new Date(0),
     updatedAt: new Date(0),
-    deletedAt: null,
   }]);
   const values = vi.fn(() => ({ returning }));
   const insert = vi.fn(() => ({ values }));
@@ -224,34 +221,31 @@ describe("tax Admin jurisdiction authority", () => {
     expect(batch).toHaveBeenCalledTimes(1);
   });
 
-  it("persists the authoritative D1 location label instead of client text", async () => {
-    const { db, values } = createRateDb({ id: "city_1", name: "Dhaka" });
+  it("creates a rate in an existing region, replacing the broader rates unless combinable", async () => {
+    const { db, values } = createRateDb({ id: "txreg_bd_city_1", name: "unused" });
 
     await createTaxRate(db as never, {
       taxClassId: "taxc_standard",
+      taxRegionId: "txreg_bd_city_1",
       name: "Dhaka rate",
       rateBps: 500,
-      jurisdictionType: "city",
-      jurisdictionId: "city_1",
-      jurisdictionLabel: "Untrusted client label",
     });
 
     expect(values).toHaveBeenCalledWith(expect.objectContaining({
-      jurisdictionType: "city",
-      jurisdictionId: "city_1",
-      jurisdictionLabel: "Dhaka",
+      taxRegionId: "txreg_bd_city_1",
+      combinable: false,
+      rateBps: 500,
     }));
   });
 
-  it("rejects missing, inactive, or wrong-type location identifiers", async () => {
+  it("rejects a rate for a region that does not exist", async () => {
     const { db, insert } = createRateDb(null);
 
     await expect(createTaxRate(db as never, {
       taxClassId: "taxc_standard",
+      taxRegionId: "txreg_missing",
       name: "Invalid scope",
       rateBps: 500,
-      jurisdictionType: "zone",
-      jurisdictionId: "city_1",
     })).rejects.toBeInstanceOf(ValidationError);
     expect(insert).not.toHaveBeenCalled();
   });

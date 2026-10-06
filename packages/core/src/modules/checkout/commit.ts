@@ -36,6 +36,11 @@ import {
 } from "../../integrations/meta/purchase-outbox";
 import { createCODTrackingInsertValues } from "../payments";
 import {
+    ORDER_ITEM_TAX_SNAPSHOT_PARAMETERS_PER_ROW,
+    orderItemTaxSnapshotColumns,
+    orderTaxSnapshotColumns,
+} from "../tax";
+import {
   buildOrderCreatedNotificationDedupeKey,
   createOrderNotificationOutboxInsertValues,
   type OrderNotificationQueue,
@@ -120,8 +125,9 @@ const INVENTORY_COMMIT_BASE_BACKOFF_MS = 5;
 // warranty lookup binds the product id once more); the D1 limit is 100 per
 // statement, so 5 rows a statement (95 values).
 export const ORDER_ITEM_INSERT_PARAMETERS_PER_ROW = 19;
-// order_item_id, order_id, tax_class_id, tax_class_name, prices_include_tax, rate_snapshot.
-const ORDER_ITEM_TAX_INSERT_PARAMETERS_PER_ROW = 6;
+// order_item_id, order_id, tax_class_id, tax_class_name, rate_snapshot,
+// tax_region_id (the order's flag, country and provider are SQL literals).
+const ORDER_ITEM_TAX_INSERT_PARAMETERS_PER_ROW = ORDER_ITEM_TAX_SNAPSHOT_PARAMETERS_PER_ROW;
 const ORDER_DISCOUNT_ALLOCATION_INSERT_PARAMETERS_PER_ROW = 18;
 const CHECKOUT_AUTHORITY_CHANGED = "CHECKOUT_AUTHORITY_CHANGED";
 /** An app's offer (its snapshot record) changed between the quote and the commit. */
@@ -496,10 +502,7 @@ function buildOrderWriteBatch(
             return {
                 orderItemId: item.id,
                 orderId: od.id,
-                taxClassId: line.taxClassId,
-                taxClassName: line.taxClassName,
-                pricesIncludeTax: payload.taxQuote.pricesIncludeTax,
-                rateSnapshot: JSON.stringify(line.components),
+                ...orderItemTaxSnapshotColumns(payload.taxQuote, line),
                 createdAt: sql`unixepoch()`,
             };
         });
@@ -513,23 +516,7 @@ function buildOrderWriteBatch(
 
     writes.push(db.insert(orderTaxSnapshots).values({
         orderId: od.id,
-        currencyCode: payload.taxQuote.currencyCode,
-        decimalPlaces: payload.taxQuote.decimalPlaces,
-        displayLabel: payload.taxQuote.displayLabel,
-        pricesIncludeTax: payload.taxQuote.pricesIncludeTax,
-        shippingTaxed: payload.taxQuote.shippingTaxed,
-        settingsVersion: payload.taxQuote.settingsVersion,
-        calculationVersion: payload.taxQuote.calculationVersion,
-        destinationSnapshot: JSON.stringify(payload.taxQuote.destination),
-        rateSnapshot: JSON.stringify({
-            lines: payload.taxQuote.lines.map((line) => ({
-                lineId: line.lineId,
-                taxClassId: line.taxClassId,
-                taxClassName: line.taxClassName,
-                components: line.components,
-            })),
-            shipping: payload.taxQuote.shipping,
-        }),
+        ...orderTaxSnapshotColumns(payload.taxQuote),
         createdAt: sql`unixepoch()`,
     }));
 

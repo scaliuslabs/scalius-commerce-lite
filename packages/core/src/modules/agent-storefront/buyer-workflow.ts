@@ -1,3 +1,4 @@
+import type { AppProviders } from "../../integrations/provider-port";
 import type { Database } from "@scalius/database/client";
 import { DELIVERY_HIERARCHY_COUNTRY } from "@scalius/shared/markets";
 import {
@@ -346,6 +347,8 @@ export async function submitAgentStorefrontCheckout(
     apps?: CheckoutAppFunctions;
     /** The request's gateways (built-in and active app providers); built-in ones alone by default. */
     paymentProviders?: PaymentProviders;
+    /** The request's app providers (an app tax provider). */
+    appProviders?: AppProviders;
   },
 ): Promise<AgentStorefrontCheckoutSubmitResult> {
   const now = options.now ?? new Date();
@@ -495,7 +498,7 @@ export async function submitAgentStorefrontCheckout(
     }),
     authority.taxAuthority,
     {},
-    { apps, channel: "agent", paymentProviders },
+    { apps, channel: "agent", paymentProviders, appProviders: options.appProviders },
   ));
 
   const currentQuoteFingerprint = await buildAgentStorefrontCheckoutQuoteFingerprint({

@@ -1,4 +1,5 @@
 import type { Database } from "@scalius/database/client";
+import type { AppProviders } from "../../integrations/provider-port";
 import {
   agentStorefrontContexts,
   agentStorefrontContinuations,
@@ -845,6 +846,8 @@ export async function quoteAgentStorefrontCheckout(
     credentialEncryptionKey?: string;
     /** The request's gateways (built-in and active app providers); built-in ones alone by default. */
     paymentProviders?: PaymentProviders;
+    /** The request's app providers (an app tax provider). */
+    appProviders?: AppProviders;
   } = {},
 ): Promise<AgentStorefrontCheckoutQuote> {
   const row = await loadActiveOwnedContext(db, grantId, contextId, input.now ?? new Date());
@@ -870,6 +873,7 @@ export async function quoteAgentStorefrontCheckout(
       priceIncrementMinor: priceIncrementForCurrency(await readStoreCurrency(db), projection.currencyCode),
     },
     apps,
+    appProviders: input.appProviders,
     channel: "agent",
     // Submit lists delivery options from the order's own address (none for pickup), so the quote does too.
     location: null,

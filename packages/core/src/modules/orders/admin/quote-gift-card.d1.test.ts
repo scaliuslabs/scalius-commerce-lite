@@ -21,11 +21,12 @@ describe("manual orders: gift-card lines", () => {
         sqlite.exec(`
             INSERT INTO tax_classes (id, name) VALUES ('tax_standard', 'Standard');
             INSERT OR REPLACE INTO tax_settings
-              (id, enabled, prices_include_tax, tax_shipping, default_tax_class_id, display_label, version)
-            VALUES ('default', 1, 0, 0, 'tax_standard', 'VAT', 1);
+              (id, enabled, tax_shipping, default_tax_class_id, display_label, version)
+            VALUES ('default', 1, 0, 'tax_standard', 'VAT', 1);
+            INSERT INTO tax_regions (id, country_code) VALUES ('txreg_bd', 'BD');
             INSERT INTO tax_rates
-              (id, tax_class_id, name, rate_bps, jurisdiction_type, jurisdiction_id, jurisdiction_label, is_active)
-            VALUES ('tax_all', 'tax_standard', 'VAT', 1000, 'all', NULL, NULL, 1);
+              (id, tax_class_id, tax_region_id, name, rate_bps, is_active)
+            VALUES ('tax_all', 'tax_standard', 'txreg_bd', 'VAT', 1000, 1);
         `);
     });
     afterEach(() => sqlite.close());
