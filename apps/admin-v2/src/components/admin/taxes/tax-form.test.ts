@@ -6,7 +6,8 @@ import {
   basisPointsToPercent,
   getRequiredTaxRateRoles,
   percentToBasisPoints,
-  resolveJurisdictionSelection,
+  normalizePostalPrefix,
+  taxRegionName,
   taxSettingsIssue,
 } from "./tax-form";
 
@@ -16,16 +17,14 @@ function rate(overrides: Partial<TaxRateRecord> = {}): TaxRateRecord {
     taxClassId: "class_standard",
     name: "Standard rate",
     rateBps: 1500,
-    jurisdictionType: "all",
-    jurisdictionId: null,
-    jurisdictionLabel: null,
+    taxRegionId: "txreg_bd",
     priority: 0,
     isCompound: false,
+    combinable: false,
     isActive: true,
     version: 1,
     createdAt: null,
     updatedAt: null,
-    deletedAt: null,
     ...overrides,
   };
 }
@@ -35,11 +34,11 @@ function configuration(overrides: Partial<TaxConfigurationPayload> = {}): TaxCon
     settings: {
       id: "default",
       enabled: false,
-      pricesIncludeTax: false,
       taxShipping: false,
       defaultTaxClassId: "class_standard",
       shippingTaxClassId: null,
       displayLabel: "Tax",
+      providerId: "system",
       version: 1,
       createdAt: null,
       updatedAt: null,
@@ -54,6 +53,7 @@ function configuration(overrides: Partial<TaxConfigurationPayload> = {}): TaxCon
       updatedAt: null,
       deletedAt: null,
     }],
+    regions: [],
     rates: [],
     jurisdictions: [],
     ...overrides,
@@ -110,16 +110,24 @@ describe("tax form boundaries", () => {
     expect(taxSettingsIssue({ ...draft, taxShipping: true, shippingTaxClassId: "class_shipping" }, config)).toBeNull();
   });
 
-  it("needs a picked place unless the rate applies everywhere", () => {
-    expect(resolveJurisdictionSelection("city", "city_1", "Dhaka")).toEqual({
-      jurisdictionId: "city_1",
-      jurisdictionLabel: "Dhaka",
-    });
-    expect(resolveJurisdictionSelection("zone", "", "")).toBeNull();
-    expect(resolveJurisdictionSelection("all", "anything", "Dhaka")).toEqual({
-      jurisdictionId: null,
-      jurisdictionLabel: null,
-    });
+  it("lets an app provider collect tax without your rates", () => {
+    const config = configuration({ rates: [] });
+    const draft = { enabled: true, taxShipping: false, defaultTaxClassId: "class_standard", shippingTaxClassId: null, displayLabel: "VAT" };
+    expect(taxSettingsIssue(draft, config)).toMatchObject({ key: "groupNeedsRate" });
+    expect(taxSettingsIssue({ ...draft, providerId: "acme.tax:avalara" }, config)).toBeNull();
+  });
+
+  it("names a region by its country, place, admin area or postal prefix", () => {
+    const name = (region: Parameters<typeof taxRegionName>[0]) =>
+      taxRegionName(region, (code) => `country ${code}`, (prefix) => `postal ${prefix}`);
+    const base = { countryCode: "US", adminArea: null, postalPrefix: null, placeName: null, placeId: null };
+    expect(name({ ...base, kind: "country" })).toBe("country US");
+    expect(name({ ...base, kind: "admin_area", adminArea: "CA" })).toBe("CA");
+    expect(name({ ...base, kind: "postal_prefix", postalPrefix: "941" })).toBe("postal 941");
+    expect(name({ ...base, countryCode: "BD", kind: "place", placeId: "city_1", placeName: "Dhaka" })).toBe("Dhaka");
+    expect(normalizePostalPrefix(" sw1a ")).toBe("SW1A");
+    expect(normalizePostalPrefix("---")).toBeNull();
+    expect(normalizePostalPrefix("12345678901")).toBeNull();
   });
 
   it("protects only the last active rate of the default and delivery groups", () => {

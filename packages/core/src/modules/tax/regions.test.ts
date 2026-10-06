@@ -224,3 +224,32 @@ describe("order tax snapshots", () => {
         expect(JSON.parse(order.destinationSnapshot)).toEqual({ city: null, zone: null, area: null });
     });
 });
+
+describe("D1 parity", () => {
+    it("binds the same parameters per snapshot line as before regions, so a 99-line order writes the same statements", async () => {
+        const { createSqliteD1Database } = await import("@scalius/database/testing/sqlite-d1");
+        const { chunkRowsForD1 } = await import("@scalius/database/client");
+        const { orderItemTaxSnapshots } = await import("@scalius/database/schema");
+        const { ORDER_ITEM_TAX_SNAPSHOT_PARAMETERS_PER_ROW } = await import("./snapshot");
+        const { db, sqlite } = createSqliteD1Database();
+        try {
+            const quote = calculateTaxQuote(input());
+            const rows = Array.from({ length: 99 }, (_, index) => ({
+                orderItemId: `item_${index}`,
+                orderId: "ord_1",
+                ...orderItemTaxSnapshotColumns(quote, quote.lines[0]!),
+            }));
+            const chunks = chunkRowsForD1(rows, ORDER_ITEM_TAX_SNAPSHOT_PARAMETERS_PER_ROW);
+            // Six bound values a row, as before (prices_include_tax is now a literal and tax_region_id bound).
+            expect(ORDER_ITEM_TAX_SNAPSHOT_PARAMETERS_PER_ROW).toBe(6);
+            expect(chunks).toHaveLength(7);
+            for (const chunk of chunks) {
+                const params = db.insert(orderItemTaxSnapshots).values(chunk).toSQL().params;
+                expect(params.length).toBeLessThanOrEqual(100);
+                expect(params.length).toBe(chunk.length * ORDER_ITEM_TAX_SNAPSHOT_PARAMETERS_PER_ROW);
+            }
+        } finally {
+            sqlite.close();
+        }
+    });
+});

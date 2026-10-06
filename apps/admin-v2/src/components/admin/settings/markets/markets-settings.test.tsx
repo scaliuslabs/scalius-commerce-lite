@@ -48,7 +48,7 @@ const envelope = <T,>(data: T) => Promise.resolve({ data: { success: true, data 
 const backup = {
   id: "mkt_backup", handle: "bangladesh", name: "Bangladesh", status: "active" as const, isBackup: true, revision: 3,
   countries: ["BD"], presence: { value: "", locale: "bn" }, currencyCode: "BDT", priceIncrementMinor: 100,
-  priceIncrementInherited: false, hasOrders: true, createdAt: "2026-10-01T00:00:00.000Z", updatedAt: "2026-10-01T00:00:00.000Z",
+  priceIncrementInherited: false, pricesIncludeTax: true, hasOrders: true, createdAt: "2026-10-01T00:00:00.000Z", updatedAt: "2026-10-01T00:00:00.000Z",
 };
 const india = {
   ...backup, id: "mkt_in", handle: "india", name: "India", status: "draft" as const, isBackup: false, revision: 1,
@@ -61,7 +61,7 @@ describe("market form", () => {
     expect(presencePath(form)).toBe("/");
     expect(marketUpdateBody({ ...form, priceIncrementMinor: 1, locale: "en" }, 3)).toEqual({
       expectedRevision: 3, name: "Bangladesh", handle: "bangladesh", countries: ["BD"],
-      presence: { value: "", locale: "en" }, priceIncrementMinor: 1,
+      presence: { value: "", locale: "en" }, priceIncrementMinor: 1, pricesIncludeTax: true,
     });
   });
 
@@ -71,7 +71,7 @@ describe("market form", () => {
     expect(presencePath(form)).toBe("/en-in");
     expect(marketUpdateBody({ ...form, status: "active" }, 1)).toEqual({
       expectedRevision: 1, name: "India", handle: "india", status: "active", countries: ["IN", "NP"],
-      presence: { value: "en-in", locale: "en" },
+      presence: { value: "en-in", locale: "en" }, pricesIncludeTax: true,
     });
     expect(marketUpdateBody(withSubfolder(form, false), 1).presence).toBeNull();
     expect(marketForm({ ...india, presence: { value: "bn-in", locale: "bn" } })).toMatchObject({ subfolder: true, suffix: "in", locale: "bn" });
@@ -171,8 +171,19 @@ describe("markets settings", () => {
     expect(saved).toBe(true);
     expect(sdk.patchApiV1AdminSettingsMarketsById).toHaveBeenCalledWith({
       path: { id: "mkt_backup" },
-      body: { expectedRevision: 3, name: "Bangladesh", handle: "bangladesh", countries: ["BD"], presence: { value: "", locale: "bn" }, priceIncrementMinor: 1 },
+      body: { expectedRevision: 3, name: "Bangladesh", handle: "bangladesh", countries: ["BD"], presence: { value: "", locale: "bn" }, priceIncrementMinor: 1, pricesIncludeTax: true },
     });
+  });
+
+  it("saves whether a market's prices include tax (MARKETS-DESIGN D8)", async () => {
+    await render(<MarketEditor marketId="mkt_in" />);
+    await vi.waitFor(() => expect(container.textContent).toContain("Prices include tax"));
+    expect(switchNamed("Prices include tax").getAttribute("aria-checked")).toBe("true");
+    act(() => switchNamed("Prices include tax").click());
+    let saved = false;
+    await act(async () => { saved = await scope!.saveAll(); });
+    expect(saved).toBe(true);
+    expect(sdk.patchApiV1AdminSettingsMarketsById.mock.calls[0]![0].body).toMatchObject({ pricesIncludeTax: false });
   });
 
   it("gives another market a subfolder and says it uses the backup market's increment", async () => {

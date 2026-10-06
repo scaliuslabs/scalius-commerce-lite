@@ -4,14 +4,16 @@ import {
   TaxCollectionCard,
   TaxGroupsCard,
   TaxOverridesCard,
-  TaxRatesCard,
+  TaxRegionsCard,
 } from "~/components/admin/taxes/TaxesSettings";
 import { SettingsPage } from "~/components/admin/settings/SettingsPage";
+import { TaxRegionPage } from "~/components/admin/taxes/TaxRegionPage";
 import { settingsHead } from "~/components/admin/settings/settings-nav";
 import { useHasPermission } from "~/contexts/PermissionContext";
 import {
   firstTaxOverridesQuery,
   taxConfigurationQueryOptions,
+  taxRegionQueryOptions,
   taxSettingsQueryOptions,
 } from "~/lib/api-query-options/taxes";
 import {
@@ -31,13 +33,19 @@ export async function requireFreshTaxesRouteAuthority() {
   return context;
 }
 
+// `?region=<id>`: one country's tax page (its service, rates and regions),
+// on this route so the dashboard keeps one Taxes screen.
 export const Route = createFileRoute("/admin/settings/taxes")({
+  validateSearch: (search: Record<string, unknown>): { region?: string } =>
+    typeof search.region === "string" && search.region ? { region: search.region } : {},
   beforeLoad: requireFreshTaxesRouteAuthority,
-  loader: ({ context: { queryClient } }) =>
+  loaderDeps: ({ search }) => ({ region: search.region }),
+  loader: ({ context: { queryClient }, deps: { region } }) =>
     Promise.allSettled([
       queryClient.ensureQueryData(taxConfigurationQueryOptions()),
-      queryClient.ensureQueryData(taxSettingsQueryOptions()),
-      queryClient.ensureQueryData(firstTaxOverridesQuery),
+      ...(region
+        ? [queryClient.ensureQueryData(taxRegionQueryOptions(region))]
+        : [queryClient.ensureQueryData(taxSettingsQueryOptions()), queryClient.ensureQueryData(firstTaxOverridesQuery)]),
     ]),
   head: () => settingsHead("taxes"),
   errorComponent: RouteErrorComponent,
@@ -46,11 +54,14 @@ export const Route = createFileRoute("/admin/settings/taxes")({
 
 function TaxesPage() {
   const canEdit = useHasPermission(ADMIN_PERMISSIONS.TAXES_MANAGE);
+  const { region } = Route.useSearch();
+  // A fresh page per country: switching countries never carries a draft over.
+  if (region) return <TaxRegionPage key={region} regionId={region} />;
   return (
     <SettingsPage page="taxes" readOnly={!canEdit}>
       <TaxCollectionCard />
+      <TaxRegionsCard />
       <TaxGroupsCard />
-      <TaxRatesCard />
       <TaxOverridesCard />
     </SettingsPage>
   );

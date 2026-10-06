@@ -221,10 +221,10 @@ export const smsQuery = {
 };
 /**
  * The installed apps' providers of one port, with the readiness its callers
- * check: offered beside the built-in couriers, SMS and email senders and
- * fraud checkers (payments: payment-providers.ts).
+ * check: offered beside the built-in couriers, SMS and email senders, fraud
+ * checkers and the built-in tax rates (payments: payment-providers.ts).
  */
-export type AppProviderKind = "courier" | "sms" | "email" | "fraud";
+export type AppProviderKind = "courier" | "sms" | "email" | "fraud" | "tax";
 export type AppProvider = ApiResult<typeof getApiV1AdminSettingsProviders>["providers"][number];
 export const appProvidersQuery = (kind: AppProviderKind) => ({
   queryKey: queryKeys.settings.appProviders(kind),

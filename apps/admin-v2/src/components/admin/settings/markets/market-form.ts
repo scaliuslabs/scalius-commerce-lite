@@ -25,6 +25,8 @@ export interface MarketForm {
   /** The subfolder's country code, after the language (`in` in `en-in`). */
   suffix: string;
   priceIncrementMinor: number;
+  /** Whether the market's prices include tax (MARKETS-DESIGN D8). */
+  pricesIncludeTax: boolean;
   // Facts the editor shows but never saves.
   isBackup: boolean;
   hasRootPresence: boolean;
@@ -41,6 +43,7 @@ export const EMPTY_MARKET_FORM: MarketForm = {
   locale: "en",
   suffix: "",
   priceIncrementMinor: 1,
+  pricesIncludeTax: false,
   isBackup: false,
   hasRootPresence: false,
   hasOrders: false,
@@ -60,6 +63,7 @@ export function marketForm(market: Market): MarketForm & { revision: number } {
     locale: presence?.locale ?? "en",
     suffix: subfolder ? presence!.value.slice(3) : "",
     priceIncrementMinor: market.priceIncrementMinor,
+    pricesIncludeTax: market.pricesIncludeTax,
     isBackup: market.isBackup,
     hasRootPresence: market.isBackup && presence?.value === "",
     hasOrders: market.hasOrders,
@@ -110,6 +114,7 @@ export function marketUpdateBody(form: MarketForm, expectedRevision: number): Up
       countries: form.countries,
       ...(form.hasRootPresence ? { presence: { value: "", locale } } : {}),
       priceIncrementMinor: form.priceIncrementMinor,
+      pricesIncludeTax: form.pricesIncludeTax,
     };
   }
   return {
@@ -119,6 +124,7 @@ export function marketUpdateBody(form: MarketForm, expectedRevision: number): Up
     status: form.status,
     countries: form.countries,
     presence: form.subfolder ? { value: `${locale}-${form.suffix.trim().toLowerCase()}`, locale } : null,
+    pricesIncludeTax: form.pricesIncludeTax,
   };
 }
 

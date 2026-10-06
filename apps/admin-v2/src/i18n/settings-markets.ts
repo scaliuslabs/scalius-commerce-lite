@@ -74,6 +74,11 @@ export const settingsMarketsMessages = defineMessages({
     inheritedWhole: "This market uses the backup market's price increment: whole amounts.",
     inheritedMinor: "This market uses the backup market's price increment: amounts with decimals.",
 
+    taxesTitle: "Taxes",
+    pricesIncludeTax: "Prices include tax",
+    pricesIncludeTaxHelp: "Product prices and delivery charges already contain tax. Checkout shows the tax as included instead of adding it.",
+    taxRegionsLink: "Where you collect tax: Settings › Taxes",
+
     delete: "Delete market",
     deleteTitle: "Delete “{name}”?",
     deleteBody: "Its countries go back to the backup market and its subfolder stops working. You can't undo this.",
@@ -150,6 +155,11 @@ export const settingsMarketsMessages = defineMessages({
     noIncrementChoice: "{currency}-এ দশমিক নেই, তাই দাম সবসময় পূর্ণ সংখ্যায় থাকে।",
     inheritedWhole: "এই মার্কেট ব্যাকআপ মার্কেটের দামের ধাপ ব্যবহার করে: পূর্ণ সংখ্যা।",
     inheritedMinor: "এই মার্কেট ব্যাকআপ মার্কেটের দামের ধাপ ব্যবহার করে: দশমিকসহ সংখ্যা।",
+
+    taxesTitle: "ট্যাক্স",
+    pricesIncludeTax: "দামে ট্যাক্স অন্তর্ভুক্ত",
+    pricesIncludeTaxHelp: "পণ্যের দাম ও ডেলিভারি চার্জে আগেই ট্যাক্স ধরা আছে। চেকআউট ট্যাক্স যোগ না করে অন্তর্ভুক্ত হিসেবে দেখায়।",
+    taxRegionsLink: "কোথায় ট্যাক্স নেন: সেটিংস › ট্যাক্স",
 
     delete: "মার্কেট মুছুন",
     deleteTitle: "“{name}” মুছবেন?",

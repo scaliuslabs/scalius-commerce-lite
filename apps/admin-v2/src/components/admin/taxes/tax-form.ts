@@ -1,8 +1,9 @@
 import { toLatinDigits } from "@scalius/shared/phone-input";
+import { SYSTEM_TAX_PROVIDER_ID } from "@scalius/shared/plugins/providers/kinds";
 import type {
   TaxConfigurationPayload,
-  TaxJurisdictionType,
   TaxRateRecord,
+  TaxRegionRecord,
   TaxSettingsRecord,
 } from "~/lib/api-query-options/taxes";
 
@@ -28,7 +29,7 @@ export type TaxSettingsIssue =
 type SettingsDraft = Pick<
   TaxSettingsRecord,
   "enabled" | "taxShipping" | "defaultTaxClassId" | "shippingTaxClassId" | "displayLabel"
->;
+> & { providerId?: string };
 type ClassesAndRates = Pick<TaxConfigurationPayload, "classes" | "rates">;
 
 function hasActiveRate(configuration: ClassesAndRates, classId: string): boolean {
@@ -57,6 +58,8 @@ export function taxSettingsIssue(
     return { field: "delivery", key: "deliveryRequired" };
   }
   if (!input.enabled || !input.defaultTaxClassId) return null;
+  // An app provider calculates without your rates.
+  if ((input.providerId ?? SYSTEM_TAX_PROVIDER_ID) !== SYSTEM_TAX_PROVIDER_ID) return null;
 
   const defaultClass = find(input.defaultTaxClassId)!;
   if (!defaultClass.isExempt && !hasActiveRate(configuration, defaultClass.id)) {
@@ -70,17 +73,22 @@ export function taxSettingsIssue(
   return null;
 }
 
-/**
- * The place a rate applies to: nowhere in particular for "all", otherwise the
- * picked place (the server checks it and stores its own name for it).
- */
-export function resolveJurisdictionSelection(
-  type: TaxJurisdictionType,
-  placeId: string,
-  placeLabel: string,
-): { jurisdictionId: string | null; jurisdictionLabel: string | null } | null {
-  if (type === "all") return { jurisdictionId: null, jurisdictionLabel: null };
-  return placeId ? { jurisdictionId: placeId, jurisdictionLabel: placeLabel || null } : null;
+/** A region's name: the country, a place's name, an admin area or the postal prefix. */
+export function taxRegionName(
+  region: Pick<TaxRegionRecord, "kind" | "countryCode" | "adminArea" | "postalPrefix" | "placeName" | "placeId">,
+  countryName: (code: string) => string,
+  postalSummary: (prefix: string) => string,
+): string {
+  if (region.kind === "country") return countryName(region.countryCode);
+  if (region.kind === "place") return region.placeName ?? region.placeId ?? "";
+  if (region.kind === "postal_prefix") return postalSummary(region.postalPrefix ?? "");
+  return region.adminArea ?? "";
+}
+
+/** A postal-code prefix as regions store it: upper-case letters and digits, 1 to 10. */
+export function normalizePostalPrefix(value: string): string | null {
+  const prefix = value.normalize("NFKC").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  return prefix.length >= 1 && prefix.length <= 10 ? prefix : null;
 }
 
 export type RequiredTaxRateRole = "products" | "delivery";

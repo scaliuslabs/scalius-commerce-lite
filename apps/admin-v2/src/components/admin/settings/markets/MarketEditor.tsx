@@ -1,7 +1,7 @@
 // One market (docs/MARKETS-DESIGN.md D4), Shopify's market page: its name
 // and status, Countries, Currency (the shop currency, locked until markets
-// get their own), Web presence (a subfolder and its language) and the price
-// increment. One save bar saves the page under the revision it loaded; the
+// get their own), Web presence (a subfolder and its language), the price
+// increment and Taxes (whether its prices include tax). One save bar saves the page under the revision it loaded; the
 // delete action sits apart at the bottom.
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -165,6 +165,17 @@ export function MarketEditor({ marketId }: { marketId: string }) {
       <WebPresenceCard values={values} canEdit={canEdit} suffixError={problems.suffix ? t(problems.suffix) : null} setValues={setValues} />
 
       <PriceIncrementCard values={values} canEdit={canEdit} onChange={(priceIncrementMinor) => setValue("priceIncrementMinor", priceIncrementMinor)} />
+
+      <SettingsCard title={t("taxesTitle")}>
+        <label className="flex min-h-11 items-center justify-between gap-4 text-body">
+          <span>
+            <span className="block font-medium">{t("pricesIncludeTax")}</span>
+            <span className="block text-muted-foreground">{t("pricesIncludeTaxHelp")}</span>
+          </span>
+          <Switch checked={values.pricesIncludeTax} disabled={!canEdit} onCheckedChange={(on) => setValue("pricesIncludeTax", on)} />
+        </label>
+        <Link to="/admin/settings/taxes" className="text-body text-foreground underline">{t("taxRegionsLink")}</Link>
+      </SettingsCard>
 
       {!saved.data.isBackup && canEdit ? <DeleteMarket id={marketId} name={saved.data.name} revision={saved.data.revision} hasOrders={saved.data.hasOrders} /> : null}
     </SettingsPage>

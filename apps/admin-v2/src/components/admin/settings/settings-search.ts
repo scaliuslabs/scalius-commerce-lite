@@ -25,7 +25,7 @@ export const SETTINGS_CARDS = [
   { page: "shipping", card: "couriers" },
   { page: "taxes", card: "taxCollection" },
   { page: "taxes", card: "taxGroups" },
-  { page: "taxes", card: "taxRates" },
+  { page: "taxes", card: "taxRegions" },
   { page: "taxes", card: "taxOverrides" },
   { page: "locations", card: "inventoryLocations" },
   { page: "markets", card: "markets" },

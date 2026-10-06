@@ -2,6 +2,7 @@ import { queryOptions } from "@tanstack/react-query";
 import {
   getApiV1AdminTaxes,
   getApiV1AdminTaxesClassifications,
+  getApiV1AdminTaxesRegionsById,
   getApiV1AdminTaxesSettings,
 } from "@scalius/api-client/sdk";
 
@@ -12,13 +13,13 @@ export type TaxConfigurationPayload = ApiResult<typeof getApiV1AdminTaxes>;
 export type TaxSettingsRecord = TaxConfigurationPayload["settings"];
 export type TaxClassRecord = TaxConfigurationPayload["classes"][number];
 export type TaxRateRecord = TaxConfigurationPayload["rates"][number];
+export type TaxRegionRecord = TaxConfigurationPayload["regions"][number];
 export type TaxJurisdictionOption = TaxConfigurationPayload["jurisdictions"][number];
-export type TaxJurisdictionType = TaxRateRecord["jurisdictionType"];
 export type TaxClassificationItem =
   ApiResult<typeof getApiV1AdminTaxesClassifications>["items"][number];
 export type TaxClassificationKind = TaxClassificationItem["kind"];
 
-/** Groups, rates and delivery places. */
+/** Settings, groups, regions, rates and delivery places. */
 export const taxConfigurationQueryOptions = () =>
   queryOptions({
     queryKey: queryKeys.settings.taxes(),
@@ -56,3 +57,10 @@ export const firstTaxOverridesQuery = taxClassificationsQueryOptions({
   page: 1,
   limit: OVERRIDES_PAGE_SIZE,
 });
+
+/** One country's tax: its region, its regions and their rates. */
+export const taxRegionQueryOptions = (regionId: string) =>
+  queryOptions({
+    queryKey: [...queryKeys.settings.taxes(), "region", regionId] as const,
+    queryFn: () => apiData(getApiV1AdminTaxesRegionsById({ path: { id: regionId } })),
+  });
