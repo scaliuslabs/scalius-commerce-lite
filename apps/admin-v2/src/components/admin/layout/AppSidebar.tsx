@@ -89,7 +89,8 @@ function useNavTooltip() {
  * Shopify's navigation on the near-black frame. From md: a 240px panel (logo
  * and collapse button, the sections, Settings) or, collapsed with ⌘B, a 56px
  * icon rail with tooltips; Settings swaps the panel for the settings list
- * beside the rail. On phones the same panel is a drawer. The width eases
+ * beside the rail. On phones the same panel is a drawer that lists every
+ * section with its sub-pages open (no accordions). The width eases
  * between states and a new panel slides in; neither moves on first paint.
  * Search, notifications and the store menu live in the canvas' top bar.
  */
@@ -192,12 +193,23 @@ function PanelTop({ onClose }: { onClose?: () => void }) {
   );
 }
 
+/**
+ * The sections and their sub-pages. On a desktop a section shows its
+ * sub-pages while one of its pages is open. The phone drawer (`onClose`)
+ * shows every sub-page at once, so one tap reaches any page, and opens
+ * scrolled to the current one.
+ */
 function MainPanel({ nav, showSettings, onClose }: { nav: VisibleNavItem[]; showSettings: boolean; onClose?: () => void }) {
   const t = useMessages(shellMessages);
   const path = useLocation({ select: (location) => location.pathname });
   const { storefrontUrl, buildStorefrontPath } = useStorefrontUrl();
   const ungrouped = nav.filter((item) => !item.group);
   const groups = [...new Set(nav.flatMap((item) => (item.group ? [item.group] : [])))];
+  const drawer = onClose !== undefined;
+  const list = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (drawer) list.current?.querySelector<HTMLElement>("[aria-current=page]")?.scrollIntoView?.({ block: "nearest" });
+  }, [drawer]);
 
   const renderItem = (item: VisibleNavItem) => {
     const open = isSectionActive(path, item);
@@ -228,8 +240,8 @@ function MainPanel({ nav, showSettings, onClose }: { nav: VisibleNavItem[]; show
             <Eye aria-hidden />
           </a>
         ) : null}
-        {open && item.children.length > 0 ? (
-          <ul data-nav-sub="" className="flex min-w-0 flex-col motion-safe:animate-nav-grow">
+        {(drawer || open) && item.children.length > 0 ? (
+          <ul data-nav-sub="" className={cn("flex min-w-0 flex-col", !drawer && "motion-safe:animate-nav-grow")}>
             {item.children.map((child) => (
               <li key={child.to}>
                 <ShellLink
@@ -255,7 +267,7 @@ function MainPanel({ nav, showSettings, onClose }: { nav: VisibleNavItem[]; show
     <>
       <PanelTop onClose={onClose} />
       {/* Only the list scrolls; Settings stays reachable on short screens. */}
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-2">
+      <div ref={list} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-2">
         <ul className="flex flex-col gap-0.5">{ungrouped.map(renderItem)}</ul>
         {groups.map((group) => (
           <div key={group} className="mt-4">
