@@ -131962,6 +131962,10 @@
                               "appName": {
                                 "type": "string"
                               },
+                              "appIcon": {
+                                "type": "string",
+                                "nullable": true
+                              },
                               "name": {
                                 "type": "string"
                               },
@@ -132024,6 +132028,7 @@
                               "kind",
                               "pluginId",
                               "appName",
+                              "appIcon",
                               "name",
                               "operations",
                               "canTestConnection",

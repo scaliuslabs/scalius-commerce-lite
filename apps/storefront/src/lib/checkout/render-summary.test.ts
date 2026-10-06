@@ -1569,7 +1569,7 @@ describe("payment page with store app checkout functions", () => {
 describe("an app's wallet at checkout", () => {
   const BKASH = "scalius.bkash:bkash";
 
-  it("shows its checkout name with a neutral mark and tells the buyer they leave the store to pay", async () => {
+  it("shows its checkout name with its logo and tells the buyer they leave the store to pay", async () => {
     let finishOrder: (response: Response) => void = () => undefined;
     vi.stubGlobal("fetch", vi.fn(async (input) => {
       const url = String(input);
@@ -1622,7 +1622,7 @@ describe("an app's wallet at checkout", () => {
     const row = document.querySelector<HTMLElement>(`[data-method="${BKASH}"]`)!;
     expect(row.textContent).toContain("bKash");
     expect(row.textContent).not.toContain("scalius");
-    expect(row.querySelector("img")?.getAttribute("src")).toBe("/payment-marks/wallet.svg");
+    expect(row.querySelector("img")?.getAttribute("src")).toBe("/payment-marks/bkash.svg");
     expect(row.querySelector(".payment-method-control")?.getAttribute("aria-label")).toBe("bKash");
     expect(document.getElementById("payButtonText")?.textContent).toBe("Continue to bKash");
     expect(document.getElementById("hostedRedirectNote")?.textContent)

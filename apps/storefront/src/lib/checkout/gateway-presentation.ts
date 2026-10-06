@@ -43,10 +43,19 @@ export const GATEWAY_PRESENTATION: Record<string, GatewayPresentation> = {
 };
 
 /**
- * A neutral wallet: an app's payment method (bKash, Nagad, …) ships no
- * audited mark, so it never borrows a brand asset or shows a broken image.
+ * A neutral wallet: an app's payment method that ships no mark here never
+ * borrows a brand asset or shows a broken image.
  */
 export const APP_GATEWAY_MARK_SRC = "/payment-marks/wallet.svg";
+
+/**
+ * The first-party wallet apps' logos, by plugin id: copies of each app's
+ * listing icon (`plugins/<app>/assets/icon.svg`; a test keeps them equal).
+ */
+export const APP_GATEWAY_MARKS: Readonly<Record<string, string>> = {
+  "scalius.bkash": "/payment-marks/bkash.svg",
+  "scalius.nagad": "/payment-marks/nagad.svg",
+};
 
 /** A payment method an app provides: `<plugin id>:<provider id>`. */
 export function isAppGatewayId(gatewayId: string): boolean {
@@ -77,17 +86,18 @@ export function getGatewayPresentation(
   const known = GATEWAY_PRESENTATION[gatewayId];
   if (known) return known;
   if (isAppGatewayId(gatewayId)) {
-    // An app's hosted wallet: its own checkout name and a neutral mark. The
-    // name doubles as the provider in "Continue to …" copy.
+    // An app's hosted wallet: its own checkout name, and its logo or a
+    // neutral mark. The name doubles as the provider in "Continue to …" copy.
     const name = fallbackLabel.trim() && fallbackLabel !== gatewayId
       ? fallbackLabel.trim()
       : appGatewayName(gatewayId) ?? fallbackLabel;
+    const logo = APP_GATEWAY_MARKS[parseQualifiedProviderId(gatewayId)?.pluginId ?? ""];
     return {
       buyerLabel: name,
       description: "",
       providerLabel: null,
-      markSrc: APP_GATEWAY_MARK_SRC,
-      markKind: "icon",
+      markSrc: logo ?? APP_GATEWAY_MARK_SRC,
+      markKind: logo ? "wordmark" : "icon",
       hosted: true,
     };
   }

@@ -65,6 +65,7 @@ const providers = [
     kind: "payment",
     pluginId: "scalius.bkash",
     appName: "bKash Payments",
+    appIcon: "/api/v1/admin/apps/scalius.bkash/assets/icon?v=63a5ccd16b4c0000",
     name: "bKash",
     operations: ["verifyReturn", "queryPayment", "testConnection"],
     canTestConnection: true,
@@ -76,6 +77,7 @@ const providers = [
     kind: "payment",
     pluginId: "scalius.nagad",
     appName: "Nagad",
+    appIcon: null,
     name: "Nagad",
     operations: ["verifyReturn", "queryPayment", "testConnection"],
     canTestConnection: true,
@@ -147,6 +149,9 @@ describe("app payment providers in payment settings", () => {
     expect(toggle(BKASH).disabled).toBe(false);
     expect(bkash.querySelector("a")?.getAttribute("href")).toBe("/admin/apps/scalius.bkash");
     expect(bkash.querySelector("a")?.textContent).toBe("Manage");
+    // The app's icon is the method's mark; an app without one keeps the neutral wallet.
+    expect(bkash.querySelector("img")?.getAttribute("src")).toBe("/api/v1/admin/apps/scalius.bkash/assets/icon?v=63a5ccd16b4c0000");
+    expect(row(NAGAD).querySelector("img")).toBeNull();
   });
 
   it("fails an app provider closed with the server's reason, and links to the app to fix it", async () => {

@@ -38300,6 +38300,7 @@ export type GetApiV1AdminSettingsProvidersResponses = {
                 kind: 'payment' | 'courier' | 'sms' | 'email' | 'fraud' | 'tax';
                 pluginId: string;
                 appName: string;
+                appIcon: string | null;
                 name: string;
                 operations: Array<string>;
                 canTestConnection: boolean;

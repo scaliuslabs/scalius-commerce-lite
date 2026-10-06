@@ -56,6 +56,7 @@ import {
 } from "./payment-method-outcome";
 import { COD_METHOD, paymentMethodRows, type PaymentMethodRow } from "./payment-method-rows";
 import { OfficialProviderMark, PROVIDER_MARKS, type ProviderMarkId } from "./provider-marks";
+import { AppIcon } from "~/components/admin/apps/AppIcon";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
 import { ConfirmDialog } from "../shared/ConfirmDialog";
 import { useWholeUnitPrices } from "../shared/MoneyInput";
@@ -128,7 +129,9 @@ function MethodMark({ row }: { row: PaymentMethodRow }) {
   if (row.kind === "built_in" && row.id in PROVIDER_MARKS) {
     return <OfficialProviderMark provider={row.id as ProviderMarkId} />;
   }
-  // Cash, or an app's provider: no official mark ships with the dashboard.
+  // An app's provider shows its app's icon (bKash, Nagad), when the app ships one.
+  if (row.kind === "app" && row.appIcon) return <AppIcon src={row.appIcon} size="sm" />;
+  // Cash, or an app without an icon: a neutral mark.
   const Icon = row.kind === "cod" ? Banknote : Wallet;
   return (
     <span className="grid size-8 shrink-0 place-items-center rounded-md bg-muted text-muted-foreground" aria-hidden="true">

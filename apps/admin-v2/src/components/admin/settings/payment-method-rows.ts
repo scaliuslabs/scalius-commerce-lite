@@ -23,6 +23,8 @@ export interface AppPaymentProvider {
   id: string;
   pluginId: string;
   appName: string;
+  /** The app's icon (its brand mark for a wallet app), or null. */
+  appIcon?: string | null;
   name: string;
   canTestConnection: boolean;
   readiness: {
@@ -44,6 +46,8 @@ export interface PaymentMethodRow {
   /** The app's plugin id, for its page under Apps. */
   pluginId: string | null;
   appName: string | null;
+  /** The app's icon, shown as the method's mark. */
+  appIcon: string | null;
   /** False for a saved app method whose app is no longer installed. */
   installed: boolean;
   canTestConnection: boolean;
@@ -97,6 +101,7 @@ export function paymentMethodRows(input: {
         name: id,
         pluginId: null,
         appName: null,
+        appIcon: null,
         installed: true,
         canTestConnection: false,
         chargeCurrencies: "any",
@@ -113,6 +118,7 @@ export function paymentMethodRows(input: {
         name: gateway.label,
         pluginId: null,
         appName: null,
+        appIcon: null,
         installed: true,
         canTestConnection: false,
         chargeCurrencies: gateway.chargeCurrencies,
@@ -125,6 +131,7 @@ export function paymentMethodRows(input: {
       name: provider?.name ?? gateway?.label ?? appPaymentMethodFallbackName(id) ?? id,
       pluginId: gateway?.pluginId ?? provider?.pluginId ?? app?.pluginId ?? null,
       appName: provider?.appName ?? null,
+      appIcon: provider?.appIcon ?? null,
       installed: Boolean(gateway || provider) || !input.appProvidersKnown,
       canTestConnection: provider?.canTestConnection ?? false,
       chargeCurrencies: gateway?.chargeCurrencies ?? "any",

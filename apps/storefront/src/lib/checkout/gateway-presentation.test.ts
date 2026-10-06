@@ -1,5 +1,7 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
+  APP_GATEWAY_MARKS,
   APP_GATEWAY_MARK_SRC,
   appGatewayName,
   getGatewayPresentation,
@@ -36,15 +38,26 @@ describe("gateway presentation", () => {
     });
   });
 
-  it("shows an app's wallet by its checkout name with a neutral wallet mark", () => {
+  it("shows an app's wallet by its checkout name with its logo, else a neutral wallet mark", () => {
     expect(getGatewayPresentation(BKASH, "bKash")).toEqual({
       buyerLabel: "bKash",
       description: "",
       providerLabel: null,
-      markSrc: APP_GATEWAY_MARK_SRC,
-      markKind: "icon",
+      markSrc: "/payment-marks/bkash.svg",
+      markKind: "wordmark",
       hosted: true,
     });
+    expect(getGatewayPresentation("scalius.nagad:nagad", "Nagad")).toMatchObject({ markSrc: "/payment-marks/nagad.svg", markKind: "wordmark" });
+    expect(getGatewayPresentation("acme.pay:wallet", "Acme wallet")).toMatchObject({ markSrc: APP_GATEWAY_MARK_SRC, markKind: "icon" });
+  });
+
+  it("serves the wallet apps' own listing icons, byte for byte", () => {
+    for (const [pluginId, src] of Object.entries(APP_GATEWAY_MARKS)) {
+      const app = pluginId.split(".")[1];
+      const served = readFileSync(new URL(`../../../public${src}`, import.meta.url));
+      const icon = readFileSync(new URL(`../../../../../plugins/${app}/assets/icon.svg`, import.meta.url));
+      expect(served.equals(icon), pluginId).toBe(true);
+    }
   });
 
   it("never shows an app's stored id, even when a caller passes it as the label", () => {

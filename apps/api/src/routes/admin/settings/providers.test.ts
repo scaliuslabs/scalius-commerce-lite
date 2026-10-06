@@ -103,6 +103,8 @@ describe("app provider settings", () => {
       id: `${WALLET_FIXTURE_ID}:wallet`,
       kind: "payment",
       appName: "Acme Wallet",
+      // The fixture lists no icon: the method shows the neutral mark.
+      appIcon: null,
       canTestConnection: true,
       readiness: expect.objectContaining({ configured: false, usable: false, missingFields: ["secret"] }),
     })]);
