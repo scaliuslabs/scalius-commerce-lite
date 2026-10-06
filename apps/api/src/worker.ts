@@ -1,4 +1,7 @@
 // apps/api/src/worker.ts
+// First import: zod 4 gives `.openapi()` only to schemas created after this
+// extension runs, and route families load lazily in any order.
+import "@hono/zod-openapi";
 import { WorkerEntrypoint } from "cloudflare:workers";
 import {
   applyBaselineSecurityHeaders,

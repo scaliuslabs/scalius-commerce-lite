@@ -19,6 +19,9 @@ export const storefrontLandingPageApiSchema = themeDocumentParts.landingPage;
 /**
  * The store facts the theme fit rules read (bounded counts and the header
  * menu shape), served beside the theme so the storefront and the dashboard
- * resolve the document against the same facts.
+ * resolve the document against the same facts. Named through
+ * `namedSharedSchema`: a shared schema can exist before the OpenAPI extension
+ * (route families load lazily), and zod 4 gives `.openapi` only to schemas
+ * created after it.
  */
-export const storeShapeApiSchema = storeShapeSchema.openapi("StorefrontStoreShape");
+export const storeShapeApiSchema = namedSharedSchema(storeShapeSchema, "StorefrontStoreShape");
