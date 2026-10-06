@@ -167,7 +167,7 @@ Provider and integration settings live in the dashboard under Settings > Payment
 D1 is the default and is bound in the committed Wrangler config. For another provider, install these secrets on the API Worker:
 
 - TursoDB: `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN`.
-- PostgreSQL: `POSTGRES_DATABASE_URL`, or bind `HYPERDRIVE`.
+- PostgreSQL: `POSTGRES_DATABASE_URL`, or bind `HYPERDRIVE` with query caching disabled (`--caching-disabled`).
 - `DATABASE_PROVIDER` (`d1`, `turso`, or `postgres`) pins the provider. It is required when both Turso and PostgreSQL credentials are installed.
 
 Changing the provider of a live store is a freeze, snapshot, import, and verify procedure, not a credential swap: [docs/DATABASE-PORTABILITY.md](docs/DATABASE-PORTABILITY.md).

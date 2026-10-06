@@ -8,6 +8,7 @@
     "./client": "./src/client.ts",
     "./postgres-adapter": "./src/postgres-adapter.ts",
     "./read-observer": "./src/read-observer.ts",
+    "./read-freshness": "./src/read-freshness.ts",
     "./migration-artifacts": "./src/migration-artifacts.ts",
     "./migration-plan": "./src/migration-plan.ts",
     "./schema-contract": "./src/schema-contract.ts",

@@ -211,6 +211,37 @@ export function createSqliteD1Binding(sqlite: DatabaseSync, hooks: SqliteD1Hooks
   return binding as unknown as D1Database;
 }
 
+type Statement = ReturnType<D1Database["prepare"]>;
+
+/**
+ * Models Hyperdrive's default query cache (tests of the read-freshness probe): a read is answered from the first
+ * result for the same SQL text and parameters; writes go to the database.
+ */
+export function withSimulatedQueryCache(binding: D1Database): D1Database {
+  const cache = new Map<string, unknown>();
+  const cached = (statement: Statement, query: string, values: unknown[]): Statement => {
+    if (!/^\s*select\b/i.test(query)) return statement;
+    const key = `${query}\u0000${JSON.stringify(values)}`;
+    const remember = <T>(method: "all" | "raw" | "first", run: () => Promise<T>) => async () => {
+      const entry = `${method}\u0000${key}`;
+      if (!cache.has(entry)) cache.set(entry, await run());
+      return cache.get(entry) as T;
+    };
+    return {
+      ...statement,
+      bind: (...next: unknown[]) => cached(statement.bind(...next), query, next),
+      all: remember("all", () => statement.all()),
+      raw: remember("raw", () => statement.raw()),
+      first: remember("first", () => statement.first()),
+    } as Statement;
+  };
+  return {
+    ...binding,
+    prepare: (query: string) => cached(binding.prepare(query), query, []),
+    batch: binding.batch.bind(binding),
+  } as D1Database;
+}
+
 export interface SqliteTursoHooks {
   onBatch?: (mode: string | undefined, statementCount: number) => void;
   writeBatchMode?: "immediate" | "concurrent";

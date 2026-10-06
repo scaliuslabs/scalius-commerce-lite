@@ -35,7 +35,7 @@ Selection (`resolveDatabaseConfiguration()` in `src/provider.ts`) fails closed:
 
 1. `DATABASE_PROVIDER` must be `d1`, `turso` or `postgres` when set. Any other value throws.
 2. `turso` needs both `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN`. The URL must use `https:`, `libsql:` or `turso:` and carry no credentials.
-3. `postgres` needs `HYPERDRIVE` or `POSTGRES_DATABASE_URL`. `HYPERDRIVE` wins when both exist. The URL must use `postgres:` or `postgresql:` and name a database.
+3. `postgres` needs `HYPERDRIVE` or `POSTGRES_DATABASE_URL`. `HYPERDRIVE` wins when both exist. The URL must use `postgres:` or `postgresql:` and name a database. A Hyperdrive configuration must have query caching disabled (`--caching-disabled`); `/api/v1/readyz` fails when a read is cached (`src/read-freshness.ts`).
 4. `d1` needs `env.DB` and ignores external credentials. Use it to roll back while target credentials stay installed.
 5. Without `DATABASE_PROVIDER`: Turso and PostgreSQL credentials together throw. PostgreSQL credentials select PostgreSQL. Any Turso credential selects Turso and needs both. Otherwise `env.DB` selects D1.
 
