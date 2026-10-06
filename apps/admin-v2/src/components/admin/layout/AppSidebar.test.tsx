@@ -43,7 +43,7 @@ function OpenDrawer() {
 }
 
 const NAV = visibleNav(() => true, [{ placement: "apps", title: "Greeter", to: "/admin/apps/acme.hello/pages/home" }]);
-const USER = { name: "Owner", email: "owner@example.com", image: null };
+const USER = { id: "owner", name: "Owner", email: "owner@example.com", image: null };
 
 async function renderAt(root: Root, path: string) {
   const rootRoute = createRootRoute({

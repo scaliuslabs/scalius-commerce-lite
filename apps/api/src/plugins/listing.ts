@@ -78,7 +78,7 @@ export function listingDetail(pluginId: string, listing: PluginListingManifest, 
   };
 }
 
-function base64Bytes(data: string): Uint8Array {
+function base64Bytes(data: string): Uint8Array<ArrayBuffer> {
   const binary = atob(data);
   const bytes = new Uint8Array(binary.length);
   for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
@@ -86,7 +86,7 @@ function base64Bytes(data: string): Uint8Array {
 }
 
 /** A compiled-in image (bundled or catalogued plugin), or null. */
-export async function compiledPluginAsset(pluginId: string, path: string): Promise<Uint8Array | null> {
+export async function compiledPluginAsset(pluginId: string, path: string): Promise<Uint8Array<ArrayBuffer> | null> {
   const { PLUGIN_ASSETS } = await import("./assets.gen");
   const files = Object.hasOwn(PLUGIN_ASSETS, pluginId) ? PLUGIN_ASSETS[pluginId]! : undefined;
   const file = files && Object.hasOwn(files, path) ? files[path] : undefined;
@@ -102,7 +102,7 @@ export function pluginAssetKey(pluginId: string, version: string, sha256: string
  * The response for one listing image after its check, or null when the bytes
  * fail it. `immutable` when the address named the current fingerprint.
  */
-export function pluginAssetResponse(bytes: Uint8Array, path: string, role: PluginAssetRole, immutable: boolean): Response | null {
+export function pluginAssetResponse(bytes: Uint8Array<ArrayBuffer>, path: string, role: PluginAssetRole, immutable: boolean): Response | null {
   const contentType = pluginAssetContentType(path);
   if (!contentType || checkPluginAsset(path, bytes, role) !== null) return null;
   return new Response(bytes, {

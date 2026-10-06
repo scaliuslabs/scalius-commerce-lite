@@ -1,10 +1,16 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { checkPluginAsset, checkPluginSvg } from "./assets";
 
 const svg = (body: string) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10">${body}</svg>`;
 const bytes = (text: string) => new TextEncoder().encode(text);
 const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13]);
+
+/** A repository file's bytes (tests only; a runtime specifier keeps Node types out of this Workers package). */
+async function readRepoFile(path: string): Promise<Uint8Array> {
+  const specifier = "node:fs/promises";
+  const fs = (await import(/* @vite-ignore */ specifier)) as { readFile(path: URL): Promise<Uint8Array> };
+  return new Uint8Array(await fs.readFile(new URL(`../../../../${path}`, import.meta.url)));
+}
 
 describe("plugin listing images", () => {
   it("accepts drawing SVGs, internal references and plain styles", () => {
@@ -36,10 +42,9 @@ describe("plugin listing images", () => {
     expect(checkPluginAsset("shot.png", new Uint8Array(0), "screenshot")).toMatch(/empty/);
   });
 
-  it("passes the first-party payment logos", () => {
+  it("passes the first-party payment logos", async () => {
     for (const plugin of ["bkash", "nagad"]) {
-      const file = new URL(`../../../../plugins/${plugin}/assets/icon.svg`, import.meta.url);
-      expect(checkPluginAsset("assets/icon.svg", new Uint8Array(readFileSync(file)), "icon"), plugin).toBeNull();
+      expect(checkPluginAsset("assets/icon.svg", await readRepoFile(`plugins/${plugin}/assets/icon.svg`), "icon"), plugin).toBeNull();
     }
   });
 });

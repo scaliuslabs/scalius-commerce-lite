@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { EVENTS_API_VERSION } from "../events";
 import {
@@ -128,8 +127,10 @@ describe("plugin manifest", () => {
     expect(bare.ok && [bare.manifest.categories, bare.manifest.screenshots, bare.manifest.countries]).toEqual([[], [], undefined]);
   });
 
-  it("names the platform release the root package is", () => {
-    const pkg = JSON.parse(readFileSync(new URL("../../../../package.json", import.meta.url), "utf8")) as { version: string };
+  it("names the platform release the root package is", async () => {
+    const specifier = "node:fs/promises";
+    const fs = (await import(/* @vite-ignore */ specifier)) as { readFile(path: URL, encoding: "utf8"): Promise<string> };
+    const pkg = JSON.parse(await fs.readFile(new URL("../../../../package.json", import.meta.url), "utf8")) as { version: string };
     expect(SCALIUS_PLATFORM_VERSION).toBe(pkg.version);
   });
 

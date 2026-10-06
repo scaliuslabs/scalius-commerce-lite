@@ -64,7 +64,7 @@ describe("generated plugin modules", () => {
     for (const source of ["plugins/bkash", "plugins/nagad"]) {
       const { manifest, assets } = await packPlugin(source);
       expect(manifest, source).toMatchObject({ icon: "assets/icon.svg", countries: ["BD"] });
-      expect(assets.map((asset: { path: string }) => asset.path)).toEqual(["assets/icon.svg"]);
+      expect(assets.map((asset) => asset.path)).toEqual(["assets/icon.svg"]);
     }
   });
 
