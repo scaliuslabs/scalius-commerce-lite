@@ -12,10 +12,15 @@ import { definePlugin, PLUGIN_API_VERSION, type PluginManifestInput } from "@sca
 export const manifest = {
   id: "scalius.bulk-discount",
   name: "Bulk discount",
-  version: "0.1.1",
+  version: "0.1.2",
   apiVersion: PLUGIN_API_VERSION,
   description: "Gives a bigger discount the more a buyer orders (up to three tiers), and can cap how many of one item fit in an order.",
   author: { name: "Scalius" },
+  tagline: "Bigger discounts for bigger orders",
+  categories: ["pricing"],
+  support: { url: "https://github.com/scaliuslabs/scalius-commerce-lite/issues" },
+  changelogUrl: "https://github.com/scaliuslabs/scalius-commerce-lite/commits/mono-repo/plugins/bulk-discount",
+  minPlatformVersion: "1.0.0",
   functions: [
     { point: "checkout.discounts", priority: 100 },
     { point: "cart.validate", priority: 100 },
@@ -46,6 +51,7 @@ export const manifest = {
   translations: {
     bn: {
       name: "বাল্ক ডিসকাউন্ট",
+      tagline: "বড় অর্ডারে বড় ডিসকাউন্ট",
       description: "ক্রেতা যত বেশি কেনেন, ডিসকাউন্ট তত বড় (তিন ধাপ পর্যন্ত); এক অর্ডারে একটি প্রোডাক্ট সর্বোচ্চ কতটি কেনা যাবে তাও ঠিক করে দিতে পারেন।",
     },
   },

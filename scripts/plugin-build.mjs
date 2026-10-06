@@ -4,13 +4,16 @@
 //
 // - packPlugin: bundles one plugin into `dist/plugin.js` (the sandbox bundle;
 //   its SHA-256 is the plugin version's fingerprint in both loaders),
-//   validates its manifest and checks its handlers against it;
+//   validates its manifest and checks its handlers against it, and checks
+//   and carries its listing images (icon, screenshots);
 // - buildSandboxRuntime: compiles the wrapper module every sandboxed plugin
 //   isolate runs (apps/api/src/plugins/runtime/sandbox-entry.ts);
-// - render*: the generated TypeScript the API Worker compiles.
+// - render*: the generated TypeScript the API Worker compiles: the bundled
+//   plugins, their listing images and the catalog of first-party plugins
+//   this deployment does not bundle.
 
 import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -19,6 +22,10 @@ export const root = resolve(import.meta.dirname, "..");
 export const LOCKFILE = join(root, "scalius.plugins.json");
 export const BUNDLED_GEN = join(root, "apps/api/src/plugins/bundled.gen.ts");
 export const SANDBOX_RUNTIME_GEN = join(root, "apps/api/src/plugins/sandbox-runtime.gen.ts");
+export const ASSETS_GEN = join(root, "apps/api/src/plugins/assets.gen.ts");
+export const CATALOG_GEN = join(root, "apps/api/src/plugins/catalog.gen.ts");
+/** First-party plugins: one package per directory. */
+export const FIRST_PARTY_DIR = join(root, "plugins");
 export const SANDBOX_ENTRY = join(root, "apps/api/src/plugins/runtime/sandbox-entry.ts");
 const API_PLUGINS_DIR = join(root, "apps/api/src/plugins");
 
@@ -65,6 +72,20 @@ export function isPathSource(source) {
   return source.startsWith("./") || source.startsWith("../") || source.startsWith("plugins/") || source.startsWith("/");
 }
 
+/** The plugin's package directory: the path itself, or the installed package's root. */
+export function pluginPackageDir(source) {
+  if (isPathSource(source)) return resolve(root, source);
+  return dirname(createRequire(join(root, "apps/api/package.json")).resolve(`${source}/package.json`));
+}
+
+/** `plugins/<dir>` of every first-party plugin package, sorted. */
+export function firstPartyPluginSources() {
+  return readdirSync(FIRST_PARTY_DIR, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && existsSync(join(FIRST_PARTY_DIR, entry.name, "package.json")))
+    .map((entry) => `plugins/${entry.name}`)
+    .sort();
+}
+
 /** The plugin's entry module: `exports["."]`, `main`, or `src/index.ts` of a path source; a resolved package otherwise. */
 export function resolvePluginEntry(source) {
   if (!isPathSource(source)) {
@@ -92,7 +113,7 @@ export async function loadPluginContract() {
   const esbuild = await loadEsbuild();
   const result = await esbuild.build({
     stdin: {
-      contents: 'export * from "@scalius/shared/plugins";',
+      contents: 'export * from "@scalius/shared/plugins";\nexport { checkPluginAsset } from "@scalius/shared/plugins/assets";',
       resolveDir: join(root, "packages/plugin-sdk"),
       loader: "ts",
     },
@@ -129,15 +150,46 @@ export async function bundlePlugin(entry) {
 }
 
 /**
- * Packs one plugin: bundle, manifest validation, handler check. Writes
- * `dist/plugin.js` and `dist/manifest.json` next to a path source.
+ * The manifest's listing images, read from the plugin package and checked
+ * (type, size, safe SVG). Their digests end the packed bundle as a comment,
+ * so the bundle's SHA-256 (the version's fingerprint in both loaders) also
+ * changes when only an image does.
+ */
+function readListingAssets(contract, manifest, source) {
+  const directory = pluginPackageDir(source);
+  const declared = [
+    ...(manifest.icon ? [{ path: manifest.icon, role: "icon" }] : []),
+    ...manifest.screenshots.map((path) => ({ path, role: "screenshot" })),
+  ];
+  return declared.map(({ path, role }) => {
+    let bytes;
+    try {
+      bytes = readFileSync(join(directory, path));
+    } catch {
+      throw new Error(`${source}: ${path} is declared in the manifest but missing.`);
+    }
+    const problem = contract.checkPluginAsset(path, new Uint8Array(bytes), role);
+    if (problem) throw new Error(`${source}: ${problem}`);
+    return { path, role, contentType: contract.pluginAssetContentType(path), sha256: createHash("sha256").update(bytes).digest("hex"), bytes };
+  });
+}
+
+/** The packed bundle: the plugin's code, then its images' digests (only when it has images). */
+export function sealBundle(code, assets) {
+  if (assets.length === 0) return code;
+  return `${code}//# scalius-assets ${JSON.stringify(Object.fromEntries(assets.map((asset) => [asset.path, asset.sha256])))}\n`;
+}
+
+/**
+ * Packs one plugin: bundle, manifest validation, handler check, listing
+ * images. Writes `dist/plugin.js`, `dist/manifest.json` and `dist/assets/*`
+ * (what a sandbox install stores in R2) next to a path source.
  */
 export async function packPlugin(source) {
   const entry = resolvePluginEntry(source);
-  const code = await bundlePlugin(entry);
-  const digest = sha256(code);
+  const bundled = await bundlePlugin(entry);
   const contract = await loadPluginContract();
-  const loaded = await import(`data:text/javascript;base64,${Buffer.from(code).toString("base64")}`);
+  const loaded = await import(`data:text/javascript;base64,${Buffer.from(bundled).toString("base64")}`);
   const definition = contract.pluginDefinitionOf(loaded);
   if (!definition) throw new Error(`${source}: the module has no default export from definePlugin().`);
   const parsed = contract.parsePluginManifest(definition.manifest);
@@ -146,13 +198,20 @@ export async function packPlugin(source) {
   }
   const issues = contract.checkPluginHandlers(contract.pluginHandlerInventory(parsed.manifest), loaded);
   if (issues.length > 0) throw new Error(`${source}: ${issues.join(" ")}`);
+  const assets = readListingAssets(contract, parsed.manifest, source);
+  const code = sealBundle(bundled, assets);
   if (isPathSource(source)) {
     const dist = join(resolve(root, source), "dist");
+    rmSync(join(dist, "assets"), { recursive: true, force: true });
     mkdirSync(dist, { recursive: true });
     writeFileSync(join(dist, "plugin.js"), code);
     writeFileSync(join(dist, "manifest.json"), `${JSON.stringify(parsed.manifest, null, 2)}\n`);
+    for (const asset of assets) {
+      mkdirSync(dirname(join(dist, "assets", asset.path)), { recursive: true });
+      writeFileSync(join(dist, "assets", asset.path), asset.bytes);
+    }
   }
-  return { id: parsed.manifest.id, version: parsed.manifest.version, sha256: digest, manifest: parsed.manifest, code, entry };
+  return { id: parsed.manifest.id, version: parsed.manifest.version, sha256: sha256(code), manifest: parsed.manifest, code, entry, assets };
 }
 
 // ── Generated modules ────────────────────────────────────────────────────
@@ -180,6 +239,83 @@ export function renderBundledGen(lockfile, specifierOf = (plugin) => bundledImpo
     "};",
     "",
   ].join("\n");
+}
+
+/**
+ * The listing images of the bundled and catalogued plugins, by plugin id and
+ * manifest path, as base64. The API imports it lazily, only to serve one.
+ */
+export function renderAssetsGen(packedPlugins) {
+  const entries = [...packedPlugins]
+    .filter((packed) => packed.assets.length > 0)
+    .sort((left, right) => left.id.localeCompare(right.id))
+    .map((packed) => [
+      `  ${JSON.stringify(packed.id)}: {`,
+      ...packed.assets.map((asset) => `    ${JSON.stringify(asset.path)}: { type: ${JSON.stringify(asset.contentType)}, sha256: ${JSON.stringify(asset.sha256)}, data: ${JSON.stringify(Buffer.from(asset.bytes).toString("base64"))} },`),
+      "  },",
+    ].join("\n"));
+  return [
+    "// Generated by `pnpm plugin` from the bundled and catalogued plugins' listing",
+    "// images (checked by @scalius/shared/plugins/assets). Do not edit by hand.",
+    "// Imported lazily by the asset route only.",
+    "",
+    'import type { PluginAssetFile } from "./listing";',
+    "",
+    "export const PLUGIN_ASSETS: Readonly<Record<string, Readonly<Record<string, PluginAssetFile>>>> = {",
+    ...entries,
+    "};",
+    "",
+  ].join("\n");
+}
+
+/** The manifest fields the Apps page lists a plugin by (`apps/api/src/plugins/listing.ts`). */
+export const LISTING_FIELDS = [
+  "name", "version", "description", "author", "homepage", "icon", "tagline", "categories", "screenshots", "support",
+  "privacyPolicyUrl", "documentationUrl", "changelogUrl", "countries", "minPlatformVersion",
+];
+
+/**
+ * First-party plugins this deployment does not bundle: the Apps page lists
+ * them as available, with the `pnpm plugin add` command that installs one.
+ */
+export function renderCatalogGen(packedPlugins) {
+  const entries = [...packedPlugins]
+    .sort((left, right) => left.id.localeCompare(right.id))
+    .map((packed) => {
+      const listing = Object.fromEntries(LISTING_FIELDS.filter((key) => packed.manifest[key] !== undefined).map((key) => [key, packed.manifest[key]]));
+      const bn = packed.manifest.translations?.bn;
+      if (bn) listing.translations = { bn: Object.fromEntries(["name", "tagline", "description"].filter((key) => bn[key] !== undefined).map((key) => [key, bn[key]])) };
+      return `  ${JSON.stringify({ id: packed.id, source: packed.source, sha256: packed.sha256, listing })},`;
+    });
+  return [
+    "// Generated by `pnpm plugin` from plugins/*: the first-party plugins this",
+    "// deployment does not bundle (scalius.plugins.json). Do not edit by hand.",
+    "",
+    'import type { PluginCatalogEntry } from "./listing";',
+    "",
+    "export const PLUGIN_CATALOG: readonly PluginCatalogEntry[] = [",
+    ...entries,
+    "];",
+    "",
+  ].join("\n");
+}
+
+/**
+ * Packs every bundled plugin and every first-party plugin the lockfile does
+ * not list: what the generated asset and catalog modules are made from.
+ */
+export async function packForGenerated(lockfile) {
+  const bundled = [];
+  for (const plugin of lockfile.plugins) bundled.push({ ...(await packPlugin(plugin.source)), source: plugin.source });
+  const bundledSources = new Set(lockfile.plugins.map((plugin) => plugin.source));
+  const bundledIds = new Set(bundled.map((packed) => packed.id));
+  const catalog = [];
+  for (const source of firstPartyPluginSources()) {
+    if (bundledSources.has(source)) continue;
+    const packed = { ...(await packPlugin(source)), source };
+    if (!bundledIds.has(packed.id)) catalog.push(packed);
+  }
+  return { bundled, catalog };
 }
 
 /** The wrapper module of every sandboxed plugin isolate. */

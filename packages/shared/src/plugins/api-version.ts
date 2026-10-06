@@ -6,3 +6,10 @@
 export const PLUGIN_API_VERSION = "2026-10" as const;
 export const SUPPORTED_PLUGIN_API_VERSIONS = [PLUGIN_API_VERSION] as const;
 export type PluginApiVersion = (typeof SUPPORTED_PLUGIN_API_VERSIONS)[number];
+
+/**
+ * The platform release this code is (the root package version). A manifest's
+ * `minPlatformVersion` above it does not parse: the app needs a newer
+ * Scalius. manifest.test.ts keeps it equal to package.json.
+ */
+export const SCALIUS_PLATFORM_VERSION = "1.0.0" as const;

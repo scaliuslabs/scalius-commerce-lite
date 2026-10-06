@@ -11285,6 +11285,50 @@
             "type": "string",
             "nullable": true
           },
+          "tagline": {
+            "type": "string",
+            "nullable": true,
+            "description": "One line under the name."
+          },
+          "icon": {
+            "type": "string",
+            "nullable": true,
+            "description": "Same-origin address of the app's icon (SVG or PNG), or null."
+          },
+          "categories": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "payments",
+                "shipping",
+                "orders",
+                "inventory",
+                "returns",
+                "checkout",
+                "pricing",
+                "marketing",
+                "loyalty",
+                "store-design",
+                "content",
+                "notifications",
+                "analytics",
+                "finances",
+                "support",
+                "operations",
+                "compliance"
+              ]
+            },
+            "description": "One to three categories; the first is the main one."
+          },
+          "countries": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "type": "string"
+            },
+            "description": "ISO 3166-1 alpha-2 codes of the countries the app serves; null: every country."
+          },
           "source": {
             "type": "string",
             "enum": [
@@ -11373,6 +11417,10 @@
           "description",
           "author",
           "homepage",
+          "tagline",
+          "icon",
+          "categories",
+          "countries",
           "source",
           "status",
           "needsApproval",
@@ -11392,6 +11440,9 @@
             "type": "object",
             "properties": {
               "name": {
+                "type": "string"
+              },
+              "tagline": {
                 "type": "string"
               },
               "description": {
@@ -11424,7 +11475,156 @@
             }
           }
         },
-        "description": "Name, description and surface titles in other dashboard languages (null: English only)."
+        "description": "Name, tagline, description and surface titles in other dashboard languages (null: English only)."
+      },
+      "AppListing": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "translations": {
+            "$ref": "#/components/schemas/AppTranslations"
+          },
+          "author": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "url": {
+                "type": "string",
+                "nullable": true
+              }
+            },
+            "required": [
+              "name",
+              "url"
+            ]
+          },
+          "homepage": {
+            "type": "string",
+            "nullable": true
+          },
+          "tagline": {
+            "type": "string",
+            "nullable": true,
+            "description": "One line under the name."
+          },
+          "icon": {
+            "type": "string",
+            "nullable": true,
+            "description": "Same-origin address of the app's icon (SVG or PNG), or null."
+          },
+          "categories": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "payments",
+                "shipping",
+                "orders",
+                "inventory",
+                "returns",
+                "checkout",
+                "pricing",
+                "marketing",
+                "loyalty",
+                "store-design",
+                "content",
+                "notifications",
+                "analytics",
+                "finances",
+                "support",
+                "operations",
+                "compliance"
+              ]
+            },
+            "description": "One to three categories; the first is the main one."
+          },
+          "countries": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "type": "string"
+            },
+            "description": "ISO 3166-1 alpha-2 codes of the countries the app serves; null: every country."
+          },
+          "screenshots": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Same-origin addresses of up to six screenshots."
+          },
+          "support": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "url": {
+                "type": "string",
+                "nullable": true
+              },
+              "email": {
+                "type": "string",
+                "nullable": true
+              }
+            },
+            "required": [
+              "url",
+              "email"
+            ]
+          },
+          "privacyPolicyUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "documentationUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "changelogUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "minPlatformVersion": {
+            "type": "string",
+            "nullable": true
+          },
+          "installCommand": {
+            "type": "string",
+            "description": "The operator's command that bundles this app (then deploy)."
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "version",
+          "description",
+          "author",
+          "homepage",
+          "tagline",
+          "icon",
+          "categories",
+          "countries",
+          "screenshots",
+          "support",
+          "privacyPolicyUrl",
+          "documentationUrl",
+          "changelogUrl",
+          "minPlatformVersion",
+          "installCommand"
+        ],
+        "description": "A first-party app this deployment does not bundle yet."
       },
       "AppAdminSurfaces": {
         "type": "object",
@@ -11625,6 +11825,47 @@
           {
             "type": "object",
             "properties": {
+              "screenshots": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Same-origin addresses of up to six screenshots."
+              },
+              "support": {
+                "type": "object",
+                "nullable": true,
+                "properties": {
+                  "url": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "email": {
+                    "type": "string",
+                    "nullable": true
+                  }
+                },
+                "required": [
+                  "url",
+                  "email"
+                ]
+              },
+              "privacyPolicyUrl": {
+                "type": "string",
+                "nullable": true
+              },
+              "documentationUrl": {
+                "type": "string",
+                "nullable": true
+              },
+              "changelogUrl": {
+                "type": "string",
+                "nullable": true
+              },
+              "minPlatformVersion": {
+                "type": "string",
+                "nullable": true
+              },
               "grantKey": {
                 "type": "string",
                 "description": "Send back on activation: approving a request nobody was shown is refused."
@@ -12015,6 +12256,12 @@
               }
             },
             "required": [
+              "screenshots",
+              "support",
+              "privacyPolicyUrl",
+              "documentationUrl",
+              "changelogUrl",
+              "minPlatformVersion",
               "grantKey",
               "request",
               "granted",
@@ -181470,12 +181717,20 @@
                             "$ref": "#/components/schemas/AppSummary"
                           }
                         },
+                        "available": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/AppListing"
+                          },
+                          "description": "First-party apps not bundled into this deployment: each installs with its installCommand, then a deploy."
+                        },
                         "sandboxAvailable": {
                           "type": "boolean"
                         }
                       },
                       "required": [
                         "apps",
+                        "available",
                         "sandboxAvailable"
                       ]
                     }
@@ -181537,6 +181792,235 @@
         "x-scalius-rbac": {
           "type": "permission",
           "permission": "apps.view"
+        }
+      }
+    },
+    "/api/v1/admin/apps/{id}/assets/{asset}": {
+      "get": {
+        "operationId": "dashboard.apps.asset_get",
+        "tags": [
+          "Admin - Apps"
+        ],
+        "summary": "Read an app's icon or one of its screenshots",
+        "description": "The image the listing names, checked again before it is served (an SVG cannot run code or load anything). A `v` equal to the app's current fingerprint is cached for a year.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?\\.[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?$",
+              "description": "The app's id (vendor.name)."
+            },
+            "required": true,
+            "description": "The app's id (vendor.name).",
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^(?:icon|screenshot-[1-6])$",
+              "description": "icon, or screenshot-1 to screenshot-6."
+            },
+            "required": true,
+            "description": "icon, or screenshot-1 to screenshot-6.",
+            "name": "asset",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 64,
+              "description": "The fingerprint from the listing's address."
+            },
+            "required": false,
+            "description": "The fingerprint from the listing's address.",
+            "name": "v",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The image",
+            "content": {
+              "image/svg+xml": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/png": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/jpeg": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/webp": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "excluded",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "exclusionReason": "Image bytes for the dashboard's app cards and app pages; agents read an app's listing from dashboard.apps.list and dashboard.apps.get."
+        },
+        "x-scalius-rbac": {
+          "type": "anyOf",
+          "permissions": [
+            "agent_access.manage",
+            "agent_access.view",
+            "analytics.create",
+            "analytics.edit",
+            "analytics.toggle",
+            "analytics.view",
+            "apps.manage",
+            "apps.use",
+            "apps.view",
+            "attributes.create",
+            "attributes.delete",
+            "attributes.edit",
+            "attributes.view",
+            "categories.create",
+            "categories.delete",
+            "categories.edit",
+            "categories.permanent_delete",
+            "categories.restore",
+            "categories.view",
+            "collections.create",
+            "collections.delete",
+            "collections.edit",
+            "collections.restore",
+            "collections.toggle_status",
+            "collections.view",
+            "conversations.reply",
+            "conversations.view",
+            "customers.create",
+            "customers.delete",
+            "customers.edit",
+            "customers.sync",
+            "customers.view",
+            "customers.view_history",
+            "dashboard.analytics",
+            "dashboard.view",
+            "discounts.create",
+            "discounts.delete",
+            "discounts.edit",
+            "discounts.toggle_status",
+            "discounts.view",
+            "gift_cards.manage",
+            "gift_cards.view",
+            "inventory.manage",
+            "inventory.view",
+            "media.delete",
+            "media.manage_folders",
+            "media.upload",
+            "media.view",
+            "orders.change_status",
+            "orders.create",
+            "orders.delete",
+            "orders.edit",
+            "orders.issue_invoice",
+            "orders.manage_shipments",
+            "orders.refund",
+            "orders.restore",
+            "orders.view",
+            "pages.create",
+            "pages.delete",
+            "pages.edit",
+            "pages.publish",
+            "pages.view",
+            "products.bulk_operations",
+            "products.create",
+            "products.delete",
+            "products.edit",
+            "products.permanent_delete",
+            "products.restore",
+            "products.view",
+            "products.view_costs",
+            "reviews.moderate",
+            "reviews.view",
+            "settings.cache.manage",
+            "settings.cache.view",
+            "settings.delivery_locations.edit",
+            "settings.delivery_locations.view",
+            "settings.delivery_providers.edit",
+            "settings.delivery_providers.view",
+            "settings.footer.edit",
+            "settings.fraud_checker.edit",
+            "settings.fraud_checker.view",
+            "settings.general.edit",
+            "settings.general.view",
+            "settings.header.edit",
+            "settings.notifications.edit",
+            "settings.seo.edit",
+            "settings.shipping_methods.edit",
+            "settings.shipping_methods.view",
+            "taxes.manage",
+            "taxes.view",
+            "team.manage",
+            "team.manage_roles",
+            "team.view",
+            "webhooks.manage",
+            "webhooks.view"
+          ]
         }
       }
     },

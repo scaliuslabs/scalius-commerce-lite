@@ -1,7 +1,9 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { EVENTS_API_VERSION } from "../events";
 import {
   PLUGIN_API_VERSION,
+  SCALIUS_PLATFORM_VERSION,
   PLUGIN_FUNCTION_POINTS,
   PLUGIN_FUNCTION_SCHEMAS,
   parsePluginManifest,
@@ -84,11 +86,51 @@ describe("plugin manifest", () => {
     ["a snapshot outside checkout.discounts", { functions: [{ point: "cart.validate", snapshot: { collection: "visits" } }] }, "functions.0.snapshot"],
     ["a snapshot of an undeclared collection", { functions: [{ point: "checkout.discounts", snapshot: { collection: "nope" } }] }, "functions.0.snapshot.collection"],
     ["a collection named batch", { storage: { batch: {} } }, "storage.batch"],
+    ["an icon outside the plugin", { icon: "../secret.svg" }, "icon"],
+    ["a JPEG icon", { icon: "assets/icon.jpg" }, "icon"],
+    ["an SVG screenshot", { screenshots: ["assets/one.svg"] }, "screenshots.0"],
+    ["seven screenshots", { screenshots: [1, 2, 3, 4, 5, 6, 7].map((n) => `shots/${n}.png`) }, "screenshots"],
+    ["an unknown category", { categories: ["games"] }, "categories.0"],
+    ["four categories", { categories: ["payments", "orders", "checkout", "finances"] }, "categories"],
+    ["a repeated category", { categories: ["payments", "payments"] }, "categories"],
+    ["a lowercase country", { countries: ["bd"] }, "countries.0"],
+    ["an empty support block", { support: {} }, "support"],
+    ["an http privacy policy", { privacyPolicyUrl: "http://acme.example/privacy" }, "privacyPolicyUrl"],
+    ["a newer platform", { minPlatformVersion: "99.0.0" }, "minPlatformVersion"],
   ])("rejects %s", (_label, override, path) => {
     const result = parsePluginManifest({ ...FULL, ...override });
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.issues.map((issue) => issue.path)).toContain(path);
+  });
+
+  it("carries the listing: icon, tagline, categories, screenshots, links, countries and platform floor", () => {
+    const result = parsePluginManifest({
+      ...FULL,
+      icon: "assets/icon.svg",
+      tagline: "Points that bring buyers back",
+      categories: ["loyalty", "marketing"],
+      screenshots: ["assets/screens/points.png", "assets/screens/redeem.webp"],
+      support: { url: "https://acme.example/help", email: "help@acme.example" },
+      privacyPolicyUrl: "https://acme.example/privacy",
+      documentationUrl: "https://acme.example/docs",
+      changelogUrl: "https://acme.example/changes",
+      countries: ["BD", "IN"],
+      minPlatformVersion: SCALIUS_PLATFORM_VERSION,
+      translations: { bn: { name: "অ্যাকমি লয়্যালটি", tagline: "ক্রেতা ফিরিয়ে আনার পয়েন্ট" } },
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.manifest).toMatchObject({ icon: "assets/icon.svg", categories: ["loyalty", "marketing"], countries: ["BD", "IN"] });
+    expect(result.manifest.translations?.bn?.tagline).toBe("ক্রেতা ফিরিয়ে আনার পয়েন্ট");
+    // Left out: no categories or screenshots, every country.
+    const bare = parsePluginManifest(FULL);
+    expect(bare.ok && [bare.manifest.categories, bare.manifest.screenshots, bare.manifest.countries]).toEqual([[], [], undefined]);
+  });
+
+  it("names the platform release the root package is", () => {
+    const pkg = JSON.parse(readFileSync(new URL("../../../../package.json", import.meta.url), "utf8")) as { version: string };
+    expect(SCALIUS_PLATFORM_VERSION).toBe(pkg.version);
   });
 
   it("carries Bangla text for the dashboard, optional and per surface", () => {

@@ -2364,6 +2364,22 @@ export type AppSummary = {
         url: string | null;
     };
     homepage: string | null;
+    /**
+     * One line under the name.
+     */
+    tagline: string | null;
+    /**
+     * Same-origin address of the app's icon (SVG or PNG), or null.
+     */
+    icon: string | null;
+    /**
+     * One to three categories; the first is the main one.
+     */
+    categories: Array<'payments' | 'shipping' | 'orders' | 'inventory' | 'returns' | 'checkout' | 'pricing' | 'marketing' | 'loyalty' | 'store-design' | 'content' | 'notifications' | 'analytics' | 'finances' | 'support' | 'operations' | 'compliance'>;
+    /**
+     * ISO 3166-1 alpha-2 codes of the countries the app serves; null: every country.
+     */
+    countries: Array<string> | null;
     source: 'bundled' | 'registry' | 'upload';
     status: 'installed' | 'active' | 'disabled' | 'failed';
     /**
@@ -2396,11 +2412,12 @@ export type AppSummary = {
 };
 
 /**
- * Name, description and surface titles in other dashboard languages (null: English only).
+ * Name, tagline, description and surface titles in other dashboard languages (null: English only).
  */
 export type AppTranslations = {
     bn?: {
         name?: string;
+        tagline?: string;
         description?: string;
         pages?: {
             [key: string]: string;
@@ -2416,6 +2433,54 @@ export type AppTranslations = {
         };
     };
 } | null;
+
+/**
+ * A first-party app this deployment does not bundle yet.
+ */
+export type AppListing = {
+    id: string;
+    name: string;
+    version: string;
+    description: string;
+    translations?: AppTranslations;
+    author: {
+        name: string;
+        url: string | null;
+    };
+    homepage: string | null;
+    /**
+     * One line under the name.
+     */
+    tagline: string | null;
+    /**
+     * Same-origin address of the app's icon (SVG or PNG), or null.
+     */
+    icon: string | null;
+    /**
+     * One to three categories; the first is the main one.
+     */
+    categories: Array<'payments' | 'shipping' | 'orders' | 'inventory' | 'returns' | 'checkout' | 'pricing' | 'marketing' | 'loyalty' | 'store-design' | 'content' | 'notifications' | 'analytics' | 'finances' | 'support' | 'operations' | 'compliance'>;
+    /**
+     * ISO 3166-1 alpha-2 codes of the countries the app serves; null: every country.
+     */
+    countries: Array<string> | null;
+    /**
+     * Same-origin addresses of up to six screenshots.
+     */
+    screenshots: Array<string>;
+    support: {
+        url: string | null;
+        email: string | null;
+    } | null;
+    privacyPolicyUrl: string | null;
+    documentationUrl: string | null;
+    changelogUrl: string | null;
+    minPlatformVersion: string | null;
+    /**
+     * The operator's command that bundles this app (then deploy).
+     */
+    installCommand: string;
+};
 
 export type AppAdminSurfaces = {
     id: string;
@@ -2453,6 +2518,18 @@ export type AppAdminSurfaces = {
 };
 
 export type AppDetail = AppSummary & {
+    /**
+     * Same-origin addresses of up to six screenshots.
+     */
+    screenshots: Array<string>;
+    support: {
+        url: string | null;
+        email: string | null;
+    } | null;
+    privacyPolicyUrl: string | null;
+    documentationUrl: string | null;
+    changelogUrl: string | null;
+    minPlatformVersion: string | null;
     /**
      * Send back on activation: approving a request nobody was shown is refused.
      */
@@ -52552,12 +52629,63 @@ export type GetApiV1AdminAppsResponses = {
         success: true;
         data: {
             apps: Array<AppSummary>;
+            /**
+             * First-party apps not bundled into this deployment: each installs with its installCommand, then a deploy.
+             */
+            available: Array<AppListing>;
             sandboxAvailable: boolean;
         };
     };
 };
 
 export type GetApiV1AdminAppsResponse = GetApiV1AdminAppsResponses[keyof GetApiV1AdminAppsResponses];
+
+export type GetApiV1AdminAppsByIdAssetsByAssetData = {
+    body?: never;
+    path: {
+        /**
+         * The app's id (vendor.name).
+         */
+        id: string;
+        /**
+         * icon, or screenshot-1 to screenshot-6.
+         */
+        asset: string;
+    };
+    query?: {
+        /**
+         * The fingerprint from the listing's address.
+         */
+        v?: string;
+    };
+    url: '/api/v1/admin/apps/{id}/assets/{asset}';
+};
+
+export type GetApiV1AdminAppsByIdAssetsByAssetErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+};
+
+export type GetApiV1AdminAppsByIdAssetsByAssetError = GetApiV1AdminAppsByIdAssetsByAssetErrors[keyof GetApiV1AdminAppsByIdAssetsByAssetErrors];
+
+export type GetApiV1AdminAppsByIdAssetsByAssetResponses = {
+    /**
+     * The image
+     */
+    200: Blob | File;
+};
+
+export type GetApiV1AdminAppsByIdAssetsByAssetResponse = GetApiV1AdminAppsByIdAssetsByAssetResponses[keyof GetApiV1AdminAppsByIdAssetsByAssetResponses];
 
 export type GetApiV1AdminAppsSurfacesData = {
     body?: never;

@@ -21,10 +21,15 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 export const manifest = {
   id: "scalius.hello",
   name: "Hello",
-  version: "0.3.1",
+  version: "0.3.2",
   apiVersion: PLUGIN_API_VERSION,
   description: "Greets paid orders, offers a welcome discount and shows what it did.",
   author: { name: "Scalius" },
+  tagline: "An example app that uses every app surface",
+  categories: ["marketing"],
+  support: { url: "https://github.com/scaliuslabs/scalius-commerce-lite/issues" },
+  changelogUrl: "https://github.com/scaliuslabs/scalius-commerce-lite/commits/mono-repo/plugins/hello",
+  minPlatformVersion: "1.0.0",
   permissions: ["orders.view"],
   events: ["order.paid", "order.created"],
   functions: [{ point: "checkout.discounts", priority: 100 }],
@@ -64,6 +69,7 @@ export const manifest = {
   translations: {
     bn: {
       name: "হ্যালো",
+      tagline: "অ্যাপের সব জায়গা ব্যবহার করা একটি উদাহরণ অ্যাপ",
       description: "পেমেন্ট হওয়া অর্ডারকে শুভেচ্ছা জানায়, স্বাগত ডিসকাউন্ট দেয় আর কী করেছে তা দেখায়।",
       pages: { overview: "হ্যালো" },
       cards: { greeting: "হ্যালো" },

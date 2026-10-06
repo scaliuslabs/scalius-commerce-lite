@@ -9,7 +9,7 @@
 // is additionally Super Admin only (enforced by the route): approving an
 // app's access is approving what it may read and change.
 import { PERMISSIONS } from "../permissions";
-import type { RoutePermissionMap } from "./shared";
+import { ANY_STAFF, type RoutePermissionMap } from "./shared";
 
 const view = { permission: PERMISSIONS.APPS_VIEW };
 const manage = { permission: PERMISSIONS.APPS_MANAGE };
@@ -23,6 +23,9 @@ export const APP_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/apps/*/settings": { PUT: manage },
   "/api/v1/admin/apps/*/uninstall": { POST: manage },
   "/api/v1/admin/apps/*/logs": { GET: view },
+  // An app's icon and screenshots: any staff member, since Settings pages
+  // (payments, shipping) show the icon of the app behind a method.
+  "/api/v1/admin/apps/*/assets/*": { GET: { anyOf: ANY_STAFF } },
   "/api/v1/admin/apps/*/deliveries": { GET: view },
   "/api/v1/admin/apps/*/deliveries/*/retry": { POST: manage },
   // An app's own dashboard routes: reading its pages needs apps.view; its

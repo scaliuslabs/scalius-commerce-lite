@@ -7,7 +7,7 @@
 
 import { z } from "zod";
 import { isEventTopicFilter, topicMatchesAnyFilter, type EventTopic, type EventTopicFilter } from "../events";
-import { SUPPORTED_PLUGIN_API_VERSIONS } from "./api-version";
+import { SCALIUS_PLATFORM_VERSION, SUPPORTED_PLUGIN_API_VERSIONS } from "./api-version";
 import { parsePluginCronSchedule } from "./cron";
 import { FIRST_PARTY_PLUGIN_VENDOR, PLUGIN_ID_PATTERN } from "./ids";
 import { pluginSettingsSchemaSchema } from "./settings-schema";
@@ -15,7 +15,7 @@ import { pluginProvidersSchema } from "./providers/descriptors";
 import { PROVIDER_KINDS } from "./providers/kinds";
 
 /** Date-versioned like the event catalog; a manifest names the version it was built for. */
-export { PLUGIN_API_VERSION, SUPPORTED_PLUGIN_API_VERSIONS, type PluginApiVersion } from "./api-version";
+export { PLUGIN_API_VERSION, SCALIUS_PLATFORM_VERSION, SUPPORTED_PLUGIN_API_VERSIONS, type PluginApiVersion } from "./api-version";
 
 /** `vendor.name` (in ./ids.ts, so id checks don't need this schema module). */
 export { FIRST_PARTY_PLUGIN_VENDOR, PLUGIN_ID_PATTERN };
@@ -185,6 +185,69 @@ const storefrontSchema = z.object({
   proxy: z.boolean().default(false),
 }).strict();
 
+// ── Listing ───────────────────────────────────────────────────────────────
+
+/**
+ * What the Apps page groups and filters by: the Shopify App Store
+ * subcategories that fit a store on this platform (shopify.dev, "App listing
+ * categories"). An app names one to three, the first is its main one.
+ */
+export const PLUGIN_CATEGORIES = [
+  "payments",
+  "shipping",
+  "orders",
+  "inventory",
+  "returns",
+  "checkout",
+  "pricing",
+  "marketing",
+  "loyalty",
+  "store-design",
+  "content",
+  "notifications",
+  "analytics",
+  "finances",
+  "support",
+  "operations",
+  "compliance",
+] as const;
+export type PluginCategory = (typeof PLUGIN_CATEGORIES)[number];
+
+/** Image types an app's icon may be; a screenshot is a raster image. */
+export const PLUGIN_ICON_TYPES = { svg: "image/svg+xml", png: "image/png" } as const;
+export const PLUGIN_SCREENSHOT_TYPES = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", webp: "image/webp" } as const;
+export const PLUGIN_ICON_MAX_BYTES = 64 * 1024;
+export const PLUGIN_SCREENSHOT_MAX_BYTES = 512 * 1024;
+export const PLUGIN_SCREENSHOTS_MAX = 6;
+
+/**
+ * A file in the plugin's package (`assets/icon.svg`): relative, lowercase,
+ * no `..`. The packer reads, checks and bundles it with the plugin.
+ */
+const assetPath = (types: Record<string, string>) => z.string().max(128)
+  .regex(/^(?!.*\.\.)[a-z0-9][a-z0-9_.-]*(?:\/[a-z0-9][a-z0-9_.-]*)*$/, "Use a relative lowercase path inside the plugin.")
+  .refine((path) => Object.hasOwn(types, path.slice(path.lastIndexOf(".") + 1)), `Use a ${Object.keys(types).join(", ")} file.`);
+
+/** The content type of an asset path the manifest accepted. */
+export function pluginAssetContentType(path: string): string | null {
+  const extension = path.slice(path.lastIndexOf(".") + 1);
+  return (PLUGIN_ICON_TYPES as Record<string, string>)[extension] ?? (PLUGIN_SCREENSHOT_TYPES as Record<string, string>)[extension] ?? null;
+}
+
+const httpsUrl = z.string().url().max(2048).refine((value) => value.startsWith("https://"), "Use an https address.");
+const tagline = z.string().trim().min(1).max(100);
+const platformVersion = z.string().regex(SEMVER, "Use a semantic version.");
+
+/** Whether semantic version `left` is below `right` (pre-release tags ignored). */
+function semverBelow(left: string, right: string): boolean {
+  const parts = (value: string) => value.split("-")[0]!.split(".").map(Number);
+  const [a, b] = [parts(left), parts(right)];
+  for (let index = 0; index < 3; index += 1) {
+    if (a[index]! !== b[index]!) return a[index]! < b[index]!;
+  }
+  return false;
+}
+
 // ── Translations ──────────────────────────────────────────────────────────
 
 /** Dashboard languages besides English, the manifest's own language. */
@@ -193,12 +256,13 @@ export type PluginTranslationLocale = (typeof PLUGIN_TRANSLATION_LOCALES)[number
 
 /**
  * The manifest's merchant-facing text in another dashboard language: the
- * app's name and description, and its pages', cards', actions' and widgets'
- * titles by id. Anything left out shows in English. An app's own screens
+ * app's name, tagline and description, and its pages', cards', actions' and
+ * widgets' titles by id. Anything left out shows in English. An app's own screens
  * pick their language from `adminContext(request).locale`.
  */
 const pluginTranslationSchema = z.object({
   name: title.optional(),
+  tagline: tagline.optional(),
   description: description.optional(),
   pages: z.record(name, title).optional(),
   cards: z.record(name, title).optional(),
@@ -218,6 +282,26 @@ export const pluginManifestSchema = z.object({
   author: z.object({ name: title, url: z.string().url().optional(), email: z.string().email().optional() }).strict(),
   homepage: z.string().url().optional(),
   license: z.string().max(64).optional(),
+
+  // Listing: what the Apps page shows before and after install (Shopify App
+  // Store and WordPress plugin directory fields). None of it is a capability.
+  /** Square SVG or PNG in the plugin package, at most 64 KiB; an SVG may hold no script or outside reference. */
+  icon: assetPath(PLUGIN_ICON_TYPES).optional(),
+  /** One line under the name; `description` says the rest. */
+  tagline: tagline.optional(),
+  categories: z.array(z.enum(PLUGIN_CATEGORIES)).max(3).default([]),
+  /** PNG, JPEG or WebP images in the plugin package, at most 512 KiB each. */
+  screenshots: z.array(assetPath(PLUGIN_SCREENSHOT_TYPES)).max(PLUGIN_SCREENSHOTS_MAX).default([]),
+  support: z.object({ url: httpsUrl.optional(), email: z.string().email().max(254).optional() }).strict()
+    .refine((support) => support.url !== undefined || support.email !== undefined, "Give a support address or email.")
+    .optional(),
+  privacyPolicyUrl: httpsUrl.optional(),
+  documentationUrl: httpsUrl.optional(),
+  changelogUrl: httpsUrl.optional(),
+  /** ISO 3166-1 alpha-2 codes of the countries the app serves; left out, it serves every country. */
+  countries: z.array(z.string().regex(/^[A-Z]{2}$/, "Use ISO 3166-1 alpha-2 codes, upper case.")).min(1).max(250).optional(),
+  /** The oldest Scalius release the app runs on. */
+  minPlatformVersion: platformVersion.optional(),
 
   /** Store data and actions, as RBAC permission names; every `ctx.api` call is checked against them. */
   permissions: z.array(z.string().regex(PLUGIN_PERMISSION_PATTERN)).max(80).default([]),
@@ -335,6 +419,16 @@ export const pluginManifestSchema = z.object({
     if (new Set(values).size !== values.length) context.addIssue({ code: "custom", path, message: `${what} must be unique.` });
   };
   unique(manifest.functions.map((fn) => fn.point), ["functions"], "Function points");
+  unique(manifest.categories, ["categories"], "Categories");
+  unique(manifest.screenshots, ["screenshots"], "Screenshots");
+  unique(manifest.countries ?? [], ["countries"], "Countries");
+  if (manifest.minPlatformVersion && semverBelow(SCALIUS_PLATFORM_VERSION, manifest.minPlatformVersion)) {
+    context.addIssue({
+      code: "custom",
+      path: ["minPlatformVersion"],
+      message: `Needs Scalius ${manifest.minPlatformVersion} or later; this is ${SCALIUS_PLATFORM_VERSION}.`,
+    });
+  }
   manifest.functions.forEach((fn, index) => {
     if (fn.onError === "block" && !(PLUGIN_BLOCKING_FUNCTION_POINTS as readonly string[]).includes(fn.point)) {
       context.addIssue({ code: "custom", path: ["functions", index, "onError"], message: "Only cart.validate and checkout.payment_methods may block checkout." });

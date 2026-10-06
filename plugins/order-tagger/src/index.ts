@@ -14,10 +14,15 @@ import { adminContext, definePlugin, PLUGIN_API_VERSION, ui, type PluginContext,
 export const manifest = {
   id: "scalius.order-tagger",
   name: "Order tagger",
-  version: "0.1.2",
+  version: "0.1.3",
   apiVersion: PLUGIN_API_VERSION,
   description: "Tags new paid orders and notes them on the order timeline, so your team sees at a glance what to pack.",
   author: { name: "Scalius" },
+  tagline: "Tag paid orders so your team knows what to pack",
+  categories: ["orders",  "operations"],
+  support: { url: "https://github.com/scaliuslabs/scalius-commerce-lite/issues" },
+  changelogUrl: "https://github.com/scaliuslabs/scalius-commerce-lite/commits/mono-repo/plugins/order-tagger",
+  minPlatformVersion: "1.0.0",
   permissions: ["orders.view", "orders.edit"],
   events: ["order.paid"],
   routes: {
@@ -42,6 +47,7 @@ export const manifest = {
   translations: {
     bn: {
       name: "অর্ডার ট্যাগার",
+      tagline: "পেমেন্ট হওয়া অর্ডারে ট্যাগ, যাতে টিম জানে কী প্যাক করতে হবে",
       description: "পেমেন্ট হওয়া নতুন অর্ডারে ট্যাগ দেয় আর অর্ডারের টাইমলাইনে নোট রাখে, যাতে আপনার টিম এক নজরে বোঝে কী প্যাক করতে হবে।",
       pages: { overview: "অর্ডার ট্যাগার" },
     },

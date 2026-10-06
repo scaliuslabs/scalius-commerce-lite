@@ -2,7 +2,9 @@
 // `pnpm plugin <command>`: the operator's tool for bundled plugins
 // (docs/platform/PLUGINS.md). Plugins compiled into the API Worker are listed
 // in scalius.plugins.json; this keeps that lockfile, the generated
-// apps/api/src/plugins/bundled.gen.ts and the sandbox wrapper in step.
+// apps/api/src/plugins/bundled.gen.ts, the plugins' listing images
+// (assets.gen.ts), the catalog of first-party plugins not bundled
+// (catalog.gen.ts) and the sandbox wrapper in step.
 //
 //   pnpm plugin create <vendor.name> [--dir plugins/<name>]   scaffold a plugin package
 //   pnpm plugin add <path | package>                           pack, check and bundle a plugin
@@ -16,14 +18,19 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import {
+  ASSETS_GEN,
   BUNDLED_GEN,
+  CATALOG_GEN,
   LOCKFILE,
   SANDBOX_RUNTIME_GEN,
   buildSandboxRuntime,
   isPathSource,
+  packForGenerated,
   packPlugin,
   readLockfile,
+  renderAssetsGen,
   renderBundledGen,
+  renderCatalogGen,
   renderLockfile,
   renderSandboxRuntimeGen,
   root,
@@ -72,8 +79,13 @@ async function regenerate(lockfile) {
   writeIfChanged(LOCKFILE, renderLockfile(lockfile));
   const bundled = writeIfChanged(BUNDLED_GEN, renderBundledGen(lockfile));
   const runtime = writeIfChanged(SANDBOX_RUNTIME_GEN, renderSandboxRuntimeGen(await buildSandboxRuntime()));
+  const packed = await packForGenerated(lockfile);
+  const assets = writeIfChanged(ASSETS_GEN, renderAssetsGen([...packed.bundled, ...packed.catalog]));
+  const catalog = writeIfChanged(CATALOG_GEN, renderCatalogGen(packed.catalog));
   if (bundled) console.log(`Updated ${relative(root, BUNDLED_GEN)}`);
   if (runtime) console.log(`Updated ${relative(root, SANDBOX_RUNTIME_GEN)}`);
+  if (assets) console.log(`Updated ${relative(root, ASSETS_GEN)}`);
+  if (catalog) console.log(`Updated ${relative(root, CATALOG_GEN)}`);
 }
 
 function normalizeSource(source) {

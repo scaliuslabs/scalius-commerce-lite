@@ -22,10 +22,16 @@ import { definePlugin, PLUGIN_API_VERSION, type PluginContext, type PluginManife
 export const manifest = {
   id: "scalius.loyalty",
   name: "Loyalty points",
-  version: "0.1.1",
+  version: "0.1.2",
   apiVersion: PLUGIN_API_VERSION,
   description: "Signed-in buyers earn points on paid orders and spend them at checkout with a code. Points are taken with the order itself, so they can never be spent twice.",
   author: { name: "Scalius" },
+  tagline: "Points buyers earn on orders and spend at checkout",
+  categories: ["loyalty",  "marketing"],
+  support: { url: "https://github.com/scaliuslabs/scalius-commerce-lite/issues" },
+  documentationUrl: "https://github.com/scaliuslabs/scalius-commerce-lite/blob/mono-repo/plugins/loyalty/README.md",
+  changelogUrl: "https://github.com/scaliuslabs/scalius-commerce-lite/commits/mono-repo/plugins/loyalty",
+  minPlatformVersion: "1.0.0",
   permissions: ["orders.view"],
   events: ["order.paid"],
   functions: [{ point: "checkout.discounts", priority: 200, snapshot: { collection: "balances" } }],
@@ -45,6 +51,7 @@ export const manifest = {
   translations: {
     bn: {
       name: "লয়্যালটি পয়েন্ট",
+      tagline: "অর্ডারে পয়েন্ট পান, চেকআউটে খরচ করুন",
       description: "সাইন-ইন করা ক্রেতারা পেমেন্ট হওয়া অর্ডারে পয়েন্ট পান আর চেকআউটে কোড দিয়ে খরচ করেন। পয়েন্ট অর্ডারের সঙ্গেই কাটা হয়, তাই কখনও দুবার খরচ করা যায় না।",
     },
   },

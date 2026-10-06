@@ -30,10 +30,18 @@ import { refund, refundStatus } from "./refunds";
 export const manifest = {
   id: "scalius.bkash",
   name: "bKash",
-  version: "0.1.1",
+  version: "0.1.2",
   apiVersion: PLUGIN_API_VERSION,
   description: "Take bKash payments at checkout. Buyers pay on bKash's own page; an order is marked paid only after bKash confirms the payment to Scalius directly. Refund bKash payments from the order page.",
   author: { name: "Scalius" },
+  icon: "assets/icon.svg",
+  tagline: "Take bKash payments at checkout",
+  categories: ["payments"],
+  countries: ["BD"],
+  support: { url: "https://github.com/scaliuslabs/scalius-commerce-lite/issues" },
+  documentationUrl: "https://github.com/scaliuslabs/scalius-commerce-lite/blob/mono-repo/plugins/bkash/README.md",
+  changelogUrl: "https://github.com/scaliuslabs/scalius-commerce-lite/commits/mono-repo/plugins/bkash",
+  minPlatformVersion: "1.0.0",
   allowedHosts: [BKASH_HOSTS.sandbox, BKASH_HOSTS.live],
   settings: [
     {
@@ -75,6 +83,7 @@ export const manifest = {
   translations: {
     bn: {
       name: "বিকাশ",
+      tagline: "চেকআউটে বিকাশ পেমেন্ট নিন",
       description: "চেকআউটে বিকাশে পেমেন্ট নিন। ক্রেতা বিকাশের নিজের পেজে পেমেন্ট করেন; বিকাশ সরাসরি Scalius-কে পেমেন্ট নিশ্চিত করার পরই অর্ডার পেইড হয়। অর্ডার পেজ থেকে বিকাশ পেমেন্ট রিফান্ড করুন।",
     },
   },

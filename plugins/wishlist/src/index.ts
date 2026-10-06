@@ -28,10 +28,15 @@ import {
 export const manifest = {
   id: "scalius.wishlist",
   name: "Wishlist",
-  version: "0.1.1",
+  version: "0.1.2",
   apiVersion: PLUGIN_API_VERSION,
   description: "Buyers save products with a heart button and find them again on their wishlist page; you see which products are wished most.",
   author: { name: "Scalius" },
+  tagline: "Buyers save products to buy later",
+  categories: ["marketing"],
+  support: { url: "https://github.com/scaliuslabs/scalius-commerce-lite/issues" },
+  changelogUrl: "https://github.com/scaliuslabs/scalius-commerce-lite/commits/mono-repo/plugins/wishlist",
+  minPlatformVersion: "1.0.0",
   // Product names, links and images for the wishlist page and the dashboard.
   permissions: ["products.view"],
   events: ["product.updated", "product.deleted"],
@@ -61,6 +66,7 @@ export const manifest = {
   translations: {
     bn: {
       name: "উইশলিস্ট",
+      tagline: "ক্রেতারা পরে কেনার জন্য প্রোডাক্ট সেভ করেন",
       description: "ক্রেতারা হার্ট বাটনে প্রোডাক্ট সেভ করেন আর উইশলিস্ট পেজে আবার খুঁজে পান; আপনি দেখেন কোন প্রোডাক্ট সবচেয়ে বেশি সেভ হয়।",
       pages: { "most-wished": "সবচেয়ে বেশি সেভ করা" },
       cards: { wishes: "উইশলিস্ট" },

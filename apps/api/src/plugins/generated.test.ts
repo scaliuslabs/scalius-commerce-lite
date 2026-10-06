@@ -1,16 +1,23 @@
 // The generated plugin modules are fresh: the sandbox wrapper is exactly what
 // `pnpm plugin build` compiles from runtime/sandbox-entry.ts and the SDK
-// runtime, and bundled.gen.ts plus scalius.plugins.json match what packing
-// each bundled plugin produces today.
+// runtime, bundled.gen.ts plus scalius.plugins.json match what packing
+// each bundled plugin produces today, and so do the listing images
+// (assets.gen.ts) and the catalog of first-party plugins not bundled
+// (catalog.gen.ts).
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
+  ASSETS_GEN,
   BUNDLED_GEN,
+  CATALOG_GEN,
   SANDBOX_RUNTIME_GEN,
   buildSandboxRuntime,
+  packForGenerated,
   packPlugin,
   readLockfile,
+  renderAssetsGen,
   renderBundledGen,
+  renderCatalogGen,
   renderSandboxRuntimeGen,
 } from "../../../../scripts/plugin-build.mjs";
 import { BUNDLED_PLUGINS } from "./bundled.gen";
@@ -33,6 +40,31 @@ describe("generated plugin modules", () => {
       const packed = await packPlugin(plugin.source);
       expect({ id: packed.id, version: packed.version, sha256: packed.sha256 }).toEqual({ id: plugin.id, version: plugin.version, sha256: plugin.sha256 });
       expect(BUNDLED_PLUGINS[plugin.id]).toMatchObject({ version: plugin.version, sha256: plugin.sha256 });
+    }
+  });
+
+  it("keeps the listing images and the catalog in step with plugins/* (run pnpm plugin build)", async () => {
+    const packed = await packForGenerated(readLockfile());
+    expect(readFileSync(ASSETS_GEN, "utf8")).toBe(renderAssetsGen([...packed.bundled, ...packed.catalog]));
+    expect(readFileSync(CATALOG_GEN, "utf8")).toBe(renderCatalogGen(packed.catalog));
+  });
+
+  it("lists every first-party app with a tagline, categories and links, in Bangla too", async () => {
+    for (const plugin of readLockfile().plugins.filter((entry) => entry.source.startsWith("plugins/"))) {
+      const { manifest } = await packPlugin(plugin.source);
+      expect(manifest, plugin.id).toMatchObject({
+        tagline: expect.any(String),
+        categories: expect.arrayContaining([expect.any(String)]),
+        support: { url: expect.stringMatching(/^https:\/\//) },
+        changelogUrl: expect.stringMatching(/^https:\/\//),
+        translations: { bn: { tagline: expect.any(String) } },
+      });
+    }
+    // The payment apps carry their brand's logo and serve Bangladesh only.
+    for (const source of ["plugins/bkash", "plugins/nagad"]) {
+      const { manifest, assets } = await packPlugin(source);
+      expect(manifest, source).toMatchObject({ icon: "assets/icon.svg", countries: ["BD"] });
+      expect(assets.map((asset: { path: string }) => asset.path)).toEqual(["assets/icon.svg"]);
     }
   });
 

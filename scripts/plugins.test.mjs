@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { judgeApiBundle, measureWorkerOutput, API_BUNDLE_BUDGET_BYTES, WORKER_SIZE_LIMIT_BYTES } from "./check-api-bundle.mjs";
-import { isPathSource, renderBundledGen, renderLockfile } from "./plugin-build.mjs";
+import { isPathSource, renderBundledGen, renderCatalogGen, renderLockfile, sealBundle } from "./plugin-build.mjs";
 import { pluginSandboxEnabled, scaffoldFiles, withPluginSandbox } from "./plugins.mjs";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -40,6 +40,37 @@ describe("pnpm plugin", () => {
     expect(generated).toContain('load: () => import("@acme/scalius-a")');
     expect(generated).toContain('load: () => import("../../../../plugins/b/src/index")');
     expect(generated.indexOf("acme.a")).toBeLessThan(generated.indexOf("zeta.b"));
+  });
+
+  it("seals listing image digests into the bundle, so an image change is a new fingerprint", () => {
+    expect(sealBundle("export default 1;\n", [])).toBe("export default 1;\n");
+    const sealed = sealBundle("export default 1;\n", [{ path: "assets/icon.svg", sha256: "a".repeat(64) }]);
+    expect(sealed).toBe(`export default 1;\n//# scalius-assets {"assets/icon.svg":"${"a".repeat(64)}"}\n`);
+    expect(sealBundle("export default 1;\n", [{ path: "assets/icon.svg", sha256: "b".repeat(64) }])).not.toBe(sealed);
+  });
+
+  it("catalogs an unbundled first-party plugin by its listing and add command", () => {
+    const generated = renderCatalogGen([{
+      id: "scalius.gift",
+      source: "plugins/gift",
+      sha256: "c".repeat(64),
+      manifest: {
+        name: "Gift wrap",
+        version: "1.0.0",
+        description: "Wrap orders.",
+        author: { name: "Scalius" },
+        tagline: "Wrap it",
+        categories: ["orders"],
+        screenshots: [],
+        permissions: ["orders.view"],
+        translations: { bn: { name: "গিফট র‍্যাপ", tagline: "মুড়ে দিন", pages: { x: "y" } } },
+      },
+    }]);
+    expect(generated).toContain('"source":"plugins/gift"');
+    expect(generated).toContain('"tagline":"Wrap it"');
+    // Only the listing travels: no capabilities, no surface translations.
+    expect(generated).not.toContain("permissions");
+    expect(generated).not.toContain("pages");
   });
 
   it("scaffolds a plugin package with a manifest and matching handlers", () => {

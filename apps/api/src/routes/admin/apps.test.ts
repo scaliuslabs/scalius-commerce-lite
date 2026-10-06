@@ -6,7 +6,7 @@
 // (a bundled app reappears as installed).
 import { OpenAPIHono } from "@hono/zod-openapi";
 import type { DatabaseSync } from "node:sqlite";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Database } from "@scalius/database/client";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { putPluginRecord, requirePluginInstallation } from "@scalius/core/modules/plugins";
@@ -14,6 +14,36 @@ import { errorResponseFromError } from "../../utils/api-response";
 import { BUNDLED_PLUGINS } from "../../plugins/bundled.gen";
 import { pluginTestCtx, pluginTestEnv } from "../../plugins/testing/fixtures";
 import { adminAppRoutes } from "./apps";
+
+// A first-party plugin this deployment does not bundle (the real catalog is empty here).
+const GIFT_ICON = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"><rect width="1" height="1"/></svg>';
+vi.mock("../../plugins/catalog.gen", () => ({
+  PLUGIN_CATALOG: [{
+    id: "scalius.gift-wrap",
+    source: "plugins/gift-wrap",
+    sha256: "c".repeat(64),
+    listing: {
+      name: "Gift wrap",
+      version: "1.0.0",
+      description: "Buyers ask for gift wrap at checkout.",
+      author: { name: "Scalius" },
+      icon: "assets/icon.svg",
+      tagline: "Wrap orders as gifts",
+      categories: ["orders"],
+      screenshots: [],
+      translations: { bn: { name: "গিফট র‍্যাপ" } },
+    },
+  }],
+}));
+vi.mock("../../plugins/assets.gen", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../plugins/assets.gen")>();
+  return {
+    PLUGIN_ASSETS: {
+      ...actual.PLUGIN_ASSETS,
+      "scalius.gift-wrap": { "assets/icon.svg": { type: "image/svg+xml", sha256: "d".repeat(64), data: btoa(GIFT_ICON) } },
+    },
+  };
+});
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- JSON from the routes, asserted field by field
 type Json = Record<string, any>;
@@ -163,6 +193,45 @@ describe("admin app routes", () => {
     expect(updated.granted.permissions).toEqual(["orders.view"]);
     const approved = await call("POST", "/apps/scalius.order-tagger/activate", { expectedRevision: updated.revision, grantKey: updated.grantKey });
     expect(approved.json.data.app).toMatchObject({ status: "active", needsApproval: false });
+  });
+
+  it("lists each app's listing and serves its checked icon, cached by fingerprint", async () => {
+    const { apps, available } = (await call("GET", "/apps")).json.data;
+    const bkash = apps.find((entry: Json) => entry.id === "scalius.bkash");
+    const sha = BUNDLED_PLUGINS["scalius.bkash"]!.sha256;
+    expect(bkash).toMatchObject({
+      tagline: "Take bKash payments at checkout",
+      categories: ["payments"],
+      countries: ["BD"],
+      icon: `/api/v1/admin/apps/scalius.bkash/assets/icon?v=${sha.slice(0, 16)}`,
+      translations: { bn: { tagline: expect.any(String) } },
+    });
+    // A first-party app not bundled here waits to be added with its command.
+    expect(available).toEqual([expect.objectContaining({
+      id: "scalius.gift-wrap",
+      tagline: "Wrap orders as gifts",
+      icon: "/api/v1/admin/apps/scalius.gift-wrap/assets/icon?v=cccccccccccccccc",
+      installCommand: "pnpm plugin add plugins/gift-wrap",
+      translations: { bn: { name: "গিফট র‍্যাপ" } },
+    })]);
+    const giftIcon = await app.request(available[0].icon, {}, env, pluginTestCtx());
+    expect([giftIcon.status, await giftIcon.text()]).toEqual([200, GIFT_ICON]);
+    const detail = (await call("GET", "/apps/scalius.bkash")).json.data.app;
+    expect(detail).toMatchObject({ screenshots: [], support: { url: expect.stringMatching(/^https:/), email: null }, minPlatformVersion: "1.0.0" });
+    expect(apps.find((entry: Json) => entry.id === "scalius.hello")).toMatchObject({ icon: null, countries: null });
+
+    const image = await app.request(bkash.icon, {}, env, pluginTestCtx());
+    expect(image.status).toBe(200);
+    expect(image.headers.get("Content-Type")).toBe("image/svg+xml");
+    expect(image.headers.get("Cache-Control")).toBe("private, max-age=31536000, immutable");
+    expect(image.headers.get("Content-Security-Policy")).toContain("sandbox");
+    expect(image.headers.get("X-Content-Type-Options")).toBe("nosniff");
+    expect(await image.text()).toMatch(/^<svg/);
+    // Another fingerprint is served but never cached; an app without the image has none.
+    expect((await app.request("/api/v1/admin/apps/scalius.bkash/assets/icon?v=0000000000000000", {}, env, pluginTestCtx())).headers.get("Cache-Control")).toBe("private, no-cache");
+    expect((await app.request("/api/v1/admin/apps/scalius.bkash/assets/screenshot-1", {}, env, pluginTestCtx())).status).toBe(404);
+    expect((await app.request("/api/v1/admin/apps/scalius.hello/assets/icon", {}, env, pluginTestCtx())).status).toBe(404);
+    expect((await app.request("/api/v1/admin/apps/scalius.bkash/assets/../plugin.js", {}, env, pluginTestCtx())).status).not.toBe(200);
   });
 
   it("lists what active apps add to the dashboard: pages by placement, cards, actions, widgets and their admin routes", async () => {

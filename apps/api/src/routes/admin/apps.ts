@@ -2,7 +2,8 @@
 // the list (bundled plugins appear as installed automatically), one app's
 // detail with its consent request in structured form, activation (Super Admin
 // approves the grant), settings (secrets write-only), deactivation,
-// uninstall (keep or delete data), the plugin log and event deliveries.
+// uninstall (keep or delete data), the plugin log and event deliveries, and
+// the listing images (icon, screenshots) of installed and catalogued apps.
 // RBAC: apps.view / apps.manage (route-permissions/apps.ts); plugins can
 // never call these (the `apps` resource is reserved, and they are
 // security-class operations).
@@ -28,6 +29,7 @@ import {
 import { PERMISSION_METADATA } from "@scalius/core/auth/rbac/permission-metadata";
 import {
   PLUGIN_ADMIN_TARGETS,
+  PLUGIN_CATEGORIES,
   PLUGIN_ID_PATTERN,
   PLUGIN_FUNCTION_POINTS,
   PLUGIN_NAV_PLACEMENTS,
@@ -43,6 +45,16 @@ import { getCredentialEncryptionKey } from "../../utils/encryption-key";
 import { conflictResponse, errorResponses, serviceUnavailableResponse, successEnvelope } from "../../schemas/responses";
 import { eventsQueue } from "../../events/flush";
 import { BUNDLED_PLUGINS } from "../../plugins/bundled.gen";
+import { PLUGIN_CATALOG } from "../../plugins/catalog.gen";
+import {
+  PLUGIN_ASSET_NAME,
+  compiledPluginAsset,
+  listingDetail,
+  listingSummary,
+  pluginAssetKey,
+  pluginAssetPath,
+  pluginAssetResponse,
+} from "../../plugins/listing";
 import { syncBundledPlugin, syncBundledPlugins } from "../../plugins/bundled-sync";
 
 import { isPluginSandboxAvailable } from "../../plugins/loaders/sandbox-availability";
@@ -91,13 +103,45 @@ const grantSchema = z.object({
 const appTranslationsSchema = z.object({
   bn: z.object({
     name: z.string().optional(),
+    tagline: z.string().optional(),
     description: z.string().optional(),
     pages: z.record(z.string(), z.string()).optional(),
     cards: z.record(z.string(), z.string()).optional(),
     actions: z.record(z.string(), z.string()).optional(),
     widgets: z.record(z.string(), z.string()).optional(),
   }).optional(),
-}).nullable().openapi("AppTranslations", { description: "Name, description and surface titles in other dashboard languages (null: English only)." });
+}).nullable().openapi("AppTranslations", { description: "Name, tagline, description and surface titles in other dashboard languages (null: English only)." });
+
+/** What every app card shows besides its name, before and after install. */
+const listingSummaryFields = {
+  tagline: z.string().nullable().openapi({ description: "One line under the name." }),
+  icon: z.string().nullable().openapi({ description: "Same-origin address of the app's icon (SVG or PNG), or null." }),
+  categories: z.array(z.enum(PLUGIN_CATEGORIES)).openapi({ description: "One to three categories; the first is the main one." }),
+  countries: z.array(z.string()).nullable().openapi({ description: "ISO 3166-1 alpha-2 codes of the countries the app serves; null: every country." }),
+};
+
+/** What an app's page adds: screenshots, help and policy links, and the oldest platform release it runs on. */
+const listingDetailFields = {
+  screenshots: z.array(z.string()).openapi({ description: "Same-origin addresses of up to six screenshots." }),
+  support: z.object({ url: z.string().nullable(), email: z.string().nullable() }).nullable(),
+  privacyPolicyUrl: z.string().nullable(),
+  documentationUrl: z.string().nullable(),
+  changelogUrl: z.string().nullable(),
+  minPlatformVersion: z.string().nullable(),
+};
+
+const appListingSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  version: z.string(),
+  description: z.string(),
+  translations: appTranslationsSchema.optional(),
+  author: z.object({ name: z.string(), url: z.string().nullable() }),
+  homepage: z.string().nullable(),
+  ...listingSummaryFields,
+  ...listingDetailFields,
+  installCommand: z.string().openapi({ description: "The operator's command that bundles this app (then deploy)." }),
+}).openapi("AppListing", { description: "A first-party app this deployment does not bundle yet." });
 
 const appSummarySchema = z.object({
   id: z.string(),
@@ -107,6 +151,7 @@ const appSummarySchema = z.object({
   translations: appTranslationsSchema.optional(),
   author: z.object({ name: z.string(), url: z.string().nullable() }),
   homepage: z.string().nullable(),
+  ...listingSummaryFields,
   source: z.enum(["bundled", "registry", "upload"]),
   status: z.enum(["installed", "active", "disabled", "failed"]),
   needsApproval: z.boolean().openapi({ description: "An update asks for more access than was approved; the app waits until a Super Admin approves it." }),
@@ -129,6 +174,7 @@ const settingFieldSchema = appSettingFieldSchema;
 const routeSchema = z.object({ name: z.string(), methods: z.array(z.string()) });
 
 const appDetailSchema = appSummarySchema.extend({
+  ...listingDetailFields,
   grantKey: z.string().openapi({ description: "Send back on activation: approving a request nobody was shown is refused." }),
   request: grantSchema,
   granted: grantSchema.nullable(),
@@ -215,6 +261,7 @@ function summary(installation: PluginInstallation) {
     translations: manifest.translations ?? null,
     author: { name: manifest.author.name, url: manifest.author.url ?? null },
     homepage: manifest.homepage ?? null,
+    ...listingSummary(installation.pluginId, manifest, installation.bundleSha256),
     source: installation.source,
     status: installation.status,
     needsApproval: pluginNeedsApproval(installation),
@@ -281,6 +328,7 @@ async function detail(c: Context<{ Bindings: Env }>, installation: PluginInstall
   const available = runtimeAvailable(c, installation);
   return {
     ...summary(installation),
+    ...listingDetail(installation.pluginId, manifest, installation.bundleSha256),
     grantKey: pluginGrantKey(request),
     request,
     granted: installation.grant,
@@ -402,7 +450,11 @@ const listRoute = createRoute({
       description: "Installed apps",
       content: {
         "application/json": {
-          schema: successEnvelope(z.object({ apps: z.array(appSummarySchema), sandboxAvailable: z.boolean() })),
+          schema: successEnvelope(z.object({
+            apps: z.array(appSummarySchema),
+            available: z.array(appListingSchema).openapi({ description: "First-party apps not bundled into this deployment: each installs with its installCommand, then a deploy." }),
+            sandboxAvailable: z.boolean(),
+          })),
         },
       },
     },
@@ -416,7 +468,85 @@ app.openapi(listRoute, async (c) => {
   const db = c.get("db");
   await syncBundledPlugins(db);
   const installations = await listPluginInstallations(db);
-  return ok(c, { apps: installations.map(summary), sandboxAvailable: sandboxAvailable(c) });
+  const installed = new Set(installations.map((installation) => installation.pluginId));
+  const available = PLUGIN_CATALOG.filter((entry) => !installed.has(entry.id)).map(catalogListing);
+  return ok(c, { apps: installations.map(summary), available, sandboxAvailable: sandboxAvailable(c) });
+});
+
+function catalogListing(entry: (typeof PLUGIN_CATALOG)[number]) {
+  const { listing } = entry;
+  return {
+    id: entry.id,
+    name: listing.name,
+    version: listing.version,
+    description: listing.description,
+    translations: listing.translations ?? null,
+    author: { name: listing.author.name, url: listing.author.url ?? null },
+    homepage: listing.homepage ?? null,
+    ...listingSummary(entry.id, listing, entry.sha256),
+    ...listingDetail(entry.id, listing, entry.sha256),
+    installCommand: `pnpm plugin add ${entry.source}`,
+  };
+}
+
+// ── Listing images ──
+
+const assetRoute = createRoute({
+  method: "get",
+  path: "/{id}/assets/{asset}",
+  operationId: "dashboard.apps.asset_get",
+  tags: ["Admin - Apps"],
+  summary: "Read an app's icon or one of its screenshots",
+  description: "The image the listing names, checked again before it is served (an SVG cannot run code or load anything). A `v` equal to the app's current fingerprint is cached for a year.",
+  request: {
+    params: idParams.extend({ asset: z.string().regex(PLUGIN_ASSET_NAME).openapi({ description: "icon, or screenshot-1 to screenshot-6." }) }),
+    query: z.object({ v: z.string().max(64).optional().openapi({ description: "The fingerprint from the listing's address." }) }),
+  },
+  responses: {
+    200: {
+      description: "The image",
+      content: {
+        "image/svg+xml": { schema: z.string().openapi({ format: "binary" }) },
+        "image/png": { schema: z.string().openapi({ format: "binary" }) },
+        "image/jpeg": { schema: z.string().openapi({ format: "binary" }) },
+        "image/webp": { schema: z.string().openapi({ format: "binary" }) },
+      },
+    },
+    ...readErrors,
+  },
+});
+
+app.openapi(assetRoute, async (c) => {
+  const { id, asset } = c.req.valid("param");
+  const version = c.req.valid("query").v ?? "";
+  const missing = () => new Response(JSON.stringify({ success: false, error: { code: "NOT_FOUND", message: "Image not found" } }), {
+    status: 404,
+    headers: { "Content-Type": "application/json", "Cache-Control": "private, no-store" },
+  });
+  const installation = await requirePluginInstallation(c.get("db"), id).catch(() => null);
+  let response: Response | null = null;
+  if (installation) {
+    const target = pluginAssetPath(installation.manifest, asset);
+    if (!target) return missing();
+    const current = version.length >= 16 && installation.bundleSha256.startsWith(version);
+    if (installation.source === "bundled") {
+      // The deployed images belong to the deployed code; another installed version is not cached.
+      const deployed = Object.hasOwn(BUNDLED_PLUGINS, id) && BUNDLED_PLUGINS[id]!.sha256 === installation.bundleSha256;
+      const bytes = await compiledPluginAsset(id, target.path);
+      if (bytes) response = pluginAssetResponse(bytes, target.path, target.role, current && deployed);
+    } else {
+      const object = await c.env.BUCKET.get(pluginAssetKey(id, installation.version, installation.bundleSha256, target.path));
+      if (object && "arrayBuffer" in object) response = pluginAssetResponse(new Uint8Array(await object.arrayBuffer()), target.path, target.role, current);
+    }
+  } else {
+    const entry = PLUGIN_CATALOG.find((candidate) => candidate.id === id);
+    const target = entry ? pluginAssetPath(entry.listing, asset) : null;
+    const bytes = entry && target ? await compiledPluginAsset(id, target.path) : null;
+    if (entry && target && bytes) {
+      response = pluginAssetResponse(bytes, target.path, target.role, version.length >= 16 && entry.sha256.startsWith(version));
+    }
+  }
+  return response ?? missing();
 });
 
 // ── Dashboard surfaces of active apps ──

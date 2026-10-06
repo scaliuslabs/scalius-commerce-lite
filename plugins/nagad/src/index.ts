@@ -47,10 +47,18 @@ import { bytesToHex } from "./rsa";
 export const manifest = {
   id: "scalius.nagad",
   name: "Nagad (unverified)",
-  version: "0.1.1",
+  version: "0.1.2",
   apiVersion: PLUGIN_API_VERSION,
   description: "Unverified: Nagad online checkout, built from Nagad's published Online Payment API without sandbox access. Confirm it with a live Nagad merchant account before taking real payments.",
   author: { name: "Scalius" },
+  icon: "assets/icon.svg",
+  tagline: "Nagad online checkout, not yet verified",
+  categories: ["payments"],
+  countries: ["BD"],
+  support: { url: "https://github.com/scaliuslabs/scalius-commerce-lite/issues" },
+  documentationUrl: "https://github.com/scaliuslabs/scalius-commerce-lite/blob/mono-repo/plugins/nagad/README.md",
+  changelogUrl: "https://github.com/scaliuslabs/scalius-commerce-lite/commits/mono-repo/plugins/nagad",
+  minPlatformVersion: "1.0.0",
   allowedHosts: NAGAD_HOSTS,
   storage: {
     payments: {
@@ -117,6 +125,7 @@ export const manifest = {
   translations: {
     bn: {
       name: "নগদ (যাচাই করা হয়নি)",
+      tagline: "নগদ অনলাইন চেকআউট, এখনও যাচাই করা হয়নি",
       description: "যাচাই করা হয়নি: স্যান্ডবক্স ছাড়া নগদের প্রকাশিত অনলাইন পেমেন্ট API দেখে তৈরি নগদ অনলাইন চেকআউট। আসল পেমেন্ট নেওয়ার আগে একটি লাইভ নগদ মার্চেন্ট অ্যাকাউন্টে এটি যাচাই করে নিন।",
     },
   },
