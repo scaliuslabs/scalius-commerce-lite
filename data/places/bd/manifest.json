@@ -1,0 +1,35 @@
+{
+  "country": "BD",
+  "source": "Pathao delivery locations (city, zone, area), exported from the Scalius demo store",
+  "exportedAt": "2026-10-07",
+  "levels": [
+    {
+      "level": 1,
+      "label": {
+        "en": "City",
+        "bn": "শহর"
+      }
+    },
+    {
+      "level": 2,
+      "label": {
+        "en": "Thana",
+        "bn": "থানা"
+      }
+    },
+    {
+      "level": 3,
+      "label": {
+        "en": "Area",
+        "bn": "এলাকা"
+      }
+    }
+  ],
+  "counts": {
+    "1": 66,
+    "2": 1258,
+    "3": 10226
+  },
+  "inactive": 52,
+  "sha256": "6f8449b26f6be5f5401405e9c1bf847ee2909080d1d3754b5be3899e72e34e8d"
+}
