@@ -17,7 +17,6 @@ const transitionMocks = vi.hoisted(() => ({
 }));
 const settingsMocks = vi.hoisted(() => ({
     getCurrencySettings: vi.fn(),
-    getAllowedCountries: vi.fn(),
 }));
 const taxMocks = vi.hoisted(() => ({
     calculateStorefrontTaxQuote: vi.fn(),
@@ -52,8 +51,19 @@ vi.mock("../../inventory/inventory-transitions", () => ({
 
 vi.mock("../../settings/site-settings.service", () => ({
     getCurrencySettings: settingsMocks.getCurrencySettings,
-    getAllowedCountries: settingsMocks.getAllowedCountries,
 }));
+
+// The store accepts a phone from any country: the policy read is one SQL
+// statement the stub database does not run (its own tests cover the rule).
+vi.mock("../../settings/phone-country-policy", async (importOriginal) => {
+    const actual = await importOriginal<typeof import("../../settings/phone-country-policy")>();
+    const { validateAndFormatPhone } = await import("@scalius/shared/customer-utils");
+    return {
+        ...actual,
+        validateCustomerPhoneCountry: async (_db: unknown, phone: string) =>
+            validateAndFormatPhone(phone, { countries: [], mode: "include" }),
+    };
+});
 
 // The store's pricing currency is the shop currency at the backup market's increment.
 vi.mock("../../markets", async (importOriginal) => {
@@ -110,10 +120,6 @@ beforeEach(() => {
     settingsMocks.getCurrencySettings.mockResolvedValue({
         currencyCode: "BDT",
         currencySymbol: "৳",
-    });
-    settingsMocks.getAllowedCountries.mockResolvedValue({
-        allowedCountries: [],
-        allowedCountriesMode: "include",
     });
     taxMocks.calculateStorefrontTaxQuote.mockImplementation(async (
         _db: Database,
