@@ -127,7 +127,8 @@ export interface PresenceMarket {
  * documents are moot). Declares `mk:<id>` for the market (a change of that
  * market or of the presence it holds invalidates the read) and, because the
  * same row carries the countries every active market sells to
- * (`sellingCountries`, for the phone countries a store accepts), `mk:*`.
+ * (`sellingCountries`, for the phone countries a store accepts), `mk:selling`
+ * (the set of those countries: a rename of another market leaves the read valid).
  */
 export async function readPresenceMarketWithDocuments(
     db: Database,

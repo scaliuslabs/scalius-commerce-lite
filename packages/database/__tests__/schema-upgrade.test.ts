@@ -508,6 +508,14 @@ describe("provider-neutral schema upgrades", () => {
         sqliteStatements: 18,
         postgresStatements: 18,
       },
+      {
+        version: 115,
+        name: "0115_selling_countries_dependency",
+        // The generated cache dependency triggers of the countries the
+        // active markets sell to and the ledger row: one statement each on both providers.
+        sqliteStatements: 6,
+        postgresStatements: 6,
+      },
     ]);
   });
 
@@ -671,6 +679,7 @@ describe("provider-neutral schema upgrades", () => {
           { version: 112, name: "0112_markets" },
           { version: 113, name: "0113_country_aware_addresses" },
           { version: 114, name: "0114_shipping_zones" },
+          { version: 115, name: "0115_selling_countries_dependency" },
         ],
       });
     } finally {

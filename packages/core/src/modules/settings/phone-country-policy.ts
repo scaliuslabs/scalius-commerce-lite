@@ -29,7 +29,7 @@ export function acceptedCustomerCountries(
 /**
  * Settings documents beside the countries the active markets sell to, in ONE
  * statement (a one-row source joined with the documents), so a read that needs
- * both costs the call it already made. Declares `mk:*`.
+ * both costs the call it already made. Declares `mk:selling`.
  */
 export async function selectDocumentsWithSellingCountries(
     db: Database,

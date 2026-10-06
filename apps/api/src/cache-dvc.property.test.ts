@@ -282,10 +282,14 @@ describe("DVC directed scenarios", () => {
     ["its country", "/api/v1/storefront/markets", "INSERT INTO market_countries (country_code, market_id) VALUES ('LK', 'mkt_dvc_india')", INVALID],
     ["its status", "/api/v1/storefront/markets", "UPDATE markets SET status = 'draft' WHERE id = 'mkt_dvc_india'", INVALID],
     ["its subfolder language", "/api/v1/storefront/layout", "UPDATE market_presences SET value = 'bn-in', locale = 'bn' WHERE id = 'mkp_dvc_india'", INVALID],
-    // The checkout config carries the phone countries every active market sells to (`mk:*`): a market's country reaches it.
-    ["its country, in the accepted phone countries", "/api/v1/checkout/config?presence=en-in", "INSERT INTO market_countries (country_code, market_id) VALUES ('LK', 'mkt_dvc_india')", INVALID],
-    // A draft market sells nothing, so its edit renders the same config; the read still re-validates on the market list.
-    ["a draft market's country", "/api/v1/checkout/config?presence=en-in", "INSERT INTO market_countries (country_code, market_id) VALUES ('LK', 'mkt_dvc_draft')", { cached: true, valid: false, equal: true }],
+    // The checkout config carries the countries every active market sells to (its accepted phone
+    // countries, `mk:selling`): another market's country or status reaches it, its rename does not.
+    ["another market's country, in the accepted phone countries", "/api/v1/checkout/config", "INSERT INTO market_countries (country_code, market_id) VALUES ('LK', 'mkt_dvc_india')", INVALID],
+    ["another market's status, in the accepted phone countries", "/api/v1/checkout/config", "UPDATE markets SET status = 'draft' WHERE id = 'mkt_dvc_india'", INVALID],
+    ["another market's name, in the config", "/api/v1/checkout/config?presence=en-in", "UPDATE markets SET name = 'Bangladesh II' WHERE id = 'mkt_backup'", VALID],
+    ["another market's rename, in the root config", "/api/v1/checkout/config", "UPDATE markets SET name = 'India II' WHERE id = 'mkt_dvc_india'", VALID],
+    // A draft market sells nothing: its countries leave every config valid.
+    ["a draft market's country", "/api/v1/checkout/config?presence=en-in", "INSERT INTO market_countries (country_code, market_id) VALUES ('LK', 'mkt_dvc_draft')", VALID],
     // A market edit never reaches the catalogue: every catalogue read is the same in every market.
     ["a product read", "/api/v1/products/linen-panjabi", "UPDATE markets SET name = 'India II' WHERE id = 'mkt_dvc_india'", VALID],
   ])("markets: %s", async (name, path, sql, expected) => {

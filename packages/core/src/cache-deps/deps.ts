@@ -124,6 +124,8 @@ export const deps = {
   anyMarket: (): void => declare(cacheDep.anyMarket()),
   /** `mk:backup`: the backup market's price increment, which every shop-currency price rounds to. */
   backupMarketPricing: (): void => declare(cacheDep.backupMarketPricing()),
+  /** `mk:selling`: the set of countries the active markets sell to (no market name, handle or presence reaches it). */
+  sellingCountries: (): void => declare(cacheDep.sellingCountries()),
 
   // --- Coarse, time and soft ------------------------------------------------------
   /** `t:<table>`: any change of the table. Correct but coarse; prefer a precise key. */

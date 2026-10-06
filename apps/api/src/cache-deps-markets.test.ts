@@ -11,6 +11,7 @@ import { OpenAPIHono } from "@hono/zod-openapi";
 import { getDb } from "@scalius/database/client";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { rebuildCatalogProjections } from "@scalius/core/modules/products";
+import { saveAllowedCountries } from "@scalius/core/modules/settings";
 import { createPublicPartReader, renderPublicRead } from "./public-read";
 import { MarketInvariantRouteError, publicMarketPresence } from "./utils/public-market";
 
@@ -41,6 +42,8 @@ async function store() {
   const { sqlite, binding, db } = createSqliteD1Database();
   sqlite.exec(SEED);
   await rebuildCatalogProjections(db);
+  // The merchant sells to Bangladesh; the markets add their countries to the accepted phone countries.
+  await saveAllowedCountries(db, ["BD"], "include");
   const env = {
     DB: binding,
     CF_VERSION_METADATA: { id: "markets-version", tag: "", timestamp: "" },
@@ -102,7 +105,6 @@ describe("market-keyed public reads", () => {
     expect((await read("/api/v1/checkout/config?presence=ne-np")).cache).toBe("hit");
     expect((await read("/api/v1/checkout/config")).cache).toBe("hit");
     // The catalogue never depends on a market's identity, countries or presences.
-    sqlite.exec("INSERT INTO market_countries (country_code, market_id) VALUES ('LK', 'mkt_in')");
     sqlite.exec("UPDATE market_presences SET locale = 'bn' WHERE id = 'mkp_backup_root'");
     expect((await read("/api/v1/products/tee")).cache).toBe("hit");
     expect((await read("/api/v1/checkout/config?presence=ne-np")).cache).toBe("hit");
@@ -110,6 +112,24 @@ describe("market-keyed public reads", () => {
     const root = await read("/api/v1/checkout/config");
     expect(root.cache).not.toBe("hit");
     expect((root.body?.data?.market as { locale: string }).locale).toBe("bn");
+
+    // The config also carries the countries every active market sells to (its accepted phone
+    // countries): a country of an active market reaches every market's config, never the catalogue.
+    sqlite.exec("INSERT INTO market_countries (country_code, market_id) VALUES ('LK', 'mkt_in')");
+    expect((await read("/api/v1/products/tee")).cache).toBe("hit");
+    const nepal = await read("/api/v1/checkout/config?presence=ne-np");
+    expect(nepal.cache).not.toBe("hit");
+    expect(nepal.body?.data?.allowedCountries).toEqual(expect.arrayContaining(["IN", "LK", "NP"]));
+    expect((await read("/api/v1/checkout/config?presence=ne-np")).cache).toBe("hit");
+    // A market's status takes its countries out of that set; a draft market's countries were never in it.
+    sqlite.exec("INSERT INTO markets (id, handle, name, status) VALUES ('mkt_pk', 'pakistan', 'Pakistan', 'draft')");
+    sqlite.exec("INSERT INTO market_countries (country_code, market_id) VALUES ('PK', 'mkt_pk')");
+    sqlite.exec("UPDATE markets SET name = 'Pakistan store' WHERE id = 'mkt_pk'");
+    expect((await read("/api/v1/checkout/config?presence=ne-np")).cache).toBe("hit");
+    sqlite.exec("UPDATE markets SET status = 'draft' WHERE id = 'mkt_in'");
+    const withoutIndia = await read("/api/v1/checkout/config?presence=ne-np");
+    expect(withoutIndia.cache).not.toBe("hit");
+    expect(withoutIndia.body?.data?.allowedCountries).not.toContain("LK");
 
     // The backup market's price increment prices the catalogue: it invalidates the product.
     sqlite.exec("UPDATE markets SET price_increment_minor = 1 WHERE id = 'mkt_backup'");

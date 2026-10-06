@@ -97,7 +97,8 @@ export const CACHE_DEP_KINDS = [
    * `mk:<marketId>`: one market (status, name, handle, countries, presences);
    * `mk:*`: any market (the active presence matrix); `mk:backup`: the backup
    * market's pricing facts (its price increment), which every price read in
-   * the shop currency uses.
+   * the shop currency uses; `mk:selling`: the set of countries the active
+   * markets sell to (a rename or a presence change leaves it alone).
    */
   "mk",
   /** `t:<table>`: coarse fallback, any buyer-visible change of the table. */
@@ -177,6 +178,8 @@ export const cacheDep = {
   anyMarket: () => `mk:${CACHE_DEP_ANY}`,
   /** The backup market's pricing facts: the price increment every shop-currency price rounds to. */
   backupMarketPricing: () => "mk:backup",
+  /** The set of countries the active markets sell to: only a country or a status change advances it. */
+  sellingCountries: () => "mk:selling",
   table: (table: string) => `t:${table}`,
   store: () => "store",
 } as const;
@@ -349,6 +352,9 @@ export function withOldImageCompanions(rules: readonly CacheDepRule[]): CacheDep
   }
   return expanded;
 }
+
+/** A country row whose market is active (`R.market_id`): only such a country is one the store sells to. */
+const SELLS_ACTIVE_MARKET = "SELECT 1 FROM markets WHERE markets.id = R.market_id AND markets.status = 'active'";
 
 const TIMESTAMPS = ["created_at", "updated_at"] as const;
 
@@ -758,13 +764,21 @@ const CACHE_DEP_TABLE_RULES = {
         name: "backup_price", event: "update", image: "new", changed: ["price_increment_minor"],
         where: { equals: { is_backup: 1 } }, keys: [{ dep: "mk:backup" }],
       },
+      // The countries active markets sell to: a status change moves them, a rename or handle edit does not.
+      { name: "selling_upd", event: "update", image: "new", changed: ["status"], keys: [{ dep: "mk:selling" }] },
+      { name: "selling_del", event: "delete", image: "old", where: { equals: { status: "active" } }, keys: [{ dep: "mk:selling" }] },
     ],
   },
   market_countries: {
     kinds: ["mk"],
     noise: ["created_at"],
-    note: "A country moved between markets advances both markets (the old image through the derived companion).",
-    rules: everyChange([{ prefix: "mk:", columns: ["market_id"] }, { dep: "mk:*" }]),
+    note: "A country moved between markets advances both markets (the old image through the derived companion). A country of an active market also advances `mk:selling`, the set of countries sold to (the checkout config's phone countries).",
+    rules: [
+      ...everyChange([{ prefix: "mk:", columns: ["market_id"] }, { dep: "mk:*" }]),
+      { name: "selling_ins", event: "insert", image: "new", where: { exists: SELLS_ACTIVE_MARKET }, keys: [{ dep: "mk:selling" }] },
+      { name: "selling_del", event: "delete", image: "old", where: { exists: SELLS_ACTIVE_MARKET }, keys: [{ dep: "mk:selling" }] },
+      { name: "selling_upd", event: "update", image: "new", changed: ["country_code", "market_id"], keys: [{ dep: "mk:selling" }] },
+    ],
   },
   market_presences: {
     kinds: ["mk"],
