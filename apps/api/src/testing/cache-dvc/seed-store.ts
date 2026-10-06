@@ -303,11 +303,18 @@ function seedSql(): string {
     ('ship_west', 'West coast', NULL, 1, 4, 150000, 'zone_west', 500000, 'delivery');
 
   INSERT INTO tax_classes (id, name, description, is_exempt) VALUES ('tax_std', 'Standard', NULL, 0), ('tax_zero', 'Zero rated', NULL, 1);
-  INSERT INTO tax_rates (id, tax_class_id, name, rate_bps, jurisdiction_type, jurisdiction_id, jurisdiction_label, priority, is_compound, is_active) VALUES
-    ('rate_vat', 'tax_std', 'VAT', 750, 'all', NULL, NULL, 0, 0, 1),
-    ('rate_dhaka', 'tax_std', 'Dhaka surcharge', 100, 'city', 'loc_dhaka', 'Dhaka', 1, 0, 1);
-  INSERT INTO tax_settings (id, enabled, prices_include_tax, tax_shipping, default_tax_class_id, shipping_tax_class_id, display_label) VALUES
-    ('default', 1, 1, 0, 'tax_std', NULL, 'VAT');
+  INSERT INTO tax_regions (id, country_code, admin_area, postal_prefix, place_type, place_id, provider_id) VALUES
+    ('txreg_bd', 'BD', '', '', NULL, NULL, NULL),
+    ('txreg_bd_loc_dhaka', 'BD', '', '', 'city', 'loc_dhaka', NULL),
+    ('txreg_us', 'US', '', '', NULL, NULL, NULL),
+    ('txreg_us_ca', 'US', 'CA', '', NULL, NULL, NULL);
+  INSERT INTO tax_rates (id, tax_class_id, tax_region_id, name, rate_bps, priority, is_compound, combinable, is_active) VALUES
+    ('rate_vat', 'tax_std', 'txreg_bd', 'VAT', 750, 0, 0, 0, 1),
+    ('rate_dhaka', 'tax_std', 'txreg_bd_loc_dhaka', 'Dhaka surcharge', 100, 1, 0, 1, 1),
+    ('rate_ca', 'tax_std', 'txreg_us_ca', 'California', 725, 0, 0, 0, 1);
+  INSERT INTO tax_settings (id, enabled, tax_shipping, default_tax_class_id, shipping_tax_class_id, display_label) VALUES
+    ('default', 1, 0, 'tax_std', NULL, 'VAT');
+  UPDATE markets SET prices_include_tax = 1 WHERE is_backup = 1;
 
   -- Markets beside the migration's backup market (BD at the root): an active
   -- market at a subfolder and a draft one, so the generator edits each kind.

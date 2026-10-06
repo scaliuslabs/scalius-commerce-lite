@@ -260,6 +260,14 @@ export const DASHBOARD_SETTINGS_OPERATIONS = {
   },
   "dashboard.taxes.rates_list": {},
   "dashboard.taxes.rates_update": { revision: "required" },
+  "dashboard.taxes.regions_create": {},
+  "dashboard.taxes.regions_delete": {
+    risk: "destructive",
+    revision: "required",
+  },
+  "dashboard.taxes.regions_get": {},
+  "dashboard.taxes.regions_list": {},
+  "dashboard.taxes.regions_update": { revision: "required" },
   "dashboard.taxes.settings_get": {},
   "dashboard.taxes.settings_update": { revision: "required" },
 } satisfies Record<string, OperationRegistryEntry>;

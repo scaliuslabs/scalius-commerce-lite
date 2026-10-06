@@ -505,9 +505,11 @@ export const AGENT_INTENT_EVAL_CASES: readonly AgentIntentEvalCase[] = [
     id: "dashboard.tax-configuration",
     surface: "dashboard",
     kind: "mixed",
-    prompt: "Configure a VAT rate for the supplied jurisdiction and class, preview a real cart calculation, then verify versioned settings.",
+    prompt: "Configure a VAT rate for the supplied country or region and class, preview a real cart calculation, then verify versioned settings.",
     expectedOperationIds: [
       "dashboard.taxes.settings_get",
+      "dashboard.taxes.regions_list",
+      "dashboard.taxes.regions_create",
       "dashboard.taxes.jurisdictions_list",
       "dashboard.taxes.classes_list",
       "dashboard.taxes.rates_create",

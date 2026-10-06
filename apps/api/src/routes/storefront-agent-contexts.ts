@@ -29,6 +29,7 @@ import { runStorefrontOrderPostCommitSideEffects, type CheckoutAppFunctions } fr
 import { listActiveCheckoutRegistrations } from "@scalius/core/modules/plugins";
 import { paymentProvidersFromRegistrations } from "../plugins/providers/payment";
 import { requestProviderRuntime } from "../plugins/providers/runtime";
+import { requestAppProviders } from "../plugins/providers/app-providers";
 import type { Database } from "@scalius/database/client";
 import { phoneNumberSchema } from "@scalius/shared/customer-utils";
 import { addressInputSchema } from "@scalius/core/modules/customers";
@@ -696,6 +697,7 @@ app.openapi(quoteCheckoutRoute, async (c) => {
     {
       customerPhone: c.req.valid("json").customerPhone,
       ...await agentCheckoutApps(c),
+      appProviders: requestAppProviders(c),
       credentialEncryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
     },
   ));
@@ -747,6 +749,7 @@ app.openapi(submitCheckoutRoute, async (c) => {
       credentialEncryptionKey: getCredentialEncryptionKey(c.env as unknown as Record<string, unknown>),
       apps,
       paymentProviders,
+      appProviders: requestAppProviders(c),
     },
   );
   const executionCtx = getOptionalExecutionContext(c);

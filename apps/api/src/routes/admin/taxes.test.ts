@@ -22,11 +22,11 @@ import { adminTaxRoutes } from "./taxes";
 const settings = {
   id: "default",
   enabled: false,
-  pricesIncludeTax: false,
   taxShipping: false,
   defaultTaxClassId: null,
   shippingTaxClassId: null,
   displayLabel: "Tax",
+  providerId: "system",
   version: 1,
   createdAt: new Date("2026-07-10T00:00:00.000Z"),
   updatedAt: new Date("2026-07-10T00:00:00.000Z"),
@@ -47,6 +47,7 @@ beforeEach(() => {
   mocks.getTaxConfiguration.mockResolvedValue({
     settings,
     classes: [],
+    regions: [],
     rates: [],
     jurisdictions: [
       { id: "city_1", name: "Dhaka", type: "city", parentId: null },
@@ -59,16 +60,14 @@ beforeEach(() => {
     taxClassId: "taxc_1",
     name: "Renamed rate",
     rateBps: 500,
-    jurisdictionType: "city",
-    jurisdictionId: "city_1",
-    jurisdictionLabel: "Dhaka",
+    taxRegionId: "txreg_bd_city_1",
     priority: 25,
     isCompound: true,
+    combinable: true,
     isActive: false,
     version: 2,
     createdAt: new Date("2026-07-10T00:00:00.000Z"),
     updatedAt: new Date("2026-07-10T00:00:00.000Z"),
-    deletedAt: null,
   });
 });
 
@@ -97,11 +96,11 @@ describe("Admin tax routes", () => {
     const body = {
       expectedVersion: 1,
       enabled: false,
-      pricesIncludeTax: true,
       taxShipping: false,
       defaultTaxClassId: null,
       shippingTaxClassId: null,
       displayLabel: "VAT",
+      providerId: "system",
     };
     const response = await createApp().request("/api/v1/admin/taxes/settings", {
       method: "PUT",

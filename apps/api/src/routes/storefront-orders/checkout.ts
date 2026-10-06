@@ -37,6 +37,8 @@ import {
 import { createCheckoutAppFunctions } from "../../plugins/checkout-functions";
 import { paymentProvidersFromRegistrations } from "../../plugins/providers/payment";
 import { requestProviderRuntime } from "../../plugins/providers/runtime";
+import { requestAppProviders } from "../../plugins/providers/app-providers";
+import { commitTaxDocument } from "@scalius/core/modules/tax";
 import { runOrderRiskChecks } from "../../plugins/order-risk";
 import { getOptionalExecutionContext } from "../../utils/execution-context";
 import { enqueueOrderAutoFulfil } from "../../utils/auto-fulfil-queue";
@@ -549,7 +551,7 @@ app.openapi(createOrderRoute, async (c) => {
       }),
       checkoutAuthority.taxAuthority,
       { masterSecret: readMasterSecret(c.env) },
-      { apps, channel: "online_store", paymentProviders },
+      { apps, channel: "online_store", paymentProviders, appProviders: requestAppProviders(c) },
     );
 
     assertStorefrontCheckoutQuoteFingerprint(
@@ -677,6 +679,8 @@ app.openapi(createOrderRoute, async (c) => {
 
     const postCommit = Promise.all([
       runStorefrontOrderPostCommitSideEffects(db, c.env, result.commitPayload),
+      // An app tax provider's calculation becomes its committed document.
+      committed.alreadyCommitted ? null : commitTaxDocument(result.taxQuote, result.orderId, requestAppProviders(c)),
       // An order fully paid at commit (e.g. covered by gift cards) is settled now.
       result.commitPayload.orderData.paymentStatus === PaymentStatus.PAID
         ? enqueueOrderAutoFulfil(c.env.JOBS_QUEUE, result.orderId, "checkout-commit")

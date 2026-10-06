@@ -10443,6 +10443,10 @@
           "priceIncrementInherited": {
             "type": "boolean"
           },
+          "pricesIncludeTax": {
+            "type": "boolean",
+            "description": "Whether the market's prices include tax: checkout adds tax on top when false, and shows it as included when true."
+          },
           "hasOrders": {
             "type": "boolean",
             "description": "A market that took orders cannot be deleted; set it to draft instead."
@@ -10468,6 +10472,7 @@
           "currencyCode",
           "priceIncrementMinor",
           "priceIncrementInherited",
+          "pricesIncludeTax",
           "hasOrders",
           "createdAt",
           "updatedAt"
@@ -121355,6 +121360,10 @@
                       "locale"
                     ],
                     "description": "A subfolder presence such as `{ value: \"en-in\", locale: \"en\" }`."
+                  },
+                  "pricesIncludeTax": {
+                    "type": "boolean",
+                    "description": "Whether its prices include tax; omitted: the backup market's."
                   }
                 },
                 "required": [
@@ -121729,6 +121738,10 @@
                     "exclusiveMinimum": true,
                     "maximum": 1000,
                     "description": "Backup market only: 1 (minor units) or the currency's whole unit (100 for BDT)."
+                  },
+                  "pricesIncludeTax": {
+                    "type": "boolean",
+                    "description": "Whether its prices include tax (checkout and the order's tax read the order's market)."
                   }
                 },
                 "required": [
@@ -172063,9 +172076,6 @@
                             "enabled": {
                               "type": "boolean"
                             },
-                            "pricesIncludeTax": {
-                              "type": "boolean"
-                            },
                             "taxShipping": {
                               "type": "boolean"
                             },
@@ -172080,6 +172090,10 @@
                             "displayLabel": {
                               "type": "string",
                               "maxLength": 80
+                            },
+                            "providerId": {
+                              "type": "string",
+                              "maxLength": 120
                             },
                             "version": {
                               "type": "integer"
@@ -172110,11 +172124,11 @@
                           "required": [
                             "id",
                             "enabled",
-                            "pricesIncludeTax",
                             "taxShipping",
                             "defaultTaxClassId",
                             "shippingTaxClassId",
                             "displayLabel",
+                            "providerId",
                             "version",
                             "createdAt",
                             "updatedAt"
@@ -172190,6 +172204,113 @@
                             ]
                           }
                         },
+                        "regions": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "maxLength": 180
+                              },
+                              "countryCode": {
+                                "type": "string",
+                                "minLength": 2,
+                                "maxLength": 2
+                              },
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "country",
+                                  "admin_area",
+                                  "postal_prefix",
+                                  "place"
+                                ],
+                                "description": "`country` is where the store collects tax; the others are regions of it."
+                              },
+                              "adminArea": {
+                                "type": "string",
+                                "nullable": true,
+                                "maxLength": 120
+                              },
+                              "postalPrefix": {
+                                "type": "string",
+                                "nullable": true,
+                                "maxLength": 10
+                              },
+                              "placeType": {
+                                "type": "string",
+                                "nullable": true,
+                                "enum": [
+                                  "city",
+                                  "zone",
+                                  "area",
+                                  null
+                                ]
+                              },
+                              "placeId": {
+                                "type": "string",
+                                "nullable": true,
+                                "maxLength": 180
+                              },
+                              "placeName": {
+                                "type": "string",
+                                "nullable": true,
+                                "maxLength": 180
+                              },
+                              "providerId": {
+                                "type": "string",
+                                "nullable": true,
+                                "maxLength": 120,
+                                "description": "A country's tax provider; null uses the store-wide one."
+                              },
+                              "rateCount": {
+                                "type": "integer",
+                                "minimum": 0
+                              },
+                              "version": {
+                                "type": "integer"
+                              },
+                              "createdAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  },
+                                  {}
+                                ]
+                              },
+                              "updatedAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  },
+                                  {}
+                                ]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "countryCode",
+                              "kind",
+                              "adminArea",
+                              "postalPrefix",
+                              "placeType",
+                              "placeId",
+                              "placeName",
+                              "providerId",
+                              "rateCount",
+                              "version",
+                              "createdAt",
+                              "updatedAt"
+                            ]
+                          }
+                        },
                         "rates": {
                           "type": "array",
                           "items": {
@@ -172203,6 +172324,11 @@
                                 "type": "string",
                                 "maxLength": 180
                               },
+                              "taxRegionId": {
+                                "type": "string",
+                                "maxLength": 180,
+                                "description": "The region the rate applies in."
+                              },
                               "name": {
                                 "type": "string",
                                 "maxLength": 120
@@ -172210,30 +172336,15 @@
                               "rateBps": {
                                 "type": "integer"
                               },
-                              "jurisdictionType": {
-                                "type": "string",
-                                "enum": [
-                                  "all",
-                                  "city",
-                                  "zone",
-                                  "area"
-                                ]
-                              },
-                              "jurisdictionId": {
-                                "type": "string",
-                                "nullable": true,
-                                "maxLength": 180
-                              },
-                              "jurisdictionLabel": {
-                                "type": "string",
-                                "nullable": true,
-                                "maxLength": 180
-                              },
                               "priority": {
                                 "type": "integer"
                               },
                               "isCompound": {
                                 "type": "boolean"
+                              },
+                              "combinable": {
+                                "type": "boolean",
+                                "description": "Applies with the broader regions' rates of its class instead of replacing them."
                               },
                               "isActive": {
                                 "type": "boolean"
@@ -172262,34 +172373,21 @@
                                   },
                                   {}
                                 ]
-                              },
-                              "deletedAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
                               }
                             },
                             "required": [
                               "id",
                               "taxClassId",
+                              "taxRegionId",
                               "name",
                               "rateBps",
-                              "jurisdictionType",
-                              "jurisdictionId",
-                              "jurisdictionLabel",
                               "priority",
                               "isCompound",
+                              "combinable",
                               "isActive",
                               "version",
                               "createdAt",
-                              "updatedAt",
-                              "deletedAt"
+                              "updatedAt"
                             ]
                           }
                         },
@@ -172332,6 +172430,7 @@
                       "required": [
                         "settings",
                         "classes",
+                        "regions",
                         "rates",
                         "jurisdictions"
                       ]
@@ -172471,9 +172570,6 @@
                             "enabled": {
                               "type": "boolean"
                             },
-                            "pricesIncludeTax": {
-                              "type": "boolean"
-                            },
                             "taxShipping": {
                               "type": "boolean"
                             },
@@ -172488,6 +172584,10 @@
                             "displayLabel": {
                               "type": "string",
                               "maxLength": 80
+                            },
+                            "providerId": {
+                              "type": "string",
+                              "maxLength": 120
                             },
                             "version": {
                               "type": "integer"
@@ -172518,11 +172618,11 @@
                           "required": [
                             "id",
                             "enabled",
-                            "pricesIncludeTax",
                             "taxShipping",
                             "defaultTaxClassId",
                             "shippingTaxClassId",
                             "displayLabel",
+                            "providerId",
                             "version",
                             "createdAt",
                             "updatedAt"
@@ -172653,9 +172753,6 @@
                   "enabled": {
                     "type": "boolean"
                   },
-                  "pricesIncludeTax": {
-                    "type": "boolean"
-                  },
                   "taxShipping": {
                     "type": "boolean"
                   },
@@ -172673,12 +172770,17 @@
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 80
+                  },
+                  "providerId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120,
+                    "description": "The store-wide tax provider; omitted keeps the saved one."
                   }
                 },
                 "required": [
                   "expectedVersion",
                   "enabled",
-                  "pricesIncludeTax",
                   "taxShipping",
                   "defaultTaxClassId",
                   "shippingTaxClassId",
@@ -172718,9 +172820,6 @@
                             "enabled": {
                               "type": "boolean"
                             },
-                            "pricesIncludeTax": {
-                              "type": "boolean"
-                            },
                             "taxShipping": {
                               "type": "boolean"
                             },
@@ -172735,6 +172834,10 @@
                             "displayLabel": {
                               "type": "string",
                               "maxLength": 80
+                            },
+                            "providerId": {
+                              "type": "string",
+                              "maxLength": 120
                             },
                             "version": {
                               "type": "integer"
@@ -172765,11 +172868,11 @@
                           "required": [
                             "id",
                             "enabled",
-                            "pricesIncludeTax",
                             "taxShipping",
                             "defaultTaxClassId",
                             "shippingTaxClassId",
                             "displayLabel",
+                            "providerId",
                             "version",
                             "createdAt",
                             "updatedAt"
@@ -173792,6 +173895,16 @@
             "required": false,
             "name": "taxClassId",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 180
+            },
+            "required": false,
+            "name": "taxRegionId",
+            "in": "query"
           }
         ],
         "responses": {
@@ -173824,6 +173937,11 @@
                                 "type": "string",
                                 "maxLength": 180
                               },
+                              "taxRegionId": {
+                                "type": "string",
+                                "maxLength": 180,
+                                "description": "The region the rate applies in."
+                              },
                               "name": {
                                 "type": "string",
                                 "maxLength": 120
@@ -173831,30 +173949,15 @@
                               "rateBps": {
                                 "type": "integer"
                               },
-                              "jurisdictionType": {
-                                "type": "string",
-                                "enum": [
-                                  "all",
-                                  "city",
-                                  "zone",
-                                  "area"
-                                ]
-                              },
-                              "jurisdictionId": {
-                                "type": "string",
-                                "nullable": true,
-                                "maxLength": 180
-                              },
-                              "jurisdictionLabel": {
-                                "type": "string",
-                                "nullable": true,
-                                "maxLength": 180
-                              },
                               "priority": {
                                 "type": "integer"
                               },
                               "isCompound": {
                                 "type": "boolean"
+                              },
+                              "combinable": {
+                                "type": "boolean",
+                                "description": "Applies with the broader regions' rates of its class instead of replacing them."
                               },
                               "isActive": {
                                 "type": "boolean"
@@ -173883,34 +173986,21 @@
                                   },
                                   {}
                                 ]
-                              },
-                              "deletedAt": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {}
-                                ]
                               }
                             },
                             "required": [
                               "id",
                               "taxClassId",
+                              "taxRegionId",
                               "name",
                               "rateBps",
-                              "jurisdictionType",
-                              "jurisdictionId",
-                              "jurisdictionLabel",
                               "priority",
                               "isCompound",
+                              "combinable",
                               "isActive",
                               "version",
                               "createdAt",
-                              "updatedAt",
-                              "deletedAt"
+                              "updatedAt"
                             ]
                           },
                           "maxItems": 50
@@ -174055,6 +174145,11 @@
                     "minLength": 1,
                     "maxLength": 180
                   },
+                  "taxRegionId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 180
+                  },
                   "name": {
                     "type": "string",
                     "minLength": 1,
@@ -174064,25 +174159,6 @@
                     "type": "integer",
                     "minimum": 0,
                     "maximum": 10000
-                  },
-                  "jurisdictionType": {
-                    "type": "string",
-                    "enum": [
-                      "all",
-                      "city",
-                      "zone",
-                      "area"
-                    ]
-                  },
-                  "jurisdictionId": {
-                    "type": "string",
-                    "nullable": true,
-                    "maxLength": 180
-                  },
-                  "jurisdictionLabel": {
-                    "type": "string",
-                    "nullable": true,
-                    "maxLength": 180
                   },
                   "priority": {
                     "type": "integer",
@@ -174094,6 +174170,10 @@
                     "type": "boolean",
                     "default": false
                   },
+                  "combinable": {
+                    "type": "boolean",
+                    "default": false
+                  },
                   "isActive": {
                     "type": "boolean",
                     "default": true
@@ -174101,9 +174181,9 @@
                 },
                 "required": [
                   "taxClassId",
+                  "taxRegionId",
                   "name",
-                  "rateBps",
-                  "jurisdictionType"
+                  "rateBps"
                 ],
                 "additionalProperties": false
               }
@@ -174138,6 +174218,11 @@
                               "type": "string",
                               "maxLength": 180
                             },
+                            "taxRegionId": {
+                              "type": "string",
+                              "maxLength": 180,
+                              "description": "The region the rate applies in."
+                            },
                             "name": {
                               "type": "string",
                               "maxLength": 120
@@ -174145,30 +174230,15 @@
                             "rateBps": {
                               "type": "integer"
                             },
-                            "jurisdictionType": {
-                              "type": "string",
-                              "enum": [
-                                "all",
-                                "city",
-                                "zone",
-                                "area"
-                              ]
-                            },
-                            "jurisdictionId": {
-                              "type": "string",
-                              "nullable": true,
-                              "maxLength": 180
-                            },
-                            "jurisdictionLabel": {
-                              "type": "string",
-                              "nullable": true,
-                              "maxLength": 180
-                            },
                             "priority": {
                               "type": "integer"
                             },
                             "isCompound": {
                               "type": "boolean"
+                            },
+                            "combinable": {
+                              "type": "boolean",
+                              "description": "Applies with the broader regions' rates of its class instead of replacing them."
                             },
                             "isActive": {
                               "type": "boolean"
@@ -174197,34 +174267,21 @@
                                 },
                                 {}
                               ]
-                            },
-                            "deletedAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {}
-                              ]
                             }
                           },
                           "required": [
                             "id",
                             "taxClassId",
+                            "taxRegionId",
                             "name",
                             "rateBps",
-                            "jurisdictionType",
-                            "jurisdictionId",
-                            "jurisdictionLabel",
                             "priority",
                             "isCompound",
+                            "combinable",
                             "isActive",
                             "version",
                             "createdAt",
-                            "updatedAt",
-                            "deletedAt"
+                            "updatedAt"
                           ]
                         }
                       },
@@ -174358,23 +174415,9 @@
                     "minimum": 0,
                     "maximum": 10000
                   },
-                  "jurisdictionType": {
+                  "taxRegionId": {
                     "type": "string",
-                    "enum": [
-                      "all",
-                      "city",
-                      "zone",
-                      "area"
-                    ]
-                  },
-                  "jurisdictionId": {
-                    "type": "string",
-                    "nullable": true,
-                    "maxLength": 180
-                  },
-                  "jurisdictionLabel": {
-                    "type": "string",
-                    "nullable": true,
+                    "minLength": 1,
                     "maxLength": 180
                   },
                   "priority": {
@@ -174383,6 +174426,9 @@
                     "maximum": 1000
                   },
                   "isCompound": {
+                    "type": "boolean"
+                  },
+                  "combinable": {
                     "type": "boolean"
                   },
                   "isActive": {
@@ -174425,6 +174471,11 @@
                               "type": "string",
                               "maxLength": 180
                             },
+                            "taxRegionId": {
+                              "type": "string",
+                              "maxLength": 180,
+                              "description": "The region the rate applies in."
+                            },
                             "name": {
                               "type": "string",
                               "maxLength": 120
@@ -174432,30 +174483,15 @@
                             "rateBps": {
                               "type": "integer"
                             },
-                            "jurisdictionType": {
-                              "type": "string",
-                              "enum": [
-                                "all",
-                                "city",
-                                "zone",
-                                "area"
-                              ]
-                            },
-                            "jurisdictionId": {
-                              "type": "string",
-                              "nullable": true,
-                              "maxLength": 180
-                            },
-                            "jurisdictionLabel": {
-                              "type": "string",
-                              "nullable": true,
-                              "maxLength": 180
-                            },
                             "priority": {
                               "type": "integer"
                             },
                             "isCompound": {
                               "type": "boolean"
+                            },
+                            "combinable": {
+                              "type": "boolean",
+                              "description": "Applies with the broader regions' rates of its class instead of replacing them."
                             },
                             "isActive": {
                               "type": "boolean"
@@ -174484,34 +174520,21 @@
                                 },
                                 {}
                               ]
-                            },
-                            "deletedAt": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {}
-                              ]
                             }
                           },
                           "required": [
                             "id",
                             "taxClassId",
+                            "taxRegionId",
                             "name",
                             "rateBps",
-                            "jurisdictionType",
-                            "jurisdictionId",
-                            "jurisdictionLabel",
                             "priority",
                             "isCompound",
+                            "combinable",
                             "isActive",
                             "version",
                             "createdAt",
-                            "updatedAt",
-                            "deletedAt"
+                            "updatedAt"
                           ]
                         }
                       },
@@ -174614,7 +174637,7 @@
         "tags": [
           "Admin - Taxes"
         ],
-        "summary": "Soft-delete a tax rate",
+        "summary": "Delete a tax rate (orders keep their own copy)",
         "parameters": [
           {
             "schema": {
@@ -174664,6 +174687,11 @@
                               "type": "string",
                               "maxLength": 180
                             },
+                            "taxRegionId": {
+                              "type": "string",
+                              "maxLength": 180,
+                              "description": "The region the rate applies in."
+                            },
                             "name": {
                               "type": "string",
                               "maxLength": 120
@@ -174671,30 +174699,15 @@
                             "rateBps": {
                               "type": "integer"
                             },
-                            "jurisdictionType": {
-                              "type": "string",
-                              "enum": [
-                                "all",
-                                "city",
-                                "zone",
-                                "area"
-                              ]
-                            },
-                            "jurisdictionId": {
-                              "type": "string",
-                              "nullable": true,
-                              "maxLength": 180
-                            },
-                            "jurisdictionLabel": {
-                              "type": "string",
-                              "nullable": true,
-                              "maxLength": 180
-                            },
                             "priority": {
                               "type": "integer"
                             },
                             "isCompound": {
                               "type": "boolean"
+                            },
+                            "combinable": {
+                              "type": "boolean",
+                              "description": "Applies with the broader regions' rates of its class instead of replacing them."
                             },
                             "isActive": {
                               "type": "boolean"
@@ -174723,8 +174736,503 @@
                                 },
                                 {}
                               ]
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "taxClassId",
+                            "taxRegionId",
+                            "name",
+                            "rateBps",
+                            "priority",
+                            "isCompound",
+                            "combinable",
+                            "isActive",
+                            "version",
+                            "createdAt",
+                            "updatedAt"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "taxRate"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "destructive",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "required",
+          "batch": "sequential",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "taxes.manage"
+        }
+      }
+    },
+    "/api/v1/admin/taxes/regions": {
+      "get": {
+        "operationId": "dashboard.taxes.regions_list",
+        "tags": [
+          "Admin - Taxes"
+        ],
+        "summary": "List where the store collects tax: countries and their regions",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 2
+            },
+            "required": false,
+            "name": "countryCode",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tax regions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "regions": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "maxLength": 180
+                              },
+                              "countryCode": {
+                                "type": "string",
+                                "minLength": 2,
+                                "maxLength": 2
+                              },
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "country",
+                                  "admin_area",
+                                  "postal_prefix",
+                                  "place"
+                                ],
+                                "description": "`country` is where the store collects tax; the others are regions of it."
+                              },
+                              "adminArea": {
+                                "type": "string",
+                                "nullable": true,
+                                "maxLength": 120
+                              },
+                              "postalPrefix": {
+                                "type": "string",
+                                "nullable": true,
+                                "maxLength": 10
+                              },
+                              "placeType": {
+                                "type": "string",
+                                "nullable": true,
+                                "enum": [
+                                  "city",
+                                  "zone",
+                                  "area",
+                                  null
+                                ]
+                              },
+                              "placeId": {
+                                "type": "string",
+                                "nullable": true,
+                                "maxLength": 180
+                              },
+                              "placeName": {
+                                "type": "string",
+                                "nullable": true,
+                                "maxLength": 180
+                              },
+                              "providerId": {
+                                "type": "string",
+                                "nullable": true,
+                                "maxLength": 120,
+                                "description": "A country's tax provider; null uses the store-wide one."
+                              },
+                              "rateCount": {
+                                "type": "integer",
+                                "minimum": 0
+                              },
+                              "version": {
+                                "type": "integer"
+                              },
+                              "createdAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  },
+                                  {}
+                                ]
+                              },
+                              "updatedAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  },
+                                  {}
+                                ]
+                              }
                             },
-                            "deletedAt": {
+                            "required": [
+                              "id",
+                              "countryCode",
+                              "kind",
+                              "adminArea",
+                              "postalPrefix",
+                              "placeType",
+                              "placeId",
+                              "placeName",
+                              "providerId",
+                              "rateCount",
+                              "version",
+                              "createdAt",
+                              "updatedAt"
+                            ]
+                          },
+                          "maxItems": 2000
+                        }
+                      },
+                      "required": [
+                        "regions"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "taxes.view"
+        }
+      },
+      "post": {
+        "operationId": "dashboard.taxes.regions_create",
+        "tags": [
+          "Admin - Taxes"
+        ],
+        "summary": "Start collecting tax in a country, or add a region of one",
+        "description": "A country is the registration; an address in a country without one pays no tax. A region of a country (an admin area of its address rules, a postal-code prefix, or a Bangladesh City/Thana/Area place) needs the country first. Rates are added to a region afterwards.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "countryCode": {
+                    "type": "string",
+                    "minLength": 2,
+                    "maxLength": 2
+                  },
+                  "adminArea": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 120
+                  },
+                  "postalPrefix": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 20
+                  },
+                  "placeId": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 180,
+                    "description": "A Bangladesh delivery location (dashboard.taxes.jurisdictions_list)."
+                  },
+                  "providerId": {
+                    "type": "string",
+                    "nullable": true,
+                    "minLength": 1,
+                    "maxLength": 120,
+                    "description": "`system` (the store's rates by region) or an installed app's tax provider, `<plugin id>:<provider id>`."
+                  }
+                },
+                "required": [
+                  "countryCode"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Tax region created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "region": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "maxLength": 180
+                            },
+                            "countryCode": {
+                              "type": "string",
+                              "minLength": 2,
+                              "maxLength": 2
+                            },
+                            "kind": {
+                              "type": "string",
+                              "enum": [
+                                "country",
+                                "admin_area",
+                                "postal_prefix",
+                                "place"
+                              ],
+                              "description": "`country` is where the store collects tax; the others are regions of it."
+                            },
+                            "adminArea": {
+                              "type": "string",
+                              "nullable": true,
+                              "maxLength": 120
+                            },
+                            "postalPrefix": {
+                              "type": "string",
+                              "nullable": true,
+                              "maxLength": 10
+                            },
+                            "placeType": {
+                              "type": "string",
+                              "nullable": true,
+                              "enum": [
+                                "city",
+                                "zone",
+                                "area",
+                                null
+                              ]
+                            },
+                            "placeId": {
+                              "type": "string",
+                              "nullable": true,
+                              "maxLength": 180
+                            },
+                            "placeName": {
+                              "type": "string",
+                              "nullable": true,
+                              "maxLength": 180
+                            },
+                            "providerId": {
+                              "type": "string",
+                              "nullable": true,
+                              "maxLength": 120,
+                              "description": "A country's tax provider; null uses the store-wide one."
+                            },
+                            "rateCount": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "version": {
+                              "type": "integer"
+                            },
+                            "createdAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                },
+                                {}
+                              ]
+                            },
+                            "updatedAt": {
                               "anyOf": [
                                 {
                                   "type": "string"
@@ -174738,24 +175246,856 @@
                           },
                           "required": [
                             "id",
-                            "taxClassId",
-                            "name",
-                            "rateBps",
-                            "jurisdictionType",
-                            "jurisdictionId",
-                            "jurisdictionLabel",
-                            "priority",
-                            "isCompound",
-                            "isActive",
+                            "countryCode",
+                            "kind",
+                            "adminArea",
+                            "postalPrefix",
+                            "placeType",
+                            "placeId",
+                            "placeName",
+                            "providerId",
+                            "rateCount",
                             "version",
                             "createdAt",
-                            "updatedAt",
-                            "deletedAt"
+                            "updatedAt"
                           ]
                         }
                       },
                       "required": [
-                        "taxRate"
+                        "region"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "sequential",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "taxes.manage"
+        }
+      }
+    },
+    "/api/v1/admin/taxes/regions/{id}": {
+      "get": {
+        "operationId": "dashboard.taxes.regions_get",
+        "tags": [
+          "Admin - Taxes"
+        ],
+        "summary": "Get a tax region with its rates and, for a country, its regions",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 180
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tax region",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "region": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "maxLength": 180
+                            },
+                            "countryCode": {
+                              "type": "string",
+                              "minLength": 2,
+                              "maxLength": 2
+                            },
+                            "kind": {
+                              "type": "string",
+                              "enum": [
+                                "country",
+                                "admin_area",
+                                "postal_prefix",
+                                "place"
+                              ],
+                              "description": "`country` is where the store collects tax; the others are regions of it."
+                            },
+                            "adminArea": {
+                              "type": "string",
+                              "nullable": true,
+                              "maxLength": 120
+                            },
+                            "postalPrefix": {
+                              "type": "string",
+                              "nullable": true,
+                              "maxLength": 10
+                            },
+                            "placeType": {
+                              "type": "string",
+                              "nullable": true,
+                              "enum": [
+                                "city",
+                                "zone",
+                                "area",
+                                null
+                              ]
+                            },
+                            "placeId": {
+                              "type": "string",
+                              "nullable": true,
+                              "maxLength": 180
+                            },
+                            "placeName": {
+                              "type": "string",
+                              "nullable": true,
+                              "maxLength": 180
+                            },
+                            "providerId": {
+                              "type": "string",
+                              "nullable": true,
+                              "maxLength": 120,
+                              "description": "A country's tax provider; null uses the store-wide one."
+                            },
+                            "rateCount": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "version": {
+                              "type": "integer"
+                            },
+                            "createdAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                },
+                                {}
+                              ]
+                            },
+                            "updatedAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                },
+                                {}
+                              ]
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "countryCode",
+                            "kind",
+                            "adminArea",
+                            "postalPrefix",
+                            "placeType",
+                            "placeId",
+                            "placeName",
+                            "providerId",
+                            "rateCount",
+                            "version",
+                            "createdAt",
+                            "updatedAt"
+                          ]
+                        },
+                        "subRegions": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "maxLength": 180
+                              },
+                              "countryCode": {
+                                "type": "string",
+                                "minLength": 2,
+                                "maxLength": 2
+                              },
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "country",
+                                  "admin_area",
+                                  "postal_prefix",
+                                  "place"
+                                ],
+                                "description": "`country` is where the store collects tax; the others are regions of it."
+                              },
+                              "adminArea": {
+                                "type": "string",
+                                "nullable": true,
+                                "maxLength": 120
+                              },
+                              "postalPrefix": {
+                                "type": "string",
+                                "nullable": true,
+                                "maxLength": 10
+                              },
+                              "placeType": {
+                                "type": "string",
+                                "nullable": true,
+                                "enum": [
+                                  "city",
+                                  "zone",
+                                  "area",
+                                  null
+                                ]
+                              },
+                              "placeId": {
+                                "type": "string",
+                                "nullable": true,
+                                "maxLength": 180
+                              },
+                              "placeName": {
+                                "type": "string",
+                                "nullable": true,
+                                "maxLength": 180
+                              },
+                              "providerId": {
+                                "type": "string",
+                                "nullable": true,
+                                "maxLength": 120,
+                                "description": "A country's tax provider; null uses the store-wide one."
+                              },
+                              "rateCount": {
+                                "type": "integer",
+                                "minimum": 0
+                              },
+                              "version": {
+                                "type": "integer"
+                              },
+                              "createdAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  },
+                                  {}
+                                ]
+                              },
+                              "updatedAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  },
+                                  {}
+                                ]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "countryCode",
+                              "kind",
+                              "adminArea",
+                              "postalPrefix",
+                              "placeType",
+                              "placeId",
+                              "placeName",
+                              "providerId",
+                              "rateCount",
+                              "version",
+                              "createdAt",
+                              "updatedAt"
+                            ]
+                          }
+                        },
+                        "rates": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "maxLength": 180
+                              },
+                              "taxClassId": {
+                                "type": "string",
+                                "maxLength": 180
+                              },
+                              "taxRegionId": {
+                                "type": "string",
+                                "maxLength": 180,
+                                "description": "The region the rate applies in."
+                              },
+                              "name": {
+                                "type": "string",
+                                "maxLength": 120
+                              },
+                              "rateBps": {
+                                "type": "integer"
+                              },
+                              "priority": {
+                                "type": "integer"
+                              },
+                              "isCompound": {
+                                "type": "boolean"
+                              },
+                              "combinable": {
+                                "type": "boolean",
+                                "description": "Applies with the broader regions' rates of its class instead of replacing them."
+                              },
+                              "isActive": {
+                                "type": "boolean"
+                              },
+                              "version": {
+                                "type": "integer"
+                              },
+                              "createdAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  },
+                                  {}
+                                ]
+                              },
+                              "updatedAt": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "number"
+                                  },
+                                  {}
+                                ]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "taxClassId",
+                              "taxRegionId",
+                              "name",
+                              "rateBps",
+                              "priority",
+                              "isCompound",
+                              "combinable",
+                              "isActive",
+                              "version",
+                              "createdAt",
+                              "updatedAt"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "region",
+                        "subRegions",
+                        "rates"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "taxes.view"
+        }
+      },
+      "put": {
+        "operationId": "dashboard.taxes.regions_update",
+        "tags": [
+          "Admin - Taxes"
+        ],
+        "summary": "Choose a country's tax provider",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 180
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "expectedVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "providerId": {
+                    "type": "string",
+                    "nullable": true,
+                    "minLength": 1,
+                    "maxLength": 120,
+                    "description": "Null uses the store-wide provider."
+                  }
+                },
+                "required": [
+                  "expectedVersion",
+                  "providerId"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Tax region updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "region": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "maxLength": 180
+                            },
+                            "countryCode": {
+                              "type": "string",
+                              "minLength": 2,
+                              "maxLength": 2
+                            },
+                            "kind": {
+                              "type": "string",
+                              "enum": [
+                                "country",
+                                "admin_area",
+                                "postal_prefix",
+                                "place"
+                              ],
+                              "description": "`country` is where the store collects tax; the others are regions of it."
+                            },
+                            "adminArea": {
+                              "type": "string",
+                              "nullable": true,
+                              "maxLength": 120
+                            },
+                            "postalPrefix": {
+                              "type": "string",
+                              "nullable": true,
+                              "maxLength": 10
+                            },
+                            "placeType": {
+                              "type": "string",
+                              "nullable": true,
+                              "enum": [
+                                "city",
+                                "zone",
+                                "area",
+                                null
+                              ]
+                            },
+                            "placeId": {
+                              "type": "string",
+                              "nullable": true,
+                              "maxLength": 180
+                            },
+                            "placeName": {
+                              "type": "string",
+                              "nullable": true,
+                              "maxLength": 180
+                            },
+                            "providerId": {
+                              "type": "string",
+                              "nullable": true,
+                              "maxLength": 120,
+                              "description": "A country's tax provider; null uses the store-wide one."
+                            },
+                            "rateCount": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "version": {
+                              "type": "integer"
+                            },
+                            "createdAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                },
+                                {}
+                              ]
+                            },
+                            "updatedAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                },
+                                {}
+                              ]
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "countryCode",
+                            "kind",
+                            "adminArea",
+                            "postalPrefix",
+                            "placeType",
+                            "placeId",
+                            "placeName",
+                            "providerId",
+                            "rateCount",
+                            "version",
+                            "createdAt",
+                            "updatedAt"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "region"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "required",
+          "batch": "sequential",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "taxes.manage"
+        }
+      },
+      "delete": {
+        "operationId": "dashboard.taxes.regions_delete",
+        "tags": [
+          "Admin - Taxes"
+        ],
+        "summary": "Stop collecting tax in a region (a country takes its regions and every rate along)",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 180
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "required": true,
+            "name": "expectedVersion",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tax region deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "countryCode": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "countryCode"
                       ]
                     }
                   },
@@ -175518,7 +176858,8 @@
         "tags": [
           "Admin - Taxes"
         ],
-        "summary": "Preview current tax configuration server-side",
+        "summary": "Preview the tax of a sample order at an address, server-side",
+        "description": "Uses the saved regions, rates and provider, and the market of the address's country for whether prices include tax. A Bangladesh address names its City and Thana (and Area); another country's names its admin area or postal code. Without an address the order is taxed where the store ships from.",
         "requestBody": {
           "required": true,
           "content": {
@@ -175554,13 +176895,31 @@
                     "maximum": 1000000000,
                     "default": 0
                   },
+                  "countryCode": {
+                    "type": "string",
+                    "nullable": true,
+                    "minLength": 2,
+                    "maxLength": 2
+                  },
+                  "adminArea": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 120
+                  },
+                  "postalCode": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 40
+                  },
                   "city": {
                     "type": "string",
+                    "nullable": true,
                     "minLength": 1,
                     "maxLength": 180
                   },
                   "zone": {
                     "type": "string",
+                    "nullable": true,
                     "minLength": 1,
                     "maxLength": 180
                   },
@@ -175571,9 +176930,7 @@
                   }
                 },
                 "required": [
-                  "amount",
-                  "city",
-                  "zone"
+                  "amount"
                 ],
                 "additionalProperties": false
               }
@@ -175621,6 +176978,21 @@
                         "totalMinor": {
                           "type": "integer"
                         },
+                        "countryCode": {
+                          "type": "string",
+                          "minLength": 2,
+                          "maxLength": 2,
+                          "description": "The country taxed."
+                        },
+                        "providerId": {
+                          "type": "string",
+                          "description": "The provider that calculated."
+                        },
+                        "taxRegionId": {
+                          "type": "string",
+                          "nullable": true,
+                          "description": "The most specific region whose rates applied to the item."
+                        },
                         "components": {
                           "type": "array",
                           "items": {
@@ -175654,6 +177026,9 @@
                         "taxMinor",
                         "totalAmount",
                         "totalMinor",
+                        "countryCode",
+                        "providerId",
+                        "taxRegionId",
                         "components"
                       ]
                     }
@@ -203540,18 +204915,21 @@
         "surface": "dashboard",
         "kind": "mixed",
         "title": "Configure a tax rate",
-        "summary": "Read tax references, create a rate, preview a calculation, and verify configured rates.",
+        "summary": "Read tax regions and classes, add a region if needed, create a rate in it, preview a calculation, and verify configured rates.",
         "examples": [
-          "Configure a VAT rate for the supplied jurisdiction and class, preview a real cart calculation, then verify versioned settings."
+          "Configure a VAT rate for the supplied country or region and class, preview a real cart calculation, then verify versioned settings."
         ],
         "tags": [
           "tax",
           "rates",
+          "regions",
           "jurisdictions",
           "configuration"
         ],
         "operationIds": [
           "dashboard.taxes.settings_get",
+          "dashboard.taxes.regions_list",
+          "dashboard.taxes.regions_create",
           "dashboard.taxes.jurisdictions_list",
           "dashboard.taxes.classes_list",
           "dashboard.taxes.rates_create",
@@ -203562,9 +204940,11 @@
         "requiresConfirmation": true,
         "requiresVerification": true,
         "rules": [
-          "Resolve exact jurisdiction and tax-class identifiers.",
-          "Require merchant-supplied rate, scope, and effective facts.",
-          "Confirm the rate write, then preview a real calculation and verify the list."
+          "The store collects tax only where it has a region: an address in a country without one pays no tax.",
+          "A rate belongs to one region; the most specific region with rates of the line's class applies, and a combinable rate adds the broader regions' rates.",
+          "Resolve exact region, place and tax-class identifiers; add the country before any region of it.",
+          "Require merchant-supplied rate, scope, and effective facts. Whether prices include tax is the market's (dashboard.markets.update).",
+          "Confirm the region and rate writes, then preview a real calculation and verify the list."
         ]
       },
       {
@@ -210042,6 +211422,46 @@
           "mode": "operation-fallback",
           "workflowIds": [
             "operation.dashboard.taxes.rates_update"
+          ]
+        },
+        {
+          "operationId": "dashboard.taxes.regions_create",
+          "surface": "dashboard",
+          "mode": "curated",
+          "workflowIds": [
+            "dashboard.tax-configuration"
+          ]
+        },
+        {
+          "operationId": "dashboard.taxes.regions_delete",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.taxes.regions_delete"
+          ]
+        },
+        {
+          "operationId": "dashboard.taxes.regions_get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.taxes.regions_get"
+          ]
+        },
+        {
+          "operationId": "dashboard.taxes.regions_list",
+          "surface": "dashboard",
+          "mode": "curated",
+          "workflowIds": [
+            "dashboard.tax-configuration"
+          ]
+        },
+        {
+          "operationId": "dashboard.taxes.regions_update",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.taxes.regions_update"
           ]
         },
         {

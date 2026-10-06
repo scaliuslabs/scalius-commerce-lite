@@ -41,6 +41,15 @@ export const SETTINGS_ROUTE_PERMISSIONS: RoutePermissionMap = {
     PUT: { permission: PERMISSIONS.TAXES_MANAGE },
     DELETE: { permission: PERMISSIONS.TAXES_MANAGE },
   },
+  "/api/v1/admin/taxes/regions": {
+    GET: { permission: PERMISSIONS.TAXES_VIEW },
+    POST: { permission: PERMISSIONS.TAXES_MANAGE },
+  },
+  "/api/v1/admin/taxes/regions/*": {
+    GET: { permission: PERMISSIONS.TAXES_VIEW },
+    PUT: { permission: PERMISSIONS.TAXES_MANAGE },
+    DELETE: { permission: PERMISSIONS.TAXES_MANAGE },
+  },
   "/api/v1/admin/taxes/rates": {
     GET: { permission: PERMISSIONS.TAXES_VIEW },
     POST: { permission: PERMISSIONS.TAXES_MANAGE },

@@ -43,6 +43,7 @@ export const marketRecordSchema = z.object({
   currencyCode: z.string().openapi({ description: "Every market sells in the shop currency until markets get their own currency." }),
   priceIncrementMinor: z.number().int().positive().openapi({ description: "The price increment its prices use, in minor units: the backup market's own, inherited by every other market." }),
   priceIncrementInherited: z.boolean(),
+  pricesIncludeTax: z.boolean().openapi({ description: "Whether the market's prices include tax: checkout adds tax on top when false, and shows it as included when true." }),
   hasOrders: z.boolean().openapi({ description: "A market that took orders cannot be deleted; set it to draft instead." }),
   createdAt: z.string().openapi({ format: "date-time" }),
   updatedAt: z.string().openapi({ format: "date-time" }),
@@ -59,6 +60,7 @@ export const createMarketSchema = z.object({
   status: z.enum(["draft", "active"]).default("draft"),
   countries: z.array(z.string().trim().length(2)).min(1).max(MAX_MARKET_COUNTRIES),
   presence: presenceInputSchema.nullable().default(null).openapi({ description: "A subfolder presence such as `{ value: \"en-in\", locale: \"en\" }`." }),
+  pricesIncludeTax: z.boolean().optional().openapi({ description: "Whether its prices include tax; omitted: the backup market's." }),
 }).strict();
 
 export const updateMarketSchema = z.object({
@@ -69,6 +71,7 @@ export const updateMarketSchema = z.object({
   countries: z.array(z.string().trim().length(2)).max(MAX_MARKET_COUNTRIES).optional(),
   presence: presenceInputSchema.nullable().optional().openapi({ description: "Backup market: only the root's language. Other markets: the subfolder, or null to remove it." }),
   priceIncrementMinor: z.number().int().positive().max(1_000).optional().openapi({ description: "Backup market only: 1 (minor units) or the currency's whole unit (100 for BDT)." }),
+  pricesIncludeTax: z.boolean().optional().openapi({ description: "Whether its prices include tax (checkout and the order's tax read the order's market)." }),
 }).strict();
 
 /** The dashboard record with dates as ISO strings. */

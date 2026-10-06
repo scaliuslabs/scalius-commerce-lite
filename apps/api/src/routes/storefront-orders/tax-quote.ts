@@ -1,5 +1,6 @@
 // Authoritative checkout tax quote.
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { requestAppProviders } from "../../plugins/providers/app-providers";
 import { InventoryPool } from "@scalius/database/schema";
 import {
     quotedDiscountLineSchema,
@@ -267,6 +268,7 @@ app.openapi(taxQuoteRoute, async (c) => {
       priceIncrementMinor: currency.priceIncrementMinor,
     },
     apps,
+    appProviders: requestAppProviders(c),
     channel: "online_store",
     location: {
       countryCode: data.shippingCountryCode,

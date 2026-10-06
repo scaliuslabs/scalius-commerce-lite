@@ -838,13 +838,15 @@ export const DASHBOARD_AGENT_WORKFLOW_ROUTES = [
     surface: "dashboard",
     kind: "mixed",
     title: "Configure a tax rate",
-    summary: "Read tax references, create a rate, preview a calculation, and verify configured rates.",
+    summary: "Read tax regions and classes, add a region if needed, create a rate in it, preview a calculation, and verify configured rates.",
     examples: [
-      "Configure a VAT rate for the supplied jurisdiction and class, preview a real cart calculation, then verify versioned settings.",
+      "Configure a VAT rate for the supplied country or region and class, preview a real cart calculation, then verify versioned settings.",
     ],
-    tags: ["tax", "rates", "jurisdictions", "configuration"],
+    tags: ["tax", "rates", "regions", "jurisdictions", "configuration"],
     operationIds: [
       "dashboard.taxes.settings_get",
+      "dashboard.taxes.regions_list",
+      "dashboard.taxes.regions_create",
       "dashboard.taxes.jurisdictions_list",
       "dashboard.taxes.classes_list",
       "dashboard.taxes.rates_create",
@@ -855,9 +857,11 @@ export const DASHBOARD_AGENT_WORKFLOW_ROUTES = [
     requiresConfirmation: true,
     requiresVerification: true,
     rules: [
-      "Resolve exact jurisdiction and tax-class identifiers.",
-      "Require merchant-supplied rate, scope, and effective facts.",
-      "Confirm the rate write, then preview a real calculation and verify the list.",
+      "The store collects tax only where it has a region: an address in a country without one pays no tax.",
+      "A rate belongs to one region; the most specific region with rates of the line's class applies, and a combinable rate adds the broader regions' rates.",
+      "Resolve exact region, place and tax-class identifiers; add the country before any region of it.",
+      "Require merchant-supplied rate, scope, and effective facts. Whether prices include tax is the market's (dashboard.markets.update).",
+      "Confirm the region and rate writes, then preview a real calculation and verify the list.",
     ],
   },
   {

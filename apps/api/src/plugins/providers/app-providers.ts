@@ -1,4 +1,4 @@
-// The app providers core may reach for SMS, email and the fraud check
+// The app providers core may reach for SMS, email, the fraud check and tax
 // (`AppProviders`, @scalius/core/integrations/provider-port). Core asks only
 // when the merchant's saved choice is an app id (`<plugin id>:<provider id>`),
 // so a store on built-in providers reads no plugin table. One answer per id
@@ -24,6 +24,7 @@ import { ValidationError } from "../../utils/api-error";
 import { getCredentialEncryptionKey } from "../../utils/encryption-key";
 import { appFraudProvider } from "./fraud";
 import { appEmailProvider, appSmsProvider } from "./messaging";
+import { appTaxProvider } from "./tax";
 import {
   createAppProviderRuntime,
   readAppProviderSettings,
@@ -38,9 +39,10 @@ const ADAPTERS: Record<AppProviderKind, Adapter> = {
   sms: appSmsProvider as Adapter,
   email: appEmailProvider as Adapter,
   fraud: appFraudProvider as Adapter,
+  tax: appTaxProvider as Adapter,
 };
 
-const PORT_NAMES: Record<AppProviderKind, string> = { sms: "SMS", email: "email", fraud: "fraud check" };
+const PORT_NAMES: Record<AppProviderKind, string> = { sms: "SMS", email: "email", fraud: "fraud check", tax: "tax" };
 
 async function resolveChoice(
   runtime: AppProviderRuntime,

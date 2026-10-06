@@ -911,6 +911,8 @@ describe("authoritative tax quote", () => {
         })],
         shippingMinor: 6_000,
       }),
+      undefined,
+      { apps: expect.anything() },
     );
   });
 
@@ -1027,6 +1029,8 @@ describe("authoritative tax quote", () => {
           lines: [expect.objectContaining({ unitPriceMinor, quantity: 2 })],
           currency: { code: currencyCode, decimalPlaces, priceIncrementMinor: 1 },
         }),
+        undefined,
+        { apps: expect.anything() },
       );
     },
   );
@@ -1109,6 +1113,8 @@ describe("authoritative tax quote", () => {
     expect(mocks.calculateStorefrontTaxQuote).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ promotionDiscountAllocation: taxAllocation }),
+      undefined,
+      { apps: expect.anything() },
     );
     expect(mocks.quoteStorefrontDiscount).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
       codes: ["PRODUCT50", "EXTRA"],
@@ -1667,7 +1673,7 @@ describe("create order commit/KV ordering", () => {
         expect.objectContaining({ partialPaymentEnabled: false }),
         expect.objectContaining({ classes: [], rates: [] }),
         { masterSecret: expect.toBeOneOf([null, expect.any(String)]) },
-        { apps: expect.objectContaining({ points: new Set() }), channel: "online_store", paymentProviders: expect.anything() },
+        { apps: expect.objectContaining({ points: new Set() }), channel: "online_store", paymentProviders: expect.anything(), appProviders: expect.anything() },
     );
     } finally {
       consoleError.mockRestore();
@@ -2316,7 +2322,7 @@ describe("create order commit/KV ordering", () => {
       expect.anything(),
       expect.anything(),
       { masterSecret: expect.toBeOneOf([null, expect.any(String)]) },
-      { apps: expect.objectContaining({ points: new Set() }), channel: "online_store", paymentProviders: expect.anything() },
+      { apps: expect.objectContaining({ points: new Set() }), channel: "online_store", paymentProviders: expect.anything(), appProviders: expect.anything() },
     );
     expect(mocks.commitStorefrontOrderPayload).toHaveBeenCalledOnce();
   });
@@ -2407,7 +2413,7 @@ describe("create order commit/KV ordering", () => {
       expect.objectContaining({ partialPaymentEnabled: false }),
       expect.objectContaining({ classes: [], rates: [] }),
       { masterSecret: expect.toBeOneOf([null, expect.any(String)]) },
-      { apps: expect.objectContaining({ points: new Set() }), channel: "online_store", paymentProviders: expect.anything() },
+      { apps: expect.objectContaining({ points: new Set() }), channel: "online_store", paymentProviders: expect.anything(), appProviders: expect.anything() },
     );
     expect(mocks.commitStorefrontOrderPayload).toHaveBeenCalledOnce();
   });
@@ -2453,7 +2459,7 @@ describe("create order commit/KV ordering", () => {
       expect.anything(),
       expect.anything(),
       { masterSecret: expect.toBeOneOf([null, expect.any(String)]) },
-      { apps: expect.objectContaining({ points: new Set() }), channel: "online_store", paymentProviders: expect.anything() },
+      { apps: expect.objectContaining({ points: new Set() }), channel: "online_store", paymentProviders: expect.anything(), appProviders: expect.anything() },
     );
     expect(mocks.commitStorefrontOrderPayload).toHaveBeenCalledOnce();
   });

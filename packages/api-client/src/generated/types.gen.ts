@@ -2155,6 +2155,10 @@ export type Market = {
     priceIncrementMinor: number;
     priceIncrementInherited: boolean;
     /**
+     * Whether the market's prices include tax: checkout adds tax on top when false, and shows it as included when true.
+     */
+    pricesIncludeTax: boolean;
+    /**
      * A market that took orders cannot be deleted; set it to draft instead.
      */
     hasOrders: boolean;
@@ -35272,6 +35276,10 @@ export type PostApiV1AdminSettingsMarketsData = {
             value: string;
             locale: string;
         } | null;
+        /**
+         * Whether its prices include tax; omitted: the backup market's.
+         */
+        pricesIncludeTax?: boolean;
     };
     path?: never;
     query?: never;
@@ -35453,6 +35461,10 @@ export type PatchApiV1AdminSettingsMarketsByIdData = {
          * Backup market only: 1 (minor units) or the currency's whole unit (100 for BDT).
          */
         priceIncrementMinor?: number;
+        /**
+         * Whether its prices include tax (checkout and the order's tax read the order's market).
+         */
+        pricesIncludeTax?: boolean;
     };
     path: {
         id: string;
@@ -49707,11 +49719,11 @@ export type GetApiV1AdminTaxesResponses = {
             settings: {
                 id: 'default';
                 enabled: boolean;
-                pricesIncludeTax: boolean;
                 taxShipping: boolean;
                 defaultTaxClassId: string | null;
                 shippingTaxClassId: string | null;
                 displayLabel: string;
+                providerId: string;
                 version: number;
                 createdAt: string | number | unknown;
                 updatedAt: string | number | unknown;
@@ -49726,21 +49738,46 @@ export type GetApiV1AdminTaxesResponses = {
                 updatedAt: string | number | unknown;
                 deletedAt: string | number | unknown;
             }>;
+            regions: Array<{
+                id: string;
+                countryCode: string;
+                /**
+                 * `country` is where the store collects tax; the others are regions of it.
+                 */
+                kind: 'country' | 'admin_area' | 'postal_prefix' | 'place';
+                adminArea: string | null;
+                postalPrefix: string | null;
+                placeType: 'city' | 'zone' | 'area' | null;
+                placeId: string | null;
+                placeName: string | null;
+                /**
+                 * A country's tax provider; null uses the store-wide one.
+                 */
+                providerId: string | null;
+                rateCount: number;
+                version: number;
+                createdAt: string | number | unknown;
+                updatedAt: string | number | unknown;
+            }>;
             rates: Array<{
                 id: string;
                 taxClassId: string;
+                /**
+                 * The region the rate applies in.
+                 */
+                taxRegionId: string;
                 name: string;
                 rateBps: number;
-                jurisdictionType: 'all' | 'city' | 'zone' | 'area';
-                jurisdictionId: string | null;
-                jurisdictionLabel: string | null;
                 priority: number;
                 isCompound: boolean;
+                /**
+                 * Applies with the broader regions' rates of its class instead of replacing them.
+                 */
+                combinable: boolean;
                 isActive: boolean;
                 version: number;
                 createdAt: string | number | unknown;
                 updatedAt: string | number | unknown;
-                deletedAt: string | number | unknown;
             }>;
             jurisdictions: Array<{
                 id: string;
@@ -49800,11 +49837,11 @@ export type GetApiV1AdminTaxesSettingsResponses = {
             settings: {
                 id: 'default';
                 enabled: boolean;
-                pricesIncludeTax: boolean;
                 taxShipping: boolean;
                 defaultTaxClassId: string | null;
                 shippingTaxClassId: string | null;
                 displayLabel: string;
+                providerId: string;
                 version: number;
                 createdAt: string | number | unknown;
                 updatedAt: string | number | unknown;
@@ -49819,11 +49856,14 @@ export type PutApiV1AdminTaxesSettingsData = {
     body: {
         expectedVersion: number;
         enabled: boolean;
-        pricesIncludeTax: boolean;
         taxShipping: boolean;
         defaultTaxClassId: string | null;
         shippingTaxClassId: string | null;
         displayLabel: string;
+        /**
+         * The store-wide tax provider; omitted keeps the saved one.
+         */
+        providerId?: string;
     };
     path?: never;
     query?: never;
@@ -49861,11 +49901,11 @@ export type PutApiV1AdminTaxesSettingsResponses = {
             settings: {
                 id: 'default';
                 enabled: boolean;
-                pricesIncludeTax: boolean;
                 taxShipping: boolean;
                 defaultTaxClassId: string | null;
                 shippingTaxClassId: string | null;
                 displayLabel: string;
+                providerId: string;
                 version: number;
                 createdAt: string | number | unknown;
                 updatedAt: string | number | unknown;
@@ -50122,6 +50162,7 @@ export type GetApiV1AdminTaxesRatesData = {
         limit?: number;
         search?: string;
         taxClassId?: string;
+        taxRegionId?: string;
     };
     url: '/api/v1/admin/taxes/rates';
 };
@@ -50165,18 +50206,22 @@ export type GetApiV1AdminTaxesRatesResponses = {
             items: Array<{
                 id: string;
                 taxClassId: string;
+                /**
+                 * The region the rate applies in.
+                 */
+                taxRegionId: string;
                 name: string;
                 rateBps: number;
-                jurisdictionType: 'all' | 'city' | 'zone' | 'area';
-                jurisdictionId: string | null;
-                jurisdictionLabel: string | null;
                 priority: number;
                 isCompound: boolean;
+                /**
+                 * Applies with the broader regions' rates of its class instead of replacing them.
+                 */
+                combinable: boolean;
                 isActive: boolean;
                 version: number;
                 createdAt: string | number | unknown;
                 updatedAt: string | number | unknown;
-                deletedAt: string | number | unknown;
             }>;
             total: number;
             page: number;
@@ -50190,13 +50235,12 @@ export type GetApiV1AdminTaxesRatesResponse = GetApiV1AdminTaxesRatesResponses[k
 export type PostApiV1AdminTaxesRatesData = {
     body: {
         taxClassId: string;
+        taxRegionId: string;
         name: string;
         rateBps: number;
-        jurisdictionType: 'all' | 'city' | 'zone' | 'area';
-        jurisdictionId?: string | null;
-        jurisdictionLabel?: string | null;
         priority?: number;
         isCompound?: boolean;
+        combinable?: boolean;
         isActive?: boolean;
     };
     path?: never;
@@ -50235,18 +50279,22 @@ export type PostApiV1AdminTaxesRatesResponses = {
             taxRate: {
                 id: string;
                 taxClassId: string;
+                /**
+                 * The region the rate applies in.
+                 */
+                taxRegionId: string;
                 name: string;
                 rateBps: number;
-                jurisdictionType: 'all' | 'city' | 'zone' | 'area';
-                jurisdictionId: string | null;
-                jurisdictionLabel: string | null;
                 priority: number;
                 isCompound: boolean;
+                /**
+                 * Applies with the broader regions' rates of its class instead of replacing them.
+                 */
+                combinable: boolean;
                 isActive: boolean;
                 version: number;
                 createdAt: string | number | unknown;
                 updatedAt: string | number | unknown;
-                deletedAt: string | number | unknown;
             };
         };
     };
@@ -50296,18 +50344,22 @@ export type DeleteApiV1AdminTaxesRatesByIdResponses = {
             taxRate: {
                 id: string;
                 taxClassId: string;
+                /**
+                 * The region the rate applies in.
+                 */
+                taxRegionId: string;
                 name: string;
                 rateBps: number;
-                jurisdictionType: 'all' | 'city' | 'zone' | 'area';
-                jurisdictionId: string | null;
-                jurisdictionLabel: string | null;
                 priority: number;
                 isCompound: boolean;
+                /**
+                 * Applies with the broader regions' rates of its class instead of replacing them.
+                 */
+                combinable: boolean;
                 isActive: boolean;
                 version: number;
                 createdAt: string | number | unknown;
                 updatedAt: string | number | unknown;
-                deletedAt: string | number | unknown;
             };
         };
     };
@@ -50321,11 +50373,10 @@ export type PutApiV1AdminTaxesRatesByIdData = {
         taxClassId?: string;
         name?: string;
         rateBps?: number;
-        jurisdictionType?: 'all' | 'city' | 'zone' | 'area';
-        jurisdictionId?: string | null;
-        jurisdictionLabel?: string | null;
+        taxRegionId?: string;
         priority?: number;
         isCompound?: boolean;
+        combinable?: boolean;
         isActive?: boolean;
     };
     path: {
@@ -50370,24 +50421,408 @@ export type PutApiV1AdminTaxesRatesByIdResponses = {
             taxRate: {
                 id: string;
                 taxClassId: string;
+                /**
+                 * The region the rate applies in.
+                 */
+                taxRegionId: string;
                 name: string;
                 rateBps: number;
-                jurisdictionType: 'all' | 'city' | 'zone' | 'area';
-                jurisdictionId: string | null;
-                jurisdictionLabel: string | null;
                 priority: number;
                 isCompound: boolean;
+                /**
+                 * Applies with the broader regions' rates of its class instead of replacing them.
+                 */
+                combinable: boolean;
                 isActive: boolean;
                 version: number;
                 createdAt: string | number | unknown;
                 updatedAt: string | number | unknown;
-                deletedAt: string | number | unknown;
             };
         };
     };
 };
 
 export type PutApiV1AdminTaxesRatesByIdResponse = PutApiV1AdminTaxesRatesByIdResponses[keyof PutApiV1AdminTaxesRatesByIdResponses];
+
+export type GetApiV1AdminTaxesRegionsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        countryCode?: string;
+    };
+    url: '/api/v1/admin/taxes/regions';
+};
+
+export type GetApiV1AdminTaxesRegionsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminTaxesRegionsError = GetApiV1AdminTaxesRegionsErrors[keyof GetApiV1AdminTaxesRegionsErrors];
+
+export type GetApiV1AdminTaxesRegionsResponses = {
+    /**
+     * Tax regions
+     */
+    200: {
+        success: true;
+        data: {
+            regions: Array<{
+                id: string;
+                countryCode: string;
+                /**
+                 * `country` is where the store collects tax; the others are regions of it.
+                 */
+                kind: 'country' | 'admin_area' | 'postal_prefix' | 'place';
+                adminArea: string | null;
+                postalPrefix: string | null;
+                placeType: 'city' | 'zone' | 'area' | null;
+                placeId: string | null;
+                placeName: string | null;
+                /**
+                 * A country's tax provider; null uses the store-wide one.
+                 */
+                providerId: string | null;
+                rateCount: number;
+                version: number;
+                createdAt: string | number | unknown;
+                updatedAt: string | number | unknown;
+            }>;
+        };
+    };
+};
+
+export type GetApiV1AdminTaxesRegionsResponse = GetApiV1AdminTaxesRegionsResponses[keyof GetApiV1AdminTaxesRegionsResponses];
+
+export type PostApiV1AdminTaxesRegionsData = {
+    body: {
+        countryCode: string;
+        adminArea?: string | null;
+        postalPrefix?: string | null;
+        /**
+         * A Bangladesh delivery location (dashboard.taxes.jurisdictions_list).
+         */
+        placeId?: string | null;
+        /**
+         * `system` (the store's rates by region) or an installed app's tax provider, `<plugin id>:<provider id>`.
+         */
+        providerId?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/taxes/regions';
+};
+
+export type PostApiV1AdminTaxesRegionsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+};
+
+export type PostApiV1AdminTaxesRegionsError = PostApiV1AdminTaxesRegionsErrors[keyof PostApiV1AdminTaxesRegionsErrors];
+
+export type PostApiV1AdminTaxesRegionsResponses = {
+    /**
+     * Tax region created
+     */
+    201: {
+        success: true;
+        data: {
+            region: {
+                id: string;
+                countryCode: string;
+                /**
+                 * `country` is where the store collects tax; the others are regions of it.
+                 */
+                kind: 'country' | 'admin_area' | 'postal_prefix' | 'place';
+                adminArea: string | null;
+                postalPrefix: string | null;
+                placeType: 'city' | 'zone' | 'area' | null;
+                placeId: string | null;
+                placeName: string | null;
+                /**
+                 * A country's tax provider; null uses the store-wide one.
+                 */
+                providerId: string | null;
+                rateCount: number;
+                version: number;
+                createdAt: string | number | unknown;
+                updatedAt: string | number | unknown;
+            };
+        };
+    };
+};
+
+export type PostApiV1AdminTaxesRegionsResponse = PostApiV1AdminTaxesRegionsResponses[keyof PostApiV1AdminTaxesRegionsResponses];
+
+export type DeleteApiV1AdminTaxesRegionsByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query: {
+        expectedVersion: number;
+    };
+    url: '/api/v1/admin/taxes/regions/{id}';
+};
+
+export type DeleteApiV1AdminTaxesRegionsByIdErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+};
+
+export type DeleteApiV1AdminTaxesRegionsByIdError = DeleteApiV1AdminTaxesRegionsByIdErrors[keyof DeleteApiV1AdminTaxesRegionsByIdErrors];
+
+export type DeleteApiV1AdminTaxesRegionsByIdResponses = {
+    /**
+     * Tax region deleted
+     */
+    200: {
+        success: true;
+        data: {
+            id: string;
+            countryCode: string;
+        };
+    };
+};
+
+export type DeleteApiV1AdminTaxesRegionsByIdResponse = DeleteApiV1AdminTaxesRegionsByIdResponses[keyof DeleteApiV1AdminTaxesRegionsByIdResponses];
+
+export type GetApiV1AdminTaxesRegionsByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/taxes/regions/{id}';
+};
+
+export type GetApiV1AdminTaxesRegionsByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminTaxesRegionsByIdError = GetApiV1AdminTaxesRegionsByIdErrors[keyof GetApiV1AdminTaxesRegionsByIdErrors];
+
+export type GetApiV1AdminTaxesRegionsByIdResponses = {
+    /**
+     * Tax region
+     */
+    200: {
+        success: true;
+        data: {
+            region: {
+                id: string;
+                countryCode: string;
+                /**
+                 * `country` is where the store collects tax; the others are regions of it.
+                 */
+                kind: 'country' | 'admin_area' | 'postal_prefix' | 'place';
+                adminArea: string | null;
+                postalPrefix: string | null;
+                placeType: 'city' | 'zone' | 'area' | null;
+                placeId: string | null;
+                placeName: string | null;
+                /**
+                 * A country's tax provider; null uses the store-wide one.
+                 */
+                providerId: string | null;
+                rateCount: number;
+                version: number;
+                createdAt: string | number | unknown;
+                updatedAt: string | number | unknown;
+            };
+            subRegions: Array<{
+                id: string;
+                countryCode: string;
+                /**
+                 * `country` is where the store collects tax; the others are regions of it.
+                 */
+                kind: 'country' | 'admin_area' | 'postal_prefix' | 'place';
+                adminArea: string | null;
+                postalPrefix: string | null;
+                placeType: 'city' | 'zone' | 'area' | null;
+                placeId: string | null;
+                placeName: string | null;
+                /**
+                 * A country's tax provider; null uses the store-wide one.
+                 */
+                providerId: string | null;
+                rateCount: number;
+                version: number;
+                createdAt: string | number | unknown;
+                updatedAt: string | number | unknown;
+            }>;
+            rates: Array<{
+                id: string;
+                taxClassId: string;
+                /**
+                 * The region the rate applies in.
+                 */
+                taxRegionId: string;
+                name: string;
+                rateBps: number;
+                priority: number;
+                isCompound: boolean;
+                /**
+                 * Applies with the broader regions' rates of its class instead of replacing them.
+                 */
+                combinable: boolean;
+                isActive: boolean;
+                version: number;
+                createdAt: string | number | unknown;
+                updatedAt: string | number | unknown;
+            }>;
+        };
+    };
+};
+
+export type GetApiV1AdminTaxesRegionsByIdResponse = GetApiV1AdminTaxesRegionsByIdResponses[keyof GetApiV1AdminTaxesRegionsByIdResponses];
+
+export type PutApiV1AdminTaxesRegionsByIdData = {
+    body: {
+        expectedVersion: number;
+        /**
+         * Null uses the store-wide provider.
+         */
+        providerId: string | null;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/taxes/regions/{id}';
+};
+
+export type PutApiV1AdminTaxesRegionsByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+};
+
+export type PutApiV1AdminTaxesRegionsByIdError = PutApiV1AdminTaxesRegionsByIdErrors[keyof PutApiV1AdminTaxesRegionsByIdErrors];
+
+export type PutApiV1AdminTaxesRegionsByIdResponses = {
+    /**
+     * Tax region updated
+     */
+    200: {
+        success: true;
+        data: {
+            region: {
+                id: string;
+                countryCode: string;
+                /**
+                 * `country` is where the store collects tax; the others are regions of it.
+                 */
+                kind: 'country' | 'admin_area' | 'postal_prefix' | 'place';
+                adminArea: string | null;
+                postalPrefix: string | null;
+                placeType: 'city' | 'zone' | 'area' | null;
+                placeId: string | null;
+                placeName: string | null;
+                /**
+                 * A country's tax provider; null uses the store-wide one.
+                 */
+                providerId: string | null;
+                rateCount: number;
+                version: number;
+                createdAt: string | number | unknown;
+                updatedAt: string | number | unknown;
+            };
+        };
+    };
+};
+
+export type PutApiV1AdminTaxesRegionsByIdResponse = PutApiV1AdminTaxesRegionsByIdResponses[keyof PutApiV1AdminTaxesRegionsByIdResponses];
 
 export type GetApiV1AdminTaxesJurisdictionsData = {
     body?: never;
@@ -50582,8 +51017,11 @@ export type PostApiV1AdminTaxesPreviewData = {
         taxClassId?: string | null;
         shippingAmount?: number;
         discountAmount?: number;
-        city: string;
-        zone: string;
+        countryCode?: string | null;
+        adminArea?: string | null;
+        postalCode?: string | null;
+        city?: string | null;
+        zone?: string | null;
         area?: string | null;
     };
     path?: never;
@@ -50623,6 +51061,18 @@ export type PostApiV1AdminTaxesPreviewResponses = {
             taxMinor: number;
             totalAmount: number;
             totalMinor: number;
+            /**
+             * The country taxed.
+             */
+            countryCode: string;
+            /**
+             * The provider that calculated.
+             */
+            providerId: string;
+            /**
+             * The most specific region whose rates applied to the item.
+             */
+            taxRegionId: string | null;
             components: Array<{
                 name: string;
                 rateBps: number;

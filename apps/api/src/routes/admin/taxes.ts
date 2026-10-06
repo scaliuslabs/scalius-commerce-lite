@@ -1,24 +1,32 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { fromMinor, toMinor } from "@scalius/shared/money";
 import {
-  calculateTaxQuote,
+  calculateStorefrontTaxQuote,
   createTaxClass,
   createTaxRate,
+  createTaxRegion,
   deleteTaxClass,
   deleteTaxRate,
+  deleteTaxRegion,
   getTaxConfiguration,
+  getTaxRegion,
   getTaxSettingsDocument,
   listTaxClasses,
   listTaxJurisdictions,
   listTaxRates,
+  listTaxRegions,
   updateTaxClass,
   updateTaxRate,
+  updateTaxRegion,
   updateTaxSettings,
+  type TaxRegionRecord,
 } from "@scalius/core/modules/tax";
 import { listTaxClassifications, updateTaxClassification } from "@scalius/core/modules/product-admin";
-import { type TaxJurisdictionType } from "@scalius/core/modules/tax/browser";
-import { readStoreCurrency } from "@scalius/core/modules/markets";
+import { isQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
 import { resolveActiveDeliveryLocationNames } from "@scalius/core/modules/delivery";
+import { readStoreCurrency } from "@scalius/core/modules/markets";
+import type { Database } from "@scalius/database/client";
+import { assertAppProviderInstalled, requestAppProviders } from "../../plugins/providers/app-providers";
 import { created, ok } from "../../utils/api-response";
 import {
   conflictResponse,
@@ -47,17 +55,29 @@ function serializeTaxRate(row: Awaited<ReturnType<typeof createTaxRate>>) {
     ...row,
     createdAt: serializeTimestamp(row.createdAt),
     updatedAt: serializeTimestamp(row.updatedAt),
-    deletedAt: serializeTimestamp(row.deletedAt),
   };
+}
+
+function serializeTaxRegion(region: TaxRegionRecord) {
+  return {
+    ...region,
+    createdAt: serializeTimestamp(region.createdAt),
+    updatedAt: serializeTimestamp(region.updatedAt),
+  };
+}
+
+/** A tax provider choice must name an installed app's tax provider (`system` always exists). */
+async function assertTaxProvider(db: Database, providerId: string | null | undefined): Promise<void> {
+  if (providerId && isQualifiedProviderId(providerId)) await assertAppProviderInstalled(db, "tax", providerId);
 }
 
 function serializeTaxSettings(row: {
   enabled: boolean;
-  pricesIncludeTax: boolean;
   taxShipping: boolean;
   defaultTaxClassId: string | null;
   shippingTaxClassId: string | null;
   displayLabel: string;
+  providerId: string;
   version: number;
   createdAt: unknown;
   updatedAt: unknown;
@@ -81,31 +101,46 @@ const taxClassSchema = z.object({
   updatedAt: nullableTimestampSchema,
   deletedAt: nullableTimestampSchema,
 });
-const jurisdictionTypeSchema = z.enum(["all", "city", "zone", "area"]);
 const taxRateSchema = z.object({
   id: z.string().max(180),
   taxClassId: z.string().max(180),
+  taxRegionId: z.string().max(180).openapi({ description: "The region the rate applies in." }),
   name: z.string().max(120),
   rateBps: z.number().int(),
-  jurisdictionType: jurisdictionTypeSchema,
-  jurisdictionId: z.string().max(180).nullable(),
-  jurisdictionLabel: z.string().max(180).nullable(),
   priority: z.number().int(),
   isCompound: z.boolean(),
+  combinable: z.boolean().openapi({ description: "Applies with the broader regions' rates of its class instead of replacing them." }),
   isActive: z.boolean(),
   version: z.number().int(),
   createdAt: nullableTimestampSchema,
   updatedAt: nullableTimestampSchema,
-  deletedAt: nullableTimestampSchema,
+});
+const providerIdSchema = z.string().trim().min(1).max(120)
+  .openapi({ description: "`system` (the store's rates by region) or an installed app's tax provider, `<plugin id>:<provider id>`." });
+const taxRegionSchema = z.object({
+  id: z.string().max(180),
+  countryCode: z.string().length(2),
+  kind: z.enum(["country", "admin_area", "postal_prefix", "place"])
+    .openapi({ description: "`country` is where the store collects tax; the others are regions of it." }),
+  adminArea: z.string().max(120).nullable(),
+  postalPrefix: z.string().max(10).nullable(),
+  placeType: z.enum(["city", "zone", "area"]).nullable(),
+  placeId: z.string().max(180).nullable(),
+  placeName: z.string().max(180).nullable(),
+  providerId: z.string().max(120).nullable().openapi({ description: "A country's tax provider; null uses the store-wide one." }),
+  rateCount: z.number().int().nonnegative(),
+  version: z.number().int(),
+  createdAt: nullableTimestampSchema,
+  updatedAt: nullableTimestampSchema,
 });
 const taxSettingsSchema = z.object({
   id: z.literal("default"),
   enabled: z.boolean(),
-  pricesIncludeTax: z.boolean(),
   taxShipping: z.boolean(),
   defaultTaxClassId: z.string().nullable(),
   shippingTaxClassId: z.string().nullable(),
   displayLabel: z.string().max(80),
+  providerId: z.string().max(120),
   version: z.number().int(),
   createdAt: nullableTimestampSchema,
   updatedAt: nullableTimestampSchema,
@@ -113,6 +148,7 @@ const taxSettingsSchema = z.object({
 const taxConfigurationSchema = z.object({
   settings: taxSettingsSchema,
   classes: z.array(taxClassSchema),
+  regions: z.array(taxRegionSchema),
   rates: z.array(taxRateSchema),
   jurisdictions: z.array(z.object({
     id: z.string().max(180),
@@ -159,6 +195,7 @@ app.openapi(getConfigurationRoute, async (c) => {
     ...configuration,
     settings,
     classes: configuration.classes.map(serializeTaxClass),
+    regions: configuration.regions.map(serializeTaxRegion),
     rates: configuration.rates.map(serializeTaxRate),
   });
 });
@@ -183,11 +220,11 @@ app.openapi(getSettingsRoute, async (c) => {
 const updateSettingsBodySchema = z.object({
   expectedVersion: z.number().int().min(0),
   enabled: z.boolean(),
-  pricesIncludeTax: z.boolean(),
   taxShipping: z.boolean(),
   defaultTaxClassId: z.string().max(180).nullable(),
   shippingTaxClassId: z.string().max(180).nullable(),
   displayLabel: z.string().trim().min(1).max(80),
+  providerId: providerIdSchema.optional().openapi({ description: "The store-wide tax provider; omitted keeps the saved one." }),
 }).strict();
 
 const updateSettingsRoute = createRoute({
@@ -207,7 +244,9 @@ const updateSettingsRoute = createRoute({
 });
 
 app.openapi(updateSettingsRoute, async (c) => {
-  const settings = await updateTaxSettings(c.get("db"), c.req.valid("json"));
+  const body = c.req.valid("json");
+  await assertTaxProvider(c.get("db"), body.providerId);
+  const settings = await updateTaxSettings(c.get("db"), body);
 
   return ok(c, { settings: serializeTaxSettings(settings) });
 });
@@ -326,13 +365,12 @@ app.openapi(deleteClassRoute, async (c) => {
 
 const rateBodySchema = z.object({
   taxClassId: z.string().min(1).max(180),
+  taxRegionId: z.string().min(1).max(180),
   name: z.string().trim().min(1).max(120),
   rateBps: z.number().int().min(0).max(10_000),
-  jurisdictionType: jurisdictionTypeSchema,
-  jurisdictionId: z.string().trim().max(180).optional().nullable(),
-  jurisdictionLabel: z.string().trim().max(180).optional().nullable(),
   priority: z.number().int().min(0).max(1_000).optional().default(0),
   isCompound: z.boolean().optional().default(false),
+  combinable: z.boolean().optional().default(false),
   isActive: z.boolean().optional().default(true),
 }).strict();
 
@@ -344,6 +382,7 @@ const listRatesRoute = createRoute({
   summary: "List active tax rates with bounded pagination",
   request: { query: boundedTaxListQuerySchema.extend({
     taxClassId: z.string().trim().min(1).max(180).optional(),
+    taxRegionId: z.string().trim().min(1).max(180).optional(),
   }) },
   responses: {
     200: { description: "Tax rates", content: { "application/json": { schema: successEnvelope(z.object({
@@ -371,11 +410,10 @@ const updateRateBodySchema = z.object({
   taxClassId: z.string().min(1).max(180).optional(),
   name: z.string().trim().min(1).max(120).optional(),
   rateBps: z.number().int().min(0).max(10_000).optional(),
-  jurisdictionType: jurisdictionTypeSchema.optional(),
-  jurisdictionId: z.string().trim().max(180).optional().nullable(),
-  jurisdictionLabel: z.string().trim().max(180).optional().nullable(),
+  taxRegionId: z.string().min(1).max(180).optional(),
   priority: z.number().int().min(0).max(1_000).optional(),
   isCompound: z.boolean().optional(),
+  combinable: z.boolean().optional(),
   isActive: z.boolean().optional(),
 }).strict();
 
@@ -430,7 +468,7 @@ const deleteRateRoute = createRoute({
   path: "/rates/{id}",
   operationId: "dashboard.taxes.rates_delete",
   tags: ["Admin - Taxes"],
-  summary: "Soft-delete a tax rate",
+  summary: "Delete a tax rate (orders keep their own copy)",
   request: { params: z.object({ id: z.string().min(1).max(180) }), query: versionQuerySchema },
   responses: {
     200: { description: "Tax rate deleted", content: { "application/json": { schema: successEnvelope(z.object({ taxRate: taxRateSchema })) } } },
@@ -445,6 +483,132 @@ app.openapi(deleteRateRoute, async (c) => {
 
   return ok(c, { taxRate: serializeTaxRate(taxRate) });
 });
+
+// ── Regions ─────────────────────────────────────────────────────────────
+
+const listRegionsRoute = createRoute({
+  method: "get",
+  path: "/regions",
+  operationId: "dashboard.taxes.regions_list",
+  tags: ["Admin - Taxes"],
+  summary: "List where the store collects tax: countries and their regions",
+  request: { query: z.object({ countryCode: z.string().trim().length(2).optional() }) },
+  responses: {
+    200: { description: "Tax regions", content: { "application/json": { schema: successEnvelope(z.object({
+      regions: z.array(taxRegionSchema).max(2_000),
+    })) } } },
+    ...errorResponses,
+  },
+});
+app.openapi(listRegionsRoute, async (c) => ok(c, {
+  regions: (await listTaxRegions(c.get("db"), c.req.valid("query"))).map(serializeTaxRegion),
+}));
+
+const getRegionRoute = createRoute({
+  method: "get",
+  path: "/regions/{id}",
+  operationId: "dashboard.taxes.regions_get",
+  tags: ["Admin - Taxes"],
+  summary: "Get a tax region with its rates and, for a country, its regions",
+  request: { params: z.object({ id: z.string().min(1).max(180) }) },
+  responses: {
+    200: { description: "Tax region", content: { "application/json": { schema: successEnvelope(z.object({
+      region: taxRegionSchema,
+      subRegions: z.array(taxRegionSchema),
+      rates: z.array(taxRateSchema),
+    })) } } },
+    ...errorResponses,
+  },
+});
+app.openapi(getRegionRoute, async (c) => {
+  const detail = await getTaxRegion(c.get("db"), c.req.valid("param").id);
+  return ok(c, {
+    region: serializeTaxRegion(detail.region),
+    subRegions: detail.subRegions.map(serializeTaxRegion),
+    rates: detail.rates.map(serializeTaxRate),
+  });
+});
+
+const createRegionRoute = createRoute({
+  method: "post",
+  path: "/regions",
+  operationId: "dashboard.taxes.regions_create",
+  tags: ["Admin - Taxes"],
+  summary: "Start collecting tax in a country, or add a region of one",
+  description: "A country is the registration; an address in a country without one pays no tax. A region of a country (an admin area of its address rules, a postal-code prefix, or a Bangladesh City/Thana/Area place) needs the country first. Rates are added to a region afterwards.",
+  request: { body: { required: true, content: { "application/json": { schema: z.object({
+    countryCode: z.string().trim().length(2),
+    adminArea: z.string().trim().max(120).nullable().optional(),
+    postalPrefix: z.string().trim().max(20).nullable().optional(),
+    placeId: z.string().trim().max(180).nullable().optional()
+      .openapi({ description: "A Bangladesh delivery location (dashboard.taxes.jurisdictions_list)." }),
+    providerId: providerIdSchema.nullable().optional(),
+  }).strict() } } } },
+  responses: {
+    201: { description: "Tax region created", content: { "application/json": { schema: successEnvelope(z.object({ region: taxRegionSchema })) } } },
+    400: errorResponses[400],
+    401: errorResponses[401],
+    403: errorResponses[403],
+    409: conflictResponse,
+  },
+});
+app.openapi(createRegionRoute, async (c) => {
+  const body = c.req.valid("json");
+  await assertTaxProvider(c.get("db"), body.providerId);
+  return created(c, { region: serializeTaxRegion(await createTaxRegion(c.get("db"), body)) });
+});
+
+const updateRegionRoute = createRoute({
+  method: "put",
+  path: "/regions/{id}",
+  operationId: "dashboard.taxes.regions_update",
+  tags: ["Admin - Taxes"],
+  summary: "Choose a country's tax provider",
+  request: {
+    params: z.object({ id: z.string().min(1).max(180) }),
+    body: { required: true, content: { "application/json": { schema: z.object({
+      expectedVersion: z.number().int().min(1),
+      providerId: providerIdSchema.nullable().openapi({ description: "Null uses the store-wide provider." }),
+    }).strict() } } },
+  },
+  responses: {
+    200: { description: "Tax region updated", content: { "application/json": { schema: successEnvelope(z.object({ region: taxRegionSchema })) } } },
+    400: errorResponses[400],
+    401: errorResponses[401],
+    403: errorResponses[403],
+    404: errorResponses[404],
+    409: conflictResponse,
+  },
+});
+app.openapi(updateRegionRoute, async (c) => {
+  const body = c.req.valid("json");
+  await assertTaxProvider(c.get("db"), body.providerId);
+  return ok(c, { region: serializeTaxRegion(await updateTaxRegion(c.get("db"), c.req.valid("param").id, body)) });
+});
+
+const deleteRegionRoute = createRoute({
+  method: "delete",
+  path: "/regions/{id}",
+  operationId: "dashboard.taxes.regions_delete",
+  tags: ["Admin - Taxes"],
+  summary: "Stop collecting tax in a region (a country takes its regions and every rate along)",
+  request: { params: z.object({ id: z.string().min(1).max(180) }), query: versionQuerySchema },
+  responses: {
+    200: { description: "Tax region deleted", content: { "application/json": { schema: successEnvelope(z.object({
+      id: z.string(),
+      countryCode: z.string(),
+    })) } } },
+    401: errorResponses[401],
+    403: errorResponses[403],
+    404: errorResponses[404],
+    409: conflictResponse,
+  },
+});
+app.openapi(deleteRegionRoute, async (c) => ok(c, await deleteTaxRegion(
+  c.get("db"),
+  c.req.valid("param").id,
+  c.req.valid("query").expectedVersion,
+)));
 
 const listJurisdictionsRoute = createRoute({
   method: "get",
@@ -554,15 +718,19 @@ const previewRoute = createRoute({
   path: "/preview",
   operationId: "dashboard.taxes.preview",
   tags: ["Admin - Taxes"],
-  summary: "Preview current tax configuration server-side",
+  summary: "Preview the tax of a sample order at an address, server-side",
+  description: "Uses the saved regions, rates and provider, and the market of the address's country for whether prices include tax. A Bangladesh address names its City and Thana (and Area); another country's names its admin area or postal code. Without an address the order is taxed where the store ships from.",
   request: { body: { required: true, content: { "application/json": { schema: z.object({
     amount: z.number().min(0).max(1_000_000_000),
     quantity: z.number().int().min(1).max(99).default(1),
     taxClassId: z.string().max(180).nullable().optional(),
     shippingAmount: z.number().min(0).max(1_000_000_000).default(0),
     discountAmount: z.number().min(0).max(1_000_000_000).default(0),
-    city: z.string().min(1).max(180),
-    zone: z.string().min(1).max(180),
+    countryCode: z.string().trim().length(2).nullable().optional(),
+    adminArea: z.string().trim().max(120).nullable().optional(),
+    postalCode: z.string().trim().max(40).nullable().optional(),
+    city: z.string().min(1).max(180).nullable().optional(),
+    zone: z.string().min(1).max(180).nullable().optional(),
     area: z.string().max(180).nullable().optional(),
   }).strict() } } } },
   responses: {
@@ -575,6 +743,9 @@ const previewRoute = createRoute({
       taxMinor: z.number().int(),
       totalAmount: z.number(),
       totalMinor: z.number().int(),
+      countryCode: z.string().length(2).openapi({ description: "The country taxed." }),
+      providerId: z.string().openapi({ description: "The provider that calculated." }),
+      taxRegionId: z.string().nullable().openapi({ description: "The most specific region whose rates applied to the item." }),
       components: z.array(z.object({ name: z.string(), rateBps: z.number().int(), amountMinor: z.number().int() }).passthrough()),
     })) } } },
     400: errorResponses[400],
@@ -586,52 +757,25 @@ const previewRoute = createRoute({
 app.openapi(previewRoute, async (c) => {
   const db = c.get("db");
   const body = c.req.valid("json");
-  const [configuration, currency, locationNames] = await Promise.all([
-    getTaxConfiguration(db),
-    readStoreCurrency(db),
-    resolveActiveDeliveryLocationNames(db, {
-      city: body.city,
-      zone: body.zone,
-      area: body.area,
-    }),
-  ]);
-  const settings = configuration.settings;
-  const quote = calculateTaxQuote({
-    currencyCode: currency.code,
-    decimalPlaces: currency.decimalPlaces,
-    priceIncrementMinor: currency.priceIncrementMinor,
-    settings: {
-      enabled: settings.enabled,
-      pricesIncludeTax: settings.pricesIncludeTax,
-      taxShipping: settings.taxShipping,
-      defaultTaxClassId: settings.defaultTaxClassId,
-      shippingTaxClassId: settings.shippingTaxClassId,
-      displayLabel: settings.displayLabel,
-      version: settings.version,
-    },
-    classes: configuration.classes.map((taxClass) => ({
-      id: taxClass.id,
-      name: taxClass.name,
-      isExempt: taxClass.isExempt,
-    })),
-    rates: configuration.rates.map((rate) => ({
-      id: rate.id,
-      taxClassId: rate.taxClassId,
-      name: rate.name,
-      rateBps: rate.rateBps,
-      jurisdictionType: rate.jurisdictionType as TaxJurisdictionType,
-      jurisdictionId: rate.jurisdictionId,
-      jurisdictionLabel: rate.jurisdictionLabel,
-      priority: rate.priority,
-      isCompound: rate.isCompound,
-    })),
+  const city = body.city?.trim() || null;
+  const zone = body.zone?.trim() || null;
+  const area = body.area?.trim() || null;
+  const locationNames = city
+    ? await resolveActiveDeliveryLocationNames(db, { city, zone: zone ?? "", area })
+    : { cityName: null, zoneName: null, areaName: null };
+  const hasAddress = Boolean(city || body.countryCode);
+  const currency = await readStoreCurrency(db);
+  const quote = await calculateStorefrontTaxQuote(db, {
     destination: {
-      city: body.city,
-      zone: body.zone,
-      area: body.area ?? null,
-      cityName: locationNames.cityName,
-      zoneName: locationNames.zoneName,
-      areaName: locationNames.areaName,
+      city,
+      zone,
+      area,
+      ...locationNames,
+      ...(hasAddress ? {
+        countryCode: body.countryCode?.toUpperCase() ?? null,
+        adminArea: body.adminArea ?? null,
+        postalCode: body.postalCode ?? null,
+      } : {}),
     },
     lines: [{
       lineId: "preview",
@@ -643,7 +787,8 @@ app.openapi(previewRoute, async (c) => {
     }],
     shippingMinor: toMinor(body.shippingAmount, currency.decimalPlaces),
     discountMinor: toMinor(body.discountAmount, currency.decimalPlaces),
-  });
+    currency: { code: currency.code, decimalPlaces: currency.decimalPlaces, priceIncrementMinor: currency.priceIncrementMinor },
+  }, undefined, { apps: requestAppProviders(c) });
   return ok(c, {
     displayLabel: quote.displayLabel,
     pricesIncludeTax: quote.pricesIncludeTax,
@@ -653,6 +798,9 @@ app.openapi(previewRoute, async (c) => {
     taxMinor: quote.taxMinor,
     totalAmount: fromMinor(quote.totalMinor, quote.decimalPlaces),
     totalMinor: quote.totalMinor,
+    countryCode: quote.jurisdiction.countryCode,
+    providerId: quote.jurisdiction.providerId,
+    taxRegionId: quote.lines[0]?.taxRegionId ?? null,
     components: [
       ...quote.lines.flatMap((line) => line.components),
       ...quote.shipping.components,

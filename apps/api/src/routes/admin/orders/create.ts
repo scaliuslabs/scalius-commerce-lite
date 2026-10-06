@@ -27,6 +27,7 @@ import { adminOrderResourceMutationErrorResponses, adminWriteErrorResponses } fr
 import { createCheckoutAppFunctions } from "../../../plugins/checkout-functions";
 import { runAppOrderRiskChecks } from "../../../plugins/order-risk";
 import { getOptionalExecutionContext } from "../../../utils/execution-context";
+import { requestAppProviders } from "../../../plugins/providers/app-providers";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -120,7 +121,10 @@ const quoteManualOrderRoute = createRoute({
 app.openapi(quoteManualOrderRoute, async (c) => {
     const db = c.get("db");
     const apps = await manualOrderApps(c.env, getOptionalExecutionContext(c) as ExecutionContext | undefined, db);
-    const quote = await quoteManualOrder(db, c.req.valid("json"), { apps: createManualOrderAppFunctions(db, apps) });
+    const quote = await quoteManualOrder(db, c.req.valid("json"), {
+        apps: createManualOrderAppFunctions(db, apps),
+        appProviders: requestAppProviders(c),
+    });
     return ok(c, quote);
 });
 
@@ -149,6 +153,7 @@ app.openapi(previewManualOrderAmendmentRoute, async (c) => {
         c.get("db"),
         c.req.valid("param").id,
         c.req.valid("json"),
+        { appProviders: requestAppProviders(c) },
     );
     return ok(c, result);
 });
@@ -187,6 +192,7 @@ app.openapi(confirmManualOrderAmendmentRoute, async (c) => {
         c.req.valid("param").id,
         { ...payload, requestKey },
         user?.id ?? null,
+        { appProviders: requestAppProviders(c) },
     );
 
     return ok(c, {
@@ -229,7 +235,10 @@ app.openapi(createOrderRoute, async (c) => {
     const user = c.get("user") as { id?: string } | undefined;
     const ctx = getOptionalExecutionContext(c) as ExecutionContext | undefined;
     const apps = await manualOrderApps(c.env, ctx, db);
-    const { response, committed } = await createManualOrder(db, data, user?.id ?? null, { apps: createManualOrderAppFunctions(db, apps) });
+    const { response, committed } = await createManualOrder(db, data, user?.id ?? null, {
+        apps: createManualOrderAppFunctions(db, apps),
+        appProviders: requestAppProviders(c),
+    });
     // Apps' advisory risk checks: after this request's commit (never on a replay), off the response path.
     if (committed && apps.points.has("order.risk")) {
         const risk = runAppOrderRiskChecks({
