@@ -315,6 +315,7 @@ describe.each(["d1", "turso"] as const)("0065 settings documents migration (%s)"
       partialPaymentEnabled: false,
       partialPaymentAmount: 0,
       autoFulfilMode: "after_payment",
+      requireFullBillingAddress: false,
       revision: 0,
     });
     expect(await getCurrencySettings(db)).toEqual({ currencyCode: "BDT", currencySymbol: "৳" });
@@ -335,6 +336,7 @@ async function expectCommonSettings(db: Parameters<typeof getBusinessSettings>[0
     partialPaymentEnabled: true,
     partialPaymentAmount: 250,
     autoFulfilMode: "after_payment",
+    requireFullBillingAddress: false,
     revision: 7,
   });
   expect(await getCustomerRequestPolicy(db)).toEqual({
