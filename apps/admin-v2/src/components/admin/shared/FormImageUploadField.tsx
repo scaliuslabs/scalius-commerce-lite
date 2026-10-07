@@ -6,6 +6,7 @@ import { mediaImageUrl } from "@scalius/shared/media-variants";
 import { cn } from "@scalius/shared/utils";
 import { useMessages } from "~/i18n";
 import { mediaMessages } from "~/i18n/media";
+import { mediaPickerMessages } from "~/i18n/media-picker";
 
 interface FormImageUploadFieldProps {
   value?: MediaFile | null;
@@ -31,6 +32,7 @@ export function FormImageUploadField({
   className,
 }: FormImageUploadFieldProps) {
   const t = useMessages(mediaMessages);
+  const picker = useMessages(mediaPickerMessages);
   return (
     <div className={cn("space-y-4", className)}>
       {value ? (
@@ -68,7 +70,7 @@ export function FormImageUploadField({
         capability="image"
         selectedFiles={value ? [value] : []}
         onSelect={(file) => onChange(file)}
-        triggerLabel={value ? changeTriggerLabel ?? t("changeImage") : triggerLabel ?? t("chooseImage")}
+        triggerLabel={value ? changeTriggerLabel ?? t("changeImage") : triggerLabel ?? picker("chooseImage")}
       />
     </div>
   );

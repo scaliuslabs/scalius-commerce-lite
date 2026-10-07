@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from "react";
+import { lazy, Suspense, useEffect, useId, useState } from "react";
 import { useWatch, type UseFormReturn } from "react-hook-form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -8,8 +8,6 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { SearchableSelect } from "@/components/ui/searchable-select";
-import { NumberInput } from "@/components/ui/number-input";
 import { MoneyInput } from "@/components/admin/shared/MoneyInput";
 import { Label } from "@/components/ui/label";
 import { CostInput, formatMargin } from "@/components/admin/inventory/cost-fields";
@@ -24,6 +22,9 @@ import { useProductKindRules } from "./product-kind-rules";
 import { useSkuCosts, type SkuCostStore } from "./sku-costs";
 import type { ProductFormValues } from "./types";
 import type { VariantPriceRange } from "./variants/option-matrix-editor-model";
+
+// A product-level discount is only edited on a product with options that already has one.
+const ProductDiscountFields = lazy(() => import("./ProductDiscountFields"));
 
 /**
  * Shopify's pricing card. A product without options has a Price (what
@@ -65,7 +66,7 @@ export function PricingCard({ form, variantPrices }: {
               </p>
               <p className="text-body text-muted-foreground">{t("variantPricesHint")}</p>
             </div>
-            {showDiscount && sale !== null ? <ProductDiscountFields form={form} /> : null}
+            {showDiscount && sale !== null ? <Suspense fallback={null}><ProductDiscountFields form={form} /></Suspense> : null}
           </>
         ) : (
           // A gift card is worth its price: no compare-at price (the product kind rules).
@@ -185,80 +186,6 @@ function PriceFields({ form, compareAtAllowed }: { form: UseFormReturn<ProductFo
           )}
         />
       ) : null}
-    </div>
-  );
-}
-
-/** A product with options that already carries a product-level discount: change or remove it here. */
-function ProductDiscountFields({ form }: { form: UseFormReturn<ProductFormValues> }) {
-  const t = useMessages(productMessages);
-  const { symbol, code } = useCurrency();
-  const discountType = useWatch({ control: form.control, name: "discountType" });
-  return (
-    <div className="grid gap-4 sm:grid-cols-2">
-      <FormField
-        control={form.control}
-        name="discountType"
-        render={({ field }) => (
-          <FormItem>
-            <FormLabel>{t("discountType")}</FormLabel>
-            <FormControl>
-              <SearchableSelect
-                value={field.value}
-                onValueChange={(value) => {
-                  field.onChange(value);
-                  form.setValue(value === "flat" ? "discountPercentage" : "discountAmount", 0, {
-                    shouldDirty: true,
-                    shouldValidate: true,
-                  });
-                }}
-                triggerClassName="w-full"
-                triggerRef={field.ref}
-                onBlur={field.onBlur}
-                options={[{ value: "percentage", label: t("discountPercentage") }, { value: "flat", label: t("discountFixed") }]}
-              />
-            </FormControl>
-            <FormMessage />
-          </FormItem>
-        )}
-      />
-      <FormField
-        key={discountType}
-        control={form.control}
-        name={discountType === "flat" ? "discountAmount" : "discountPercentage"}
-        render={({ field }) => (
-          <FormItem>
-            <FormLabel>
-              {discountType === "flat" ? t("discountAmountLabel", { symbol }) : t("discountPercentLabel")}
-            </FormLabel>
-            <FormControl>
-              {/* A flat discount is money (whole taka in BDT); a percentage is not. */}
-              {discountType === "flat" ? (
-                <MoneyInput
-                  currencyCode={code}
-                  ref={field.ref}
-                  name={field.name}
-                  placeholder="0"
-                  value={field.value}
-                  onValueChange={field.onChange}
-                  onBlur={field.onBlur}
-                />
-              ) : (
-                <NumberInput
-                  ref={field.ref}
-                  name={field.name}
-                  placeholder="0"
-                  value={field.value}
-                  onValueChange={field.onChange}
-                  onBlur={field.onBlur}
-                />
-              )}
-            </FormControl>
-            <FormMessage />
-          </FormItem>
-        )}
-      />
-      <p className="text-body text-muted-foreground sm:col-span-2">{t("variantDiscountHint")}</p>
     </div>
   );
 }

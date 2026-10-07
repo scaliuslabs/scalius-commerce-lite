@@ -15,7 +15,7 @@ import { Upload } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTrigger, DialogTitle } from "~/components/ui/dialog";
 import { useMessages } from "~/i18n";
-import { mediaMessages } from "~/i18n/media";
+import { mediaPickerMessages } from "~/i18n/media-picker";
 import { chooseKey, type MediaManagerProps } from "./types";
 
 type MediaManagerInternalProps = MediaManagerProps & {
@@ -36,7 +36,7 @@ const MediaManagerImpl = lazy(() =>
  * loaded page is acknowledged at once, never silent.
  */
 function MediaManagerLoading({ capability }: { capability: MediaManagerProps["capability"] }) {
-  const t = useMessages(mediaMessages);
+  const t = useMessages(mediaPickerMessages);
   return (
     <DialogContent>
       <DialogTitle>{t(chooseKey(capability ?? "image"))}</DialogTitle>
@@ -64,7 +64,7 @@ function MediaManagerTriggerShell({
   isLoading?: boolean;
   onOpen: () => void;
 }) {
-  const t = useMessages(mediaMessages);
+  const t = useMessages(mediaPickerMessages);
   if (isValidElement(trigger)) {
     const triggerElement = trigger as TriggerElement;
 

@@ -22,7 +22,7 @@ import { MediaManager, type MediaFile } from "../media-manager";
 import { cn } from "@scalius/shared/utils";
 import { mediaImageUrl } from "@scalius/shared/media-variants";
 import { translate, useMessages } from "~/i18n";
-import { productMediaMessages } from "~/i18n/media";
+import { productMediaMessages } from "~/i18n/product-media";
 import { productMessages } from "~/i18n/products";
 import type { ProductFormValues, ProductMediaItem } from "./types";
 

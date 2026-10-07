@@ -4,13 +4,6 @@ import { defineMessages, translate } from "./index";
 export const mediaMessages = defineMessages({
   en: {
     title: "Files",
-    chooseImage: "Choose image",
-    pickerLoading: "Loading your files",
-    chooseVideo: "Choose video",
-    chooseFile: "Choose file",
-    chooseImages: "Choose images",
-    chooseVideos: "Choose videos",
-    chooseFiles: "Choose files",
     limitImages: "Images up to 20 MB",
     limitVideos: "MP4 or WebM videos up to 100 MB",
     limitBoth: "Images up to 20 MB, videos up to 100 MB, 50 files at a time",
@@ -187,13 +180,6 @@ export const mediaMessages = defineMessages({
   },
   bn: {
     title: "ফাইল",
-    chooseImage: "ছবি বাছাই করুন",
-    pickerLoading: "ফাইল লোড হচ্ছে",
-    chooseVideo: "ভিডিও বাছাই করুন",
-    chooseFile: "ফাইল বাছাই করুন",
-    chooseImages: "ছবিগুলো বাছাই করুন",
-    chooseVideos: "ভিডিওগুলো বাছাই করুন",
-    chooseFiles: "ফাইলগুলো বাছাই করুন",
     limitImages: "ছবি সর্বোচ্চ ২০ MB",
     limitVideos: "MP4 বা WebM ভিডিও সর্বোচ্চ ১০০ MB",
     limitBoth: "ছবি সর্বোচ্চ ২০ MB, ভিডিও ১০০ MB, একবারে ৫০টি ফাইল",
@@ -374,45 +360,3 @@ export const mediaMessages = defineMessages({
 export function mediaText(key: keyof typeof mediaMessages.en, vars?: Record<string, string | number>): string {
   return translate(mediaMessages, key, vars);
 }
-
-/** The product editor's Media card: tile controls name the item and its position. */
-export const productMediaMessages = defineMessages({
-  en: {
-    photoAt: "photo {position} of {count}",
-    videoAt: "video {position} of {count}",
-    named: "{item}, {name}",
-    moveEarlier: "Move earlier",
-    moveLater: "Move later",
-    moveEarlierItem: "Move {item} earlier",
-    moveLaterItem: "Move {item} later",
-    editDescription: "Edit description",
-    editDescriptionItem: "Edit the description of {item}",
-    makeMainPhoto: "Make main photo",
-    makeMainPhotoItem: "Make {item} the main photo",
-    makeMainVideo: "Make main video",
-    makeMainVideoItem: "Make {item} the main video",
-    remove: "Remove",
-    removeItem: "Remove {item}",
-    descriptionFor: "Description for {item}",
-    descriptionHint: "Leave empty to use the description saved in Files.",
-  },
-  bn: {
-    photoAt: "{count}টির মধ্যে {position} নম্বর ছবি",
-    videoAt: "{count}টির মধ্যে {position} নম্বর ভিডিও",
-    named: "{item}, {name}",
-    moveEarlier: "আগে সরান",
-    moveLater: "পরে সরান",
-    moveEarlierItem: "{item} আগে সরান",
-    moveLaterItem: "{item} পরে সরান",
-    editDescription: "বিবরণ এডিট করুন",
-    editDescriptionItem: "বিবরণ এডিট করুন: {item}",
-    makeMainPhoto: "প্রধান ছবি করুন",
-    makeMainPhotoItem: "{item} প্রধান ছবি করুন",
-    makeMainVideo: "প্রধান ভিডিও করুন",
-    makeMainVideoItem: "{item} প্রধান ভিডিও করুন",
-    remove: "সরান",
-    removeItem: "{item} সরান",
-    descriptionFor: "বিবরণ: {item}",
-    descriptionHint: "ফাঁকা রাখলে ফাইল-এ সেভ করা বিবরণ ব্যবহার হবে।",
-  },
-});
