@@ -17,7 +17,9 @@ describe("canonical schema hygiene", () => {
         RETIRED_PRE_CONSOLIDATION_TABLES.has(table));
 
       expect(d1Tables).toEqual(tursoTables);
-      expect(d1Tables).toHaveLength(179);
+      expect(d1Tables).toHaveLength(182);
+      // 0121: the store's languages, translations and localized handles.
+      for (const table of ["store_languages", "translations", "localized_slugs"]) expect(d1Tables).toContain(table);
       // 0120: price lists and their prices.
       for (const pricing of ["price_lists", "price_list_prices"]) expect(d1Tables).toContain(pricing);
       // 0116: where the merchant collects tax.

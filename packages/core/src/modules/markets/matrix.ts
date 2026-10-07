@@ -25,7 +25,9 @@ export interface MarketMatrixRead {
  * `<value>:<locale>`, the root's value empty), or NULL without an active
  * market. Country codes, subfolder values and locales are letters and dashes
  * only (database checks), so the lists are unambiguous. Every value is cast
- * to text: PostgreSQL's `json_object` takes text. Declares `mk:*`.
+ * to text: PostgreSQL's `json_object` takes text. A presence is served only
+ * while its language is published (`store_languages`, MARKETS-DESIGN D9; the
+ * root's always is). Declares `mk:*`, which language publication advances.
  */
 export function marketMatrixSql(): SQL<string | null> {
     deps.anyMarket();
@@ -37,7 +39,8 @@ export function marketMatrixSql(): SQL<string | null> {
             'isBackup', CAST(matrix_row.is_backup AS TEXT),
             'priceIncrementMinor', CAST(matrix_row.price_increment_minor AS TEXT),
             'countries', (SELECT group_concat(matrix_country.country_code, ',') FROM market_countries AS matrix_country WHERE matrix_country.market_id = matrix_row.id),
-            'presences', (SELECT group_concat(matrix_presence.value || ':' || matrix_presence.locale, ',') FROM market_presences AS matrix_presence WHERE matrix_presence.market_id = matrix_row.id AND matrix_presence.kind = 'subfolder')
+            'presences', (SELECT group_concat(matrix_presence.value || ':' || matrix_presence.locale, ',') FROM market_presences AS matrix_presence WHERE matrix_presence.market_id = matrix_row.id AND matrix_presence.kind = 'subfolder'
+                AND EXISTS (SELECT 1 FROM store_languages AS matrix_language WHERE matrix_language.locale = matrix_presence.locale AND matrix_language.published = 1))
         ) AS entry
         FROM markets AS matrix_row
         WHERE matrix_row.status = 'active'

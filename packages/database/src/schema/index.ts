@@ -37,3 +37,4 @@ export * from "./events";
 export * from "./custom-fields";
 export * from "./plugins";
 export * from "./price-lists";
+export * from "./translations";

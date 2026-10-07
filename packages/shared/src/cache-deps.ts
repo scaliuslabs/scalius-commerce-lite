@@ -109,6 +109,16 @@ export const CACHE_DEP_KINDS = [
    * public, so they advance nothing.
    */
   "pl",
+  /**
+   * Translations (MARKETS-DESIGN D9): `tr:<type>:<id>`: one resource's
+   * translations and localized URL handles in every locale and market (a
+   * SKU's, an option's and an option value's advance their product's
+   * `tr:product:<id>`); `tr:slugs:<type>:<locale>`: which resource a
+   * localized handle names (a handle lookup that found none);
+   * `tr:locales`: which locale and market each presence is, the store
+   * default locale, and which languages are published.
+   */
+  "tr",
   /** `t:<table>`: coarse fallback, any buyer-visible change of the table. */
   "t",
   /** `store`: everything (dashboard "clear cache", catalogue-wide rebuilds). */
@@ -192,6 +202,12 @@ export const cacheDep = {
   marketPricing: (marketId: string) => `pl:${marketId}`,
   /** The active public list prices of one product's SKUs in one market. */
   marketProductPricing: (marketId: string, productId: string) => `pl:${marketId}:${productId}`,
+  /** One resource's translations and localized handles (a product's parts advance their product's). */
+  translation: (resourceType: string, resourceId: string) => `tr:${resourceType}:${resourceId}`,
+  /** Which resource of a type a localized handle names in one locale. */
+  localizedSlugs: (resourceType: string, locale: string) => `tr:slugs:${resourceType}:${locale}`,
+  /** The locale and market of each presence, the default locale and the published languages. */
+  translationLocales: () => "tr:locales",
   table: (table: string) => `t:${table}`,
   store: () => "store",
 } as const;
@@ -375,6 +391,9 @@ const PUBLIC_PRICE_LIST = "SELECT 1 WHERE R.kind <> 'segment' AND R.status = 'ac
 const SELLS_ACTIVE_MARKET = "SELECT 1 FROM markets WHERE markets.id = R.market_id AND markets.status = 'active'";
 
 const TIMESTAMPS = ["created_at", "updated_at"] as const;
+
+/** A translation of a resource with its own key (every type but a product's SKUs, options and values). */
+const TRANSLATION_OWNS_ITS_KEY = "SELECT 1 WHERE R.resource_type NOT IN ('product_variant', 'product_option', 'product_option_value')";
 
 const BUYER_MEMBERSHIP = ["is_public", "category_id", "brand_id", "product_created_at"] as const;
 const PUBLIC_ROW = { equals: { is_public: 1 } } as const;
@@ -815,9 +834,13 @@ const CACHE_DEP_TABLE_RULES = {
     ],
   },
   market_presences: {
-    kinds: ["mk"],
+    kinds: ["mk", "tr"],
     noise: ["created_at"],
-    rules: everyChange([{ prefix: "mk:", columns: ["market_id"] }, { dep: "mk:*" }]),
+    note: "A presence's locale and market, and the root presence's locale (the store default language), decide which translations a presence read resolves (`tr:locales`, 0121).",
+    rules: [
+      ...everyChange([{ prefix: "mk:", columns: ["market_id"] }, { dep: "mk:*" }]),
+      ...everyChange([{ dep: "tr:locales" }]).map((rule): CacheDepRule => ({ ...rule, name: `locales_${rule.name}` })),
+    ],
   },
 
   price_lists: {
@@ -835,6 +858,40 @@ const CACHE_DEP_TABLE_RULES = {
       prefix: "pl:",
       rows: `SELECT price_list.market_id || ':' || price_sku.product_id AS ref FROM price_lists AS price_list, product_variants AS price_sku WHERE price_list.id = R.price_list_id AND price_sku.id = R.variant_id AND price_list.kind <> 'segment' AND price_list.status = 'active'`,
     }]),
+  },
+
+  // --- Translations (docs/MARKETS-DESIGN.md D9) ------------------------------------
+  store_languages: {
+    kinds: ["mk", "tr"],
+    noise: ["created_at", "updated_at"],
+    note: "Only a published language's presences are served: publishing changes the presence matrix (`mk:*`) and the languages a presence read resolves (`tr:locales`).",
+    rules: everyChange([{ dep: "mk:*" }, { dep: "tr:locales" }]),
+  },
+  translations: {
+    kinds: ["tr"],
+    noise: ["updated_at"],
+    note: "A translation advances its resource's `tr:<type>:<id>` in every locale and market (presence reads of the resource declare it). A SKU's, an option's and an option value's advance their product's `tr:product:<id>`: the product page and cards declare that one key.",
+    rules: [
+      ...everyChange([{ prefix: "tr:", columns: ["resource_type", "resource_id"] }])
+        .map((rule): CacheDepRule => ({ ...rule, where: { exists: TRANSLATION_OWNS_ITS_KEY } })),
+      ...everyChange([{ prefix: "tr:product:", lookup: { table: "product_variants", select: "product_id", key: "id", column: "resource_id" } }])
+        .map((rule): CacheDepRule => ({ ...rule, name: `sku_${rule.name}`, where: { equals: { resource_type: "product_variant" } } })),
+      ...everyChange([{ prefix: "tr:product:", lookup: { table: "product_option_definitions", select: "product_id", key: "id", column: "resource_id" } }])
+        .map((rule): CacheDepRule => ({ ...rule, name: `option_${rule.name}`, where: { equals: { resource_type: "product_option" } } })),
+      ...everyChange([{
+        prefix: "tr:product:",
+        rows: "SELECT value_option.product_id AS ref FROM product_option_values AS translated_value JOIN product_option_definitions AS value_option ON value_option.id = translated_value.option_definition_id WHERE translated_value.id = R.resource_id",
+      }]).map((rule): CacheDepRule => ({ ...rule, name: `value_${rule.name}`, where: { equals: { resource_type: "product_option_value" } } })),
+    ],
+  },
+  localized_slugs: {
+    kinds: ["tr"],
+    noise: ["updated_at"],
+    note: "A handle advances its resource's `tr:<type>:<id>` (its pages, cards and alternates) and the handle space of its type and locale (`tr:slugs:<type>:<locale>`), which a lookup that found no resource declares.",
+    rules: everyChange([
+      { prefix: "tr:", columns: ["resource_type", "resource_id"] },
+      { prefix: "tr:slugs:", columns: ["resource_type", "locale"] },
+    ]),
   },
 
   orders: {

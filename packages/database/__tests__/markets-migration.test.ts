@@ -157,8 +157,10 @@ describe(`${NAME} over a populated 0111 database`, () => {
     expect(() => database.exec("UPDATE market_presences SET value = '', locale = 'en' WHERE id = 'mkp_in'")).toThrow(/MARKET_ROOT_PRESENCE_BACKUP_ONLY|UNIQUE/);
     expect(() => database.exec("INSERT INTO market_presences (id, market_id, kind, value, locale) VALUES ('mkp_y', 'mkt_in', 'subfolder', 'en-in', 'en')")).toThrow(/UNIQUE/);
     for (const [value, locale] of [["hi-in", "en"], ["en_in", "en"], ["EN-IN", "en"], ["eng-in", "en"], ["in", "en"], ["hi-in", "HI"]]) {
-      expect(() => database.prepare("INSERT INTO market_presences (id, market_id, kind, value, locale) VALUES ('mkp_z', 'mkt_in', 'subfolder', ?, ?)").run(value, locale), `${value} ${locale}`).toThrow(/CHECK/);
+      // 0121: a locale that is no store language (HI never is) is refused before the shape checks.
+      expect(() => database.prepare("INSERT INTO market_presences (id, market_id, kind, value, locale) VALUES ('mkp_z', 'mkt_in', 'subfolder', ?, ?)").run(value, locale), `${value} ${locale}`).toThrow(/CHECK|STORE_LANGUAGE_REQUIRED/);
     }
+    database.exec("INSERT INTO store_languages (locale, published) VALUES ('hi', 1)");
     database.exec("INSERT INTO market_presences (id, market_id, kind, value, locale) VALUES ('mkp_hi', 'mkt_in', 'subfolder', 'hi-in', 'hi')");
     // Deleting a market takes its countries and presences with it.
     database.exec("INSERT INTO market_countries (country_code, market_id) VALUES ('IN', 'mkt_in')");

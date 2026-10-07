@@ -29,6 +29,7 @@ class MemoryCache {
 const SEED = `
   INSERT INTO markets (id, handle, name, status) VALUES ('mkt_in', 'india', 'India', 'active'), ('mkt_np', 'nepal', 'Nepal', 'active');
   INSERT INTO market_countries (country_code, market_id) VALUES ('IN', 'mkt_in'), ('NP', 'mkt_np');
+  INSERT INTO store_languages (locale, published) VALUES ('ne', 1);
   INSERT INTO market_presences (id, market_id, kind, value, locale) VALUES
     ('mkp_in', 'mkt_in', 'subfolder', 'en-in', 'en'), ('mkp_np', 'mkt_np', 'subfolder', 'ne-np', 'ne');
   INSERT INTO products (id, name, price_minor, slug, is_active, discount_type, discount_bps) VALUES

@@ -57,6 +57,7 @@
     "./modules/platform": "./src/modules/platform/index.ts",
     "./modules/plugins": "./src/modules/plugins/index.ts",
     "./modules/price-lists": "./src/modules/price-lists/index.ts",
+    "./modules/translations": "./src/modules/translations/index.ts",
     "./modules/product-admin": "./src/modules/product-admin/index.ts",
     "./modules/products": "./src/modules/products/index.ts",
     "./modules/promotions": "./src/modules/promotions/index.ts",
