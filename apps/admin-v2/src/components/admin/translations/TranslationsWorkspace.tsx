@@ -163,6 +163,7 @@ export function TranslationsWorkspace({ search: rawSearch }: { search: Record<st
               </TabsList>
             </Tabs>
             <form
+              method="get"
               className="mt-3"
               onSubmit={(event) => {
                 event.preventDefault();
@@ -172,6 +173,7 @@ export function TranslationsWorkspace({ search: rawSearch }: { search: Record<st
               <Label htmlFor="translation-search" className="sr-only">{t("search")}</Label>
               <Input
                 id="translation-search"
+                name="q"
                 type="search"
                 placeholder={t("search")}
                 value={query}
