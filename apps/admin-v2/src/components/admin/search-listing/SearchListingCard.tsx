@@ -35,8 +35,6 @@ export interface SearchListingValue {
   handle?: string;
   /** Hide from search engines: the page stays public (noindex,follow). */
   hidden: boolean;
-  /** Products only: keep it out of the Facebook and Google product feeds. */
-  excludeFromFeed?: boolean;
 }
 
 export interface SearchListingCardProps {
@@ -204,20 +202,6 @@ export function SearchListingCard({
                 <span className="block text-muted-foreground">{t("hideHelp")}</span>
               </span>
             </label>
-            {value.excludeFromFeed !== undefined ? (
-              <label className="flex items-start gap-3 text-body">
-                <Checkbox
-                  checked={value.excludeFromFeed}
-                  disabled={disabled}
-                  onCheckedChange={(checked) => onChange({ excludeFromFeed: checked === true })}
-                  className="mt-0.5"
-                />
-                <span>
-                  {t("excludeFromFeed")}
-                  <span className="block text-muted-foreground">{t("excludeFromFeedHelp")}</span>
-                </span>
-              </label>
-            ) : null}
           </div>
         ) : null}
       </div>

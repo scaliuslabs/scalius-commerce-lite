@@ -17,6 +17,7 @@ import { emiSettingsRoutes } from "./settings/emi";
 import { marketingConsentSettingsRoutes } from "./settings/marketing-consent";
 import { appProviderSettingsRoutes } from "./settings/providers";
 import { marketsSettingsRoutes } from "./settings/markets";
+import { salesChannelsSettingsRoutes } from "./settings/sales-channels";
 import { languagesSettingsRoutes } from "./settings/languages";
 import { storeDefaultsSettingsRoutes } from "./settings/store-defaults";
 
@@ -33,6 +34,7 @@ app.route("/", platformSettingsRoutes);
 app.route("/", storeDefaultsSettingsRoutes);
 app.route("/shipping-methods", shippingMethodsSettingsRoutes);
 app.route("/markets", marketsSettingsRoutes);
+app.route("/sales-channels", salesChannelsSettingsRoutes);
 app.route("/languages", languagesSettingsRoutes);
 app.route("/delivery-providers", deliveryProvidersRoutes);
 app.route("/meta-conversions", metaConversionsAdminRoutes);

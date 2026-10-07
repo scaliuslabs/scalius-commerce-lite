@@ -32,7 +32,7 @@ const defaultValues = {
   canonicalPath: null,
   noIndex: false,
   excludeFromSitemap: false,
-  excludeFromProductFeed: false,
+  salesChannelIds: null,
   productCondition: DEFAULT_PRODUCT_CONDITION,
   slug: "",
   media: [],

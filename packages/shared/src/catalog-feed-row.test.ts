@@ -297,14 +297,6 @@ describe("catalog feed row projector", () => {
   it("reports bounded, row-specific omission reasons without fabricating rows", () => {
     const result = project([
       {
-        id: "excluded",
-        name: "Excluded",
-        slug: "excluded",
-        price: 100,
-        excludeFromProductFeed: true,
-        imageUrl: "https://cdn.example.test/excluded.jpg",
-      },
-      {
         id: "inactive",
         name: "Inactive",
         slug: "inactive",
@@ -347,16 +339,11 @@ describe("catalog feed row projector", () => {
         variantStrategy: "variants",
         includeUnavailableProducts: false,
       },
-      maxReportedOmissions: 4,
+      maxReportedOmissions: 3,
     });
 
     expect(result.rows).toEqual([]);
     expect(result.omissions).toEqual([
-      {
-        productId: "excluded",
-        variantId: null,
-        reason: "excluded_from_product_feed",
-      },
       {
         productId: "inactive",
         variantId: null,

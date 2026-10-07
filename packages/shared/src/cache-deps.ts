@@ -399,6 +399,21 @@ const TIMESTAMPS = ["created_at", "updated_at"] as const;
 /** A translation of a resource with its own key (every type but a product's SKUs, options and values). */
 const TRANSLATION_OWNS_ITS_KEY = "SELECT 1 WHERE R.resource_type NOT IN ('product_variant', 'product_option', 'product_option_value')";
 
+/**
+ * A merchant unlinked some location from some channel (MARKETS-DESIGN D6): a
+ * channel's sellable stock is then the on-hand of its linked locations, which
+ * a stock or reservation change can move inside a SKU's raw availability
+ * band. A new channel links every location and a new location every channel
+ * (triggers), so a store that never unlinked one never matches.
+ */
+const CHANNEL_STOCK_PARTIAL = "SELECT 1 FROM sales_channels AS partial_channel, inventory_locations AS partial_location WHERE NOT EXISTS (SELECT 1 FROM sales_channel_locations AS partial_link WHERE partial_link.channel_id = partial_channel.id AND partial_link.location_id = partial_location.id)";
+
+/** The default online store's id (`ONLINE_STORE_CHANNEL_ID` in `@scalius/shared/sales-channels`). */
+const ONLINE_STORE_CHANNEL = "sc_online_store";
+
+/** A stock level at a location some channel does not sell (`R.location_id`). */
+const LEVEL_AT_UNLINKED_LOCATION = "SELECT 1 FROM sales_channels AS unlinked_channel WHERE NOT EXISTS (SELECT 1 FROM sales_channel_locations AS unlinked_link WHERE unlinked_link.channel_id = unlinked_channel.id AND unlinked_link.location_id = R.location_id)";
+
 const BUYER_MEMBERSHIP = ["is_public", "category_id", "brand_id", "product_created_at"] as const;
 const PUBLIC_ROW = { equals: { is_public: 1 } } as const;
 
@@ -450,7 +465,7 @@ const CACHE_DEP_TABLE_RULES = {
   products: {
     kinds: ["p", "lo", "lm", "srch"],
     noise: ["aggregate_revision", "updated_at", "tax_classification_version"],
-    note: "Membership, price and band come from product_buyer_state, refreshed in the same batch. `lm:shape`: the layout's count of active products and their SKUs.",
+    note: "Membership, price and band come from product_buyer_state, refreshed in the same batch; the price filter alone reads the product discount live (`price_order`). `lm:shape`: the layout's count of active products and their SKUs.",
     rules: [
       { name: "ins", event: "insert", image: "new", keys: [p("id"), { dep: "srch" }, SHAPE] },
       { name: "del", event: "delete", image: "old", keys: [p("id"), { dep: "srch" }, SHAPE] },
@@ -464,9 +479,19 @@ const CACHE_DEP_TABLE_RULES = {
         name: "name_order", event: "update", image: "new", changed: ["name"],
         keys: [{ scopes: "lo:name", from: { product: "id" } }],
       },
+      // The price filter (buyerCatalogHasSkuInPriceRange) computes each SKU's
+      // effective price live from these product columns, so a raw product
+      // discount write can move the product across a listing's price bounds
+      // before its buyer state is refreshed (0122).
+      {
+        name: "price_order", event: "update", image: "new", changed: [...SALE_DISCOUNT],
+        keys: [{ scopes: "lo:price", from: { product: "id" } }],
+      },
       {
         name: "seo", event: "update", image: "new",
-        changed: ["no_index", "exclude_from_sitemap", "exclude_from_product_feed"],
+        // Deployed 0100 also named exclude_from_product_feed, dropped in 0122
+        // (the feed channels' publications replace it): CACHE_DEP_BASELINE_CHANGED.
+        changed: ["no_index", "exclude_from_sitemap"],
         keys: [{ dep: "lm:seo" }],
       },
       { name: "sale_ins", event: "insert", image: "new", where: SALE_PRODUCT, keys: [SALE] },
@@ -522,6 +547,12 @@ const CACHE_DEP_TABLE_RULES = {
       { name: "upd", event: "update", image: "new", changed: "visible", keys: [p("product_id")] },
       { name: "shape", event: "update", image: "new", changed: ["deleted_at", "product_id", "fulfillment_kind"], keys: [SHAPE] },
       { name: "band", event: "update", image: "new", bandChanged: true, keys: [p("product_id")] },
+      // A channel's band reads the on-hand of its linked locations; only once
+      // a merchant unlinked one can raw stock inside its band move it (0122).
+      {
+        name: "chstock", event: "update", image: "new", changed: ["stock", "reserved_stock"],
+        where: { exists: CHANNEL_STOCK_PARTIAL }, keys: [p("product_id")],
+      },
       { name: "sale_ins", event: "insert", image: "new", where: SALE_SKU, keys: [SALE] },
       { name: "sale_del", event: "delete", image: "old", where: SALE_SKU, keys: [SALE] },
       {
@@ -529,6 +560,15 @@ const CACHE_DEP_TABLE_RULES = {
         changed: [...SALE_DISCOUNT, "created_at", "deleted_at", "product_id"], keys: [SALE],
       },
     ],
+  },
+  inventory_levels: {
+    kinds: ["p"],
+    noise: ["updated_at"],
+    note: "A channel's sellable stock subtracts its SKU's on-hand at the locations it does not sell (0122), so only a level at such a location is buyer-visible: it advances its SKU's product. Levels at linked locations sum into the SKU's stock, whose own rules (band, chstock) cover them.",
+    rules: everyChange([{
+      prefix: "p:",
+      lookup: { table: "product_variants", select: "product_id", key: "id", column: "variant_id" },
+    }]).map((rule): CacheDepRule => ({ ...rule, where: { exists: LEVEL_AT_UNLINKED_LOCATION } })),
   },
   product_media: { kinds: ["p"], noise: [...TIMESTAMPS], rules: everyChange([p("product_id")]) },
   product_option_definitions: {
@@ -904,6 +944,31 @@ const CACHE_DEP_TABLE_RULES = {
     ]),
   },
 
+  // --- Sales channels (docs/MARKETS-DESIGN.md D6) -----------------------------------
+  sales_channels: {
+    kinds: ["lm"],
+    noise: ["handle", "name", "position", "created_at", "updated_at"],
+    note: "Catalogue feeds and the UCP catalogue read their channel's status (an inactive channel lists nothing): they declare `lm:seo`. The online store is always active. Names and handles are dashboard-only.",
+    rules: everyChange([{ dep: "lm:seo" }]),
+  },
+  product_channel_publications: {
+    kinds: ["p", "lm", "srch"],
+    noise: ["published_at"],
+    note: "A product is published to a channel while its row has no unpublished_at. Any channel: the product's own keys and the discovery key (feeds and UCP read their channel's rows). The online store's rows also decide public membership for live readers (site search, collection lists, a product page's 404), so they advance `lm:all` and `srch`; listings and sitemaps read the buyer-state projection, refreshed in the same batch.",
+    rules: [
+      ...everyChange([p("product_id"), { dep: "lm:seo" }]),
+      ...everyChange([{ dep: "lm:all" }, { dep: "srch" }]).map((rule): CacheDepRule => ({
+        ...rule, name: `store_${rule.name}`, where: { equals: { channel_id: ONLINE_STORE_CHANNEL } },
+      })),
+    ],
+  },
+  sales_channel_locations: {
+    kinds: ["store"],
+    noise: ["created_at"],
+    note: "Which locations' on-hand a channel sells: linking or unlinking one can change the availability of every product a channel shows, so it advances `store` (a rare merchant setting).",
+    rules: everyChange([{ dep: "store" }]),
+  },
+
   orders: {
     kinds: ["recommendation-signals"], noise: [],
     note: "Only live fallback ranking reads private order signals; no order or buyer identifier enters a dependency key.",
@@ -960,7 +1025,6 @@ export const CACHE_DEP_EXEMPT_TABLES: Readonly<Record<string, string>> = {
   scalius_schema_migrations: "Schema ledger; a release changes the Worker version, which is in every cache key.",
   inventory_movements: DERIVED_STOCK,
   inventory_operations: DERIVED_STOCK,
-  inventory_levels: DERIVED_STOCK,
   inventory_locations: "Where physical stock is held; buyers see SKU availability bands, never locations.",
   product_low_stock_alerts: DERIVED_STOCK,
   // Purchasing and transfers (0109): staff-only documents. Their stock

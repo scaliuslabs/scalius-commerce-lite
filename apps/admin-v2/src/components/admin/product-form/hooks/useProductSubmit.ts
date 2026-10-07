@@ -11,6 +11,7 @@ import {
   putApiV1AdminProductsById,
 } from "@scalius/api-client/sdk";
 import { apiData } from "~/lib/api";
+import { saveProductChannels, salesChannelKeys } from "~/lib/api-query-options/sales-channels";
 import { getServerFnError } from "~/lib/api-helpers";
 import { readApiFieldIssues } from "~/lib/api-field-errors";
 import {
@@ -121,6 +122,9 @@ export function useProductSubmit({
         const entityId = productId || values.id;
         const expected = expectedAggregateRevision ?? aggregateRevision;
         if (!entityId || !expected) throw new Error(t("saveFailed"));
+        // The Publishing card saves first: it is not under the product's revision,
+        // so a refused product write can be retried without a conflict.
+        if (dirty.salesChannelIds && values.salesChannelIds) await saveProductChannels(entityId, values.salesChannelIds);
         return apiData(putApiV1AdminProductsById({
           path: { id: entityId },
           body: {
@@ -135,7 +139,9 @@ export function useProductSubmit({
       // Only an address the merchant typed is sent; otherwise the server makes one from the title.
       const slug = values.slugEdited && values.slug ? values.slug : undefined;
       // Typed costs per item go with the new SKUs, in the same create.
-      return apiData(postApiV1AdminProducts({ body: { ...formattedValues, slug, ...withCreateCosts(createComposition) } }));
+      // Unticked channels go with the new product; untouched, it is on every channel.
+      const salesChannelIds = values.salesChannelIds ?? undefined;
+      return apiData(postApiV1AdminProducts({ body: { ...formattedValues, slug, salesChannelIds, ...withCreateCosts(createComposition) } }));
     },
     onSuccess: async (result, { values }) => {
       setMediaRemovalConflict(null);
@@ -152,6 +158,8 @@ export function useProductSubmit({
         queryClient.invalidateQueries({ queryKey: queryKeys.products.collectionOptions() }),
         queryClient.invalidateQueries({ queryKey: queryKeys.products.stats() }),
         queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all }),
+        // Per-channel product counts.
+        queryClient.invalidateQueries({ queryKey: salesChannelKeys.list() }),
         queryClient.invalidateQueries({ queryKey: queryKeys.inventory.list() }),
         ...(savedProductId
           ? [

@@ -10990,6 +10990,71 @@
           "updatedAt"
         ]
       },
+      "SalesChannel": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "handle": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "description": "The English name; the dashboard shows built-in channels in the staff member's language."
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "online_store",
+              "pos",
+              "catalog_feed",
+              "agent",
+              "app"
+            ],
+            "description": "`online_store` (the storefront), `catalog_feed` (Google, Meta), `agent` (AI agents: UCP and agent checkout), `pos`, or `app` (a sales-channel app)."
+          },
+          "pluginId": {
+            "type": "string",
+            "nullable": true,
+            "description": "The app that declares an `app` channel."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "inactive"
+            ],
+            "description": "An inactive channel shows nothing: its feed is empty and its checkout refuses orders. The online store is always active; an app's channel follows the app."
+          },
+          "position": {
+            "type": "integer"
+          },
+          "locationIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The inventory locations whose on-hand the channel sells. Every channel sells every location until a merchant unlinks one."
+          },
+          "publishedProducts": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Products published to it (trashed ones included)."
+          }
+        },
+        "required": [
+          "id",
+          "handle",
+          "name",
+          "kind",
+          "pluginId",
+          "status",
+          "position",
+          "locationIds",
+          "publishedProducts"
+        ]
+      },
       "StoreLanguage": {
         "type": "object",
         "properties": {
@@ -47241,6 +47306,21 @@
             "description": "Comma-separated product IDs, product handles, variant IDs, or SKUs",
             "name": "ids",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "sc_google",
+                "sc_meta",
+                "sc_agents"
+              ],
+              "description": "The sales channel the feed serves: `sc_google` (default, /api/product-feed.xml), `sc_meta` (/api/facebook-feed.xml) or `sc_agents` (the UCP catalogue). A product needs publishing to it and to the online store; an inactive channel lists nothing."
+            },
+            "required": false,
+            "description": "The sales channel the feed serves: `sc_google` (default, /api/product-feed.xml), `sc_meta` (/api/facebook-feed.xml) or `sc_agents` (the UCP catalogue). A product needs publishing to it and to the online store; an inactive channel lists nothing.",
+            "name": "channel",
+            "in": "query"
           }
         ],
         "responses": {
@@ -47339,9 +47419,6 @@
                               "categoryId": {
                                 "type": "string",
                                 "nullable": true
-                              },
-                              "excludeFromProductFeed": {
-                                "type": "boolean"
                               },
                               "requiresCustomization": {
                                 "type": "boolean"
@@ -47609,7 +47686,6 @@
                               "discountedPrice",
                               "freeDelivery",
                               "categoryId",
-                              "excludeFromProductFeed",
                               "requiresCustomization",
                               "productCondition",
                               "hasVariants",
@@ -117492,6 +117568,21 @@
             "required": false,
             "name": "sampleLimit",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "sc_google",
+                "sc_meta",
+                "sc_agents"
+              ],
+              "description": "The catalogue channel to diagnose: `sc_google` (default), `sc_meta` or `sc_agents`."
+            },
+            "required": false,
+            "description": "The catalogue channel to diagnose: `sc_google` (default), `sc_meta` or `sc_agents`.",
+            "name": "channel",
+            "in": "query"
           }
         ],
         "responses": {
@@ -127753,6 +127844,655 @@
         "x-scalius-rbac": {
           "type": "permission",
           "permission": "settings.general.edit"
+        }
+      }
+    },
+    "/api/v1/admin/settings/sales-channels": {
+      "get": {
+        "operationId": "dashboard.sales_channels.list",
+        "tags": [
+          "Admin - Sales channels"
+        ],
+        "summary": "Sales channels: where products are published",
+        "description": "The online store first, then Google, Meta, AI agents and each app's channels, with their status, the locations they sell from and how many products are published to each.",
+        "responses": {
+          "200": {
+            "description": "Sales channels",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/SalesChannel"
+                          }
+                        }
+                      },
+                      "required": [
+                        "items"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "anyOf",
+          "permissions": [
+            "products.view",
+            "settings.general.view"
+          ]
+        }
+      }
+    },
+    "/api/v1/admin/settings/sales-channels/{id}": {
+      "get": {
+        "operationId": "dashboard.sales_channels.get",
+        "tags": [
+          "Admin - Sales channels"
+        ],
+        "summary": "One sales channel",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The channel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "channel": {
+                          "$ref": "#/components/schemas/SalesChannel"
+                        }
+                      },
+                      "required": [
+                        "channel"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "anyOf",
+          "permissions": [
+            "products.view",
+            "settings.general.view"
+          ]
+        }
+      },
+      "patch": {
+        "operationId": "dashboard.sales_channels.update",
+        "tags": [
+          "Admin - Sales channels"
+        ],
+        "summary": "Switch a channel on or off, or choose the locations it sells from",
+        "description": "A channel sells the on-hand of its linked locations, less every reservation. Every channel sells every location until you unlink one. The online store is always on; an app's channel follows the app.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "active",
+                      "inactive"
+                    ],
+                    "description": "Switch the channel on or off. The online store is always on; an app's channel follows the app (turn the app off in Apps)."
+                  },
+                  "locationIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 64
+                    },
+                    "minItems": 1,
+                    "maxItems": 100,
+                    "description": "Every location whose on-hand the channel sells: at least one active location. Its availability becomes the stock there, less every reservation."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The saved channel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "channel": {
+                          "$ref": "#/components/schemas/SalesChannel"
+                        }
+                      },
+                      "required": [
+                        "channel"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "sequential",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "settings.general.edit"
+        }
+      }
+    },
+    "/api/v1/admin/settings/sales-channels/{id}/products": {
+      "get": {
+        "operationId": "dashboard.sales_channels.products",
+        "tags": [
+          "Admin - Sales channels"
+        ],
+        "summary": "The products published to a channel, by id",
+        "description": "Keyset pages of product ids (trashed products left out): a sales-channel app syncs its listings from this and follows the `product.publication_changed` event.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "description": "The last product id of the previous page."
+            },
+            "required": false,
+            "description": "The last product id of the previous page.",
+            "name": "after",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of product ids",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "productIds": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "nextAfter": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "productIds",
+                        "nextAfter"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "parallel",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "products.view"
         }
       }
     },
@@ -144856,6 +145596,13 @@
                               "sku": {
                                 "type": "string"
                               },
+                              "salesChannelIds": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                },
+                                "description": "The sales channels the product is published to."
+                              },
                               "availableStock": {
                                 "type": "integer",
                                 "nullable": true,
@@ -144974,6 +145721,7 @@
                               "hasStockHistory",
                               "mediaCount",
                               "primaryImage",
+                              "salesChannelIds",
                               "availableStock",
                               "requiresCustomization",
                               "customization"
@@ -145871,6 +146619,10 @@
                                 "maxLength": 64,
                                 "description": "Where it came in within the channel, as a lowercase slug: facebook, instagram, whatsapp, phone, walk_in, the merchant's own label, or an app id."
                               },
+                              "salesChannelId": {
+                                "type": "string",
+                                "description": "The sales channel the order sold from (MARKETS-DESIGN D6): sc_online_store, sc_agents, or a channel staff picked."
+                              },
                               "openRequestType": {
                                 "type": "string",
                                 "nullable": true,
@@ -145961,6 +146713,7 @@
                               "archivedAt",
                               "channel",
                               "channelSource",
+                              "salesChannelId",
                               "openRequestType",
                               "onHold",
                               "cod",
@@ -146381,6 +147134,11 @@
                     "nullable": true,
                     "maxLength": 64,
                     "description": "Where the order came in: facebook, instagram, whatsapp, phone, walk_in, or free text (stored as a lowercase slug of at most 64 characters)."
+                  },
+                  "salesChannelId": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 160
                   }
                 },
                 "required": [
@@ -147453,6 +148211,10 @@
                                 "maxLength": 64,
                                 "description": "Where it came in within the channel, as a lowercase slug: facebook, instagram, whatsapp, phone, walk_in, the merchant's own label, or an app id."
                               },
+                              "salesChannelId": {
+                                "type": "string",
+                                "description": "The sales channel the order sold from (MARKETS-DESIGN D6): sc_online_store, sc_agents, or a channel staff picked."
+                              },
                               "openRequestType": {
                                 "type": "string",
                                 "nullable": true,
@@ -147543,6 +148305,7 @@
                               "archivedAt",
                               "channel",
                               "channelSource",
+                              "salesChannelId",
                               "openRequestType",
                               "onHold",
                               "cod",
@@ -152036,6 +152799,10 @@
                           "maxLength": 64,
                           "description": "Where it came in within the channel, as a lowercase slug: facebook, instagram, whatsapp, phone, walk_in, the merchant's own label, or an app id."
                         },
+                        "salesChannelId": {
+                          "type": "string",
+                          "description": "The sales channel the order sold from (MARKETS-DESIGN D6): sc_online_store, sc_agents, or a channel staff picked."
+                        },
                         "openRequestType": {
                           "type": "string",
                           "nullable": true,
@@ -152508,6 +153275,7 @@
                         "archivedAt",
                         "channel",
                         "channelSource",
+                        "salesChannelId",
                         "openRequestType",
                         "onHold",
                         "cod",
@@ -160451,6 +161219,32 @@
           {
             "schema": {
               "type": "string",
+              "maxLength": 160,
+              "description": "Only products published to this sales channel (or, with salesChannelState=unpublished, not published to it).",
+              "example": "sc_online_store"
+            },
+            "required": false,
+            "description": "Only products published to this sales channel (or, with salesChannelState=unpublished, not published to it).",
+            "name": "salesChannel",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "published",
+                "unpublished"
+              ],
+              "description": "With salesChannel: published (default) or unpublished products."
+            },
+            "required": false,
+            "description": "With salesChannel: published (default) or unpublished products.",
+            "name": "salesChannelState",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
               "enum": [
                 "full",
                 "compact"
@@ -160635,6 +161429,13 @@
                               },
                               "sku": {
                                 "type": "string"
+                              },
+                              "salesChannelIds": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                },
+                                "description": "The sales channels the product is published to."
                               }
                             },
                             "required": [
@@ -160658,7 +161459,8 @@
                               "hasVariantDiscount",
                               "hasStockHistory",
                               "mediaCount",
-                              "primaryImage"
+                              "primaryImage",
+                              "salesChannelIds"
                             ]
                           }
                         },
@@ -160911,10 +161713,6 @@
                     "default": false
                   },
                   "excludeFromSitemap": {
-                    "type": "boolean",
-                    "default": false
-                  },
-                  "excludeFromProductFeed": {
                     "type": "boolean",
                     "default": false
                   },
@@ -161389,6 +162187,15 @@
                       "stock"
                     ],
                     "description": "Inventory for a product without options. Omit for an untracked SKU. Not allowed with optionMatrix."
+                  },
+                  "salesChannelIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "maxLength": 160
+                    },
+                    "maxItems": 50,
+                    "description": "The sales channels to publish the new product to. Omit to publish it to every channel."
                   }
                 },
                 "required": [
@@ -162579,6 +163386,370 @@
         }
       }
     },
+    "/api/v1/admin/products/publications": {
+      "post": {
+        "operationId": "dashboard.products.publications_bulk",
+        "tags": [
+          "Admin - Products"
+        ],
+        "summary": "Publish or unpublish products on sales channels",
+        "description": "Up to 90 products on up to 10 channels in one write. A product already in that state is left alone. Unpublishing from the online store takes the product off the storefront (its page answers 404, listings and sitemaps drop it); from Google, Meta or AI agents, off that feed or UCP.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "enum": [
+                      "publish",
+                      "unpublish"
+                    ]
+                  },
+                  "productIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 64
+                    },
+                    "minItems": 1,
+                    "maxItems": 90
+                  },
+                  "channelIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "maxLength": 160,
+                      "description": "A sales channel id: `sc_online_store`, `sc_google`, `sc_meta`, `sc_agents`, or an app's `<plugin id>:<id>`.",
+                      "example": "sc_online_store"
+                    },
+                    "minItems": 1,
+                    "maxItems": 10
+                  }
+                },
+                "required": [
+                  "action",
+                  "productIds",
+                  "channelIds"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The products and channels written",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "productIds": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "channelIds": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "productIds",
+                        "channelIds"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "sequential",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "products.bulk_operations"
+        }
+      }
+    },
+    "/api/v1/admin/products/{id}/publications": {
+      "put": {
+        "operationId": "dashboard.products.publications_set",
+        "tags": [
+          "Admin - Products"
+        ],
+        "summary": "Publish a product to exactly these sales channels",
+        "description": "The product page's Publishing card: every listed channel publishes the product, every other channel unpublishes it. It does not change the product's revision.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "channelIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "maxLength": 160,
+                      "description": "A sales channel id: `sc_online_store`, `sc_google`, `sc_meta`, `sc_agents`, or an app's `<plugin id>:<id>`.",
+                      "example": "sc_online_store"
+                    },
+                    "maxItems": 50,
+                    "description": "Every channel the product is published to; the others unpublish it. An empty list takes it off every channel."
+                  }
+                },
+                "required": [
+                  "channelIds"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The channels the product is published to",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "salesChannelIds": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "salesChannelIds"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          },
+          {
+            "agentBearer": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "execute",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "sequential",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "products.edit"
+        }
+      }
+    },
     "/api/v1/admin/products/{id}/duplicate": {
       "post": {
         "operationId": "dashboard.products.duplicate",
@@ -162912,8 +164083,12 @@
                                 "excludeFromSitemap": {
                                   "type": "boolean"
                                 },
-                                "excludeFromProductFeed": {
-                                  "type": "boolean"
+                                "salesChannelIds": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  },
+                                  "description": "The sales channels the product is published to (read-only here: dashboard.products.publications_set)."
                                 },
                                 "productCondition": {
                                   "type": "string",
@@ -163062,7 +164237,7 @@
                                 "canonicalPath",
                                 "noIndex",
                                 "excludeFromSitemap",
-                                "excludeFromProductFeed",
+                                "salesChannelIds",
                                 "productCondition",
                                 "isActive",
                                 "discountType",
@@ -164178,9 +165353,6 @@
                           "excludeFromSitemap": {
                             "type": "boolean"
                           },
-                          "excludeFromProductFeed": {
-                            "type": "boolean"
-                          },
                           "productCondition": {
                             "type": "string",
                             "nullable": true,
@@ -164916,8 +166088,12 @@
                         "excludeFromSitemap": {
                           "type": "boolean"
                         },
-                        "excludeFromProductFeed": {
-                          "type": "boolean"
+                        "salesChannelIds": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "The sales channels the product is published to (MARKETS-DESIGN D6); change them with dashboard.products.publications_set."
                         },
                         "productCondition": {
                           "type": "string",
@@ -165482,7 +166658,7 @@
                         "isActive",
                         "noIndex",
                         "excludeFromSitemap",
-                        "excludeFromProductFeed",
+                        "salesChannelIds",
                         "productCondition",
                         "options",
                         "aggregateRevision",
@@ -165642,10 +166818,6 @@
                     "default": false
                   },
                   "excludeFromSitemap": {
-                    "type": "boolean",
-                    "default": false
-                  },
-                  "excludeFromProductFeed": {
                     "type": "boolean",
                     "default": false
                   },
@@ -186008,6 +187180,7 @@
                         "product.created",
                         "product.updated",
                         "product.deleted",
+                        "product.publication_changed",
                         "inventory.level_changed",
                         "inventory.purchase_order_updated",
                         "inventory.transfer_updated",
@@ -186018,7 +187191,7 @@
                       "description": "An exact topic, `<resource>.*` for all of a resource's topics, or `*` for every topic."
                     },
                     "minItems": 1,
-                    "maxItems": 22
+                    "maxItems": 23
                   },
                   "description": {
                     "type": "string",
@@ -186335,6 +187508,7 @@
                         "product.created",
                         "product.updated",
                         "product.deleted",
+                        "product.publication_changed",
                         "inventory.level_changed",
                         "inventory.purchase_order_updated",
                         "inventory.transfer_updated",
@@ -186345,7 +187519,7 @@
                       "description": "An exact topic, `<resource>.*` for all of a resource's topics, or `*` for every topic."
                     },
                     "minItems": 1,
-                    "maxItems": 22
+                    "maxItems": 23
                   },
                   "description": {
                     "type": "string",
@@ -187303,6 +188477,7 @@
                 "product.created",
                 "product.updated",
                 "product.deleted",
+                "product.publication_changed",
                 "inventory.level_changed",
                 "inventory.purchase_order_updated",
                 "inventory.transfer_updated",
@@ -207856,7 +209031,6 @@
                       "canonicalPath": null,
                       "noIndex": false,
                       "excludeFromSitemap": false,
-                      "excludeFromProductFeed": false,
                       "productCondition": null,
                       "slug": null,
                       "media": [],
@@ -207897,7 +209071,6 @@
                         "canonicalPath",
                         "noIndex",
                         "excludeFromSitemap",
-                        "excludeFromProductFeed",
                         "productCondition"
                       ]
                     }
@@ -217250,6 +218423,22 @@
           ]
         },
         {
+          "operationId": "dashboard.products.publications_bulk",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.products.publications_bulk"
+          ]
+        },
+        {
+          "operationId": "dashboard.products.publications_set",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.products.publications_set"
+          ]
+        },
+        {
           "operationId": "dashboard.products.restore",
           "surface": "dashboard",
           "mode": "operation-fallback",
@@ -217391,6 +218580,38 @@
           "mode": "curated",
           "workflowIds": [
             "dashboard.sales-analytics"
+          ]
+        },
+        {
+          "operationId": "dashboard.sales_channels.get",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.sales_channels.get"
+          ]
+        },
+        {
+          "operationId": "dashboard.sales_channels.list",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.sales_channels.list"
+          ]
+        },
+        {
+          "operationId": "dashboard.sales_channels.products",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.sales_channels.products"
+          ]
+        },
+        {
+          "operationId": "dashboard.sales_channels.update",
+          "surface": "dashboard",
+          "mode": "operation-fallback",
+          "workflowIds": [
+            "operation.dashboard.sales_channels.update"
           ]
         },
         {

@@ -1,3 +1,4 @@
+import { ONLINE_STORE_CHANNEL_ID } from "@scalius/shared/sales-channels";
 import type { Database } from "@scalius/database/client";
 import { buildBatchGuard, isBatchGuardError } from "@scalius/database/client";
 import { adminOrderCreateAttempts } from "@scalius/database/schema";
@@ -393,6 +394,8 @@ function normalizeAdminOrderCreateRequest(input: CreateOrderInput): Record<strin
     })),
     ...(input.shippingMethodId ? { shippingMethodId: input.shippingMethodId } : {}),
     ...(channelSource ? { channelSource } : {}),
+    // The online store is the default: naming it is the same request.
+    ...(input.salesChannelId && input.salesChannelId !== ONLINE_STORE_CHANNEL_ID ? { salesChannelId: input.salesChannelId } : {}),
     discountAmount: input.discountAmount == null ? null : normalizeAmount(input.discountAmount),
     shippingCharge: normalizeAmount(input.shippingCharge),
   };

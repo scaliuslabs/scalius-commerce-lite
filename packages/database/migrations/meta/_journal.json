@@ -857,6 +857,13 @@
       "breakpoints": true
     },
     {
+      "idx": 122,
+      "version": "6",
+      "when": 1791380000000,
+      "tag": "0122_sales_channels",
+      "breakpoints": true
+    },
+    {
       "idx": 123,
       "version": "6",
       "when": 1791390000000,

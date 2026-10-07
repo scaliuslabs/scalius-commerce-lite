@@ -11,6 +11,8 @@ Installed apps' persistent state and lifecycle (layer L1), for contributors. The
 | `plugin_records`, `plugin_kv` | `ctx.storage` and `ctx.kv` data, each with a `revision`. |
 | `plugin_log_entries`, `plugin_event_deliveries`, `plugin_cron_runs` | The masked log ring, delivery state (8 attempts), cron claims. |
 
+An app's sales channels (`manifest.salesChannels`, MARKETS-DESIGN D6) are `sales_channels` rows `<plugin id>:<id>` (kind `app`), written in the batch of each install, update and uninstall: declared channels are upserted, a channel no longer declared is removed when no order names it, else switched off. They are active while the app is active (activate, deactivate and a load failure set them in the same batch).
+
 Records, KV, logs, deliveries and cron runs belong to the plugin id, not to the installation row, so an uninstall that keeps data leaves them. `order_holds` belongs to `orders`. `storefront.ts` reads the active installations a public render needs.
 
 ## Lifecycle

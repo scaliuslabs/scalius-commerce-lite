@@ -3,8 +3,8 @@
 // Reserves stock by incrementing reservedStock WITHOUT decrementing stock.
 // Stock is permanently deducted only on payment confirmation.
 
-import { catalogBuyerStateRefreshStatementsForSkus, effectiveLowStockThresholdSql } from "../products";
-import { eq, and, sql, inArray, isNull } from "drizzle-orm";
+import { catalogBuyerStateRefreshStatementsForSkus, channelUnlinkedOnHandSql, effectiveLowStockThresholdSql } from "../products";
+import { eq, and, sql, inArray, isNull, type SQL } from "drizzle-orm";
 import { inventoryMovements, products, productVariants } from "@scalius/database/schema";
 import {
   buildBatchGuard,
@@ -261,6 +261,13 @@ export interface ReserveStockBatchOptions {
    * caller's read batch. The guarded writes re-check them in-transaction.
    */
   variantStates?: readonly ReservationVariantState[];
+  /**
+   * The sales channel the order sells from (MARKETS-DESIGN D6): a regular
+   * reservation needs the units at its linked locations, less every
+   * reservation (`channelUnlinkedOnHandSql`, 0 while it links every
+   * location). Omitted: the SKU's whole stock.
+   */
+  salesChannelId?: string;
 }
 
 export type ReserveStockBatchResult = {
@@ -427,7 +434,7 @@ export async function prepareStockReservationBatch(
 
   if (useCurrentTransactionState) {
     const movementQueries = movementClaims.map((claim) =>
-      buildFreshReservationMovementInsert(db, claim, pool)
+      buildFreshReservationMovementInsert(db, claim, pool, options.salesChannelId)
     );
     const updateQueries = movementClaims.map((claim) =>
       buildFreshReservationCounterUpdate(db, claim)
@@ -460,7 +467,7 @@ export async function prepareStockReservationBatch(
   }
 
   const guardQueries = trackedEntries.map((entry) =>
-    buildReservationBatchGuard(db, entry, variants.get(entry.variantId)!, pool)
+    buildReservationBatchGuard(db, entry, variants.get(entry.variantId)!, pool, options.salesChannelId)
   );
   const movementQueries = movementClaims.map((claim) =>
     buildReservationMovementInsert(db, claim, variants.get(claim.variantId)!)
@@ -590,11 +597,17 @@ export type ReservationVariantState = {
   lowStockThreshold?: number | null;
 };
 
+/** Units a regular reservation may not take: the SKU's on-hand at locations its channel does not sell. */
+function channelGapSql(variantId: SQL, salesChannelId: string | undefined): SQL {
+  return salesChannelId ? sql` - ${channelUnlinkedOnHandSql(variantId, salesChannelId)}` : sql``;
+}
+
 function buildReservationBatchGuard(
   db: Database,
   entry: ReservationBatchItem,
   variant: ReservationVariantState,
   pool: ReservationPool,
+  salesChannelId?: string,
 ): SQLiteBatchItem {
   const availability = pool === "preorder"
     ? sql`${productVariants.allowPreorder} = 1
@@ -605,7 +618,7 @@ function buildReservationBatchGuard(
             ${productVariants.backorderLimit} = 0
             OR ${productVariants.reservedStock} + ${entry.quantity} <= ${productVariants.backorderLimit}
           )`
-      : sql`${productVariants.stock} - ${productVariants.reservedStock} >= ${entry.quantity}`;
+      : sql`${productVariants.stock} - ${productVariants.reservedStock}${channelGapSql(sql.raw('"product_variants"."id"'), salesChannelId)} >= ${entry.quantity}`;
 
   return buildBatchGuard(db, sql`EXISTS (
     SELECT 1
@@ -843,6 +856,7 @@ function buildFreshReservationMovementInsert(
   db: Database,
   claim: ReservationMovementClaim,
   pool: ReservationPool,
+  salesChannelId?: string,
 ) {
   const variant = {
     id: sql.raw('"product_variants"."id"'),
@@ -871,7 +885,7 @@ function buildFreshReservationMovementInsert(
             ${variant.backorderLimit} = 0
             OR ${variant.reservedStock} + ${claim.quantity} <= ${variant.backorderLimit}
           )`
-      : sql`${variant.stock} - ${variant.reservedStock} >= ${claim.quantity}`;
+      : sql`${variant.stock} - ${variant.reservedStock}${channelGapSql(variant.id, salesChannelId)} >= ${claim.quantity}`;
   const nextPreorderStock = pool === "preorder"
     ? sql`${variant.preorderStock} - ${claim.quantity}`
     : sql`${variant.preorderStock}`;

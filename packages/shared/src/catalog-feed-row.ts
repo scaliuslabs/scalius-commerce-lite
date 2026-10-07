@@ -82,7 +82,6 @@ export interface CatalogFeedProductInput {
   freeDelivery?: boolean;
   isActive?: boolean;
   availableForSale?: boolean;
-  excludeFromProductFeed?: boolean;
   hasVariants?: boolean;
   imageUrl?: string | null;
   canonicalPath?: string | null;
@@ -630,10 +629,6 @@ export function projectCatalogFeedRows(
       continue;
     }
 
-    if (product.excludeFromProductFeed) {
-      omit(product.id, null, "excluded_from_product_feed");
-      continue;
-    }
     if (product.isActive === false) {
       omit(product.id, null, "inactive_product");
       continue;

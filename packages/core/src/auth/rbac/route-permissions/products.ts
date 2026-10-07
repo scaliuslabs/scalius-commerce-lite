@@ -30,6 +30,13 @@ export const PRODUCT_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/products/by-ids": {
     GET: { anyOf: [PERMISSIONS.PRODUCTS_VIEW, PERMISSIONS.COLLECTIONS_VIEW] },
   },
+  // Publishing (MARKETS-DESIGN D6): one product's channels, and many at once.
+  "/api/v1/admin/products/publications": {
+    POST: { permission: PERMISSIONS.PRODUCTS_BULK_OPERATIONS },
+  },
+  "/api/v1/admin/products/*/publications": {
+    PUT: { permission: PERMISSIONS.PRODUCTS_EDIT },
+  },
   "/api/v1/admin/products/bulk-delete": {
     POST: { permission: PERMISSIONS.PRODUCTS_BULK_OPERATIONS },
     DELETE: { permission: PERMISSIONS.PRODUCTS_BULK_OPERATIONS },

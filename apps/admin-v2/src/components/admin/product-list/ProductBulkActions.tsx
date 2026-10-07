@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { toast } from "~/lib/toast";
@@ -38,6 +38,9 @@ import { productMessages } from "~/i18n/products";
 import { resourceMessages } from "~/i18n/resource";
 import type { ProductListItem } from "./product-columns";
 
+// Sales channels (MARKETS-DESIGN D6): the publish dialog loads with its first use.
+const PublicationsDialog = lazy(() => import("./PublicationsDialog").then((module) => ({ default: module.PublicationsDialog })));
+
 type Picker = "category" | "addToCollection" | "removeFromCollection";
 
 const INVALIDATE = [
@@ -58,6 +61,7 @@ export function ProductBulkActions({ rows, done }: { rows: ProductListItem[]; do
   const t = useMessages(productMessages);
   const r = useMessages(resourceMessages);
   const [picker, setPicker] = useState<Picker | null>(null);
+  const [publishing, setPublishing] = useState<"publish" | "unpublish" | null>(null);
   const [choice, setChoice] = useState("");
   const count = rows.length;
   const queryClient = useQueryClient();
@@ -178,10 +182,25 @@ export function ProductBulkActions({ rows, done }: { rows: ProductListItem[]; do
           <DropdownMenuItem onSelect={() => open("addToCollection")}>{t("addToCollection")}</DropdownMenuItem>
           <DropdownMenuItem onSelect={() => open("removeFromCollection")}>{t("removeFromCollection")}</DropdownMenuItem>
           <DropdownMenuItem onSelect={() => open("category")}>{t("changeCategory")}</DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => setPublishing("publish")}>{t("makeAvailable")}</DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => setPublishing("unpublish")}>{t("makeUnavailable")}</DropdownMenuItem>
           <DropdownMenuItem disabled={printLabels.isPending} onSelect={() => printLabels.mutate()}>{t("printLabels")}</DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
 
+      {publishing ? (
+        <Suspense fallback={null}>
+          <PublicationsDialog
+            action={publishing}
+            productIds={rows.map((row) => row.id)}
+            onClose={() => setPublishing(null)}
+            onDone={() => {
+              setPublishing(null);
+              done();
+            }}
+          />
+        </Suspense>
+      ) : null}
       <Dialog open={picker !== null} onOpenChange={(next) => { if (!next && !change.isPending) setPicker(null); }}>
         <DialogContent>
           <DialogHeader>

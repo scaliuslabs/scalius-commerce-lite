@@ -1,3 +1,4 @@
+import { AGENTS_CHANNEL_ID } from "@scalius/shared/sales-channels";
 import type { AppProviders } from "../../integrations/provider-port";
 import type { Database } from "@scalius/database/client";
 import { DELIVERY_HIERARCHY_COUNTRY } from "@scalius/shared/markets";
@@ -417,6 +418,8 @@ export async function submitAgentStorefrontCheckout(
     loadStorefrontCheckoutAuthority(db, {
       items: cart,
       inventoryPool: InventoryPool.REGULAR,
+      // A buyer agent sells from the AI agents channel (MARKETS-DESIGN D6).
+      salesChannelId: AGENTS_CHANNEL_ID,
       shippingCountryCode: owned.countryCode,
       city: owned.cityId,
       zone: owned.zoneId,

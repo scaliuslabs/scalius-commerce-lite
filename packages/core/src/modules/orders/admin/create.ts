@@ -1,4 +1,5 @@
 // Staff-created (manual) orders: one guarded batch writes the order, its lines, stock reservations and receipt.
+import { resolveStaffOrderSalesChannel } from "../../sales-channels";
 import { nextOrderNumberSql } from "../number";
 import { chunkRowsForD1, safeBatch, type Database } from "@scalius/database/client";
 import {
@@ -132,6 +133,8 @@ export async function createManualOrder(
     // response still replays. Fresh requests validate before claiming, which
     // lets a merchant correct a rejected phone without burning the request key.
     const prepared = await (async () => {
+        // An active channel staff picked, else the online store (MARKETS-DESIGN D6).
+        const salesChannelId = await resolveStaffOrderSalesChannel(db, data.salesChannelId);
         const manualQuote = await prepareManualOrderQuote(db, data, undefined, undefined, { apps: options.apps, appProviders: options.appProviders });
         const {
             locationNames: { cityName, zoneName, areaName },
@@ -219,6 +222,7 @@ export async function createManualOrder(
             appDiscounts,
             appCart,
             currency,
+            salesChannelId,
         };
     })().catch(async (error) => {
         await markAdminOrderCreateAttemptFailed(db, attempt, error).catch(() => undefined);
@@ -246,6 +250,7 @@ export async function createManualOrder(
         appDiscounts,
         appCart,
         currency,
+        salesChannelId,
     } = prepared;
     let customerId = existingCustomer?.id;
 
@@ -370,6 +375,7 @@ export async function createManualOrder(
             // Staff-created; the source says where it came in (facebook, walk_in, …).
             channel: "admin",
             channelSource: normalizeOrderChannelSource(data.channelSource),
+            salesChannelId,
             version: 1,
             createdAt: sql`unixepoch()`,
             updatedAt: sql`unixepoch()`,

@@ -244,7 +244,6 @@ function toCatalogFeedProduct(
     freeDelivery: product.freeDelivery,
     isActive: true,
     availableForSale: product.availableForSale,
-    excludeFromProductFeed: product.excludeFromProductFeed,
     hasVariants: product.hasVariants,
     imageUrl: product.imageUrl,
     canonicalPath: product.canonicalPath,
@@ -317,11 +316,12 @@ function diagnosticReason(
   }
   if (
     !source.diagnostic.isActive ||
-    source.diagnostic.isDeleted
+    source.diagnostic.isDeleted ||
+    !source.diagnostic.publishedToOnlineStore
   ) {
     return "inactive_product";
   }
-  if (source.diagnostic.excludeFromProductFeed) {
+  if (!source.diagnostic.publishedToChannel) {
     return "excluded_from_product_feed";
   }
   if (!source.diagnostic.sellsPhysicalGoods) {

@@ -294,6 +294,7 @@ const pluginTranslationSchema = z.object({
   description: description.optional(),
   pages: z.record(name, title).optional(),
   cards: z.record(name, title).optional(),
+  salesChannels: z.record(name, title).optional(),
   actions: z.record(name, title).optional(),
   widgets: z.record(name, title).optional(),
   /** Page tab titles: page id → tab id → title. */
@@ -386,6 +387,16 @@ export const pluginManifestSchema = z.object({
   storage: z.record(name, storageCollectionSchema).default({})
     .refine((collections) => Object.keys(collections).length <= 20, "At most 20 storage collections."),
   customFields: z.array(customFieldSchema).max(50).default([]),
+  /**
+   * Sales channels the app sells through (Shopify's sales-channel apps,
+   * MARKETS-DESIGN D6): each becomes the channel `<plugin id>:<id>`, on while
+   * the app is active. Merchants publish products to it (Products, the
+   * product page's Publishing card); the app reads them from
+   * `GET /api/v1/admin/settings/sales-channels/<channel id>/products` and
+   * follows `product.publication_changed`. Its orders name it.
+   */
+  salesChannels: z.array(z.object({ id: name, name: title }).strict()).max(3).default([])
+    .refine((channels) => new Set(channels.map((channel) => channel.id)).size === channels.length, "Sales channel ids must be unique."),
   settings: pluginSettingsSchemaSchema.default([]),
   /** App-wide settings sections (`settings[].group`); additive, presentation only. */
   settingsGroups: z.array(settingsGroupSchema).max(PLUGIN_SETTINGS_GROUPS_MAX).default([]),
@@ -434,6 +445,10 @@ export const pluginManifestSchema = z.object({
           context.addIssue({ code: "custom", path: ["translations", locale, surface, id], message: `No admin ${surface.slice(0, -1)} ${id} to translate.` });
         }
       }
+    }
+    const salesChannelIds = new Set(manifest.salesChannels.map((channel) => channel.id));
+    for (const id of Object.keys(translation.salesChannels ?? {})) {
+      if (!salesChannelIds.has(id)) context.addIssue({ code: "custom", path: ["translations", locale, "salesChannels", id], message: `No sales channel ${id} to translate.` });
     }
     for (const [pageId, tabs] of Object.entries(translation.tabs ?? {})) {
       const page = manifest.admin.pages.find((entry) => entry.id === pageId);

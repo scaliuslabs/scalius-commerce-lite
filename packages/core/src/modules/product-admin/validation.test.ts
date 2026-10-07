@@ -28,7 +28,6 @@ const productInput = {
     canonicalPath: null,
     noIndex: false,
     excludeFromSitemap: false,
-    excludeFromProductFeed: false,
     productCondition: DEFAULT_PRODUCT_CONDITION,
     slug: "main-shoe",
     media: [],

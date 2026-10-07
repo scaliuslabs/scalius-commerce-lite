@@ -38,7 +38,7 @@ All paths are under `/api/v1` and public except the last two (admin).
 
 ### Listings and facets
 
-- Public products are the `product_buyer_state` rows with `is_public = 1`. Live cart and checkout validation stay authoritative.
+- Public products are the `product_buyer_state` rows with `is_public = 1` (it includes the online store's publication). Live cart and checkout validation stay authoritative.
 - The listing routes take `page` or `cursor`. A cursor continues `newest`, `price-asc` and `price-desc` only. Other orders (relevance, name, discount, rating) page by number. A numbered page past `planLimits().lists.maxOffset` (1,000 on Free, 10,000 on Paid) is empty. The total stops at `lists.countCap`.
 - A search with no hit is retried once with the closest catalogue words. The response carries `correctedQuery`.
 - A category listing includes its published descendants. A draft or internal descendant's products stay out of the parent.
@@ -51,7 +51,7 @@ All paths are under `/api/v1` and public except the last two (admin).
 ### Feeds and sitemaps
 
 - `GET /products/feed` is cursor-paged (`feed-v1.` cursor), newest first, at most 100 per page. A `page` other than 1 is refused.
-- A product enters the feed when it is public with a buyer SKU, has a live physical SKU, has a real primary image and is not `exclude_from_product_feed`. Gift cards and products with service or digital SKUs stay out. Feed exclusion does not hide or noindex the product page.
+- A product enters the feed when it is public with a buyer SKU, has a live physical SKU, has a real primary image and is published to the feed's sales channel (`?channel=`: `sc_google` by default, `sc_meta`, `sc_agents` for UCP) while that channel is active. Gift cards and products with service or digital SKUs stay out. Leaving a feed's channel does not hide or noindex the product page; leaving the online store does (see [`products`](../products/README.md)).
 - `projectCatalogFeedRows` (`packages/shared/src/catalog-feed-row.ts`) builds the rows. The storefront renders them as XML (`apps/storefront/src/pages/api/product-feed.xml.ts`, `facebook-feed.xml.ts`).
   - Availability: Google `in_stock` and `out_of_stock`; Meta `in stock` and `out of stock`.
   - Brand comes only from the published brand record. GTIN comes only from a variant barcode of type `ean13`, `upc`, `isbn` or `gtin`. Condition comes only from `products.product_condition`. Taxonomy categories come only from the explicit slug mapping. A missing fact is omitted, never invented.

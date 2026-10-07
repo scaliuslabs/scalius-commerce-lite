@@ -1,3 +1,4 @@
+import { CATALOG_CHANNEL_IDS } from "@scalius/shared/sales-channels";
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import {
   THEME_VERSION_CHANGES_MAX,
@@ -973,6 +974,9 @@ const productFeedDiagnosticsQuerySchema = z.object({
     .min(1)
     .max(PRODUCT_FEED_DIAGNOSTIC_MAX_SAMPLE_LIMIT)
     .optional(),
+  channel: z.enum(CATALOG_CHANNEL_IDS).optional().openapi({
+    description: "The catalogue channel to diagnose: `sc_google` (default), `sc_meta` or `sc_agents`.",
+  }),
 });
 
 const seoDiscoveryLiveProbeCountsSchema = z.object({
@@ -1065,6 +1069,7 @@ app.openapi(getSeoFeedDiagnosticsRoute, async (c) => {
     storefrontBaseUrl: c.env.STOREFRONT_URL,
     currencyCode: currency.code,
     priceIncrementMinor: currency.priceIncrementMinor,
+    channel: query.channel,
   });
   return ok(c, projectProductFeedDiagnostics(diagnostics));
 });

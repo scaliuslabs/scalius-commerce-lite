@@ -24,7 +24,8 @@ function product(
         name: `Product ${id}`,
         slug: `product-${id}`,
         isActive: true,
-        excludeFromProductFeed: false,
+        publishedToChannel: true,
+        publishedToOnlineStore: true,
         deletedAt: null,
         price: 1200,
         discountType: null,
@@ -120,7 +121,7 @@ describe("product feed diagnostics", () => {
         const report = buildProductFeedDiagnosticsFromScan({
             products: [
                 product("excluded", {
-                    excludeFromProductFeed: true,
+                    publishedToChannel: false,
                     isActive: false,
                 }),
             ],

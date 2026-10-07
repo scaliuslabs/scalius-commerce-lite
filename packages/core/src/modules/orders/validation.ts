@@ -2,6 +2,7 @@
 // Zod schemas for order create/update operations.
 // Imported by admin API routes and OrderService.
 
+import { isSalesChannelId, SALES_CHANNEL_ID_MAX_LENGTH } from "@scalius/shared/sales-channels";
 import { z } from "zod";
 import { phoneNumberSchema } from "@scalius/shared/customer-utils";
 import { LINE_PROPERTY_INPUT_LIMITS } from "@scalius/shared/line-properties";
@@ -149,6 +150,11 @@ export const createOrderObjectSchema = sellableOrderContentSchema.extend({
      */
     shippingMethodId: z.string().trim().min(1).max(180).nullable().optional(),
     channelSource: orderChannelSourceInputSchema,
+    /**
+     * The sales channel the order sells from (MARKETS-DESIGN D6): an active
+     * channel; omitted, the online store. Staff may sell any product.
+     */
+    salesChannelId: z.string().max(SALES_CHANNEL_ID_MAX_LENGTH).refine(isSalesChannelId, "Use a sales channel id.").nullable().optional(),
 });
 
 /** Schema for creating a new order (POST /api/orders). */

@@ -88,6 +88,7 @@ An installation with `source` `bundled` uses the bundled loader. `registry` and 
 - `cron` (10): `{ name, schedule }`.
 - `storage` (20 collections): `indexes` (4) and `unique` (2), each with up to 4 fields.
 - `customFields` (50): fields in the app's namespace on a product, variant, customer, order, category, collection, brand or page.
+- `salesChannels` (3): sales channels the app sells through (`{ id, name }`), Shopify's sales-channel apps. Each becomes the channel `<plugin id>:<id>`, active while the app is. Merchants publish products to it; the app pages them from `GET /api/v1/admin/settings/sales-channels/<channel id>/products` (`products.view`) and follows `product.publication_changed`.
 - `settings` (40): the merchant's form. Types: `text`, `textarea`, `number`, `boolean`, `select`, `multiselect`, `secret`, `url` (https), `email`, `color`.
 - `admin`: `pages` (10), `cards` (20), `actions` (20), `widgets` (5). Each names an admin route.
 - `storefront`: `sections` (20), `productBlocks` (10), `scripts` (5, https; their hosts join the storefront CSP), `head` and `proxy` flags.

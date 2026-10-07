@@ -2,6 +2,7 @@ import { getVariantDiscountedPrice } from "@/components/product/lib/pricing-engi
 import { roundPriceToPrecision } from "@scalius/shared/price-utils";
 import { resolvePriceIncrementMinor } from "@scalius/shared/currency-policy";
 import { getFeedProducts, type FeedProductPage } from "@/lib/api/products";
+import { AGENTS_CHANNEL_ID } from "@scalius/shared/sales-channels";
 import { getLayoutData, type CurrencyData } from "@/lib/api/storefront";
 import type { Product, ProductVariant } from "@/lib/api/types";
 import { setRuntimeImageCdnPolicy } from "@/lib/api/runtime";
@@ -709,9 +710,6 @@ function mapProduct(
   inputMatches?: Map<string, Array<{ id: string; match?: VariantMatchMode }>>,
 ): UcpProduct | null {
   if (product.isActive === false) return null;
-  if ((product as { excludeFromProductFeed?: unknown }).excludeFromProductFeed === true) {
-    return null;
-  }
 
   const resolution = resolveBuyerVariants(product.variants ?? []);
   if (resolution.variants.length === 0) return null;
@@ -837,7 +835,8 @@ async function loadFeedProducts(
   options: Parameters<typeof getFeedProducts>[0],
 ): Promise<FeedProductPage | null> {
   try {
-    return await getFeedProducts(options);
+    // UCP lists what the AI agents sales channel publishes (MARKETS-DESIGN D6).
+    return await getFeedProducts({ ...options, channel: AGENTS_CHANNEL_ID });
   } catch (error) {
     console.error("Error loading UCP feed products:", error);
     return null;

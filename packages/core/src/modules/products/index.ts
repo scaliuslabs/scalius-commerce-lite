@@ -11,6 +11,7 @@ export * from "./option-model";
 export * from "./media";
 export * from "./money";
 export * from "./public-eligibility";
+export * from "./channel-publications";
 export * from "./buyer-projection";
 export * from "./variant-identity";
 export * from "./customization";

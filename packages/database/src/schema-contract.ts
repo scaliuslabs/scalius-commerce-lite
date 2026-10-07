@@ -388,6 +388,11 @@ export const CURRENT_DATABASE_SCHEMA_MIGRATIONS = [
     sourceSha256: "bd4bc6821c6f8787a33e888a51e71ac2a562ea3dc7c4ec57b9192ae00d9ad8b4",
   },
   {
+    version: 122,
+    name: "0122_sales_channels",
+    sourceSha256: "7a6b5cac792843fd099faa6d18fe59aa54ce4ff5defe29d2e34a72218e15e69d",
+  },
+  {
     version: 123,
     name: "0123_market_currencies",
     sourceSha256: "6c6cf8a662eef18fd8a097c8dd413acb6a85a681d150d355d08e9b5549770977",

@@ -938,6 +938,143 @@ templates, and agent product sections show source text. Per-menu navigation
 reads and footer placement labels are not translated. RTL (step 6
 locale basics).
 
+## Step 5 implemented
+
+A store that never unlinks a location and never unpublishes a product
+behaves as before: the same pages, listings, feeds, UCP results and checkout,
+the same bytes for every read, and the same D1 calls and statements in every
+free-plan budget scenario and render budget.
+
+**Channels** (D6, Shopify's sales channels). Each built-in surface is its
+own channel, as in Shopify (Online Store, Google & YouTube, Facebook &
+Instagram, the agentic catalogue):
+
+| Id | Kind | Surface |
+|----|------|---------|
+| `sc_online_store` | `online_store` | The storefront. Always active. |
+| `sc_google` | `catalog_feed` | `/api/product-feed.xml` (Google Merchant Center). |
+| `sc_meta` | `catalog_feed` | `/api/facebook-feed.xml` (Facebook and Instagram). |
+| `sc_agents` | `agent` | The UCP catalogue and buyer-agent checkout. |
+
+Decision: one channel per surface, not one feed channel. Reason: Shopify
+gives each surface its own channel, so a merchant can keep a product off
+Meta (ads policy) and keep it on Google. The three surfaces read one
+projection, so a channel is only a parameter of that read
+(`/api/v1/products/feed?channel=`, `sc_google` by default). An app
+declares at most three `app` channels in its manifest (`salesChannels`):
+`<plugin id>:<id>`, active while the app is active.
+
+**Schema.** Migration `0122_sales_channels` (D1/Turso file, PostgreSQL
+sidecar, ledger digest, schema contract 122, Drizzle snapshot):
+
+- `sales_channels`: handle, name, kind, `plugin_id` (app channels only),
+  status (`active` | `inactive`), position. Triggers keep the online store
+  (`SALES_CHANNEL_ONLINE_STORE_REQUIRED`) and a channel's kind and app
+  (`SALES_CHANNEL_IDENTITY_IMMUTABLE`), and refuse to delete a channel with
+  orders (`SALES_CHANNEL_HAS_ORDERS`);
+- `product_channel_publications`: a product is published to a channel while
+  its row has no `unpublished_at`. The migration publishes every product to
+  every channel. A new product is published to every channel (trigger); the
+  product form and the API then unpublish the channels the merchant unticks;
+- `sales_channel_locations`: the locations whose on-hand a channel sells.
+  The migration links every location to every channel. A new channel links
+  every location and a new location every channel (triggers);
+- `orders.sales_channel_id`: the channel an order sold from, beside the
+  attribution `channel`. Agent orders take `sc_agents`, other orders
+  `sc_online_store`. It never changes.
+
+**One truth for feed exclusion.** `products.exclude_from_product_feed` is
+gone. The migration unpublishes its products from Google, Meta and AI agents
+(UCP read the same flag), so every feed and UCP lists what it listed before.
+The product page's Publishing card replaces the "Leave out of product ads"
+box. Feed diagnostics and row previews report an unpublished product as the
+merchant's exclusion (`product_feed_excluded`).
+
+**Reads.** The SQL lives in `products/channel-publications.ts`:
+
+- The online store: `publicProductBaseConditions()`, collections and the
+  product page add one primary-key probe (`productPublishedToChannelSql`).
+  The stored buyer state folds the publication into `is_public`, so
+  listings, counts, facets, sitemaps, navigation and the homepage read no new
+  row. A product the online store does not publish has no page, listing,
+  search hit or sitemap entry.
+- A feed or UCP read requires its channel's publication and the online
+  store's (a row links to the product page), and lists nothing while its
+  channel is inactive (an uncorrelated check, decided once per statement).
+  The Meta XML feed reads `sc_meta`, UCP `sc_agents`.
+
+**Sellable stock.** A channel sells the on-hand of its linked locations,
+less every reservation: `stock - reserved_stock` minus the SKU's levels at
+unlinked locations (`channelAvailableStockSql`). Reservations stay
+location-free, and no per-channel count is stored. While a channel links
+every location, the subtraction is a constant 0 that SQLite decides once per
+statement, so a single-location store does no work per SKU. Card bands, the
+buyer projection, the product page, search, feeds, market list pricing,
+cart validation and the checkout reservation guard read it for their
+channel. Linking or unlinking a location queues a catalogue projection
+rebuild.
+
+**Writes.**
+
+- Checkout stamps the order's channel as an SQL literal (no new bound
+  value): the online store, or AI agents for a buyer agent. Cart
+  validation, the checkout authority read and the reservation guard use that
+  channel: a SKU of a product the channel does not publish is
+  `PRODUCT_UNAVAILABLE`. Unpublishing a product or switching a channel off
+  advances the checkout authority fence.
+- Staff orders take `salesChannelId` (an active channel; the online store by
+  default). Staff may sell any product, published or not (Shopify's draft
+  orders), from the whole stock.
+- Products take `salesChannelIds` on create. `PUT /admin/products/{id}/publications`
+  sets one product's channels (outside the product revision).
+  `POST /admin/products/publications` publishes or unpublishes up to 90
+  products on up to 10 channels in one batch, with the online store's buyer
+  state refreshed in that batch.
+- An app's channels follow its manifest and status in the batch of each
+  lifecycle write. The app reads its products from
+  `GET /admin/settings/sales-channels/{id}/products` and follows the new
+  event `product.publication_changed` (`published` | `unpublished`).
+
+**DVC.** `sales_channels` advances `lm:seo` (feeds and UCP read the status).
+`product_channel_publications` advances `p:<product>` and `lm:seo`; the
+online store's rows also advance `lm:all` and `srch` (live readers).
+`sales_channel_locations` advances `store`. Once a location is unlinked, a
+raw stock or reservation change advances the SKU's `p:` key
+(`cdep_product_variants_chstock`); before that it advances nothing. A
+level at a location that some channel does not sell advances its SKU's `p:`
+key (`inventory_levels`). A product discount advances its `lo:price` scopes,
+because the price filter calculates SKU prices live. The products triggers
+that named the dropped flag are reinstalled. The harness
+seeds a second location, a product off the Meta feed and the old feed flag,
+and runs publish, unpublish, set-channels and location-link actions. The
+property and race gate reports zero findings.
+
+**Inventory locations.** The default location's country was a `'BD'`
+literal. The migration and the store setup step give the untouched default
+location the store's country (the backup market's). A new location takes
+the store's country when the form names none.
+
+**Dashboard.** Settings → Sales channels lists each channel with its status,
+product count and locations; Manage switches it on or off (not the online
+store; an app's follows the app) and picks its locations. The product page
+has a Publishing card under Status. The products list has a Channels column
+("3 of 4"), a sales channel filter (on or not on a channel) and bulk "Make
+available" and "Make unavailable" on channels. Copy is in English and
+Bangla.
+
+**Agents and MCP.** Registry rows `dashboard.sales_channels.list`, `get`,
+`update` and `products`, and `dashboard.products.publications_set` and
+`publications_bulk`. RBAC: channel reads need `settings.general.view` or
+`products.view`, channel edits `settings.general.edit`, one product's
+channels `products.edit`, the bulk call `products.bulk_operations`. The SDK
+is regenerated.
+
+**Left for later.** A POS surface (the `pos` kind exists; no POS reads yet).
+Per-channel prices and per-channel market availability. Scheduled
+publishing (`published_at` in the future). Channel-scoped reservations and
+fulfilment from the channel's nearest location. Orders list filter by sales
+channel. Creating extra online store channels for a second storefront.
+
 ## Step 6 implemented
 
 A store whose markets all sell in the shop currency behaves as before: the

@@ -579,6 +579,17 @@ describe("provider-neutral schema upgrades", () => {
         postgresStatements: 69,
       },
       {
+        version: 122,
+        name: "0122_sales_channels",
+        // The three tables and their indexes, the built-in channels, the
+        // location links and publication backfill, the feed flag's drop with
+        // its reinstalled triggers, the order column, the default location's
+        // country, the channel, publication and order guards and fences, the
+        // generated event and cache triggers and the ledger: one each.
+        sqliteStatements: 57,
+        postgresStatements: 57,
+      },
+      {
         version: 123,
         name: "0123_market_currencies",
         // The market's three currency columns and the as-of backfill, the
@@ -759,6 +770,7 @@ describe("provider-neutral schema upgrades", () => {
           { version: 119, name: "0119_billing_addresses" },
           { version: 120, name: "0120_price_lists" },
           { version: 121, name: "0121_translations" },
+          { version: 122, name: "0122_sales_channels" },
           { version: 123, name: "0123_market_currencies" },
         ],
       });

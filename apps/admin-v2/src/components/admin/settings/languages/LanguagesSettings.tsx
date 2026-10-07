@@ -117,7 +117,7 @@ export function LanguagesSettings() {
                   <TableCell data-numeric="">
                     {language.isDefault ? "—" : t("translatedCount", { count: formatNumber(language.translatedResources) })}
                   </TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="text-end">
                     <span className="flex items-center justify-end gap-1">
                       {language.isDefault ? null : (
                         <Button variant="ghost" size="sm" asChild>

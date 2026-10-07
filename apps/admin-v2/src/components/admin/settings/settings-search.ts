@@ -29,6 +29,7 @@ export const SETTINGS_CARDS = [
   { page: "taxes", card: "taxOverrides" },
   { page: "locations", card: "inventoryLocations" },
   { page: "markets", card: "markets" },
+  { page: "salesChannels", card: "salesChannels" },
   { page: "languages", card: "languages" },
   { page: "languages", card: "machineTranslation" },
   { page: "customerAccounts", card: "customerFields" },

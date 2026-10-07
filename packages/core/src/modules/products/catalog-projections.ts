@@ -39,6 +39,7 @@ import { alias } from "drizzle-orm/sqlite-core";
 import { OPTION_FACET_KEY_PREFIX } from "@scalius/shared/catalog-attributes";
 import { buildBuyerCatalogPricingProjection } from "./buyer-projection";
 import { publicProductHasBuyerResolvableSku } from "./public-eligibility";
+import { channelAvailableStockSql, productPublishedToChannelSql } from "./channel-publications";
 import { storeDefaultLowStockThresholdSql } from "./low-stock-policy";
 
 type SQLiteBatchItem = BatchItem<"sqlite">;
@@ -93,20 +94,26 @@ const EVERY_PRODUCT: ProductScope = { on: () => sql`1 = 1`, pricing: undefined }
  * The live buyer state of the scoped products, in `product_buyer_state`
  * column order. Used by the refresh insert and by drift checks.
  *
- * - `is_public`: active, not trashed, a buyer-resolvable SKU topology (the
- *   storefront's own predicate) and a priced card SKU.
+ * - `is_public`: active, not trashed, published to the online store, a
+ *   buyer-resolvable SKU topology (the storefront's own predicate) and a
+ *   priced card SKU.
  * - `sku_id`, `from/to/base_minor`, `has_discount`, `available_for_sale`,
  *   `has_customer_options`: the buyer pricing projection's card row.
  * - `discount_depth_bps`: (base - from) / base of the card SKU, the
  *   listing's "discount" sort.
  * - `availability_band`: the card SKU's band (its own low-stock level, else
- *   the store default), as `resolveBuyerAvailabilityBand`.
+ *   the store default), as `resolveBuyerAvailabilityBand`, over the units
+ *   the online store sells (its linked locations).
  */
 export function selectLiveCatalogBuyerState(db: Database, scope: SQL, pricingScope: SQL | undefined = scope) {
     const pricing = buildBuyerCatalogPricingProjection(db, { productScope: pricingScope });
     const cardSku = alias(productVariants, "buyer_state_card_sku");
     const effective = sql`${pricing.effectivePriceMinor}`;
-    const available = sql`(${cardSku.stock} - ${cardSku.reservedStock})`;
+    const available = channelAvailableStockSql({
+        id: sql`${cardSku.id}`,
+        stock: sql`${cardSku.stock}`,
+        reservedStock: sql`${cardSku.reservedStock}`,
+    });
     const threshold = sql`COALESCE(${cardSku.lowStockThreshold}, ${storeDefaultLowStockThresholdSql()})`;
     return db
         .select({
@@ -115,6 +122,7 @@ export function selectLiveCatalogBuyerState(db: Database, scope: SQL, pricingSco
                 WHEN ${products.isActive} = 1
                   AND ${products.deletedAt} IS NULL
                   AND ${pricing.skuId} IS NOT NULL
+                  AND ${productPublishedToChannelSql(sql`${products.id}`)}
                   AND ${publicProductHasBuyerResolvableSku()}
                 THEN 1 ELSE 0
             END`.as("buyer_state_is_public"),

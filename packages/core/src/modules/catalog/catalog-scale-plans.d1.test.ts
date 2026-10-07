@@ -334,7 +334,7 @@ describe("catalogue-scale query plans", () => {
         expect(first.products.map((product) => product.id)).toEqual(["prod_a"]);
         expect(second.products.map((product) => ({ id: product.id, availableForSale: product.availableForSale })))
             .toEqual([{ id: "prod_b", availableForSale: false }]);
-        const [pagePlan] = plans((sql) => sql.includes("exclude_from_product_feed"));
+        const [pagePlan] = plans((sql) => sql.includes("active_channel"));
         expect(pagePlan).toContain("products_public_newest_idx");
         expect(pagePlan).not.toContain("buyer_ranked_skus");
         for (const plan of plans(joinsPricing)) expect(plan).not.toMatch(/SCAN buyer_pricing_sku/);

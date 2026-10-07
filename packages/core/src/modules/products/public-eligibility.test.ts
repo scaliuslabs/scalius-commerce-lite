@@ -42,12 +42,17 @@ describe("public product SKU eligibility", () => {
         expect(query.sql).not.toContain("buyer_simple_sku.color");
     });
 
-    it("keeps public product base conditions gated by SKU eligibility", () => {
+    it("keeps public product base conditions gated by the online store's publication and SKU eligibility", () => {
         const conditions = publicProductBaseConditions();
         const dialect = new SQLiteSyncDialect();
-        const query = dialect.sqlToQuery(conditions[2]!);
+        const publication = dialect.sqlToQuery(conditions[2]!);
+        const query = dialect.sqlToQuery(conditions[3]!);
 
-        expect(conditions).toHaveLength(3);
+        expect(conditions).toHaveLength(4);
+        // One primary-key probe, the channel an SQL literal (no bound value).
+        expect(publication.sql).toContain("product_channel_publications");
+        expect(publication.sql).toContain("'sc_online_store'");
+        expect(publication.params).toEqual([]);
         expect(query.sql).toContain("buyer_option_sku");
         expect(query.sql).toContain("buyer_shape_sku");
         expect(query.sql).toContain("buyer_simple_sku");

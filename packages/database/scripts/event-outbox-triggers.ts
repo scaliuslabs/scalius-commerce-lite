@@ -456,6 +456,61 @@ export const EVENT_TRIGGER_SPECS: readonly EventTriggerSpec[] = [
       ["deletion", text("permanent")],
     ],
   },
+  // ── product publications (0122) ───────────────────────────────────────
+  // A row without unpublished_at is a publication; an insert of an
+  // unpublished row was never published and emits nothing.
+  {
+    name: "product_channel_publications_published",
+    table: "product_channel_publications",
+    event: "insert",
+    when: isNull(NEW("unpublished_at")),
+    topic: "product.publication_changed",
+    resourceId: NEW("product_id"),
+    facts: [
+      ["productId", NEW("product_id")],
+      ["channelId", NEW("channel_id")],
+      ["state", text("published")],
+    ],
+  },
+  {
+    name: "product_channel_publications_republished",
+    table: "product_channel_publications",
+    event: "update",
+    when: and(notNull(OLD("unpublished_at")), isNull(NEW("unpublished_at"))),
+    topic: "product.publication_changed",
+    resourceId: NEW("product_id"),
+    facts: [
+      ["productId", NEW("product_id")],
+      ["channelId", NEW("channel_id")],
+      ["state", text("published")],
+    ],
+  },
+  {
+    name: "product_channel_publications_unpublished",
+    table: "product_channel_publications",
+    event: "update",
+    when: and(isNull(OLD("unpublished_at")), notNull(NEW("unpublished_at"))),
+    topic: "product.publication_changed",
+    resourceId: NEW("product_id"),
+    facts: [
+      ["productId", NEW("product_id")],
+      ["channelId", NEW("channel_id")],
+      ["state", text("unpublished")],
+    ],
+  },
+  {
+    name: "product_channel_publications_removed",
+    table: "product_channel_publications",
+    event: "delete",
+    when: isNull(OLD("unpublished_at")),
+    topic: "product.publication_changed",
+    resourceId: OLD("product_id"),
+    facts: [
+      ["productId", OLD("product_id")],
+      ["channelId", OLD("channel_id")],
+      ["state", text("unpublished")],
+    ],
+  },
   // ── inventory ─────────────────────────────────────────────────────────
   {
     // On-hand stock moved at a location (ledger movements with a stock
@@ -600,6 +655,10 @@ export const EVENT_TRIGGER_MIGRATIONS: Readonly<Record<string, string>> = {
   // 0119 (billing addresses) re-creates these with the billing columns.
   orders_updated: "0119_billing_addresses",
   customer_addresses_changed: "0119_billing_addresses",
+  product_channel_publications_published: "0122_sales_channels",
+  product_channel_publications_republished: "0122_sales_channels",
+  product_channel_publications_unpublished: "0122_sales_channels",
+  product_channel_publications_removed: "0122_sales_channels",
 };
 
 /**

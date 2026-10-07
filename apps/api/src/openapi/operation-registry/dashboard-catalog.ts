@@ -114,6 +114,9 @@ export const DASHBOARD_CATALOG_OPERATIONS = {
   },
   "dashboard.products.list_summaries": {},
   "dashboard.products.lookup_barcode": {},
+  // Publishing (MARKETS-DESIGN D6): not under the product's revision.
+  "dashboard.products.publications_bulk": {},
+  "dashboard.products.publications_set": {},
   "dashboard.products.restore": { revision: "required" },
   "dashboard.products.stats": {},
   "dashboard.products.trash": {

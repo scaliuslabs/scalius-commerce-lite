@@ -3,7 +3,6 @@ import { useQuery } from "@tanstack/react-query";
 import { currencySettingsQueryOptions } from "~/lib/api-query-options/currency";
 import { getDecimalPlaces } from "@scalius/shared/currency";
 import { resolvePriceIncrementMinor } from "@scalius/shared/currency-policy";
-import { currencySymbol } from "@scalius/shared/money-format";
 import { discountedPriceMinor, fromMinor, percentToBps, toMinor } from "@scalius/shared/money";
 import { formatNumber, useLocale } from "~/i18n";
 
@@ -59,25 +58,5 @@ export function useCurrency() {
     [code, priceIncrementMinor],
   );
 
-  /**
-   * An amount of `currencyCode` (an order in a market's own currency,
-   * MARKETS-DESIGN step 6): the store's format for its own currency, else that
-   * currency's symbol and places.
-   */
-  const fmtIn = useCallback(
-    (price: number | string, currencyCode: string | null | undefined) => {
-      const other = currencyCode?.trim().toUpperCase();
-      if (!other || other === code) return fmt(price);
-      const value = Number(price);
-      const amount = Number.isFinite(value) ? value : 0;
-      const digits = getDecimalPlaces(other);
-      const formatted = formatNumber(Math.abs(amount), { minimumFractionDigits: digits, maximumFractionDigits: digits });
-      return `${amount < 0 ? "-" : ""}${currencySymbol(other)}${formatted}`;
-    },
-    // `locale` changes the output of formatNumber.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [fmt, code, locale],
-  );
-
-  return { symbol, code, priceIncrementMinor, fmt, fmtIn, formatPrice: fmt, salePrice };
+  return { symbol, code, priceIncrementMinor, fmt, formatPrice: fmt, salePrice };
 }

@@ -37,7 +37,7 @@ import { settingsMarketsMessages } from "~/i18n/settings-markets";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { getServerFnError } from "~/lib/api-helpers";
 import { isAdminApiNotFoundError } from "~/lib/admin-api-error";
-import { marketWriteInvalidations, marketsQueryOptions, saveMarket, useDeleteMarket } from "~/lib/api-query-options/markets";
+import { marketCurrenciesQueryOptions, marketWriteInvalidations, marketsQueryOptions, saveMarket, useDeleteMarket } from "~/lib/api-query-options/markets";
 import { SettingsCard, SettingsCardLoading, SettingsField, SettingsPage } from "../SettingsPage";
 import { SettingsLoadFailure } from "../SettingsLoadFailure";
 import { MarketCountryPicker } from "./MarketCountryPicker";
@@ -213,6 +213,7 @@ function CurrencyCard({ values, savedCurrency, canEdit, rateError, lockError, se
   setValues: (update: (draft: MarketForm) => MarketForm) => void;
 }) {
   const t = useMessages(settingsMarketsMessages);
+  const currencies = useQuery({ ...marketCurrenciesQueryOptions(), enabled: !values.isBackup });
   if (values.isBackup) {
     return (
       <SettingsCard title={t("currencyTitle")}>
@@ -226,9 +227,26 @@ function CurrencyCard({ values, savedCurrency, canEdit, rateError, lockError, se
   }
   const shop = values.shopCurrencyCode;
   const own = sellsOwnCurrency(values);
+  // Only currencies an active payment method charges (the saved one stays listed).
+  const chargeable = currencies.data?.chargeable;
+  const others = (chargeable === "any" ? [...SUPPORTED_CURRENCY_CODES] : chargeable ?? [])
+    .filter((code) => code !== shop);
+  if (own && !others.includes(values.currencyCode)) others.unshift(values.currencyCode);
+  if (currencies.isSuccess && others.length === 0) {
+    // Nothing else can be charged: the market simply sells in the shop currency.
+    return (
+      <SettingsCard title={t("currencyTitle")}>
+        <p className="text-body">{displayName(shop, "currency")} ({shop})</p>
+        <p className="text-body text-muted-foreground">
+          {t("noOtherCurrency", { currency: shop })}{" "}
+          <Link to="/admin/settings/payments" className="text-foreground underline">{t("paymentsLink")}</Link>
+        </p>
+      </SettingsCard>
+    );
+  }
   const options = [
     { value: shop, label: t("shopCurrencyOption", { currency: `${displayName(shop, "currency")} (${shop})` }), keywords: [shop] },
-    ...SUPPORTED_CURRENCY_CODES.filter((code) => code !== shop).map((code) => ({
+    ...others.map((code) => ({
       value: code,
       label: `${displayName(code, "currency")} (${code} ${currencySymbol(code)})`,
       keywords: [code],
@@ -236,7 +254,7 @@ function CurrencyCard({ values, savedCurrency, canEdit, rateError, lockError, se
   ];
   return (
     <SettingsCard title={t("currencyTitle")}>
-      <SettingsField id="market-currency" label={t("currencyLabel")} help={t("currencyHelp")}>
+      <SettingsField id="market-currency" label={t("currencyLabel")} help={t("currencyHelp", { currency: shop })}>
         <SearchableSelect
           id="market-currency"
           value={values.currencyCode}

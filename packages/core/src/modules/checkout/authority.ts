@@ -1,3 +1,4 @@
+import { ONLINE_STORE_CHANNEL_ID } from "@scalius/shared/sales-channels";
 import type { Database } from "@scalius/database/client";
 import { checkoutAuthority } from "@scalius/database/schema";
 import { inArray, sql } from "drizzle-orm";
@@ -84,6 +85,12 @@ export interface StorefrontCheckoutAuthorityInput {
     billingCountryCode?: string | null;
     /** The signed-in buyer: segment price lists price their members (awaited only when one applies). */
     customerId?: string | null | PromiseLike<string | null>;
+    /**
+     * The sales channel the order sells from (MARKETS-DESIGN D6): its
+     * publications and its locations' stock; absent: the online store.
+     * Every input of one batch sells from the same channel.
+     */
+    salesChannelId?: string;
 }
 
 export interface StorefrontCheckoutSettingsAuthority {
@@ -206,6 +213,10 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
         );
     }
 
+    const salesChannelId = inputs[0]!.salesChannelId ?? ONLINE_STORE_CHANNEL_ID;
+    if (inputs.some((input) => (input.salesChannelId ?? ONLINE_STORE_CHANNEL_ID) !== salesChannelId)) {
+        throw new Error("Checkout authority batch inputs must sell from one sales channel.");
+    }
     const allItems = inputs.flatMap((input) => input.items);
     const productIds = uniqueNonEmpty(allItems.map((item) => item.productId));
     const variantIds = uniqueNonEmpty(allItems.map((item) => item.variantId));
@@ -229,8 +240,8 @@ export function createStorefrontCheckoutAuthorityBatchReadPlan(
     const statements = [
         selectSettingsDocuments(db, CHECKOUT_SETTINGS_DOCUMENTS),
         selectSettingsDocuments(db, [checkoutDocument]),
-        selectStorefrontCartProductRows(db, productIds),
-        selectStorefrontCartVariantRows(db, productIds, variantIds),
+        selectStorefrontCartProductRows(db, productIds, salesChannelId),
+        selectStorefrontCartVariantRows(db, productIds, variantIds, salesChannelId),
         selectCheckoutProductMediaProjectionRows(db, productIds, variantIds),
         selectActiveDeliveryLocationRowsByIds(db, locationIds),
         selectDeliveryRateRowsByIds(db, shippingMethodIds, destinationCountries),

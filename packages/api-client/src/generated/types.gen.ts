@@ -2351,6 +2351,36 @@ export type Market = {
     updatedAt: string;
 };
 
+export type SalesChannel = {
+    id: string;
+    handle: string;
+    /**
+     * The English name; the dashboard shows built-in channels in the staff member's language.
+     */
+    name: string;
+    /**
+     * `online_store` (the storefront), `catalog_feed` (Google, Meta), `agent` (AI agents: UCP and agent checkout), `pos`, or `app` (a sales-channel app).
+     */
+    kind: 'online_store' | 'pos' | 'catalog_feed' | 'agent' | 'app';
+    /**
+     * The app that declares an `app` channel.
+     */
+    pluginId: string | null;
+    /**
+     * An inactive channel shows nothing: its feed is empty and its checkout refuses orders. The online store is always active; an app's channel follows the app.
+     */
+    status: 'active' | 'inactive';
+    position: number;
+    /**
+     * The inventory locations whose on-hand the channel sells. Every channel sells every location until a merchant unlinks one.
+     */
+    locationIds: Array<string>;
+    /**
+     * Products published to it (trashed ones included).
+     */
+    publishedProducts: number;
+};
+
 export type StoreLanguage = {
     /**
      * ISO 639-1 language code.
@@ -13500,6 +13530,10 @@ export type GetApiV1ProductsFeedData = {
          * Comma-separated product IDs, product handles, variant IDs, or SKUs
          */
         ids?: string;
+        /**
+         * The sales channel the feed serves: `sc_google` (default, /api/product-feed.xml), `sc_meta` (/api/facebook-feed.xml) or `sc_agents` (the UCP catalogue). A product needs publishing to it and to the online store; an inactive channel lists nothing.
+         */
+        channel?: 'sc_google' | 'sc_meta' | 'sc_agents';
     };
     url: '/api/v1/products/feed';
 };
@@ -13543,7 +13577,6 @@ export type GetApiV1ProductsFeedResponses = {
                 discountedPrice: number;
                 freeDelivery: boolean;
                 categoryId: string | null;
-                excludeFromProductFeed: boolean;
                 requiresCustomization: boolean;
                 productCondition: 'new' | 'refurbished' | 'used' | null;
                 hasVariants: boolean;
@@ -34288,6 +34321,10 @@ export type GetApiV1AdminSettingsSeoFeedDiagnosticsData = {
     query?: {
         scanLimit?: number;
         sampleLimit?: number;
+        /**
+         * The catalogue channel to diagnose: `sc_google` (default), `sc_meta` or `sc_agents`.
+         */
+        channel?: 'sc_google' | 'sc_meta' | 'sc_agents';
     };
     url: '/api/v1/admin/settings/seo/feed-diagnostics';
 };
@@ -37400,6 +37437,232 @@ export type PatchApiV1AdminSettingsMarketsByIdResponses = {
 };
 
 export type PatchApiV1AdminSettingsMarketsByIdResponse = PatchApiV1AdminSettingsMarketsByIdResponses[keyof PatchApiV1AdminSettingsMarketsByIdResponses];
+
+export type GetApiV1AdminSettingsSalesChannelsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/settings/sales-channels';
+};
+
+export type GetApiV1AdminSettingsSalesChannelsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminSettingsSalesChannelsError = GetApiV1AdminSettingsSalesChannelsErrors[keyof GetApiV1AdminSettingsSalesChannelsErrors];
+
+export type GetApiV1AdminSettingsSalesChannelsResponses = {
+    /**
+     * Sales channels
+     */
+    200: {
+        success: true;
+        data: {
+            items: Array<SalesChannel>;
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsSalesChannelsResponse = GetApiV1AdminSettingsSalesChannelsResponses[keyof GetApiV1AdminSettingsSalesChannelsResponses];
+
+export type GetApiV1AdminSettingsSalesChannelsByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/settings/sales-channels/{id}';
+};
+
+export type GetApiV1AdminSettingsSalesChannelsByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminSettingsSalesChannelsByIdError = GetApiV1AdminSettingsSalesChannelsByIdErrors[keyof GetApiV1AdminSettingsSalesChannelsByIdErrors];
+
+export type GetApiV1AdminSettingsSalesChannelsByIdResponses = {
+    /**
+     * The channel
+     */
+    200: {
+        success: true;
+        data: {
+            channel: SalesChannel;
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsSalesChannelsByIdResponse = GetApiV1AdminSettingsSalesChannelsByIdResponses[keyof GetApiV1AdminSettingsSalesChannelsByIdResponses];
+
+export type PatchApiV1AdminSettingsSalesChannelsByIdData = {
+    body: {
+        /**
+         * Switch the channel on or off. The online store is always on; an app's channel follows the app (turn the app off in Apps).
+         */
+        status?: 'active' | 'inactive';
+        /**
+         * Every location whose on-hand the channel sells: at least one active location. Its availability becomes the stock there, less every reservation.
+         */
+        locationIds?: Array<string>;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/settings/sales-channels/{id}';
+};
+
+export type PatchApiV1AdminSettingsSalesChannelsByIdErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Conflict
+     */
+    409: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PatchApiV1AdminSettingsSalesChannelsByIdError = PatchApiV1AdminSettingsSalesChannelsByIdErrors[keyof PatchApiV1AdminSettingsSalesChannelsByIdErrors];
+
+export type PatchApiV1AdminSettingsSalesChannelsByIdResponses = {
+    /**
+     * The saved channel
+     */
+    200: {
+        success: true;
+        data: {
+            channel: SalesChannel;
+        };
+    };
+};
+
+export type PatchApiV1AdminSettingsSalesChannelsByIdResponse = PatchApiV1AdminSettingsSalesChannelsByIdResponses[keyof PatchApiV1AdminSettingsSalesChannelsByIdResponses];
+
+export type GetApiV1AdminSettingsSalesChannelsByIdProductsData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: {
+        /**
+         * The last product id of the previous page.
+         */
+        after?: string;
+        limit?: number;
+    };
+    url: '/api/v1/admin/settings/sales-channels/{id}/products';
+};
+
+export type GetApiV1AdminSettingsSalesChannelsByIdProductsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type GetApiV1AdminSettingsSalesChannelsByIdProductsError = GetApiV1AdminSettingsSalesChannelsByIdProductsErrors[keyof GetApiV1AdminSettingsSalesChannelsByIdProductsErrors];
+
+export type GetApiV1AdminSettingsSalesChannelsByIdProductsResponses = {
+    /**
+     * A page of product ids
+     */
+    200: {
+        success: true;
+        data: {
+            productIds: Array<string>;
+            nextAfter: string | null;
+        };
+    };
+};
+
+export type GetApiV1AdminSettingsSalesChannelsByIdProductsResponse = GetApiV1AdminSettingsSalesChannelsByIdProductsResponses[keyof GetApiV1AdminSettingsSalesChannelsByIdProductsResponses];
 
 export type GetApiV1AdminSettingsLanguagesData = {
     body?: never;
@@ -42192,6 +42455,10 @@ export type GetApiV1AdminOrdersCatalogProductsResponses = {
                 primaryImage: string | null;
                 sku?: string;
                 /**
+                 * The sales channels the product is published to.
+                 */
+                salesChannelIds: Array<string>;
+                /**
                  * Units buyers can still order across active SKUs; null when a SKU has no stock limit.
                  */
                 availableStock: number | null;
@@ -42482,6 +42749,10 @@ export type GetApiV1AdminOrdersResponses = {
                  * Where it came in within the channel, as a lowercase slug: facebook, instagram, whatsapp, phone, walk_in, the merchant's own label, or an app id.
                  */
                 channelSource: string | null;
+                /**
+                 * The sales channel the order sold from (MARKETS-DESIGN D6): sc_online_store, sc_agents, or a channel staff picked.
+                 */
+                salesChannelId: string;
                 openRequestType: 'cancel_pre_shipment' | 'return' | 'refund' | null;
                 /**
                  * An app's hold for staff review is open: the order is not shipped or moved on until staff release it.
@@ -42595,6 +42866,7 @@ export type PostApiV1AdminOrdersData = {
          * Where the order came in: facebook, instagram, whatsapp, phone, walk_in, or free text (stored as a lowercase slug of at most 64 characters).
          */
         channelSource?: string | null;
+        salesChannelId?: string | null;
     };
     headers?: {
         /**
@@ -42921,6 +43193,10 @@ export type GetApiV1AdminOrdersPaymentRecoveryResponses = {
                  * Where it came in within the channel, as a lowercase slug: facebook, instagram, whatsapp, phone, walk_in, the merchant's own label, or an app id.
                  */
                 channelSource: string | null;
+                /**
+                 * The sales channel the order sold from (MARKETS-DESIGN D6): sc_online_store, sc_agents, or a channel staff picked.
+                 */
+                salesChannelId: string;
                 openRequestType: 'cancel_pre_shipment' | 'return' | 'refund' | null;
                 /**
                  * An app's hold for staff review is open: the order is not shipped or moved on until staff release it.
@@ -44186,6 +44462,10 @@ export type GetApiV1AdminOrdersByIdResponses = {
              * Where it came in within the channel, as a lowercase slug: facebook, instagram, whatsapp, phone, walk_in, the merchant's own label, or an app id.
              */
             channelSource: string | null;
+            /**
+             * The sales channel the order sold from (MARKETS-DESIGN D6): sc_online_store, sc_agents, or a channel staff picked.
+             */
+            salesChannelId: string;
             openRequestType: 'cancel_pre_shipment' | 'return' | 'refund' | null;
             /**
              * An app's hold for staff review is open: the order is not shipped or moved on until staff release it.
@@ -46428,6 +46708,14 @@ export type GetApiV1AdminProductsData = {
          */
         status?: 'active' | 'draft';
         /**
+         * Only products published to this sales channel (or, with salesChannelState=unpublished, not published to it).
+         */
+        salesChannel?: string;
+        /**
+         * With salesChannel: published (default) or unpublished products.
+         */
+        salesChannelState?: 'published' | 'unpublished';
+        /**
          * Compact lists omit rich descriptions
          */
         view?: 'full' | 'compact';
@@ -46529,6 +46817,10 @@ export type GetApiV1AdminProductsResponses = {
                 mediaCount: number;
                 primaryImage: string | null;
                 sku?: string;
+                /**
+                 * The sales channels the product is published to.
+                 */
+                salesChannelIds: Array<string>;
             }>;
             pagination: {
                 /**
@@ -46591,7 +46883,6 @@ export type PostApiV1AdminProductsData = {
         canonicalPath?: string | null;
         noIndex?: boolean;
         excludeFromSitemap?: boolean;
-        excludeFromProductFeed?: boolean;
         productCondition: 'new' | 'refurbished' | 'used';
         /**
          * Omit to derive the web address from the name; a taken one gets a -2, -3… suffix.
@@ -46725,6 +47016,10 @@ export type PostApiV1AdminProductsData = {
              */
             cost?: number | null;
         };
+        /**
+         * The sales channels to publish the new product to. Omit to publish it to every channel.
+         */
+        salesChannelIds?: Array<string>;
     };
     path?: never;
     query?: never;
@@ -47106,6 +47401,118 @@ export type PostApiV1AdminProductsBulkUpdateResponses = {
 
 export type PostApiV1AdminProductsBulkUpdateResponse = PostApiV1AdminProductsBulkUpdateResponses[keyof PostApiV1AdminProductsBulkUpdateResponses];
 
+export type PostApiV1AdminProductsPublicationsData = {
+    body: {
+        action: 'publish' | 'unpublish';
+        productIds: Array<string>;
+        channelIds: Array<string>;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/admin/products/publications';
+};
+
+export type PostApiV1AdminProductsPublicationsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PostApiV1AdminProductsPublicationsError = PostApiV1AdminProductsPublicationsErrors[keyof PostApiV1AdminProductsPublicationsErrors];
+
+export type PostApiV1AdminProductsPublicationsResponses = {
+    /**
+     * The products and channels written
+     */
+    200: {
+        success: true;
+        data: {
+            productIds: Array<string>;
+            channelIds: Array<string>;
+        };
+    };
+};
+
+export type PostApiV1AdminProductsPublicationsResponse = PostApiV1AdminProductsPublicationsResponses[keyof PostApiV1AdminProductsPublicationsResponses];
+
+export type PutApiV1AdminProductsByIdPublicationsData = {
+    body: {
+        /**
+         * Every channel the product is published to; the others unpublish it. An empty list takes it off every channel.
+         */
+        channelIds: Array<string>;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/admin/products/{id}/publications';
+};
+
+export type PutApiV1AdminProductsByIdPublicationsErrors = {
+    /**
+     * Validation error
+     */
+    400: ErrorResponse;
+    /**
+     * Unauthorized
+     */
+    401: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Not found
+     */
+    404: ErrorResponse;
+    /**
+     * Rate limit exceeded
+     */
+    429: ErrorResponse;
+    /**
+     * Server error
+     */
+    500: ErrorResponse;
+};
+
+export type PutApiV1AdminProductsByIdPublicationsError = PutApiV1AdminProductsByIdPublicationsErrors[keyof PutApiV1AdminProductsByIdPublicationsErrors];
+
+export type PutApiV1AdminProductsByIdPublicationsResponses = {
+    /**
+     * The channels the product is published to
+     */
+    200: {
+        success: true;
+        data: {
+            salesChannelIds: Array<string>;
+        };
+    };
+};
+
+export type PutApiV1AdminProductsByIdPublicationsResponse = PutApiV1AdminProductsByIdPublicationsResponses[keyof PutApiV1AdminProductsByIdPublicationsResponses];
+
 export type PostApiV1AdminProductsByIdDuplicateData = {
     body: {
         /**
@@ -47232,7 +47639,10 @@ export type GetApiV1AdminProductsByIdSectionsBySectionResponses = {
                 canonicalPath: string | null;
                 noIndex: boolean;
                 excludeFromSitemap: boolean;
-                excludeFromProductFeed: boolean;
+                /**
+                 * The sales channels the product is published to (read-only here: dashboard.products.publications_set).
+                 */
+                salesChannelIds: Array<string>;
                 productCondition: 'new' | 'refurbished' | 'used' | null;
                 isActive: boolean;
                 discountType: 'percentage' | 'flat' | null;
@@ -47452,7 +47862,6 @@ export type PatchApiV1AdminProductsByIdSectionsBySectionData = {
             canonicalPath?: string | null;
             noIndex?: boolean;
             excludeFromSitemap?: boolean;
-            excludeFromProductFeed?: boolean;
             productCondition?: 'new' | 'refurbished' | 'used' | null;
             slug?: string;
             emiEligible?: boolean;
@@ -47686,7 +48095,10 @@ export type GetApiV1AdminProductsByIdResponses = {
             isActive: boolean;
             noIndex: boolean;
             excludeFromSitemap: boolean;
-            excludeFromProductFeed: boolean;
+            /**
+             * The sales channels the product is published to (MARKETS-DESIGN D6); change them with dashboard.products.publications_set.
+             */
+            salesChannelIds: Array<string>;
             productCondition: 'new' | 'refurbished' | 'used' | null;
             options: Array<{
                 id: string;
@@ -47835,7 +48247,6 @@ export type PutApiV1AdminProductsByIdData = {
         canonicalPath?: string | null;
         noIndex?: boolean;
         excludeFromSitemap?: boolean;
-        excludeFromProductFeed?: boolean;
         productCondition: 'new' | 'refurbished' | 'used' | null;
         slug: string;
         media: Array<{
@@ -54034,7 +54445,7 @@ export type PostApiV1AdminWebhooksData = {
          * HTTPS endpoint on a public host. Private, loopback, link-local and reserved addresses are refused.
          */
         url: string;
-        topics: Array<'*' | 'order.*' | 'return.*' | 'product.*' | 'inventory.*' | 'customer.*' | 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'inventory.level_changed' | 'inventory.purchase_order_updated' | 'inventory.transfer_updated' | 'customer.created' | 'customer.updated' | 'customer.consent_changed'>;
+        topics: Array<'*' | 'order.*' | 'return.*' | 'product.*' | 'inventory.*' | 'customer.*' | 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'product.publication_changed' | 'inventory.level_changed' | 'inventory.purchase_order_updated' | 'inventory.transfer_updated' | 'customer.created' | 'customer.updated' | 'customer.consent_changed'>;
         description?: string | null;
     };
     path?: never;
@@ -54186,7 +54597,7 @@ export type PatchApiV1AdminWebhooksByIdData = {
          * HTTPS endpoint on a public host. Private, loopback, link-local and reserved addresses are refused.
          */
         url?: string;
-        topics?: Array<'*' | 'order.*' | 'return.*' | 'product.*' | 'inventory.*' | 'customer.*' | 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'inventory.level_changed' | 'inventory.purchase_order_updated' | 'inventory.transfer_updated' | 'customer.created' | 'customer.updated' | 'customer.consent_changed'>;
+        topics?: Array<'*' | 'order.*' | 'return.*' | 'product.*' | 'inventory.*' | 'customer.*' | 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'product.publication_changed' | 'inventory.level_changed' | 'inventory.purchase_order_updated' | 'inventory.transfer_updated' | 'customer.created' | 'customer.updated' | 'customer.consent_changed'>;
         description?: string | null;
         status?: 'active' | 'disabled';
     };
@@ -54456,7 +54867,7 @@ export type GetApiV1AdminEventsData = {
     body?: never;
     path?: never;
     query?: {
-        topic?: 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'inventory.level_changed' | 'inventory.purchase_order_updated' | 'inventory.transfer_updated' | 'customer.created' | 'customer.updated' | 'customer.consent_changed';
+        topic?: 'order.created' | 'order.updated' | 'order.paid' | 'order.cancelled' | 'order.fulfilled' | 'order.refunded' | 'return.updated' | 'product.created' | 'product.updated' | 'product.deleted' | 'product.publication_changed' | 'inventory.level_changed' | 'inventory.purchase_order_updated' | 'inventory.transfer_updated' | 'customer.created' | 'customer.updated' | 'customer.consent_changed';
         resourceType?: 'order' | 'return' | 'product' | 'variant' | 'customer' | 'purchase_order' | 'inventory_transfer';
         resourceId?: string;
         /**

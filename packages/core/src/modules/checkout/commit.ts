@@ -23,6 +23,7 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { storedPhone } from "@scalius/shared/customer-auth-policy";
 import type { OrderChannel } from "@scalius/shared/order-channel";
+import { defaultOrderSalesChannelId, ONLINE_STORE_CHANNEL_ID } from "@scalius/shared/sales-channels";
 import { orderMoneyChainColumns } from "@scalius/shared/money-chain";
 import { ConflictError, ServiceUnavailableError, ValidationError } from "../../errors";
 import {
@@ -281,6 +282,7 @@ async function prepareOrderInventory(
     payload: StorefrontOrderCommitPayload,
     freshOrder = false,
     variantStates?: readonly ReservationVariantState[],
+    salesChannelId: string = ONLINE_STORE_CHANNEL_ID,
 ): Promise<PreparedStockReservationBatch> {
     const entries = getReservationEntries(payload);
     const result = await prepareStockReservationBatch(
@@ -297,6 +299,8 @@ async function prepareOrderInventory(
                 ? new Set([payload.orderData.id])
                 : undefined,
             variantStates,
+            // Units at the locations the order's channel sells from (MARKETS-DESIGN D6).
+            salesChannelId,
         },
     );
 
@@ -453,6 +457,9 @@ function buildOrderWriteBatch(
             // Set once here; the orders trigger keeps it immutable.
             channel,
             channelSource: null,
+            // The channel whose publications the order sold from (MARKETS-DESIGN
+            // D6), an SQL literal like the channel: no bound value.
+            salesChannelId: sql.raw(`'${defaultOrderSalesChannelId(channel)}'`),
             // The market of the shipping country, else the backup market, read
             // inside this insert (MARKETS-DESIGN D4); the authority fence covers
             // a market change between the quote and this commit.
@@ -839,6 +846,9 @@ export async function commitStorefrontOrderPayload(
               AND ${checkoutAuthority.revision} = ${payload.checkoutAuthorityRevision}
         )`, CHECKOUT_AUTHORITY_CHANGED);
 
+        // A buyer agent's checkout carries its storefront context; every other
+        // commit is the storefront's own checkout (COMMERCE-HOOKS H2).
+        const orderChannel = checkoutCommit?.agentContext ? "agent" : "online_store";
         const [customer, inventoryPlan] = await Promise.all([
             resolveCustomerForOrder(db, payload, reads),
             prepareOrderInventory(
@@ -846,6 +856,7 @@ export async function commitStorefrontOrderPayload(
                 payload,
                 checkoutCommit?.attempt.origin === "new",
                 reads?.variantStates,
+                defaultOrderSalesChannelId(orderChannel),
             ),
         ]);
         reads = undefined;
@@ -867,14 +878,12 @@ export async function commitStorefrontOrderPayload(
         const agentContextPlan = checkoutCommit?.agentContext
             ? prepareAgentStorefrontCheckoutCommit(db, payload, checkoutCommit.agentContext)
             : null;
-        // A buyer agent's checkout carries its storefront context; every other
-        // commit is the storefront's own checkout (COMMERCE-HOOKS H2).
         const orderWrites = buildOrderWriteBatch(
             db,
             payload,
             customer,
             appliedPromotion,
-            checkoutCommit?.agentContext ? "agent" : "online_store",
+            orderChannel,
         );
         const writesBeforeInventory: SQLiteBatchItem[] = [
             authorityGuard,

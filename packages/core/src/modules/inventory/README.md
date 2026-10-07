@@ -21,7 +21,7 @@ The `inventory` domain owns SKU stock: reservations, deductions, releases and re
 | `suppliers`, `purchase_orders`, `purchase_order_lines`, `purchase_order_receipt_lines`, `inventory_transfers`, `inventory_transfer_lines`, `inventory_transfer_movements` | Purchasing and transfers between locations (migration 0109). |
 
 - Settings document `inventory` (`inventorySettingsDocument`, field `defaultLowStockThreshold`) is declared in `products/low-stock-policy.ts`, because buyer availability bands read it. `deps.inventoryBands()` depends on it.
-- DVC: the ledger, level, location, purchasing and transfer tables register no dependency of their own (`packages/shared/src/cache-deps.ts`). Their buyer-visible effect is the SKU availability band, which `product_variants` and `product_buyer_state` register. A write that keeps a SKU in its band advances no dependency.
+- DVC: the ledger, location, purchasing and transfer tables register no dependency of their own (`packages/shared/src/cache-deps.ts`). Their buyer-visible effect is the SKU availability band, which `product_variants` and `product_buyer_state` register. A write that keeps a SKU in its band advances no dependency. Exception: a level at a location that some sales channel does not sell advances its SKU's product, because that channel's sellable stock subtracts it (0122).
 - Events (emitted by triggers): `inventory.level_changed` (each movement with a non-zero `stock_delta`), `inventory.purchase_order_updated` and `inventory.transfer_updated` (one per revision).
 - A product with SKU movements, purchase-order lines or transfer lines keeps its history: the permanent delete is blocked.
 
@@ -75,6 +75,8 @@ Types: `reserved`, `preorder_reserved`, `released`, `deducted`, `preorder_deduct
 - Manual adjustments, stocktakes and scanner writes take an optional `locationId` (default when omitted), which is part of the operation request hash. A stocktake counts that location.
 - Product-editor stock edits and licence-key pools move stock at the default location. `assertSimpleConversionStockAtDefaultLocation()` (`product-admin`) blocks turning a simple product into an optioned one while its SKU holds units elsewhere.
 - Archive a location only when it is not the default, holds no units, has no open order set to ship from it, and has no open purchase order or transfer.
+- A new location without a country takes the store's (the backup market's). Migration 0122 gave the untouched default location the store's country.
+- Sales channels sell the on-hand of their linked locations (`sales_channel_locations`, MARKETS-DESIGN D6). A new location is linked to every channel. A regular reservation with `salesChannelId` (checkout) also needs `stock - reserved_stock` minus the SKU's levels at the channel's unlinked locations to cover the quantity; reservations themselves stay location-free.
 
 ## Adjustments
 

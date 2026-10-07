@@ -41,7 +41,7 @@ function productBaseMatches(command, current) {
   const scalarFields = [
     "slug", "name", "description", "price", "categoryId", "isActive",
     "freeDelivery", "metaTitle", "metaDescription",
-    "canonicalPath", "noIndex", "excludeFromSitemap", "excludeFromProductFeed", "productCondition",
+    "canonicalPath", "noIndex", "excludeFromSitemap", "productCondition",
   ];
   if (!equalFields(current, command.body, scalarFields)) return false;
   if (!discountMatches(current, command.body)) return false;

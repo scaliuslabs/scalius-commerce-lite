@@ -719,7 +719,6 @@ describe("agent workflow catalog", () => {
         "canonicalPath",
         "noIndex",
         "excludeFromSitemap",
-        "excludeFromProductFeed",
         "productCondition",
       ]),
     })]);

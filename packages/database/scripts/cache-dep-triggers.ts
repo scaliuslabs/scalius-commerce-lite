@@ -73,6 +73,11 @@ export const CACHE_DEP_LATER_TABLES: Readonly<Record<string, string>> = {
   store_languages: "0121_translations",
   translations: "0121_translations",
   localized_slugs: "0121_translations",
+  sales_channels: "0122_sales_channels",
+  product_channel_publications: "0122_sales_channels",
+  sales_channel_locations: "0122_sales_channels",
+  // A channel's sellable stock reads the levels at its unlinked locations.
+  inventory_levels: "0122_sales_channels",
 };
 /**
  * Triggers added after their table's migration, by trigger name: the table's
@@ -103,9 +108,32 @@ export const CACHE_DEP_LATER_TRIGGERS: Readonly<Record<string, string>> = {
   cdep_market_presences_locales_ins: "0121_translations",
   cdep_market_presences_locales_del: "0121_translations",
   cdep_market_presences_locales_upd: "0121_translations",
+  // Sales channels (0122) drop products.exclude_from_product_feed (the feed
+  // channels' publications replace it): the triggers that name it are
+  // reinstalled without it. A channel's sellable stock reads its linked
+  // locations, so raw stock moves a SKU's keys once a location is unlinked.
+  cdep_products_upd: "0122_sales_channels",
+  cdep_products_seo: "0122_sales_channels",
+  cdep_product_variants_chstock: "0122_sales_channels",
+  cdep_product_variants_chstock_old: "0122_sales_channels",
+  // The price filter reads the product discount live (`lo:price`).
+  cdep_products_price_order: "0122_sales_channels",
+  cdep_products_price_order_old: "0122_sales_channels",
   // A market's currency (0123) is a visible column of its row.
   cdep_markets_upd: "0123_market_currencies",
 };
+
+/**
+ * Rules added to a baseline table after deployed 0100 (not reinstalled ones):
+ * 0100 never had them, so its render leaves them out; the migration named in
+ * `CACHE_DEP_LATER_TRIGGERS` installs them.
+ */
+export const CACHE_DEP_ADDED_BASELINE_TRIGGERS: ReadonlySet<string> = new Set([
+  "cdep_product_variants_chstock",
+  "cdep_product_variants_chstock_old",
+  "cdep_products_price_order",
+  "cdep_products_price_order_old",
+]);
 
 /**
  * Baseline tables whose columns changed after deployed 0100, with the
@@ -113,7 +141,23 @@ export const CACHE_DEP_LATER_TRIGGERS: Readonly<Record<string, string>> = {
  * and the migration that changed the columns reinstalls the triggers that
  * name them (`CACHE_DEP_LATER_TRIGGERS`).
  */
+/**
+ * Update rules whose `changed` list deployed 0100 rendered with a column a
+ * later migration dropped (`<table>:<rule name>`): 0100 renders this list,
+ * every later render the registry's.
+ */
+export const CACHE_DEP_BASELINE_CHANGED: Readonly<Record<string, readonly string[]>> = {
+  "products:seo": ["no_index", "exclude_from_sitemap", "exclude_from_product_feed"],
+};
+
 export const CACHE_DEP_BASELINE_COLUMNS: Readonly<Record<string, readonly string[]>> = {
+  products: [
+    "id", "name", "description", "price_minor", "category_id", "slug", "meta_title", "meta_description",
+    "canonical_path", "no_index", "exclude_from_sitemap", "exclude_from_product_feed", "product_condition",
+    "aggregate_revision", "created_at", "updated_at", "deleted_at", "is_active", "discount_bps", "discount_type",
+    "discount_amount_minor", "free_delivery", "tax_class_id", "tax_classification_version", "is_gift_card",
+    "customization_schema", "brand_id", "page_template", "emi_eligible", "warranty_policy_id",
+  ],
   tax_rates: [
     "id", "tax_class_id", "name", "rate_bps", "jurisdiction_type", "jurisdiction_id", "jurisdiction_label",
     "priority", "is_compound", "is_active", "version", "created_at", "updated_at", "deleted_at",
@@ -325,7 +369,9 @@ function changedColumns(table: string, spec: CacheDepTableSpec, rule: CacheDepRu
   if (rule.changed === undefined) return [];
   const columns = rule.changed === "visible"
     ? columnsOf(table).filter((column) => !spec.noise.includes(column))
-    : [...rule.changed];
+    : renderingBaseline && CACHE_DEP_BASELINE_CHANGED[`${table}:${rule.name}`]
+      ? [...CACHE_DEP_BASELINE_CHANGED[`${table}:${rule.name}`]!]
+      : [...rule.changed];
   for (const column of columns) assertColumn(table, column);
   return columns;
 }
@@ -633,7 +679,8 @@ function sourceSha256(statements: readonly string[]): string {
 
 /** Both migration files, byte for byte. */
 export function renderCacheDepMigration(): { sqlite: string; postgres: string } {
-  const baseline = generatedBaseline.filter((trigger) => isBaselineTable(trigger.table));
+  const baseline = generatedBaseline.filter((trigger) =>
+    isBaselineTable(trigger.table) && !CACHE_DEP_ADDED_BASELINE_TRIGGERS.has(trigger.name));
   const sqliteBody = [...TABLES_SQLITE, ...CLOCK_TRIGGERS_SQLITE, ...baseline.map((trigger) => trigger.sqlite)];
   const sqliteStatements = sqliteBody.map((statement, index) => `${index === 0 ? `${HEADER}\n` : ""}${statement};`);
   const sha = sourceSha256(sqliteStatements);

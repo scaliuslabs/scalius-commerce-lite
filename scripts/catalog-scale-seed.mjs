@@ -193,7 +193,9 @@ const insCategory = insert(`INSERT INTO categories (id, name, slug, description,
 const insAttribute = insert(`INSERT INTO product_attributes (id, name, slug, filterable, options, created_at, updated_at, key_spec) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
 const insBrand = insert(`INSERT INTO brands (id, name, slug, status, sort_order, created_at, updated_at) VALUES (?, ?, ?, 'published', ?, ?, ?)`);
 const insMedia = insert(`INSERT INTO media (id, filename, kind, object_key, size, mime_type, alt_text, width, height, variant_width, status, created_at, updated_at) VALUES (?, ?, 'image', ?, ?, 'image/webp', ?, 1600, 1600, 1600, 'ready', ?, ?)`);
-const insProduct = insert(`INSERT INTO products (id, name, description, price_minor, category_id, slug, meta_title, meta_description, no_index, exclude_from_sitemap, exclude_from_product_feed, product_condition, is_active, discount_bps, discount_type, discount_amount_minor, free_delivery, created_at, updated_at, deleted_at, brand_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'percentage', 0, ?, ?, ?, ?, ?)`);
+const insProduct = insert(`INSERT INTO products (id, name, description, price_minor, category_id, slug, meta_title, meta_description, no_index, exclude_from_sitemap, product_condition, is_active, discount_bps, discount_type, discount_amount_minor, free_delivery, created_at, updated_at, deleted_at, brand_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'percentage', 0, ?, ?, ?, ?, ?)`);
+// A product inserted is published to every sales channel (0122); some leave the feeds and AI agents.
+const unpublishFromFeeds = insert(`UPDATE product_channel_publications SET unpublished_at = unixepoch() WHERE product_id = ? AND channel_id <> 'sc_online_store'`);
 const insProductMedia = insert(`INSERT INTO product_media (id, product_id, media_id, alt_text, is_primary, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
 const insOptionDef = insert(`INSERT INTO product_option_definitions (id, product_id, name, normalized_name, position, standard_mapping, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
 const insOptionValue = insert(`INSERT INTO product_option_values (id, option_definition_id, value, normalized_value, position, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`);
@@ -333,10 +335,16 @@ function seedProduct(index) {
 
   const variantPrices = combos.map((_, comboIndex) => basePrice + comboIndex * Math.round(basePrice * 0.05 / 100) * 100);
   const priceMinor = (optioned ? Math.min(...variantPrices) : basePrice) * 100;
+  // Drawn in the order the seed always drew them, so the catalogue stays the same.
+  const metaTitle = chance(0.3) ? `${name} Price in BD` : null;
+  const noIndex = chance(0.01) ? 1 : 0;
+  const excludeFromSitemap = chance(0.01) ? 1 : 0;
+  const offFeeds = chance(0.02);
+  const condition = chance(0.9) ? "new" : chance(0.5) ? "refurbished" : null;
   insProduct.run(id, name, description, priceMinor, category.id, `${slugify(name).slice(0, 80)}-${index}`,
-    chance(0.3) ? `${name} Price in BD` : null, `Buy ${name} at the best price in Bangladesh.`,
-    chance(0.01) ? 1 : 0, chance(0.01) ? 1 : 0, chance(0.02) ? 1 : 0, chance(0.9) ? "new" : chance(0.5) ? "refurbished" : null,
+    metaTitle, `Buy ${name} at the best price in Bangladesh.`, noIndex, excludeFromSitemap, condition,
     isActive, optioned ? 0 : discountBps, chance(0.05) ? 1 : 0, createdAt, updatedAt, deletedAt, brandIds.get(brand));
+  if (offFeeds) unpublishFromFeeds.run(id);
   productRows.push({ id, name, optioned, deletedAt, isActive });
 
   // Media: 1-4 ready images, first is primary.

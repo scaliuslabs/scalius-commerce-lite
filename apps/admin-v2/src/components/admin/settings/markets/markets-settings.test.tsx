@@ -16,6 +16,7 @@ const sdk = vi.hoisted(() => ({
   patchApiV1AdminSettingsMarketsById: vi.fn(),
   postApiV1AdminSettingsMarkets: vi.fn(),
   deleteApiV1AdminSettingsMarketsById: vi.fn(),
+  getApiV1AdminSettingsMarketsCurrencies: vi.fn(),
 }));
 const navigate = vi.hoisted(() => vi.fn());
 vi.mock("@scalius/api-client/sdk", () => sdk);
@@ -137,6 +138,8 @@ describe("markets settings", () => {
     container = document.createElement("div");
     document.body.append(container);
     root = createRoot(container);
+    // A one-currency store: only cash on delivery, which charges no other currency.
+    sdk.getApiV1AdminSettingsMarketsCurrencies.mockImplementation(() => envelope({ shopCurrencyCode: "BDT", chargeable: ["BDT"], marketCurrencies: [] }));
     sdk.getApiV1AdminSettingsMarkets.mockImplementation(() => envelope({ items: [backup, { ...india, presence: { value: "en-in", locale: "en" } }] }));
     sdk.getApiV1AdminSettingsMarketsById.mockImplementation(({ path: { id } }: { path: { id: string } }) =>
       envelope({ market: id === "mkt_backup" ? backup : india }));
@@ -219,11 +222,22 @@ describe("markets settings", () => {
     expect(sdk.patchApiV1AdminSettingsMarketsById.mock.calls[0]![0].body).toMatchObject({ pricesIncludeTax: false });
   });
 
+  it("offers the currencies a payment method charges, and asks for a rate only for another one", async () => {
+    sdk.getApiV1AdminSettingsMarketsCurrencies.mockImplementation(() => envelope({ shopCurrencyCode: "BDT", chargeable: "any", marketCurrencies: [] }));
+    await render(<MarketEditor marketId="mkt_in" />);
+    await vi.waitFor(() => expect(container.querySelector("#market-currency")).not.toBeNull());
+    expect(container.textContent).toContain("Most stores keep BDT.");
+    expect(container.textContent).not.toContain("Exchange rate");
+  });
+
   it("gives another market a subfolder and says it uses the backup market's increment", async () => {
     await render(<MarketEditor marketId="mkt_in" />);
     await vi.waitFor(() => expect(container.textContent).toContain("Sell at a subfolder"));
     expect(container.textContent).toContain("This market uses the backup market's price increment: whole amounts.");
-    expect(container.textContent).toContain("Bangladeshi Taka (BDT): the shop currency");
+    // A store that can charge only its own currency sees no currency choice, just how to get one.
+    await vi.waitFor(() => expect(container.textContent).toContain("This market sells in BDT, like the rest of your store."));
+    expect(container.querySelector("#market-currency")).toBeNull();
+    expect(container.textContent).not.toContain("Exchange rate");
     expect(container.textContent).toContain("Delete market");
 
     // Off, the switch says what it gives; it makes no claim about orders.

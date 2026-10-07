@@ -19,7 +19,7 @@ import { OrderMobileCard } from "./OrderMobileCard";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-vi.mock("~/hooks/use-currency", () => ({ useCurrency: () => ({ fmt: (n: number) => `৳${n}`, fmtIn: (n: number) => `৳${n}` }) }));
+vi.mock("~/hooks/use-currency", () => ({ useCurrency: () => ({ fmt: (n: number) => `৳${n}` }) }));
 
 const order = (overrides: Partial<OrderListItem>) => ({
   id: "o-1",

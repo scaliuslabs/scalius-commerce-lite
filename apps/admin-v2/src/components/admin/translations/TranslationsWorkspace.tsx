@@ -196,7 +196,7 @@ export function TranslationsWorkspace({ search: rawSearch }: { search: Record<st
                       type="button"
                       aria-current={item.id === selected ? "true" : undefined}
                       className={cn(
-                        "flex min-h-12 w-full items-center gap-2 px-3 py-2 text-left hover:bg-accent",
+                        "flex min-h-12 w-full items-center gap-2 px-3 py-2 text-start hover:bg-accent",
                         item.id === selected && "bg-accent",
                       )}
                       onClick={() => update({ id: item.id })}

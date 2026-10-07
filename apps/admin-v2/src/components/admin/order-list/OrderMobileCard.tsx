@@ -5,7 +5,7 @@ import { formatPhoneForDisplay } from "@scalius/shared/phone-input";
 import { cn } from "@scalius/shared/utils";
 import { Checkbox } from "../../ui/checkbox";
 import { Badge } from "../../ui/badge";
-import { useCurrency } from "@/hooks/use-currency";
+import { useOrderCurrency } from "@/hooks/use-order-currency";
 import { orderBadgeVisibility, statusBadgeVariant } from "~/components/admin/orderview/status-badges";
 import { useMessages } from "~/i18n";
 import { orderMessages, orderStatusLabel } from "~/i18n/orders";
@@ -37,7 +37,7 @@ export const OrderMobileCard = memo(function OrderMobileCard({
   isSelected: boolean;
   onToggleSelection: () => void;
 }) {
-  const { fmtIn } = useCurrency();
+  const { fmtIn } = useOrderCurrency();
   const t = useMessages(orderListMessages);
   const tr = useMessages(resourceMessages);
   const to = useMessages(orderMessages);

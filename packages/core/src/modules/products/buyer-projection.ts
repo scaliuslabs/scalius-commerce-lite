@@ -4,6 +4,7 @@ import { and, eq, isNull, sql, type SQL, type SQLWrapper } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import { fromMinor } from "@scalius/shared/money";
 import { effectivePriceMinorSql } from "./money";
+import { channelAvailableStockSql, skuStockRefs } from "./channel-publications";
 
 type DiscountColumns = { discountType: SQL; discountBps: SQL; discountAmountMinor: SQL };
 
@@ -83,11 +84,15 @@ export function resolvedBuyerDiscountSql(sku: DiscountColumns, product: Discount
  */
 export function buildBuyerCatalogPricingProjection(
     db: Database,
-    options: { productScope?: SQL } = {},
+    options: {
+        productScope?: SQL;
+        /** The channel whose sellable stock decides availability (default: the online store). */
+        channelId?: string;
+    } = {},
 ) {
     const pricingProduct = alias(products, "buyer_pricing_product");
     const pricingSku = alias(productVariants, "buyer_pricing_sku");
-    const availableStock = sql`(${pricingSku.stock} - ${pricingSku.reservedStock})`;
+    const availableStock = channelAvailableStockSql(skuStockRefs("buyer_pricing_sku"), options.channelId);
 
     const skuAvailable = sql<number>`CASE
         WHEN ${pricingSku.trackInventory} = 0
@@ -251,10 +256,8 @@ export function buyerCatalogHasSkuInPriceRange(
     minPriceMinor?: number | SQL<number>,
     maxPriceMinor?: number | SQL<number>,
 ): SQL {
-    const buyerFilterAvailable = sql.raw("(buyer_filter_sku.stock - buyer_filter_sku.reserved_stock)");
-    const buyerAvailableSkuAvailable = sql.raw(
-        "(buyer_filter_available_sku.stock - buyer_filter_available_sku.reserved_stock)",
-    );
+    const buyerFilterAvailable = channelAvailableStockSql(skuStockRefs("buyer_filter_sku"));
+    const buyerAvailableSkuAvailable = channelAvailableStockSql(skuStockRefs("buyer_filter_available_sku"));
     const available = sql`(
         buyer_filter_sku.track_inventory = 0
         OR ${buyerFilterAvailable} > 0

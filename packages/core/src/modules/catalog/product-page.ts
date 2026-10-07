@@ -17,6 +17,8 @@ import {
   type ProductMediaProjection,
   type ProductPageBlockMedia,
   type ProductPageContentBlockRow,
+  channelOnHandSql,
+  productPublishedToChannelSql,
   publicProductHasBuyerResolvableSku,
   readStoredCustomization,
   resolveProductImageRepresentation,
@@ -203,6 +205,7 @@ export async function getStorefrontProductBySlug(db: Database, slug: string, pri
             productBySlugCondition(slug, translation),
             eq(products.isActive, true),
             isNull(products.deletedAt),
+            productPublishedToChannelSql(sql`${products.id}`),
             publicProductHasBuyerResolvableSku(),
         ))
         .get();
@@ -297,7 +300,8 @@ export async function getStorefrontProductBySlug(db: Database, slug: string, pri
         weight: productVariants.weight,
         sku: productVariants.sku,
         priceMinor: productVariants.priceMinor,
-        stock: productVariants.stock,
+        // The units the online store sells (its linked locations' on-hand).
+        stock: channelOnHandSql({ id: sql`${productVariants.id}`, stock: sql`${productVariants.stock}` }).mapWith(Number),
         reservedStock: productVariants.reservedStock,
         isDefault: productVariants.isDefault,
         trackInventory: productVariants.trackInventory,

@@ -163,17 +163,17 @@ function seedSql(): string {
     ('media_logo', 'logo.png', 'image', 'media/logo.png', 1, 'image/png', 'ready', 400, 400, 400, NULL, ${T}, ${T});
   UPDATE brands SET logo_media_id = 'media_logo' WHERE id = 'brd_aarong01';
 
-  INSERT INTO products (id, name, description, price_minor, slug, category_id, brand_id, is_active, discount_type, discount_bps, discount_amount_minor, product_condition, meta_title, no_index, exclude_from_sitemap, exclude_from_product_feed, created_at, updated_at) VALUES
-    ('p_linen', 'Linen Panjabi', '<p>Breathable linen.</p>', 250000, 'linen-panjabi', 'cat_panjabi', 'brd_aarong01', 1, NULL, 0, 0, 'new', 'Linen Panjabi | Store', 0, 0, 0, ${T - 9 * DAY}, ${T}),
-    ('p_cotton', 'Cotton Panjabi', '<p>Soft cotton.</p>', 180000, 'cotton-panjabi', 'cat_panjabi', 'brd_yellow01', 1, 'percentage', 1000, 0, 'new', NULL, 0, 0, 0, ${T - 8 * DAY}, ${T}),
-    ('p_silk', 'Silk Panjabi', '<p>Silk for Eid.</p>', 520000, 'silk-panjabi', 'cat_festive', 'brd_aarong01', 1, 'fixed', 0, 20000, 'new', NULL, 0, 0, 0, ${T - 7 * DAY}, ${T}),
-    ('p_kurta', 'Kurta Set', NULL, 150000, 'kurta-set', 'cat_men', NULL, 1, NULL, 0, 0, NULL, NULL, 1, 0, 0, ${T - 6 * DAY}, ${T}),
-    ('p_saree', 'Jamdani Saree', '<p>Handwoven.</p>', 900000, 'jamdani-saree', 'cat_saree', 'brd_aarong01', 1, NULL, 0, 0, 'new', NULL, 0, 1, 0, ${T - 5 * DAY}, ${T}),
-    ('p_shoe', 'Loafer', '<p>Leather.</p>', 320000, 'loafer', 'cat_acc', 'brd_yellow01', 1, NULL, 0, 0, 'used', NULL, 0, 0, 1, ${T - 4 * DAY}, ${T}),
-    ('p_bag', 'Tote Bag', '<p>Jute tote.</p>', 90000, 'tote-bag', 'cat_acc', NULL, 1, NULL, 0, 0, NULL, NULL, 0, 0, 0, ${T - 3 * DAY}, ${T}),
-    ('p_watch', 'Field Watch', NULL, 750000, 'field-watch', 'cat_internal', 'brd_yellow01', 1, NULL, 0, 0, NULL, NULL, 0, 0, 0, ${T - 2 * DAY}, ${T}),
-    ('p_draft', 'Draft Item', NULL, 100000, 'draft-item', 'cat_panjabi', NULL, 0, NULL, 0, 0, NULL, NULL, 0, 0, 0, ${T - 1 * DAY}, ${T}),
-    ('p_gift', 'Gift Card', NULL, 100000, 'gift-card', NULL, NULL, 1, NULL, 0, 0, NULL, NULL, 0, 0, 0, ${T}, ${T});
+  INSERT INTO products (id, name, description, price_minor, slug, category_id, brand_id, is_active, discount_type, discount_bps, discount_amount_minor, product_condition, meta_title, no_index, exclude_from_sitemap, created_at, updated_at) VALUES
+    ('p_linen', 'Linen Panjabi', '<p>Breathable linen.</p>', 250000, 'linen-panjabi', 'cat_panjabi', 'brd_aarong01', 1, NULL, 0, 0, 'new', 'Linen Panjabi | Store', 0, 0, ${T - 9 * DAY}, ${T}),
+    ('p_cotton', 'Cotton Panjabi', '<p>Soft cotton.</p>', 180000, 'cotton-panjabi', 'cat_panjabi', 'brd_yellow01', 1, 'percentage', 1000, 0, 'new', NULL, 0, 0, ${T - 8 * DAY}, ${T}),
+    ('p_silk', 'Silk Panjabi', '<p>Silk for Eid.</p>', 520000, 'silk-panjabi', 'cat_festive', 'brd_aarong01', 1, 'fixed', 0, 20000, 'new', NULL, 0, 0, ${T - 7 * DAY}, ${T}),
+    ('p_kurta', 'Kurta Set', NULL, 150000, 'kurta-set', 'cat_men', NULL, 1, NULL, 0, 0, NULL, NULL, 1, 0, ${T - 6 * DAY}, ${T}),
+    ('p_saree', 'Jamdani Saree', '<p>Handwoven.</p>', 900000, 'jamdani-saree', 'cat_saree', 'brd_aarong01', 1, NULL, 0, 0, 'new', NULL, 0, 1, ${T - 5 * DAY}, ${T}),
+    ('p_shoe', 'Loafer', '<p>Leather.</p>', 320000, 'loafer', 'cat_acc', 'brd_yellow01', 1, NULL, 0, 0, 'used', NULL, 0, 0, ${T - 4 * DAY}, ${T}),
+    ('p_bag', 'Tote Bag', '<p>Jute tote.</p>', 90000, 'tote-bag', 'cat_acc', NULL, 1, NULL, 0, 0, NULL, NULL, 0, 0, ${T - 3 * DAY}, ${T}),
+    ('p_watch', 'Field Watch', NULL, 750000, 'field-watch', 'cat_internal', 'brd_yellow01', 1, NULL, 0, 0, NULL, NULL, 0, 0, ${T - 2 * DAY}, ${T}),
+    ('p_draft', 'Draft Item', NULL, 100000, 'draft-item', 'cat_panjabi', NULL, 0, NULL, 0, 0, NULL, NULL, 0, 0, ${T - 1 * DAY}, ${T}),
+    ('p_gift', 'Gift Card', NULL, 100000, 'gift-card', NULL, NULL, 1, NULL, 0, 0, NULL, NULL, 0, 0, ${T}, ${T});
 
   INSERT INTO product_option_definitions (id, product_id, name, normalized_name, position, standard_mapping) VALUES
     ('opt_linen_size', 'p_linen', 'Size', 'size', 0, 'size'),
@@ -433,6 +433,17 @@ function seedSql(): string {
     ('pl_dvc_vip', 'v_watch', 'BDT', 700000, NULL, 1, ${T}, ${T}),
     ('pl_dvc_vip', 'v_cotton', 'BDT', 160000, NULL, 1, ${T}, ${T}),
     ('pl_dvc_vip', 'v_bag', 'BDT', 80000, NULL, 3, ${T}, ${T});
+
+  -- Sales channels (0122): the loafer is off the feeds and AI agents (the old
+  -- feed flag), the cotton panjabi is off the Meta feed, and a second
+  -- location holds two totes the Meta feed does not sell from, so the
+  -- generator publishes, unpublishes and links locations over every read.
+  UPDATE product_channel_publications SET unpublished_at = published_at WHERE product_id = 'p_shoe' AND channel_id IN ('sc_google', 'sc_meta', 'sc_agents');
+  UPDATE product_channel_publications SET unpublished_at = published_at WHERE product_id = 'p_cotton' AND channel_id = 'sc_meta';
+  INSERT INTO inventory_locations (id, name, code, country_code, is_default, status, position) VALUES ('loc_dvc_dhk', 'Dhaka shop', 'DHK', 'BD', 0, 'active', 1);
+  UPDATE inventory_levels SET on_hand = on_hand - 2 WHERE variant_id = 'v_bag' AND location_id = 'loc_default';
+  INSERT INTO inventory_levels (variant_id, location_id, on_hand) VALUES ('v_bag', 'loc_dvc_dhk', 2);
+  DELETE FROM sales_channel_locations WHERE channel_id = 'sc_meta' AND location_id = 'loc_dvc_dhk';
 
   INSERT INTO checkout_languages (id, name, code, is_active, is_default, language_data, field_visibility) VALUES
     ('lang_en', 'English', 'en', 1, 1, ${q({ pageTitle: "Checkout", placeOrder: "Place order" })}, ${q({ email: true })}),

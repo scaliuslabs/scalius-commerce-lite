@@ -206,6 +206,17 @@ export const orders = sqliteTable("orders", {
      * deleted.
      */
     marketId: text("market_id").references(() => markets.id, { onDelete: "restrict" }),
+    /**
+     * The sales channel the order sold from (MARKETS-DESIGN D6, migration
+     * 0122): the storefront checkout sells the online store's catalogue, a
+     * buyer agent the agents channel's, staff the channel they pick (the
+     * online store by default). Beside the attribution `channel`. A row
+     * inserted without one (raw SQL) is the online store's, and it never
+     * changes (`orders_sales_channel_immutable`). Triggers keep it a known
+     * channel and keep a channel with orders from being deleted (an FK added
+     * by ALTER TABLE could not carry the default).
+     */
+    salesChannelId: text("sales_channel_id").notNull().default("sc_online_store"),
 }, (table) => [
     check("orders_requires_shipping_check", sql`${table.requiresShipping} IN (0, 1)`),
     check(
@@ -284,6 +295,11 @@ export const orders = sqliteTable("orders", {
         .on(table.fulfillmentLocationId, table.inventoryAction)
         .where(sql`${table.fulfillmentLocationId} IS NOT NULL`),
     index("orders_channel_list_idx").on(table.deletedAt, table.channel, table.updatedAt),
+    // Orders of channels other than the online store (an app channel's
+    // delete guard; small: most orders are the online store's).
+    index("orders_sales_channel_idx")
+        .on(table.salesChannelId)
+        .where(sql`${table.salesChannelId} <> 'sc_online_store'`),
     index("orders_market_idx").on(table.marketId, table.createdAt),
 ]);
 

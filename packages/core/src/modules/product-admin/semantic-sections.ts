@@ -43,6 +43,8 @@ import {
   readProductContentBlockChunk,
   readProductContentBlockSection,
   readStoreDecimalPlaces,
+  parsePublishedChannelIds,
+  publishedChannelIdsSql,
 } from "../products";
 import { executeProductAggregateMutationBatch } from "./aggregate-revision";
 import { updateProductMediaSection } from "./write";
@@ -105,7 +107,6 @@ const productBasePatchSchema = z.object({
     canonicalPath: canonicalPathPatchSchema,
     noIndex: z.boolean().optional(),
     excludeFromSitemap: z.boolean().optional(),
-    excludeFromProductFeed: z.boolean().optional(),
     productCondition: z.enum(PRODUCT_CONDITION_VALUES).nullable().optional(),
     slug: z.string().min(3).max(100).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).optional(),
     /** Shows the store's EMI line (when the store has EMI plans). Informational only. */
@@ -303,7 +304,7 @@ export async function getProductSemanticSection(
             canonicalPath: products.canonicalPath,
             noIndex: products.noIndex,
             excludeFromSitemap: products.excludeFromSitemap,
-            excludeFromProductFeed: products.excludeFromProductFeed,
+            salesChannelIds: publishedChannelIdsSql(sql.raw('"products"."id"')),
             productCondition: products.productCondition,
             isActive: products.isActive,
             discountType: products.discountType,
@@ -349,7 +350,8 @@ export async function getProductSemanticSection(
                 canonicalPath: row.canonicalPath,
                 noIndex: row.noIndex,
                 excludeFromSitemap: row.excludeFromSitemap,
-                excludeFromProductFeed: row.excludeFromProductFeed,
+                // Read-only here: dashboard.products.publications_set changes it.
+                salesChannelIds: parsePublishedChannelIds(row.salesChannelIds),
                 productCondition: row.productCondition,
                 isActive: row.isActive,
                 discountType: row.discountType,
@@ -637,7 +639,6 @@ async function updateBaseSection(
         canonicalPath: products.canonicalPath,
         noIndex: products.noIndex,
         excludeFromSitemap: products.excludeFromSitemap,
-        excludeFromProductFeed: products.excludeFromProductFeed,
         productCondition: products.productCondition,
         slug: products.slug,
         emiEligible: products.emiEligible,
@@ -680,7 +681,6 @@ async function updateBaseSection(
         canonicalPath: next.canonicalPath,
         noIndex: next.noIndex,
         excludeFromSitemap: next.excludeFromSitemap,
-        excludeFromProductFeed: next.excludeFromProductFeed,
         productCondition: next.productCondition,
         slug: next.slug,
         emiEligible: next.emiEligible,

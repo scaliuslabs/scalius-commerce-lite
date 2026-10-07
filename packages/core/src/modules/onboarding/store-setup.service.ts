@@ -15,6 +15,7 @@ import { sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import {
     BACKUP_MARKET_ID,
+    inventoryLocations,
     marketCountries,
     marketPresences,
     markets,
@@ -244,7 +245,18 @@ export async function applyStoreSetup(
                 patch: { timeZone: values.timeZone, unitSystem: values.unitSystem, weightUnit: values.weightUnit },
                 ctx: { kv },
             },
-        ], { before: [guard], after: marketWrites });
+        ], {
+            before: [guard],
+            after: [
+                ...marketWrites,
+                // The default location is in the store's country while nobody has
+                // edited it (MARKETS-DESIGN step 5): tax origin and shipping read it.
+                db.update(inventoryLocations).set({ countryCode: values.countryCode, updatedAt: sql`unixepoch()` })
+                    .where(sql`${inventoryLocations.isDefault} = 1 AND ${inventoryLocations.version} = 1
+                        AND ${inventoryLocations.addressLine1} IS NULL AND ${inventoryLocations.city} IS NULL
+                        AND ${inventoryLocations.postalCode} IS NULL`) as SQLiteBatchItem,
+            ],
+        });
     } catch (error) {
         if (isBatchGuardError(error, STORE_SETUP_DONE)) throw storeSetupDone();
         throw error;

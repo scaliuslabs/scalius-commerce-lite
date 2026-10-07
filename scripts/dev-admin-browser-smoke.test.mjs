@@ -178,7 +178,6 @@ describe("local admin product rich-text browser smoke CLI", () => {
       isActive: false,
       noIndex: true,
       excludeFromSitemap: true,
-      excludeFromProductFeed: true,
       productCondition: "new",
     });
     expect(product.media).toEqual([]);

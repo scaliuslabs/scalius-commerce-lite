@@ -1,6 +1,7 @@
 // src/modules/checkout/prepare.ts
 // Storefront order creation — validates and prepares orders for queue dispatch.
 
+import { defaultOrderSalesChannelId } from "@scalius/shared/sales-channels";
 import type { Database } from "@scalius/database/client";
 import { assertOrderContact, resolveCheckoutContact, type CheckoutContactFieldSettings } from "./contact-fields";
 import { DEFAULT_CURRENCY } from "@scalius/shared/currency";
@@ -673,6 +674,8 @@ export async function createStorefrontOrder(
             inventoryPool: data.inventoryPool,
             currencyCode: requestCurrency.code,
             priceIncrementMinor: requestCurrency.priceIncrementMinor,
+            // The order's sales channel: its publications and its locations' units.
+            salesChannelId: defaultOrderSalesChannelId(appOptions.channel ?? "online_store"),
         },
     );
 

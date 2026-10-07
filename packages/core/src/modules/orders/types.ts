@@ -253,6 +253,8 @@ export interface OrderListItem {
     channel: OrderChannel;
     /** Where it came in within the channel (`facebook`, `walk_in`, …), a lowercase slug. */
     channelSource: string | null;
+    /** The sales channel the order sold from (MARKETS-DESIGN D6): its publications and locations. */
+    salesChannelId: string;
     /** The open customer request, so it isn't shipped unnoticed. */
     openRequestType: "cancel_pre_shipment" | "return" | "refund" | null;
     /** An app put the order on hold for staff review: nothing ships or moves on until it is released. */
