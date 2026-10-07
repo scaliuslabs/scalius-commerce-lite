@@ -22,7 +22,7 @@ import {
   verification,
 } from "@scalius/database/schema";
 import { ConflictError, NotFoundError, ValidationError } from "@scalius/core/errors";
-import { deleteStaffShortcutsStatement } from "../../modules/settings";
+import { deleteStaffPreferencesStatement } from "../../modules/settings";
 import { clearPermissionCache } from "./helpers";
 
 /** The removed person's email is released so the address can be invited again. */
@@ -60,7 +60,7 @@ export async function removeStaffMember(
       db.delete(userPermissions).where(eq(userPermissions.userId, userId)),
       db.delete(adminFcmTokens).where(eq(adminFcmTokens.userId, userId)),
       db.delete(scannerTokenClaims).where(eq(scannerTokenClaims.adminId, userId)),
-      deleteStaffShortcutsStatement(db, userId),
+      deleteStaffPreferencesStatement(db, userId),
       db.delete(verification).where(and(
         like(verification.identifier, "reset-password:%"),
         eq(verification.value, userId),

@@ -108751,6 +108751,223 @@
         }
       }
     },
+    "/api/v1/admin/dashboard/setup-guide": {
+      "get": {
+        "tags": [
+          "Admin - Dashboard"
+        ],
+        "summary": "Get Home's setup guide",
+        "description": "Which of the store's first steps are done (each read from the store's own data) and whether this staff member dismissed the guide.",
+        "operationId": "dashboard.home.setup_guide",
+        "responses": {
+          "200": {
+            "description": "Setup guide",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "dismissed": {
+                          "type": "boolean",
+                          "description": "This staff member dismissed the guide."
+                        },
+                        "countryCode": {
+                          "type": "string",
+                          "minLength": 2,
+                          "maxLength": 2,
+                          "description": "The store's country; the guide shows country-specific steps for it."
+                        },
+                        "setupNeeded": {
+                          "type": "boolean",
+                          "description": "The new-store setup step (name, country, currency, time zone) still applies."
+                        },
+                        "steps": {
+                          "type": "object",
+                          "properties": {
+                            "product": {
+                              "type": "boolean",
+                              "description": "A product exists outside the trash."
+                            },
+                            "details": {
+                              "type": "boolean",
+                              "description": "The store has a name."
+                            },
+                            "theme": {
+                              "type": "boolean",
+                              "description": "The theme was published from the editor."
+                            },
+                            "payments": {
+                              "type": "boolean",
+                              "description": "Checkout offers a payment method that is ready, in the store's currency and for its country."
+                            },
+                            "shipping": {
+                              "type": "boolean",
+                              "description": "A live delivery rate serves a place, or local pickup is on."
+                            },
+                            "domain": {
+                              "type": "boolean",
+                              "description": "The storefront web address is set."
+                            },
+                            "order": {
+                              "type": "boolean",
+                              "description": "An order exists."
+                            }
+                          },
+                          "required": [
+                            "product",
+                            "details",
+                            "theme",
+                            "payments",
+                            "shipping",
+                            "domain",
+                            "order"
+                          ]
+                        },
+                        "bangladeshPack": {
+                          "type": "object",
+                          "nullable": true,
+                          "properties": {
+                            "active": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "active"
+                          ],
+                          "description": "The Bangladesh pack, for a Bangladesh store whose deployment includes it; null otherwise."
+                        }
+                      },
+                      "required": [
+                        "dismissed",
+                        "countryCode",
+                        "setupNeeded",
+                        "steps",
+                        "bangladeshPack"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "excluded",
+          "principals": [
+            "admin"
+          ],
+          "risk": "read",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "exclusionReason": "The setup guide is the signed-in staff member's own Home card; its dismissal is a personal preference, and the facts it shows are available through the settings, catalog and order operations."
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "dashboard.view"
+        }
+      }
+    },
+    "/api/v1/admin/dashboard/setup-guide/dismiss": {
+      "post": {
+        "tags": [
+          "Admin - Dashboard"
+        ],
+        "summary": "Dismiss Home's setup guide",
+        "description": "Hides the setup guide for the signed-in staff member only. Saying it again changes nothing.",
+        "operationId": "dashboard.home.setup_guide_dismiss",
+        "responses": {
+          "200": {
+            "description": "Setup guide dismissed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "dismissed": {
+                          "type": "boolean",
+                          "enum": [
+                            true
+                          ]
+                        }
+                      },
+                      "required": [
+                        "dismissed"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "data"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "adminSession": []
+          }
+        ],
+        "x-scalius-agent": {
+          "surface": "dashboard",
+          "exposure": "excluded",
+          "principals": [
+            "admin"
+          ],
+          "risk": "write",
+          "openWorld": false,
+          "idempotency": "none",
+          "revision": "none",
+          "batch": "forbidden",
+          "transport": "json",
+          "maximumResponseBytes": 65536,
+          "maxRequestBytes": 1048576,
+          "sensitiveOutput": false,
+          "oneTimeSecretOutput": false,
+          "exclusionReason": "Dismissing the setup guide is the signed-in staff member's own Home preference."
+        },
+        "x-scalius-rbac": {
+          "type": "permission",
+          "permission": "dashboard.view"
+        }
+      }
+    },
     "/api/v1/admin/reports/overview": {
       "get": {
         "operationId": "dashboard.reports.overview",

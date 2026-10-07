@@ -4,8 +4,9 @@ import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import { ValidationError } from "@scalius/core/errors";
 
 import { SettingsRevisionConflictError } from "../../settings-store";
+import { dismissSetupGuide, readSetupGuideDismissed } from "./staff-setup-guide";
 import {
-  deleteStaffShortcutsStatement,
+  deleteStaffPreferencesStatement,
   readStaffShortcuts,
   staffShortcutsProblem,
   writeStaffShortcuts,
@@ -78,8 +79,21 @@ describe("staff shortcut storage", () => {
     const { db } = createSqliteD1Database();
     await writeStaffShortcuts(db, "user_1", { "/admin/orders": "g o" }, 0);
     await writeStaffShortcuts(db, "user_2", { "/admin/orders": "g p" }, 0);
-    await safeBatch(db, [deleteStaffShortcutsStatement(db, "user_1")] as never);
+    await safeBatch(db, [deleteStaffPreferencesStatement(db, "user_1")] as never);
     expect(await readStaffShortcuts(db, "user_1")).toEqual({ shortcuts: {}, revision: 0 });
     expect((await readStaffShortcuts(db, "user_2")).revision).toBe(1);
+  });
+});
+
+describe("staff setup guide dismissal", () => {
+  it("is per staff member, repeatable, and goes with the person", async () => {
+    const { db } = createSqliteD1Database();
+    expect(await readSetupGuideDismissed(db, "user_1")).toBe(false);
+    await dismissSetupGuide(db, "user_1");
+    await dismissSetupGuide(db, "user_1");
+    expect(await readSetupGuideDismissed(db, "user_1")).toBe(true);
+    expect(await readSetupGuideDismissed(db, "user_2")).toBe(false);
+    await safeBatch(db, [deleteStaffPreferencesStatement(db, "user_1")] as never);
+    expect(await readSetupGuideDismissed(db, "user_1")).toBe(false);
   });
 });
