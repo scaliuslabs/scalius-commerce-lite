@@ -59,8 +59,8 @@ import { getCustomerColumns, CUSTOMER_COLUMN_LAYOUT, type CustomerListItem } fro
 
 const money = (symbol: string) => (amount: number) =>
   `${symbol}${formatNumber(amount, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-vi.mock("~/hooks/use-currency", () => ({ useCurrency: () => ({ fmt: money("৳") }) }));
-vi.mock("@/hooks/use-currency", () => ({ useCurrency: () => ({ fmt: money("৳") }) }));
+vi.mock("~/hooks/use-currency", () => ({ useCurrency: () => ({ fmt: money("৳"), fmtIn: money("৳") }) }));
+vi.mock("@/hooks/use-currency", () => ({ useCurrency: () => ({ fmt: money("৳"), fmtIn: money("৳") }) }));
 vi.mock("~/hooks/use-order-action-permissions", () => ({ useOrderActionPermissions: () => ({ canViewFraudCheck: true }) }));
 
 const LOCALES = ["en", "bn"] as const;

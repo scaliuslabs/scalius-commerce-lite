@@ -150,4 +150,4 @@ export const checkoutFxSchema = z.object({
   source: z.string().openapi({ description: "`manual`: the market's rate set by the merchant; else a rate provider's id." }),
   asOf: z.string().nullable().openapi({ format: "date-time", description: "When the rate was set." }),
   lockedUntil: z.string().openapi({ format: "date-time", description: "An order placed now keeps this rate until then." }),
-}).nullable().openapi("CheckoutFx", { description: "Null when the checkout is in the shop currency." });
+}).nullable().openapi({ description: "Null when the checkout is in the shop currency." });

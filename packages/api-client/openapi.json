@@ -8587,43 +8587,6 @@
           "nextCursor"
         ]
       },
-      "CheckoutFx": {
-        "type": "object",
-        "nullable": true,
-        "properties": {
-          "shopCurrencyCode": {
-            "type": "string",
-            "description": "The shop currency: the store's books."
-          },
-          "rate": {
-            "type": "string",
-            "description": "Units of the checkout currency per shop currency unit (an exact decimal)."
-          },
-          "source": {
-            "type": "string",
-            "description": "`manual`: the market's rate set by the merchant; else a rate provider's id."
-          },
-          "asOf": {
-            "type": "string",
-            "nullable": true,
-            "format": "date-time",
-            "description": "When the rate was set."
-          },
-          "lockedUntil": {
-            "type": "string",
-            "format": "date-time",
-            "description": "An order placed now keeps this rate until then."
-          }
-        },
-        "required": [
-          "shopCurrencyCode",
-          "rate",
-          "source",
-          "asOf",
-          "lockedUntil"
-        ],
-        "description": "Null when the checkout is in the shop currency."
-      },
       "BuyerWarrantyClaim": {
         "type": "object",
         "properties": {
@@ -20887,6 +20850,11 @@
                     "minLength": 7,
                     "maxLength": 16,
                     "description": "Customer phone for per-customer limits"
+                  },
+                  "presence": {
+                    "type": "string",
+                    "maxLength": 5,
+                    "description": "The page's subfolder presence (`en-gb`): a market in its own currency previews in it, its shop amounts converted at its rate (MARKETS-DESIGN step 6). Omit at the root."
                   }
                 }
               }
@@ -57777,7 +57745,41 @@
                           "type": "integer"
                         },
                         "fx": {
-                          "$ref": "#/components/schemas/CheckoutFx"
+                          "type": "object",
+                          "nullable": true,
+                          "properties": {
+                            "shopCurrencyCode": {
+                              "type": "string",
+                              "description": "The shop currency: the store's books."
+                            },
+                            "rate": {
+                              "type": "string",
+                              "description": "Units of the checkout currency per shop currency unit (an exact decimal)."
+                            },
+                            "source": {
+                              "type": "string",
+                              "description": "`manual`: the market's rate set by the merchant; else a rate provider's id."
+                            },
+                            "asOf": {
+                              "type": "string",
+                              "nullable": true,
+                              "format": "date-time",
+                              "description": "When the rate was set."
+                            },
+                            "lockedUntil": {
+                              "type": "string",
+                              "format": "date-time",
+                              "description": "An order placed now keeps this rate until then."
+                            }
+                          },
+                          "required": [
+                            "shopCurrencyCode",
+                            "rate",
+                            "source",
+                            "asOf",
+                            "lockedUntil"
+                          ],
+                          "description": "Null when the checkout is in the shop currency."
                         },
                         "settingsVersion": {
                           "type": "integer"

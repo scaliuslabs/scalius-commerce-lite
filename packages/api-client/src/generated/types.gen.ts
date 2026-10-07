@@ -1756,32 +1756,6 @@ export type ProductReviews = {
     nextCursor: string | null;
 };
 
-/**
- * Null when the checkout is in the shop currency.
- */
-export type CheckoutFx = {
-    /**
-     * The shop currency: the store's books.
-     */
-    shopCurrencyCode: string;
-    /**
-     * Units of the checkout currency per shop currency unit (an exact decimal).
-     */
-    rate: string;
-    /**
-     * `manual`: the market's rate set by the merchant; else a rate provider's id.
-     */
-    source: string;
-    /**
-     * When the rate was set.
-     */
-    asOf: string | null;
-    /**
-     * An order placed now keeps this rate until then.
-     */
-    lockedUntil: string;
-} | null;
-
 export type BuyerWarrantyClaim = {
     id: string;
     warrantyId: string;
@@ -5288,6 +5262,10 @@ export type PostApiV1DiscountsValidateData = {
          * Customer phone for per-customer limits
          */
         customerPhone?: string;
+        /**
+         * The page's subfolder presence (`en-gb`): a market in its own currency previews in it, its shop amounts converted at its rate (MARKETS-DESIGN step 6). Omit at the root.
+         */
+        presence?: string;
     };
     path?: never;
     query?: never;
@@ -16467,7 +16445,31 @@ export type PostApiV1OrdersTaxQuoteResponses = {
             shippingTaxed: boolean;
             currencyCode: string;
             decimalPlaces: number;
-            fx: CheckoutFx;
+            /**
+             * Null when the checkout is in the shop currency.
+             */
+            fx: {
+                /**
+                 * The shop currency: the store's books.
+                 */
+                shopCurrencyCode: string;
+                /**
+                 * Units of the checkout currency per shop currency unit (an exact decimal).
+                 */
+                rate: string;
+                /**
+                 * `manual`: the market's rate set by the merchant; else a rate provider's id.
+                 */
+                source: string;
+                /**
+                 * When the rate was set.
+                 */
+                asOf: string | null;
+                /**
+                 * An order placed now keeps this rate until then.
+                 */
+                lockedUntil: string;
+            } | null;
             settingsVersion: number;
             subtotalMinor: number;
             subtotalAmount: number;
