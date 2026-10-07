@@ -423,7 +423,8 @@ describe("reviewed agent workflow resolver", () => {
     })).toMatchObject({
       kind: "choices",
       disposition: "ask",
-      choices: expect.arrayContaining([expect.objectContaining({ id: "dashboard.notification-rules" })]),
+      // A notification candidate (its rules or its templates) beside Meta's.
+      choices: expect.arrayContaining([expect.objectContaining({ id: expect.stringMatching(/notification/) })]),
     });
     expect(resolveWorkflow({
       surface: "dashboard",

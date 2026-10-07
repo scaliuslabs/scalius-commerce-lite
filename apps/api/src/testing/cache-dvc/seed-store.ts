@@ -405,8 +405,8 @@ function seedSql(): string {
   -- feed flag), the cotton panjabi is off the Meta feed, and a second
   -- location holds two totes the Meta feed does not sell from, so the
   -- generator publishes, unpublishes and links locations over every read.
-  UPDATE product_channel_publications SET unpublished_at = ${T} WHERE product_id = 'p_shoe' AND channel_id IN ('sc_google', 'sc_meta', 'sc_agents');
-  UPDATE product_channel_publications SET unpublished_at = ${T} WHERE product_id = 'p_cotton' AND channel_id = 'sc_meta';
+  UPDATE product_channel_publications SET unpublished_at = published_at WHERE product_id = 'p_shoe' AND channel_id IN ('sc_google', 'sc_meta', 'sc_agents');
+  UPDATE product_channel_publications SET unpublished_at = published_at WHERE product_id = 'p_cotton' AND channel_id = 'sc_meta';
   INSERT INTO inventory_locations (id, name, code, country_code, is_default, status, position) VALUES ('loc_dvc_dhk', 'Dhaka shop', 'DHK', 'BD', 0, 'active', 1);
   UPDATE inventory_levels SET on_hand = on_hand - 2 WHERE variant_id = 'v_bag' AND location_id = 'loc_default';
   INSERT INTO inventory_levels (variant_id, location_id, on_hand) VALUES ('v_bag', 'loc_dvc_dhk', 2);

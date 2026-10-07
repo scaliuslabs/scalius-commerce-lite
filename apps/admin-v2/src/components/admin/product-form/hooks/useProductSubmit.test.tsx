@@ -118,6 +118,8 @@ describe("useProductSubmit", () => {
         queryKeys.products.collectionOptions(),
         queryKeys.products.stats(),
         queryKeys.dashboard.all,
+        // Per-channel product counts (sales channels).
+        ["settings", "sales-channels", "list"],
         queryKeys.inventory.list(),
         queryKeys.products.detail("prod_new"),
         queryKeys.products.variants("prod_new"),

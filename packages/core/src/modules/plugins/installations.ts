@@ -202,7 +202,11 @@ function salesChannelStatements(
   pluginId: string,
   declaredChannels: ReadonlyArray<{ id: string; name: string }>,
   running: boolean,
+  /** The manifest this write replaces declared channels: only then can a row need removing. */
+  hadChannels = false,
 ) {
+  // An app without channels before or after writes nothing (most apps).
+  if (declaredChannels.length === 0 && !hadChannels) return [];
   const declared = declaredChannels.map((channel, index) => ({
     id: appSalesChannelId(pluginId, channel.id),
     handle: appSalesChannelId(pluginId, channel.id),
@@ -235,15 +239,16 @@ function salesChannelStatements(
 }
 
 /** The app's declared channels follow its status: on while it is active. */
-function salesChannelStatusStatement(db: Database, pluginId: string, manifest: PluginManifest, running: boolean) {
+function salesChannelStatusStatements(db: Database, pluginId: string, manifest: PluginManifest, running: boolean) {
   const ids = manifest.salesChannels.map((channel) => appSalesChannelId(pluginId, channel.id));
-  return db.update(salesChannels)
+  if (ids.length === 0) return [];
+  return [db.update(salesChannels)
     .set({ status: running ? "active" : "inactive", updatedAt: sql`unixepoch()` })
     .where(and(
       eq(salesChannels.pluginId, pluginId),
-      ids.length > 0 ? inArray(salesChannels.id, ids) : sql`1 = 0`,
+      inArray(salesChannels.id, ids),
       sql`${salesChannels.status} <> ${running ? "active" : "inactive"}`,
-    ));
+    ))];
 }
 
 /** Registration inserts, chunked within D1's bound-parameter limit (4 per row). */
@@ -393,7 +398,7 @@ export async function activatePlugin(
         updatedAt: sql`unixepoch()`,
       }).where(eq(pluginInstallations.pluginId, pluginId)),
       // Its sales channels are on while it runs.
-      salesChannelStatusStatement(db, pluginId, installation.manifest, true),
+      ...salesChannelStatusStatements(db, pluginId, installation.manifest, true),
     ] as never);
   } catch (error) {
     if (isBatchGuardError(error, REVISION_GUARD)) await requireRevision(db, pluginId, options.expectedRevision, []);
@@ -416,7 +421,7 @@ export async function deactivatePlugin(
         revision: sql`${pluginInstallations.revision} + 1`,
         updatedAt: sql`unixepoch()`,
       }).where(eq(pluginInstallations.pluginId, pluginId)),
-      salesChannelStatusStatement(db, pluginId, installation.manifest, false),
+      ...salesChannelStatusStatements(db, pluginId, installation.manifest, false),
     ] as never);
   } catch (error) {
     if (isBatchGuardError(error, REVISION_GUARD)) await requireRevision(db, pluginId, options.expectedRevision, []);
@@ -511,7 +516,7 @@ export async function updatePluginInstallation(
       }).where(eq(pluginInstallations.pluginId, pluginId)),
       db.delete(pluginRegistrations).where(eq(pluginRegistrations.pluginId, pluginId)),
       ...registrationInserts(db, pluginId, manifest),
-      ...salesChannelStatements(db, pluginId, manifest.salesChannels, status === "active"),
+      ...salesChannelStatements(db, pluginId, manifest.salesChannels, status === "active", current.manifest.salesChannels.length > 0),
     ] as never);
   } catch (error) {
     if (isBatchGuardError(error, REVISION_GUARD)) await requireRevision(db, pluginId, input.expectedRevision, []);
@@ -539,12 +544,14 @@ export async function uninstallPlugin(
   options: { keepData: boolean; expectedRevision: number },
 ): Promise<void> {
   const waiting = ["pending", "enqueueing", "queued", "processing", "failed"] as const;
+  const installed = await getPluginInstallation(db, pluginId);
+  const hadChannels = (installed?.manifest.salesChannels.length ?? 0) > 0;
   try {
     await safeBatch(db, [
       revisionGuard(db, pluginId, options.expectedRevision),
       db.delete(pluginInstallations).where(eq(pluginInstallations.pluginId, pluginId)),
       // Its channels go (or, when orders name them, stay switched off).
-      ...salesChannelStatements(db, pluginId, [], false),
+      ...salesChannelStatements(db, pluginId, [], false, hadChannels),
       ...(options.keepData
         ? [
           db.update(pluginEventDeliveries).set({
