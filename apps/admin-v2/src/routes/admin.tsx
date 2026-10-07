@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo } from "react";
 import { createFileRoute, Outlet, redirect, useMatchRoute } from "@tanstack/react-router";
 import { AppSidebar } from "@/components/admin/layout/AppSidebar";
 import { AdminHeader } from "@/components/admin/layout/AdminHeader";
@@ -25,6 +25,9 @@ import { storefrontUrlQueryOptions } from "~/lib/api-query-options/storefront-ur
 import { syncStoreDefaults } from "~/lib/api-query-options/store-defaults";
 import { useWarmEverydayRouteCode } from "~/lib/warm-route-code";
 import { useStoreReach, withoutUnusedPages } from "~/lib/store-reach";
+
+// Asks the API what the store uses once the first page is up.
+const StoreReachProbe = lazy(() => import("~/lib/store-reach-probe"));
 import { useMessages } from "~/i18n";
 import { shellMessages } from "~/i18n/shell";
 
@@ -71,7 +74,7 @@ function AdminLayout() {
   const nav = useMemo(() => visibleNav(canOpen, appPages), [canOpen, appPages]);
   // Search finds every page; the sidebar lists the advanced ones (Price lists,
   // Translate & adapt) once the store uses them.
-  const reach = useStoreReach(canOpen);
+  const reach = useStoreReach();
   const sidebarNav = useMemo(() => withoutUnusedPages(nav, reach), [nav, reach]);
   useWarmEverydayRouteCode(canOpen);
   // The theme editor is a workspace of its own (Shopify's): the frame steps aside.
@@ -108,6 +111,9 @@ function AdminLayout() {
           {t("skipToContent")}
         </a>
         <GlobalSearch nav={nav} canOpen={canOpen} />
+        <Suspense fallback={null}>
+          <StoreReachProbe languages={canOpen("/admin/translations")} priceLists={canOpen("/admin/price-lists")} />
+        </Suspense>
         {/* Shopify's frame: the near-black navigation and top bar, and the
             page on a rounded canvas inset from them (square-cornered edge to
             edge on phones). The frame never scrolls: `main` is the only

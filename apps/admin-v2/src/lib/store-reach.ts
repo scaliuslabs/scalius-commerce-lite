@@ -1,14 +1,14 @@
-// What the store has grown into, read from data it already keeps. The
-// dashboard lists an advanced page (Price lists, Translate & adapt) in the
-// navigation only once the store uses it. Before that the page is one click
-// from where it belongs (Settings › Markets, Settings › Languages) and still
-// found by search. This is presentation only: the pages, the API and agents
-// are unchanged.
-import { useQuery } from "@tanstack/react-query";
-import { getApiV1AdminPriceLists, getApiV1AdminSettingsLanguages } from "@scalius/api-client/sdk";
-import { apiData } from "./api";
-import { priceListKeys } from "./api-query-options/price-lists";
-import { translationKeys } from "./api-query-options/translations";
+// What the store has grown into, so the dashboard shows an advanced page
+// (Price lists, Translate & adapt) in the sidebar only once the store uses
+// it. Before that the page is one click from where it belongs (Settings ›
+// Markets, Settings › Languages) and still found by search. Presentation
+// only: the pages, the API and agents are unchanged.
+//
+// This module is in the first download, so it is small: the answer lives in
+// a tiny store. The probe that asks the API (`StoreReachProbe`) loads after
+// the first page, and the last answer is kept in this browser so a store
+// that uses these pages never sees them pop in.
+import { useSyncExternalStore } from "react";
 import type { VisibleNavItem } from "~/components/admin/layout/AdminNav";
 
 export interface StoreReach {
@@ -19,9 +19,8 @@ export interface StoreReach {
 }
 
 const STORAGE_KEY = "scalius:store-reach";
-const REFRESH_MS = 10 * 60_000;
+const listeners = new Set<() => void>();
 
-/** The last answer in this browser, so a store that uses these pages never sees them pop in. */
 function remembered(): StoreReach {
   try {
     const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}") as Partial<StoreReach>;
@@ -31,43 +30,29 @@ function remembered(): StoreReach {
   }
 }
 
-function remember(reach: StoreReach): void {
+let current: StoreReach = remembered();
+
+/** Records what the API said (the probe's job); an unchanged answer changes nothing. */
+export function setStoreReach(next: Partial<StoreReach>): void {
+  const merged = { ...current, ...next };
+  if (merged.translations === current.translations && merged.priceLists === current.priceLists) return;
+  current = merged;
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(reach));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(current));
   } catch {
     // A browser that refuses storage just asks again next time.
   }
+  for (const listener of listeners) listener();
 }
 
-/**
- * The pages the store uses. An unreadable answer (a staff member without the
- * settings permission) keeps the page listed: only a confirmed "not used"
- * hides it.
- */
-export function useStoreReach(canOpen: (path: string) => boolean): StoreReach {
-  const languages = useQuery({
-    queryKey: translationKeys.languages(),
-    queryFn: async () => (await apiData(getApiV1AdminSettingsLanguages())).items,
-    enabled: canOpen("/admin/translations"),
-    staleTime: REFRESH_MS,
-    refetchOnWindowFocus: false,
-  });
-  const priceLists = useQuery({
-    queryKey: priceListKeys.list(),
-    queryFn: async () => (await apiData(getApiV1AdminPriceLists({ query: {} }))).items,
-    enabled: canOpen("/admin/price-lists"),
-    staleTime: REFRESH_MS,
-    refetchOnWindowFocus: false,
-  });
-  const hint = remembered();
-  const reach: StoreReach = {
-    translations: languages.data ? languages.data.length > 1 : languages.isError || hint.translations,
-    priceLists: priceLists.data ? priceLists.data.length > 0 : priceLists.isError || hint.priceLists,
-  };
-  if ((languages.data || priceLists.data) && (reach.translations !== hint.translations || reach.priceLists !== hint.priceLists)) {
-    remember(reach);
-  }
-  return reach;
+function subscribe(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+/** The pages the store uses: the last answer, until the probe replaces it. */
+export function useStoreReach(): StoreReach {
+  return useSyncExternalStore(subscribe, () => current, () => current);
 }
 
 /** The sidebar's list: the same sections, minus the advanced pages the store does not use yet. */
