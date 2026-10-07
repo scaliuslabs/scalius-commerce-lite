@@ -142,18 +142,6 @@ function getPaymentResultErrorMessage(result: PaymentResult): string {
   );
 }
 
-export function getPaymentResultRecovery(result: PaymentResult): {
-  message: string;
-  buttonText: string;
-} | null {
-  if (result.errorCode !== "CUSTOMER_SESSION_STALE") return null;
-
-  return {
-    message: checkoutCopy.sessionExpiredText,
-    buttonText: checkoutCopy.continueAsGuestText,
-  };
-}
-
 function setPayButton(text: string, disabled = false): void {
   const btn = document.getElementById("payButton") as HTMLButtonElement | null;
   const span = document.getElementById("payButtonText");
@@ -1288,15 +1276,6 @@ async function processPayment(): Promise<void> {
         return;
       }
 
-      const recovery = getPaymentResultRecovery(result);
-      if (recovery) {
-        hideCheckoutLoadingOverlay();
-        isProcessing = false;
-        setPaymentControlsDisabled(false);
-        showError(recovery.message);
-        setPayButton(recovery.buttonText, false);
-        return;
-      }
       if (result.errorCode === "STOREFRONT_CHECKOUT_QUOTE_CONFLICT") {
         hideCheckoutLoadingOverlay();
         let refreshed: Awaited<ReturnType<typeof fetchQuoteForCheckout>>;

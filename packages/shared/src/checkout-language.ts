@@ -404,9 +404,6 @@ export const ENGLISH_CHECKOUT_LANGUAGE_DATA = {
   dueAtPickupText: "Due at pickup",
   dueAtServiceText: "Due when the service is done",
   continueText: "Continue",
-  continueAsGuestText: "Continue as guest",
-  sessionExpiredText:
-    "Your sign-in session expired. Your checkout details are safe. Continue as a guest, or sign in again.",
   checkoutConflictText: "This checkout was already submitted or changed in another tab. Review your cart and try again.",
   totalChangedReviewText:
     "Your order total or checkout terms changed. Review the refreshed total, then confirm the order again.",
@@ -1124,9 +1121,6 @@ export const BANGLA_CHECKOUT_LANGUAGE_DATA: CheckoutLanguageData = {
   dueAtPickupText: "সংগ্রহের সময় পরিশোধযোগ্য",
   dueAtServiceText: "সেবা শেষে পরিশোধযোগ্য",
   continueText: "এগিয়ে যান",
-  continueAsGuestText: "অতিথি হিসেবে এগিয়ে যান",
-  sessionExpiredText:
-    "আপনার সাইন-ইন সেশন শেষ হয়েছে। চেকআউটের তথ্য নিরাপদ আছে। অতিথি হিসেবে এগিয়ে যান অথবা আবার সাইন ইন করুন।",
   checkoutConflictText: "এই চেকআউটটি ইতিমধ্যে জমা হয়েছে অথবা অন্য ট্যাবে পরিবর্তিত হয়েছে। কার্ট দেখে আবার চেষ্টা করুন।",
   totalChangedReviewText:
     "আপনার অর্ডারের মোট টাকা বা চেকআউটের শর্ত বদলেছে। হালনাগাদ মোট টাকা দেখে অর্ডারটি আবার নিশ্চিত করুন।",
@@ -1543,7 +1537,6 @@ export const CHECKOUT_LANGUAGE_LONG_TEXT_KEYS =/* @__PURE__ */ new Set<CheckoutL
   "openingPaymentOptionsMessage",
   "checkoutDetailsMissingText",
   "checkoutDetailsUnreadableText",
-  "sessionExpiredText",
   "noPaymentMethodsText",
   "paymentMethodUnavailableMessage",
   "processingPaymentMessage",

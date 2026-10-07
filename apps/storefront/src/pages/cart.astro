@@ -37,7 +37,7 @@ import { resolveRequestTheme } from "@/lib/storefront-theme-context";
 import { templateSectionData } from "@/lib/template-sections";
 import { markRenderUncacheable } from "@/lib/cache-policy";
 import { getRuntimePresence } from "@/lib/api/runtime";
-import { getCustomerSessionTokenFromCookie } from "@/lib/customer-session-cookie";
+import { ENDED_CUSTOMER_SESSION_COOKIES, getCustomerSessionTokenFromCookie } from "@/lib/customer-session-cookie";
 import {
   createOrderReceiptCookieHeader,
   createOrderReceiptFinalizeCookieHeader,
@@ -135,7 +135,6 @@ const [existingCheckoutMessageBefore, existingCheckoutMessageAfter = ""] =
 // Initialize error message and success state
 let errorMessage = "";
 let isProcessing = false;
-let staleCustomerSession = false;
 let codCartRepairState: {
   source: "cart";
   message: string;
@@ -199,6 +198,10 @@ if (Astro.request.method === "POST" && codOnly) {
         const response = Astro.redirect(
           `/order-success?orderId=${encodeURIComponent(result.orderId)}`,
         );
+        // Placed as a guest's: the ended session's cookies go.
+        if ("customerSessionEnded" in result && result.customerSessionEnded) {
+          for (const cookie of ENDED_CUSTOMER_SESSION_COOKIES) response.headers.append("Set-Cookie", cookie);
+        }
         const receiptCookie = createOrderReceiptCookieHeader(
           result.orderId,
           result.receiptToken,
@@ -220,23 +223,6 @@ if (Astro.request.method === "POST" && codOnly) {
       } else {
         console.error("Order processing failed:", result.error);
         const resultError = result.error;
-        if (
-          "errorCode" in result &&
-          result.errorCode === "CUSTOMER_SESSION_STALE"
-        ) {
-          Astro.cookies.delete("cs_tok", {
-            path: "/",
-            httpOnly: true,
-            sameSite: "lax",
-            secure: true,
-          });
-          Astro.cookies.delete("cs_auth", {
-            path: "/",
-            sameSite: "lax",
-            secure: true,
-          });
-          staleCustomerSession = true;
-        }
         // A store app's rules: the page says them at their lines and above Place order.
         const ruleErrors = cartRuleRefusal({
           details: "details" in result ? result.details : undefined,
@@ -294,9 +280,7 @@ const shipsToBangladesh = shippingCountries.includes(LOCATION_COUNTRY);
 const shippingCountry = defaultShippingCountry(layoutData?.markets, getRuntimePresence(), shippingCountries);
 
 // Determine submit button label
-const submitLabel = staleCustomerSession && checkoutConfig.guestCheckoutEnabled !== false
-  ? copy.continueAsGuestText
-  : codOnly
+const submitLabel = codOnly
     ? copy.placeOrderText
     : checkoutUnavailable
       ? copy.checkoutUnavailableText

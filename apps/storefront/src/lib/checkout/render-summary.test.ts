@@ -12,7 +12,6 @@ vi.mock("../analytics", () => ({
 }));
 
 import {
-  getPaymentResultRecovery,
   initCheckoutPage,
   renderOrderSummaryDetails,
   resumeCheckoutPageFromHistory,
@@ -54,28 +53,6 @@ function installStorageMocks(): void {
   Object.defineProperty(globalThis, "sessionStorage", { value: session, configurable: true });
   Object.defineProperty(window, "sessionStorage", { value: session, configurable: true });
 }
-
-describe("checkout payment recovery", () => {
-  it("turns a cleared stale customer session into an explicit guest continuation", () => {
-    expect(getPaymentResultRecovery({
-      success: false,
-      status: 401,
-      errorCode: "CUSTOMER_SESSION_STALE",
-      error: "Your session expired.",
-    })).toEqual({
-      message: "Your sign-in session expired. Your checkout details are safe. Continue as a guest, or sign in again.",
-      buttonText: "Continue as guest",
-    });
-  });
-
-  it("does not relabel unrelated checkout failures", () => {
-    expect(getPaymentResultRecovery({
-      success: false,
-      status: 503,
-      errorCode: "CHECKOUT_CONFIG_UNAVAILABLE",
-    })).toBeNull();
-  });
-});
 
 function taxQuote(
   overrides: Partial<CheckoutTaxQuote> = {},

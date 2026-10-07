@@ -3,6 +3,7 @@
 import { apiFetch } from "./transport";
 import { getRuntimePresence } from "./runtime";
 import { isMarketSubfolder } from "@scalius/shared/markets";
+import { CUSTOMER_SESSION_ENDED_HEADER } from "@scalius/shared/customer-auth-policy";
 import type { OrderLineProperty, OrderReceipt, CreateOrderPayload } from "./types";
 import type {
   DeliveryMethodKind,
@@ -31,6 +32,8 @@ type CreateOrderResult = {
   errorCode?: string;
   error?: string;
   details?: unknown;
+  /** The session sent no longer signs anyone in: the order is a guest's; clear the session cookies. */
+  customerSessionEnded?: boolean;
 };
 
 export type CartValidationIssue = {
@@ -341,6 +344,7 @@ export async function createOrder(
       totalAmount: typeof data.data?.totalAmount === "number" ? data.data.totalAmount : undefined,
       paymentMethod: data.data?.paymentMethod,
       status: response.status,
+      customerSessionEnded: response.headers.get(CUSTOMER_SESSION_ENDED_HEADER) === "1",
     };
   } catch (error: unknown) {
     console.error("Error creating order:", error);

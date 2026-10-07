@@ -83,12 +83,15 @@ describe("checkout create-order proxy Origin guard", () => {
     expect(json.details).toEqual({ itemIssues: [issue] });
   });
 
-  it("clears stale customer cookies when backend rejects an expired customer session", async () => {
+  it("places a guest order and clears the cookies of a session that ended", async () => {
     mocks.createOrder.mockResolvedValueOnce({
-      success: false,
-      error: "Your session expired. Please sign in again or continue as a guest.",
-      errorCode: "CUSTOMER_SESSION_STALE",
-      status: 401,
+      success: true,
+      orderId: "order_1",
+      receiptToken: "chk_receipt",
+      totalAmount: 100,
+      paymentMethod: "cod",
+      status: 201,
+      customerSessionEnded: true,
     });
 
     const response = await POST({
@@ -101,13 +104,36 @@ describe("checkout create-order proxy Origin guard", () => {
         body: JSON.stringify({ items: [] }),
       }),
     } as never);
-    const json = await response.json() as { errorCode?: string };
+    const json = await response.json() as { success?: boolean; data?: { id?: string } };
     const setCookie = response.headers.get("set-cookie") ?? "";
 
-    expect(response.status).toBe(401);
-    expect(json.errorCode).toBe("CUSTOMER_SESSION_STALE");
+    expect(response.status).toBe(200);
+    expect(json).toMatchObject({ success: true, data: { id: "order_1" } });
+    expect(mocks.createOrder).toHaveBeenCalledWith(expect.anything(), { customerSessionToken: "expired" });
     expect(setCookie).toContain("cs_tok=; Max-Age=0");
     expect(setCookie).toContain("cs_auth=; Max-Age=0");
+  });
+
+  it("keeps a live session's cookies", async () => {
+    mocks.createOrder.mockResolvedValueOnce({
+      success: true,
+      orderId: "order_2",
+      receiptToken: "chk_receipt",
+      paymentMethod: "cod",
+      status: 201,
+      customerSessionEnded: false,
+    });
+
+    const response = await POST({
+      request: new Request("https://storefront.example.test/api/checkout/create-order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Cookie: "cs_tok=live; cs_auth=1" },
+        body: JSON.stringify({ items: [] }),
+      }),
+    } as never);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("set-cookie") ?? "").not.toContain("cs_tok=;");
   });
 
   it.each([

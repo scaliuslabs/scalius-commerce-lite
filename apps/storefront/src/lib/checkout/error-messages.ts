@@ -99,7 +99,7 @@ export function getCheckoutStatusErrorMessage(
 
   switch (status) {
     case 401:
-      return copy?.sessionExpiredText ?? "Your sign-in session expired. Please sign in again or continue as a guest.";
+      return copy?.signInToCheckoutText ?? "Sign in to checkout";
     case 409:
       return copy?.checkoutConflictText ?? "This checkout was already submitted or changed in another tab. Please review your cart and try again.";
     case 429:
