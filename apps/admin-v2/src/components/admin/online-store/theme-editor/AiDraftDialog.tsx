@@ -87,6 +87,7 @@ export function AiDraftDialog({ open, onOpenChange, page, locale, canConnectAgen
         {query.isPending ? null : providers.length > 0 ? (
           <form
             id="ai-draft-form"
+            method="post"
             className="space-y-4"
             onSubmit={(event) => {
               event.preventDefault();
