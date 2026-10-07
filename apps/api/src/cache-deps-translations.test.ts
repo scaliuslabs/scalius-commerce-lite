@@ -122,10 +122,13 @@ describe("translations in the dependency-validated cache", () => {
     expect((await read("/api/v1/products/cap?presence=bn-in")).cache).not.toBe("hit");
     // The root cap page shows the tee by its source name: still valid.
     expect((await read("/api/v1/products/cap")).cache).toBe("hit");
-    // The root tee page lists the tee's handles (\`tr:product:p_tee\`): it reads again, to the same bytes.
-    const rootTee = await read("/api/v1/products/tee");
+    // The root tee page depends on the tee's handles (`tr:handles:product:p_tee`), not its text.
+    expect((await read("/api/v1/products/tee")).cache).toBe("hit");
+    // A handle edit reaches it: its alternates change.
+    sqlite.exec("UPDATE localized_slugs SET slug = 'ti-shirt-2' WHERE resource_id = 'p_tee'");
+    const rootTee = await read<ProductPage>("/api/v1/products/tee");
     expect(rootTee.cache).not.toBe("hit");
-    expect(rootTee.body).toMatchObject({ data: { product: { name: "Tee" } } });
+    expect(rootTee.body.data?.product?.localizedSlugs).toEqual({ bn: "ti-shirt-2" });
 
     // A draft language's translation changes no root bytes.
     const rootBefore = await read("/api/v1/products/cap");
