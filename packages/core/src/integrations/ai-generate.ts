@@ -85,7 +85,7 @@ export async function generateStructured<Schema extends z.ZodType>(
   request.signal?.addEventListener("abort", cancel, { once: true });
   // A provider that ignores the signal still loses the race.
   const stopped = new Promise<never>((_, reject) => {
-    controller.signal.addEventListener("abort", () => reject(controller.signal.reason), { once: true });
+    controller.signal.addEventListener("abort", () => reject(new Error("stopped")), { once: true });
   });
 
   let output: { value: unknown };
