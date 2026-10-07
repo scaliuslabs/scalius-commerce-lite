@@ -33,7 +33,21 @@ import {
   productScenarioOf,
 } from "./fixtures";
 
-export const GALLERY_API_ORIGIN = "https://api.gallery.test";
+/**
+ * The fixture API lives on the gallery server under the entry's id, so the
+ * page's server reads and its browser reads (the cart, recommendations) both
+ * reach the entry's fixtures: `<origin>/__gallery/api/<entry id>/api/v1/...`.
+ */
+export const GALLERY_API_PREFIX = "/__gallery/api/";
+
+export function galleryApiBase(origin: string, entryId: string): string {
+  return `${origin}${GALLERY_API_PREFIX}${entryId}`;
+}
+
+/** The API path of a fixture API URL path (`/__gallery/api/<id>/api/v1/x` is `/api/v1/x`). */
+function apiPath(path: string): string {
+  return path.startsWith(GALLERY_API_PREFIX) ? path.slice(GALLERY_API_PREFIX.length).replace(/^[^/]*/, "") : path;
+}
 export const GALLERY_LOGO_ID = "logo-nakshi-bazar";
 
 const envelope = (data: unknown) => JSON.stringify({ success: true, data });
@@ -204,6 +218,17 @@ function answer(entry: GalleryEntry, path: string, search: URLSearchParams): unk
   if (page) return { page: fixturePage(decodeURIComponent(page[1]!), entry.scenario.locale === "bn") };
   if (path === "/api/v1/locations/cities") return [{ id: "dhaka", name: "Dhaka" }, { id: "chattogram", name: "Chattogram" }, { id: "sylhet", name: "Sylhet" }];
   if (path === "/api/v1/checkout-languages/active") return { language: null };
+  if (path === "/api/v1/navigation/categories") return fixtureCategoryTree();
+  if (path === "/api/v1/navigation") return fixtureMenu();
+  const rules = /^\/api\/v1\/address-rules\/([A-Z]{2})$/.exec(path);
+  if (rules) {
+    return {
+      countryCode: rules[1], format: "%N%n%O%n%A%n%D%n%C %Z", rows: [["name"], ["line1"], ["line2"], ["dependentLocality"], ["locality", "postalCode"]],
+      allowedFields: ["name", "line1", "line2", "dependentLocality", "locality", "postalCode"], requiredFields: ["name", "line1", "locality"], upperFields: [],
+      postalCodePattern: "\\d{4}", postalCodeExamples: ["1000", "1205"],
+      labels: { adminArea: "district", locality: "city", dependentLocality: "suburb", postalCode: "postal" }, adminAreas: [],
+    };
+  }
   if (path === "/api/v1/categories") return { categories: fixtureCategoryTree().nodes.slice(0, 18).map((node) => ({ ...node, description: null, metaTitle: null, metaDescription: null, createdAt: null })) };
   return undefined;
 }
@@ -217,6 +242,7 @@ function record(entry: GalleryEntry, path: string) {
 /** Answers one request the storefront sent to the fixture API origin. */
 export async function answerFixtureApi(entry: GalleryEntry, request: Request): Promise<Response> {
   const url = new URL(request.url);
+  url.pathname = apiPath(url.pathname);
   const json = { "Content-Type": "application/json" };
   if (url.pathname === "/api/v1/auth/token") {
     return new Response(envelope({ token: "gallery-token", expiresIn: 3600 }), { headers: json });
@@ -224,6 +250,7 @@ export async function answerFixtureApi(entry: GalleryEntry, request: Request): P
   if (url.pathname === "/api/v1/storefront/batch") {
     const parts = url.searchParams.getAll("r").map((part) => {
       const partUrl = new URL(part, url.origin);
+      partUrl.pathname = apiPath(partUrl.pathname);
       const data = answer(entry, partUrl.pathname, partUrl.searchParams);
       if (data === undefined) {
         record(entry, partUrl.pathname);

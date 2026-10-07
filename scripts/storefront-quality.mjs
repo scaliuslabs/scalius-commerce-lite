@@ -397,7 +397,7 @@ async function auditEntry({ browser, context, axeSource, baseUrl, entry, widths,
         result.widths[width] = { screenshot: null, diff: null, metrics: {}, findings: [{ rule: "render", source: "harness", impact: "critical", gating: true, message: `The page answered ${status}.`, help: null, count: 1, nodes: [] }] };
         continue;
       }
-      await page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => {});
+      await page.waitForLoadState("networkidle", { timeout: 5_000 }).catch(() => {});
       await page.evaluate(() => document.fonts?.ready).catch(() => {});
       for (const action of entry.interact ?? []) {
         if (action.maxWidth && width >= action.maxWidth) continue;

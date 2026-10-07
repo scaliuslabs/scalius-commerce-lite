@@ -7,7 +7,7 @@
  * and a production build refuses to evaluate it.
  */
 import { resolveStorefrontTheme } from "@scalius/shared/storefront-theme";
-import { answerFixtureApi, entryTheme, GALLERY_API_ORIGIN, unansweredReads } from "./api";
+import { answerFixtureApi, entryTheme, galleryApiBase, GALLERY_API_PREFIX, unansweredReads } from "./api";
 import { galleryEntries, galleryEntry, type GalleryEntry, type GalleryPage } from "./entries";
 import { PRODUCT_SCENARIO_SLUGS, mediaShape, setFixtureOrigin } from "./fixtures";
 
@@ -15,7 +15,7 @@ if (import.meta.env.PROD) {
   throw new Error("The storefront gallery is dev and test only.");
 }
 
-export { answerFixtureApi, GALLERY_API_ORIGIN };
+export { answerFixtureApi, galleryEntry, GALLERY_API_PREFIX };
 
 const PAGES: Record<GalleryPage, { module: string; path: (entry: GalleryEntry) => string; params: (entry: GalleryEntry) => Record<string, string> }> = {
   home: { module: "/src/pages/index.astro", path: () => "/", params: () => ({}) },
@@ -61,8 +61,8 @@ export function galleryRenderPlan(id: string, origin: string): GalleryRenderPlan
     headers: {},
     params: page.params(entry),
     runtime: {
-      PUBLIC_API_URL: `${GALLERY_API_ORIGIN}/api/v1`,
-      PUBLIC_API_BASE_URL: GALLERY_API_ORIGIN,
+      PUBLIC_API_URL: `${galleryApiBase(origin, entry.id)}/api/v1`,
+      PUBLIC_API_BASE_URL: galleryApiBase(origin, entry.id),
       STOREFRONT_URL: origin,
       CDN_DOMAIN_URL: new URL(origin).host,
       STORE_TIME_ZONE: "Asia/Dhaka",
