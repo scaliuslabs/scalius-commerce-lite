@@ -1313,37 +1313,24 @@ describe("adminAuthMiddleware RBAC route mapping", () => {
     expect(next).toHaveBeenCalledTimes(1);
   });
 
-  it("maps deeper Pathao import status to delivery-location edit permission", async () => {
+  it("lets the narrow import permission import places but never delete them", async () => {
     mocks.getUserPermissions.mockResolvedValue(
-      new Set([PERMISSIONS.SETTINGS_DELIVERY_LOCATIONS_VIEW]),
+      new Set([PERMISSIONS.SETTINGS_DELIVERY_LOCATIONS_IMPORT]),
     );
     const next = vi.fn().mockResolvedValue(undefined);
-
-    await expect(
-      adminAuthMiddleware(
-        createContext(
-          "/api/v1/admin/settings/delivery-locations/import-pathao/status",
-          "GET",
-        ) as never,
-        next,
-      ),
-    ).rejects.toMatchObject({
-      status: 403,
-      code: "FORBIDDEN",
-      message: "You do not have permission to perform this action",
-    });
-
-    mocks.getUserPermissions.mockResolvedValue(
-      new Set([PERMISSIONS.SETTINGS_DELIVERY_LOCATIONS_EDIT]),
-    );
     await adminAuthMiddleware(
-      createContext(
-        "/api/v1/admin/settings/delivery-locations/import-pathao/status",
-        "GET",
-      ) as never,
+      createContext("/api/v1/admin/settings/delivery-locations/import", "POST") as never,
       next,
     );
     expect(next).toHaveBeenCalledTimes(1);
+    for (const [path, method] of [
+      ["/api/v1/admin/settings/delivery-locations", "DELETE"],
+      ["/api/v1/admin/settings/delivery-locations/all", "DELETE"],
+      ["/api/v1/admin/settings/delivery-locations/place_1", "DELETE"],
+      ["/api/v1/admin/settings/delivery-locations/place_1", "PUT"],
+    ] as const) {
+      await expect(adminAuthMiddleware(createContext(path, method) as never, next)).rejects.toMatchObject({ status: 403 });
+    }
   });
 
   it("allows scanner sessions only on exact scanner workflow endpoints", async () => {

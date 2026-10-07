@@ -11,9 +11,7 @@ export type ProviderMarkId =
   | "google-tag-manager"
   | "tiktok"
   | "firebase"
-  | "whatsapp"
-  | "pathao"
-  | "steadfast";
+  | "whatsapp";
 
 export interface ProviderMarkManifestEntry {
   label: string;
@@ -156,28 +154,6 @@ export const PROVIDER_MARKS: Record<ProviderMarkId, ProviderMarkManifestEntry> =
     retrievedAt: "2026-07-14",
     sha256: "a936aa671e367472b7d21155eb55c4f850ae168b8e36c622de7d682659e2ad25",
     minimumCssPixels: 24,
-    allowedSurface: "direct-provider-settings",
-  },
-  pathao: {
-    label: "Pathao",
-    lightSrc: "/provider-marks/pathao.svg",
-    kind: "wordmark",
-    firstPartyAssetUrl: "https://pathao.com/wp-content/uploads/2023/10/Pathao-logo.svg",
-    governingTermsUrl: "https://pathao.com/press-kit/",
-    retrievedAt: "2026-07-14",
-    sha256: "5561a988e6c53ef678536d4c1db5df94f1ab18557b11a5d231d37c3635dd9946",
-    minimumCssPixels: 48,
-    allowedSurface: "direct-provider-settings",
-  },
-  steadfast: {
-    label: "Steadfast",
-    lightSrc: "/provider-marks/steadfast.svg",
-    kind: "wordmark",
-    firstPartyAssetUrl: "https://steadfast.com.bd/landing-page/asset/images/logo/logo.svg",
-    governingTermsUrl: "https://steadfast.com.bd/",
-    retrievedAt: "2026-07-14",
-    sha256: "da7dd2aa0efafa0cad3d6572f196f0e9021a1f0c7beba76057a94df5734d98cd",
-    minimumCssPixels: 48,
     allowedSurface: "direct-provider-settings",
   },
 };

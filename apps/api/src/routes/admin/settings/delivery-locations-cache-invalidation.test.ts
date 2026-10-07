@@ -9,7 +9,6 @@ const mocks = vi.hoisted(() => ({
   updatePlace: vi.fn(),
   getPlaceById: vi.fn(),
   getCheckoutDeliveryReadiness: vi.fn(),
-  resetPathaoImportProgress: vi.fn(),
 }));
 
 vi.mock("@scalius/core/modules/delivery", async (importOriginal) => ({
@@ -19,9 +18,6 @@ vi.mock("@scalius/core/modules/delivery", async (importOriginal) => ({
   deletePlaces: mocks.deletePlaces,
   getPlaceById: mocks.getPlaceById,
   updatePlace: mocks.updatePlace,
-  getPathaoImportStatus: vi.fn(),
-  processPathaoImportChunk: vi.fn(),
-  resetPathaoImportProgress: mocks.resetPathaoImportProgress,
 }));
 
 vi.mock("@scalius/core/modules/checkout", async (importOriginal) => ({
@@ -104,25 +100,6 @@ describe("delivery location write behavior", () => {
 
     expect(response.status).toBe(201);
 
-  });
-
-  it("routes Pathao reset to the static import endpoint before the location ID route", async () => {
-    mocks.resetPathaoImportProgress.mockResolvedValueOnce(undefined);
-    const { app, env } = createTestApp();
-
-    const response = await app.request(
-      "/api/v1/admin/settings/delivery-locations/import-pathao",
-      { method: "DELETE" },
-      env,
-    );
-
-    expect(response.status, await response.clone().text()).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({
-      success: true,
-      data: { message: "Import progress reset. You can start a fresh import." },
-    });
-    expect(mocks.resetPathaoImportProgress).toHaveBeenCalledWith(env.CACHE);
-    expect(mocks.getPlaceById).not.toHaveBeenCalled();
   });
 
   it("trims location names at the request boundary", async () => {

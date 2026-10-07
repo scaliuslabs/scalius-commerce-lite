@@ -14,7 +14,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { buildPathaoPlaceDataset } from "@scalius/core/modules/delivery";
+import { buildPathaoPlaceDataset, pathaoLocationClient } from "../../../plugins/bangladesh/src/pathao-places";
 import {
   placeDatasetCounts,
   serializePlaceDataset,
@@ -39,7 +39,12 @@ async function main() {
   const previous = JSON.parse(readFileSync(join(dataset, "places.json"), "utf8")) as PlaceDatasetEntry[];
   const legacyIds = new Map(previous.flatMap((place) => (place.legacyId ? [[place.key, place.legacyId] as const] : [])));
 
-  const places = await buildPathaoPlaceDataset(JSON.parse(readFileSync(fromRoot(credentialsPath), "utf8")), { legacyIds });
+  const account = JSON.parse(readFileSync(fromRoot(credentialsPath), "utf8"));
+  const client = pathaoLocationClient(account, async (url, init) => {
+    const response = await fetch(url, init);
+    return { ok: response.ok, status: response.status, json: <T>() => response.json() as Promise<T> };
+  });
+  const places = await buildPathaoPlaceDataset(client, { legacyIds }) as PlaceDatasetEntry[];
   const text = serializePlaceDataset(places);
   const { counts, inactive } = placeDatasetCounts(places);
   const next: PlaceDatasetManifest = {

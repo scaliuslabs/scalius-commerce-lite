@@ -1,7 +1,7 @@
-// Delivery providers and shipments. Every courier, built in or an app's, is
-// reached through the one courier port (./couriers/port.ts): a provider row's
-// `type` names the courier, the request's couriers resolve it, and nothing
-// here branches on which courier it is.
+// Delivery providers and shipments. Every courier is an app's, reached
+// through the one courier port (./couriers/port.ts): a provider row's `type`
+// names the courier, the request's couriers resolve it, and nothing here
+// branches on which courier it is.
 import { deliveryProviders, deliveryShipments, orders, orderItems, products, ShipmentStatus, type Order } from "@scalius/database/schema";
 import { fromMinor } from "@scalius/shared/money";
 import { DELIVERY_HIERARCHY_COUNTRY } from "@scalius/shared/markets";
@@ -12,7 +12,6 @@ import {
   type CourierShipment,
   type CourierShipmentInput,
 } from "@scalius/shared/plugins/providers";
-import { encryptCredentials } from "@scalius/core/utils/credential-encryption";
 
 import type { Database } from "@scalius/database/client";
 import {
@@ -31,10 +30,7 @@ import {
   hasActiveShipmentClaim,
 } from "../order-kernel";
 import { assertOrderStockCoverable, InventoryLocationShortfallError } from "../inventory";
-import {
-  getDeliveryProviderReadinessSummary,
-  getDeliveryProviderSetupFingerprint,
-} from "./provider-readiness";
+import { getDeliveryProviderReadinessSummary } from "./provider-readiness";
 import type { DeliveryProviderReadinessSummary } from "./provider-readiness";
 import type { Courier, CourierCall, CourierRow, CourierSetup } from "./couriers/port";
 import { courierFor, type CourierProvidersSource } from "./couriers/registry";
@@ -42,7 +38,7 @@ import { readinessMessages } from "@scalius/shared/readiness";
 
 type ShipmentInternalOptions = {
   shipmentId?: string;
-  /** The request's couriers (app couriers join here); absent: the built-in couriers. */
+  /** The request's couriers (the active apps'); absent: none. */
   couriers?: CourierProvidersSource;
 };
 
@@ -143,11 +139,8 @@ async function readCourierSetup(
     setup: {
       settings: null,
       error: `Unsupported provider type: ${provider.type}`,
-      fingerprint: null,
       readiness: getDeliveryProviderReadinessSummary({
         type: provider.type,
-        credentials: null,
-        config: null,
         isActive: provider.isActive,
         lastTestAttemptAt: provider.lastTestAttemptAt,
         lastTestSuccessAt: provider.lastTestSuccessAt,
@@ -183,13 +176,15 @@ function courierCall(settings: unknown, db: Database): CourierCall {
 
 /** Whether a setup may be switched on: the courier's own blockers, thrown as one validation error. */
 export async function assertDeliveryProviderActivatable(
-  provider: Pick<CourierRow, "type" | "credentials" | "config">,
+  provider: Pick<CourierRow, "type">,
   encryptionKey: string | undefined,
   couriers?: CourierProvidersSource,
 ): Promise<void> {
   const { setup } = await readCourierSetup({
     id: "",
     isActive: true,
+    credentials: "{}",
+    config: "{}",
     lastTestAttemptAt: null,
     lastTestSuccessAt: null,
     lastTestFailureAt: null,
@@ -322,86 +317,42 @@ export async function getDeliveryProvider(db: Database, id: string) {
 /**
  * Save provider to database (create or update)
  */
+/**
+ * Saves a merchant's courier: its name, the app courier it uses and whether
+ * it is on. The courier's keys and options live in the app's settings; the
+ * row carries none. Switching it on checks the courier's readiness first.
+ */
 export async function saveDeliveryProvider(
   db: Database,
-  provider: {
-    id: string;
-    name: string;
-    type: string;
-    isActive: boolean;
-    credentials: Record<string, unknown> | string;
-    config: Record<string, unknown> | string;
-  },
-  encryptionKey: string,
+  provider: { id: string; name: string; type: string; isActive: boolean },
+  encryptionKey: string | undefined,
   couriers?: CourierProvidersSource,
 ) {
-  if (!encryptionKey) {
-    throw new ServiceUnavailableError("CREDENTIAL_ENCRYPTION_KEY is required to store provider credentials.");
-  }
-
   const providerId = provider.id || nanoid();
-
-  // Convert objects to JSON strings
-  let credentials =
-    typeof provider.credentials === "string"
-      ? provider.credentials
-      : JSON.stringify(provider.credentials);
-
-  const config =
-    typeof provider.config === "string"
-      ? provider.config
-      : JSON.stringify(provider.config);
-  if (provider.isActive) {
-    await assertDeliveryProviderActivatable({ type: provider.type, credentials, config }, encryptionKey, couriers);
-  }
-  const currentFingerprint = await getDeliveryProviderSetupFingerprint({
-    type: provider.type,
-    credentials,
-    config,
-  }, encryptionKey);
-
-  credentials = await encryptCredentials(credentials, encryptionKey);
-
-  // Check if provider exists
+  if (provider.isActive) await assertDeliveryProviderActivatable({ type: provider.type }, encryptionKey, couriers);
   const existingProvider = await getDeliveryProvider(db, providerId);
-  const preserveTestProof = existingProvider?.lastTestSuccessFingerprint === currentFingerprint;
-  const staleTestProofReset = preserveTestProof
-    ? {}
-    : {
-      lastTestAttemptAt: null,
-      lastTestSuccessAt: null,
-      lastTestFailureAt: null,
-      lastTestSuccessFingerprint: null,
-    };
-
   if (existingProvider) {
-    // Update
     await db
       .update(deliveryProviders)
       .set({
         name: provider.name,
         type: provider.type,
         isActive: provider.isActive,
-        credentials,
-        config,
-        ...staleTestProofReset,
         updatedAt: sql`unixepoch()`,
       })
       .where(eq(deliveryProviders.id, providerId));
   } else {
-    // Create
     await db.insert(deliveryProviders).values({
       id: providerId,
       name: provider.name,
       type: provider.type,
       isActive: provider.isActive,
-      credentials,
-      config,
+      credentials: "{}",
+      config: "{}",
       createdAt: sql`unixepoch()`,
       updatedAt: sql`unixepoch()`,
     });
   }
-
   return { ...provider, id: providerId };
 }
 
@@ -416,20 +367,6 @@ async function testCourierConnection(
   }
   const result = await courier.testConnection({}, courierCall(settings, db));
   return { success: result.ok, message: result.message };
-}
-
-/**
- * Test a setup that is not saved yet (the settings form's typed keys): no
- * test proof is recorded. Throws when the setup cannot be read.
- */
-export async function testDeliveryProviderSetup(
-  db: Database,
-  provider: CourierRow,
-  encryptionKey: string | undefined,
-  couriers?: CourierProvidersSource,
-): Promise<{ success: boolean; message: string }> {
-  const { courier, settings } = await requireCourierSettings(provider, encryptionKey, couriers);
-  return testCourierConnection(courier, settings, db);
 }
 
 /**
@@ -467,8 +404,6 @@ export async function testDeliveryProvider(
       });
     }
     if (!courier || setup.settings === null) throw new ServiceUnavailableError(setupFailureMessage(setup));
-    // The proof names the setup that passed; a courier without one (an app's) keeps none.
-    const fingerprint = setup.fingerprint;
     const result = await testCourierConnection(courier, setup.settings, db);
     if (result.success) {
       await db
@@ -476,7 +411,6 @@ export async function testDeliveryProvider(
         .set({
           lastTestSuccessAt: sql`unixepoch()`,
           lastTestFailureAt: null,
-          lastTestSuccessFingerprint: fingerprint,
           updatedAt: sql`unixepoch()`,
         })
         .where(eq(deliveryProviders.id, id));
@@ -645,6 +579,8 @@ export async function createShipment(
     orderId,
     providerId,
     providerType: provider.type,
+    // The courier's name as staff and buyers read it ("Pathao"), whatever the row's type id.
+    courierName: courier.label,
     status: "creating",
     rawStatus: "creating",
     metadata: JSON.stringify({ initiatedAt: new Date().toISOString() }),

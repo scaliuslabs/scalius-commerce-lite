@@ -277,7 +277,6 @@ export const queryKeys = {
       params !== undefined
         ? (["settings", "delivery-locations-all", params] as const)
         : (["settings", "delivery-locations-all"] as const),
-    importPathaoStatus: () => ["settings", "import-pathao-status"] as const,
     checkoutLanguages: (params?: Record<string, unknown>) =>
       params !== undefined
         ? (["settings", "checkout-languages", params] as const)

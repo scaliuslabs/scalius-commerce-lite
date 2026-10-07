@@ -1,16 +1,15 @@
 // The courier as delivery code sees it: the shared courier port
-// (`@scalius/shared/plugins/providers/courier`, the same port app couriers
-// implement) plus how a saved delivery provider row configures it. A courier
-// adapter speaks one courier's protocol; booking, tracking, connection tests,
-// recovery lookups and readiness are written once in delivery.service.ts and
-// never branch on a courier id, or on whether the courier is built in or an
-// app's.
+// (`@scalius/shared/plugins/providers/courier`, the port app couriers
+// implement) plus how a saved delivery provider row configures it. Booking,
+// tracking, connection tests, recovery lookups and readiness are written once
+// in delivery.service.ts and never branch on a courier id.
 //
-// A merchant uses a courier through a `delivery_providers` row whose `type`
-// is the courier id: `pathao`, `steadfast`, or an app courier's
-// `<plugin id>:<provider id>`. Built-in couriers keep their credentials on
-// the row (encrypted with CREDENTIAL_ENCRYPTION_KEY); an app courier's live
-// in the app's own settings and its row carries none.
+// Every courier is an app's: a merchant uses one through a
+// `delivery_providers` row whose `type` is `<plugin id>:<provider id>`
+// (`scalius.bangladesh:pathao`). Its credentials live in the app's own
+// settings; the row carries none. A row that still names a retired built-in
+// courier (`pathao`, `steadfast`) resolves to the app courier that replaced
+// it, or fails closed with the app's reason (./registry.ts).
 //
 // Port failures are the port's `ProviderError`: a certain refusal (declined,
 // misconfigured, or retryable without `uncertain`) means the courier booked
@@ -41,7 +40,7 @@ export interface CourierCall<S = unknown> {
   /** The row's settings, read with `setup` for this request. */
   settings: S;
   signal: AbortSignal;
-  /** The store's database, for adapters that read store data (Pathao's location mappings). */
+  /** The store's database, for the platform's own reads around a call (a courier's location ids). */
   db: Database;
 }
 
@@ -55,12 +54,10 @@ export interface CourierSetup<S = unknown> {
   unreadable?: boolean;
   /** Setup, activation and connection-test readiness, as settings and shipment actions check it. */
   readiness: DeliveryProviderReadinessSummary;
-  /** The keyed fingerprint of the setup a live connection test proves; null when the courier keeps no test proof. */
-  fingerprint: string | null;
 }
 
 export interface Courier<S = unknown> extends ProviderPort<"courier", CourierCall<S>> {
-  /** `pathao`, `steadfast`, or an app courier's `<plugin id>:<provider id>`. */
+  /** `<plugin id>:<provider id>`, or a retired built-in id until its app takes it over. */
   readonly id: string;
   /** Merchant-facing courier name. */
   readonly label: string;
@@ -73,15 +70,19 @@ export interface Courier<S = unknown> extends ProviderPort<"courier", CourierCal
   /** Reads a row's setup: strictly, failing closed on unreadable or placeholder credentials. */
   setup(provider: CourierRow, encryptionKey: string | undefined): Promise<CourierSetup<S>>;
   /**
+   * The address levels a booking needs mapped to the courier's own ids
+   * (Pathao: city and zone): the order page asks for them before booking.
+   */
+  readonly requiredLocations?: readonly ("city" | "zone" | "area")[];
+  /**
    * Store setup a booking to this recipient needs before anything is written
-   * (Pathao's location mappings): a merchant-facing reason it cannot be
-   * booked, or null.
+   * (the courier's location ids on the store's places): a merchant-facing
+   * reason it cannot be booked, or null.
    */
   preflight?(recipient: CourierShipmentInput["recipient"], db: Database): Promise<string | null>;
   /**
    * The courier's public tracking page for a parcel, kept with the shipment
-   * when it is booked (an app's declared `trackingUrl`). Built-in couriers'
-   * pages are derived where they are shown (`getTrackingUrl`).
+   * when it is booked (the app's declared `trackingUrl`).
    */
   trackingUrl?(trackingId: string): string;
 }

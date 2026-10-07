@@ -36,12 +36,6 @@ export const DASHBOARD_SETTINGS_OPERATIONS = {
   "dashboard.delivery_locations.get": {},
   "dashboard.delivery_locations.import": { batch: "forbidden" },
   "dashboard.delivery_locations.list": {},
-  "dashboard.delivery_locations.pathao_import_chunk": {
-    openWorld: true,
-    batch: "forbidden",
-  },
-  "dashboard.delivery_locations.pathao_import_reset": { batch: "forbidden" },
-  "dashboard.delivery_locations.pathao_import_status": {},
   "dashboard.delivery_locations.trash": { risk: "destructive" },
   "dashboard.delivery_locations.update": {},
   "dashboard.delivery_providers.create": {
@@ -56,12 +50,6 @@ export const DASHBOARD_SETTINGS_OPERATIONS = {
   "dashboard.delivery_providers.get": { limits: { response: 16_384 } },
   "dashboard.delivery_providers.list": {},
   "dashboard.delivery_providers.test": {
-    risk: "security",
-    openWorld: true,
-    batch: "forbidden",
-    limits: { response: 16_384 },
-  },
-  "dashboard.delivery_providers.test_credentials": {
     risk: "security",
     openWorld: true,
     batch: "forbidden",

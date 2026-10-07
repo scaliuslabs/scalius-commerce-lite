@@ -1,17 +1,17 @@
 # Delivery
 
-The `delivery` domain owns the courier port and its adapters, saved courier accounts (delivery providers), shipments and their tracking, and the delivery places and rates a buyer chooses at checkout (locations, zones, shipping methods). It is for contributors who change booking, tracking or delivery pricing. Courier-specific facts (endpoints, headers, statuses, webhooks) are in [docs/delivery-providers](../../../../../docs/delivery-providers/README.md).
+The `delivery` domain owns the courier port, saved courier accounts (delivery providers), shipments and their tracking, and the delivery places and rates a buyer chooses at checkout (locations, zones, shipping methods). It is for contributors who change booking, tracking or delivery pricing. Courier-specific facts (endpoints, headers, statuses, webhooks) are in [docs/delivery-providers](../../../../../docs/delivery-providers/README.md).
 
 ## Entries and layer
 
-- `index.ts` exports the services, the courier port and registry (`couriers/port.ts`, `couriers/registry.ts`), `pathaoCourier` and `steadfastCourier`, and re-exports `browser.ts` (`types.ts`, `getTrackingUrl()`, `provider-readiness.ts`).
+- `index.ts` exports the services, the courier port and registry (`couriers/port.ts`, `couriers/registry.ts`), the retired-courier handoff reads (`retired-couriers.ts`), `getTrackingUrl()` (a retired courier's page for a parcel booked before the move), and re-exports `browser.ts` (`types.ts`, `zone-match.ts`, `provider-readiness.ts`). Core has no courier adapter: every courier is an app's.
 - Layer L5. It imports `inventory`, `order-kernel` and `settings`. `checkout`, `fulfilment`, `notifications` and `orders` import it (`scripts/core-domain-graph.allow.json`).
 
 ## Owns
 
 | Table | Purpose |
 |-------|---------|
-| `delivery_providers` | A saved courier account: `type`, `is_active` (default false), encrypted `credentials`, `config`, and the live-test proof (`last_test_*` columns). |
+| `delivery_providers` | A merchant's courier: `type` (the app courier), `is_active` (default false) and the last test (`last_test_*` columns). `credentials` and `config` are `{}`: the app's settings hold the keys. A row saved before its courier moved into an app keeps its old encrypted keys until the app's activation moves them. |
 | `delivery_shipments` | A parcel. `provider_type` is `manual` for an own rider. |
 | `places` | The place directory: a tree of numbered levels per country (Bangladesh: City, Thana, Area). `external_ids` is JSON, for example `{ "pathao": "123" }`. Imports key places by `source_key`. Soft delete. [Places](../../../../../docs/PLACES.md). |
 | `delivery_zones`, `delivery_zone_locations` | A zone and its Bangladesh places. A place belongs to at most one zone. `delivery_zones.revision` guards edits. |
@@ -24,28 +24,29 @@ The `delivery` domain owns the courier port and its adapters, saved courier acco
 ## Couriers
 
 - Every courier implements the courier port (`@scalius/shared/plugins/providers/courier`). `couriers/port.ts` adds `setup()`, `preflight()` and `trackingUrl()`.
-- A delivery provider row names its courier in `type`: `pathao`, `steadfast`, or an installed app's `<plugin id>:<provider id>`. Delivery and fulfilment code never branch on the courier.
+- A delivery provider row names its courier in `type`: an installed app's `<plugin id>:<provider id>` (`scalius.bangladesh:pathao`). Delivery and fulfilment code never branch on the courier.
+- A row or shipment that still names a retired built-in courier (`pathao`, `steadfast`) resolves to the app courier that replaced it (`integrations/retired-providers.ts`). While that app is not active it resolves to a courier that fails closed: readiness blocked with "Activate Bangladesh pack in Apps to use it.", no booking, no tracking. Its shipments stay readable, with their tracking pages.
 - A courier states the countries it delivers to (`countries`: `"any"` or ISO codes; Pathao and Steadfast deliver to `["BD"]`). The provider list returns them. The order page offers a courier only for an order shipping to one of its countries and names the others with the reason; the bulk booking skips such orders. `createShipment()` refuses the country before any write, as a last guard (MARKETS-DESIGN step 3a).
-- `createCourierProviders(apps)` builds one request's catalog: built-in couriers first, then app couriers. An app cannot shadow a built-in id. The API loads app couriers only when a row names one (`requestCourierProviders()` in `apps/api/src/plugins/providers/courier.ts`). Without that source, only built-ins exist.
-- `Courier.setup(row, key)` reads a row once. It returns the call settings (null when unreadable: never call the courier), the readiness summary and a setup fingerprint.
-- A built-in courier keeps encrypted credentials on the row. `readRowCourierSetup()` reads them strictly with `CREDENTIAL_ENCRYPTION_KEY`. An app courier's row has no credentials: its settings and readiness live in the app.
+- `createCourierProviders(apps)` builds one request's catalog from the active courier apps. The API loads them only when a row names an app courier or a retired one (`requestCourierProviders()` in `apps/api/src/plugins/providers/courier.ts`). Without that source there is none.
+- `Courier.setup(row, key)` reads the setup once: the call settings (null when unreadable: never call the courier) and the readiness summary. An app courier's settings are the app's, read strictly with `CREDENTIAL_ENCRYPTION_KEY`.
+- A courier that books by its own place ids declares `locations` (Pathao: `pathao`, city and zone, numeric). The adapter's `preflight()` refuses a booking without them before the shipment row, and `createShipment` passes them as `recipient.locationIds`. The provider list returns `requiredLocations` (the order page asks for them) and `canFindShipment`.
 - `ProviderError` decides the outcome of a booking. A certain refusal (`declined`, `misconfigured`, or `retryable` without `uncertain`) means nothing was booked. `uncertain`, or any other throw after the call started, keeps the booking for reconciliation.
 
 ## Provider readiness
 
-`getDeliveryProviderReadinessSummary()` reports a lifecycle: `draft`, `configured`, `tested`, `active` or `blocked`. `active` means enabled and tested.
+`getDeliveryProviderReadinessSummary()` reports a lifecycle: `draft`, `tested`, `active` or `blocked`. `active` means on and set up.
 
-- A placeholder-looking value (`test`, `demo`, `changeme`, `password`, repeated digits, and similar) blocks activation. The `baseUrl` must be an absolute public HTTPS URL without credentials, a custom port, a query or a fragment.
-- The test proof is an HMAC-SHA256 fingerprint of the type, credentials and config, keyed with `CREDENTIAL_ENCRYPTION_KEY`. `saveDeliveryProvider()` keeps the proof only while the fingerprint still matches. A failure after the last success blocks actions until a new test passes. App couriers keep no proof.
+- The courier names what blocks it (`activationBlockers`): the app's missing, unreadable or placeholder settings, or the app not active. The first blocker is the issue the dashboard shows.
+- The app tests its own setup (`testConnection` through the app). The row records the last test; there is no proof on the row.
 - Shipment creation and status checks need an active provider.
 
 ## Shipment creation
 
 `createShipment(db, orderId, providerId, options, key, { shipmentId, couriers })` inserts first:
 
-1. Check that the provider is `active`, run the courier `preflight()` (Pathao needs mapped city and zone ids) and run `assertOrderStockCoverable()`.
+1. Check that the provider is `active`, run the courier `preflight()` (a courier's declared place ids) and run `assertOrderStockCoverable()`.
 2. Build the `CourierShipmentInput` from the saved order. The caller supplies only staff options (`deliveryType`, `itemType`, `itemWeight`, `note`). `codAmountMinor` is the balance due. `idempotencyKey` is the shipment id.
-3. Insert a `creating` shipment row, then call the courier.
+3. Insert a `creating` shipment row (with the courier's name), then call the courier.
 4. Success: save `external_id`, `tracking_id` (the booking id when the courier has none), `tracking_url`, `status`, `raw_status` and the courier's details in `metadata`.
 5. Certain refusal: `status = failed`, `raw_status = provider_rejected`.
 6. Uncertain outcome: `status = reconcile_required`, `raw_status = provider_outcome_unknown`. The caller (`fulfilment`) keeps the order's shipment claim without an expiry. If this write fails, the `creating` row still blocks a retry.
@@ -59,7 +60,7 @@ The `delivery` domain owns the courier port and its adapters, saved courier acco
 
 ## Status and order sync
 
-`mapProviderStatus(type, status)` maps a courier status to one of 14 shipment codes (`status-mapper.ts`). An unmapped status becomes `unknown`. The maps are in [Pathao](../../../../../docs/delivery-providers/pathao.md) and [Steadfast](../../../../../docs/delivery-providers/steadfast.md).
+Each courier maps its own statuses to the port's 14 shipment codes (Pathao and Steadfast: `plugins/bangladesh/src/couriers.ts`; [Pathao](../../../../../docs/delivery-providers/pathao.md), [Steadfast](../../../../../docs/delivery-providers/steadfast.md)). An unmapped status becomes `unknown`.
 
 `updateOrderStatusFromShipment(db, shipmentId, status)` moves the order:
 
@@ -79,9 +80,9 @@ The `delivery` domain owns the courier port and its adapters, saved courier acco
 
 ## Webhooks
 
-The API mounts `POST /api/v1/webhooks/pathao`, `POST /api/v1/webhooks/steadfast` and `POST /api/v1/webhooks/couriers/{id}` (app couriers whose port implements `verifyWebhook`) without session auth: verification is the auth (`apps/api/src/routes/webhooks/`, `apps/api/src/middleware/webhook-auth.ts`; rules in [docs/delivery-providers](../../../../../docs/delivery-providers/README.md)). After verification, each route:
+The API mounts `POST /api/v1/webhooks/couriers/{id}` (app couriers whose port implements `verifyWebhook`) and the retired couriers' URLs `POST /api/v1/webhooks/pathao` and `/webhooks/steadfast`, internal forwards to the app couriers that replaced them, without session auth: the app's verification is the auth (`apps/api/src/routes/webhooks/couriers.ts`; rules in [docs/delivery-providers](../../../../../docs/delivery-providers/README.md)). After verification, the route:
 
-1. Finds the shipment by external id, scoped to the verified provider id and type. An old or inactive row, or another provider's colliding id, cannot match.
+1. Finds the shipment by external id, scoped to the one active provider row and the courier. An old or inactive row, or another provider's colliding id, cannot match. With the order number the courier echoes, it refuses a booking of another order and binds a booking a lookup confirmed without its id.
 2. Claims the event once in `webhook_events`. A duplicate returns the earlier result.
 3. Stores the status and details on the shipment, then runs `syncCourierFulfilmentFromShipment()`, `updateOrderStatusFromShipment()` and `syncCourierFulfilmentFromShipment()` again.
 4. Enqueues the customer notification after a committed status change.
@@ -91,15 +92,15 @@ Admin status checks use the same sync through `checkAndSyncShipmentStatus()` (`a
 ## Locations and zones
 
 - A place has a country and a level (`places.ts`). Bangladesh addresses read levels 1 to 3 as city, zone (thana) and area (`placeAddressFieldSql`). A name is trimmed and whitespace-collapsed, at most 120 characters. Active names are unique per parent and level. `deletePlaces()` soft-deletes a place with everything under it and removes all of them from zones in one batch, because orders and bookings still read the names.
-- `importPlaces()` (`places-import.ts`) is the one idempotent dataset import: the dashboard, agents, plugins, the dev seed and the Pathao import use it. Rules are in [Places](../../../../../docs/PLACES.md).
+- `importPlaces()` (`places-import.ts`) is the one idempotent dataset import: the dashboard, agents, plugins (the Bangladesh pack's dataset and its Pathao refresh) and the dev seed use it. Rules are in [Places](../../../../../docs/PLACES.md).
 - `resolveActiveDeliveryLocationNames()` checks a checkout address: the city is a root city, the zone belongs to it, the area belongs to the zone, and all are active. Otherwise it throws `delivery_location_unavailable` with the failing field.
-- Pathao needs positive-integer `external_ids` for city and zone. The area is optional.
+- A courier reads its own ids from `external_ids` (Pathao: positive integers for city and zone; the area is optional).
 - A zone is a name plus Bangladesh places and regions (MARKETS-DESIGN step 3b). `resolveDestinationZoneId()` (`zone-match.ts`, browser safe; the dashboard order form uses it too) picks an address's zone, most specific first: Bangladesh place (area, then zone, then city), the longest postal prefix, the admin area, the whole country. With no zone the address gets no delivery rate. A `pickup` rate is store-wide, needs a pickup address, and is offered for every address.
 - A zone serves a country `entire` when it holds the country whole and no other zone holds part of it (`zoneCountryCoverage()`). The public rate list states each rate's `countries`; JSON-LD and the feeds claim a country-wide rate only for `entire` countries.
 - `resolveDeliveryRate()` is the one checkout decision: the rate is active and live, its zone matches the destination (pickup always matches), and the rate is free when the items subtotal before discounts reaches `free_over_minor`. The rate statement carries the destination country's regions as one JSON column, so the decision costs no extra statement.
 - Limits: a rate or threshold up to 100,000 major units (`MAX_DELIVERY_AMOUNT`), 20 rates per zone, 2,000 places and 500 regions per zone, postal prefixes of 1 to 10 letters or digits. A fee is on the store's price increment (whole taka by default in BDT).
 - Zone edits need the current `delivery_zones.revision`. Pickup edits need the revision of the `delivery_pickup` document. A region another zone holds is refused with that zone's name. A write cannot remove the last active rate. `applyDeliveryZoneTemplate()` creates starter Dhaka zones (Inside Dhaka, optionally Near Dhaka, and the zone Bangladesh for Outside Dhaka) only when no zone exists.
-- `processPathaoImportChunk()` turns Pathao's cities, zones and areas into dataset entries and applies them through `importPlaces()` in steps, through repeated dashboard calls until the status is `complete`. Progress is in KV under `location_import:pathao` (24-hour TTL). `buildPathaoPlaceDataset()` reads the whole tree for a dataset refresh.
+- The Bangladesh pack refreshes Pathao's live cities, zones and areas through `importPlaces()` in bounded steps (`plugins/bangladesh/src/pathao-places.ts`).
 
 ## Routes
 
@@ -109,10 +110,11 @@ Permissions are in `packages/core/src/auth/rbac/route-permissions/settings.ts` a
 |------|------------|
 | `/api/v1/admin/settings/delivery-providers`: `GET /` | `settings.delivery_providers.view` or `orders.manage_shipments` |
 | Same path: `GET /{id}` | `settings.delivery_providers.view` |
-| Same path: `POST /`, `PUT /`, `POST /create-test` (test an unsaved setup), `POST /{id}` (test a saved one), `DELETE /{id}` | `settings.delivery_providers.edit` |
+| Same path: `POST /`, `PUT /` (an app courier id, no keys), `POST /{id}` (test through the app), `DELETE /{id}` | `settings.delivery_providers.edit` |
 | `/api/v1/admin/settings/delivery-locations`: reads (`GET /`, `GET /{id}`) | `settings.delivery_locations.view` |
 | Same path: `GET /countries` | `settings.delivery_locations.view` |
-| Same path: `POST /`, `POST /import`, `PUT /{id}`, `DELETE /`, `DELETE /all`, `DELETE /{id}`, `POST`/`DELETE /import-pathao`, `GET /import-pathao/status` | `settings.delivery_locations.edit` |
+| Same path: `POST /`, `PUT /{id}`, `DELETE /`, `DELETE /all`, `DELETE /{id}` | `settings.delivery_locations.edit` |
+| Same path: `POST /import` (adds and updates, never deletes) | `settings.delivery_locations.edit` or `settings.delivery_locations.import` (what an app that loads a dataset asks for) |
 | `/api/v1/admin/settings/shipping-methods`: `GET /`, `POST /` (create zone), `PUT /{id}`, `DELETE /{id}`, `PUT /pickup`, `PUT /template` | `settings.shipping_methods.view` (`GET`), `.edit` (writes) |
 | `GET /api/v1/locations/cities`, `/zones`, `/areas` (and `/summaries`), `GET /api/v1/shipping-methods` (Bangladesh `cityId`/`zoneId`/`areaId`, or `countryCode`/`adminArea`/`postalCode`) | public |
 | `GET`, `DELETE /api/v1/admin/shipments/{id}`; `POST /api/v1/admin/shipments/{id}/check-status` | `orders.view` / `orders.manage_shipments` |
@@ -122,7 +124,7 @@ Permissions are in `packages/core/src/auth/rbac/route-permissions/settings.ts` a
 
 - Never call a courier with unreadable or placeholder credentials. Fail closed.
 - Never infer "not booked" from a 404, a failed lookup or an unknown status. Never attach an external id without evidence that binds it to the original provider and order.
-- Never save a masked placeholder (`••••••••••••`) as a credential. The admin routes mask `clientSecret`, `password`, `apiKey`, `secretKey` and `webhookSecret`.
+- Never put a courier key on a delivery provider row: it belongs in the courier app's settings (sealed, never echoed).
 - Never log credentials, courier response bodies, buyer contact data or webhook bodies.
-- Always scope webhook shipment lookups to the verified provider id and type.
+- Always scope webhook shipment lookups to the one active provider row and the courier.
 - Never write the fulfilment ledger or order status from a courier adapter. Adapters speak one courier's protocol only.

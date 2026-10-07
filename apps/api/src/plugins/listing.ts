@@ -41,19 +41,39 @@ export interface PluginCatalogEntry {
   listing: PluginListingManifest;
 }
 
-/** `icon`, or `screenshot-1` to `screenshot-6`. */
-export const PLUGIN_ASSET_NAME = /^(?:icon|screenshot-[1-6])$/;
+/** `icon`, `screenshot-1` to `screenshot-6`, or `provider-<provider id>` (a provider's own icon). */
+export const PLUGIN_ASSET_NAME = /^(?:icon|screenshot-[1-6]|provider-[a-z][a-z0-9-]{0,47})$/;
 
 export function pluginAssetUrl(pluginId: string, asset: string, fingerprint: string): string {
   return `/api/v1/admin/apps/${pluginId}/assets/${asset}?v=${fingerprint.slice(0, 16)}`;
 }
 
 /** The manifest path an asset name stands for, with the check it gets; null when the app has none. */
-export function pluginAssetPath(listing: Pick<PluginManifest, "icon" | "screenshots">, asset: string): { path: string; role: PluginAssetRole } | null {
+export function pluginAssetPath(
+  listing: Pick<PluginManifest, "icon" | "screenshots"> & { providers?: PluginManifest["providers"] },
+  asset: string,
+): { path: string; role: PluginAssetRole } | null {
   if (asset === "icon") return listing.icon ? { path: listing.icon, role: "icon" } : null;
+  if (asset.startsWith("provider-")) {
+    const id = asset.slice("provider-".length);
+    const icon = listing.providers?.find((provider) => provider.id === id)?.icon;
+    return icon ? { path: icon, role: "icon" } : null;
+  }
   const index = Number(asset.slice("screenshot-".length)) - 1;
   const path = asset.startsWith("screenshot-") ? listing.screenshots[index] : undefined;
   return path ? { path, role: "screenshot" } : null;
+}
+
+/** A provider's own icon (its brand mark), else the app's icon, else null. */
+export function providerIconUrl(
+  pluginId: string,
+  manifest: Pick<PluginManifest, "icon" | "providers">,
+  providerId: string,
+  fingerprint: string,
+): string | null {
+  const own = manifest.providers.find((provider) => provider.id === providerId)?.icon;
+  if (own) return pluginAssetUrl(pluginId, `provider-${providerId}`, fingerprint);
+  return manifest.icon ? pluginAssetUrl(pluginId, "icon", fingerprint) : null;
 }
 
 /** The listing fields every app card shows. */

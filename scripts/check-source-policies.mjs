@@ -294,7 +294,6 @@ export const policies = [
       "packages/core/src/integrations/firebase/admin.ts",
       "packages/core/src/integrations/storage.ts",
       "packages/core/src/integrations/email/provider.ts",
-      "packages/core/src/modules/delivery/pathao-location-import.ts",
       "packages/core/src/modules/payments/gateways/stripe.ts",
       "apps/api/src/utils/kv-cache.ts",
     ],

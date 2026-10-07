@@ -700,6 +700,15 @@ export const PERMISSION_METADATA: Record<
     category: "Settings",
     isSensitive: false,
   },
+  [PERMISSIONS.SETTINGS_DELIVERY_LOCATIONS_IMPORT]: {
+    name: PERMISSIONS.SETTINGS_DELIVERY_LOCATIONS_IMPORT,
+    displayName: "Import Delivery Locations",
+    description: "Add and update places through the place import, without deleting any",
+    resource: "settings",
+    action: "delivery_locations.import",
+    category: "Settings",
+    isSensitive: false,
+  },
 
   // Settings - Delivery Providers (SENSITIVE)
   [PERMISSIONS.SETTINGS_DELIVERY_PROVIDERS_VIEW]: {

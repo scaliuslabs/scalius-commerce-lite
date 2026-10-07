@@ -23,7 +23,7 @@ import { ForbiddenError, NotFoundError, ValidationError } from "../../../utils/a
 import { ok } from "../../../utils/api-response";
 import { errorResponses, successEnvelope } from "../../../schemas/responses";
 import { readAppProviderSettings, requestProviderRuntime } from "../../../plugins/providers/runtime";
-import { pluginAssetUrl } from "../../../plugins/listing";
+import { pluginAssetUrl, providerIconUrl } from "../../../plugins/listing";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -35,6 +35,8 @@ const appProviderSchema = z.object({
   appName: z.string(),
   /** Same-origin address of the app's icon, shown beside the method (null: the app has none). */
   appIcon: z.string().nullable(),
+  /** Same-origin address of the provider's own mark (a pack's couriers are different brands), else the app's icon. */
+  icon: z.string().nullable(),
   name: z.string(),
   /** The port's optional operations the app implements. */
   operations: z.array(z.string()),
@@ -93,6 +95,7 @@ app.openapi(listRoute, async (c) => {
         pluginId: installation.pluginId,
         appName: installation.manifest.name,
         appIcon: installation.manifest.icon ? pluginAssetUrl(installation.pluginId, "icon", installation.bundleSha256) : null,
+        icon: providerIconUrl(installation.pluginId, installation.manifest, declaration.id, installation.bundleSha256),
         name: declaration.name,
         operations: [...operations],
         canTestConnection: operations.includes("testConnection"),

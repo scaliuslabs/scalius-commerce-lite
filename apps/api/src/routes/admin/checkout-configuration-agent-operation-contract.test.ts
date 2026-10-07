@@ -57,9 +57,6 @@ const expectedOperations: ExpectedOperation[] = [
   ["get", "/api/v1/admin/settings/delivery-locations/{id}", "dashboard.delivery_locations.get"],
   ["put", "/api/v1/admin/settings/delivery-locations/{id}", "dashboard.delivery_locations.update"],
   ["delete", "/api/v1/admin/settings/delivery-locations/{id}", "dashboard.delivery_locations.trash"],
-  ["post", "/api/v1/admin/settings/delivery-locations/import-pathao", "dashboard.delivery_locations.pathao_import_chunk"],
-  ["get", "/api/v1/admin/settings/delivery-locations/import-pathao/status", "dashboard.delivery_locations.pathao_import_status"],
-  ["delete", "/api/v1/admin/settings/delivery-locations/import-pathao", "dashboard.delivery_locations.pathao_import_reset"],
   ["get", "/api/v1/admin/settings/customer-requests", "dashboard.customer_requests.policy_get"],
   ["put", "/api/v1/admin/settings/customer-requests", "dashboard.customer_requests.policy_update"],
   ["get", "/api/v1/admin/taxes", "dashboard.taxes.configuration_get"],
@@ -133,7 +130,7 @@ const backendScenarios = {
     "dashboard.shipping_zones.pickup_update",
     "dashboard.shipping_zones.apply_template",
   ],
-  deliveryHierarchyAndPathaoImport: [
+  deliveryHierarchyAndImport: [
     "dashboard.delivery_locations.list",
     "dashboard.delivery_locations.countries",
     "dashboard.delivery_locations.create",
@@ -143,9 +140,6 @@ const backendScenarios = {
     "dashboard.delivery_locations.get",
     "dashboard.delivery_locations.update",
     "dashboard.delivery_locations.trash",
-    "dashboard.delivery_locations.pathao_import_chunk",
-    "dashboard.delivery_locations.pathao_import_status",
-    "dashboard.delivery_locations.pathao_import_reset",
   ],
   customerRequestPolicy: [
     "dashboard.customer_requests.policy_get",
@@ -195,7 +189,7 @@ describe("checkout configuration agent operation contract", () => {
       expect(ids.has(operationId), `duplicate ${operationId}`).toBe(false);
       ids.add(operationId);
     }
-    expect(ids.size).toBe(49);
+    expect(ids.size).toBe(46);
   });
 
   it("marks every declared JSON mutation body as required", () => {

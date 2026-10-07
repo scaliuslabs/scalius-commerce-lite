@@ -99,6 +99,25 @@ describe("ShipmentCard recovery authority", () => {
     },
   );
 
+  it("offers the courier's own lookup only for a courier that finds bookings by order number", async () => {
+    const provider = (type: string, courierName: string, canFindShipment: boolean) => ({
+      id: `prov_${courierName}`, name: courierName, type, courierId: type, courierName, countries: "any", requiredLocations: [], canFindShipment, isActive: true,
+      createdAt: 1, updatedAt: 1,
+    });
+    const lookup = en["courier.checkWith"].replace("{courier}", "Steadfast");
+    await render({
+      shipmentRecovery: { ...recovery, providerType: "scalius.bangladesh:steadfast" },
+      deliveryProviders: [provider("scalius.bangladesh:steadfast", "Steadfast", true)] as never,
+    });
+    expect(host.textContent).toContain(lookup);
+    await render({
+      shipmentRecovery: { ...recovery, providerType: "scalius.bangladesh:pathao" },
+      deliveryProviders: [provider("scalius.bangladesh:pathao", "Pathao", false)] as never,
+    });
+    expect(host.textContent).not.toContain(en["courier.checkWith"].replace("{courier}", "Pathao"));
+    expect(host.textContent).toContain(en["courier.checkTitle"]);
+  });
+
   it("retains the authorized repair action for incomplete local finalization", async () => {
     await render({ shipmentRecovery: { ...recovery, reason: "reconcile_required", canRepair: true } });
     expect(repairButton()).toBeDefined();

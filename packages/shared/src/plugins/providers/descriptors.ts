@@ -26,6 +26,13 @@ import { paymentAmountLimitsSchema } from "./payment";
 const providerId = z.string().regex(/^[a-z][a-z0-9-]{0,47}$/);
 const title = z.string().trim().min(1).max(80);
 const settingKey = z.string().regex(/^[a-z][a-z0-9_]{0,47}$/);
+/**
+ * The provider's own mark in the plugin package (`assets/pathao.svg`): an SVG
+ * or PNG with the app icon's checks, shown beside the provider where the
+ * merchant picks it (a pack's providers are different brands).
+ */
+const providerIcon = z.string().max(128)
+  .regex(/^(?!.*\.\.)[a-z0-9][a-z0-9_.-]*(?:\/[a-z0-9][a-z0-9_.-]*)*\.(?:svg|png)$/, "Use a relative lowercase .svg or .png path inside the plugin.");
 
 /**
  * The most providers one app declares. A regional pack bundles a country's
@@ -54,6 +61,7 @@ function base<K extends ProviderKind>(kind: K) {
     settings: z.array(settingKey).max(40)
       .refine((keys) => new Set(keys).size === keys.length, "List each setting once.")
       .optional(),
+    icon: providerIcon.optional(),
   };
 }
 
@@ -92,6 +100,20 @@ export const courierProviderDescriptorSchema = z.object({
   countries: providerCountriesSchema.default("any"),
   /** The public tracking page, with `{trackingId}` where the tracking id goes. */
   trackingUrl: z.string().max(500).regex(/^https:\/\/[^\s]*\{trackingId\}[^\s]*$/, "Use an https URL containing {trackingId}.").optional(),
+  /**
+   * The courier books by its own location ids, kept on the store's places
+   * under `externalIds.<key>`. The platform refuses a booking whose city,
+   * zone or area lacks a `required` id before anything is written (`numeric`:
+   * the id must be a positive whole number), and passes the ids as
+   * `recipient.locationIds`.
+   */
+  locations: z.object({
+    key: z.string().regex(/^[a-z][a-z0-9_-]{0,31}$/),
+    required: z.array(z.enum(["city", "zone", "area"])).max(3)
+      .refine((levels) => new Set(levels).size === levels.length, "List each level once.")
+      .default([]),
+    numeric: z.boolean().default(false),
+  }).strict().optional(),
 }).strict();
 
 const plain = <K extends ProviderKind>(kind: K) => z.object(base(kind)).strict();

@@ -9,10 +9,8 @@ import authRoutes from "../routes/auth";
 import { authSetupRoutes } from "../routes/admin/auth-management";
 import { cacheControlRoutes } from "../routes/cache";
 import { paymentRoutes } from "../routes/payment/payment-routes";
-import { courierWebhookRoutes } from "../routes/webhooks/couriers";
-import { pathaoWebhookRoutes } from "../routes/webhooks/pathao";
+import { courierWebhookRoutes, legacyCourierWebhookRoutes } from "../routes/webhooks/couriers";
 import { paymentWebhookRoutes } from "../routes/webhooks/payments";
-import { steadfastWebhookRoutes } from "../routes/webhooks/steadfast";
 
 export function registerSystemRoutes(app: RuntimeApiApp): void {
   app.route("/auth", authRoutes);
@@ -20,9 +18,10 @@ export function registerSystemRoutes(app: RuntimeApiApp): void {
   app.route("/agent-artifacts", agentArtifactRoutes);
 
   app.use("/webhooks/*", webhookBodyLimitMiddleware);
-  app.route("/webhooks/pathao", pathaoWebhookRoutes);
-  app.route("/webhooks/steadfast", steadfastWebhookRoutes);
-  // App couriers: /webhooks/couriers/{provider}.
+  // Couriers: /webhooks/couriers/{provider}; the retired built-ins' URLs serve
+  // the Bangladesh pack's couriers that replaced them (no reconfiguration).
+  app.route("/webhooks/pathao", legacyCourierWebhookRoutes("pathao"));
+  app.route("/webhooks/steadfast", legacyCourierWebhookRoutes("steadfast"));
   app.route("/webhooks/couriers", courierWebhookRoutes);
   // Payment gateways: /webhooks/{provider}. Registered after the courier routes.
   app.route("/webhooks", paymentWebhookRoutes);

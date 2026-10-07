@@ -1,8 +1,9 @@
-// The courier port end to end: one contract run against a built-in adapter
-// (Steadfast, fetch mocked) and an app courier (a fixture plugin through the
-// bundled loader, the Workers Free path), the app courier booked, tracked and
-// recovered through core delivery code on the migrated schema, and its
-// tracking pushes through POST /webhooks/couriers/{id}.
+// The courier port end to end: the contract run against an app courier (a
+// fixture plugin through the bundled loader, the Workers Free path), booked,
+// tracked and recovered through core delivery code on the migrated schema,
+// and its tracking pushes through POST /webhooks/couriers/{id}. The
+// Bangladesh pack's Pathao and Steadfast run the same way in
+// ../bangladesh-couriers.*.test.ts.
 import { createHash } from "node:crypto";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import type { DatabaseSync } from "node:sqlite";
@@ -16,7 +17,6 @@ import * as schema from "@scalius/database/schema";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 import {
   checkShipmentStatus,
-  steadfastCourier,
   type Courier,
   type CourierCall,
   type CourierProviders,
@@ -125,36 +125,6 @@ interface Harness {
   call: CourierCall;
 }
 
-/** Steadfast with its API answered locally: books, refuses ORD-DECLINE, loses ORD-TIMEOUT's answer. */
-function steadfastHarness(): Harness {
-  const booked = new Set<string>();
-  vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
-    if (url.endsWith("/get_balance")) return Response.json({ status: 200, current_balance: 0 });
-    if (url.endsWith("/create_order")) {
-      const body = JSON.parse(String(init?.body)) as { invoice: string };
-      if (body.invoice === "ORD-DECLINE") return Response.json({ status: 422, message: "Invalid" }, { status: 422 });
-      booked.add(body.invoice);
-      if (body.invoice === "ORD-TIMEOUT") throw new TypeError("network lost after sending");
-      return Response.json({ status: 200, consignment: { consignment_id: 924, invoice: body.invoice, tracking_code: "SF924", status: "in_review" } });
-    }
-    if (url.includes("/status_by_cid/")) return Response.json({ status: 200, delivery_status: "in_review" });
-    if (url.includes("/status_by_invoice/")) {
-      return booked.has(decodeURIComponent(url.split("/").pop()!))
-        ? Response.json({ status: 200, delivery_status: "in_review" })
-        : new Response("not found", { status: 404 });
-    }
-    throw new Error(`Unexpected courier request ${url}`);
-  }));
-  return {
-    courier: steadfastCourier,
-    call: {
-      settings: { credentials: { baseUrl: "https://courier.invalid/api/v1", apiKey: "steadfast-api-4821", secretKey: "steadfast-secret-9417" }, config: { defaultCodAmount: 0 } },
-      signal: new AbortController().signal,
-      db,
-    },
-  };
-}
-
 async function appHarness(): Promise<Harness> {
   const courier = (await requestCouriers()).require(PARCEL_COURIER_ID);
   const setup = await courier.setup({
@@ -165,10 +135,8 @@ async function appHarness(): Promise<Harness> {
   return { courier, call: { settings: setup.settings, signal: new AbortController().signal, db } };
 }
 
-describe.each([
-  ["Steadfast (built in)", async () => steadfastHarness()],
-  ["an app courier (bundled loader)", appHarness],
-] as const)("%s implements the courier port", (_name, harness) => {
+describe("an app courier (bundled loader) implements the courier port", () => {
+  const harness = appHarness;
   const port = PROVIDER_PORTS.courier;
 
   it("books a parcel and answers within the port", async () => {
@@ -227,12 +195,10 @@ describe("app courier as a merchant's delivery provider", () => {
     expect(response.status, await response.clone().text()).toBe(201);
     expect((await response.json() as { data: unknown }).data).toMatchObject({
       type: PARCEL_COURIER_ID,
-      credentials: "{}",
-      config: "{}",
+      courierName: "Acme Parcel",
       readiness: { status: "ready", configured: true, tested: true, active: true, canCreateShipment: true },
     });
-    const stored = sqlite.prepare("SELECT credentials FROM delivery_providers").get() as { credentials: string };
-    expect(stored.credentials).not.toBe("{}");
+    expect(sqlite.prepare("SELECT credentials, config FROM delivery_providers").get()).toEqual({ credentials: "{}", config: "{}" });
 
     expect((await save({ name: "Acme Parcel", type: PARCEL_COURIER_ID, credentials: { apiKey: "x" } })).status).toBe(400);
     expect((await save({ name: "Acme Parcel", type: "acme.parcel" })).status).toBe(400);

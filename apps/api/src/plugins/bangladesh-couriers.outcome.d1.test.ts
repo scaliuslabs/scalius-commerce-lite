@@ -1,26 +1,34 @@
+// Pathao and Steadfast booking outcomes through the persisted fulfilment
+// flow (core's delivery.create-outcome test from before the move): the
+// Bangladesh pack's couriers through the platform's provider runtime
+// (bundled loader, sealed settings, the courier port's validation), the real
+// delivery service, claims and database. A lost answer is held for
+// reconciliation and never posted twice; a refusal is released for a
+// corrected retry; Steadfast's lookup by invoice is positive-only.
 import type { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Database } from "@scalius/database/client";
 import * as schema from "@scalius/database/schema";
 import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
-import { bulkShipOrders } from "../fulfilment/bulk";
-import {
-    lookupUnknownOrderShipment,
-    reconcileOrderShipment,
-    resolveUnknownOrderShipment,
-} from "../fulfilment/reconcile";
-import { markOrderDelivered } from "../fulfilment/delivery-outcomes";
-import { checkShipmentStatus, deleteShipmentRecord, getShipments, ORDER_SHIPMENT_LIST_LIMIT } from "./delivery.service";
-import { applyInventoryForStatusChangeWithImpact } from "../inventory/inventory-transitions";
-import { getDeliveryProviderSetupFingerprint } from "./provider-readiness";
-import { mapProviderStatus } from "./status-mapper";
-import { updateOrderStatusFromShipment } from "./tracking";
+import { bulkShipOrders, lookupUnknownOrderShipment, markOrderDelivered, reconcileOrderShipment, resolveUnknownOrderShipment } from "@scalius/core/modules/fulfilment";
+import { checkShipmentStatus, deleteShipmentRecord, getShipments, ORDER_SHIPMENT_LIST_LIMIT, updateOrderStatusFromShipment } from "@scalius/core/modules/delivery";
+import { applyInventoryForStatusChangeWithImpact } from "../../../../packages/core/src/modules/inventory/inventory-transitions";
+import { activatePlugin, installPlugin, writePluginSettings } from "@scalius/core/modules/plugins";
+import { BUNDLED_PLUGINS } from "./bundled.gen";
+import { loadCourierProviders } from "./providers/courier";
+import { createAppProviderRuntime } from "./providers/runtime";
+import { pluginTestCtx, pluginTestEnv } from "./testing/fixtures";
+import { manifest as packManifest } from "../../../../plugins/bangladesh/src/index";
+import { mapSteadfastStatus } from "../../../../plugins/bangladesh/src/couriers";
 
-// Keep the real provider, delivery service, claims and database; inventory is a separate boundary.
-vi.mock("../inventory/inventory-transitions", () => ({
+// Keep the real couriers, delivery service, claims and database; inventory is a separate boundary.
+vi.mock("../../../../packages/core/src/modules/inventory/inventory-transitions", () => ({
   applyInventoryForStatusChangeWithImpact: vi.fn(),
   assertOrderStockCoverable: vi.fn(async () => undefined),
 }));
+
+const PACK = "scalius.bangladesh";
+const BASE = { pathao: "https://api-hermes.pathao.com", steadfast: "https://portal.packzy.com/api/v1" } as const;
 
 type Outcome = "network" | "invalid-json" | "http-502" | "missing-id" | "http-408" | "http-409" | "http-429" | "rejected" | "success";
 
@@ -28,27 +36,27 @@ describe.each(["pathao", "steadfast"] as const)("%s shipment outcome through the
   let sqlite: DatabaseSync;
   let db: Database;
   let createPosts: number;
-  const key = "synthetic-local-fingerprint-key";
+  let env: Env;
+  const key = Buffer.alloc(32, 5).toString("base64");
+  const couriers = () => loadCourierProviders(createAppProviderRuntime({ env, db, ctx: pluginTestCtx() }));
 
   beforeEach(async () => {
     createPosts = 0;
     vi.mocked(applyInventoryForStatusChangeWithImpact).mockReset().mockResolvedValue({
       inventoryAction: "deducted", availabilityTransitionVariantIds: [],
     });
-    ({ sqlite, db } = createSqliteD1Database({ foreignKeys: true }));
-    const credentials = providerType === "pathao" ? {
-      baseUrl: "https://courier.invalid", clientId: "synthetic-client-924", clientSecret: "synthetic-secret-924",
-      username: "synthetic-user-924", password: "synthetic-password-924",
-    } : { baseUrl: "https://courier.invalid", apiKey: "synthetic-api-924", secretKey: "synthetic-secret-924" };
-    const config = providerType === "pathao"
-      ? { storeId: "924", defaultDeliveryType: 48, defaultItemType: 2, defaultItemWeight: 0.5 }
-      : { defaultCodAmount: 0 };
-    const fingerprint = await getDeliveryProviderSetupFingerprint({ type: providerType, credentials, config }, key);
-    const now = new Date();
+    let binding: D1Database;
+    ({ sqlite, db, binding } = createSqliteD1Database({ foreignKeys: true }));
+    env = pluginTestEnv(binding, { CREDENTIAL_ENCRYPTION_KEY: key });
+    sqlite.prepare("INSERT INTO user (id, name, email, email_verified, role, is_super_admin) VALUES ('owner', 'Owner', 'owner@shop.test', 1, 'admin', 1)").run();
+    const installed = await installPlugin(db, { manifest: packManifest, source: "bundled", bundleSha256: BUNDLED_PLUGINS[PACK]!.sha256, actorUserId: "owner" });
+    const configured = await writePluginSettings(db, PACK, providerType === "pathao" ? {
+      pathao_client_id: "synthetic-client-924", pathao_client_secret: "synthetic-secret-924",
+      pathao_username: "synthetic-user-924", pathao_password: "synthetic-password-924", pathao_store_id: "924",
+    } : { steadfast_api_key: "synthetic-api-924", steadfast_secret_key: "synthetic-secret-924" }, { expectedRevision: installed.revision, credentialEncryptionKey: key });
+    await activatePlugin(db, PACK, { actorUserId: "owner", expectedRevision: configured.revision });
     await db.insert(schema.deliveryProviders).values({
-      id: "provider_local", name: "Synthetic provider", type: providerType, isActive: true,
-      credentials: JSON.stringify(credentials), config: JSON.stringify(config),
-      lastTestAttemptAt: now, lastTestSuccessAt: now, lastTestSuccessFingerprint: fingerprint,
+      id: "provider_local", name: "Synthetic provider", type: `${PACK}:${providerType}`, isActive: true, credentials: "{}", config: "{}",
     });
     await db.insert(schema.places).values([
       { id: "city_local", name: "Synthetic City", countryCode: "BD", level: 1, externalIds: '{"pathao":"1"}', metadata: "{}" },
@@ -66,20 +74,21 @@ describe.each(["pathao", "steadfast"] as const)("%s shipment outcome through the
   afterEach(() => { vi.unstubAllGlobals(); sqlite?.close(); });
 
   function mockProvider(outcome: Outcome, failShipmentWrites = false) {
-    vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
-      if (url === "https://courier.invalid/aladdin/api/v1/issue-token") {
+    vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input instanceof Request ? input.url : input);
+      if (url === `${BASE.pathao}/aladdin/api/v1/issue-token`) {
         return Response.json({ access_token: "synthetic-token", expires_in: 86400 });
       }
       const statusUrl = providerType === "pathao"
         ? "/aladdin/api/v1/orders/confirmed-consignment/info"
         : "/status_by_cid/confirmed-consignment";
-      if (url === `https://courier.invalid${statusUrl}` && init?.method === "GET") {
+      if (url === `${BASE[providerType]}${statusUrl}` && init?.method === "GET") {
         return Response.json(providerType === "pathao"
           ? { code: 200, data: { order_status: "Delivered" } }
           : { status: 200, delivery_status: "delivered" });
       }
       const createUrl = providerType === "pathao" ? "/aladdin/api/v1/orders" : "/create_order";
-      if (url !== `https://courier.invalid${createUrl}` || init?.method !== "POST") {
+      if (url !== `${BASE[providerType]}${createUrl}` || init?.method !== "POST") {
         throw new Error("Unexpected local test endpoint");
       }
       createPosts++;
@@ -102,7 +111,7 @@ describe.each(["pathao", "steadfast"] as const)("%s shipment outcome through the
         : { status: 200, message: "Created", consignment: { consignment_id: consignmentId, tracking_code: "synthetic-tracking", status: "pending" } }, { status: 201 });
     }));
   }
-  const create = () => bulkShipOrders(db as never, ["order_local"], "provider_local", {}, key);
+  const create = () => bulkShipOrders(db as never, ["order_local"], "provider_local", {}, key, couriers);
   const orderState = () => sqlite.prepare("SELECT status, version, inventory_action, shipment_claim_id, shipment_claim_expires_at FROM orders WHERE id='order_local'").get();
   const shipmentRows = () => sqlite.prepare("SELECT id, status, raw_status, external_id, metadata FROM delivery_shipments ORDER BY created_at,id").all();
 
@@ -144,6 +153,7 @@ describe.each(["pathao", "steadfast"] as const)("%s shipment outcome through the
       trackingId: "confirmed-tracking",
       actorId: "admin_local",
       encryptionKey: key,
+      couriers,
     });
     expect(result).toMatchObject({ status: "repaired", resolution: "merchant_confirmed_existing", claimCleared: true });
     expect(orderState()).toMatchObject({ status: "shipped", shipment_claim_id: null });
@@ -156,7 +166,7 @@ describe.each(["pathao", "steadfast"] as const)("%s shipment outcome through the
         operationKey: "00000000-0000-4000-8000-000000000001",
       },
     });
-    await expect(checkShipmentStatus(db as never, shipmentId, key)).resolves.toMatchObject({
+    await expect(checkShipmentStatus(db as never, shipmentId, key, couriers)).resolves.toMatchObject({
       shipmentId,
       status: expect.any(String),
     });
@@ -187,6 +197,7 @@ describe.each(["pathao", "steadfast"] as const)("%s shipment outcome through the
       confirmationAccepted: true,
       actorId: "admin_local",
       encryptionKey: key,
+      couriers,
     });
     expect(result).toMatchObject({ status: "released", resolution: "merchant_confirmed_not_created", claimCleared: true });
     expect(orderState()).toMatchObject({ status: "confirmed", version: expectedOrderVersion + 1, shipment_claim_id: null });
@@ -216,6 +227,7 @@ describe.each(["pathao", "steadfast"] as const)("%s shipment outcome through the
       confirmationAccepted: true,
       actorId: "admin_local",
       encryptionKey: key,
+      couriers,
     })).rejects.toThrow("Order changed");
     expect(orderState()?.shipment_claim_id).toBe(shipmentId);
     expect(shipmentRows()[0]).toMatchObject({ status: "reconcile_required", raw_status: "provider_outcome_unknown" });
@@ -226,13 +238,13 @@ describe.each(["pathao", "steadfast"] as const)("%s shipment outcome through the
       mockProvider("success");
       expect((await create())[0]?.success).toBe(true);
       const shipmentId = String(shipmentRows()[0]!.id);
-      const pendingCancellation = mapProviderStatus("steadfast", "cancelled_approval_pending");
+      const pendingCancellation = mapSteadfastStatus("cancelled_approval_pending");
       await updateOrderStatusFromShipment(db as never, shipmentId, pendingCancellation);
       expect(orderState()?.status).toBe("shipped");
       expect((await create())[0]).toMatchObject({ success: true, message: "Order already shipped; inventory reconciled" });
       expect(createPosts).toBe(1);
 
-      await updateOrderStatusFromShipment(db as never, shipmentId, mapProviderStatus("steadfast", "cancelled"));
+      await updateOrderStatusFromShipment(db as never, shipmentId, mapSteadfastStatus("cancelled"));
       expect(orderState()?.status).toBe("confirmed");
       mockProvider("success");
       expect((await create())[0]?.success).toBe(true);
@@ -244,7 +256,7 @@ describe.each(["pathao", "steadfast"] as const)("%s shipment outcome through the
       await create();
       const shipmentId = String(shipmentRows()[0]!.id);
       vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
-        expect(url).toBe("https://courier.invalid/status_by_invoice/order_local");
+        expect(String(url)).toBe(`${BASE.steadfast}/status_by_invoice/order_local`);
         expect(init?.method).toBe("GET");
         return Response.json({ status: 200, delivery_status: "in_review" });
       }));
@@ -255,6 +267,7 @@ describe.each(["pathao", "steadfast"] as const)("%s shipment outcome through the
         operationKey: "00000000-0000-4000-8000-000000000004",
         actorId: "admin_local",
         encryptionKey: key,
+        couriers,
       });
       expect(result).toMatchObject({ status: "repaired", resolution: "provider_confirmed_existing" });
       expect(orderState()).toMatchObject({ status: "shipped", shipment_claim_id: null });
@@ -281,6 +294,7 @@ describe.each(["pathao", "steadfast"] as const)("%s shipment outcome through the
           operationKey: "00000000-0000-4000-8000-000000000008",
           actorId: "admin_local",
           encryptionKey: key,
+          couriers,
         })).rejects.toThrow("recognized shipment state");
         expect(orderState()).toMatchObject({ status: "confirmed", shipment_claim_id: shipmentId });
         expect(shipmentRows()[0]).toMatchObject({ status: "reconcile_required", raw_status: "provider_outcome_unknown" });
@@ -299,6 +313,7 @@ describe.each(["pathao", "steadfast"] as const)("%s shipment outcome through the
         operationKey: "00000000-0000-4000-8000-000000000005",
         actorId: "admin_local",
         encryptionKey: key,
+        couriers,
       })).rejects.toThrow("lock remains active");
       expect(orderState()?.shipment_claim_id).toBe(shipmentId);
       expect(shipmentRows()[0]).toMatchObject({ status: "reconcile_required", raw_status: "provider_outcome_unknown" });
@@ -316,6 +331,7 @@ describe.each(["pathao", "steadfast"] as const)("%s shipment outcome through the
         operationKey: "00000000-0000-4000-8000-000000000007",
         actorId: "admin_local",
         encryptionKey: key,
+        couriers,
       })).rejects.toThrow("Record a courier-confirmed cancellation");
       expect(orderState()).toMatchObject({ status: "confirmed", shipment_claim_id: shipmentId });
       expect(shipmentRows()[0]).toMatchObject({ status: "reconcile_required", raw_status: "provider_outcome_unknown" });
@@ -337,6 +353,7 @@ describe.each(["pathao", "steadfast"] as const)("%s shipment outcome through the
         confirmationAccepted: true,
         actorId: "admin_local",
         encryptionKey: key,
+        couriers,
       })).rejects.toThrow("Steadfast confirms a shipment");
       expect(orderState()?.shipment_claim_id).toBe(shipmentId);
     });
@@ -378,7 +395,7 @@ describe.each(["pathao", "steadfast"] as const)("%s shipment outcome through the
   it("does not treat an expired creating placeholder as provider confirmation", async () => {
     sqlite.exec(`
       INSERT INTO delivery_shipments (id, order_id, provider_id, provider_type, status, raw_status, metadata)
-      VALUES ('shipment_expired', 'order_local', 'provider_local', '${providerType}', 'reconcile_required',
+      VALUES ('shipment_expired', 'order_local', 'provider_local', '${PACK}:${providerType}', 'reconcile_required',
         'expired_order_shipment_claim', '{"reconciliation":{"providerStatus":"creating"}}');
       UPDATE orders SET shipment_claim_id = 'shipment_expired', shipment_claim_expires_at = NULL;
     `);
@@ -419,7 +436,7 @@ describe.each(["pathao", "steadfast"] as const)("%s shipment outcome through the
         INSERT INTO order_fulfillments (id, order_id, kind, request_key, actor_type) VALUES ('ful_sent', 'order_local', 'ship', 'sent', 'admin');
         INSERT INTO order_fulfillment_lines (id, fulfillment_id, order_id, order_item_id, quantity) VALUES ('fln_sent', 'ful_sent', 'order_local', 'item_local', 1);
         INSERT INTO delivery_shipments (id, order_id, provider_id, provider_type, status) VALUES
-          ('courier_ship', 'order_local', 'provider_local', 'pathao', 'in_transit'),
+          ('courier_ship', 'order_local', 'provider_local', 'scalius.bangladesh:pathao', 'in_transit'),
           ('manual_ship', 'order_local', NULL, 'manual', 'in_transit');
       `);
       await markOrderDelivered(db, "order_local");
@@ -433,7 +450,7 @@ describe.each(["pathao", "steadfast"] as const)("%s shipment outcome through the
     it("lists a bounded newest-first shipment page with provider names in one read", async () => {
       sqlite.exec(`WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i <= ${ORDER_SHIPMENT_LIST_LIMIT})
         INSERT INTO delivery_shipments (id, order_id, provider_id, provider_type, status, created_at)
-        SELECT printf('ship_%03d', i), 'order_local', 'provider_local', 'pathao', 'failed', i FROM n`);
+        SELECT printf('ship_%03d', i), 'order_local', 'provider_local', 'scalius.bangladesh:pathao', 'failed', i FROM n`);
       const rows = await getShipments(db, "order_local");
       expect(rows).toHaveLength(ORDER_SHIPMENT_LIST_LIMIT);
       expect(rows[0]).toMatchObject({ id: `ship_${ORDER_SHIPMENT_LIST_LIMIT + 1}`, providerName: "Synthetic provider" });

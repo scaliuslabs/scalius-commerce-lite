@@ -1,27 +1,35 @@
 // Retired built-in providers handed to the app that replaced them
 // (docs/platform/PLUGINS.md, "Retired built-in providers"). When a Super
 // Admin activates that app, the store's old configuration of those providers
-// moves into the app's settings, so a store keeps sending and checking with
-// the keys it saved before the move:
+// moves into the app's settings, so a store keeps sending, checking and
+// shipping with the keys it saved before the move:
 //
 //   1. Read the old configuration with the strict reader
-//      (CREDENTIAL_ENCRYPTION_KEY): the `sms` document's gateway fields and
-//      the `fraud-checker` rows of a retired type. A value this key cannot
-//      open is skipped and reported, never guessed.
+//      (CREDENTIAL_ENCRYPTION_KEY): the `sms` document's gateway fields, the
+//      `fraud-checker` rows and the `delivery_providers` rows of a retired
+//      type (a courier's active row, else its newest). A value this key
+//      cannot open is skipped and reported, never guessed.
 //   2. Write it into the app's settings (secrets sealed for the app), only
 //      into keys the merchant has not set there: the app's own settings win.
 //      A value the app's settings refuse (not https, a placeholder) is
 //      skipped and reported.
 //   3. Repoint the saved choices at the app's providers and drop the moved
 //      fields: the `sms` document is replaced (compare-and-swap on the
-//      revision read), each fraud row is rewritten only while it is still the
-//      row that was read.
+//      revision read), each fraud and delivery row is rewritten only while it
+//      is still the row that was read, and the retired couriers' shipments
+//      name the app's couriers (their tracking pages saved).
 //
 // Idempotent: a second activation finds nothing left to move. Nothing here
 // logs or returns a credential; the result names setting keys only.
 
 import type { Database } from "@scalius/database/client";
 import { readRetiredFraudCheckers, replaceRetiredFraudChecker, type RetiredFraudChecker } from "@scalius/core/modules/fraud-checker";
+import {
+  readRetiredCourierRows,
+  repointRetiredCourierRow,
+  repointRetiredCourierShipments,
+  type RetiredCourierRow,
+} from "@scalius/core/modules/delivery";
 import {
   PluginError,
   isSealedPluginSecret,
@@ -32,6 +40,7 @@ import {
 import { smsDocument } from "@scalius/core/modules/settings";
 import { selectSettingsDocuments } from "@scalius/core/settings-store";
 import {
+  RETIRED_COURIER_PROVIDERS,
   RETIRED_FRAUD_PROVIDERS,
   RETIRED_SMS_PROVIDERS,
   RETIRED_SMS_SECRET_FIELDS,
@@ -45,7 +54,7 @@ export interface ProviderHandoffResult {
   moved: string[];
   /** App setting keys whose old value could not be moved: the merchant enters them again. */
   skipped: string[];
-  /** Saved choices now pointing at the app (`sms`, fraud row ids). */
+  /** Saved choices now pointing at the app (`sms`, fraud row ids, delivery provider row ids). */
   repointed: string[];
 }
 
@@ -99,9 +108,41 @@ async function smsCandidates(
   return { document, revision: row.revision, values, unreadable };
 }
 
+type Candidate = { field: string; value: unknown };
+
+/** A saved value in the type the app's setting takes (a number field gets a number, a select its option). */
+function settingValue(installation: PluginInstallation, key: string, value: string | number): unknown {
+  const field = installation.manifest.settings.find((candidate) => candidate.key === key);
+  if (field?.type === "number") return typeof value === "number" ? value : Number(value);
+  return String(value);
+}
+
+/** Each retired courier's values from its active row, else its newest one; the old fields that could not be opened. */
+function courierCandidates(installation: PluginInstallation, rows: RetiredCourierRow[]): { values: Map<string, Candidate>; unreadable: string[] } {
+  const values = new Map<string, Candidate>();
+  const unreadable: string[] = [];
+  const byType = new Map<string, RetiredCourierRow>();
+  for (const row of rows) {
+    const chosen = byType.get(row.type);
+    if (!chosen || (!chosen.isActive && row.isActive) || (chosen.isActive === row.isActive && row.updatedAt > chosen.updatedAt)) byType.set(row.type, row);
+  }
+  for (const [type, row] of byType) {
+    const settings = RETIRED_COURIER_PROVIDERS[type]!.settings;
+    for (const [field, value] of Object.entries(row.values)) {
+      const target = settings[field];
+      if (target) values.set(target, { field, value: settingValue(installation, target, value) });
+    }
+    for (const field of row.unreadable) {
+      const target = settings[field];
+      if (target) unreadable.push(target);
+    }
+  }
+  return { values, unreadable };
+}
+
 /** Each retired fraud type's values from its active row, else its newest one. */
-function fraudCandidates(rows: RetiredFraudChecker[]): Map<string, { field: string; value: string }> {
-  const values = new Map<string, { field: string; value: string }>();
+function fraudCandidates(rows: RetiredFraudChecker[]): Map<string, Candidate> {
+  const values = new Map<string, Candidate>();
   const byType = new Map<string, RetiredFraudChecker>();
   for (const row of rows) {
     const chosen = byType.get(row.type);
@@ -124,7 +165,7 @@ function fraudCandidates(rows: RetiredFraudChecker[]): Map<string, { field: stri
 async function writeCandidates(
   db: Database,
   pluginId: string,
-  candidates: Map<string, { field: string; value: string }>,
+  candidates: Map<string, Candidate>,
   encryptionKey: string,
 ): Promise<{ moved: string[]; skipped: string[] }> {
   const skipped: string[] = [];
@@ -170,17 +211,22 @@ export async function handOffRetiredProviders(
   const installation = await requirePluginInstallation(db, pluginId);
   const sms = replacedBy(installation, RETIRED_SMS_PROVIDERS);
   const fraud = replacedBy(installation, RETIRED_FRAUD_PROVIDERS);
-  if ((sms.length === 0 && fraud.length === 0) || !encryptionKey) return EMPTY;
+  const couriers = replacedBy(installation, RETIRED_COURIER_PROVIDERS);
+  if ((sms.length === 0 && fraud.length === 0 && couriers.length === 0) || !encryptionKey) return EMPTY;
 
   const smsRead = sms.length > 0 ? await smsCandidates(db, sms, encryptionKey) : null;
   const fraudTypes = new Set(fraud.map(([type]) => type));
   const fraudRows = fraud.length > 0 ? (await readRetiredFraudCheckers(db, encryptionKey)).filter((row) => fraudTypes.has(row.type)) : [];
 
-  const candidates = new Map([...(smsRead?.values ?? []), ...fraudCandidates(fraudRows)]);
+  const courierTypes = new Set(couriers.map(([type]) => type));
+  const courierRows = courierTypes.size > 0 ? (await readRetiredCourierRows(db, encryptionKey)).filter((row) => courierTypes.has(row.type)) : [];
+  const courierRead = courierCandidates(installation, courierRows);
+
+  const candidates = new Map<string, Candidate>([...(smsRead?.values ?? []), ...fraudCandidates(fraudRows), ...courierRead.values]);
   const written = await writeCandidates(db, pluginId, candidates, encryptionKey);
   const result: ProviderHandoffResult = {
     moved: written.moved,
-    skipped: [...new Set([...(smsRead?.unreadable ?? []), ...written.skipped])],
+    skipped: [...new Set([...(smsRead?.unreadable ?? []), ...courierRead.unreadable, ...written.skipped])],
     repointed: [],
   };
 
@@ -214,6 +260,11 @@ export async function handOffRetiredProviders(
   for (const row of fraudRows) {
     if (await replaceRetiredFraudChecker(db, row, encryptionKey)) result.repointed.push(row.id);
   }
+  // Delivery rows, then their shipments (kept readable: their tracking pages are saved now).
+  for (const row of courierRows) {
+    if (await repointRetiredCourierRow(db, row)) result.repointed.push(row.id);
+  }
+  for (const type of courierTypes) await repointRetiredCourierShipments(db, type);
   if (result.moved.length > 0 || result.skipped.length > 0 || result.repointed.length > 0) {
     // Setting keys and counts only.
     console.info(`[plugins] ${pluginId} took over retired providers: ${result.moved.length} settings moved, ${result.skipped.length} skipped, ${result.repointed.length} choices repointed`);

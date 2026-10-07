@@ -228,15 +228,9 @@ export const SETTINGS_ROUTE_PERMISSIONS: RoutePermissionMap = {
   "/api/v1/admin/settings/delivery-locations/countries": {
     GET: { permission: PERMISSIONS.SETTINGS_DELIVERY_LOCATIONS_VIEW },
   },
+  // The place import only adds and updates: an app loading its dataset needs nothing that deletes.
   "/api/v1/admin/settings/delivery-locations/import": {
-    POST: { permission: PERMISSIONS.SETTINGS_DELIVERY_LOCATIONS_EDIT },
-  },
-  "/api/v1/admin/settings/delivery-locations/import-pathao": {
-    POST: { permission: PERMISSIONS.SETTINGS_DELIVERY_LOCATIONS_EDIT },
-    DELETE: { permission: PERMISSIONS.SETTINGS_DELIVERY_LOCATIONS_EDIT },
-  },
-  "/api/v1/admin/settings/delivery-locations/import-pathao/status": {
-    GET: { permission: PERMISSIONS.SETTINGS_DELIVERY_LOCATIONS_EDIT },
+    POST: { anyOf: [PERMISSIONS.SETTINGS_DELIVERY_LOCATIONS_EDIT, PERMISSIONS.SETTINGS_DELIVERY_LOCATIONS_IMPORT] },
   },
   "/api/v1/admin/settings/delivery-locations/*": {
     GET: { permission: PERMISSIONS.SETTINGS_DELIVERY_LOCATIONS_VIEW },

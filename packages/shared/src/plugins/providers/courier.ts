@@ -8,6 +8,12 @@
 // never confirmed is found again with `findShipment` instead of booking
 // twice. A call that may have reached the courier but gave no answer raises
 // `ProviderError("retryable", …, { uncertain: true })`.
+//
+// A courier that books by its own location ids (Pathao's city, zone and
+// area) declares `locations` in its manifest entry: the platform reads those
+// ids from the store's places (`externalIds.<key>`), refuses a booking that
+// lacks a required one before anything is written, and passes them as
+// `recipient.locationIds`.
 
 import { z } from "zod";
 import {
@@ -56,6 +62,16 @@ export const courierRecipientSchema = z.object({
   areaName: text(200).nullable(),
   postalCode: text(40).nullable(),
   country: providerCountrySchema.nullable(),
+  /**
+   * The courier's own ids of the recipient's city, zone and area, read from
+   * the store's places (`externalIds.<key>` of the courier's declared
+   * `locations`). Present only for a courier that declares `locations`.
+   */
+  locationIds: z.object({
+    city: text(128).nullable(),
+    zone: text(128).nullable(),
+    area: text(128).nullable(),
+  }).strict().optional(),
 }).strict();
 export type CourierRecipient = z.infer<typeof courierRecipientSchema>;
 
@@ -138,20 +154,74 @@ export const courierQuoteSchema = z.object({
   estimatedDays: z.number().int().min(0).max(365).nullable(),
 }).strict();
 
+const HEADER_NAME = /^[a-z0-9!#$%&'*+.^_`|~-]{1,128}$/;
+/** Headers a courier's answer may carry (an integration secret it echoes): never cookies, a redirect or the content type. */
+const REPLY_HEADER = z.string().regex(HEADER_NAME).refine(
+  (name) => !/^(?:set-cookie|location|refresh|content-type|content-length|cache-control|content-security-policy|access-control-.*|transfer-encoding|connection)$/i.test(name),
+  "The platform sets this header.",
+);
+type ReplyJson = string | number | boolean | null | ReplyJson[] | { [key: string]: ReplyJson };
+const replyJson: z.ZodType<ReplyJson> = z.lazy(() => z.union([
+  z.string().max(500),
+  z.number().finite(),
+  z.boolean(),
+  z.null(),
+  z.array(replyJson).max(20),
+  z.record(z.string().max(64), replyJson),
+]));
+
+/**
+ * The answer the courier expects (some check the status, a header or the
+ * body). The platform sends it for a push it accepted, applied or not; it
+ * stays JSON, uncached and without cookies. Absent: `200 { received: true }`.
+ */
+export const courierWebhookReplySchema = z.object({
+  status: z.number().int().min(200).max(299),
+  headers: z.record(REPLY_HEADER, z.string().max(1024)).refine((headers) => Object.keys(headers).length <= 8, "At most 8 headers.").optional(),
+  body: z.record(z.string().max(64), replyJson).optional(),
+}).strict();
+export type CourierWebhookReply = z.infer<typeof courierWebhookReplySchema>;
+
 /**
  * An authenticated tracking push, or why nothing applies. The platform
  * applies a push once: by the courier's own `eventId` when it sends one, else
  * by the shipment, state and time the push reports.
+ *
+ * - `update`: a new state of the shipment `externalId`. With `orderId` (the
+ *   order number the courier echoes), the platform refuses a push whose order
+ *   differs from the shipment's, and binds the booking id to a shipment of
+ *   that order whose booking the courier confirmed by lookup
+ *   (`findShipment`) but whose id it never learned.
+ * - `note`: facts about the shipment (a tracking message) without a state change.
+ * - `ignored`: authentic but not about a shipment (an integration check).
+ * - `invalid`: not authentic (401), or authentic but malformed when it
+ *   carries `rejectStatus` (a 4xx the courier expects).
  */
 export const courierWebhookSchema = z.discriminatedUnion("status", [
   z.object({
     status: z.literal("update"),
     eventId: providerRefSchema.optional(),
     externalId: providerRefSchema,
+    orderId: providerRefSchema.optional(),
     tracking: courierTrackingSchema,
+    reply: courierWebhookReplySchema.optional(),
   }).strict(),
-  z.object({ status: z.literal("ignored"), reason: providerReasonSchema }).strict(),
-  z.object({ status: z.literal("invalid"), reason: providerReasonSchema }).strict(),
+  z.object({
+    status: z.literal("note"),
+    eventId: providerRefSchema,
+    externalId: providerRefSchema,
+    orderId: providerRefSchema.optional(),
+    /** Merged into the shipment's details: never contact data or secrets. */
+    details: providerDetailsSchema,
+    reply: courierWebhookReplySchema.optional(),
+  }).strict(),
+  z.object({ status: z.literal("ignored"), reason: providerReasonSchema, reply: courierWebhookReplySchema.optional() }).strict(),
+  z.object({
+    status: z.literal("invalid"),
+    reason: providerReasonSchema,
+    /** A malformed push from an authenticated sender: the 4xx it gets instead of 401. */
+    rejectStatus: z.number().int().min(400).max(499).optional(),
+  }).strict(),
 ]);
 export type CourierWebhook = z.infer<typeof courierWebhookSchema>;
 

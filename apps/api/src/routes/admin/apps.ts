@@ -496,10 +496,10 @@ const assetRoute = createRoute({
   path: "/{id}/assets/{asset}",
   operationId: "dashboard.apps.asset_get",
   tags: ["Admin - Apps"],
-  summary: "Read an app's icon or one of its screenshots",
+  summary: "Read an app's icon, one of its screenshots or a provider's icon",
   description: "The image the listing names, checked again before it is served (an SVG cannot run code or load anything). A `v` equal to the app's current fingerprint is cached for a year.",
   request: {
-    params: idParams.extend({ asset: z.string().regex(PLUGIN_ASSET_NAME).openapi({ description: "icon, or screenshot-1 to screenshot-6." }) }),
+    params: idParams.extend({ asset: z.string().regex(PLUGIN_ASSET_NAME).openapi({ description: "icon, screenshot-1 to screenshot-6, or provider-<provider id>." }) }),
     query: z.object({ v: z.string().max(64).optional().openapi({ description: "The fingerprint from the listing's address." }) }),
   },
   responses: {

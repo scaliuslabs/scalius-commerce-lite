@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, MoreHorizontal, Search } from "lucide-react";
@@ -7,9 +7,7 @@ import {
   deleteApiV1AdminSettingsDeliveryLocations,
   deleteApiV1AdminSettingsDeliveryLocationsAll,
   deleteApiV1AdminSettingsDeliveryLocationsById,
-  deleteApiV1AdminSettingsDeliveryLocationsImportPathao,
   postApiV1AdminSettingsDeliveryLocations,
-  postApiV1AdminSettingsDeliveryLocationsImportPathao,
   putApiV1AdminSettingsDeliveryLocationsById,
 } from "@scalius/api-client/sdk";
 import { PLACE_ADDRESS_COUNTRY, placeLevelName, placeLevels } from "@scalius/shared/places";
@@ -31,21 +29,18 @@ import {
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
 import { Input } from "~/components/ui/input";
-import { Progress } from "~/components/ui/progress";
 import { SearchableSelect } from "~/components/ui/searchable-select";
 import { Switch } from "~/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { useHasPermission } from "~/contexts/PermissionContext";
 import { ADMIN_PERMISSIONS } from "~/lib/admin-permissions";
 import { apiData } from "~/lib/api";
+import { BANGLADESH_PACK_ID } from "~/lib/bangladesh-pack";
 import { addressCountriesQueryOptions } from "~/lib/api-query-options/address-rules";
 import {
   deliveryLocationLoader,
   deliveryLocationsQueryOptions,
-  deliveryProvidersQueryOptions,
-  importPathaoStatusQueryOptions,
   type DeliveryLocation,
-  type PathaoImportProgress,
 } from "~/lib/api-query-options/delivery";
 import { placeCountriesQueryOptions } from "~/lib/api-query-options/places";
 import { countryName } from "~/lib/country-name";
@@ -239,60 +234,6 @@ function AddCountryForm({ taken, onAdd }: { taken: ReadonlySet<string>; onAdd: (
   );
 }
 
-/** Pathao import runs in steps; the loop resumes an import left running. */
-function usePathaoImport() {
-  const refresh = useRefreshAreas();
-  const t = useMessages(shippingMessages);
-  const status = useQuery({ ...importPathaoStatusQueryOptions(), retry: false });
-  const [progress, setProgress] = useState<PathaoImportProgress | null>(null);
-  const [running, setRunning] = useState(false);
-  const stopped = useRef(false);
-  const resumed = useRef(false);
-
-  async function run() {
-    stopped.current = false;
-    setRunning(true);
-    try {
-      while (!stopped.current) {
-        const next = await apiData(postApiV1AdminSettingsDeliveryLocationsImportPathao());
-        setProgress(next);
-        if (next.status === "complete") {
-          toast.success(t("importDone"));
-          await refresh();
-          break;
-        }
-        if (next.status === "error") throw new Error("import failed");
-        await new Promise((resolve) => setTimeout(resolve, 50));
-      }
-    } catch {
-      toast.error(t("importFailed"));
-      setProgress((current) => (current ? { ...current, status: "error" } : current));
-    } finally {
-      setRunning(false);
-    }
-  }
-
-  useEffect(() => {
-    if (status.data?.status === "importing" && !resumed.current) {
-      resumed.current = true;
-      setProgress(status.data);
-      void run();
-    }
-    return () => {
-      stopped.current = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status.data]);
-
-  async function restart() {
-    await apiData(deleteApiV1AdminSettingsDeliveryLocationsImportPathao()).catch(() => undefined);
-    setProgress(null);
-    await run();
-  }
-
-  return { progress, running, start: run, restart };
-}
-
 /**
  * The place directory by country: a country selector (the countries that
  * have places, and Add country), the country's levels as tabs, and a
@@ -324,10 +265,9 @@ export function DeliveryAreasManager() {
   const [parentFilterLabel, setParentFilterLabel] = useState<string | undefined>();
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<string[]>([]);
-  const [confirm, setConfirm] = useState<"selected" | "import" | null>(null);
+  const [confirm, setConfirm] = useState<"selected" | null>(null);
   const [confirmAll, setConfirmAll] = useState(false);
   const noPlaces = countries !== undefined && countryCount === 0;
-  const importer = usePathaoImport();
 
   const list = useQuery({
     ...deliveryLocationsQueryOptions({
@@ -340,8 +280,6 @@ export function DeliveryAreasManager() {
     }),
     placeholderData: (previous) => previous,
   });
-  const couriers = useQuery(deliveryProvidersQueryOptions());
-  const hasPathao = bangladesh && (couriers.data ?? []).some((courier) => courier.type === "pathao" && courier.isActive);
   const locations = list.data?.locations ?? [];
   const selectedUnder = placesUnder(sumDescendants(locations.filter((location) => selected.includes(location.id)).map(descendantsOf)));
   // One place is named, like its own Delete; several are counted.
@@ -391,7 +329,6 @@ export function DeliveryAreasManager() {
     setPage(next);
     setSelected([]);
   };
-  const progress = importer.progress;
   const countryOptions = listed.map((code) => {
     const count = countries?.find((entry) => entry.countryCode === code)?.places ?? 0;
     return { value: code, label: countryName(code), description: t("placeCount", { count: formatNumber(count) }), keywords: [code] };
@@ -399,23 +336,6 @@ export function DeliveryAreasManager() {
 
   return (
     <>
-      {progress ? (
-        <SettingsCard
-          title={importer.running ? t("importing") : progress.status === "error" ? t("importFailed") : t("importDone")}
-          action={
-            progress.status === "error" ? (
-              <Button type="button" variant="outline" size="sm" onClick={() => void importer.restart()}>{t("retry")}</Button>
-            ) : null
-          }
-        >
-          {importer.running ? (
-            <>
-              <p className="text-body text-muted-foreground">{progress.progress.label}</p>
-              <Progress value={progress.progress.total ? (progress.progress.current / progress.progress.total) * 100 : 0} />
-            </>
-          ) : null}
-        </SettingsCard>
-      ) : null}
       <SettingsCard
         header={
           <Tabs value={String(level)} onValueChange={(value) => changeLevel(Number(value))} className="mr-auto">
@@ -428,9 +348,10 @@ export function DeliveryAreasManager() {
         }
         action={
           <div className="flex gap-2">
-            {canEdit && hasPathao ? (
-              <Button type="button" variant="outline" size="sm" loading={importer.running} onClick={() => setConfirm("import")}>
-                {t("importBangladesh")}
+            {canEdit && bangladesh ? (
+              // The Bangladesh pack loads the places and refreshes them from Pathao's live list.
+              <Button asChild variant="outline" size="sm">
+                <Link to="/admin/apps/$pluginId/pages/$pageId" params={{ pluginId: BANGLADESH_PACK_ID, pageId: "places" }}>{t("bangladeshPlaces")}</Link>
               </Button>
             ) : null}
             {canEdit ? (
@@ -529,8 +450,8 @@ export function DeliveryAreasManager() {
                       ? t("noPlacesYet")
                       : t("noPlacesCountry", { country: countryName(country), name: names.word(1, 2) })}
                 </p>
-                {canEdit && bangladesh && !hasPathao && noPlaces ? (
-                  <Link to="/admin/settings/shipping" hash="couriers" className="text-link hover:underline">{t("connectPathao")}</Link>
+                {canEdit && bangladesh && noPlaces ? (
+                  <Link to="/admin/apps/$pluginId/pages/$pageId" params={{ pluginId: BANGLADESH_PACK_ID, pageId: "places" }} className="text-link hover:underline">{t("loadBangladeshPlaces")}</Link>
                 ) : null}
               </div>
             ) : (
@@ -606,30 +527,21 @@ export function DeliveryAreasManager() {
         open={confirm !== null}
         onOpenChange={(open) => !open && setConfirm(null)}
         title={
-          confirm === "import"
-            ? t("importConfirmTitle")
-            : onlySelected
-              ? common("deleteNamed", { name: onlySelected.name })
-              : t("deleteSelectedTitle", { count: selected.length })
+          onlySelected
+            ? common("deleteNamed", { name: onlySelected.name })
+            : t("deleteSelectedTitle", { count: selected.length })
         }
         description={
-          confirm === "import"
-            ? t("importConfirmBody")
-            : onlySelected
-              ? selectedUnder ? t("deleteWithChildren", { name: onlySelected.name, places: selectedUnder }) : t("deleteLocationConfirm")
-              : selectedUnder ? t("deleteSelectedWithChildren", { places: selectedUnder }) : t("deleteLocationConfirm")
+          onlySelected
+            ? selectedUnder ? t("deleteWithChildren", { name: onlySelected.name, places: selectedUnder }) : t("deleteLocationConfirm")
+            : selectedUnder ? t("deleteSelectedWithChildren", { places: selectedUnder }) : t("deleteLocationConfirm")
         }
-        confirmLabel={confirm === "import" ? t("import") : common("delete")}
+        confirmLabel={common("delete")}
         cancelLabel={common("cancel")}
-        variant={confirm === "import" ? "default" : "destructive"}
+        variant="destructive"
         isLoading={bulk.isPending}
         onConfirm={() => {
-          if (confirm === "import") {
-            setConfirm(null);
-            void importer.start();
-          } else if (confirm) {
-            bulk.mutate(confirm);
-          }
+          if (confirm) bulk.mutate(confirm);
         }}
       />
       <DeleteAllDialog

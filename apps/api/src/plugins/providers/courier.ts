@@ -11,11 +11,19 @@
 // refusal fails the booking, an uncertain one keeps it for reconciliation.
 // A request the port would refuse is refused here first, as a certain
 // failure: it never reaches the app.
+//
+// A courier that books by its own location ids (`locations` in its manifest
+// entry) gets them here: the platform reads them from the store's places
+// (`externalIds.<key>`), refuses a booking missing a required one before the
+// shipment row is written (`preflight`), and passes them in the recipient.
 
+import type { Database } from "@scalius/database/client";
 import {
-  BUILT_IN_COURIER_PROVIDERS,
+  NO_APP_COURIER_PROVIDERS,
   createCourierProviders,
   getDeliveryProviderReadinessSummary,
+  getExternalLocationIds,
+  isPositiveIntegerExternalLocationId,
   type Courier,
   type CourierProviders,
   type CourierProvidersSource,
@@ -98,6 +106,42 @@ function appSetupBlockers(appName: string, settings: AppProviderSettings): Deliv
   return blockers;
 }
 
+type CourierLocations = NonNullable<CourierDeclaration["locations"]>;
+type LocationLevel = "city" | "zone" | "area";
+const LEVEL_IDS: Record<LocationLevel, "cityId" | "zoneId" | "areaId"> = { city: "cityId", zone: "zoneId", area: "areaId" };
+
+/**
+ * The courier's ids of the recipient's places, or why a booking cannot be
+ * made: a required level missing from the address, or a place without the
+ * courier's id. One read per level the address names.
+ */
+async function courierLocationIds(
+  db: Database,
+  courierName: string,
+  locations: CourierLocations,
+  recipient: CourierShipmentInput["recipient"],
+): Promise<{ ids: NonNullable<CourierShipmentInput["recipient"]["locationIds"]> } | { refusal: string }> {
+  const absent = locations.required.filter((level) => !recipient[LEVEL_IDS[level]]);
+  if (absent.length > 0) return { refusal: `Missing required location information: ${absent.join(", ")}` };
+  const found = await getExternalLocationIds(db, {
+    ...(recipient.cityId ? { city: recipient.cityId } : {}),
+    ...(recipient.zoneId ? { zone: recipient.zoneId } : {}),
+    area: recipient.areaId,
+  }, locations.key);
+  const usable = (value: string | number | null | undefined) => (locations.numeric
+    ? isPositiveIntegerExternalLocationId(value)
+    : (typeof value === "string" && value.trim() !== "") || typeof value === "number");
+  const ids = {
+    city: usable(found.city) ? String(found.city).trim() : null,
+    zone: usable(found.zone) ? String(found.zone).trim() : null,
+    area: usable(found.area) ? String(found.area).trim() : null,
+  };
+  const missing = locations.required.filter((level) => ids[level] === null);
+  return missing.length === 0
+    ? { ids }
+    : { refusal: `${courierName} requires mapped${locations.numeric ? " numeric" : ""} location IDs before shipment creation. Missing mapping for: ${missing.join(", ")}. Configure ${courierName} IDs in Delivery Locations settings.` };
+}
+
 /** One app courier as a delivery courier. */
 export function appCourier(
   runtime: AppProviderRuntime,
@@ -131,17 +175,14 @@ export function appCourier(
     id: qualifiedProviderId(installation.pluginId, declaration.id),
     label: declaration.name,
     countries: declaration.kind === "courier" ? declaration.countries : "any",
+    ...(declaration.locations ? { requiredLocations: declaration.locations.required } : {}),
 
     // Read once per request and key: readiness, settings pages and every call share it.
     async setup(provider, encryptionKey) {
       const settings = await readSettings(encryptionKey);
       const readiness = getDeliveryProviderReadinessSummary({
         type: provider.type,
-        credentials: null,
-        config: null,
         activationBlockers: appSetupBlockers(installation.manifest.name, settings),
-        // The app's own settings hold the setup; it is tested through the app.
-        requiresTestProof: false,
         isActive: provider.isActive,
         lastTestAttemptAt: provider.lastTestAttemptAt,
         lastTestSuccessAt: provider.lastTestSuccessAt,
@@ -149,13 +190,28 @@ export function appCourier(
       });
       const error = settings.credentialErrors[0];
       return error
-        ? { settings: null, error, unreadable: true, readiness, fingerprint: null }
-        : { settings, readiness, fingerprint: null };
+        ? { settings: null, error, unreadable: true, readiness }
+        : { settings, readiness };
     },
 
-    createShipment: (input, { signal }) => invoke("createShipment", fitShipmentInput(input), signal),
+    async createShipment(input, { signal, db }) {
+      const locations = declaration.locations;
+      if (!locations) return invoke("createShipment", fitShipmentInput(input), signal);
+      const read = await courierLocationIds(db, declaration.name, locations, input.recipient);
+      if ("refusal" in read) throw new ProviderError("declined", read.refusal, { code: "courier.locations" });
+      return invoke("createShipment", fitShipmentInput({ ...input, recipient: { ...input.recipient, locationIds: read.ids } }), signal);
+    },
     trackShipment: (input, { signal }) => invoke("trackShipment", input, signal),
   };
+
+  const locations = declaration.locations;
+  if (locations) {
+    // Before a shipment row is written: a booking the courier cannot place is refused without a trace.
+    courier.preflight = async (recipient, db) => {
+      const read = await courierLocationIds(db, declaration.name, locations, recipient);
+      return "refusal" in read ? read.refusal : null;
+    };
+  }
 
   if (operations.has("findShipment")) courier.findShipment = (input, { signal }) => invoke("findShipment", input, signal);
   if (operations.has("cancelShipment")) courier.cancelShipment = (input, { signal }) => invoke("cancelShipment", input, signal);
@@ -179,18 +235,18 @@ export function appCouriers(runtime: AppProviderRuntime, installations: readonly
   return couriers;
 }
 
-/** The couriers a runtime can use, reading the active courier apps (one indexed read; none: the built-ins). */
+/** The couriers a runtime can use, reading the active courier apps (one indexed read). */
 export async function loadCourierProviders(runtime: AppProviderRuntime): Promise<CourierProviders> {
   const installations = await listActiveProviderPlugins(runtime.db, "courier");
-  return installations.length === 0 ? BUILT_IN_COURIER_PROVIDERS : createCourierProviders(appCouriers(runtime, installations));
+  return installations.length === 0 ? NO_APP_COURIER_PROVIDERS : createCourierProviders(appCouriers(runtime, installations));
 }
 
 const perRequest = new WeakMap<Request, Promise<CourierProviders>>();
 
 /**
  * The couriers one request can use, as a lazy source: delivery code calls it
- * only for a row that names an app courier, so work on built-in couriers
- * reads no plugin table. Read at most once per request.
+ * only for a row that names an app courier (or a retired built-in one), so
+ * other work reads no plugin table. Read at most once per request.
  */
 export function requestCourierProviders(c: RequestLike): CourierProvidersSource {
   return () => {

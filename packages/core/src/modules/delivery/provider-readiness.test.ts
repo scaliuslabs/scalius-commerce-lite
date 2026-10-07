@@ -1,290 +1,65 @@
+// A delivery provider row's readiness, as the courier that reads it reports
+// its blockers (every courier is an app's: the app's settings and status).
 import { describe, expect, it } from "vitest";
-import { createHmac } from "node:crypto";
-import { ValidationError } from "../../errors";
-import {
-  assertDeliveryProviderReadyForActivation,
-  getDeliveryProviderActivationBlockers,
-  getDeliveryProviderReadinessSummary,
-  getDeliveryProviderSetupFingerprint,
-} from "./provider-readiness";
+import { getDeliveryProviderReadinessSummary } from "./provider-readiness";
+import { createCourierProviders, retiredCourierReason } from "./couriers/registry";
 
-function legacyStableJson(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(legacyStableJson);
-  if (!value || typeof value !== "object") return value;
-  return Object.keys(value as Record<string, unknown>)
-    .sort()
-    .reduce<Record<string, unknown>>((result, key) => {
-      result[key] = legacyStableJson((value as Record<string, unknown>)[key]);
-      return result;
-    }, {});
-}
+describe("delivery provider readiness summary", () => {
+  it("is ready only when the courier reports no blockers and the provider is on", () => {
+    expect(getDeliveryProviderReadinessSummary({ type: "acme.parcel:parcel", activationBlockers: [], isActive: true }))
+      .toMatchObject({ status: "ready", lifecycle: "active", configured: true, tested: true, active: true, issues: [] });
+    expect(getDeliveryProviderReadinessSummary({ type: "acme.parcel:parcel", activationBlockers: [], isActive: false }))
+      .toMatchObject({ status: "incomplete", lifecycle: "tested", active: false, issues: [{ code: "inactive" }] });
+  });
 
-function legacySetupFingerprint(
-  input: { type: string; credentials: Record<string, unknown>; config: Record<string, unknown> },
-  key: string,
-): string {
-  const material = JSON.stringify(legacyStableJson(input));
-  const digest = createHmac("sha256", Buffer.from(key, "base64"))
-    .update(material)
-    .digest("hex");
-  return `hmac-sha256:${digest}`;
-}
-
-describe("delivery provider activation readiness", () => {
-  it("requires Pathao API credentials and store configuration before activation", () => {
-    const blockers = getDeliveryProviderActivationBlockers({
-      type: "pathao",
-      credentials: {
-        baseUrl: "https://api-hermes.pathao.com",
-        clientSecret: "pathao-secret-9417",
-        password: "merchant-password-7813",
-      },
-      config: {},
+  it("says the courier's own reason for a blocked setup", () => {
+    const summary = getDeliveryProviderReadinessSummary({
+      type: "acme.parcel:parcel",
+      activationBlockers: [{ source: "config", key: "settings.api_key", label: "api_key", message: "Complete Parcel's settings: api_key." }],
+      isActive: true,
     });
-
-    expect(blockers.map((blocker) => blocker.key)).toEqual([
-      "clientId",
-      "username",
-      "storeId",
-    ]);
+    expect(summary).toMatchObject({ status: "incomplete", lifecycle: "blocked", active: false });
+    expect(summary.issues).toEqual([{ code: "unconfigured", message: "Complete Parcel's settings: api_key." }]);
   });
 
-  it("accepts complete Pathao setup from JSON strings", () => {
-    expect(getDeliveryProviderActivationBlockers({
-      type: "pathao",
-      credentials: JSON.stringify({
-        baseUrl: "https://api-hermes.pathao.com",
-        clientId: "pathao-client-4821",
-        clientSecret: "pathao-secret-9417",
-        username: "merchant",
-        password: "merchant-password-7813",
-      }),
-      config: JSON.stringify({ storeId: "store_1" }),
-    })).toEqual([]);
-  });
-
-  it("requires Steadfast base URL, API key, and secret key before activation", () => {
-    const blockers = getDeliveryProviderActivationBlockers({
-      type: "steadfast",
-      credentials: { baseUrl: "https://portal.packzy.com/api/v1" },
-      config: {},
+  it("fails closed for a type no courier answers for", () => {
+    expect(getDeliveryProviderReadinessSummary({ type: "dhl", isActive: true })).toMatchObject({
+      lifecycle: "blocked",
+      active: false,
+      activationBlockers: [{ key: "type", message: "Unsupported delivery provider type: dhl" }],
     });
-
-    expect(blockers.map((blocker) => blocker.key)).toEqual(["apiKey", "secretKey"]);
   });
 
-  it("fails closed for unsupported provider types", () => {
-    expect(() => assertDeliveryProviderReadyForActivation({
-      type: "unknown",
-      credentials: {},
-      config: {},
-    })).toThrow(ValidationError);
-  });
-
-  it("blocks obvious placeholders and unsafe provider base URLs", () => {
-    expect(getDeliveryProviderActivationBlockers({
-      type: "steadfast",
-      credentials: {
-        baseUrl: "http://localhost:8787/api/v1?token=secret",
-        apiKey: "dummy",
-        secretKey: "your-secret-here",
-      },
-      config: {},
-    }).map((blocker) => blocker.key)).toEqual([
-      "baseUrl",
-      "apiKey",
-      "secretKey",
-    ]);
-  });
-
-  it.each([
-    "https://127.0.0.1/api/v1",
-    "https://localhost/api/v1",
-    "https://courier.internal/api/v1",
-    "https://portal.packzy.com:8443/api/v1",
-  ])("blocks non-public provider base URL %s", (baseUrl) => {
-    expect(getDeliveryProviderActivationBlockers({
-      type: "steadfast",
-      credentials: {
-        baseUrl,
-        apiKey: "steadfast-api-4821",
-        secretKey: "steadfast-secret-9417",
-      },
-      config: {},
-    })).toEqual(expect.arrayContaining([expect.objectContaining({ key: "baseUrl" })]));
-  });
-
-  it("throws a typed validation error with blocker details", () => {
-    expect(() => assertDeliveryProviderReadyForActivation({
-      type: "steadfast",
-      credentials: "{}",
-      config: "{}",
-    })).toThrow(ValidationError);
-
-    try {
-      assertDeliveryProviderReadyForActivation({
-        type: "steadfast",
-        credentials: "{}",
-        config: "{}",
-      });
-    } catch (error) {
-      expect(error).toBeInstanceOf(ValidationError);
-      expect((error as ValidationError).details).toMatchObject({
-        blockers: [
-          { key: "baseUrl" },
-          { key: "apiKey" },
-          { key: "secretKey" },
-        ],
-      });
-    }
+  it("reports secrets that cannot be read as an error, not unfinished setup", () => {
+    expect(getDeliveryProviderReadinessSummary({ type: "acme.parcel:parcel", credentialsReadable: false, isActive: true })).toMatchObject({
+      status: "error",
+      lifecycle: "blocked",
+      issues: [{ code: "unreadable", message: expect.stringContaining("cannot be decrypted") }],
+    });
   });
 });
 
-describe("delivery provider durable readiness summary", () => {
-  const completeSteadfastCredentials = {
-    baseUrl: "https://portal.packzy.com/api/v1",
-    apiKey: "steadfast-api-4821",
-    secretKey: "steadfast-secret-9417",
+describe("retired built-in couriers", () => {
+  const row = {
+    id: "dp_1", type: "pathao", isActive: true, credentials: "enc:v1:old", config: "{}",
+    lastTestAttemptAt: null, lastTestSuccessAt: null, lastTestFailureAt: null, lastTestSuccessFingerprint: null,
   };
 
-  it.each([
-    {
-      type: "steadfast",
-      credentials: completeSteadfastCredentials,
-      config: {},
-    },
-    {
-      type: "pathao",
-      credentials: {
-        baseUrl: "https://api-hermes.pathao.com",
-        clientId: "pathao-client-4821",
-        clientSecret: "pathao-secret-9417",
-        username: "merchant",
-        password: "merchant-password-7813",
-      },
-      config: { storeId: "232926" },
-    },
-  ])("invalidates permissive $type connection proofs", async (setup) => {
-    const key = Buffer.alloc(32, 7).toString("base64");
-    const legacyFingerprint = legacySetupFingerprint(setup, key);
-    const currentFingerprint = await getDeliveryProviderSetupFingerprint(setup, key);
-    expect(currentFingerprint).not.toBe(legacyFingerprint);
-    expect(getDeliveryProviderReadinessSummary({
-      ...setup,
-      isActive: true,
-      currentFingerprint,
-      lastTestSuccessAt: 100,
-      lastTestSuccessFingerprint: legacyFingerprint,
-    })).toMatchObject({
-      status: "incomplete",
-      lifecycle: "blocked",
-      tested: false,
-      active: false,
-      issues: [{ code: "untested" }],
-    });
+  it("read as blocked with the pack's reason, and never book or track, while the Bangladesh pack is not active", async () => {
+    const pathao = createCourierProviders().get("pathao")!;
+    expect(pathao).toMatchObject({ id: "pathao", label: "Pathao", countries: ["BD"] });
+    const setup = await pathao.setup(row, "key");
+    expect(setup).toMatchObject({ settings: null, error: "Activate Bangladesh pack in Apps to use it." });
+    expect(setup.readiness).toMatchObject({ active: false, issues: [{ code: "unconfigured", message: retiredCourierReason() }] });
+    await expect(pathao.createShipment({} as never, {} as never)).rejects.toMatchObject({ category: "misconfigured", message: "Pathao: Activate Bangladesh pack in Apps to use it." });
+    await expect(pathao.trackShipment({ externalId: "DL1" }, {} as never)).rejects.toMatchObject({ category: "misconfigured" });
+    expect(createCourierProviders().get("steadfast")?.label).toBe("Steadfast");
+    expect(createCourierProviders().get("redx")).toBeUndefined();
   });
 
-  it("reports encrypted credentials that cannot be read as unreadable, not unconfigured", () => {
-    expect(getDeliveryProviderReadinessSummary({
-      type: "pathao",
-      credentials: null,
-      credentialsReadable: false,
-      config: { storeId: "232926" },
-      isActive: true,
-    })).toMatchObject({
-      // Unreadable credentials are a platform error, not unfinished setup.
-      status: "error",
-      lifecycle: "blocked",
-      configured: false,
-      tested: false,
-      active: false,
-      issues: [{
-        code: "unreadable",
-        message: expect.stringContaining("cannot be decrypted"),
-      }],
-      activationBlockers: [{
-        source: "credentials",
-        key: "credentials",
-      }],
-    });
-  });
-
-  it("does not count a successful test unless the fingerprint matches the current setup", async () => {
-    const fingerprint = await getDeliveryProviderSetupFingerprint({
-      type: "steadfast",
-      credentials: completeSteadfastCredentials,
-      config: {},
-    }, "fingerprint-key");
-
-    expect(getDeliveryProviderReadinessSummary({
-      type: "steadfast",
-      credentials: { ...completeSteadfastCredentials, apiKey: "changed" },
-      config: {},
-      isActive: true,
-      currentFingerprint: await getDeliveryProviderSetupFingerprint({
-        type: "steadfast",
-        credentials: { ...completeSteadfastCredentials, apiKey: "changed" },
-        config: {},
-      }, "fingerprint-key"),
-      lastTestSuccessAt: 100,
-      lastTestSuccessFingerprint: fingerprint,
-    })).toMatchObject({
-      status: "incomplete",
-      lifecycle: "blocked",
-      configured: true,
-      tested: false,
-      active: false,
-      issues: [{ code: "untested" }],
-    });
-  });
-
-  it("reports active only when the provider is configured, enabled, and successfully tested", async () => {
-    const fingerprint = await getDeliveryProviderSetupFingerprint({
-      type: "steadfast",
-      credentials: completeSteadfastCredentials,
-      config: {},
-    }, "fingerprint-key");
-
-    expect(getDeliveryProviderReadinessSummary({
-      type: "steadfast",
-      credentials: completeSteadfastCredentials,
-      config: {},
-      isActive: true,
-      currentFingerprint: fingerprint,
-      lastTestSuccessAt: 100,
-      lastTestSuccessFingerprint: fingerprint,
-    })).toMatchObject({
-      status: "ready",
-      lifecycle: "active",
-      configured: true,
-      tested: true,
-      active: true,
-      issues: [],
-    });
-  });
-
-  it("blocks a provider when the latest test failed after a matching success", async () => {
-    const fingerprint = await getDeliveryProviderSetupFingerprint({
-      type: "steadfast",
-      credentials: completeSteadfastCredentials,
-      config: {},
-    }, "fingerprint-key");
-
-    expect(getDeliveryProviderReadinessSummary({
-      type: "steadfast",
-      credentials: completeSteadfastCredentials,
-      config: {},
-      isActive: true,
-      currentFingerprint: fingerprint,
-      lastTestSuccessAt: 100,
-      lastTestFailureAt: 200,
-      lastTestSuccessFingerprint: fingerprint,
-    })).toMatchObject({
-      status: "incomplete",
-      lifecycle: "blocked",
-      tested: false,
-      active: false,
-      issues: [{ code: "test_failed" }],
-    });
+  it("resolve to the pack's courier once it is active", () => {
+    const appPathao = { id: "scalius.bangladesh:pathao", label: "Pathao" } as never;
+    expect(createCourierProviders([appPathao]).get("pathao")).toBe(appPathao);
+    expect(createCourierProviders([appPathao]).get("scalius.bangladesh:pathao")).toBe(appPathao);
   });
 });

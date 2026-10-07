@@ -1,15 +1,14 @@
 export * from "./browser";
+export * from "./tracking-url";
 export * from "./delivery.service";
 export * from "./tracking";
 export * from "./places";
 export * from "./places-import";
-export * from "./pathao-location-import";
 export * from "./zones";
 export * from "./location-validation";
-export * from "./status-mapper";
-// Couriers: the port as delivery code calls it, the request-scoped catalog,
-// and the built-in adapters (./couriers, one file per courier).
+// Couriers: the port as delivery code calls it and the request-scoped
+// catalog. Every courier is an app's (the Bangladesh ones are the Bangladesh
+// pack's); core has none of its own.
 export * from "./couriers/port";
 export * from "./couriers/registry";
-export { pathaoCourier, type PathaoSettings } from "./couriers/pathao";
-export { steadfastCourier, type SteadfastSettings } from "./couriers/steadfast";
+export * from "./retired-couriers";

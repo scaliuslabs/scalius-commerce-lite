@@ -12,7 +12,6 @@ const sdk = vi.hoisted(() => ({
   putApiV1AdminSettingsDeliveryProviders: vi.fn(),
   postApiV1AdminSettingsProvidersByIdTest: vi.fn(),
   postApiV1AdminSettingsDeliveryProvidersById: vi.fn(),
-  postApiV1AdminSettingsDeliveryProvidersCreateTest: vi.fn(),
   deleteApiV1AdminSettingsDeliveryProvidersById: vi.fn(),
 }));
 vi.mock("@scalius/api-client/sdk", () => sdk);
@@ -37,6 +36,8 @@ function appCourier(readiness: Record<string, unknown> = {}) {
     kind: "courier",
     pluginId: "acme.parcel",
     appName: "Acme Parcel",
+    appIcon: "/api/v1/admin/apps/acme.parcel/assets/icon?v=1111111111111111",
+    icon: "/api/v1/admin/apps/acme.parcel/assets/provider-parcel?v=1111111111111111",
     name: "Acme Parcel",
     operations: ["createShipment", "trackShipment", "verifyWebhook", "testConnection"],
     canTestConnection: true,
@@ -45,14 +46,17 @@ function appCourier(readiness: Record<string, unknown> = {}) {
   };
 }
 
-function courierRow(isActive: boolean, ready: boolean) {
+function courierRow(isActive: boolean, ready: boolean, overrides: Record<string, unknown> = {}) {
   return {
     id: "prov_parcel",
     name: "Acme Parcel",
     type: COURIER_ID,
+    courierId: COURIER_ID,
+    courierName: "Acme Parcel",
+    requiredLocations: [],
+    canFindShipment: false,
+    countries: "any",
     isActive,
-    credentials: "{}",
-    config: "{}",
     readiness: {
       status: ready ? "ready" : "incomplete",
       lifecycle: ready ? "active" : "draft",
@@ -65,13 +69,14 @@ function courierRow(isActive: boolean, ready: boolean) {
     },
     createdAt: 1,
     updatedAt: 1,
+    ...overrides,
   };
 }
 
 const button = (label: string) =>
   [...document.querySelectorAll("button")].find((element) => element.textContent?.trim() === label);
 
-describe("courier apps beside Pathao and Steadfast", () => {
+describe("couriers are apps", () => {
   let root: Root;
   let container: HTMLDivElement;
 
@@ -92,7 +97,7 @@ describe("courier apps beside Pathao and Steadfast", () => {
     notifyManager.setNotifyFunction((callback) => callback());
   });
 
-  async function openCourier(row: ReturnType<typeof courierRow>, app: ReturnType<typeof appCourier>) {
+  async function openCourier(row: ReturnType<typeof courierRow>, app: ReturnType<typeof appCourier>, expected = "keeps this courier's keys and options in its own settings") {
     sdk.getApiV1AdminSettingsDeliveryProviders.mockImplementation(() =>
       envelope({ providers: [row], pagination: { page: 1, limit: 10, hasMore: false } }));
     sdk.getApiV1AdminSettingsProviders.mockImplementation(() => envelope({ providers: [app] }));
@@ -108,18 +113,20 @@ describe("courier apps beside Pathao and Steadfast", () => {
         </QueryClientProvider>,
       );
     });
-    await vi.waitFor(() => expect(container.textContent).toContain("Acme Parcel"));
-    const rowButton = [...container.querySelectorAll("button")].find((element) => element.textContent?.includes("Acme Parcel"));
+    await vi.waitFor(() => expect(container.textContent).toContain(row.name));
+    const rowButton = [...container.querySelectorAll("button")].find((element) => element.textContent?.includes(row.name));
     await act(async () => rowButton!.click());
-    await vi.waitFor(() => expect(document.body.textContent).toContain("keeps this courier's keys and options in its own settings"));
+    await vi.waitFor(() => expect(document.body.textContent).toContain(expected));
   }
 
   it("sets up a ready courier app through the app: no keys here, its update link, its connection test", async () => {
     await openCourier(courierRow(true, true), appCourier());
 
     expect(document.body.textContent).toContain("Acme Parcel is ready to book deliveries.");
-    expect(document.querySelector<HTMLInputElement>("#courier-webhook-url")?.value)
-      .toBe("https://api.shop.test/api/v1/webhooks/couriers/acme.parcel:parcel");
+    // The courier's own mark, from its app's listing.
+    expect(container.querySelector("img")?.getAttribute("src")).toBe("/api/v1/admin/apps/acme.parcel/assets/provider-parcel?v=1111111111111111");
+    await vi.waitFor(() => expect(document.querySelector<HTMLInputElement>("#courier-webhook-url")?.value)
+      .toBe("https://api.shop.test/api/v1/webhooks/couriers/acme.parcel:parcel"));
     expect(document.querySelector("#courier-environment")).toBeNull();
     expect(document.querySelector("#courier-apiKey")).toBeNull();
     expect(document.querySelector("#courier-webhook-key")).toBeNull();
@@ -134,5 +141,20 @@ describe("courier apps beside Pathao and Steadfast", () => {
 
     expect(document.body.textContent).toContain("Complete Acme Parcel's settings: secret.");
     expect(document.querySelector<HTMLButtonElement>("button[role='switch']")?.disabled).toBe(true);
+  });
+
+  it("keeps a courier saved before the Bangladesh pack off, with the pack's reason, until the pack takes it over", async () => {
+    const pathao = { ...appCourier({ enabled: false, usable: false }), id: "scalius.bangladesh:pathao", pluginId: "scalius.bangladesh", appName: "Bangladesh pack", name: "Pathao" };
+    const row = courierRow(true, false, {
+      id: "prov_pathao", name: "Pathao", type: "pathao", courierId: "scalius.bangladesh:pathao", courierName: "Pathao",
+      readiness: {
+        status: "incomplete", lifecycle: "blocked", configured: false, tested: false, active: false, canCreateShipment: false,
+        issues: [{ code: "unconfigured", message: "Activate Bangladesh pack in Apps to use it." }],
+        activationBlockers: [{ source: "config", key: "app", label: "Bangladesh pack", message: "Activate Bangladesh pack in Apps to use it." }],
+      },
+    });
+    await openCourier(row, pathao, "Activate Bangladesh pack in Apps to use it.");
+    expect(document.querySelector<HTMLButtonElement>("button[role='switch']")?.disabled).toBe(true);
+    expect(button("Test connection")?.disabled).toBe(true);
   });
 });

@@ -1,7 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 import {
   getApiV1AdminSettingsDeliveryLocations,
-  getApiV1AdminSettingsDeliveryLocationsImportPathaoStatus,
   getApiV1AdminSettingsDeliveryProviders,
 } from "@scalius/api-client/sdk";
 import {
@@ -27,8 +26,6 @@ export type DeliveryProviderRecord = Omit<ApiDeliveryProvider, "readiness"> & {
 export type DeliveryLocationsQuery = ApiQuery<typeof getApiV1AdminSettingsDeliveryLocations>;
 export type DeliveryLocation =
   ApiResult<typeof getApiV1AdminSettingsDeliveryLocations>["locations"][number];
-export type PathaoImportProgress =
-  ApiResult<typeof getApiV1AdminSettingsDeliveryLocationsImportPathaoStatus>;
 
 async function getAllDeliveryProviders(): Promise<DeliveryProviderRecord[]> {
   const providers: DeliveryProviderRecord[] = [];
@@ -129,13 +126,5 @@ export const allDeliveryLocationsQueryOptions = (params: {
   queryOptions({
     queryKey: queryKeys.settings.deliveryLocationsAll(params),
     queryFn: () => getAllDeliveryLocations(params.type),
-    staleTime: LOOKUP_STALE_TIME_MS,
-  });
-
-
-export const importPathaoStatusQueryOptions = () =>
-  queryOptions({
-    queryKey: queryKeys.settings.importPathaoStatus(),
-    queryFn: () => apiData(getApiV1AdminSettingsDeliveryLocationsImportPathaoStatus()),
     staleTime: LOOKUP_STALE_TIME_MS,
   });
