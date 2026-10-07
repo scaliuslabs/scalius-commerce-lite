@@ -150,6 +150,22 @@ describe("translations in the dependency-validated cache", () => {
     expect((await read("/api/v1/products/cap?presence=bn-in")).status).toBe(404);
   });
 
+  it("serves a published language at its subfolder of the backup market (`/bn`), at the root's prices, until it is unpublished", async () => {
+    const { read, sqlite } = await store();
+    const root = await read<ProductPage & { data?: { product?: { price?: number } } }>("/api/v1/products/tee");
+    const bangla = await read<ProductPage & { data?: { product?: { price?: number } } }>("/api/v1/products/tee?presence=bn");
+    expect(bangla.body.data?.product).toMatchObject({ name: "টি-শার্ট", slug: "ti-shirt", description: "<p>Cotton tee.</p>" });
+    expect(bangla.body.data?.product?.price).toBe(root.body.data?.product?.price);
+    expect((await read("/api/v1/products/tee?presence=bn")).cache).toBe("hit");
+    // A draft language has no subfolder: its translations never leak through the shape.
+    expect((await read("/api/v1/products/tee?presence=fr")).status).toBe(404);
+    // The default language is the root's alone.
+    expect((await read("/api/v1/products/tee?presence=en")).status).toBe(404);
+
+    sqlite.exec("UPDATE store_languages SET published = 0 WHERE locale = 'bn'");
+    expect((await read("/api/v1/products/tee?presence=bn")).status).toBe(404);
+  });
+
   it("refuses a localized handle that another resource uses as its own", async () => {
     const { sqlite } = await store();
     expect(() => sqlite.exec("INSERT INTO localized_slugs (resource_type, locale, slug, resource_id) VALUES ('product', 'bn', 'cap', 'p_tee')"))

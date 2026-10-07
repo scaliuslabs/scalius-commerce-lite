@@ -58,8 +58,9 @@ import {
 } from "@/lib/partytown-config";
 import { partytownLoaderPath } from "virtual:scalius/partytown";
 import { getRuntimePresence } from "@/lib/api/runtime";
-import { defaultLocale, hreflangAlternates, marketOfPresence, stripPresencePath } from "@scalius/shared/markets";
-import { hasSeveralPresences } from "@/lib/market-selector";
+import { defaultLocale, hreflangAlternates, marketOfPresence, presenceCountry, stripPresencePath } from "@scalius/shared/markets";
+import { hasSeveralMarkets, hasSeveralPresences, languageOptions, pageMarket, selectedMarketCountry } from "@/lib/market-selector";
+import LanguageSelector from "../components/markets/LanguageSelector.astro";
 import MarketSelector from "../components/markets/MarketSelector.astro";
 import MarketSuggestion from "../components/markets/MarketSuggestion.astro";
 import type { LocalizedPaths } from "@/lib/localized-paths";
@@ -209,7 +210,7 @@ const pageLanguage = presenceEntry?.presence.locale
 // written as there; Open Graph names the presence's country, else the store's.
 const pageRegion = storeRegion();
 const ogLocale = presenceEntry
-  ? `${presenceEntry.presence.locale}_${presenceEntry.presence.value.slice(3).toUpperCase()}`
+  ? `${presenceEntry.presence.locale}_${presenceCountry(presenceEntry.presence.value) ?? pageRegion}`
   : `${pageLanguage}_${pageRegion}`;
 // hreflang, the market selector and the geo suggestion exist only while the
 // store sells at more than one URL, so a single-presence store's HTML is unchanged.
@@ -224,6 +225,11 @@ const hreflangLinks = severalPresences && canonicalLocation && storefrontUrl && 
   )
   : [];
 const marketReturnTo = `${stripPresencePath(Astro.url.pathname, marketPresence)}${Astro.url.search}`;
+// The footer's localization forms (Dawn): country/region with more than one
+// market, language when the page's market has two languages (`/bn`).
+const currentMarket = severalPresences ? pageMarket(marketMatrix, marketPresence) : null;
+const languageMarket = currentMarket && languageOptions(currentMarket).length > 1 ? currentMarket : null;
+const languageCountry = languageMarket ? selectedMarketCountry(marketMatrix, marketPresence) : null;
 // The site's own URL in WebSite JSON-LD: the presence's home on a presence page.
 const siteUrl = storefrontUrl && marketPresence ? `${storefrontUrl}/${marketPresence}` : storefrontUrl;
 const merchantReturnPolicyJsonLd = buildMerchantReturnPolicyJsonLd({
@@ -537,11 +543,20 @@ const pageStoreTimeZone = storeTimeZone();
             business={businessInfo}
             languageCode={layoutData?.storefrontCopy?.languageCode}
           />
-          {severalPresences && (
+          {hasSeveralMarkets(marketMatrix) && (
             <MarketSelector
               matrix={marketMatrix}
               presence={marketPresence}
               currencyCode={layoutData?.currency?.shopCode ?? currencyCode}
+              language={pageLanguage}
+              returnTo={marketReturnTo}
+            />
+          )}
+          {languageMarket && languageCountry && (
+            <LanguageSelector
+              market={languageMarket}
+              presence={marketPresence}
+              country={languageCountry}
               language={pageLanguage}
               returnTo={marketReturnTo}
             />

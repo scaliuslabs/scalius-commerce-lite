@@ -940,6 +940,29 @@ templates, and agent product sections show source text. Per-menu navigation
 reads and footer placement labels are not translated. RTL (step 6
 locale basics).
 
+**Language subfolders.** Each published language other than the default
+is served on the backup market at `/<locale>` (`/bn`), as Shopify serves
+the published languages of its primary market. The published language
+list is the one source: no `market_presences` row is stored.
+
+- `MARKET_SUBFOLDER_PATTERN` accepts `<locale>` and `<locale>-<country>`.
+  A market stores only `<locale>-<country>`
+  (`MARKET_COUNTRY_SUBFOLDER_PATTERN`). A page slug of two letters is
+  reserved.
+- `marketMatrixSql()` adds `<locale>:<locale>` to the backup market for each
+  published language that none of its presences uses. The default language
+  is the root's, and a merchant's own `bn-bd` keeps Bangla there.
+- `readPresenceMarketWithDocuments()` and `readMarketPriceContext()` resolve
+  `bn` to the backup market by the same rule. The prices are the root's.
+  The translation fold reads the language while it is published.
+- DVC: `mk:*` and `tr:locales` (language publication) and `mk:mkt_backup`
+  (its presences) cover these reads. No trigger changed.
+- Storefront: the gateway serves `/bn/...` as any presence. hreflang names
+  `bn-BD` when the backup market has one country. The footer shows the
+  language form (`LanguageSelector.astro`, `locale_code` to `/localization`)
+  when the page's market has two languages. The country form shows only
+  with more than one market. A store with one language is unchanged.
+
 ## Step 5 implemented
 
 A store that never unlinks a location and never unpublishes a product

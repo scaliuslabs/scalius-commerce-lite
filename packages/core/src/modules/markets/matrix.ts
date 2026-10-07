@@ -7,7 +7,7 @@
 // calls and statements with markets as before.
 import type { Database } from "@scalius/database/client";
 import { marketPresences, markets, settings } from "@scalius/database/schema";
-import type { MarketMatrix, PublicMarket } from "@scalius/shared/markets";
+import { isLanguageSubfolder, type MarketMatrix, type PublicMarket } from "@scalius/shared/markets";
 import { and, eq, sql, type SQL } from "drizzle-orm";
 import { deps } from "../../cache-deps";
 import { settingsDocumentsJoin, type SettingsDocumentRow } from "../../settings-store";
@@ -27,7 +27,10 @@ export interface MarketMatrixRead {
  * only (database checks), so the lists are unambiguous. Every value is cast
  * to text: PostgreSQL's `json_object` takes text. A presence is served only
  * while its language is published (`store_languages`, MARKETS-DESIGN D9; the
- * root's always is). Declares `mk:*`, which language publication advances.
+ * root's always is). The backup market also lists `<locale>:<locale>` for
+ * each published language none of its presences uses (`/bn`, Shopify's
+ * language subfolders on the primary market): derived here from the language
+ * list, never stored. Declares `mk:*`, which language publication advances.
  */
 export function marketMatrixSql(): SQL<string | null> {
     deps.anyMarket();
@@ -40,8 +43,13 @@ export function marketMatrixSql(): SQL<string | null> {
             'priceIncrementMinor', CAST(matrix_row.price_increment_minor AS TEXT),
             'currencyCode', matrix_row.currency_code,
             'countries', (SELECT group_concat(matrix_country.country_code, ',') FROM market_countries AS matrix_country WHERE matrix_country.market_id = matrix_row.id),
-            'presences', (SELECT group_concat(matrix_presence.value || ':' || matrix_presence.locale, ',') FROM market_presences AS matrix_presence WHERE matrix_presence.market_id = matrix_row.id AND matrix_presence.kind = 'subfolder'
-                AND EXISTS (SELECT 1 FROM store_languages AS matrix_language WHERE matrix_language.locale = matrix_presence.locale AND matrix_language.published = 1))
+            'presences', (SELECT group_concat(matrix_served.entry, ',') FROM (
+                SELECT matrix_presence.value || ':' || matrix_presence.locale AS entry FROM market_presences AS matrix_presence WHERE matrix_presence.market_id = matrix_row.id AND matrix_presence.kind = 'subfolder'
+                    AND EXISTS (SELECT 1 FROM store_languages AS matrix_language WHERE matrix_language.locale = matrix_presence.locale AND matrix_language.published = 1)
+                UNION ALL
+                SELECT matrix_language.locale || ':' || matrix_language.locale AS entry FROM store_languages AS matrix_language
+                WHERE matrix_row.is_backup = 1 AND ${languageSubfolderServedSql(sql.raw("matrix_row.id"), sql.raw("matrix_language.locale"))}
+            ) AS matrix_served)
         ) AS entry
         FROM markets AS matrix_row
         WHERE matrix_row.status = 'active'
@@ -132,6 +140,16 @@ export interface PresenceMarket {
 }
 
 /**
+ * A language subfolder of the backup market is served: the language is
+ * published and none of that market's presences uses it (the default
+ * language is the root's; a merchant's own `bn-bd` keeps the language there).
+ */
+export function languageSubfolderServedSql(backupMarketId: SQL, locale: SQL): SQL {
+    return sql`EXISTS (SELECT 1 FROM store_languages AS subfolder_language WHERE subfolder_language.locale = ${locale} AND subfolder_language.published = 1)
+        AND NOT EXISTS (SELECT 1 FROM market_presences AS subfolder_taken WHERE subfolder_taken.market_id = ${backupMarketId} AND subfolder_taken.kind = 'subfolder' AND subfolder_taken.locale = ${locale})`;
+}
+
+/**
  * The joined presence is served: its language is published (MARKETS-DESIGN
  * D9). The default language is always published, so the root always is.
  */
@@ -155,6 +173,8 @@ export async function readPresenceMarketWithDocuments(
     value: string,
     documents: readonly { key: string }[],
 ): Promise<{ market: PresenceMarket | null; documentRows: SettingsDocumentRow[]; sellingCountries: string[] }> {
+    // A language subfolder (`bn`) is the backup market in that language.
+    const language = isLanguageSubfolder(value);
     const rows = await db.select({
         selling: sellingCountriesSql(),
         id: markets.id,
@@ -168,7 +188,7 @@ export async function readPresenceMarketWithDocuments(
         revision: settings.revision,
     })
         .from(markets)
-        .leftJoin(marketPresences, and(
+        .leftJoin(marketPresences, language ? sql`0 = 1` : and(
             eq(marketPresences.marketId, markets.id),
             eq(marketPresences.kind, "subfolder"),
             eq(marketPresences.value, value),
@@ -178,7 +198,9 @@ export async function readPresenceMarketWithDocuments(
         .leftJoin(settings, settingsDocumentsJoin(documents))
         .where(and(
             eq(markets.status, "active"),
-            value === "" ? eq(markets.isBackup, true) : sql`${marketPresences.value} IS NOT NULL`,
+            value === "" ? eq(markets.isBackup, true)
+                : language ? and(eq(markets.isBackup, true), languageSubfolderServedSql(sql`${markets.id}`, sql`${value}`))
+                    : sql`${marketPresences.value} IS NOT NULL`,
         ));
     // Which presences are served: their locales and the published languages.
     if (value !== "") deps.translationLocales();
@@ -191,7 +213,7 @@ export async function readPresenceMarketWithDocuments(
             handle: row.handle,
             name: row.name,
             isBackup: Boolean(row.isBackup),
-            presence: { value, locale: row.locale ?? "en" },
+            presence: { value, locale: language ? value : row.locale ?? "en" },
             ...(!row.isBackup && row.currencyCode ? { currencyCode: row.currencyCode } : {}),
         },
         documentRows: rows.flatMap((each) => each.category === null || each.value === null

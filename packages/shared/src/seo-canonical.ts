@@ -117,7 +117,7 @@ export function isValidResourceCanonicalPath(
   }
   if (!CANONICAL_SLUG_SEGMENT_PATTERN.test(segment)) return false;
 
-  // `<locale>-<country>` (`en-in`) is a market's subfolder presence, never a page.
+  // `<locale>-<country>` (`en-in`) and `<locale>` (`bn`) are subfolder presences, never a page.
   return kind !== "page" || (!RESERVED_PAGE_CANONICAL_SEGMENTS.has(segment) && !MARKET_SUBFOLDER_PATTERN.test(segment));
 }
 

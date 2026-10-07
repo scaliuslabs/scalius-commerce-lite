@@ -1,17 +1,21 @@
 /**
- * The market selector and the geo suggestion (docs/MARKETS-DESIGN.md D4):
- * which countries a buyer can choose, in the page's language, and what the
- * selector form and the suggestion say. Both appear only while the store
- * has more than one active presence, so today's pages stay as they are.
+ * The market and language selectors and the geo suggestion
+ * (docs/MARKETS-DESIGN.md D4): which countries and languages a buyer can
+ * choose, in the page's language, and what the forms and the suggestion say.
+ * They appear only while the store has more than one active presence (the
+ * country form: more than one market; the language form: two languages in
+ * the page's market), so a single-language store's pages stay as they are.
  */
 import {
   activePresences,
   backupMarket,
   isStorefrontPagePath,
+  marketLanguagePresences,
   marketOfPresence,
   presenceOfPath,
   stripPresencePath,
   type MarketMatrix,
+  type PublicMarket,
 } from "@scalius/shared/markets";
 
 export interface MarketCountryOption {
@@ -43,6 +47,36 @@ export function marketCountryOptions(matrix: MarketMatrix, language: string, sho
     .sort((left, right) => left.name.localeCompare(right.name, language));
 }
 
+/** The market a page is in: its presence's, else (the root) the backup market. */
+export function pageMarket(matrix: MarketMatrix, presence: string | null): PublicMarket | null {
+  return presence ? marketOfPresence(matrix, presence)?.market ?? null : backupMarket(matrix);
+}
+
+/** The country form appears only when the store sells in more than one market. */
+export function hasSeveralMarkets(matrix: MarketMatrix | null | undefined): boolean {
+  return (matrix?.markets.length ?? 0) > 1;
+}
+
+export interface LanguageOption {
+  locale: string;
+  /** The language in itself ("বাংলা", "English"), as Shopify's language form names it. */
+  name: string;
+}
+
+function languageName(locale: string): string {
+  try {
+    const name = new Intl.DisplayNames([locale, "en"], { type: "language" }).of(locale) ?? locale;
+    return name.charAt(0).toLocaleUpperCase(locale) + name.slice(1);
+  } catch {
+    return locale;
+  }
+}
+
+/** The languages a market's pages are in (the root's first); the form shows them when there are two or more. */
+export function languageOptions(market: PublicMarket): LanguageOption[] {
+  return marketLanguagePresences(market).map(({ locale }) => ({ locale, name: languageName(locale) }));
+}
+
 /** The country the selector shows as chosen: the first of the page's market. */
 export function selectedMarketCountry(matrix: MarketMatrix, presence: string | null): string | null {
   const market = presence ? marketOfPresence(matrix, presence)?.market : backupMarket(matrix);
@@ -51,6 +85,7 @@ export function selectedMarketCountry(matrix: MarketMatrix, presence: string | n
 
 export interface MarketSelectorCopy {
   label: string;
+  languageLabel: string;
   submit: string;
   suggestion: string;
   go: string;
@@ -60,6 +95,7 @@ export interface MarketSelectorCopy {
 const COPY: Record<"en" | "bn", MarketSelectorCopy> = {
   en: {
     label: "Country/region",
+    languageLabel: "Language",
     submit: "Update",
     suggestion: "Shopping from {country}? See the store for your country.",
     go: "Go",
@@ -67,6 +103,7 @@ const COPY: Record<"en" | "bn", MarketSelectorCopy> = {
   },
   bn: {
     label: "দেশ/অঞ্চল",
+    languageLabel: "ভাষা",
     submit: "হালনাগাদ করুন",
     suggestion: "{country} থেকে কিনছেন? আপনার দেশের দোকান দেখুন।",
     go: "যান",

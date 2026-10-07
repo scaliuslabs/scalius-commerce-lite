@@ -5,11 +5,15 @@ import {
   hreflangAlternates,
   defaultLocale,
   isCrawlerUserAgent,
+  isLanguageSubfolder,
   isPresenceServedPath,
   isStorefrontPagePath,
   isTopLevelNavigation,
+  marketLanguagePresences,
   parseMarketSelection,
+  presenceCountry,
   presenceHref,
+  presenceHreflang,
   presenceOfPath,
   presencePath,
   readMarketSelectionCookie,
@@ -241,5 +245,53 @@ describe("resolveMarket", () => {
   it("is deterministic", () => {
     const signals = page("/products/x", { geoCountry: "IN", selection: { country: "IN", presence: "en-in" } });
     expect(resolveMarket(MATRIX, signals)).toEqual(resolveMarket(MATRIX, signals));
+  });
+});
+
+// Shopify's language subfolders on the primary market (`/en`, `/bn`): the
+// backup market serves each published language other than the default.
+describe("language subfolders of the backup market", () => {
+  const LANGUAGES: MarketMatrix = {
+    markets: [{ ...BACKUP, presences: [{ value: "", locale: "bn" }, { value: "en", locale: "en" }] }, INDIA],
+  };
+
+  it("reads `/en/...` as a presence and names no country", () => {
+    expect(presenceOfPath("/en/products/x")).toBe("en");
+    expect(isLanguageSubfolder("en")).toBe(true);
+    expect(isLanguageSubfolder("en-in")).toBe(false);
+    expect(presenceCountry("en")).toBeNull();
+    expect(presenceCountry("en-in")).toBe("IN");
+    expect(presenceCountry("")).toBeNull();
+    expect(presencePath("en", "/products/x?y=1")).toBe("/en/products/x?y=1");
+  });
+
+  it("names the backup's country in hreflang, as the root does", () => {
+    expect(presenceHreflang(LANGUAGES.markets[0]!, { value: "en", locale: "en" })).toBe("en-BD");
+    expect(hreflangAlternates(LANGUAGES, "/products/x", "https://shop.example")).toEqual([
+      { hreflang: "bn-BD", href: "https://shop.example/products/x" },
+      { hreflang: "en-BD", href: "https://shop.example/en/products/x" },
+      { hreflang: "en-IN", href: "https://shop.example/en-in/products/x" },
+      { hreflang: "hi-IN", href: "https://shop.example/hi-in/products/x" },
+      { hreflang: "x-default", href: "https://shop.example/products/x" },
+    ]);
+  });
+
+  it("offers each market's languages once, the root's first", () => {
+    expect(marketLanguagePresences(LANGUAGES.markets[0]!)).toEqual([{ value: "", locale: "bn" }, { value: "en", locale: "en" }]);
+    expect(marketLanguagePresences(INDIA).map(({ locale }) => locale)).toEqual(["en", "hi"]);
+  });
+
+  it("keeps a buyer's language choice in the selection cookie and follows it", () => {
+    expect(parseMarketSelection("BD:en")).toEqual({ country: "BD", presence: "en" });
+    const resolution = resolveMarket(LANGUAGES, {
+      surface: "page",
+      pathname: "/products/x",
+      selection: { country: "BD", presence: "en" },
+      crawler: false,
+      navigation: true,
+    });
+    expect(resolution.redirect).toEqual({ location: "/en/products/x", reason: "buyer_choice" });
+    // A language the store no longer serves is a 404, like any unknown presence.
+    expect(resolveMarket(SINGLE, { surface: "page", pathname: "/en", crawler: false, navigation: true }).reason).toBe("unknown_presence");
   });
 });
