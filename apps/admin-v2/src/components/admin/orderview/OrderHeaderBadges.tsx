@@ -28,7 +28,7 @@ export function OrderHeaderBadges({ order }: {
     <div className="flex flex-wrap gap-1" data-testid="order-header-badges">
       {closed ? <Badge variant={statusBadgeVariant(status, "order")}>{orderStatusLabel(o, status)}</Badge> : null}
       {shown.payment && order.paymentStatus ? (
-        <Badge variant={statusBadgeVariant(order.paymentStatus, "payment")}>{paymentStatusLabel(o, order.paymentStatus)}</Badge>
+        <Badge variant={statusBadgeVariant(order.paymentStatus, "payment")}>{paymentStatusLabel(o, order.paymentStatus, order.paymentMethod)}</Badge>
       ) : null}
       {shown.fulfillment && order.fulfillmentStatus ? (
         <Badge variant={statusBadgeVariant(order.fulfillmentStatus, "fulfillment")}>{fulfillmentStatusLabel(o, order.fulfillmentStatus)}</Badge>

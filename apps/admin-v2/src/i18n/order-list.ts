@@ -241,7 +241,7 @@ export const orderListMessages = defineMessages({
     views: "অর্ডার ভিউ",
     "tab.unfulfilled": "পাঠানো হয়নি",
     "tab.ready_for_pickup": "পিকআপের জন্য তৈরি",
-    "tab.unpaid": "পেমেন্ট বাকি",
+    "tab.unpaid": "অপরিশোধিত",
     "tab.cod_to_collect": "ক্যাশ তোলা বাকি",
     "tab.delivery_failed": "ডেলিভারি হয়নি",
     "tab.returned": "ফেরত এসেছে",

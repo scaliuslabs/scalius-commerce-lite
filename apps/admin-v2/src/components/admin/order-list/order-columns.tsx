@@ -189,7 +189,7 @@ export function PaymentCell({ order }: { order: Pick<OrderListItem, "status" | "
   if (isQualifiedProviderId(order.paymentMethod)) return <AppPaymentBadge status={status} method={order.paymentMethod} />;
   return (
     <Badge data-part="value" variant={statusBadgeVariant(status, "payment")} title={paymentMethodLabel(t, order.paymentMethod)}>
-      {paymentStatusLabel(t, status)}
+      {paymentStatusLabel(t, status, order.paymentMethod)}
     </Badge>
   );
 }
@@ -199,7 +199,7 @@ function AppPaymentBadge({ status, method }: { status: string; method: string })
   const appNames = useAppPaymentMethodNames(true);
   return (
     <Badge data-part="value" variant={statusBadgeVariant(status, "payment")} title={paymentMethodLabel(t, method, appNames)}>
-      {paymentStatusLabel(t, status)}
+      {paymentStatusLabel(t, status, method)}
     </Badge>
   );
 }
@@ -320,14 +320,14 @@ export const ORDER_COLUMN_LAYOUT = {
   customer: { priority: 96, maxWidth: 176, minWidth: 188 },
   channel: { priority: 40, maxWidth: 140, minWidth: 152 },
   total: { priority: 94, minWidth: 120, numeric: true },
-  payment: { priority: 92, minWidth: { en: 136, bn: 124 } },
+  payment: { priority: 92, minWidth: { en: 136, bn: 178 } },
   fulfillment: { priority: 90, minWidth: { en: 132, bn: 156 } },
   // Payment over fulfilment in one cell, where the two don't fit side by side.
-  paymentFulfillment: { priority: 92, minWidth: { en: 136, bn: 156 }, combines: ["payment", "fulfillment"] },
+  paymentFulfillment: { priority: 92, minWidth: { en: 136, bn: 178 }, combines: ["payment", "fulfillment"] },
   items: { priority: 30, minWidth: { en: 100, bn: 108 }, numeric: true },
   deliveryStatus: { priority: 70, maxWidth: 176, minWidth: 188 },
   deliveryMethod: { priority: 20, maxWidth: 128, minWidth: 140 },
-  status: { priority: 95, minWidth: { en: 112, bn: 140 } },
+  status: { priority: 95, minWidth: { en: 112, bn: 148 } },
 } as const;
 
 type OrderColumnKey = keyof typeof ORDER_COLUMN_LAYOUT;

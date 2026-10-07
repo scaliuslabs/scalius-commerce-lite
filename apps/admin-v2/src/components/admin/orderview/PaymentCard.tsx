@@ -371,7 +371,7 @@ export function PaymentCard({ order, request }: { order: Order; request?: OrderA
       <CardHeader className="flex-row items-center justify-between gap-2 space-y-0">
         <CardTitle>{t("payment.title")}</CardTitle>
         {showBadge && order.paymentStatus ? (
-          <Badge variant={statusBadgeVariant(order.paymentStatus, "payment")}>{paymentStatusLabel(o, order.paymentStatus)}</Badge>
+          <Badge variant={statusBadgeVariant(order.paymentStatus, "payment")}>{paymentStatusLabel(o, order.paymentStatus, order.paymentMethod)}</Badge>
         ) : null}
       </CardHeader>
       <CardContent className="space-y-4">

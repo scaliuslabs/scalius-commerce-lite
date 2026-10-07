@@ -314,13 +314,22 @@ describe("app forms", () => {
     await type(field("Name"), "Al");
     await type(field("Email"), "nope");
     await type(field("Points"), "2.5");
-    await type(field("Joined"), "2026-01-15");
     expect(text()).toContain("Use at least 3 characters.");
     expect(text()).toContain("Enter an email address.");
     expect(text()).toContain("Enter a whole number.");
-    expect(text()).toMatch(/Pick .*2026 or later\./);
     await click(button("Save member"));
     expect(calls("POST", "save")).toHaveLength(0);
+  });
+
+  it("draws a date field as a calendar that offers no day before its earliest", async () => {
+    await renderTree(signupForm);
+    // Shown with the month as a word, empty until picked.
+    expect(field("Joined").textContent).toContain("Pick a date");
+    await click(field("Joined"));
+    const earlier = document.querySelector<HTMLButtonElement>('button[data-day="2026-01-15"]');
+    const later = document.querySelector<HTMLButtonElement>('button[data-day="2026-02-15"]');
+    expect(earlier === null || earlier.disabled).toBe(true);
+    expect(later?.disabled).toBe(false);
   });
 
   it("sends the values with the action's body and maps the app's errors onto the inputs", async () => {
