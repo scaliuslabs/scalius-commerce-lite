@@ -384,7 +384,15 @@ function syncCartPagePresentation(ready: boolean): void {
   const hideOperationalPanels = !ready || !hasItems;
   cartSummary?.classList.toggle("hidden", hideOperationalPanels);
   checkoutPanel?.classList.toggle("hidden", hideOperationalPanels);
+  // The cart drawer's "Checkout" lands on the form (`#checkoutFormCard`). It is
+  // shown only now, after the browser tried the fragment, so scroll here once.
+  if (!hideOperationalPanels && !checkoutFragmentShown && window.location.hash === "#checkoutFormCard") {
+    checkoutFragmentShown = true;
+    document.getElementById("checkoutFormCard")?.scrollIntoView({ block: "start" });
+  }
 }
+
+let checkoutFragmentShown = false;
 
 async function processQuickBuy() {
   try {

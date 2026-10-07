@@ -13,6 +13,7 @@ import {
   removeCartItemByKey,
   clearCart,
   addToCart,
+  cartLineKeyFor,
   restoreCart,
   cartLinePropertyInputs,
   type CartStore,
@@ -29,12 +30,13 @@ import {
   Plus,
   Minus,
   ArrowRight,
+  Check,
   ChevronDown,
 } from "lucide-react";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@scalius/shared/utils";
 import { formatMoney } from "@/lib/currency";
-import { productImageSources } from "@/lib/product-media";
+import { PRODUCT_IMAGE_FALLBACK, productImageSources, resolveProductImageUrl } from "@/lib/product-media";
 import type { ImageSlot } from "@/lib/responsive-image";
 import { previewCartDiscounts } from "@/lib/cart/browser-api";
 import { discountLineKey, type CheckoutDiscountFacts } from "@/lib/checkout/tax-quote-contract";
@@ -109,6 +111,17 @@ export type AddToCartEventDetail = Parameters<typeof addToCart>[0] & {
   redirectToCart?: boolean;
 };
 
+/**
+ * Detail of the document `open-cart` event. `addedLineKey` is the cart line
+ * an add just created or grew: the drawer then confirms it ("Added to your
+ * cart") and lists it first. A plain `open-cart` (the header cart icon) shows
+ * the cart as it is.
+ */
+export type OpenCartEventDetail = { addedLineKey?: string };
+
+/** Where "Checkout" lands: the cart page is also the checkout form. */
+const CHECKOUT_FORM_ID = "checkoutFormCard";
+
 interface Props {
   onReady?: () => void;
 }
@@ -176,6 +189,50 @@ function useDrawerCartFacts(cart: CartStore, isOpen: boolean) {
   return { discounts: Object.keys(cart.items).length > 0 ? discounts : null, issues, ruleErrors };
 }
 
+/**
+ * True shortly after `active` turns on (or `key` changes while on). A live
+ * region only speaks text that arrives after it is in the page, and the
+ * drawer mounts its content together with the region.
+ */
+function useDelayedFlag(active: boolean, key: string | null): boolean {
+  const [on, setOn] = useState(false);
+  useEffect(() => {
+    setOn(false);
+    if (!active) return;
+    const timer = window.setTimeout(() => setOn(true), 150);
+    return () => window.clearTimeout(timer);
+  }, [active, key]);
+  return on;
+}
+
+/**
+ * A line photo. It loads at once (the drawer shows it straight away; lazy
+ * loading inside a sliding sheet can leave it empty) and falls back to the
+ * stored full image, then the placeholder, when a rendition fails to load.
+ */
+function CartLineImage({ url, alt }: { url: string | undefined; alt: string }) {
+  const [stage, setStage] = useState<"rendition" | "original" | "placeholder">("rendition");
+  useEffect(() => setStage("rendition"), [url]);
+  const sources =
+    stage === "rendition"
+      ? productImageProps(url, CART_LINE_IMAGE)
+      : { src: stage === "original" ? resolveProductImageUrl(url) : PRODUCT_IMAGE_FALLBACK };
+  return (
+    <img
+      {...sources}
+      alt={alt}
+      width={72}
+      height={72}
+      decoding="async"
+      onError={() => {
+        setStage((current) =>
+          current === "rendition" && resolveProductImageUrl(url) !== sources.src ? "original" : "placeholder");
+      }}
+      className="h-full w-full object-contain object-center"
+    />
+  );
+}
+
 export default function CartFlyout({ onReady }: Props) {
   const cart = useStore(cartStore);
   const isOpen = useStore(cartOpenState);
@@ -208,43 +265,17 @@ export default function CartFlyout({ onReady }: Props) {
     if (undo) restoreCart(undo.snapshot);
     setUndo(null);
   };
-  const autoCloseTimer = useRef<NodeJS.Timeout | null>(null);
   const cartTriggerRef = useRef<HTMLElement | null>(null);
-  const isAutoCloseEnabled = useRef(false);
-  const lastInteractionTime = useRef<number>(0);
+  /** The line an add just touched; null for a plain open. */
+  const [addedKey, setAddedKey] = useState<string | null>(null);
+  const addedItem = addedKey ? cart.items[addedKey] : undefined;
+  const announced = useDelayedFlag(isOpen && Boolean(addedItem), addedKey);
 
   // Scroll & Swipe Logic
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canScrollMore, setCanScrollMore] = useState(false);
   const dragStartY = useRef(0);
   const dragCurrentY = useRef(0);
-
-  const clearAutoCloseTimer = useCallback(() => {
-    if (autoCloseTimer.current) {
-      clearTimeout(autoCloseTimer.current);
-      autoCloseTimer.current = null;
-    }
-  }, []);
-
-  const disableAutoClose = useCallback(() => {
-    clearAutoCloseTimer();
-    isAutoCloseEnabled.current = false;
-  }, [clearAutoCloseTimer]);
-
-  const handleMeaningfulInteraction = () => {
-    const now = Date.now();
-    if (now - lastInteractionTime.current > 1000) disableAutoClose();
-    lastInteractionTime.current = now;
-  };
-
-  const startAutoCloseTimer = useCallback(() => {
-    clearAutoCloseTimer();
-    isAutoCloseEnabled.current = true;
-    lastInteractionTime.current = Date.now();
-    autoCloseTimer.current = setTimeout(() => {
-      if (isAutoCloseEnabled.current) setCartOpen(false);
-    }, 5000);
-  }, [clearAutoCloseTimer]);
 
   // Mobile Swipe Down Logic
   const handleDragStart = (e: React.TouchEvent) => {
@@ -282,28 +313,34 @@ export default function CartFlyout({ onReady }: Props) {
   useEffect(() => {
     hydrateCartFromStorage();
 
+    /** Remembers what to refocus on close; a re-add while open keeps the first. */
+    const rememberTrigger = () => {
+      if (cartOpenState.get()) return;
+      const activeElement = document.activeElement;
+      cartTriggerRef.current = activeElement instanceof HTMLElement && activeElement !== document.body
+        ? activeElement
+        : null;
+    };
+
+    const openCart = (addedLineKey?: string) => {
+      rememberTrigger();
+      setAddedKey(addedLineKey ?? null);
+      setCartOpen(true);
+    };
+
     const handleAddToCartEvent = async (event: CustomEvent<AddToCartEventDetail>) => {
       if (!event.detail) return;
       if (!(await addToCart(event.detail))) return;
       if (event.detail.redirectToCart) {
         window.location.href = pagePath("/cart");
       } else {
-        const activeElement = document.activeElement;
-        cartTriggerRef.current = activeElement instanceof HTMLElement
-          ? activeElement
-          : null;
-        setCartOpen(true);
-        startAutoCloseTimer();
+        const { id, variantId, properties } = event.detail;
+        openCart(variantId ? await cartLineKeyFor({ id, variantId, properties }).catch(() => undefined) : undefined);
       }
     };
 
-    const handleOpenCartEvent = () => {
-      disableAutoClose();
-      const activeElement = document.activeElement;
-      cartTriggerRef.current = activeElement instanceof HTMLElement
-        ? activeElement
-        : null;
-      setCartOpen(true);
+    const handleOpenCartEvent = (event?: Event) => {
+      openCart((event as CustomEvent<OpenCartEventDetail | undefined> | undefined)?.detail?.addedLineKey);
     };
 
     const onAddToCart: EventListener = (event) =>
@@ -321,7 +358,7 @@ export default function CartFlyout({ onReady }: Props) {
           }),
         );
       } else {
-        handleOpenCartEvent();
+        openCart(pendingEvent.detail?.addedLineKey);
       }
     }
     onReady?.();
@@ -330,25 +367,19 @@ export default function CartFlyout({ onReady }: Props) {
       document.removeEventListener("add-to-cart", onAddToCart);
       document.removeEventListener("open-cart", handleOpenCartEvent);
       window.removeEventListener("resize", checkScroll);
-      clearAutoCloseTimer();
     };
-  }, [checkScroll, clearAutoCloseTimer, disableAutoClose, onReady, startAutoCloseTimer]);
+  }, [checkScroll, onReady]);
 
-  const handleCheckout = () => {
-    window.location.href = pagePath("/cart");
-    setCartOpen(false);
-  };
+  const checkoutHref = `${pagePath("/cart")}#${CHECKOUT_FORM_ID}`;
+  const cartHref = pagePath("/cart");
+  /** The line an add just touched comes first, as Shopify's cart notification shows it. */
+  const lineEntries = Object.entries(cart.items).sort(([a], [b]) =>
+    Number(b === addedKey) - Number(a === addedKey));
 
   return (
     <Sheet
       open={isOpen}
-      onOpenChange={(value) => {
-        setCartOpen(value);
-        if (!value) {
-          clearAutoCloseTimer();
-          isAutoCloseEnabled.current = false;
-        }
-      }}
+      onOpenChange={setCartOpen}
     >
       <SheetContent
         side="right"
@@ -369,11 +400,11 @@ export default function CartFlyout({ onReady }: Props) {
           // Desktop: Side Sheet
           "sm:fixed sm:inset-y-0 sm:inset-e-0 sm:inset-s-auto sm:h-full sm:max-h-none sm:w-full sm:max-w-[380px] sm:rounded-none sm:border-s",
         )}
-        onMouseEnter={handleMeaningfulInteraction}
-        onTouchStart={handleMeaningfulInteraction}
       >
         <SheetDescription className="sr-only">
-          Review cart items, change quantities, or continue to checkout.
+          {addedItem
+            ? `${addedItem.name} was added to your cart. View your cart, check out, or continue shopping.`
+            : "Review cart items, change quantities, or continue to checkout."}
         </SheetDescription>
         {/*
           SWIPE ZONE (Mobile Only)
@@ -415,6 +446,19 @@ export default function CartFlyout({ onReady }: Props) {
           </SheetClose>
         </div>
 
+        {/* Confirmation of an add, like Shopify's cart notification. A fixed strip in the sheet, never in the page. */}
+        {addedItem && (
+          <div className="flex shrink-0 items-center gap-2 border-b border-border bg-card px-4 py-2 text-sm font-medium text-foreground sm:px-5" data-cart-added>
+            <span aria-hidden="true" className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
+              <Check className="h-3 w-3" strokeWidth={3} />
+            </span>
+            <span aria-hidden="true">Added to your cart</span>
+            <p role="status" className="sr-only">
+              {announced ? `${addedItem.name} added to your cart. Cart has ${cart.totalItems} ${cart.totalItems === 1 ? "item" : "items"}.` : ""}
+            </p>
+          </div>
+        )}
+
         {/* 2. CONTENT */}
         <div className="flex-1 relative overflow-hidden flex flex-col bg-muted/50">
           <div
@@ -444,22 +488,18 @@ export default function CartFlyout({ onReady }: Props) {
             ) : (
               // Mobile: gap-2 (tighter), Desktop: gap-3
               <div className="space-y-2 sm:space-y-3 pb-4">
-                {Object.entries(cart.items).map(([key, item]) => (
+                {lineEntries.map(([key, item]) => (
                   <div
                     key={key}
-                    className="group relative flex gap-2.5 sm:gap-3 bg-card p-2 sm:p-2.5 rounded-xl border border-border shadow-sm"
+                    aria-current={key === addedKey ? "true" : undefined}
+                    className={cn(
+                      "group relative flex gap-2.5 sm:gap-3 bg-card p-2 sm:p-2.5 rounded-xl border border-border shadow-sm",
+                      key === addedKey && "border-primary ring-1 ring-primary",
+                    )}
                   >
                     {/* Compact Image */}
                     <div className="h-12 w-12 sm:h-18 sm:w-18 shrink-0 overflow-hidden rounded-lg border border-border bg-muted">
-                      <img
-                        {...productImageProps(item.image, CART_LINE_IMAGE)}
-                        alt={item.name}
-                        width={72}
-                        height={72}
-                        decoding="async"
-                        className="h-full w-full object-contain object-center transition-transform duration-500 group-hover:scale-105"
-                        loading="lazy"
-                      />
+                      <CartLineImage url={item.image} alt={item.name} />
                     </div>
 
                     <div className="flex flex-1 flex-col min-w-0 justify-between py-0">
@@ -521,7 +561,6 @@ export default function CartFlyout({ onReady }: Props) {
                                   type="button"
                                   className="min-h-9 rounded-md border border-border px-2 text-xs font-medium text-foreground hover:bg-muted cursor-pointer"
                                   onClick={() => {
-                                    disableAutoClose();
                                     updateCartItemByKey(key, { quantity: Math.floor(issues[key]!.availableQuantity!) });
                                   }}
                                 >
@@ -532,7 +571,6 @@ export default function CartFlyout({ onReady }: Props) {
                                   type="button"
                                   className="min-h-9 rounded-md border border-border px-2 text-xs font-medium text-foreground hover:bg-muted cursor-pointer"
                                   onClick={() => {
-                                    disableAutoClose();
                                     removeWithUndo(`${item.name} removed`, () => removeCartItemByKey(key));
                                   }}
                                 >
@@ -560,7 +598,6 @@ export default function CartFlyout({ onReady }: Props) {
                           <button
                             aria-label={`Decrease ${item.name} quantity`}
                             onClick={() => {
-                              disableAutoClose();
                               const newQ = Math.max(0, item.quantity - 1);
                               if (newQ === 0)
                                 removeWithUndo(`${item.name} removed`, () => removeCartItemByKey(key));
@@ -577,7 +614,6 @@ export default function CartFlyout({ onReady }: Props) {
                           <button
                             aria-label={`Increase ${item.name} quantity`}
                             onClick={() => {
-                              disableAutoClose();
                               updateCartItemByKey(key, {
                                 quantity: item.quantity + 1,
                               });
@@ -591,7 +627,6 @@ export default function CartFlyout({ onReady }: Props) {
                         <button
                           aria-label={`Remove ${item.name} from cart`}
                           onClick={() => {
-                            disableAutoClose();
                             removeWithUndo(`${item.name} removed`, () => removeCartItemByKey(key));
                           }}
                           className="flex h-11 w-11 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive active:scale-90 sm:h-8 sm:w-8 cursor-pointer"
@@ -612,7 +647,6 @@ export default function CartFlyout({ onReady }: Props) {
                         <li key={product.id} className="w-28 shrink-0">
                           <a
                             href={pagePath(`/products/${encodeURIComponent(product.slug)}`)}
-                            onClick={disableAutoClose}
                             className="flex h-full flex-col rounded-lg border border-border bg-card p-1.5 transition-colors hover:border-foreground/30"
                           >
                             <img
@@ -681,7 +715,6 @@ export default function CartFlyout({ onReady }: Props) {
                     className="shrink-0 rounded-md border border-border px-2 py-1 text-sm font-medium hover:bg-muted cursor-pointer"
                     onClick={() => {
                       const product = offer.products[0]!;
-                      disableAutoClose();
                       void addToCart({
                         id: product.id,
                         slug: product.slug,
@@ -706,90 +739,57 @@ export default function CartFlyout({ onReady }: Props) {
 
         {/* 3. FOOTER */}
         {cart.totalItems > 0 && (
-          <div className="border-t border-border bg-card p-2 sm:p-5 shrink-0 z-30 shadow-[0_-4px_20px_-4px_rgba(0,0,0,0.05)] safe-area-pb">
-            {/* Desktop Footer */}
-            <div className="hidden sm:block space-y-4">
-              <div className="flex justify-between items-end">
+          <div className="border-t border-border bg-card p-3 sm:p-5 shrink-0 z-30 shadow-[0_-4px_20px_-4px_rgba(0,0,0,0.05)] safe-area-pb">
+            <div className="space-y-3 sm:space-y-4">
+              <div className="flex items-end justify-between gap-3">
                 <div className="text-sm text-muted-foreground">
                   {discountTotal > 0 ? "Estimated total (excl. shipping)" : "Subtotal (excl. shipping)"}
                 </div>
-                <div className="text-xl font-semibold text-foreground tabular-nums">
+                <div className="text-lg font-semibold text-foreground tabular-nums sm:text-xl">
                   {formatMoney(estimatedTotal)}
                 </div>
               </div>
               {checkoutBlocked && (
-                <p className="text-sm text-destructive" role="status">{blockedText}</p>
+                <p id="drawerCheckoutBlocked" className="text-xs text-destructive sm:text-sm" role="status">{blockedText}</p>
               )}
-              <Button
-                disabled={checkoutBlocked}
-                onClick={() => {
-                  disableAutoClose();
-                  handleCheckout();
-                }}
-                className="w-full h-11 rounded-xl text-[14px] font-bold bg-primary hover:bg-primary/90 text-primary-foreground shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <span>Checkout</span>
-                <ArrowRight className="h-4 w-4" />
-              </Button>
-              <div className="flex justify-between items-center px-1">
+              <div className="flex flex-col gap-2 sm:gap-3">
+                <Button asChild variant="outline" className="h-11 w-full rounded-xl text-[14px] font-bold cursor-pointer">
+                  <a href={cartHref} onClick={() => setCartOpen(false)}>View cart</a>
+                </Button>
+                {checkoutBlocked ? (
+                  <Button
+                    disabled
+                    aria-describedby="drawerCheckoutBlocked"
+                    className="h-11 w-full rounded-xl text-[14px] font-bold bg-primary text-primary-foreground shadow-md flex items-center justify-center gap-2"
+                  >
+                    <span>Checkout</span>
+                    <ArrowRight className="h-4 w-4" />
+                  </Button>
+                ) : (
+                  <Button asChild className="h-11 w-full rounded-xl text-[14px] font-bold bg-primary hover:bg-primary/90 text-primary-foreground shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer">
+                    <a href={checkoutHref} onClick={() => setCartOpen(false)}>
+                      <span>Checkout</span>
+                      <ArrowRight className="h-4 w-4" />
+                    </a>
+                  </Button>
+                )}
+              </div>
+              <div className="flex items-center justify-between px-1">
                 <button
+                  type="button"
                   onClick={() => setCartOpen(false)}
-                  className="min-h-9 text-sm text-muted-foreground hover:text-foreground underline decoration-border underline-offset-2 cursor-pointer"
+                  className="min-h-11 text-sm text-muted-foreground hover:text-foreground underline decoration-border underline-offset-2 cursor-pointer sm:min-h-9"
                 >
                   Continue shopping
                 </button>
                 <button
-                  onClick={() => {
-                    disableAutoClose();
-                    removeWithUndo("Cart cleared", clearCart);
-                  }}
-                  className="min-h-9 text-sm text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                  type="button"
+                  onClick={() => removeWithUndo("Cart cleared", clearCart)}
+                  className="min-h-11 text-sm text-muted-foreground hover:text-foreground transition-colors cursor-pointer sm:min-h-9"
                 >
                   Clear cart
                 </button>
               </div>
-            </div>
-
-            {/* Mobile Footer */}
-            {checkoutBlocked && (
-              <p id="drawerCheckoutBlocked" className="px-1 pb-1 text-xs text-destructive sm:hidden" role="status">{blockedText}</p>
-            )}
-            <div className="flex sm:hidden items-center gap-3 px-1 pb-1">
-              {/* Left: Total */}
-              <div className="flex min-w-0 items-center gap-1">
-                <div className="flex flex-col justify-center">
-                  <span className="text-xs text-muted-foreground">
-                    {discountTotal > 0 ? "Estimated total" : "Subtotal"}
-                  </span>
-                  <div className="text-lg font-semibold leading-none text-foreground tabular-nums">
-                    {formatMoney(estimatedTotal)}
-                  </div>
-                </div>
-                <button
-                  aria-label="Clear cart"
-                  onClick={() => {
-                    disableAutoClose();
-                    removeWithUndo("Cart cleared", clearCart);
-                  }}
-                  className="flex min-h-11 items-center rounded-md px-2 text-sm text-muted-foreground underline decoration-dotted underline-offset-2 hover:text-foreground cursor-pointer"
-                >
-                  Clear
-                </button>
-              </div>
-
-              {/* Right: Action */}
-              <Button
-                disabled={checkoutBlocked}
-                aria-describedby={checkoutBlocked ? "drawerCheckoutBlocked" : undefined}
-                onClick={() => {
-                  disableAutoClose();
-                  handleCheckout();
-                }}
-                className="ms-auto flex h-11 flex-1 items-center justify-center gap-2 rounded-full bg-primary text-[12px] font-bold text-primary-foreground shadow-sm active:scale-[0.97] cursor-pointer"
-              >
-                <span>Checkout</span>
-                <ArrowRight className="h-3 w-3" />
-              </Button>
             </div>
           </div>
         )}

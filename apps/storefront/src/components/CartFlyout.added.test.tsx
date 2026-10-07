@@ -1,0 +1,127 @@
+// @vitest-environment happy-dom
+
+import { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("@/lib/cart/browser-api", () => ({
+  previewCartDiscounts: vi.fn(async () => ({ ok: false, message: null })),
+}));
+
+import CartFlyout, { setCartOpen } from "./CartFlyout";
+import { addToCart, cartLineKeyFor, clearCart } from "@/store/cart";
+
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+let root: Root;
+let host: HTMLDivElement;
+
+beforeEach(() => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ data: { issues: [] } }), { status: 200 })));
+  localStorage.clear();
+  clearCart();
+  host = document.createElement("div");
+  document.body.append(host);
+  root = createRoot(host);
+});
+
+afterEach(async () => {
+  await act(async () => root.unmount());
+  host.remove();
+  setCartOpen(false);
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
+
+const trouser = { id: "trouser", slug: "trouser", name: "Trouser", price: 900, variantId: "var_trouser", quantity: 1 };
+const shirt = { id: "shirt", slug: "shirt", name: "Blue Shirt", price: 500, variantId: "var_shirt", quantity: 2 };
+
+async function mount() {
+  await addToCart(trouser);
+  await addToCart(shirt);
+  await act(async () => root.render(<CartFlyout />));
+}
+
+async function dispatchOpenCart(detail?: { addedLineKey?: string }) {
+  await act(async () => {
+    document.dispatchEvent(new CustomEvent("open-cart", detail ? { detail } : undefined));
+    await vi.advanceTimersByTimeAsync(500);
+  });
+}
+
+const dialog = () => document.querySelector<HTMLElement>('[role="dialog"]')!;
+const status = () => [...dialog().querySelectorAll<HTMLElement>('[role="status"]')];
+const link = (label: string) =>
+  [...dialog().querySelectorAll<HTMLAnchorElement>("a")].find((a) => a.textContent?.trim() === label);
+
+describe("cart drawer after an add", () => {
+  it("confirms the added line, announces it politely, and links to the cart and checkout", async () => {
+    await mount();
+    await dispatchOpenCart({ addedLineKey: await cartLineKeyFor(shirt) });
+
+    expect(dialog().textContent).toContain("Added to your cart");
+    const announcement = status().find((region) => region.textContent?.includes("Blue Shirt"));
+    expect(announcement?.textContent).toContain("Blue Shirt added to your cart");
+    // The added line comes first and is the current one.
+    const lines = [...dialog().querySelectorAll<HTMLElement>("[aria-current]")];
+    expect(lines).toHaveLength(1);
+    expect(lines[0]!.textContent).toContain("Blue Shirt");
+    expect(lines[0]!.parentElement!.firstElementChild).toBe(lines[0]);
+    expect(dialog().getAttribute("aria-describedby")).toBeTruthy();
+    expect(document.getElementById(dialog().getAttribute("aria-describedby")!)?.textContent).toContain("Blue Shirt was added");
+
+    expect(link("View cart")?.getAttribute("href")).toBe("/cart");
+    expect(link("Checkout")?.getAttribute("href")).toBe("/cart#checkoutFormCard");
+    expect(dialog().textContent).toContain("Continue shopping");
+    expect(dialog().textContent).toContain("Subtotal");
+  });
+
+  it("shows the plain cart, with no confirmation, for a bare open-cart", async () => {
+    await mount();
+    await dispatchOpenCart();
+
+    expect(dialog().textContent).not.toContain("Added to your cart");
+    expect(status().some((region) => region.textContent?.includes("added to your cart"))).toBe(false);
+    expect(dialog().querySelector("[aria-current]")).toBeNull();
+    expect(link("View cart")).toBeDefined();
+    expect(link("Checkout")).toBeDefined();
+  });
+
+  it("drops the confirmation when the drawer is opened plainly afterwards", async () => {
+    await mount();
+    await dispatchOpenCart({ addedLineKey: await cartLineKeyFor(shirt) });
+    await act(async () => setCartOpen(false));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(600);
+    });
+    await dispatchOpenCart();
+    expect(dialog().textContent).not.toContain("Added to your cart");
+  });
+
+  it("stays open: nothing closes the drawer on a timer", async () => {
+    await mount();
+    await dispatchOpenCart({ addedLineKey: await cartLineKeyFor(shirt) });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30_000);
+    });
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+  });
+
+  it("returns focus to the control that opened the drawer", async () => {
+    const trigger = document.createElement("button");
+    trigger.textContent = "Add to cart";
+    document.body.append(trigger);
+    trigger.focus();
+    await mount();
+    await dispatchOpenCart({ addedLineKey: await cartLineKeyFor(shirt) });
+    expect(dialog().contains(document.activeElement)).toBe(true);
+
+    await act(async () => setCartOpen(false));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(600);
+    });
+    expect(document.activeElement).toBe(trigger);
+    trigger.remove();
+  });
+});
