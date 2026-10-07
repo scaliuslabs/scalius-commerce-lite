@@ -516,6 +516,13 @@ export const pluginManifestSchema = z.object({
         context.addIssue({ code: "custom", path: ["providers", index, "settings"], message: `Setting ${key} is not declared in settings.` });
       }
     }
+    if (provider.environmentSetting !== undefined) {
+      const field = manifest.settings.find((candidate) => candidate.key === provider.environmentSetting);
+      const values = field?.type === "select" ? field.options.map((option) => option.value).sort().join(",") : "";
+      if (values !== "live,sandbox") {
+        context.addIssue({ code: "custom", path: ["providers", index, "environmentSetting"], message: `Setting ${provider.environmentSetting} must be a select of sandbox and live.` });
+      }
+    }
   });
   unique(manifest.settingsGroups.map((group) => group.id), ["settingsGroups"], "Settings group ids");
   const providerIds = new Set(manifest.providers.map((provider) => provider.id));

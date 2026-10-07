@@ -8,7 +8,12 @@ import {
   formatCheckoutLanguageText,
   type CheckoutLanguageData,
 } from "@scalius/shared/checkout-language";
-import { appGatewayName, type GatewayPresentation } from "./checkout/gateway-presentation";
+import {
+  appGatewayName,
+  SSLCOMMERZ_GATEWAY_ID,
+  sslcommerzPresentation,
+  type GatewayPresentation,
+} from "./checkout/gateway-presentation";
 
 function normalize(value: string | null | undefined): string {
   return (value ?? "").trim().toLowerCase();
@@ -76,7 +81,9 @@ export function formatOrderSuccessPaymentMethod(
       return copy.cashOnDeliveryText;
     case "stripe":
       return copy.orderReceiptPaymentMethodCardText;
+    // SSLCommerz, the Bangladesh pack's (stored as `sslcommerz` before it moved there).
     case "sslcommerz":
+    case SSLCOMMERZ_GATEWAY_ID:
       return copy.orderReceiptPaymentMethodSslcommerzText;
     default:
       // An app's wallet (`<plugin id>:<provider id>`) by its checkout name.
@@ -97,11 +104,8 @@ export function localizeOrderReceiptGatewayPresentation(
         description: copy.paySecurelyByCardText,
       };
     case "sslcommerz":
-      return {
-        ...presentation,
-        buyerLabel: copy.onlinePaymentText,
-        description: copy.onlinePaymentDescriptionText,
-      };
+    case SSLCOMMERZ_GATEWAY_ID:
+      return sslcommerzPresentation(presentation, copy);
     case "cod":
       return {
         ...presentation,

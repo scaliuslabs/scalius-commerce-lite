@@ -8,6 +8,10 @@
 // - Fraud checks (fraud.ts): FraudBD, FraudGuard, eCourier Fraud Alert and
 //   the custom fraudchecker.link API on the order page (advice, never
 //   blocking), for Bangladesh buyers only.
+// - Payments (sslcommerz.ts): SSLCommerz as a hosted payment provider
+//   (cards, mobile wallets, internet banking): sessions, IPN and return
+//   validation through SSLCommerz's validation API, refunds. The old
+//   /webhooks/sslcommerz and /payment/sslcommerz/* URLs keep reaching it.
 // - Couriers (couriers.ts): Pathao and Steadfast as courier providers:
 //   booking, tracking, Steadfast's lookup by order number, and tracking pushes
 //   (the platform's courier webhook route, and the old /webhooks/pathao and
@@ -36,12 +40,13 @@ import { FRAUD_CHECKERS, fraudProviders } from "./fraud";
 import { continuePathaoRefresh, pathaoRefreshRunning, readPathaoRefresh, startPathaoRefresh, type PathaoRefreshState } from "./pathao-places";
 import { PLACES_TOTAL, PLACES_VERSION, placesCurrent, readPlacesState, seedPlaces, type PlacesState } from "./places";
 import { SMS_HOSTS, smsProviders } from "./sms";
+import { SSLCOMMERZ_AMOUNT_LIMITS, SSLCOMMERZ_HOSTS, paymentProviders } from "./sslcommerz";
 
 // Each field belongs to one provider (`group: <provider id>`): the dashboard
 // shows it only in that provider's setup sheet, where the provider is in
-// Settings (Notifications, Shipping, Apps and integrations), so the labels
-// need no provider prefix.
-type Group = "smsnetbd" | "bdbulksms" | "mimsms" | "gennet" | "fraudchecker" | "fraudbd" | "fraudguard" | "ecourier" | "pathao" | "steadfast";
+// Settings (Notifications, Shipping, Payments, Apps and integrations), so the
+// labels need no provider prefix.
+type Group = "smsnetbd" | "bdbulksms" | "mimsms" | "gennet" | "fraudchecker" | "fraudbd" | "fraudguard" | "ecourier" | "pathao" | "steadfast" | "sslcommerz";
 const secret = (group: Group, key: string, label: string, help?: string) => ({ key, label, type: "secret" as const, group, ...(help ? { help } : {}) });
 const text = (group: Group, key: string, label: string, maxLength: number, help?: string) =>
   ({ key, label, type: "text" as const, maxLength, group, ...(help ? { help } : {}) });
@@ -87,6 +92,17 @@ const SETTINGS = [
   secret("steadfast", "steadfast_api_key", "API key"),
   secret("steadfast", "steadfast_secret_key", "Secret key"),
   secret("steadfast", "steadfast_webhook_secret", "Webhook token", "The Bearer token Steadfast sends with its updates. Left empty, the secret key is used."),
+  // No default: a store chooses test or live payments itself (activation moves a choice saved before the move).
+  {
+    key: "sslcommerz_environment",
+    label: "Environment",
+    type: "select" as const,
+    options: [{ value: "sandbox", label: "Sandbox (test payments)" }, { value: "live", label: "Live" }],
+    group: "sslcommerz" as const,
+    help: "Sandbox uses SSLCommerz's test system. Switch to Live together with your live store ID and password.",
+  },
+  text("sslcommerz", "sslcommerz_store_id", "Store ID", 200, "From the store credentials SSLCommerz sent you."),
+  secret("sslcommerz", "sslcommerz_store_password", "Store password"),
 ];
 
 /** The field labels in Bangla (the dashboard's other language); help stays English. */
@@ -102,6 +118,8 @@ const BN_LABELS: Record<string, string> = {
   "Client secret": "ক্লায়েন্ট সিক্রেট",
   "Default weight (kg)": "ডিফল্ট ওজন (কেজি)",
   "Delivery type": "ডেলিভারির ধরন",
+  Environment: "পরিবেশ",
+  "Store password": "স্টোর পাসওয়ার্ড",
   "Item type": "পার্সেলের ধরন",
   Password: "পাসওয়ার্ড",
   "Secret key": "সিক্রেট কী",
@@ -120,13 +138,13 @@ const BN_LABELS: Record<string, string> = {
 export const manifest = {
   id: "scalius.bangladesh",
   name: "Bangladesh pack",
-  version: "1.2.0",
+  version: "1.3.0",
   apiVersion: PLUGIN_API_VERSION,
-  description: "Everything a store in Bangladesh needs in one app: book, track and follow deliveries with Pathao and Steadfast; send order messages and sign-in codes through SMS.net.bd, BDBulkSMS, MIM SMS or GenNet; check a buyer's courier history with FraudBD, FraudGuard, eCourier or FraudChecker from the order page; and load the City, Thana and Area list (Pathao's delivery places) for addresses and shipping zones.",
+  description: "Everything a store in Bangladesh needs in one app: take online payments (cards, bKash, Nagad, Rocket and internet banking) with SSLCommerz; book, track and follow deliveries with Pathao and Steadfast; send order messages and sign-in codes through SMS.net.bd, BDBulkSMS, MIM SMS or GenNet; check a buyer's courier history with FraudBD, FraudGuard, eCourier or FraudChecker from the order page; and load the City, Thana and Area list (Pathao's delivery places) for addresses and shipping zones.",
   author: { name: "Scalius" },
   icon: "assets/icon.svg",
-  tagline: "Bangladesh pack: couriers, SMS, fraud checks, places",
-  categories: ["notifications", "orders", "shipping"],
+  tagline: "Bangladesh pack: SSLCommerz, couriers, SMS, fraud checks, places",
+  categories: ["payments", "shipping", "notifications"],
   countries: ["BD"],
   support: { url: "https://github.com/scaliuslabs/scalius-commerce-lite/issues" },
   documentationUrl: "https://github.com/scaliuslabs/scalius-commerce-lite/blob/mono-repo/plugins/bangladesh/README.md",
@@ -134,9 +152,33 @@ export const manifest = {
   minPlatformVersion: "1.0.0",
   // The place import (dashboard.delivery_locations.import): it adds and updates places, never deletes.
   permissions: ["settings.delivery_locations.import"],
-  allowedHosts: [...SMS_HOSTS, ...new Set(Object.values(FRAUD_CHECKERS).flatMap((checker) => checker.hosts)), ...PATHAO_HOSTS, ...STEADFAST_HOSTS],
+  allowedHosts: [
+    ...SMS_HOSTS,
+    ...new Set(Object.values(FRAUD_CHECKERS).flatMap((checker) => checker.hosts)),
+    ...PATHAO_HOSTS,
+    ...STEADFAST_HOSTS,
+    SSLCOMMERZ_HOSTS.sandbox,
+    SSLCOMMERZ_HOSTS.live,
+  ],
   settings: SETTINGS,
   providers: {
+    payment: [
+      {
+        id: "sslcommerz",
+        name: "SSLCommerz",
+        icon: "assets/sslcommerz.png",
+        // The name buyers saw before the move: SSLCommerz's page offers cards, wallets and banking.
+        checkoutName: "Online Payment",
+        flow: "hosted",
+        chargeCurrencies: ["BDT"],
+        amountLimits: SSLCOMMERZ_AMOUNT_LIMITS,
+        operations: ["verifyReturn", "queryPayment", "refund", "refundStatus", "testConnection"],
+        settings: ["sslcommerz_environment", "sslcommerz_store_id", "sslcommerz_store_password"],
+        environmentSetting: "sslcommerz_environment",
+        // A failed or cancelled return posts the merchant reference unsigned: it only names the attempt to release.
+        returnCorrelationField: "tran_id",
+      },
+    ],
     courier: [
       {
         id: "pathao",
@@ -192,8 +234,8 @@ export const manifest = {
   translations: {
     bn: {
       name: "বাংলাদেশ প্যাক",
-      tagline: "বাংলাদেশ প্যাক: কুরিয়ার, এসএমএস, ফ্রড চেক, এলাকা",
-      description: "বাংলাদেশের দোকানের যা দরকার, এক অ্যাপে: Pathao আর Steadfast দিয়ে ডেলিভারি বুক করুন ও ট্র্যাক করুন; SMS.net.bd, BDBulkSMS, MIM SMS বা GenNet দিয়ে অর্ডারের মেসেজ আর সাইন-ইন কোড পাঠান; অর্ডার পেজ থেকে FraudBD, FraudGuard, eCourier বা FraudChecker দিয়ে ক্রেতার কুরিয়ার ইতিহাস দেখুন; আর ঠিকানা ও শিপিং জোনের জন্য শহর, থানা ও এলাকার তালিকা (Pathao-র ডেলিভারি এলাকা) লোড করুন।",
+      tagline: "বাংলাদেশ প্যাক: SSLCommerz, কুরিয়ার, এসএমএস, ফ্রড চেক, এলাকা",
+      description: "বাংলাদেশের দোকানের যা দরকার, এক অ্যাপে: SSLCommerz দিয়ে অনলাইন পেমেন্ট নিন (কার্ড, বিকাশ, নগদ, রকেট ও ইন্টারনেট ব্যাংকিং); Pathao আর Steadfast দিয়ে ডেলিভারি বুক করুন ও ট্র্যাক করুন; SMS.net.bd, BDBulkSMS, MIM SMS বা GenNet দিয়ে অর্ডারের মেসেজ আর সাইন-ইন কোড পাঠান; অর্ডার পেজ থেকে FraudBD, FraudGuard, eCourier বা FraudChecker দিয়ে ক্রেতার কুরিয়ার ইতিহাস দেখুন; আর ঠিকানা ও শিপিং জোনের জন্য শহর, থানা ও এলাকার তালিকা (Pathao-র ডেলিভারি এলাকা) লোড করুন।",
       pages: { places: "বাংলাদেশের এলাকা" },
       settings: Object.fromEntries(SETTINGS.flatMap((field) => (BN_LABELS[field.label] ? [[field.key, { label: BN_LABELS[field.label] }]] : []))),
     },
@@ -220,7 +262,7 @@ const COPY = {
     loadedToast: "The Bangladesh places are loaded.",
     partialToast: "Some places are loaded. The rest load within the hour.",
     keep: "Removing the app keeps every place: zones, tax regions and addresses use them.",
-    next: "Next: add Pathao or Steadfast in Settings → Shipping → Couriers, choose your SMS gateway in Settings → Notifications, and turn on a fraud checker in Settings → Apps and integrations. Each one's keys are entered where you set it up.",
+    next: "Next: set up SSLCommerz in Settings → Payments, add Pathao or Steadfast in Settings → Shipping → Couriers, choose your SMS gateway in Settings → Notifications, and turn on a fraud checker in Settings → Apps and integrations. Each one's keys are entered where you set it up.",
     pathaoTitle: "Pathao's live places",
     pathaoDescription: "Reads Pathao's current cities, thanas and areas into your places, a few dozen at a time, and links them for Pathao bookings. It needs Pathao's keys (Settings → Shipping → Couriers).",
     pathaoIdle: "Not refreshed",
@@ -251,7 +293,7 @@ const COPY = {
     loadedToast: "বাংলাদেশের এলাকা লোড হয়েছে।",
     partialToast: "কিছু এলাকা লোড হয়েছে। বাকিগুলো এক ঘণ্টার মধ্যে লোড হবে।",
     keep: "অ্যাপ সরালেও সব এলাকা থাকে: জোন, ট্যাক্স অঞ্চল আর ঠিকানা এগুলো ব্যবহার করে।",
-    next: "এরপর: Settings → Shipping → Couriers-এ Pathao বা Steadfast যোগ করুন, Settings → Notifications-এ আপনার এসএমএস গেটওয়ে বাছুন, আর Settings → Apps and integrations-এ একটি ফ্রড চেকার চালু করুন। যেখানে চালু করবেন, সেখানেই তার কী দিন।",
+    next: "এরপর: Settings → Payments-এ SSLCommerz চালু করুন, Settings → Shipping → Couriers-এ Pathao বা Steadfast যোগ করুন, Settings → Notifications-এ আপনার এসএমএস গেটওয়ে বাছুন, আর Settings → Apps and integrations-এ একটি ফ্রড চেকার চালু করুন। যেখানে চালু করবেন, সেখানেই তার কী দিন।",
     pathaoTitle: "Pathao-র হালনাগাদ এলাকা",
     pathaoDescription: "Pathao-র বর্তমান শহর, থানা ও এলাকা অল্প অল্প করে আপনার এলাকায় আনে, আর Pathao বুকিংয়ের জন্য যুক্ত করে। এর জন্য Pathao-র কী লাগবে (Settings → Shipping → Couriers)।",
     pathaoIdle: "হালনাগাদ হয়নি",
@@ -318,7 +360,7 @@ const seed = (ctx: PluginContext) => seedPlaces(ctx, { budgetMs: SEED_BUDGET_MS 
 
 export default definePlugin({
   manifest,
-  providers: { ...courierProviders, ...smsProviders, ...fraudProviders },
+  providers: { ...paymentProviders, ...courierProviders, ...smsProviders, ...fraudProviders },
   routes: {
     admin: {
       places: async (request, ctx) => ({ body: placesPage(request, await readPlacesState(ctx), await readPathaoRefresh(ctx)) }),

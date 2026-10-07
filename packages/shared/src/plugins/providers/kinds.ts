@@ -2,9 +2,9 @@
 // typed error every port raises (docs/platform/PLUGINS.md, "Providers").
 //
 // A port is one interface per kind (payment, courier, sms, email, fraud,
-// tax). The platform's own adapters (COD, Stripe, SSLCommerz, Pathao,
-// Steadfast, the SMS and email providers, the fraud checker) and app
-// providers implement the same port; core code resolves a provider by id and
+// tax). The platform's own adapters (COD, Stripe, the email providers) and
+// app providers (the Bangladesh pack's SSLCommerz, couriers, SMS gateways and
+// fraud checkers; bKash; Nagad) implement the same port; core code resolves a provider by id and
 // never asks which kind of implementation it got. Ports are part of the
 // versioned plugin API (`PLUGIN_API_VERSION`): within a version they change
 // only additively.

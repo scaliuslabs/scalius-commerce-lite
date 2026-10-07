@@ -29,6 +29,7 @@ import {
   ANALYTICS_REPORT_IDS,
   ANALYTICS_REPORT_MAX_PAGE_SIZE,
   ANALYTICS_REPORT_MAX_ROWS,
+  analyticsReport,
   type AnalyticsReportDefinition,
 } from "@scalius/shared/analytics-reports";
 import { fromMinor } from "@scalius/shared/money";
@@ -36,6 +37,7 @@ import { ok } from "../../utils/api-response";
 import { errorResponses, successEnvelope } from "../../schemas/responses";
 import { REPORT_CSV_MAX_BYTES } from "@scalius/core/modules/analytics";
 import { storeTimeZoneOf } from "../../utils/store-time-zone";
+import { requestPaymentProviders } from "../../plugins/providers/payment";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -467,6 +469,11 @@ app.openapi(exportRoute, async (c) => {
   const { reportId } = c.req.valid("param");
   const query = c.req.valid("query");
   const ctx = await createAnalyticsContext(c.get("db"), storeTimeZoneOf(c.env));
+  // A report with payment methods names each by its provider (an app's, a retired built-in id's).
+  if (analyticsReport(reportId).columns.some((column) => column.enum === "paymentMethod")) {
+    const providers = await requestPaymentProviders(c);
+    ctx.paymentMethodName = (id) => providers.label(id);
+  }
   const exported = await exportAnalyticsReportCsv(ctx, reportId, query, access(c));
   return c.body(csvStream(exported.artifact.chunks), 200, {
     "Content-Type": "text/csv; charset=utf-8",

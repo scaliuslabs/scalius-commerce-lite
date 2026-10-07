@@ -1,7 +1,8 @@
 // Built-in providers that moved into an app, and where their saved
 // configuration goes (docs/platform/PLUGINS.md, "Retired built-in
-// providers"). Core has no SMS gateway, fraud checker or courier of its own:
-// the Bangladesh ones are providers of the Bangladesh pack (`scalius.bangladesh`).
+// providers"). Core has no SMS gateway, fraud checker, courier or Bangladeshi
+// payment gateway of its own: the Bangladesh ones are providers of the
+// Bangladesh pack (`scalius.bangladesh`).
 //
 // Two uses, both for stores that saved a built-in choice before the move:
 // - A saved choice that still names a retired id resolves to the app provider
@@ -16,6 +17,7 @@
 // still hold its old configuration.
 
 import { qualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
+import { RETIRED_PAYMENT_METHODS } from "@scalius/shared/plugins/providers/retired-payments";
 
 /** The app that took over the retired built-in providers below. */
 export const BANGLADESH_PACK_ID = "scalius.bangladesh";
@@ -133,8 +135,44 @@ export function retiredCourierTrackingUrl(providerType: string | null | undefine
   return RETIRED_COURIER_PROVIDERS[providerType]!.trackingUrl.split("{trackingId}").join(encodeURIComponent(trackingId));
 }
 
+/** One retired built-in payment gateway: its own settings document kept its setup. */
+export interface RetiredPaymentGateway extends RetiredProvider {
+  /** Merchant-facing name, for orders paid through it before the move. */
+  label: string;
+  /** Its settings document key (`sslcommerz`); `settings` maps the document's fields. */
+  document: string;
+}
+
+/**
+ * Retired built-in payment gateways, by their old id (`orders.payment_method`,
+ * `order_payments.payment_method`, the payment methods allowlist). Settled
+ * orders keep the old id: the payment kernel resolves it to the app provider
+ * that replaced it (refunds, labels, callbacks to the old URLs), and while
+ * that app is not active to a gateway that fails closed with the app's reason.
+ * The old `sandbox` flag becomes the app's environment select.
+ */
+export const RETIRED_PAYMENT_PROVIDERS: Readonly<Record<string, RetiredPaymentGateway>> = {
+  sslcommerz: {
+    replacement: RETIRED_PAYMENT_METHODS.sslcommerz!.replacement,
+    label: RETIRED_PAYMENT_METHODS.sslcommerz!.name,
+    document: "sslcommerz",
+    settings: { storeId: "sslcommerz_store_id", storePassword: "sslcommerz_store_password", sandbox: "sslcommerz_environment" },
+  },
+};
+
+/** The retired payment gateway an id names, or null. */
+export function retiredPaymentGateway(id: unknown): RetiredPaymentGateway | null {
+  return typeof id === "string" && Object.hasOwn(RETIRED_PAYMENT_PROVIDERS, id) ? RETIRED_PAYMENT_PROVIDERS[id]! : null;
+}
+
+/** The reason a retired choice gives until the app that replaced it is active. */
+export function retiredProviderReason(): string {
+  return `Activate ${BANGLADESH_PACK_NAME} in Apps to use it.`;
+}
+
 /** The app provider a retired built-in id now means, or null when the id is not a retired one. */
-export function retiredProviderReplacement(kind: "sms" | "fraud" | "courier", id: string | null | undefined): string | null {
+export function retiredProviderReplacement(kind: "sms" | "fraud" | "courier" | "payment", id: string | null | undefined): string | null {
+  if (kind === "payment") return retiredPaymentGateway(id)?.replacement ?? null;
   if (kind === "courier") return id && Object.hasOwn(RETIRED_COURIER_PROVIDERS, id) ? RETIRED_COURIER_PROVIDERS[id]!.replacement : null;
   const table = kind === "sms" ? RETIRED_SMS_PROVIDERS : RETIRED_FRAUD_PROVIDERS;
   const key = kind === "fraud" ? (id || "default") : id;

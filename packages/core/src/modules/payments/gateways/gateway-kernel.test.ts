@@ -22,8 +22,8 @@ import {
 import { buildPaymentCorrelationId, parsePaymentCorrelationId, PAYMENT_CORRELATION_ID_MAX_LENGTH } from "./correlation";
 import { BUILT_IN_PAYMENT_GATEWAY_IDS } from "./identity";
 import type { GatewayRequest } from "./port";
-import { BUILT_IN_PAYMENT_PROVIDERS, type PaymentProviders } from "./registry";
-import { sslcommerzGateway } from "./sslcommerz";
+import { BUILT_IN_PAYMENT_PROVIDERS, paymentProvidersFor, type PaymentProviders } from "./registry";
+import { isOnlinePaymentMethod, paymentMethodAliases } from "./identity";
 import { stripeGateway } from "./stripe";
 import { createFakeGateway, FAKE_GATEWAY_ID, type FakeGatewayState } from "./testing";
 
@@ -42,16 +42,65 @@ const isPaymentMethodCurrencyEligible = (id: string, currency: string) => getPay
 describe("built-in gateway registry", () => {
   it("lists the built-in adapters under the ids identity checks know", () => {
     expect(BUILT_IN_PAYMENT_PROVIDERS.gateways.map((gateway) => gateway.id)).toEqual([...BUILT_IN_PAYMENT_GATEWAY_IDS]);
-    expect(BUILT_IN_PAYMENT_PROVIDERS.methodIds()).toEqual(["stripe", "sslcommerz", "cod"]);
+    expect(BUILT_IN_PAYMENT_PROVIDERS.methodIds()).toEqual(["stripe", "cod"]);
+  });
+});
+
+describe("a retired built-in gateway (SSLCommerz, now the Bangladesh pack's)", () => {
+  const PACK_SSLCOMMERZ = "scalius.bangladesh:sslcommerz";
+
+  it("stays an online method on stored rows and resolves to the app provider that replaced it", () => {
+    expect(isOnlinePaymentMethod("sslcommerz")).toBe(true);
+    const { gateway, providers } = createFakeGateway(PACK_SSLCOMMERZ);
+    expect(providers.get("sslcommerz")).toBe(gateway);
+    expect(providers.label("sslcommerz")).toBe("FakePay");
+    // It is never offered under the old id: checkout lists only the app's.
+    expect(providers.methodIds()).not.toContain("sslcommerz");
+    expect(paymentMethodAliases(PACK_SSLCOMMERZ)).toEqual([PACK_SSLCOMMERZ, "sslcommerz"]);
+    expect(paymentMethodAliases("sslcommerz")).toEqual(["sslcommerz", PACK_SSLCOMMERZ]);
+    expect(paymentMethodAliases("stripe")).toEqual(["stripe"]);
+  });
+
+  it("fails closed with the app's reason while the pack is not active", async () => {
+    const standIn = BUILT_IN_PAYMENT_PROVIDERS.require("sslcommerz");
+    expect(standIn.id).toBe("sslcommerz");
+    expect(standIn.label).toBe("SSLCommerz");
+    // The same stand-in every time: identity checks compare gateways.
+    expect(BUILT_IN_PAYMENT_PROVIDERS.get("sslcommerz")).toBe(standIn);
+    const settings = await standIn.loadSettings({} as Database, "key");
+    expect(standIn.readiness(settings)).toMatchObject({
+      usable: false,
+      blockedReason: "SSLCommerz: Activate Bangladesh pack in Apps to use it.",
+    });
+    expect(standIn.canVerify(settings!)).toBe(false);
+    await expect(standIn.createSession({} as never, call(settings!))).rejects.toThrow("Activate Bangladesh pack in Apps");
+    await expect(standIn.refund!({} as never, call(settings!))).rejects.toThrow("Activate Bangladesh pack in Apps");
+    await expect(standIn.verifyWebhook(request({ rawBody: "val_id=val_1" }), call(settings!))).resolves.toMatchObject({ status: "retry" });
+  });
+
+  it("reads the app providers for a retired id, and only then", async () => {
+    let loads = 0;
+    const app = createFakeGateway(PACK_SSLCOMMERZ);
+    const source = async () => {
+      loads += 1;
+      return app.providers;
+    };
+    expect(await paymentProvidersFor(source, "stripe")).toBe(BUILT_IN_PAYMENT_PROVIDERS);
+    expect(loads).toBe(0);
+    expect((await paymentProvidersFor(source, "sslcommerz")).get("sslcommerz")).toBe(app.gateway);
+    expect(loads).toBe(1);
   });
 });
 
 describe("registry currency and limit policy", () => {
-  it("keeps every method for BDT and drops SSLCommerz elsewhere without touching the saved order", () => {
-    expect(filterPaymentMethodsForCurrency(["stripe", "sslcommerz", "cod"], "BDT")).toEqual(["stripe", "sslcommerz", "cod"]);
-    expect(filterPaymentMethodsForCurrency(["sslcommerz", "cod", "stripe", "unknown"], "usd")).toEqual(["cod", "stripe"]);
-    expect(getPaymentMethodCurrencyIssue("sslcommerz", "USD"))
-      .toBe("SSLCommerz checkout requires the store currency to be BDT. Current currency: USD.");
+  const app = createFakeGateway();
+  const providers = app.providers;
+
+  it("keeps every method for BDT and drops a BDT-only gateway elsewhere without touching the saved order", () => {
+    expect(providers.filterForCurrency(["stripe", FAKE_GATEWAY_ID, "cod"], "BDT")).toEqual(["stripe", FAKE_GATEWAY_ID, "cod"]);
+    expect(providers.filterForCurrency([FAKE_GATEWAY_ID, "cod", "stripe", "unknown"], "usd")).toEqual(["cod", "stripe"]);
+    expect(providers.currencyIssue(FAKE_GATEWAY_ID, "USD"))
+      .toBe("FakePay checkout requires the store currency to be BDT. Current currency: USD.");
   });
 
   it("fails closed for unknown methods and unsupported currencies", () => {
@@ -61,12 +110,12 @@ describe("registry currency and limit policy", () => {
   });
 
   it("checks the first online charge against provider limits before an order commits", () => {
-    const input = { paymentMethod: "sslcommerz", currencyCode: "BDT", partialPaymentEnabled: false, partialPaymentAmount: 0 };
-    expect(getCheckoutGatewayPrecommitIssue({ ...input, totalAmountMinor: 1_000 })).toBeNull();
-    expect(getCheckoutGatewayPrecommitIssue({ ...input, totalAmountMinor: 999 }))
-      .toBe("SSLCommerz payment amount must be between 10.00 BDT and 500000.00 BDT.");
+    const input = { paymentMethod: FAKE_GATEWAY_ID, currencyCode: "BDT", partialPaymentEnabled: false, partialPaymentAmount: 0 };
+    expect(providers.precommitIssue({ ...input, totalAmountMinor: 1_000 })).toBeNull();
+    expect(providers.precommitIssue({ ...input, totalAmountMinor: 999 }))
+      .toBe("FakePay payment amount must be between 10.00 BDT and 100000.00 BDT.");
     // A configured advance below the total is the first charge.
-    expect(getCheckoutGatewayPrecommitIssue({ ...input, totalAmountMinor: 60_000_000, partialPaymentEnabled: true, partialPaymentAmount: 500 }))
+    expect(providers.precommitIssue({ ...input, totalAmountMinor: 60_000_000, partialPaymentEnabled: true, partialPaymentAmount: 500 }))
       .toBeNull();
     expect(getCheckoutGatewayPrecommitIssue({ ...input, paymentMethod: "cod", totalAmountMinor: 100 })).toBeNull();
   });
@@ -87,8 +136,10 @@ describe("registry currency and limit policy", () => {
     expect(getCheckoutGatewayPrecommitIssue({
       paymentMethod: "stripe", currencyCode: "KWD", totalAmountMinor: 12_345, partialPaymentEnabled: false, partialPaymentAmount: 0,
     })).toMatch(/^Stripe cannot charge 12\.345 KWD exactly/);
-    // SSLCommerz takes ISO minor units as they are.
-    expect(encodeAmount("sslcommerz", 12_550, "BDT")).toMatchObject({ chargedMinor: 12_550, roundingMinor: 0 });
+    // A gateway without codecs takes ISO minor units as they are (SSLCommerz, through its retired id too).
+    expect(providers.encodeAmount(FAKE_GATEWAY_ID, 12_550, "BDT")).toMatchObject({ chargedMinor: 12_550, roundingMinor: 0 });
+    expect(createFakeGateway("scalius.bangladesh:sslcommerz").providers.encodeAmount("sslcommerz", 12_550, "BDT"))
+      .toMatchObject({ chargedMinor: 12_550, roundingMinor: 0 });
   });
 });
 
@@ -153,73 +204,6 @@ describe("Stripe adapter", () => {
   it("ignores authentic events the kernel does not act on", async () => {
     const other = await signed({ id: "evt_2", type: "customer.created", data: { object: { id: "cus_1", object: "customer" } } });
     await expect(stripeGateway.verifyWebhook(other, call(settings))).resolves.toMatchObject({ status: "ignored" });
-  });
-});
-
-describe("SSLCommerz adapter", () => {
-  const settings = { storeId: "store_1", storePassword: "secret", sandbox: true, enabled: true };
-  const validation = {
-    status: "VALID", tran_id: "order_1_full_ABC12345", val_id: "val_1", amount: "150.00",
-    currency_type: "BDT", bank_tran_id: "bank_1", value_a: "full", value_b: "order_1", card_type: "BKASH-BKash",
-  };
-  const fetchMock = vi.fn();
-
-  beforeEach(() => {
-    fetchMock.mockReset();
-    vi.stubGlobal("fetch", fetchMock);
-  });
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
-  it("trusts an IPN only after server-to-server validation of its val_id", async () => {
-    fetchMock.mockImplementation(async () => Response.json(validation));
-    await expect(sslcommerzGateway.verifyWebhook(request({ rawBody: "val_id=val_1&amount=999999" }), call(settings)))
-      .resolves.toEqual({
-        status: "event",
-        event: {
-          kind: "confirmed", eventType: "ipn", eventId: "order_1_full_ABC12345:val_1", orderId: "order_1",
-          providerRef: "val_1", secondaryRef: "bank_1", amountMinor: 15_000, currency: "BDT", paymentType: "full",
-          details: { tranId: "order_1_full_ABC12345", validationStatus: "VALID", cardType: "BKASH-BKash", cardBrand: null },
-        },
-      });
-    const calledUrl = new URL(String(fetchMock.mock.calls[0]?.[0]));
-    expect(calledUrl.pathname).toBe("/validator/api/validationserverAPI.php");
-    expect(calledUrl.searchParams.get("val_id")).toBe("val_1");
-  });
-
-  it("asks the provider to retry when validation is unreachable and ignores unfinished or inconsistent results", async () => {
-    fetchMock.mockRejectedValueOnce(new Error("network"));
-    await expect(sslcommerzGateway.verifyWebhook(request({ rawBody: "val_id=val_1" }), call(settings)))
-      .resolves.toMatchObject({ status: "retry" });
-
-    fetchMock.mockResolvedValueOnce(Response.json({ ...validation, status: "PENDING" }));
-    await expect(sslcommerzGateway.verifyWebhook(request({ rawBody: "val_id=val_1" }), call(settings)))
-      .resolves.toMatchObject({ status: "ignored" });
-
-    fetchMock.mockResolvedValueOnce(Response.json({ ...validation, value_b: "order_2" }));
-    await expect(sslcommerzGateway.verifyWebhook(request({ rawBody: "val_id=val_1" }), call(settings)))
-      .resolves.toMatchObject({ status: "ignored" });
-
-    fetchMock.mockResolvedValueOnce(Response.json({ ...validation, status: "FAILED" }));
-    await expect(sslcommerzGateway.verifyWebhook(request({ rawBody: "val_id=val_1" }), call(settings)))
-      .resolves.toMatchObject({ status: "event", event: { kind: "failed", providerRef: "val_1" } });
-  });
-
-  it("produces the same claim identity for a buyer return as for the IPN, and rejects a return whose context disagrees", async () => {
-    fetchMock.mockImplementation(async () => Response.json(validation));
-    const buyerReturn = request({
-      rawBody: "tran_id=order_1_full_ABC12345&val_id=val_1",
-      query: { order_id: "order_1", payment_type: "full" },
-    });
-    const ipn = await sslcommerzGateway.verifyWebhook(request({ rawBody: "val_id=val_1" }), call(settings));
-    const returned = await sslcommerzGateway.verifyReturn!(buyerReturn, call(settings));
-    expect(returned).toEqual(ipn);
-
-    await expect(sslcommerzGateway.verifyReturn!(
-      { ...buyerReturn, query: { order_id: "order_1", payment_type: "deposit" } },
-      call(settings),
-    )).resolves.toMatchObject({ status: "ignored" });
   });
 });
 

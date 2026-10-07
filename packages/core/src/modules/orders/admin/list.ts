@@ -35,6 +35,7 @@ import { buildPhoneSearchTerms, isEmailSearch, isLikelyPhoneSearch } from "../se
 import { orderMoneyAmounts, orderMoneySelection } from "../money";
 import { formatOrderCsvLineProperties } from "../csv-export";
 import {
+  paymentMethodAliases,
   type RefundAttemptVisibilityRow,
   resolveActiveRefundOperationsForOrders,
   selectActiveRefundAttemptRowsForOrders,
@@ -373,7 +374,11 @@ export async function listOrders(db: Database, options: {
     }
 
     if (paymentMethod) {
-        whereConditions.push(sql`${orders.paymentMethod} = ${paymentMethod}`);
+        // An app gateway and the retired built-in id it replaced are one method.
+        const aliases = paymentMethodAliases(paymentMethod);
+        whereConditions.push(aliases.length === 1
+            ? sql`${orders.paymentMethod} = ${paymentMethod}`
+            : sql`${orders.paymentMethod} IN (${sql.join(aliases.map((alias) => sql`${alias}`), sql`, `)})`);
     }
 
     if (fulfillmentStatus) {

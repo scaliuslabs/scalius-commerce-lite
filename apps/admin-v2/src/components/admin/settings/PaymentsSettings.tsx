@@ -4,12 +4,10 @@ import { Link } from "@tanstack/react-router";
 import { ArrowDown, ArrowUp, Banknote, Wallet } from "lucide-react";
 import { toast } from "~/lib/toast";
 import {
-  deleteApiV1AdminSettingsSslcommerz,
   deleteApiV1AdminSettingsStripe,
   getApiV1AdminSettingsCheckoutFlow,
   postApiV1AdminSettingsPaymentMethods,
   postApiV1AdminSettingsProvidersByIdTest,
-  postApiV1AdminSettingsSslcommerz,
   postApiV1AdminSettingsStripe,
   putApiV1AdminSettingsCheckoutFlow,
 } from "@scalius/api-client/sdk";
@@ -43,8 +41,9 @@ import { settingsMessages } from "~/i18n/settings";
 import { paymentsMessages } from "~/i18n/settings-payments";
 import { saveBarMessages } from "~/i18n/save-bar";
 import {
-  CHECKOUT_ADVANCE_PAYMENT_AMOUNT_LIMITS,
   getCheckoutFlowPreviewIssues,
+  violatedAdvanceLimit,
+  type AdvanceAmountLimit,
 } from "./checkout-flow-policy";
 import {
   chargeCurrencyIssue,
@@ -68,11 +67,14 @@ import { SettingsCard, SettingsDialog, SettingsField, SettingsCardLoading, useCl
 const MASKED = "••••••••••••";
 
 type CheckoutFlow = Omit<ApiResult<typeof getApiV1AdminSettingsCheckoutFlow>, "revision">;
-type GatewayKey = "secretKey" | "publishableKey" | "webhookSecret" | "storeId" | "storePassword";
-/** Every key a gateway needs before it can be turned on, and the field showing it. */
-const GATEWAY_KEYS: Record<"stripe" | "sslcommerz", Partial<Record<GatewayKey, string>>> = {
+type GatewayKey = "secretKey" | "publishableKey" | "webhookSecret";
+/**
+ * Every key a built-in gateway needs before it can be turned on, and the
+ * field showing it. Other gateways are apps' (SSLCommerz: the Bangladesh
+ * pack's), set up in their provider sheet.
+ */
+const GATEWAY_KEYS: Record<"stripe", Partial<Record<GatewayKey, string>>> = {
   stripe: { secretKey: "stripe-secret", publishableKey: "stripe-publishable", webhookSecret: "stripe-webhook" },
-  sslcommerz: { storeId: "ssl-store-id", storePassword: "ssl-password" },
 };
 
 /** "publishable key and webhook secret", in the dashboard language. */
@@ -132,7 +134,7 @@ function MethodMark({ row }: { row: PaymentMethodRow }) {
   if (row.kind === "built_in" && row.id in PROVIDER_MARKS) {
     return <OfficialProviderMark provider={row.id as ProviderMarkId} />;
   }
-  // An app's provider shows its app's icon (bKash, Nagad), when the app ships one.
+  // An app's provider shows its own mark (SSLCommerz in the Bangladesh pack), else its app's icon (bKash, Nagad).
   if (row.kind === "app" && row.appIcon) return <AppIcon src={row.appIcon} size="sm" />;
   // Cash, or an app without an icon: a neutral mark.
   const Icon = row.kind === "cod" ? Banknote : Wallet;
@@ -143,7 +145,7 @@ function MethodMark({ row }: { row: PaymentMethodRow }) {
   );
 }
 
-/** The two built-in gateways whose keys this page edits. */
+/** The built-in gateway whose keys this page edits. */
 function hasKeyForm(id: string): id is keyof typeof GATEWAY_KEYS {
   return Object.hasOwn(GATEWAY_KEYS, id);
 }
@@ -195,7 +197,7 @@ function GatewayFields({
   turnOn = false,
   onTurnedOn,
 }: {
-  gateway: "stripe" | "sslcommerz";
+  gateway: "stripe";
   turnOn?: boolean;
   onTurnedOn?: () => void;
 }) {
@@ -214,9 +216,7 @@ function GatewayFields({
     fetchFn: query.queryFn,
     saveFn: async (draft, expectedRevision) => {
       const body = { ...draft, enabled: turnOn || missingKeys(draft).length === 0, expectedRevision };
-      const result = gateway === "stripe"
-        ? await apiData(postApiV1AdminSettingsStripe({ body }))
-        : await apiData(postApiV1AdminSettingsSslcommerz({ body }));
+      const result = await apiData(postApiV1AdminSettingsStripe({ body }));
       if (turnOn) onTurnedOn?.();
       return result;
     },
@@ -244,25 +244,6 @@ function GatewayFields({
   );
   const removable = Object.keys(GATEWAY_KEYS[gateway]).some((key) => String(saved[key] ?? "").trim());
   const remove = removable ? <RemoveKeys gateway={gateway} revision={Number(saved.revision)} /> : null;
-
-  if (gateway === "sslcommerz") {
-    return (
-      <>
-        <label className="flex min-h-11 items-center justify-between gap-4 text-body">
-          <span>
-            <span className="block font-medium">{t("testModeLabel")}</span>
-            <span className="block text-muted-foreground">{values.sandbox ? t("testModeHelp") : t("liveWarning")}</span>
-          </span>
-          <Switch checked={Boolean(values.sandbox)} onCheckedChange={(sandbox) => setValue("sandbox", sandbox)} />
-        </label>
-        <SettingsField id="ssl-store-id" label={t("storeId")} error={turnOnError("storeId")}>
-          <Input id="ssl-store-id" autoComplete="off" value={text("storeId")} onChange={(event) => setValue("storeId", event.target.value)} />
-        </SettingsField>
-        {secret("ssl-password", "storePassword", t("storePassword"))}
-        {remove}
-      </>
-    );
-  }
 
   const environment = getStripeCredentialEnvironment({
     secretKey: text("secretKey"),
@@ -300,7 +281,7 @@ function GatewayFields({
  * off at checkout. The server refuses it when checkout would be left without
  * a way to pay, as it refuses turning the gateway off.
  */
-function RemoveKeys({ gateway, revision }: { gateway: "stripe" | "sslcommerz"; revision: number }) {
+function RemoveKeys({ gateway, revision }: { gateway: "stripe"; revision: number }) {
   const t = useMessages(paymentsMessages);
   const common = useMessages(settingsMessages);
   const bar = useMessages(saveBarMessages);
@@ -313,9 +294,7 @@ function RemoveKeys({ gateway, revision }: { gateway: "stripe" | "sslcommerz"; r
       .map((queryKey) => queryClient.invalidateQueries({ queryKey })),
   );
   const remove = useMutation({
-    mutationFn: () => apiData(gateway === "stripe"
-      ? deleteApiV1AdminSettingsStripe({ body: { expectedRevision: revision } })
-      : deleteApiV1AdminSettingsSslcommerz({ body: { expectedRevision: revision } })),
+    mutationFn: () => apiData(deleteApiV1AdminSettingsStripe({ body: { expectedRevision: revision } })),
     onSuccess: async () => {
       toast.success(t("keysRemoved"));
       closeDialog?.();
@@ -468,7 +447,9 @@ export function PaymentMethodsCard() {
     // Only the built-in key forms name missing keys; an app explains itself (blockedReason).
     const needsKeys = keyForm !== null && outcome.state === "needs_setup" && missingKeys.length > 0;
     const unusable = outcome.state === "needs_setup" || outcome.state === "provider_off" || outcome.state === "blocked";
-    const detail = row.kind === "app" && !row.installed
+    const detail = row.retired
+      ? t("activatePack")
+      : row.kind === "app" && !row.installed
       ? t("appRemoved")
       : neededCurrencies
         ? currencyText(neededCurrencies)
@@ -501,6 +482,12 @@ export function PaymentMethodsCard() {
             {t("testConnection")}
           </Button>
         ) : null}
+        {/* A retired gateway's app waits for activation on its app page. */}
+        {canViewApps && row.retired && row.pluginId ? (
+          <Button asChild variant="outline" size="sm">
+            <Link to="/admin/apps/$pluginId" params={{ pluginId: row.pluginId }}>{t("openApp")}</Link>
+          </Button>
+        ) : null}
         {/* The provider's own keys open in its setup sheet, here; the app page holds its activation. */}
         {canViewApps && row.installed && row.pluginId ? (
           openProvider ? (
@@ -515,7 +502,7 @@ export function PaymentMethodsCard() {
         ) : null}
       </>
     ) : null;
-    const hasActions = reorderable || keyForm !== null || (row.kind === "app" && ((row.canTestConnection && status?.usable) || (canViewApps && row.installed && row.pluginId)));
+    const hasActions = reorderable || keyForm !== null || (row.kind === "app" && ((row.canTestConnection && status?.usable) || (canViewApps && (row.installed || row.retired) && row.pluginId)));
     return (
       <li key={method} data-method={method} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
         <MethodMark row={row} />
@@ -640,6 +627,11 @@ export function PaymentOptionsCard() {
   const canEdit = useCanEditPayments();
   const methods = useQuery(paymentMethodsQuery);
   const { codEnabled, online } = usableMethods(methods.data);
+  // The charge limits of the online methods checkout offers (SSLCommerz: 10 to 500,000 Taka).
+  const advanceLimits: AdvanceAmountLimit[] = online.flatMap((method) => {
+    const limits = methods.data?.gateways.find((gateway) => gateway.id === method)?.amountLimits;
+    return limits ? [{ method, ...limits }] : [];
+  });
   const wholeTaka = useWholeUnitPrices();
   const issuesFor = (draft: CheckoutFlow) =>
     getCheckoutFlowPreviewIssues({
@@ -650,7 +642,7 @@ export function PaymentOptionsCard() {
       paymentMethodsLoaded: Boolean(methods.data),
       codEnabled,
       activeOnlineMethodCount: online.length,
-      sslCommerzEnabled: online.includes("sslcommerz"),
+      advanceLimits,
       wholeTaka,
     });
   const { values, setValue, isLoaded, isLoadError, refetch } = useCheckoutFlowForm((draft) => issuesFor(draft).length === 0, t("optionsTitle"));
@@ -658,7 +650,17 @@ export function PaymentOptionsCard() {
   if (!isLoaded) return <SettingsCardLoading />;
 
   const issues = issuesFor(values);
-  const limits = { min: formatNumber(CHECKOUT_ADVANCE_PAYMENT_AMOUNT_LIMITS.min), max: formatNumber(CHECKOUT_ADVANCE_PAYMENT_AMOUNT_LIMITS.max) };
+  // The first offered method whose limits the advance misses words the range message.
+  const violated = violatedAdvanceLimit(values.partialPaymentAmount, advanceLimits);
+  const methodName = (id: string) => methods.data?.gateways.find((gateway) => gateway.id === id)?.label ?? id;
+  const limits: Record<string, string> = violated
+    ? {
+        method: methodName(violated.method),
+        min: formatNumber(violated.min),
+        max: formatNumber(violated.max),
+        currency: violated.currency === "BDT" ? t("taka") : violated.currency,
+      }
+    : {};
   const modes = [
     ["all", "modeAll", "modeAllDesc"],
     ["guest_cod_only", "modeCod", "modeCodDesc"],
@@ -703,7 +705,7 @@ export function PaymentOptionsCard() {
             className="max-w-40"
             value={Number.isFinite(values.partialPaymentAmount) ? values.partialPaymentAmount : ""}
             disabled={!canEdit}
-            aria-invalid={issues.includes("amountInvalid") || issues.includes("sslRange") || issues.includes("wholeTaka")}
+            aria-invalid={issues.includes("amountInvalid") || issues.includes("advanceRange") || issues.includes("wholeTaka")}
             aria-describedby="advance-amount-note"
             onChange={(event) => setValue("partialPaymentAmount", Number(event.target.value))}
           />

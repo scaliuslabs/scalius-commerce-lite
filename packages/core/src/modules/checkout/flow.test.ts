@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
 
+import { createSslcommerzPackProviders, PACK_SSLCOMMERZ_ID } from "../payments/gateways/testing";
 import {
   getCheckoutFlowValidationIssues,
   isCheckoutGatewayUsableForFlow,
 } from "./flow";
+
+/** The Bangladesh pack's SSLCommerz is active: its limits apply to the advance. */
+const paymentProviders = createSslcommerzPackProviders().providers;
 
 describe("checkout flow validation", () => {
   it("rejects Fast COD Only when COD is not enabled", () => {
@@ -35,7 +39,8 @@ describe("checkout flow validation", () => {
       checkoutMode: "all",
       partialPaymentEnabled: false,
       partialPaymentAmount: 0,
-      availablePaymentMethods: ["sslcommerz"],
+      availablePaymentMethods: [PACK_SSLCOMMERZ_ID],
+      paymentProviders,
     })).toEqual([]);
   });
 
@@ -66,14 +71,16 @@ describe("checkout flow validation", () => {
       checkoutMode: "gateways_only",
       partialPaymentEnabled: true,
       partialPaymentAmount: 5,
-      availablePaymentMethods: ["sslcommerz"],
+      availablePaymentMethods: [PACK_SSLCOMMERZ_ID],
+      paymentProviders,
     })).toContain("SSLCommerz advance payment amount must be between 10.00 BDT and 500000.00 BDT.");
 
     expect(getCheckoutFlowValidationIssues({
       checkoutMode: "all",
       partialPaymentEnabled: true,
       partialPaymentAmount: 5,
-      availablePaymentMethods: ["stripe", "sslcommerz"],
+      availablePaymentMethods: ["stripe", PACK_SSLCOMMERZ_ID],
+      paymentProviders,
     })).toContain("SSLCommerz advance payment amount must be between 10.00 BDT and 500000.00 BDT.");
 
     expect(getCheckoutFlowValidationIssues({
@@ -81,6 +88,7 @@ describe("checkout flow validation", () => {
       partialPaymentEnabled: true,
       partialPaymentAmount: 5,
       availablePaymentMethods: ["stripe"],
+      paymentProviders,
     })).not.toContain("SSLCommerz advance payment amount must be between 10.00 BDT and 500000.00 BDT.");
   });
 

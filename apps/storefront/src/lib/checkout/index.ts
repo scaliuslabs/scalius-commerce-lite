@@ -44,6 +44,8 @@ import { normalizeCheckoutRedirectUrl } from "./redirect-url";
 import {
   getGatewayPresentation,
   isAppGatewayId,
+  SSLCOMMERZ_GATEWAY_ID,
+  sslcommerzPresentation,
   type GatewayPresentation,
 } from "./gateway-presentation";
 import { isGatewayEligibleForPaymentAmount } from "./gateway-amount-eligibility";
@@ -359,11 +361,8 @@ function localizedGatewayPresentation(
         description: checkoutCopy.paySecurelyByCardText,
       };
     case "sslcommerz":
-      return {
-        ...presentation,
-        buyerLabel: checkoutCopy.onlinePaymentText,
-        description: checkoutCopy.onlinePaymentDescriptionText,
-      };
+    case SSLCOMMERZ_GATEWAY_ID:
+      return sslcommerzPresentation(presentation, checkoutCopy);
     case "cod": {
       // Gift cards paid part: cash on delivery collects only what is left.
       const due = authoritativeTaxQuote && hasGiftCardTender(authoritativeTaxQuote)

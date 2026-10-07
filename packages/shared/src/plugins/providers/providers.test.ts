@@ -232,6 +232,17 @@ describe("provider declarations", () => {
     }).ok).toBe(false);
   });
 
+  it("lets a hosted provider name its unsigned return reference and its own environment setting (SSLCommerz)", () => {
+    const environment = { key: "pay_environment", label: "Environment", type: "select", options: [{ value: "sandbox", label: "Sandbox" }, { value: "live", label: "Live" }] };
+    const wallet = { id: "wallet", name: "Wallet", chargeCurrencies: ["BDT"], operations: HOSTED_REFUNDS, returnCorrelationField: "tran_id", environmentSetting: "pay_environment" };
+    const parsed = parsePluginManifest({ ...manifest, settings: [environment], providers: { payment: [wallet] } });
+    expect(parsed.ok && parsed.manifest.providers[0]).toMatchObject({ returnCorrelationField: "tran_id", environmentSetting: "pay_environment" });
+    // The environment setting must exist and be a select of sandbox and live; the field name a plain form key.
+    expect(parsePluginManifest({ ...manifest, providers: { payment: [wallet] } }).ok).toBe(false);
+    expect(parsePluginManifest({ ...manifest, settings: [{ ...environment, options: [{ value: "test", label: "Test" }] }], providers: { payment: [wallet] } }).ok).toBe(false);
+    expect(parsePluginManifest({ ...manifest, settings: [environment], providers: { payment: [{ ...wallet, returnCorrelationField: "tran id" }] } }).ok).toBe(false);
+  });
+
   it("lets couriers and fraud checkers declare the countries they serve (MARKETS-DESIGN step 3a)", () => {
     const parsed = parsePluginManifest({
       ...manifest,

@@ -28,7 +28,6 @@ export const Route = createFileRoute("/admin/settings/payments")({
       queryClient.ensureQueryData(checkoutFlowQuery),
       queryClient.ensureQueryData(currencyQuery),
       queryClient.ensureQueryData(platformQuery),
-      queryClient.ensureQueryData(gatewayQuery("sslcommerz")),
       queryClient.ensureQueryData(gatewayQuery("stripe")),
       queryClient.ensureQueryData(emiSettingsQuery),
     ]),

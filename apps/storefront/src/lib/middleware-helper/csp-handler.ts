@@ -11,6 +11,12 @@ import {
  * Security) and the hosts of approved app scripts all arrive in the
  * request's layout payload, so building the header costs no extra read.
  * There is no environment-variable source.
+ *
+ * Hosted payment pages (SSLCommerz, bKash, Nagad: app providers) need no
+ * source here: checkout sends the buyer there with a top-level navigation,
+ * which CSP does not govern, and nothing on the storefront loads, frames or
+ * posts a form to them. Their hosts are each app's `allowedHosts`, for its
+ * own server-side calls.
  */
 
 /** Platform origins that are always allowed, resolved per request. */
@@ -64,13 +70,9 @@ const COMMON_THIRD_PARTY_DOMAINS = [
   "https://connect.facebook.net",
   "https://www.facebook.com",
   "https://*.facebook.com",
-  // Stripe payment gateway
+  // Stripe payment gateway (card fields load and frame from Stripe)
   "https://js.stripe.com",
   "https://*.stripe.com",
-  // SSLCommerz payment gateway
-  "https://sandbox.sslcommerz.com",
-  "https://securepay.sslcommerz.com",
-  "https://*.sslcommerz.com",
 ];
 
 // Generate script-src directives
@@ -107,7 +109,6 @@ function getFrameSrcDirectives(additionalDomains: string[]): string[] {
     "https://*.facebook.com", // For Facebook UI elements or login iframes
     "https://js.stripe.com", // Stripe card elements use iframes
     "https://*.stripe.com",
-    "https://*.sslcommerz.com", // SSLCommerz payment gateway
     "https://www.youtube-nocookie.com", // Merchant-authored YouTube embeds
     "https://player.vimeo.com", // Merchant-authored Vimeo embeds
     ...additionalDomains,
@@ -211,7 +212,7 @@ export function setPageCspHeader(
     "object-src 'none'",
     directive("worker-src", getWorkerSrcDirectives(additionalDomains)),
     "base-uri 'self'",
-    "form-action 'self' https://www.facebook.com https://*.sslcommerz.com https://*.stripe.com",
+    "form-action 'self' https://www.facebook.com https://*.stripe.com",
     ["frame-ancestors 'self'", ...frameAncestors].join(" "),
   ];
 

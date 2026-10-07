@@ -1,6 +1,6 @@
 // src/modules/payments/gateway-settings.ts
 // Reads payment gateway configuration from the authoritative settings
-// documents (`stripe`, `sslcommerz`, `payment_methods`). Request paths may
+// documents (`stripe`, `payment_methods`); app gateways read their own. Request paths may
 // load one relational snapshot, but decrypted credentials are never retained
 // in Worker-global memory or written to KV.
 
@@ -10,7 +10,7 @@ import { isQualifiedProviderId } from "@scalius/shared/plugins/providers/kinds";
 import { isPaymentMethodId } from "./gateways/identity";
 import type { PaymentGateway } from "./gateways/port";
 import type { PaymentProviders, PaymentProvidersSource } from "./gateways/registry";
-import { paymentMethodsDocument, sslcommerzDocument, stripeDocument } from "../settings";
+import { paymentMethodsDocument, stripeDocument } from "../settings";
 import {
   selectSettingsDocuments,
   type SettingsDocumentRow,
@@ -45,35 +45,11 @@ export interface StripeCheckoutReadiness {
   blockedReason?: string;
 }
 
-export interface SSLCommerzSettings {
-  storeId: string;
-  storePassword: string;
-  sandbox: boolean;
-  enabled: boolean;
-  credentialErrors?: string[];
-}
-
-export type SSLCommerzCheckoutRequiredField = "storeId" | "storePassword";
-
-const SSLCOMMERZ_CHECKOUT_FIELD_LABELS: Record<SSLCommerzCheckoutRequiredField, string> = {
-  storeId: "store ID",
-  storePassword: "store password",
-};
-
-export interface SSLCommerzCheckoutReadiness {
-  configured: boolean;
-  enabled: boolean;
-  usable: boolean;
-  missingFields: SSLCommerzCheckoutRequiredField[];
-  credentialErrors?: string[];
-  blockedReason?: string;
-}
-
 /** A stored gateway settings document row (see `selectSettingsDocuments`). */
 export type GatewaySettingsStoredRow = SettingsDocumentRow;
 
 async function readGatewayRows(db: Database): Promise<GatewaySettingsStoredRow[]> {
-  return selectSettingsDocuments(db, [paymentMethodsDocument, stripeDocument, sslcommerzDocument]);
+  return selectSettingsDocuments(db, [paymentMethodsDocument, stripeDocument]);
 }
 const STRIPE_PLACEHOLDER_VALUES = new Set([
   "dummy",
@@ -193,108 +169,6 @@ async function resolveStripeSettingsFromRows(
     credentialErrors: compactErrors([stored.secretErrors.secretKey, stored.secretErrors.webhookSecret]),
   };
 }
-const SSLCOMMERZ_STORED_SECRET_MARKER = "__stored__";
-const SSLCOMMERZ_PLACEHOLDER_VALUES = new Set([
-  "dummy",
-  "test",
-  "testbox",
-  "qwerty",
-  "password",
-  "store_id",
-  "storeid",
-  "store_password",
-  "storepass",
-  "example",
-  "placeholder",
-  "demo",
-  "123456",
-  "000000",
-  "xxxxxx",
-  SSLCOMMERZ_STORED_SECRET_MARKER,
-]);
-
-type SSLCommerzCredentialField = "storeId" | "storePassword";
-
-export function isSSLCommerzPlaceholderCredential(value: unknown): boolean {
-  return typeof value === "string" && SSLCOMMERZ_PLACEHOLDER_VALUES.has(value.trim().toLowerCase());
-}
-
-export function getSSLCommerzCheckoutMissingFields(
-  settings: Partial<Pick<SSLCommerzSettings, SSLCommerzCheckoutRequiredField>> | null | undefined,
-): SSLCommerzCheckoutRequiredField[] {
-  const missing: SSLCommerzCheckoutRequiredField[] = [];
-  if (!hasText(settings?.storeId)) missing.push("storeId");
-  if (!hasText(settings?.storePassword)) missing.push("storePassword");
-  return missing;
-}
-
-function sslCommerzBlockedReason(missingFields: SSLCommerzCheckoutRequiredField[]): string | undefined {
-  return missingFieldsReason("SSLCommerz", missingFields.map((field) => SSLCOMMERZ_CHECKOUT_FIELD_LABELS[field]));
-}
-
-function getSSLCommerzPlaceholderCredentialErrors(
-  settings: Partial<Pick<SSLCommerzSettings, SSLCommerzCredentialField | "sandbox">> | null | undefined,
-): string[] {
-  const officialSandboxAccount = settings?.sandbox === true &&
-    settings.storeId?.trim() === "testbox" &&
-    settings.storePassword?.trim() === "qwerty";
-  if (officialSandboxAccount) return [];
-
-  const errors: string[] = [];
-  if (isSSLCommerzPlaceholderCredential(settings?.storeId)) {
-    errors.push("SSLCommerz store ID looks like a placeholder. Enter the real SSLCommerz store ID from your merchant account.");
-  }
-  if (isSSLCommerzPlaceholderCredential(settings?.storePassword)) {
-    errors.push("SSLCommerz store password looks like a placeholder. Enter the real SSLCommerz store password from your merchant account.");
-  }
-  return errors;
-}
-
-export function getSSLCommerzCheckoutReadiness(
-  settings: Partial<SSLCommerzSettings> | null | undefined,
-): SSLCommerzCheckoutReadiness {
-  const missingFields = getSSLCommerzCheckoutMissingFields(settings);
-  const credentialErrors = compactErrors([
-    ...(settings?.credentialErrors ?? []),
-    ...getSSLCommerzPlaceholderCredentialErrors(settings),
-  ]);
-  const enabled = settings?.enabled === true;
-  const configured = missingFields.length === 0 && credentialErrors.length === 0;
-  return {
-    configured,
-    enabled,
-    usable: enabled && configured,
-    missingFields,
-    credentialErrors,
-    blockedReason: credentialErrors[0] ?? sslCommerzBlockedReason(missingFields),
-  };
-}
-
-export function isSSLCommerzCheckoutUsable(
-  settings: Partial<SSLCommerzSettings> | null | undefined,
-): settings is SSLCommerzSettings {
-  return getSSLCommerzCheckoutReadiness(settings).usable;
-}
-
-export async function getSSLCommerzSettings(
-  db: Database,
-  encryptionKey?: string,
-): Promise<SSLCommerzSettings | null> {
-  return resolveSSLCommerzSettingsFromRows(await readGatewayRows(db), encryptionKey);
-}
-
-async function resolveSSLCommerzSettingsFromRows(
-  rows: readonly GatewaySettingsStoredRow[],
-  encryptionKey?: string,
-): Promise<SSLCommerzSettings | null> {
-  const stored = await sslcommerzDocument.fromRows(rows, { encryptionKey });
-  if (!stored.stored) return null;
-  return {
-    ...stored.value,
-    credentialErrors: compactErrors([stored.secretErrors.storePassword]),
-  };
-}
-
 export interface PaymentMethodsConfig {
   /** Which payment methods are enabled for the storefront: `cod`, built-in gateways, app providers. */
   enabledMethods: string[];
@@ -346,7 +220,6 @@ export interface PaymentGatewaySettingsSnapshot {
   providers?: PaymentProviders;
   settings: {
     stripe: StripeSettings | null;
-    sslcommerz: SSLCommerzSettings | null;
     cod: { enabled: true };
   };
 }
@@ -363,8 +236,6 @@ function buildActivePaymentMethods(
     if (method === "cod") validMethods.push(method);
     else if (method === "stripe") {
       if (isStripeCheckoutUsable(resolved.stripe)) validMethods.push(method);
-    } else if (method === "sslcommerz") {
-      if (isSSLCommerzCheckoutUsable(resolved.sslcommerz)) validMethods.push(method);
     } else if (apps.get(method) === true) validMethods.push(method);
   }
   if (validMethods.length === 0 && !preferences.hasExplicitEnabledMethods) {
@@ -383,12 +254,11 @@ async function resolvePaymentGatewaySettingsSnapshotFromRows(
   encryptionKey: string | undefined,
   apps: AppPaymentUsability,
 ): Promise<PaymentGatewaySettingsSnapshot> {
-  const [preferences, stripe, sslcommerz] = await Promise.all([
+  const [preferences, stripe] = await Promise.all([
     resolvePaymentMethodPreferences(rows),
     resolveStripeSettingsFromRows(rows, encryptionKey),
-    resolveSSLCommerzSettingsFromRows(rows, encryptionKey),
   ]);
-  const resolved = { stripe, sslcommerz, cod: { enabled: true as const } };
+  const resolved = { stripe, cod: { enabled: true as const } };
   return {
     preferences,
     activePaymentMethods: buildActivePaymentMethods(preferences, resolved, apps),
@@ -403,15 +273,8 @@ export async function resolveActivePaymentMethodsFromRows(
 ): Promise<PaymentMethodsConfig> {
   const preferences = await resolvePaymentMethodPreferences(rows);
   const enabled = new Set(preferences.enabledMethods);
-  const [stripe, sslcommerz] = await Promise.all([
-    enabled.has("stripe") ? resolveStripeSettingsFromRows(rows, encryptionKey) : null,
-    enabled.has("sslcommerz") ? resolveSSLCommerzSettingsFromRows(rows, encryptionKey) : null,
-  ]);
-  return buildActivePaymentMethods(preferences, {
-    stripe,
-    sslcommerz,
-    cod: { enabled: true },
-  }, apps);
+  const stripe = enabled.has("stripe") ? await resolveStripeSettingsFromRows(rows, encryptionKey) : null;
+  return buildActivePaymentMethods(preferences, { stripe, cod: { enabled: true } }, apps);
 }
 
 /**

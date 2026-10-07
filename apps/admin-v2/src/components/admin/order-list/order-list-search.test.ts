@@ -24,7 +24,7 @@ describe("order list search", () => {
   });
 
   it("filters by cash, a built-in gateway or an app's method, dropping anything else", () => {
-    for (const paymentMethod of ["cod", "stripe", "sslcommerz", "scalius.bkash:bkash"]) {
+    for (const paymentMethod of ["cod", "stripe", "scalius.bangladesh:sslcommerz", "scalius.bkash:bkash"]) {
       const search = validateOrderSearch({ paymentMethod });
       expect(search.paymentMethod).toBe(paymentMethod);
       expect(orderListQuery(search, "").paymentMethod).toBe(paymentMethod);
@@ -33,6 +33,8 @@ describe("order list search", () => {
     for (const paymentMethod of ["bkash", "scalius.bkash:", ":bkash", "scalius.bkash:BKASH", 7]) {
       expect(validateOrderSearch({ paymentMethod }).paymentMethod).toBeUndefined();
     }
+    // An old link's SSLCommerz filters by the Bangladesh pack's provider (the API matches both ids).
+    expect(validateOrderSearch({ paymentMethod: "sslcommerz" }).paymentMethod).toBe("scalius.bangladesh:sslcommerz");
   });
 
   it("filters by sales channel and counts it, dropping unknown channels", () => {

@@ -16,6 +16,7 @@ import {
   BUILT_IN_PAYMENT_PROVIDERS,
   createPaymentProviders,
   getActivePaymentMethods,
+  isAppPaymentMethod,
   PaymentProviderError,
   type GatewayVerification,
   type PaymentGateway,
@@ -25,7 +26,6 @@ import {
 import { listActiveProviderPlugins, type PluginInstallation, type RegisteredPlugin } from "@scalius/core/modules/plugins";
 import {
   declaredProviderOperations,
-  isQualifiedProviderId,
   providerErrorOf,
   qualifiedProviderId,
   type PaymentProviderDescriptor,
@@ -151,7 +151,22 @@ export function appPaymentGateway(
   if (operations.has("refund")) gateway.refund = (input, { signal }) => invoke("refund", input, { signal });
   if (operations.has("refundStatus")) gateway.refundStatus = (input, { signal }) => invoke("refundStatus", input, { signal });
   if (operations.has("listRefunds")) gateway.listRefunds = (input, { signal }) => invoke("listRefunds", input, { signal });
+  // The unsigned merchant reference of a failed or cancelled return, read
+  // here from the provider's form post: context that selects an attempt the
+  // platform created, never payment authority (no app call).
+  const correlationField = declaration.returnCorrelationField;
+  if (correlationField) gateway.returnCorrelationId = (request) => formField(request, correlationField);
   return gateway;
+}
+
+/** One field of a form-encoded POST body, trimmed; "" for anything else. */
+function formField(request: { method: string; rawBody: string }, field: string): string {
+  if (request.method !== "POST" || !request.rawBody) return "";
+  try {
+    return new URLSearchParams(request.rawBody).get(field)?.trim() ?? "";
+  } catch {
+    return "";
+  }
 }
 
 /** Every payment provider these installations declare, as gateways. */
@@ -185,10 +200,10 @@ const perRequest = new WeakMap<Request, Promise<PaymentProviders>>();
  * The gateways one request can use, read once per request. Built-in ids
  * never need the read: `forId` names the gateway the request is about, and
  * when it is a built-in one the built-in gateways answer without touching
- * the plugin tables.
+ * the plugin tables. A retired built-in id (`sslcommerz`) is an app's now.
  */
 export function requestPaymentProviders(c: RequestLike, forId?: string | null): Promise<PaymentProviders> {
-  if (forId !== undefined && !isQualifiedProviderId(forId)) return Promise.resolve(BUILT_IN_PAYMENT_PROVIDERS);
+  if (forId !== undefined && !isAppPaymentMethod(forId)) return Promise.resolve(BUILT_IN_PAYMENT_PROVIDERS);
   let providers = perRequest.get(c.req.raw);
   if (!providers) {
     providers = loadPaymentProviders(requestProviderRuntime(c));

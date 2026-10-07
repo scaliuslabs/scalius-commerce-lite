@@ -171,7 +171,7 @@ Shared composition files are split so that features in different domains never e
 
 ## Provider ports
 
-`@scalius/shared/plugins/providers` defines one port per provider kind: `payment`, `courier`, `sms`, `email`, `fraud` and `tax`. Built-in adapters (Stripe, SSLCommerz, the email senders) and app providers (the Bangladesh pack's couriers, SMS gateways and fraud checkers, bKash, Nagad) implement the same port. Core resolves a provider by id and never asks which kind it got. A built-in id never contains a colon. An app provider id is `<plugin id>:<provider id>`.
+`@scalius/shared/plugins/providers` defines one port per provider kind: `payment`, `courier`, `sms`, `email`, `fraud` and `tax`. Built-in adapters (Stripe, the email senders) and app providers (the Bangladesh pack's SSLCommerz, couriers, SMS gateways and fraud checkers, bKash, Nagad) implement the same port. A retired built-in id (`sslcommerz`, `pathao`, …) on rows saved before its move resolves to the app provider that replaced it, and fails closed ("Activate Bangladesh pack in Apps to use it.") until that app is active. Core resolves a provider by id and never asks which kind it got. A built-in id never contains a colon. An app provider id is `<plugin id>:<provider id>`.
 
 - The API builds each request's app providers from `plugin_registrations` rows of kind `provider` (`apps/api/src/plugins/providers/`). Payment and courier providers join their registries (`payments/gateways/registry.ts`, `delivery/couriers/registry.ts`). SMS, email and fraud providers reach core through the `AppProviders` lookup (`packages/core/src/integrations/provider-port.ts`).
 - Core asks for an app provider only when the saved choice names one, so a store on built-in providers reads no plugin table. Without a lookup an app choice fails closed.
@@ -356,7 +356,7 @@ A settings document is one `settings` row: `category` is the document key, `key`
 | `checkout`, `customer_auth`, `customer_countries`, `customer_requests`, `marketing_consent` | `settings/documents.ts` | Checkout flow, sign-in policy, phone countries, buyer requests, marketing consent | -- |
 | `currency`, `business`, `seo`, `media`, `security`, `policies`, `emi`, `reviews`, `gift_cards` | `settings/documents.ts` | Currency, business identity, discovery policy, media hosts, CSP sources, policy pages, EMI plans, review and gift-card defaults | -- |
 | `email`, `whatsapp`, `sms`, `firebase` | `settings/documents.ts` | Messaging providers | Resend key, WhatsApp token, SMS keys, service account |
-| `stripe`, `sslcommerz`, `payment_methods` | `settings/documents.ts` | Payment gateways and the checkout method allowlist | Stripe secret and webhook secret, SSLCommerz store password |
+| `stripe`, `payment_methods` (and the retired `sslcommerz`, cleared by the Bangladesh pack's activation) | `settings/documents.ts` | Stripe and the checkout method allowlist | Stripe secret and webhook secret (old SSLCommerz store password) |
 | `meta_conversions` | `settings/documents.ts` | Meta Conversions API | Access token |
 
 Fraud-checker provider rows (`category = 'fraud-checker'`) and `notification_provider_health` markers share the table but are not documents. The storefront theme is not a settings document: it lives in `theme_settings` and `theme_settings_drafts`.

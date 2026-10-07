@@ -99,7 +99,7 @@ export const REPORT_COLUMN_LABELS_EN: Record<string, string> = {
 
 const ENUM_LABELS_EN: Record<AnalyticsEnumVocabulary, Record<string, string>> = {
   channel: { online_store: "Online store", admin: "Dashboard", pos: "Point of sale", agent: "AI agent", app: "App" },
-  paymentMethod: { cod: "Cash on delivery", stripe: "Card (Stripe)", sslcommerz: "SSLCommerz", gift_card: "Gift card", other: "Other" },
+  paymentMethod: { cod: "Cash on delivery", stripe: "Card (Stripe)", gift_card: "Gift card", other: "Other" },
   paymentKind: { payment: "Payment", refund: "Refund" },
   paymentStatus: {
     pending: "Pending",
@@ -137,7 +137,10 @@ const TOKEN_LABELS_EN: Record<string, string> = {
   __shipping: "Shipping",
 };
 
-function cellText(column: AnalyticsColumn, value: ReportCell, decimalPlaces: number): string | number {
+/** A payment method the report has no words for (an app's, a retired built-in id): its provider's name. */
+type PaymentMethodName = ((id: string) => string) | undefined;
+
+function cellText(column: AnalyticsColumn, value: ReportCell, decimalPlaces: number, paymentMethodName?: PaymentMethodName): string | number {
   if (value === null) return "";
   switch (column.type) {
     case "money":
@@ -148,8 +151,11 @@ function cellText(column: AnalyticsColumn, value: ReportCell, decimalPlaces: num
       return Math.round(Number(value) * 100) / 100;
     case "count":
       return Number(value);
-    case "enum":
-      return (column.enum && ENUM_LABELS_EN[column.enum][String(value)]) || String(value);
+    case "enum": {
+      const known = column.enum && ENUM_LABELS_EN[column.enum][String(value)];
+      if (known) return known;
+      return column.enum === "paymentMethod" && paymentMethodName ? paymentMethodName(String(value)) : String(value);
+    }
     default:
       return TOKEN_LABELS_EN[String(value)] ?? String(value);
   }
@@ -173,12 +179,13 @@ export function createReportCsvBuilder(
   report: AnalyticsReportDefinition,
   currency: { code: string; decimalPlaces: number },
   maxBytes = REPORT_CSV_MAX_BYTES,
+  paymentMethodName?: PaymentMethodName,
 ): ReportCsvBuilder {
   type Line = { values: Record<string, ReportCell>; total: boolean };
   const builder = createCsvArtifactBuilder<Line>(reportCsvHeaders(report, currency.code), (line) => [
     report.columns.map((column, index) => {
       if (line.total && index === 0) return "Total";
-      return cellText(column, line.values[column.key] ?? null, currency.decimalPlaces);
+      return cellText(column, line.values[column.key] ?? null, currency.decimalPlaces, paymentMethodName);
     }),
   ], maxBytes);
   return {

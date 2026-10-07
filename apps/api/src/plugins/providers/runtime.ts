@@ -84,7 +84,7 @@ export interface AppProviderSettings {
   missingFields: string[];
   /** Secrets that could not be opened (key rotated or missing). Never call the provider then. */
   credentialErrors: string[];
-  /** From the app's `environment` setting (`sandbox` or `live`), when it has one. */
+  /** From the provider's `environmentSetting` (else the app's `environment` setting): `sandbox` or `live`, when it has one. */
   environment: "test" | "live" | "unknown";
   /** Why the provider cannot be used, in the merchant's words. */
   blockedReason?: string;
@@ -100,7 +100,7 @@ export interface AppProviderSettings {
 export async function readAppProviderSettings(
   runtime: AppProviderRuntime,
   installation: PluginInstallation,
-  provider: Pick<PluginProviderDeclaration, "kind" | "settings"> & { name?: string },
+  provider: Pick<PluginProviderDeclaration, "kind" | "settings" | "environmentSetting"> & { name?: string },
   encryptionKey: string | undefined,
 ): Promise<AppProviderSettings> {
   const name = installation.manifest.name;
@@ -129,9 +129,8 @@ export async function readAppProviderSettings(
   ];
   const approved = installation.status === "active" && installation.grant?.providers.includes(provider.kind) === true;
   const runnable = runtime.canRun(installation);
-  const environment = settings.values.environment === "live"
-    ? "live"
-    : settings.values.environment === "sandbox" ? "test" : "unknown";
+  const environmentValue = settings.values[provider.environmentSetting ?? "environment"];
+  const environment = environmentValue === "live" ? "live" : environmentValue === "sandbox" ? "test" : "unknown";
   const complete = (keys: string[]) => `Complete ${name}'s settings: ${keys.map((key) => (own ? qualified(key) : key)).join(", ")}.`;
   // The provider's own fields, named as its setup sheet names them.
   const setUp = (keys: string[]) => (provider.name

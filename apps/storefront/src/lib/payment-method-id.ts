@@ -1,5 +1,5 @@
 // The shape of a payment method id the storefront passes on before the API
-// decides: a built-in id (`stripe`, `sslcommerz`, `cod`, …) or an app
+// decides: a built-in id (`stripe`, `cod`, a retired `sslcommerz`, …) or an app
 // provider's `<plugin id>:<provider id>`. The API alone says whether a
 // method is enabled and ready; this only keeps arbitrary text out of paths.
 

@@ -3,9 +3,6 @@ import { createSqliteD1Database } from "@scalius/database/testing/sqlite-d1";
 
 import {
   getActivePaymentMethods,
-  getSSLCommerzSettings,
-  getSSLCommerzCheckoutReadiness,
-  isSSLCommerzPlaceholderCredential,
   getStripeSettings,
   getStripeCheckoutReadiness,
   isStripePlaceholderCredential,
@@ -235,16 +232,8 @@ describe("payment gateway settings reads", () => {
         { key: "enabled", value: "true" },
       ],
     ]);
-    const sslDb = createDbReturningCategoryReads([
-      [
-        { key: "store_id", value: "store_test" },
-        { key: "store_password", value: `enc:${await encryptCredentials("password_test", key)}` },
-        { key: "enabled", value: "true" },
-      ],
-    ]);
 
     const stripe = await getStripeSettings(stripeDb, wrongKey);
-    const ssl = await getSSLCommerzSettings(sslDb, wrongKey);
 
     expect(getStripeCheckoutReadiness(stripe)).toMatchObject({
       configured: false,
@@ -254,27 +243,6 @@ describe("payment gateway settings reads", () => {
         "Stripe webhook secret could not be decrypted with the configured credential key.",
       ],
       blockedReason: "Stripe secret key could not be decrypted with the configured credential key.",
-    });
-    expect(getSSLCommerzCheckoutReadiness(ssl)).toMatchObject({
-      configured: false,
-      usable: false,
-      credentialErrors: [
-        "SSLCommerz store password could not be decrypted with the configured credential key.",
-      ],
-    });
-  });
-
-  it("reports exact SSLCommerz checkout readiness gaps", () => {
-    expect(getSSLCommerzCheckoutReadiness({
-      storeId: "store_1",
-      storePassword: "",
-      enabled: true,
-    })).toMatchObject({
-      configured: false,
-      enabled: true,
-      usable: false,
-      missingFields: ["storePassword"],
-      blockedReason: expect.stringContaining("store password"),
     });
   });
 
@@ -372,85 +340,20 @@ describe("payment gateway settings reads", () => {
     });
   });
 
-  it.each([
-    "dummy",
-    "test",
-    "testbox",
-    "qwerty",
-    "password",
-    "store_id",
-    "storeid",
-    "store_password",
-    "storepass",
-    "example",
-    "placeholder",
-    "demo",
-    "123456",
-    "000000",
-    "xxxxxx",
-    "__stored__",
-  ])("treats %s as an SSLCommerz placeholder credential", (value) => {
-    expect(isSSLCommerzPlaceholderCredential(` ${value.toUpperCase()} `)).toBe(true);
-  });
-
-  it("does not reject real-looking SSLCommerz sandbox credential names by substring", () => {
-    expect(isSSLCommerzPlaceholderCredential("sandbox")).toBe(false);
-    expect(isSSLCommerzPlaceholderCredential("sslcz_sandbox_store_123")).toBe(false);
-  });
-
-  it("accepts SSLCommerz's published testbox account only in sandbox mode", () => {
-    expect(getSSLCommerzCheckoutReadiness({
-      storeId: "testbox",
-      storePassword: "qwerty",
-      sandbox: true,
-      enabled: true,
-    })).toMatchObject({ configured: true, usable: true, credentialErrors: [] });
-
-    expect(getSSLCommerzCheckoutReadiness({
-      storeId: "testbox",
-      storePassword: "qwerty",
-      sandbox: false,
-      enabled: true,
-    })).toMatchObject({ configured: false, usable: false });
-  });
-
-  it("blocks SSLCommerz checkout readiness when credentials are placeholders", () => {
-    expect(getSSLCommerzCheckoutReadiness({
-      storeId: "store_id",
-      storePassword: "password",
-      enabled: true,
-    })).toMatchObject({
-      configured: false,
-      enabled: true,
-      usable: false,
-      missingFields: [],
-      credentialErrors: [
-        "SSLCommerz store ID looks like a placeholder. Enter the real SSLCommerz store ID from your merchant account.",
-        "SSLCommerz store password looks like a placeholder. Enter the real SSLCommerz store password from your merchant account.",
-      ],
-      blockedReason: "SSLCommerz store ID looks like a placeholder. Enter the real SSLCommerz store ID from your merchant account.",
-    });
-  });
-
-  it("does not make SSLCommerz active with placeholder credentials", async () => {
+  it("never offers a retired SSLCommerz choice, however complete its old keys: the Bangladesh pack serves it now", async () => {
     const db = createDbReturningCategoryReads([
       [
-        { key: "enabled_methods", value: JSON.stringify(["sslcommerz"]) },
+        { key: "enabled_methods", value: JSON.stringify(["sslcommerz", "cod"]) },
         { key: "default_method", value: "sslcommerz" },
       ],
       [
         { key: "store_id", value: "real_store_123" },
-        { key: "store_password", value: "password" },
+        { key: "store_password", value: "real_password_456" },
         { key: "enabled", value: "true" },
       ],
     ]);
 
-    await expect(
-      getActivePaymentMethods(db),
-    ).resolves.toEqual({
-      enabledMethods: [],
-      defaultMethod: "cod",
-    });
+    await expect(getActivePaymentMethods(db)).resolves.toEqual({ enabledMethods: ["cod"], defaultMethod: "cod" });
   });
 
   it("keeps Stripe active when every checkout-required key is present", async () => {
@@ -488,8 +391,9 @@ describe("payment gateway settings reads", () => {
       { category: "sslcommerz", key: "enabled", value: "true" },
     ];
 
+    // The retired SSLCommerz choice is hidden (fail closed) until the pack's activation repoints it.
     await expect(resolveActivePaymentMethodsFromRows(documentRows(rows))).resolves.toEqual({
-      enabledMethods: ["cod", "stripe", "sslcommerz"],
+      enabledMethods: ["cod", "stripe"],
       defaultMethod: "stripe",
     });
   });

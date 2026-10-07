@@ -6,9 +6,10 @@
 //
 //   1. Read the old configuration with the strict reader
 //      (CREDENTIAL_ENCRYPTION_KEY): the `sms` document's gateway fields, the
-//      `fraud-checker` rows and the `delivery_providers` rows of a retired
-//      type (a courier's active row, else its newest). A value this key
-//      cannot open is skipped and reported, never guessed.
+//      `fraud-checker` rows, the `delivery_providers` rows of a retired
+//      type (a courier's active row, else its newest) and a retired payment
+//      gateway's document (`sslcommerz`). A value this key cannot open is
+//      skipped and reported, never guessed.
 //   2. Write it into the app's settings (secrets sealed for the app), only
 //      into keys the merchant has not set there: the app's own settings win.
 //      A value the app's settings refuse (not https, a placeholder) is
@@ -17,7 +18,13 @@
 //      fields: the `sms` document is replaced (compare-and-swap on the
 //      revision read), each fraud and delivery row is rewritten only while it
 //      is still the row that was read, and the retired couriers' shipments
-//      name the app's couriers (their tracking pages saved).
+//      name the app's couriers (their tracking pages saved). A retired
+//      payment gateway the merchant had on is replaced in the checkout's
+//      payment methods (one that was off is dropped), its document is
+//      cleared once every field moved, and its payments still under way
+//      (unpaid, part-paid or failed orders, their attempts and payment rows)
+//      name the app's gateway. Settled orders keep the old id, which the
+//      payment registry resolves to the app's gateway.
 //
 // Idempotent: a second activation finds nothing left to move. Nothing here
 // logs or returns a credential; the result names setting keys only.
@@ -40,8 +47,15 @@ import {
 import { smsDocument } from "@scalius/core/modules/settings";
 import { selectSettingsDocuments } from "@scalius/core/settings-store";
 import {
+  readRetiredPaymentSettings,
+  repointRetiredPaymentChoice,
+  repointRetiredPaymentRows,
+  type RetiredPaymentSettings,
+} from "@scalius/core/modules/payments";
+import {
   RETIRED_COURIER_PROVIDERS,
   RETIRED_FRAUD_PROVIDERS,
+  RETIRED_PAYMENT_PROVIDERS,
   RETIRED_SMS_PROVIDERS,
   RETIRED_SMS_SECRET_FIELDS,
   type RetiredProvider,
@@ -157,6 +171,17 @@ function fraudCandidates(rows: RetiredFraudChecker[]): Map<string, Candidate> {
   return values;
 }
 
+/** Each retired payment gateway's saved setup, already in the app's setting terms. */
+function paymentCandidates(reads: RetiredPaymentSettings[]): { values: Map<string, Candidate>; unreadable: string[] } {
+  const values = new Map<string, Candidate>();
+  const unreadable: string[] = [];
+  for (const read of reads) {
+    for (const [key, value] of Object.entries(read.values)) values.set(key, { field: key, value });
+    unreadable.push(...read.unreadable);
+  }
+  return { values, unreadable };
+}
+
 /**
  * Writes `candidates` into the app's unset settings. A value the app's schema
  * refuses is dropped and the write retried, so one bad old value never blocks
@@ -212,7 +237,8 @@ export async function handOffRetiredProviders(
   const sms = replacedBy(installation, RETIRED_SMS_PROVIDERS);
   const fraud = replacedBy(installation, RETIRED_FRAUD_PROVIDERS);
   const couriers = replacedBy(installation, RETIRED_COURIER_PROVIDERS);
-  if ((sms.length === 0 && fraud.length === 0 && couriers.length === 0) || !encryptionKey) return EMPTY;
+  const payments = replacedBy(installation, RETIRED_PAYMENT_PROVIDERS);
+  if ((sms.length === 0 && fraud.length === 0 && couriers.length === 0 && payments.length === 0) || !encryptionKey) return EMPTY;
 
   const smsRead = sms.length > 0 ? await smsCandidates(db, sms, encryptionKey) : null;
   const fraudTypes = new Set(fraud.map(([type]) => type));
@@ -222,11 +248,20 @@ export async function handOffRetiredProviders(
   const courierRows = courierTypes.size > 0 ? (await readRetiredCourierRows(db, encryptionKey)).filter((row) => courierTypes.has(row.type)) : [];
   const courierRead = courierCandidates(installation, courierRows);
 
-  const candidates = new Map<string, Candidate>([...(smsRead?.values ?? []), ...fraudCandidates(fraudRows), ...courierRead.values]);
+  const paymentIds = new Set(payments.map(([id]) => id));
+  const paymentReads = paymentIds.size > 0 ? (await readRetiredPaymentSettings(db, encryptionKey)).filter((read) => paymentIds.has(read.id)) : [];
+  const paymentRead = paymentCandidates(paymentReads);
+
+  const candidates = new Map<string, Candidate>([
+    ...(smsRead?.values ?? []),
+    ...fraudCandidates(fraudRows),
+    ...courierRead.values,
+    ...paymentRead.values,
+  ]);
   const written = await writeCandidates(db, pluginId, candidates, encryptionKey);
   const result: ProviderHandoffResult = {
     moved: written.moved,
-    skipped: [...new Set([...(smsRead?.unreadable ?? []), ...courierRead.unreadable, ...written.skipped])],
+    skipped: [...new Set([...(smsRead?.unreadable ?? []), ...courierRead.unreadable, ...paymentRead.unreadable, ...written.skipped])],
     repointed: [],
   };
 
@@ -265,6 +300,14 @@ export async function handOffRetiredProviders(
     if (await repointRetiredCourierRow(db, row)) result.repointed.push(row.id);
   }
   for (const type of courierTypes) await repointRetiredCourierShipments(db, type);
+  // Payment gateways: the checkout's choice (and, once every field moved,
+  // the old document), then the payments still under way.
+  for (const read of paymentReads) {
+    const keys = Object.values(RETIRED_PAYMENT_PROVIDERS[read.id]!.settings);
+    const allMoved = !keys.some((key) => result.skipped.includes(key));
+    if (await repointRetiredPaymentChoice(db, read, { clearDocument: allMoved })) result.repointed.push(`payment_methods:${read.id}`);
+    await repointRetiredPaymentRows(db, read.id);
+  }
   if (result.moved.length > 0 || result.skipped.length > 0 || result.repointed.length > 0) {
     // Setting keys and counts only.
     console.info(`[plugins] ${pluginId} took over retired providers: ${result.moved.length} settings moved, ${result.skipped.length} skipped, ${result.repointed.length} choices repointed`);

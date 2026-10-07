@@ -8,7 +8,6 @@ const NAGAD = "scalius.nagad:nagad";
 
 const gateways: PaymentGatewayInfo[] = [
   { id: "stripe", label: "Stripe", pluginId: null, chargeCurrencies: "any" },
-  { id: "sslcommerz", label: "SSLCommerz", pluginId: null, chargeCurrencies: ["BDT"] },
   { id: BKASH, label: "bKash", pluginId: "scalius.bkash", chargeCurrencies: ["BDT"] },
 ];
 
@@ -33,7 +32,7 @@ describe("payment method rows", () => {
     const rows = paymentMethodRows({
       enabledMethods: [BKASH, "cod"],
       gateways,
-      gatewayStatus: { cod: ready, stripe: ready, sslcommerz: ready, [BKASH]: { ...ready, environment: "live" } },
+      gatewayStatus: { cod: ready, stripe: ready, [BKASH]: { ...ready, environment: "live" } },
       appProviders: [provider(BKASH), nagad],
       appProvidersKnown: true,
     });
@@ -42,7 +41,6 @@ describe("payment method rows", () => {
       [BKASH, "app"],
       ["cod", "cod"],
       ["stripe", "built_in"],
-      ["sslcommerz", "built_in"],
       [NAGAD, "app"],
     ]);
     expect(rows[0]).toMatchObject({
@@ -56,16 +54,34 @@ describe("payment method rows", () => {
       status: { environment: "live" },
     });
     // An inactive app's readiness, failing closed with the server's reason.
-    expect(rows[4]).toMatchObject({
+    expect(rows[3]).toMatchObject({
       name: "Nagad",
       status: { usable: false, providerEnabled: false, blockedReason: "Activate Nagad in Apps to use it." },
     });
   });
 
+  it("shows a pack provider's own mark, and a saved SSLCommerz waiting for the Bangladesh pack", () => {
+    const pack = provider("scalius.bangladesh:sslcommerz", {
+      appName: "Bangladesh pack", name: "SSLCommerz", appIcon: "/icon/pack.svg", icon: "/icon/sslcommerz.png",
+      readiness: { configured: false, enabled: false, usable: false, missingFields: [], credentialErrors: [], blockedReason: "Activate Bangladesh pack in Apps to use it." },
+    });
+    const rows = paymentMethodRows({
+      enabledMethods: ["sslcommerz", "cod"],
+      gateways: gateways.slice(0, 1),
+      gatewayStatus: { cod: ready, sslcommerz: { configured: false, enabled: false, usable: false, providerEnabled: false } },
+      appProviders: [pack],
+      appProvidersKnown: true,
+    });
+    expect(rows.find((row) => row.id === "sslcommerz")).toMatchObject({
+      kind: "app", retired: true, installed: false, name: "SSLCommerz", pluginId: "scalius.bangladesh", appIcon: "/icon/sslcommerz.png",
+    });
+    expect(rows.find((row) => row.id === "scalius.bangladesh:sslcommerz")).toMatchObject({ retired: false, appIcon: "/icon/sslcommerz.png" });
+  });
+
   it("keeps a saved app method whose app was removed, so it can be turned off", () => {
     const input = {
       enabledMethods: ["cod", "gone.app:wallet-pay"],
-      gateways: gateways.slice(0, 2),
+      gateways: gateways.slice(0, 1),
       gatewayStatus: { cod: ready },
       appProviders: [],
     };

@@ -63,7 +63,7 @@ describe("where an app appears", () => {
     const manifest = await manifestOf("bangladesh");
     const entries = appearsEntries(detailOf(manifest));
     // Every provider, each on its capability page with its sheet open.
-    expect(manifest.providers).toHaveLength(10);
+    expect(manifest.providers).toHaveLength(11);
     for (const provider of manifest.providers) {
       const id = qualifiedProviderId(manifest.id, provider.id);
       const entry = entries.find((candidate) => candidate.key === `provider:${id}`);
@@ -73,6 +73,7 @@ describe("where an app appears", () => {
     expect(entries.find((entry) => entry.key === "provider:scalius.bangladesh:smsnetbd")?.to).toBe("/admin/settings/notifications");
     expect(entries.find((entry) => entry.key === "provider:scalius.bangladesh:pathao")?.to).toBe("/admin/settings/shipping");
     expect(entries.find((entry) => entry.key === "provider:scalius.bangladesh:fraudbd")?.to).toBe("/admin/settings/integrations");
+    expect(entries.find((entry) => entry.key === "provider:scalius.bangladesh:sslcommerz")?.to).toBe("/admin/settings/payments");
     // Its places page is a settings page; it has no app-wide settings, so no "App settings" entry.
     expect(entries.find((entry) => entry.key === "page:places")).toMatchObject({ group: "settings", to: "/admin/apps/scalius.bangladesh/pages/places" });
     expect(entries.some((entry) => entry.key === "settings")).toBe(false);

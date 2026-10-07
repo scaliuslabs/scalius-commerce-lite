@@ -24,7 +24,6 @@ import {
   getApiV1AdminSettingsSecurity,
   getApiV1AdminSettingsSecurityRuntimeSources,
   getApiV1AdminSettingsSms,
-  getApiV1AdminSettingsSslcommerz,
   getApiV1AdminSettingsStripe,
 } from "@scalius/api-client/sdk";
 import type {
@@ -102,12 +101,10 @@ export const paymentMethodsQuery = {
 };
 /** A gateway document as read: keys, flags and its `revision` (kept apart from the form values). */
 export type GatewayValues = Record<string, string | boolean | number>;
-export const gatewayQuery = (gateway: "stripe" | "sslcommerz") => ({
+/** Stripe's keys (other gateways are apps: their keys live in the app's settings). */
+export const gatewayQuery = (gateway: "stripe") => ({
   queryKey: queryKeys.settings.paymentGateway(gateway),
-  queryFn: async (): Promise<GatewayValues> =>
-    gateway === "stripe"
-      ? await apiData(getApiV1AdminSettingsStripe())
-      : await apiData(getApiV1AdminSettingsSslcommerz()),
+  queryFn: async (): Promise<GatewayValues> => await apiData(getApiV1AdminSettingsStripe()),
 });
 
 // ── Checkout ─────────────────────────────────────────────────────────────

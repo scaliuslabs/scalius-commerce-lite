@@ -2021,7 +2021,7 @@ describe("reviewed agent workflow resolver", () => {
       expect(Object.hasOwn(resolution.plan, "detail")).toBe(false);
       const serialized = JSON.stringify(resolution.plan);
       expect(serialized).toContain("explicit symbol");
-      expect(serialized).toContain("{enabled:true}");
+      expect(serialized).toContain("never write them");
       expect(serialized).toContain("keep/disable intent");
       expect(serialized).toContain("near/duplicate: ask");
       expect(serialized).toContain("revision-merge guest only");

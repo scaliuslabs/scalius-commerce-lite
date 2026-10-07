@@ -24,7 +24,8 @@ import {
 } from "@scalius/shared/order-channel";
 import { commerceCalendarDateKey } from "@scalius/shared/commerce-time";
 import { storeTimeZoneOf } from "../../../utils/store-time-zone";
-import { isPaymentMethodId } from "@scalius/core/modules/payments";
+import { isAppPaymentMethod, isPaymentMethodId, paymentMethodLabel, type PaymentProviders } from "@scalius/core/modules/payments";
+import { requestPaymentProviders } from "../../../plugins/providers/payment";
 import {
     type OrderPaymentRecoveryFilter,
     createOrdersCsvArtifactBuilder,
@@ -335,7 +336,10 @@ app.openapi(exportOrdersRoute, async (c) => {
     if (ids && ids.length > 100) throw new ValidationError("Export at most 100 selected orders at a time.");
     const maxRows = Math.min(query.maxRows, ORDER_EXPORT_MAX_ROWS);
     const effectiveSort: OrderListSort = exportSort(query.sort);
-    const csvBuilder = createOrdersCsvArtifactBuilder(query.format, storeTimeZoneOf(c.env));
+    // App methods are named by their providers, read once and only when a page has one.
+    let providers: PaymentProviders | null = null;
+    const csvBuilder = createOrdersCsvArtifactBuilder(query.format, storeTimeZoneOf(c.env), undefined,
+        (id) => (providers ?? null)?.label(id) ?? paymentMethodLabel(id));
     let exportedRows = 0;
     let after: string | undefined;
     // Rows remain beyond the file; the list's own total is only a capped count.
@@ -365,6 +369,7 @@ app.openapi(exportOrdersRoute, async (c) => {
             endDate: parseStoreDateOnlyBoundary(query.endDate, "end", storeTimeZoneOf(c.env)),
         });
         counted = { total: result.pagination.total, totalIsCapped: result.pagination.totalIsCapped };
+        if (!providers && result.orders.some((order) => isAppPaymentMethod(order.paymentMethod))) providers = await requestPaymentProviders(c);
         const details = await loadOrderExportDetails(db, result.orders.map((order) => order.id));
         for (const order of result.orders) {
             const detail = details.get(order.id);

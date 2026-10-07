@@ -144,7 +144,7 @@ export async function exportAnalyticsReportCsv(
   const report = analyticsReport(reportId);
   await assertReportAvailable(ctx, report, access);
   const params = resolveReportParams(report, query, ctx);
-  const builder = createReportCsvBuilder(report, ctx.currency);
+  const builder = createReportCsvBuilder(report, ctx.currency, undefined, ctx.paymentMethodName);
   let totalRows = 0;
   let exported = 0;
   let totals: ReportPage["totals"] | null = null;

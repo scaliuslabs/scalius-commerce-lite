@@ -19,7 +19,11 @@ describe("app payment method names", () => {
     const names = new Map([[BKASH, "bKash"]]);
     expect(appPaymentMethodName(BKASH, names)).toBe("bKash");
     expect(appPaymentMethodName("scalius.nagad:nagad", names)).toBe("Nagad");
-    expect(appPaymentMethodName("sslcommerz", names)).toBeNull();
+    expect(appPaymentMethodName("stripe", names)).toBeNull();
+    // SSLCommerz is the Bangladesh pack's: its old id reads as the pack's provider.
+    expect(appPaymentMethodName("sslcommerz", names)).toBe("SSLCommerz");
+    expect(appPaymentMethodName("sslcommerz", new Map([["scalius.bangladesh:sslcommerz", "SSLCommerz (pack)"]]))).toBe("SSLCommerz (pack)");
+    expect(appPaymentMethodName("scalius.bangladesh:sslcommerz")).toBe("SSLCommerz");
   });
 
   it("labels orders' methods: built-in words unchanged, an app by its provider, never the stored id", () => {

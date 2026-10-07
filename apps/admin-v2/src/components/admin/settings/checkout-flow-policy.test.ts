@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
     getCheckoutFlowPreviewIssues,
+    violatedAdvanceLimit,
     type CheckoutFlowIssue,
     type CheckoutFlowPreviewOptions,
 } from "./checkout-flow-policy";
@@ -27,8 +28,10 @@ const baseOptions: CheckoutFlowPreviewOptions = {
     paymentMethodsLoaded: true,
     codEnabled: true,
     activeOnlineMethodCount: 0,
-    sslCommerzEnabled: false,
 };
+
+/** The Bangladesh pack's SSLCommerz, as the payment-methods read lists its limits. */
+const SSLCOMMERZ_LIMIT = { method: "scalius.bangladesh:sslcommerz", currency: "BDT", min: 10, max: 500_000 };
 
 function issues(overrides: Partial<CheckoutFlowPreviewOptions>): CheckoutFlowIssue[] {
     return getCheckoutFlowPreviewIssues({
@@ -94,25 +97,26 @@ describe("checkout flow preview policy", () => {
             partialPaymentAmount: amount,
             codEnabled: true,
             activeOnlineMethodCount: 1,
-            sslCommerzEnabled: true,
-        })).toContain("sslRange");
+            advanceLimits: [SSLCOMMERZ_LIMIT],
+        })).toContain("advanceRange");
+        expect(violatedAdvanceLimit(amount, [SSLCOMMERZ_LIMIT])).toEqual(SSLCOMMERZ_LIMIT);
     });
 
     it("asks for whole taka in a BDT store and keeps decimals for other currencies", () => {
-        const advance = { checkoutMode: "all", partialPaymentEnabled: true, partialPaymentAmount: 99.5, codEnabled: true, activeOnlineMethodCount: 1, sslCommerzEnabled: false };
+        const advance = { checkoutMode: "all", partialPaymentEnabled: true, partialPaymentAmount: 99.5, codEnabled: true, activeOnlineMethodCount: 1 };
         expect(issues({ ...advance, wholeTaka: true })).toContain("wholeTaka");
         expect(issues({ ...advance, wholeTaka: true, partialPaymentAmount: 100 })).not.toContain("wholeTaka");
         expect(issues({ ...advance, wholeTaka: false })).not.toContain("wholeTaka");
     });
 
-    it.each([5, 500001])("does not apply SSLCommerz's BDT range to other online gateways (%s)", (amount) => {
+    it.each([5, 500001])("applies no range when the offered online gateways have no limits (%s)", (amount) => {
         expect(issues({
             checkoutMode: "all",
             partialPaymentEnabled: true,
             partialPaymentAmount: amount,
             codEnabled: false,
             activeOnlineMethodCount: 1,
-            sslCommerzEnabled: false,
+            advanceLimits: [],
         })).toEqual([]);
     });
 
@@ -140,7 +144,6 @@ describe("checkout flow preview policy", () => {
         { mode: "gateways_only", partial: false, amount: 0, methods: ["stripe"] },
         { mode: "guest_cod_only", partial: false, amount: 0, methods: ["cod"] },
         { mode: "all", partial: true, amount: 5, methods: ["stripe"] },
-        { mode: "all", partial: true, amount: 5, methods: ["sslcommerz"] },
         { mode: "guest_cod_only", partial: true, amount: 200, methods: ["cod"] },
     ])("matches server acceptance for $mode / $methods", ({ mode, partial, amount, methods }) => {
         const serverIssues = getCheckoutFlowValidationIssues({
@@ -155,7 +158,6 @@ describe("checkout flow preview policy", () => {
             partialPaymentAmount: amount,
             codEnabled: methods.includes("cod"),
             activeOnlineMethodCount: methods.filter((method) => method !== "cod").length,
-            sslCommerzEnabled: methods.includes("sslcommerz"),
         });
 
         expect(adminIssues.length === 0).toBe(serverIssues.length === 0);
@@ -167,7 +169,6 @@ describe("checkout flow preview policy", () => {
             [],
             ["cod"],
             ["stripe"],
-            ["sslcommerz"],
             ["cod", "stripe"],
         ];
         const advances = [
@@ -190,7 +191,6 @@ describe("checkout flow preview policy", () => {
                         partialPaymentAmount: advance.amount,
                         codEnabled: methods.includes("cod"),
                         activeOnlineMethodCount: methods.filter((method) => method !== "cod").length,
-                        sslCommerzEnabled: methods.includes("sslcommerz"),
                     });
 
                     expect({

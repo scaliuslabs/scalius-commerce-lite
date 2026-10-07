@@ -11,14 +11,11 @@ const sdk = vi.hoisted(() => ({
   getApiV1AdminSettingsCurrency: vi.fn(),
   getApiV1AdminSettingsPlatform: vi.fn(),
   getApiV1AdminSettingsStripe: vi.fn(),
-  getApiV1AdminSettingsSslcommerz: vi.fn(),
   postApiV1AdminSettingsStripe: vi.fn(),
-  postApiV1AdminSettingsSslcommerz: vi.fn(),
   postApiV1AdminSettingsPaymentMethods: vi.fn(),
   getApiV1AdminSettingsProviders: vi.fn(),
   postApiV1AdminSettingsProvidersByIdTest: vi.fn(),
   deleteApiV1AdminSettingsStripe: vi.fn(),
-  deleteApiV1AdminSettingsSslcommerz: vi.fn(),
 }));
 vi.mock("@scalius/api-client/sdk", () => sdk);
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
@@ -50,11 +47,9 @@ function methods(stripe: Record<string, unknown>) {
     defaultMethod: "cod",
     gateways: [
       { id: "stripe", label: "Stripe", checkoutName: "Card", flow: "card", pluginId: null, supportsRefund: true, chargeCurrencies: "any" },
-      { id: "sslcommerz", label: "SSLCommerz", checkoutName: "SSLCommerz", flow: "hosted", pluginId: null, supportsRefund: true, chargeCurrencies: ["BDT"] },
     ],
     gatewayStatus: {
       cod: status({ environment: "not_applicable", checkoutSelected: true }),
-      sslcommerz: status({ configured: false, enabled: false, usable: false, missingFields: ["storeId", "storePassword"], providerEnabled: false }),
       stripe: status(stripe),
     },
   };
@@ -124,7 +119,8 @@ describe("payment gateway setup", () => {
     await renderCard();
 
     expect(container.textContent).toContain("Needs publishable key and webhook secret");
-    expect(container.textContent).toContain("Needs store ID and store password");
+    // SSLCommerz is the Bangladesh pack's: no key form here.
+    expect(container.textContent).not.toContain("SSLCommerz");
   });
 
   it("saves some keys without turning Stripe on", async () => {

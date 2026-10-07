@@ -18,7 +18,6 @@ import {
   customerCountriesDocument,
   metaConversionsDocument,
   paymentMethodsDocument,
-  sslcommerzDocument,
   stripeDocument,
 } from "../settings";
 import type { CheckoutContactFieldSettings } from "./contact-fields";
@@ -63,7 +62,6 @@ const CHECKOUT_SETTINGS_DOCUMENTS = [
     metaConversionsDocument,
     paymentMethodsDocument,
     stripeDocument,
-    sslcommerzDocument,
 ];
 
 export interface StorefrontCheckoutAuthorityInput {

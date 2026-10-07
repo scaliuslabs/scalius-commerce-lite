@@ -116604,6 +116604,25 @@
                                     }
                                   }
                                 ]
+                              },
+                              "amountLimits": {
+                                "type": "object",
+                                "properties": {
+                                  "currency": {
+                                    "type": "string"
+                                  },
+                                  "min": {
+                                    "type": "number"
+                                  },
+                                  "max": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "currency",
+                                  "min",
+                                  "max"
+                                ]
                               }
                             },
                             "required": [
@@ -116622,58 +116641,6 @@
                           "type": "object",
                           "properties": {
                             "stripe": {
-                              "type": "object",
-                              "properties": {
-                                "configured": {
-                                  "type": "boolean"
-                                },
-                                "enabled": {
-                                  "type": "boolean"
-                                },
-                                "usable": {
-                                  "type": "boolean"
-                                },
-                                "missingFields": {
-                                  "type": "array",
-                                  "items": {
-                                    "type": "string"
-                                  }
-                                },
-                                "credentialErrors": {
-                                  "type": "array",
-                                  "items": {
-                                    "type": "string"
-                                  }
-                                },
-                                "blockedReason": {
-                                  "type": "string"
-                                },
-                                "providerEnabled": {
-                                  "type": "boolean"
-                                },
-                                "checkoutSelected": {
-                                  "type": "boolean"
-                                },
-                                "checkoutVisible": {
-                                  "type": "boolean"
-                                },
-                                "environment": {
-                                  "type": "string",
-                                  "enum": [
-                                    "test",
-                                    "live",
-                                    "mixed",
-                                    "unknown",
-                                    "not_applicable"
-                                  ]
-                                }
-                              },
-                              "required": [
-                                "configured",
-                                "enabled"
-                              ]
-                            },
-                            "sslcommerz": {
                               "type": "object",
                               "properties": {
                                 "configured": {
@@ -116780,7 +116747,6 @@
                           },
                           "required": [
                             "stripe",
-                            "sslcommerz",
                             "cod"
                           ],
                           "additionalProperties": {
@@ -117491,508 +117457,6 @@
         "responses": {
           "200": {
             "description": "Stripe keys removed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        true
-                      ]
-                    },
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "message": {
-                          "type": "string"
-                        },
-                        "revision": {
-                          "type": "integer",
-                          "minimum": 0
-                        }
-                      },
-                      "required": [
-                        "message",
-                        "revision"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "data"
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Conflict",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Rate limit exceeded",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "adminSession": []
-          },
-          {
-            "agentBearer": []
-          }
-        ],
-        "x-scalius-agent": {
-          "surface": "dashboard",
-          "exposure": "execute",
-          "principals": [
-            "admin"
-          ],
-          "risk": "destructive",
-          "openWorld": false,
-          "idempotency": "none",
-          "revision": "required",
-          "batch": "forbidden",
-          "transport": "json",
-          "maximumResponseBytes": 65536,
-          "maxRequestBytes": 1048576,
-          "sensitiveOutput": false,
-          "oneTimeSecretOutput": false
-        },
-        "x-scalius-rbac": {
-          "type": "permission",
-          "permission": "settings.general.edit"
-        }
-      }
-    },
-    "/api/v1/admin/settings/sslcommerz": {
-      "get": {
-        "operationId": "dashboard.payments.sslcommerz_get",
-        "tags": [
-          "Admin - Settings"
-        ],
-        "summary": "Get SSLCommerz settings",
-        "responses": {
-          "200": {
-            "description": "SSLCommerz settings",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        true
-                      ]
-                    },
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "revision": {
-                          "type": "integer",
-                          "minimum": 0
-                        },
-                        "storeId": {
-                          "type": "string"
-                        },
-                        "storePassword": {
-                          "type": "string"
-                        },
-                        "sandbox": {
-                          "type": "boolean"
-                        },
-                        "enabled": {
-                          "type": "boolean"
-                        }
-                      },
-                      "required": [
-                        "revision",
-                        "storeId",
-                        "storePassword",
-                        "sandbox",
-                        "enabled"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "data"
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Rate limit exceeded",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "adminSession": []
-          },
-          {
-            "agentBearer": []
-          }
-        ],
-        "x-scalius-agent": {
-          "surface": "dashboard",
-          "exposure": "execute",
-          "principals": [
-            "admin"
-          ],
-          "risk": "read",
-          "openWorld": false,
-          "idempotency": "none",
-          "revision": "none",
-          "batch": "parallel",
-          "transport": "json",
-          "maximumResponseBytes": 65536,
-          "maxRequestBytes": 1048576,
-          "sensitiveOutput": false,
-          "oneTimeSecretOutput": false
-        },
-        "x-scalius-rbac": {
-          "type": "permission",
-          "permission": "settings.general.view"
-        }
-      },
-      "post": {
-        "operationId": "dashboard.payments.sslcommerz_update",
-        "tags": [
-          "Admin - Settings"
-        ],
-        "summary": "Save SSLCommerz settings",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "expectedRevision": {
-                    "type": "integer",
-                    "minimum": 0
-                  },
-                  "storeId": {
-                    "type": "string"
-                  },
-                  "storePassword": {
-                    "type": "string"
-                  },
-                  "sandbox": {
-                    "type": "boolean"
-                  },
-                  "enabled": {
-                    "type": "boolean"
-                  }
-                },
-                "required": [
-                  "expectedRevision"
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "SSLCommerz settings saved",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean",
-                      "enum": [
-                        true
-                      ]
-                    },
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "message": {
-                          "type": "string"
-                        },
-                        "revision": {
-                          "type": "integer",
-                          "minimum": 0
-                        }
-                      },
-                      "required": [
-                        "message",
-                        "revision"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "success",
-                    "data"
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Conflict",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Rate limit exceeded",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Service unavailable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "adminSession": []
-          },
-          {
-            "agentBearer": []
-          }
-        ],
-        "x-scalius-agent": {
-          "surface": "dashboard",
-          "exposure": "execute",
-          "principals": [
-            "admin"
-          ],
-          "risk": "security",
-          "openWorld": false,
-          "idempotency": "none",
-          "revision": "required",
-          "batch": "forbidden",
-          "transport": "json",
-          "maximumResponseBytes": 65536,
-          "maxRequestBytes": 1048576,
-          "sensitiveOutput": false,
-          "oneTimeSecretOutput": false
-        },
-        "x-scalius-rbac": {
-          "type": "permission",
-          "permission": "settings.general.edit"
-        }
-      },
-      "delete": {
-        "operationId": "dashboard.payments.sslcommerz_remove",
-        "tags": [
-          "Admin - Settings"
-        ],
-        "summary": "Remove the saved SSLCommerz keys and turn SSLCommerz off",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "expectedRevision": {
-                    "type": "integer",
-                    "minimum": 0
-                  }
-                },
-                "required": [
-                  "expectedRevision"
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "SSLCommerz keys removed",
             "content": {
               "application/json": {
                 "schema": {
@@ -204922,18 +204386,6 @@
                           "alias": "stripeVisible"
                         },
                         {
-                          "pointer": "/sslcommerz/configured",
-                          "alias": "sslConfigured"
-                        },
-                        {
-                          "pointer": "/sslcommerz/usable",
-                          "alias": "sslUsable"
-                        },
-                        {
-                          "pointer": "/sslcommerz/checkoutVisible",
-                          "alias": "sslVisible"
-                        },
-                        {
                           "pointer": "/cod/configured",
                           "alias": "codConfigured"
                         },
@@ -205872,7 +205324,7 @@
           "dashboard.shipping_methods.list",
           "dashboard.checkout.flow_get",
           "dashboard.settings.currency_update",
-          "dashboard.payments.sslcommerz_update",
+          "dashboard.settings_providers.list",
           "dashboard.payments.methods_update",
           "dashboard.shipping_zones.create",
           "dashboard.shipping_zones.update",
@@ -205887,8 +205339,8 @@
         "rules": [
           "Dhaka time and mandatory phone stay fixed.",
           "BDT needs unlocked code, explicit symbol, positive USD rate; write/reread all or stop.",
-          "Set only {enabled:true} after configured/no-error SSLCommerz status; no secrets/sandbox. Reread usable; no charge proof.",
-          "Require keep/disable intent per payment and exact default; union COD/usable SSLCommerz into fresh enabledMethods. Never choose.",
+          "SSLCommerz is the Bangladesh pack's scalius.bangladesh:sslcommerz; its keys live in the pack's settings: never write them; list payment providers, usable only; no charge proof.",
+          "Require keep/disable intent per payment and exact default; union COD/usable scalius.bangladesh:sslcommerz into fresh enabledMethods. Never choose.",
           "Require zone name/places/charge name/fee/active and the charge for the rest of Bangladesh (the zone holding the whole of BD). One exact zone: update at its revision; none: create; near/duplicate: ask; never delete.",
           "Require readiness + active shipping/delivery hierarchy; revision-merge guest only. Failure: stop/reread/report partial; no rollback/retry. Never touch SEO/analytics; verify both audiences."
         ]
@@ -208054,7 +207506,7 @@
         ],
         "forbiddenOperationIds": [
           "dashboard.settings.currency_update",
-          "dashboard.payments.sslcommerz_update",
+          "dashboard.apps.settings_update",
           "dashboard.payments.methods_update",
           "dashboard.shipping_zones.create",
           "dashboard.shipping_zones.update",
@@ -208120,7 +207572,7 @@
         ],
         "forbiddenOperationIds": [
           "dashboard.settings.currency_update",
-          "dashboard.payments.sslcommerz_update",
+          "dashboard.apps.settings_update",
           "dashboard.payments.methods_update",
           "dashboard.shipping_zones.create",
           "dashboard.shipping_zones.update",
@@ -208276,7 +207728,7 @@
         ],
         "forbiddenOperationIds": [
           "dashboard.settings.currency_update",
-          "dashboard.payments.sslcommerz_update",
+          "dashboard.apps.settings_update",
           "dashboard.payments.methods_update",
           "dashboard.shipping_zones.create",
           "dashboard.shipping_zones.update",
@@ -208341,7 +207793,7 @@
         ],
         "forbiddenOperationIds": [
           "dashboard.settings.currency_update",
-          "dashboard.payments.sslcommerz_update",
+          "dashboard.apps.settings_update",
           "dashboard.payments.methods_update",
           "dashboard.shipping_zones.create",
           "dashboard.shipping_zones.update",
@@ -208401,7 +207853,7 @@
         ],
         "forbiddenOperationIds": [
           "dashboard.settings.currency_update",
-          "dashboard.payments.sslcommerz_update",
+          "dashboard.apps.settings_update",
           "dashboard.payments.methods_update",
           "dashboard.shipping_zones.create",
           "dashboard.shipping_zones.update",
@@ -208520,7 +207972,7 @@
         ],
         "forbiddenOperationIds": [
           "dashboard.settings.currency_update",
-          "dashboard.payments.sslcommerz_update",
+          "dashboard.apps.settings_update",
           "dashboard.payments.methods_update",
           "dashboard.shipping_zones.create",
           "dashboard.shipping_zones.update",
@@ -208584,7 +208036,7 @@
         ],
         "forbiddenOperationIds": [
           "dashboard.settings.currency_update",
-          "dashboard.payments.sslcommerz_update",
+          "dashboard.apps.settings_update",
           "dashboard.payments.methods_update",
           "dashboard.shipping_zones.create",
           "dashboard.shipping_zones.update",
@@ -208646,7 +208098,7 @@
         ],
         "forbiddenOperationIds": [
           "dashboard.settings.currency_update",
-          "dashboard.payments.sslcommerz_update",
+          "dashboard.apps.settings_update",
           "dashboard.payments.methods_update",
           "dashboard.shipping_zones.create",
           "dashboard.shipping_zones.update",
@@ -208713,7 +208165,7 @@
         ],
         "forbiddenOperationIds": [
           "dashboard.settings.currency_update",
-          "dashboard.payments.sslcommerz_update",
+          "dashboard.apps.settings_update",
           "dashboard.payments.methods_update",
           "dashboard.shipping_zones.create",
           "dashboard.shipping_zones.update",
@@ -208777,7 +208229,7 @@
         ],
         "forbiddenOperationIds": [
           "dashboard.settings.currency_update",
-          "dashboard.payments.sslcommerz_update",
+          "dashboard.apps.settings_update",
           "dashboard.payments.methods_update",
           "dashboard.shipping_zones.create",
           "dashboard.shipping_zones.update",
@@ -208843,7 +208295,7 @@
         ],
         "forbiddenOperationIds": [
           "dashboard.settings.currency_update",
-          "dashboard.payments.sslcommerz_update",
+          "dashboard.apps.settings_update",
           "dashboard.payments.methods_update",
           "dashboard.shipping_zones.create",
           "dashboard.shipping_zones.update",
@@ -209601,7 +209053,7 @@
         ],
         "forbiddenOperationIds": [
           "dashboard.settings.currency_update",
-          "dashboard.payments.sslcommerz_update",
+          "dashboard.apps.settings_update",
           "dashboard.payments.methods_update",
           "dashboard.shipping_zones.create",
           "dashboard.shipping_zones.update",
@@ -209718,7 +209170,7 @@
         ],
         "forbiddenOperationIds": [
           "dashboard.settings.currency_update",
-          "dashboard.payments.sslcommerz_update",
+          "dashboard.apps.settings_update",
           "dashboard.payments.methods_update",
           "dashboard.shipping_zones.create",
           "dashboard.shipping_zones.update",
@@ -213048,30 +212500,6 @@
           ]
         },
         {
-          "operationId": "dashboard.payments.sslcommerz_get",
-          "surface": "dashboard",
-          "mode": "operation-fallback",
-          "workflowIds": [
-            "operation.dashboard.payments.sslcommerz_get"
-          ]
-        },
-        {
-          "operationId": "dashboard.payments.sslcommerz_remove",
-          "surface": "dashboard",
-          "mode": "operation-fallback",
-          "workflowIds": [
-            "operation.dashboard.payments.sslcommerz_remove"
-          ]
-        },
-        {
-          "operationId": "dashboard.payments.sslcommerz_update",
-          "surface": "dashboard",
-          "mode": "curated",
-          "workflowIds": [
-            "dashboard.bangladesh-checkout-supported-setup"
-          ]
-        },
-        {
           "operationId": "dashboard.payments.stripe_get",
           "surface": "dashboard",
           "mode": "curated",
@@ -213464,6 +212892,7 @@
           "surface": "dashboard",
           "mode": "curated",
           "workflowIds": [
+            "dashboard.bangladesh-checkout-supported-setup",
             "dashboard.delivery-provider"
           ]
         },

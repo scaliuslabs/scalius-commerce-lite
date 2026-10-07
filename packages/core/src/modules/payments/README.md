@@ -16,11 +16,12 @@ payment and refund facts are `../orders`'.
 Every gateway implements the shared payment port
 (`@scalius/shared/plugins/providers`, `PAYMENT_PORT`) through `PaymentGateway`
 in `gateways/port.ts`: each operation takes its port input and a call context
-(`{ settings, signal }`). Built-in gateways (Stripe, SSLCommerz) are adapter
-files listed in `BUILT_IN_GATEWAYS`; app payment providers
-(`<plugin id>:<provider id>`, e.g. `scalius.bkash:bkash`) are built per request
-by the API (`apps/api/src/plugins/providers/payment.ts`) and run through the
-plugin host in either loader.
+(`{ settings, signal }`). The built-in gateway (Stripe) is an adapter file
+listed in `BUILT_IN_GATEWAYS`; app payment providers
+(`<plugin id>:<provider id>`: `scalius.bkash:bkash`, the Bangladesh pack's
+`scalius.bangladesh:sslcommerz`) are built per request by the API
+(`apps/api/src/plugins/providers/payment.ts`) and run through the plugin host
+in either loader. Cash on delivery is not a gateway.
 
 - `PaymentProviders` (`gateways/registry.ts`) is one request's catalog:
   lookups, labels, currency eligibility and the pre-commit amount checks.
@@ -32,7 +33,19 @@ plugin host in either loader.
 - `gateways/identity.ts` says what a stored id means without loading any
   adapter: built-in ids, qualified app ids (still online after the app is
   removed, so recovery and refunds fail closed instead of misclassifying),
-  COD and the gift-card tender.
+  retired built-in ids, COD and the gift-card tender.
+- A retired built-in id (`sslcommerz`, on orders and payments made before
+  SSLCommerz moved into the Bangladesh pack;
+  `integrations/retired-providers.ts`) resolves to the app provider that
+  replaced it: `get()`, labels, refunds, reconciliation and the old callback
+  URLs (`/webhooks/sslcommerz`, `/payment/sslcommerz/*`) reach the pack's
+  gateway. While the app is not active it resolves to a stand-in that fails
+  closed with "Activate Bangladesh pack in Apps to use it." (never offered,
+  callbacks answer 503, refunds stop before any provider call).
+  `paymentMethodAliases()` lets an order filter find both ids. The pack's
+  activation moves the old `sslcommerz` document into its settings and
+  repoints the checkout choice and the payments still under way
+  (`retired-gateways.ts`); settled orders keep the old id.
 
 ### Adding a built-in gateway
 
@@ -52,7 +65,13 @@ gateway; the kernel suites in `gateways/gateway-kernel.test.ts` and
 - `readiness()` fails closed: missing, unreadable, or placeholder credentials
   are not configured. Adapters never call a provider with unreadable secrets.
 - `verifyWebhook` / `verifyReturn` authenticate before any state change
-  (Stripe: signature; SSLCommerz: server-to-server `val_id` validation).
+  (Stripe: signature; the pack's SSLCommerz: server-to-server `val_id`
+  validation).
+- A hosted provider whose failed or cancelled return posts the merchant
+  reference unsigned declares the form field (`returnCorrelationField`:
+  SSLCommerz's `tran_id`); the platform releases the attempt it names
+  without calling the app. A success return always goes through
+  `verifyReturn`.
   Callback fields are expectations, never authority.
 - A provider fact reached through a webhook and a buyer return yields the same
   `eventType` + `eventId`, so `webhook_events` claims it once.
@@ -84,11 +103,12 @@ gateway; the kernel suites in `gateways/gateway-kernel.test.ts` and
 ## Storage
 
 `order_payments.payment_method` is the provider id. `provider_ref` is the
-provider's unique payment reference (Stripe PaymentIntent, SSLCommerz
-`val_id`); `UNIQUE(payment_method, provider_ref)` makes a replayed or racing
-confirmation credit an order at most once. `provider_secondary_ref` is the
-captured-transaction reference refunds use (Stripe charge, SSLCommerz
-`bank_tran_id`). Refund rows never carry a `provider_ref`.
+provider's unique payment reference (Stripe PaymentIntent, the pack
+SSLCommerz's `val_id`); `UNIQUE(payment_method, provider_ref)` makes a
+replayed or racing confirmation credit an order at most once.
+`provider_secondary_ref` is the captured-transaction reference refunds use
+(Stripe charge, SSLCommerz `bank_tran_id`). Refund rows never carry a
+`provider_ref`.
 
 Every row also records settlement (migration 0111, MARKETS-DESIGN D2):
 `settlement_currency`, `settlement_amount_minor`, `settlement_rate` (a decimal
