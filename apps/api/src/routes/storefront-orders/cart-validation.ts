@@ -48,7 +48,7 @@ import {
 import { readMasterSecret } from "@scalius/shared/runtime-secrets";
 import type { Database } from "@scalius/database/client";
 import type { StorefrontGiftCardIssue } from "@scalius/core/modules/orders";
-import type { StoreCurrencyRate } from "@scalius/shared/presentment";
+import { shopPresentment, type StoreCurrencyRate } from "@scalius/shared/presentment";
 
 const app = new OpenAPIHono<{ Bindings: Env }>();
 
@@ -264,7 +264,7 @@ app.openapi(cartValidationRoute, async (c) => {
       delivery,
       apps,
       // Apps see the cart in its currency (its market's).
-      currency: { code: result.money.currencyCode, decimalPlaces: result.money.decimalPlaces },
+      currency: { code: money.currencyCode, decimalPlaces: money.decimalPlaces },
       customerId: session?.customerId ?? null,
       channel: "online_store",
     });
@@ -282,17 +282,18 @@ app.openapi(cartValidationRoute, async (c) => {
     },
   });
   // The cart's currency: its market's (MARKETS-DESIGN step 6).
-  const decimalPlaces = result.money.decimalPlaces;
+  const money = result.money ?? shopPresentment({ code: currency.code, decimalPlaces: currency.decimalPlaces, priceIncrementMinor: currency.priceIncrementMinor });
+  const decimalPlaces = money.decimalPlaces;
   const giftCardIssues = await giftCardHandleIssues(
     db,
     (data.giftCards ?? []).map((card) => card.handle),
     readMasterSecret(c.env),
-    result.money.currencyCode,
-    giftCardTenderRates(result.money),
+    money.currencyCode,
+    giftCardTenderRates(money),
   );
   const propertiesHashes = await storefrontLinePropertiesHashes(result);
   const cartOnly = summarizeStorefrontCartFulfilment(result, null);
-  const cartOnlyPayment = resolveCartPaymentMethods(paymentMethods.enabledMethods, cartOnly, null, paymentProviders, result.money.currencyCode);
+  const cartOnlyPayment = resolveCartPaymentMethods(paymentMethods.enabledMethods, cartOnly, null, paymentProviders, money.currencyCode);
   // Delivery is priced once a method is chosen: a pickup rate needs no
   // address, a delivery rate needs city and zone.
   const wantsDelivery = Boolean(data.shippingMethodId) || Boolean(data.city && data.zone);
@@ -331,7 +332,7 @@ app.openapi(cartValidationRoute, async (c) => {
       delivery.fulfilment,
       delivery.address?.countryCode ?? null,
       paymentProviders,
-      result.money.currencyCode,
+      money.currencyCode,
     ),
     giftCardIssues,
     ...(delivery.kind && delivery.shippingMethod

@@ -424,6 +424,7 @@ const orderRecommendations = order && showsSuccessHero && !statusView
     data-checkout-finalize-id={currentCheckoutFinalizeMarker?.checkoutId ?? undefined}
     data-checkout-finalize-cart-hash={currentCheckoutFinalizeMarker?.cartFingerprintHash ?? undefined}
     data-order-id={order?.id}
+    data-order-currency={receiptCurrencyCode}
     data-payment-method={order?.paymentMethod}
     data-order-updated-at={order?.updatedAt ?? undefined}
   >
@@ -972,7 +973,8 @@ const orderRecommendations = order && showsSuccessHero && !statusView
               quantity: item.quantity,
               item_price: item.price,
             })),
-            currency: window.__CURRENCY_CODE__ || "BDT",
+            // The order's currency (a market's own, MARKETS-DESIGN step 6), not the page's.
+            currency: mainElement.dataset.orderCurrency || window.__CURRENCY_CODE__ || "BDT",
             num_items: orderItems.reduce(
               (sum, item) => sum + item.quantity,
               0

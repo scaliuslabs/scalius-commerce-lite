@@ -12,6 +12,7 @@ import {
 } from "@/lib/checkout/tax-quote-contract";
 import { fromMinor, toMinor } from "@scalius/shared/money";
 import { getCurrencyCode, getDecimalPlaces } from "@/lib/currency";
+import { currentPresence } from "@/lib/presence-url";
 
 interface DiscountPreviewItem {
   id: string;
@@ -39,6 +40,8 @@ export interface DiscountPreviewBody {
   shippingCost?: number;
   customerPhone?: string;
   items: DiscountPreviewItem[];
+  /** The page's presence: its market's currency prices the preview (MARKETS-DESIGN step 6). */
+  presence?: string;
 }
 
 export function buildDiscountPreviewBody(
@@ -61,6 +64,7 @@ export function buildDiscountPreviewBody(
     }),
     ...(shippingCost !== undefined ? { shippingCost } : {}),
     ...(customerPhone ? { customerPhone } : {}),
+    ...(typeof document !== "undefined" && currentPresence() ? { presence: currentPresence()! } : {}),
   };
 }
 

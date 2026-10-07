@@ -26,10 +26,16 @@ import { orderStateMatrix } from "./order-state-matrix.fixture";
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 vi.mock("~/hooks/use-currency", () => ({
-  useCurrency: () => ({ fmt: (n: number) => `৳${n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` }),
+  useCurrency: () => ({
+    fmt: (n: number) => `৳${n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+    fmtIn: (n: number) => `৳${n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+  }),
 }));
 vi.mock("@/hooks/use-currency", () => ({
-  useCurrency: () => ({ fmt: (n: number) => `৳${n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` }),
+  useCurrency: () => ({
+    fmt: (n: number) => `৳${n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+    fmtIn: (n: number) => `৳${n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+  }),
 }));
 vi.mock("~/hooks/use-order-action-permissions", () => ({ useOrderActionPermissions: () => ({ canViewFraudCheck: true }) }));
 

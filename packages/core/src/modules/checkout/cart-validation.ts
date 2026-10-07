@@ -838,12 +838,15 @@ export function bundleLineSavings<TLine extends BundlePricedLine>(
 export async function previewStorefrontBundleSavings<TLine extends BundlePricedLine>(
     db: Database,
     lines: readonly TLine[],
-    /** The store's price increment. */
+    /** The cart currency's price increment. */
     priceIncrementMinor: number,
+    /** A cart in a market's own currency: fixed tier prices convert into it. */
+    money?: PresentmentMoney | null,
 ): Promise<{ lineSavings: Map<TLine, number>; bundles: StorefrontCartBundleSaving[] }> {
     const productIds = [...new Set(lines.map((line) => line.productId))];
     const bundleRows = productIds.length > 0 ? await selectActiveProductBundleRows(db, productIds) : [];
-    return bundleLineSavings(lines, (bundleRows ?? []) as ProductBundleRow[], priceIncrementMinor);
+    const rows = (bundleRows ?? []) as ProductBundleRow[];
+    return bundleLineSavings(lines, money ? presentBundleRows(rows, money) : rows, priceIncrementMinor);
 }
 
 export async function validateStorefrontCartItems(

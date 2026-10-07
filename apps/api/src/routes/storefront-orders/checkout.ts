@@ -543,7 +543,9 @@ app.openapi(createOrderRoute, async (c) => {
       paymentProviders,
     );
     // A gateway must charge the order's currency: its market's (MARKETS-DESIGN step 6).
-    assertGatewayCurrencyReadiness(data, cartValidation.money.currencyCode, paymentProviders);
+    // (A cart validated before step 6 carries no money: the authority's shop currency.)
+    const orderCurrencyCode = cartValidation.money?.currencyCode ?? currency.currencyCode;
+    assertGatewayCurrencyReadiness(data, orderCurrencyCode, paymentProviders);
     diagnostics?.mark("policy");
 
     // This remains memory-only until the authoritative order batch. The
@@ -610,7 +612,7 @@ app.openapi(createOrderRoute, async (c) => {
       result.giftCardTender.amountDueMinor,
       result.taxQuote.currencyCode,
       result.giftCardTender.appliedTotalMinor > 0,
-      cartValidation.money.currencyCode !== cartValidation.money.shopCurrencyCode,
+      orderCurrencyCode !== currency.currencyCode,
     );
     diagnostics?.mark("prepare");
 

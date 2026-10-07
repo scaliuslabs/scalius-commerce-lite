@@ -52,6 +52,8 @@ vi.mock("@scalius/core/modules/markets", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@scalius/core/modules/markets")>();
   return {
     ...actual,
+    // No market sells in its own currency, so the shop currency can change.
+    listOwnMarketCurrencies: async () => [],
     readStoreCurrency: async (db: unknown) => {
       const currency = await mocks.getCurrencySettings(db);
       return { ...actual.storeCurrencyOf(currency, currency.priceIncrementMinor), symbol: currency.currencySymbol };
