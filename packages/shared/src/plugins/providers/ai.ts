@@ -1,47 +1,50 @@
-// The AI port: a model an app connects (the store's own key, the app's
-// settings) that drafts content for the merchant to review. The platform
-// has no built-in provider and no key of its own; an app provides one.
+// The AI port: the platform's one general port for generated text and
+// structured data. Core has no model, no vendor and no key: an app provides
+// the port (the store's own key in the app's settings, or a model the app
+// runs itself).
 //
-// `draftSections` turns the merchant's words into theme sections for the
-// theme editor's "Draft with AI": the host sends the section types the page
-// may use, each with its settings' JSON Schema, and validates every section
-// the provider returns against the theme's own section schemas. An invalid
-// section never reaches the draft, and nothing the provider returns is saved
-// until the merchant's editor saves it (marked as an AI draft until opened).
+// `generate` takes host-written instructions, the merchant's words and a
+// JSON Schema, and returns one JSON value that should match the schema. The
+// host never trusts the answer: each consumer validates the value against
+// its own schemas before it uses it, and nothing generated is saved until
+// the merchant saves it.
+//
+// Consumers name themselves in `purpose`. The first is `theme.sections`
+// (the theme editor's "Draft with AI"). Product descriptions, SEO fields,
+// alt text, inbox replies and analytics questions are planned on the same
+// port, and the `translation` kind is to fold into it.
 
 import { z } from "zod";
 
-/** Most sections one draft returns. */
-export const AI_DRAFT_SECTIONS_MAX = 8;
-export const AI_DRAFT_PROMPT_MAX = 2_000;
+export const AI_GENERATE_PROMPT_MAX = 4_000;
+export const AI_GENERATE_INSTRUCTIONS_MAX = 8_000;
 
-export const aiDraftSectionsInputSchema = z.object({
+/** A consumer's name: `theme.sections`, `product.description`, … */
+export const aiPurposeSchema = z.string().regex(/^[a-z][a-z0-9_-]{0,30}(\.[a-z][a-z0-9_-]{0,30}){0,3}$/);
+
+export const aiGenerateInputSchema = z.object({
+  /** Which consumer asks (for the provider's routing, limits and logs). */
+  purpose: aiPurposeSchema,
+  /** What the host asks for and the rules of the answer (host-written, never the merchant's). */
+  instructions: z.string().trim().min(1).max(AI_GENERATE_INSTRUCTIONS_MAX),
   /** What the merchant asked for, in their words. */
-  prompt: z.string().trim().min(1).max(AI_DRAFT_PROMPT_MAX),
-  /** The store language the words should be in (ISO 639-1). */
+  prompt: z.string().trim().min(1).max(AI_GENERATE_PROMPT_MAX),
+  /** The language the words of the answer should be in (ISO 639-1). */
   locale: z.string().regex(/^[a-z]{2}$/),
-  /** The page the sections are for. */
-  page: z.enum(["home", "landing", "product", "collection", "cart", "page"]),
-  /** Most sections to return. */
-  limit: z.number().int().min(1).max(AI_DRAFT_SECTIONS_MAX),
-  /** The section types the page may use: each with what it is for and its settings' JSON Schema. */
-  sectionTypes: z.array(z.object({
-    type: z.string().min(1).max(40),
-    description: z.string().max(300),
-    settings: z.record(z.string(), z.unknown()),
-  }).strict()).min(1).max(40),
+  /** A JSON Schema (draft 2020-12) the answer's `value` must match. */
+  schema: z.record(z.string(), z.unknown()),
+  /** Most output tokens the host wants spent (the provider may use fewer). */
+  maxOutputTokens: z.number().int().min(16).max(32_000).optional(),
 }).strict();
 
-export const aiDraftSectionsOutputSchema = z.object({
-  /** Each `{ type, settings }` (an `id` is optional: the host assigns one). */
-  sections: z.array(z.record(z.string(), z.unknown())).max(AI_DRAFT_SECTIONS_MAX),
-  /** One short line for the merchant (what the draft did, what to check). */
-  note: z.string().max(500).optional(),
+export const aiGenerateOutputSchema = z.object({
+  /** The answer: one JSON value meant to match the input's schema (the host validates it). */
+  value: z.unknown(),
 }).strict();
 
 export const AI_PORT = {
-  draftSections: { input: aiDraftSectionsInputSchema, output: aiDraftSectionsOutputSchema },
+  generate: { input: aiGenerateInputSchema, output: aiGenerateOutputSchema },
 } as const;
 
-export type AiDraftSectionsInput = z.infer<typeof aiDraftSectionsInputSchema>;
-export type AiDraftSectionsOutput = z.infer<typeof aiDraftSectionsOutputSchema>;
+export type AiGenerateInput = z.infer<typeof aiGenerateInputSchema>;
+export type AiGenerateOutput = z.infer<typeof aiGenerateOutputSchema>;

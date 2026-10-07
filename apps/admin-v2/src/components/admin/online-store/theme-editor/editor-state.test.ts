@@ -5,6 +5,7 @@ import {
   STOREFRONT_MAX_SECTIONS,
   storefrontSectionDefault,
   storefrontThemeDocumentSchema,
+  storefrontVisibleSection,
   type StorefrontSection,
   type StorefrontSectionType,
   type StorefrontThemeDocument,
@@ -12,20 +13,33 @@ import {
 import type { ThemeApp, ThemeAppSettingField } from "~/lib/api-query-options/online-store";
 import {
   HISTORY_COALESCE_MS,
-  addAppSection,
-  addSection,
+  addBlock,
+  addBlockedReason,
+  appSectionInvalid,
   appSectionsByKey,
-  appSectionsInvalid,
+  blockList,
   canAddSectionType,
+  canRemoveBlock,
   changedLeaf,
+  draftedSections,
+  duplicateBlock,
   duplicateSection,
   editorHistory,
-  moveSectionTo,
-  previewChange,
+  fromPageItems,
+  insertItem,
+  mapSection,
+  moveBlock,
+  moveItem,
+  newAppSection,
+  newSection,
+  pageItems,
+  removeBlock,
   removeSection,
-  restoreSection,
-  setAppSectionValues,
   startHistory,
+  toggleBlockHidden,
+  unopenedAiSections,
+  withoutAiMark,
+  type PageItem,
 } from "./editor-state";
 
 type Theme = StorefrontThemeDocument;
@@ -37,14 +51,16 @@ const HOME = [section("hero", "hero"), section("product-rail", "rail", { title: 
 const withSections = (base: Theme, home: StorefrontSection[]): Theme => ({ ...base, pages: { ...base.pages, home } });
 const theme = (home: StorefrontSection[] = HOME): Theme => withSections(DEFAULT_STOREFRONT_THEME, home);
 const ids = (sections: readonly StorefrontSection[]) => sections.map((each) => each.id);
+const itemIds = (items: readonly PageItem[]) => items.map((item) => item.kind === "fixed" ? "<main>" : item.section.id);
 const setTitle = (title: string) => (current: Theme) => withSections(current, current.pages.home.map((each) =>
   each.id === "rail" ? { ...each, settings: { ...each.settings, title } } as StorefrontSection : each));
+const homeItems = pageItems(HOME, null);
 
 describe("editor history", () => {
   it("undoes and redoes edits; a new edit drops the redo branch", () => {
     let state = startHistory(theme());
     state = editorHistory(state, { type: "edit", update: setTitle("A"), at: 0 });
-    state = editorHistory(state, { type: "edit", update: (current) => withSections(current, moveSectionTo(current.pages.home, 2, 0)), at: 5_000 });
+    state = editorHistory(state, { type: "edit", update: (current) => withSections(current, moveItem(current.pages.home, 2, 0)), at: 5_000 });
     expect(ids(state.present.pages.home)).toEqual(["faq", "hero", "rail"]);
     state = editorHistory(state, { type: "undo" });
     expect(ids(state.present.pages.home)).toEqual(["hero", "rail", "faq"]);
@@ -80,53 +96,140 @@ describe("editor history", () => {
   it("finds the one value an edit changed", () => {
     const before = theme();
     expect(changedLeaf(before, setTitle("A")(before))).toBe("pages.home.1.settings.title");
-    expect(changedLeaf(before, withSections(before, moveSectionTo(before.pages.home, 0, 2)))).toBeNull();
+    expect(changedLeaf(before, withSections(before, moveItem(before.pages.home, 0, 2)))).toBeNull();
     expect(changedLeaf(before, before)).toBeNull();
   });
-});
 
-describe("homepage section operations", () => {
-  it("moves a section to another place, and leaves the list alone out of range", () => {
-    expect(ids(moveSectionTo(HOME, 0, 2))).toEqual(["rail", "faq", "hero"]);
-    expect(ids(moveSectionTo(HOME, 2, 0))).toEqual(["faq", "hero", "rail"]);
-    expect(ids(moveSectionTo(HOME, 0, 5))).toEqual(["hero", "rail", "faq"]);
+  it("drops an AI mark from every step once the section is opened, so undo never brings it back", () => {
+    const drafted = { ...section("faq", "faq-2"), aiDraft: true } as StorefrontSection;
+    let state = startHistory(theme());
+    state = editorHistory(state, { type: "edit", update: (current) => withSections(current, [...current.pages.home, drafted]), at: 0 });
+    state = editorHistory(state, { type: "edit", update: setTitle("A"), at: 5_000 });
+    expect(unopenedAiSections(state.present).map((each) => each.id)).toEqual(["faq-2"]);
+    state = editorHistory(state, { type: "opened", id: "faq-2" });
+    expect(unopenedAiSections(state.present)).toEqual([]);
+    state = editorHistory(state, { type: "undo" });
+    expect(ids(state.present.pages.home)).toContain("faq-2");
+    expect(unopenedAiSections(state.present)).toEqual([]);
+    // Opening a section without a mark changes nothing.
+    expect(editorHistory(state, { type: "opened", id: "hero" })).toBe(state);
   });
 
+  it("finds AI marks on landing pages and templates too", () => {
+    const marked = { ...section("faq", "faq"), aiDraft: true } as StorefrontSection;
+    const base = theme();
+    const document: Theme = {
+      ...base,
+      pages: {
+        ...base.pages,
+        landing: { sale: { title: "Sale", description: "", sections: [marked] } },
+        templates: { ...base.pages.templates, cart: { sections: [{ ...marked, id: "faq-cart" } as StorefrontSection], main: 0 } },
+      },
+    };
+    expect(unopenedAiSections(document).map((each) => each.id)).toEqual(["faq", "faq-cart"]);
+    expect(unopenedAiSections(withoutAiMark(document, "faq-cart")).map((each) => each.id)).toEqual(["faq"]);
+    // Unchanged lists keep their identity.
+    expect(withoutAiMark(document, "nothing")).toBe(document);
+  });
+});
+
+describe("a page's items", () => {
+  it("puts a template's fixed part at its place and reads it back", () => {
+    const items = pageItems(HOME, 1);
+    expect(itemIds(items)).toEqual(["hero", "<main>", "rail", "faq"]);
+    expect(fromPageItems(moveItem(items, 1, 3))).toEqual({ sections: HOME, main: 3 });
+    expect(fromPageItems(homeItems)).toEqual({ sections: HOME, main: null });
+    // A place past the end is the end.
+    expect(itemIds(pageItems(HOME, 9))).toEqual(["hero", "rail", "faq", "<main>"]);
+  });
+
+  it("moves an item, and leaves the list alone out of range", () => {
+    expect(moveItem(["hero", "rail", "faq"], 0, 2)).toEqual(["rail", "faq", "hero"]);
+    expect(moveItem(["hero", "rail", "faq"], 2, 0)).toEqual(["faq", "hero", "rail"]);
+    expect(moveItem(["hero", "rail", "faq"], 0, 5)).toEqual(["hero", "rail", "faq"]);
+  });
+});
+
+describe("sections", () => {
   it("adds and duplicates under free ids, one hero per page, at most 24 sections", () => {
-    const added = addSection(HOME, "faq", 0);
-    expect(added.id).toBe("faq-2");
-    expect(ids(added.sections)).toEqual(["hero", "faq-2", "rail", "faq"]);
-    const copy = duplicateSection(HOME, "rail")!;
-    expect(ids(copy.sections)).toEqual(["hero", "rail", "product-rail", "faq"]);
-    expect(copy.sections[2]!.settings).toEqual(HOME[1]!.settings);
-    expect(duplicateSection(HOME, "hero")).toBeNull();
+    const faq = newSection("faq", HOME);
+    expect(faq.id).toBe("faq-2");
+    expect(itemIds(insertItem(homeItems, faq, 1))).toEqual(["hero", "faq-2", "rail", "faq"]);
+    const copy = duplicateSection(homeItems, "rail")!;
+    expect(copy.id).toBe("product-rail");
+    expect(itemIds(copy.items)).toEqual(["hero", "rail", "product-rail", "faq"]);
+    expect(fromPageItems(copy.items).sections[2]!.settings).toEqual(HOME[1]!.settings);
+    expect(duplicateSection(homeItems, "hero")).toBeNull();
     expect(canAddSectionType(HOME, "hero")).toBe(false);
+    expect(addBlockedReason(HOME, "hero")).toBe("one-hero");
+    expect(addBlockedReason(HOME, "faq")).toBeNull();
     const full = Array.from({ length: STOREFRONT_MAX_SECTIONS }, (_, index) => section("faq", `faq-${index}`));
     expect(canAddSectionType(full, "faq")).toBe(false);
+    expect(addBlockedReason(full, "faq")).toBe("limit");
   });
 
-  it("removes a section and puts it back where it was", () => {
-    const removed = removeSection(HOME, "rail")!;
-    expect(ids(removed.sections)).toEqual(["hero", "faq"]);
-    expect(ids(restoreSection(removed.sections, removed.removed, removed.index))).toEqual(["hero", "rail", "faq"]);
-    // Restoring twice never duplicates an id.
-    expect(ids(restoreSection(HOME, removed.removed, removed.index))).toEqual(["hero", "rail", "faq"]);
+  it("never copies an AI mark", () => {
+    const items = pageItems([{ ...section("faq", "faq"), aiDraft: true } as StorefrontSection], null);
+    const copy = duplicateSection(items, "faq")!;
+    expect(fromPageItems(copy.items).sections[1]!.aiDraft).toBeUndefined();
+  });
+
+  it("removes a section with what Undo needs, and keeps a template's fixed part", () => {
+    const removed = removeSection(pageItems(HOME, 1), "rail")!;
+    expect(itemIds(removed.items)).toEqual(["hero", "<main>", "faq"]);
+    expect(removed.removed.id).toBe("rail");
+    expect(removed.index).toBe(2);
+    expect(removeSection(homeItems, "missing")).toBeNull();
+  });
+
+  it("replaces one section by id and leaves the others alone", () => {
+    const items = mapSection(homeItems, "rail", (each) => ({ ...each, hidden: true }) as StorefrontSection);
+    expect(fromPageItems(items).sections[1]!.hidden).toBe(true);
+    expect(items[0]).toBe(homeItems[0]);
+  });
+
+  it("makes AI-drafted sections the page's own: fresh ids, marked", () => {
+    const added = draftedSections([section("faq", "faq"), section("faq", "faq")], HOME);
+    expect(added.map((each) => [each.id, each.aiDraft])).toEqual([["faq-2", true], ["faq-3", true]]);
   });
 });
 
-describe("what a saved change means for the preview", () => {
-  it("swaps the sections whose settings changed", () => {
-    expect(previewChange(theme(), setTitle("A")(theme()))).toEqual({ kind: "sections", ids: ["rail"] });
-    expect(previewChange(theme(), theme())).toEqual({ kind: "none" });
+describe("blocks", () => {
+  const faq = section("faq", "faq", { items: [{ question: "Shipping?", answer: "Two days." }] });
+  const tabs = storefrontSectionDefault("product-tabs", "tabs") as StorefrontSection;
+
+  it("adds, duplicates, moves and removes the items of a block list", () => {
+    const added = addBlock(faq, "items")!;
+    expect(blockList(added, "items")).toHaveLength(2);
+    const copied = duplicateBlock(faq, "items", 0)!;
+    expect(blockList(copied, "items")).toEqual([blockList(faq, "items")[0], blockList(faq, "items")[0]]);
+    const edited = { ...copied, settings: { ...copied.settings, items: [{ question: "A?", answer: "a" }, { question: "B?", answer: "b" }] } } as StorefrontSection;
+    expect(blockList(moveBlock(edited, "items", 1, 0), "items").map((item) => (item as { question: string }).question)).toEqual(["B?", "A?"]);
+    expect(blockList(removeBlock(edited, "items", 0), "items")).toEqual([{ question: "B?", answer: "b" }]);
+    expect(duplicateBlock(faq, "items", 5)).toBeNull();
   });
 
-  it("reloads for order, added or removed sections, home mode, tokens, blocks and brand", () => {
-    const base = theme();
-    expect(previewChange(base, withSections(base, moveSectionTo(HOME, 0, 1)))).toEqual({ kind: "reload" });
-    expect(previewChange(base, withSections(base, HOME.slice(1)))).toEqual({ kind: "reload" });
-    expect(previewChange(base, { ...base, pages: { ...base.pages, homeMode: { kind: "product", productId: "p" } } })).toEqual({ kind: "reload" });
-    expect(previewChange(base, { ...base, tokens: { ...base.tokens, density: "airy" } })).toEqual({ kind: "reload" });
-    expect(previewChange(base, { ...base, brand: { ...base.brand, logo: "m" } })).toEqual({ kind: "reload" });
+  it("stops at a list's maximum and keeps its minimum", () => {
+    const full = section("faq", "faq", { items: Array.from({ length: 20 }, (_, index) => ({ question: `Q${index}?`, answer: "a" })) });
+    expect(addBlock(full, "items")).toBeNull();
+    expect(duplicateBlock(full, "items", 0)).toBeNull();
+    // A tab strip keeps two tabs.
+    expect(blockList(tabs, "tabs").length).toBe(2);
+    expect(canRemoveBlock(tabs, "tabs")).toBe(false);
+    expect(canRemoveBlock(faq, "items")).toBe(true);
+  });
+
+  it("gives a new slide a centred focal point", () => {
+    const hero = addBlock(section("hero", "hero"), "slides")!;
+    expect(blockList(hero, "slides").at(-1)).toMatchObject({ focalPoint: { x: 50, y: 50 } });
+  });
+
+  it("hides a block from buyers and shows it again; the document accepts it", () => {
+    const hidden = toggleBlockHidden(faq, "items", 0);
+    expect(blockList(hidden, "items")[0]).toEqual({ question: "Shipping?", answer: "Two days.", hidden: true });
+    expect(blockList(storefrontVisibleSection(hidden), "items")).toEqual([]);
+    expect(storefrontThemeDocumentSchema.safeParse(theme([hidden])).success).toBe(true);
+    expect(blockList(toggleBlockHidden(hidden, "items", 0), "items")[0]).toEqual({ question: "Shipping?", answer: "Two days." });
   });
 });
 
@@ -148,88 +251,37 @@ describe("app sections", () => {
     productBlocks: [],
   }];
   const byKey = appSectionsByKey(APPS);
-  const appSection = (id: string) => ({ ...addAppSection([], "acme.reviews/carousel", {}).sections[0]!, id });
 
   it("adds an app section under a free id with its values, and the document accepts it", () => {
-    const first = addAppSection(HOME, "acme.reviews/carousel", { heading: "What buyers say", count: 4 }, 0);
-    expect(first.id).toBe("app");
-    expect(first.sections[1]).toEqual({
+    const first = newAppSection("acme.reviews/carousel", { heading: "What buyers say", count: 4 }, HOME);
+    expect(first).toEqual({
       id: "app",
       type: "app",
       version: 1,
       settings: { app: "acme.reviews/carousel", values: { heading: "What buyers say", count: 4 } },
     });
-    const second = addAppSection(first.sections, "acme.reviews/carousel", {});
-    expect(second.id).toBe("app-2");
-    expect(ids(second.sections)).toEqual(["hero", "app", "rail", "faq", "app-2"]);
-    expect(storefrontThemeDocumentSchema.safeParse(theme(second.sections)).success).toBe(true);
-    // A copy is another app section with the same values.
-    const copy = duplicateSection(second.sections, "app")!;
-    expect(copy.id).toBe("app-3");
-    expect(copy.sections[2]).toMatchObject({ type: "app", settings: first.sections[1]!.settings });
+    const sections = [...HOME, first];
+    expect(newAppSection("acme.reviews/carousel", {}, sections).id).toBe("app-2");
+    expect(storefrontThemeDocumentSchema.safeParse(theme(sections)).success).toBe(true);
+    const copy = duplicateSection(pageItems(sections, null), "app")!;
+    expect(copy.id).toBe("app-2");
+    expect(fromPageItems(copy.items).sections[4]).toMatchObject({ type: "app", settings: first.settings });
   });
 
-  it("stops at the app sections a homepage draws", () => {
-    const apps = Array.from({ length: PLUGIN_HOME_SECTIONS_MAX }, (_, index) => appSection(`app-${index}`));
+  it("stops at the app sections a page draws", () => {
+    const apps = Array.from({ length: PLUGIN_HOME_SECTIONS_MAX }, (_, index) => ({ ...newAppSection("acme.reviews/carousel", {}, []), id: `app-${index}` }));
     expect(canAddSectionType(apps.slice(1), "app")).toBe(true);
     expect(canAddSectionType(apps, "app")).toBe(false);
-    expect(duplicateSection(apps, "app-0")).toBeNull();
-    // Platform sections still fit.
+    expect(addBlockedReason(apps, "app")).toBe("app-limit");
+    expect(duplicateSection(pageItems(apps, null), "app-0")).toBeNull();
     expect(canAddSectionType(apps, "faq")).toBe(true);
-    // Undo cannot bring one back past the limit.
-    const removed = removeSection(apps, "app-0")!;
-    const refilled = [...removed.sections, appSection("app-new")];
-    expect(restoreSection(refilled, removed.removed, removed.index)).toHaveLength(PLUGIN_HOME_SECTIONS_MAX);
   });
 
-  it("writes values and judges them against the app, never a section whose app is not active", () => {
-    const added = addAppSection(HOME, "acme.reviews/carousel", { heading: "Reviews", count: 4 });
-    expect(appSectionsInvalid(added.sections, byKey)).toBe(false);
-    const broken = setAppSectionValues(added.sections, "app", { heading: "Reviews", count: 40 });
-    expect(broken.find((each) => each.id === "app")!.settings).toEqual({ app: "acme.reviews/carousel", values: { heading: "Reviews", count: 40 } });
-    expect(appSectionsInvalid(broken, byKey)).toBe(true);
-    // Other sections keep their identity.
-    expect(broken[0]).toBe(added.sections[0]);
-    const gone = addAppSection(HOME, "acme.gone/banner", { anything: "kept" });
-    expect(appSectionsInvalid(gone.sections, byKey)).toBe(false);
-  });
-
-  it("swaps an app section in the preview when only its values changed", () => {
-    const added = theme(addAppSection(HOME, "acme.reviews/carousel", { count: 4 }).sections);
-    const edited = withSections(added, setAppSectionValues(added.pages.home, "app", { count: 6 }));
-    expect(previewChange(added, edited)).toEqual({ kind: "sections", ids: ["app"] });
-    expect(previewChange(theme(), added)).toEqual({ kind: "reload" });
-  });
-
-});
-
-describe("preview changes on other pages", () => {
-  const withLanding = (sections: StorefrontSection[]): Theme => ({
-    ...theme(),
-    pages: { ...theme().pages, landing: { sale: { title: "Sale", description: "", sections } } },
-  });
-  const sale = { kind: "landing", slug: "sale" } as const;
-
-  it("swaps a landing page's own sections in place, and reloads for its order or another page's edits", () => {
-    const before = withLanding([section("faq", "faq"), section("seo-text", "seo")]);
-    const edited = withLanding([section("faq", "faq", { heading: "Questions" }), section("seo-text", "seo")]);
-    expect(previewChange(before, edited, sale)).toEqual({ kind: "sections", ids: ["faq"] });
-    expect(previewChange(before, withLanding([section("seo-text", "seo"), section("faq", "faq")]), sale)).toEqual({ kind: "reload" });
-    // The homepage's preview reloads for a landing page edit (it is another page).
-    expect(previewChange(before, edited)).toEqual({ kind: "reload" });
-    // Hiding a section reloads: it leaves the page.
-    expect(previewChange(before, withLanding([{ ...section("faq", "faq"), hidden: true }, section("seo-text", "seo")]), sale)).toEqual({ kind: "reload" });
-  });
-
-  it("reloads product and listing pages for any change, and leaves an unchanged draft alone", () => {
-    const before = theme();
-    const product = { kind: "product" } as const;
-    const reordered = { ...before, blocks: { ...before.blocks, product: { ...before.blocks.product, below: [...before.blocks.product.below].reverse() } } };
-    expect(previewChange(before, reordered, product)).toEqual({ kind: "reload" });
-    expect(previewChange(before, structuredClone(before), product)).toEqual({ kind: "none" });
-  });
-
-  it("moves any list item, as the tree's rows do for product modules", () => {
-    expect(moveSectionTo(["description", "reviews", "related"], 2, 0)).toEqual(["related", "description", "reviews"]);
+  it("judges values against the app, never a section whose app is not active", () => {
+    const valid = newAppSection("acme.reviews/carousel", { heading: "Reviews", count: 4 }, HOME);
+    expect(appSectionInvalid(valid, byKey)).toBe(false);
+    expect(appSectionInvalid({ ...valid, settings: { ...valid.settings, values: { count: 40 } } }, byKey)).toBe(true);
+    expect(appSectionInvalid(newAppSection("acme.gone/banner", { anything: "kept" }, HOME), byKey)).toBe(false);
+    expect(appSectionInvalid(HOME[0]!, byKey)).toBe(false);
   });
 });

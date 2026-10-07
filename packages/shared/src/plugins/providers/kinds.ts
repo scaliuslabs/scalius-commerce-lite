@@ -35,7 +35,7 @@ export const PROVIDER_OPERATIONS = {
   // Machine translation (MARKETS-DESIGN D9): no built-in provider, apps only.
   translation: { required: ["translate"], optional: ["testConnection"] },
   // AI drafting (the theme editor's "Draft with AI"): no built-in provider or key, apps only.
-  ai: { required: ["draftSections"], optional: ["testConnection"] },
+  ai: { required: ["generate"], optional: ["testConnection"] },
 } as const satisfies Record<ProviderKind, { required: readonly string[]; optional: readonly string[] }>;
 
 export type ProviderOperationName<K extends ProviderKind> =

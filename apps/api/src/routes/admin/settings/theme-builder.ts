@@ -12,8 +12,7 @@ import {
   storefrontLandingSlugSchema,
 } from "@scalius/shared/storefront-theme";
 import {
-  AI_DRAFT_PROMPT_MAX,
-  AI_DRAFT_SECTIONS_MAX,
+  AI_GENERATE_PROMPT_MAX,
   ProviderError,
   providerErrorOf,
   qualifiedProviderId,
@@ -137,14 +136,57 @@ const SECTION_PURPOSE: Record<(typeof STOREFRONT_SECTION_RENDERERS)[number], str
   newsletter: "A signup: phone always, e-mail as chosen, optional WhatsApp.",
 };
 
-/** The section types the provider may use, each with its settings' JSON Schema. */
-function aiSectionTypes() {
-  return STOREFRONT_SECTION_RENDERERS.map((type) => ({
-    type,
-    description: SECTION_PURPOSE[type],
-    settings: z.toJSONSchema(STOREFRONT_SECTION_REGISTRY[type].settings, { unrepresentable: "any" }) as Record<string, unknown>,
-  }));
+/** Most sections one AI draft returns. */
+const AI_DRAFT_SECTIONS_MAX = 8;
+
+/**
+ * The JSON Schema of a draft: `{ sections, note }`, each section one of the
+ * types a page may use with that type's settings schema. The AI port is
+ * general (`generate`); this schema and the instructions make it a section
+ * drafter, and the answer is validated against the theme's own schemas.
+ */
+function aiDraftSchema(limit: number): Record<string, unknown> {
+  return {
+    type: "object",
+    additionalProperties: false,
+    required: ["sections"],
+    properties: {
+      sections: {
+        type: "array",
+        maxItems: limit,
+        items: {
+          anyOf: STOREFRONT_SECTION_RENDERERS.map((type) => ({
+            type: "object",
+            description: SECTION_PURPOSE[type],
+            additionalProperties: false,
+            required: ["type", "settings"],
+            properties: {
+              type: { const: type },
+              settings: z.toJSONSchema(STOREFRONT_SECTION_REGISTRY[type].settings, { unrepresentable: "any" }),
+            },
+          })),
+        },
+      },
+      note: { type: "string", maxLength: 500, description: "One short line for the merchant: what the draft did and what to check." },
+    },
+  };
 }
+
+const AI_PAGE_NAMES = { home: "the homepage", landing: "a landing page", product: "product pages", collection: "category and collection pages", cart: "the cart page", page: "content pages" } as const;
+
+function aiDraftInstructions(page: keyof typeof AI_PAGE_NAMES, limit: number): string {
+  return [
+    `Draft at most ${limit} storefront sections for ${AI_PAGE_NAMES[page]} of an online store, from the merchant's words.`,
+    "Answer with one JSON value that matches the schema: each section is a `type` and its `settings`.",
+    "Write every word in the language the request names. Use only facts the merchant gave; never invent prices, discounts, deadlines, reviews or contact details.",
+    "Images, products, categories and collections are ids you do not have: leave image fields empty or choose a section that needs none, and use product sources such as newest or on sale.",
+  ].join("\n");
+}
+
+const aiDraftValueSchema = z.object({
+  sections: z.array(z.record(z.string(), z.unknown())).max(AI_DRAFT_SECTIONS_MAX),
+  note: z.string().max(500).optional(),
+});
 
 const aiPageSchema = z.enum(["home", "landing", ...STOREFRONT_PAGE_TEMPLATES]);
 
@@ -153,7 +195,7 @@ app.openapi(createRoute({
   path: "/theme/ai-draft",
   tags: ["Admin - Settings"],
   summary: "Draft theme sections from the merchant's words with an app's AI provider",
-  description: `Scalius has no built-in AI and no model key: an app provides one (\`draftSections\`). Returns up to ${AI_DRAFT_SECTIONS_MAX} sections, each validated against the theme's section schemas and marked as an AI draft; invalid ones are left out and counted. Nothing is saved: the editor adds them to its unsaved draft.`,
+  description: `Scalius has no built-in AI and no model key: an app's AI provider (the general \`generate\` port) drafts against the section schemas. Returns up to ${AI_DRAFT_SECTIONS_MAX} sections, each validated against the theme's section schemas and marked as an AI draft; invalid ones are left out and counted. Nothing is saved: the editor adds them to its unsaved draft.`,
   operationId: "dashboard.theme.ai_draft_create",
   request: {
     body: {
@@ -162,7 +204,7 @@ app.openapi(createRoute({
         "application/json": {
           schema: z.object({
             providerId: z.string().min(3).max(120),
-            prompt: z.string().trim().min(1).max(AI_DRAFT_PROMPT_MAX),
+            prompt: z.string().trim().min(1).max(AI_GENERATE_PROMPT_MAX),
             page: aiPageSchema,
             locale: z.string().regex(/^[a-z]{2}$/).default("en"),
             limit: z.number().int().min(1).max(AI_DRAFT_SECTIONS_MAX).default(3),
@@ -194,23 +236,25 @@ app.openapi(createRoute({
   if (!choice.provider) throw new ValidationError(choice.issue);
   let output;
   try {
-    output = await choice.provider.draftSections({
+    output = await choice.provider.generate({
+      purpose: "theme.sections",
+      instructions: aiDraftInstructions(input.page, input.limit),
       prompt: input.prompt,
       locale: input.locale,
-      page: input.page,
-      limit: input.limit,
-      sectionTypes: aiSectionTypes(),
+      schema: aiDraftSchema(input.limit),
     }, {});
   } catch (error) {
     const providerError = providerErrorOf(error);
     if (providerError) throw new ValidationError(`${choice.provider.label}: ${providerError.message}`);
     throw new ValidationError(`${choice.provider.label} could not draft sections. Try again.`, error instanceof ProviderError ? { code: error.code } : undefined);
   }
-  const accepted = acceptDraftedSections(output.sections.slice(0, input.limit), []);
+  const value = aiDraftValueSchema.safeParse(output.value);
+  if (!value.success) throw new ValidationError(`${choice.provider.label} returned nothing this theme can show. Try other words.`);
+  const accepted = acceptDraftedSections(value.data.sections.slice(0, input.limit), []);
   if (accepted.sections.length === 0) {
     throw new ValidationError(`${choice.provider.label} returned nothing this theme can show. Try other words.`);
   }
-  return ok(c, { sections: accepted.sections, rejected: accepted.rejected, note: output.note ?? null });
+  return ok(c, { sections: accepted.sections, rejected: accepted.rejected, note: value.data.note ?? null });
 });
 
 app.openapi(createRoute({

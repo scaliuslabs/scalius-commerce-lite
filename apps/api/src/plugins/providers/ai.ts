@@ -1,8 +1,8 @@
-// App AI providers as the AI port: the theme editor's "Draft with AI". The
-// platform has no built-in provider and no model key. The plugin host
-// validates both sides of the port; the theme route then validates every
-// drafted section against the theme's schemas, and nothing is saved until
-// the merchant's editor saves it.
+// App AI providers as the AI port (`generate`): structured generation
+// against a JSON Schema. The platform has no built-in provider and no model
+// key. The plugin host validates both sides of the port; each consumer (the
+// theme editor's Draft with AI first) validates the value against its own
+// schemas, and nothing is saved until the merchant saves it.
 
 import type { BoundProvider } from "@scalius/core/integrations/provider-port";
 import type { PluginInstallation } from "@scalius/core/modules/plugins";
@@ -28,7 +28,7 @@ export function appAiProvider(
   const provider: Record<string, unknown> = {
     id: qualifiedProviderId(installation.pluginId, declaration.id),
     label: declaration.name,
-    draftSections: (input: unknown, { signal }: { signal?: AbortSignal } = {}) => invoke("draftSections", input, signal),
+    generate: (input: unknown, { signal }: { signal?: AbortSignal } = {}) => invoke("generate", input, signal),
   };
   if (operations.has("testConnection")) {
     provider.testConnection = (input: unknown, { signal }: { signal?: AbortSignal } = {}) => invoke("testConnection", input, signal);

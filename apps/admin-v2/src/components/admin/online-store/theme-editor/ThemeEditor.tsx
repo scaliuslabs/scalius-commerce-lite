@@ -378,7 +378,8 @@ export function ThemeEditor({ workspace, refetch }: {
   const [libraryAt, setLibraryAt] = useState<number | null>(null);
   const [aiOpen, setAiOpen] = useState(false);
   const aiProviders = workspace.aiProviders;
-  const aiAvailable = canEdit && (aiProviders.length > 0 || canConnectAgent);
+  // Always offered to editors: without an AI app or agent, the dialog says what to turn on.
+  const aiAvailable = canEdit;
   const template = pageTemplate(page);
   const libraryOptions: LibraryOption[] = useMemo(() => {
     const current = sections ?? [];
