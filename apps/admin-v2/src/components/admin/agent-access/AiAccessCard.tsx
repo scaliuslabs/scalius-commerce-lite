@@ -46,7 +46,6 @@ import {
   rotateAgentCredential,
 } from "./api";
 import type { AgentAuditEvent, AgentConnection, AgentRisk } from "./types";
-import { eventTime } from "~/lib/event-time";
 
 const ACTIVITY_LIMIT = 10;
 const RISKS: ReadonlySet<string> = new Set<AgentRisk>(["read", "write", "destructive", "financial", "security"]);
@@ -60,7 +59,7 @@ function formatDate(value: string | null, withTime = false): string | null {
   if (!value) return null;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return null;
-  return withTime ? eventTime(date) : formatDateTime(date, { dateStyle: "medium" });
+  return formatDateTime(date, withTime ? { dateStyle: "medium", timeStyle: "short" } : { dateStyle: "medium" });
 }
 
 const isKnownPermission = (permission: string): permission is PermissionName =>

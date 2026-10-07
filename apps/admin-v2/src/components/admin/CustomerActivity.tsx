@@ -1,7 +1,7 @@
 import { Fragment, type ReactNode } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { displayPhone } from "~/lib/phone-display";
+import { formatPhoneForDisplay } from "@scalius/shared/phone-input";
 import { formatOrderNumber } from "@scalius/shared/order-utils";
 import { unixToDate } from "@scalius/shared/timestamps";
 import { Button } from "~/components/ui/button";
@@ -16,7 +16,6 @@ import { formatDateTime, useMessages } from "~/i18n";
 import { customerPageMessages } from "~/i18n/customer-page";
 import { customerTitle, type CustomerTitleInput } from "~/lib/customer-title";
 import { resourceMessages } from "~/i18n/resource";
-import { eventTime } from "~/lib/event-time";
 
 const PAGE = { orders: 10, history: 10 } as const;
 
@@ -28,7 +27,7 @@ const day = (value: string | number | null | undefined) => {
 /** Change-log entries carry the time too: several can land on one day. */
 const when = (value: string | number | null | undefined) => {
   const date = unixToDate(value);
-  return date ? eventTime(date) ?? "" : "";
+  return date ? formatDateTime(date, { dateStyle: "medium", timeStyle: "short" }) : "";
 };
 
 /** What a change-log entry records: the contact (addresses are in the address book). */
@@ -42,7 +41,7 @@ const FIELD_LABEL = {
 function snapshot(change: { name: string | null; phone: string | null; email: string | null }): Snapshot {
   return {
     name: change.name ?? "",
-    phone: change.phone ? displayPhone(change.phone) : "",
+    phone: change.phone ? formatPhoneForDisplay(change.phone) : "",
     email: change.email ?? "",
   };
 }

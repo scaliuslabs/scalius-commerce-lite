@@ -2,12 +2,11 @@
 
 import { unixToDate } from "@scalius/shared/timestamps";
 import { formatDateTime, formatNumber } from "~/i18n";
-import { eventTime } from "~/lib/event-time";
 
 /** A media timestamp in store time, in the dashboard language. */
 export function formatDate(value: Date | number | string | null | undefined): string {
   const date = unixToDate(value ?? null);
-  return date && Number.isFinite(date.getTime()) ? eventTime(date) ?? "—" : "—";
+  return date && Number.isFinite(date.getTime()) ? formatDateTime(date, { dateStyle: "medium", timeStyle: "short" }) : "—";
 }
 
 

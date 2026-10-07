@@ -2,7 +2,7 @@ import * as React from "react";
 
 import { cn } from "@scalius/shared/utils";
 import { formatDateTime, useMessages } from "~/i18n";
-import { dataTableMessages } from "~/i18n/data-table";
+import { formMessages } from "~/i18n/forms";
 import { formatDateOnly, parseDateOnly } from "~/lib/date-only";
 import { fieldClassName } from "./input";
 import { Popover, PopoverContent, PopoverTrigger } from "./popover";
@@ -31,7 +31,7 @@ type DateInputProps = {
  * "YYYY-MM-DD" a native date field holds; the calendar opens below the field.
  */
 export function DateInput({ value, onValueChange, min, max, id, disabled = false, className, ...aria }: DateInputProps) {
-  const t = useMessages(dataTableMessages);
+  const t = useMessages(formMessages);
   const [open, setOpen] = React.useState(false);
   const day = parseDateOnly(value);
   const earliest = parseDateOnly(min);

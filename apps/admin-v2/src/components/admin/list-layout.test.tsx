@@ -27,7 +27,7 @@ import { FULFILLMENT_STATUSES, ORDER_STATUSES, PAYMENT_STATUSES } from "@scalius
 import { displayPhone } from "~/lib/phone-display";
 import { formatNumber, setLocale, translate } from "~/i18n";
 import { customersMessages } from "~/i18n/customers";
-import { eventTimeMessages } from "~/i18n/event-time";
+import { dataTableMessages } from "~/i18n/data-table";
 import { orderListMessages, type OrderListMessageKey } from "~/i18n/order-list";
 import { orderChannelText, orderMessages } from "~/i18n/orders";
 import { productMessages, type ProductMessageKey } from "~/i18n/products";
@@ -73,7 +73,7 @@ const LONG_NAMES = [
 ];
 const PHONE = "+8801712345678";
 const NOW = new Date("2026-10-07T12:00:00Z");
-const t = (key: keyof (typeof eventTimeMessages)["en"], vars?: Record<string, string | number>) => translate(eventTimeMessages, key, vars);
+const t = (key: keyof (typeof dataTableMessages)["en"], vars?: Record<string, string | number>) => translate(dataTableMessages, key, vars);
 
 /** Apps' data-backed columns, as Wave 7 adds them from custom fields marked as list columns. */
 function pluginColumns<TData extends TableRowData>(): ColumnDef<TData, unknown>[] {

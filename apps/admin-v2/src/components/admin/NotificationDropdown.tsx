@@ -6,9 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useFirebaseInit } from "@/hooks/use-firebase-init";
 import { formatDateTime, useMessages } from "~/i18n";
-import { notificationBellMessages } from "~/i18n/notification-bell";
+import { shellMessages } from "~/i18n/shell";
 import { TOP_BAR_BUTTON } from "./layout/nav-button";
-import { eventTime } from "~/lib/event-time";
 
 interface AdminNotification {
   id: string;
@@ -47,7 +46,7 @@ function saveNotifications(notifications: AdminNotification[]) {
 }
 
 export function NotificationDropdown({ userId }: { userId: string }) {
-  const t = useMessages(notificationBellMessages);
+  const t = useMessages(shellMessages);
   const navigate = useNavigate();
   const [notifications, setNotifications] = useState<AdminNotification[]>(loadNotifications);
   const { status: pushStatus, enablePushNotifications } = useFirebaseInit(userId);
@@ -134,7 +133,7 @@ export function NotificationDropdown({ userId }: { userId: string }) {
                 <p className={cn("truncate text-body", !notification.read && "font-medium")}>{notification.title}</p>
                 {notification.message ? <p className="line-clamp-2 text-body text-muted-foreground">{notification.message}</p> : null}
                 <p className="mt-0.5 text-caption text-muted-foreground">
-                  {eventTime(new Date(notification.timestamp))}
+                  {formatDateTime(new Date(notification.timestamp), { dateStyle: "medium", timeStyle: "short" })}
                 </p>
               </button>
             ))

@@ -32,6 +32,7 @@ import { Badge, type BadgeVariant } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
 import { Checkbox } from "~/components/ui/checkbox";
+import { DateInput } from "~/components/ui/date-input";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { NumberInput } from "~/components/ui/number-input";
@@ -45,8 +46,6 @@ import { appUiMessages } from "~/i18n/app-ui";
 import { appErrorMessage, hasActionEffect, openTarget, runAppRoute, showActionToast } from "./run-action";
 import { targetLocation, useCanUseApps, type AppSurfaces } from "./surfaces";
 import { checkInput, initialInputValue, inputValueToJson, type InputProblem, type InputValue } from "./ui-form";
-import { DateInput } from "~/components/ui/date-input";
-import { eventTime } from "~/lib/event-time";
 
 /** What the surface around a tree offers it. */
 export interface PluginUiHost {
@@ -115,7 +114,7 @@ export function formatAppDate(value: string): string {
   if (Number.isNaN(date.getTime())) return value;
   return dateOnly
     ? formatDateTime(date, { dateStyle: "medium", timeZone: "UTC" })
-    : eventTime(date) ?? value;
+    : formatDateTime(date, { dateStyle: "medium", timeStyle: "short" });
 }
 
 /** Integer minor units in the store currency (or the cell's own currency). */

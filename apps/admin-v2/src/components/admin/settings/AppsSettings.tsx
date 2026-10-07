@@ -65,7 +65,6 @@ import { useSaveBar } from "../shared/SaveBar";
 import { OfficialProviderMark, type ProviderMarkId } from "./provider-marks";
 import { SettingsLoadFailure } from "./SettingsLoadFailure";
 import { SettingsCard, SettingsCardLoading, SettingsDialog, SettingsField, SettingsRow } from "./SettingsPage";
-import { eventTime } from "~/lib/event-time";
 
 /** Saved secrets come back masked; sending the mask back keeps them. */
 const MASKED_VALUE = "••••••••••••";
@@ -613,7 +612,7 @@ function RecentEvents() {
               <span className="block truncate font-medium">{log.eventName ?? t("event")}</span>
               {time ? (
                 <span className="block text-muted-foreground">
-                  {eventTime(time)}
+                  {formatDateTime(time, { dateStyle: "medium", timeStyle: "short" })}
                 </span>
               ) : null}
             </span>

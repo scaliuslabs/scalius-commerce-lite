@@ -35,7 +35,6 @@ import { customerMarketingMessages } from "~/i18n/customer-marketing";
 import { customerPageMessages } from "~/i18n/customer-page";
 import { resourceMessages } from "~/i18n/resource";
 import { CONSENT_BADGE, consentFacts, suggestedConsentChange } from "./marketing-display";
-import { eventTime } from "~/lib/event-time";
 
 /** Consent log entries shown before "Show all". */
 const HISTORY_PREVIEW = 3;
@@ -47,7 +46,7 @@ const day = (value: string | null | undefined) => {
 
 const when = (value: string | null | undefined) => {
   const date = unixToDate(value);
-  return date ? eventTime(date) ?? "" : "";
+  return date ? formatDateTime(date, { dateStyle: "medium", timeStyle: "short" }) : "";
 };
 
 function ChannelStatus({ consent }: { consent: CustomerConsent }) {

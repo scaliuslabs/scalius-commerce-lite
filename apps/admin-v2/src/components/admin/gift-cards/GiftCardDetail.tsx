@@ -15,14 +15,12 @@ import { AdjustBalanceDialog, EditDetailsDialog, ExpiryDialog, giftCardErrorText
 import { GiftCardStatusBadge } from "./gift-card-fields";
 import { formatGiftCardLastDay, formatGiftCardMoney } from "./gift-card-format";
 import { useResendGiftCard, useUpdateGiftCard } from "./use-gift-card-mutations";
-import { eventTime } from "~/lib/event-time";
 
 type DialogName = "adjust" | "expiry" | "details" | "disable" | null;
 
-function when(value: string | number | null | undefined, options?: Intl.DateTimeFormatOptions): string {
+function when(value: string | number | null | undefined, options: Intl.DateTimeFormatOptions = { dateStyle: "medium", timeStyle: "short" }): string {
   const date = unixToDate(value ?? null);
-  if (!date) return "—";
-  return options ? formatDateTime(date, options) : eventTime(date) ?? "—";
+  return date ? formatDateTime(date, options) : "—";
 }
 
 /** The API sends the order number already formatted ("#1001"). */

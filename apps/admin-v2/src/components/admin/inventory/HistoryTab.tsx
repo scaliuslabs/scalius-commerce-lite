@@ -30,7 +30,6 @@ import {
   type MovementFilter,
   type MovementType,
 } from "./inventory-search";
-import { eventTime } from "~/lib/event-time";
 
 
 type CounterChange = {
@@ -330,7 +329,7 @@ export function HistoryTab({ filters, onFiltersChange }: HistoryTabProps) {
                     </p>
                   ))}
                   <p className="text-body text-muted-foreground">
-                    {eventTime(toDate(movement.createdAt))}
+                    {formatDateTime(toDate(movement.createdAt), { dateStyle: "medium", timeStyle: "short" })}
                   </p>
                 </div>
               </li>

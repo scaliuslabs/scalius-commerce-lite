@@ -3,7 +3,6 @@ import type { BadgeVariant } from "~/components/ui/badge";
 import { formatDateTime, formatNumber, translate } from "~/i18n";
 import { webhookTopicMessages, webhooksMessages } from "~/i18n/settings-webhooks";
 import type { WebhookDeliveryStatus, WebhookSubscription } from "~/lib/api-query-options/webhooks";
-import { eventTime } from "~/lib/event-time";
 
 /** A topic filter in plain words; an unknown one (a newer API) as sent. */
 export function topicLabel(topic: string): string {
@@ -23,7 +22,7 @@ export function formatWhen(value: string | null): string | null {
   if (!value) return null;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return null;
-  return eventTime(date);
+  return formatDateTime(date, { dateStyle: "medium", timeStyle: "short" });
 }
 
 export function formatDuration(ms: number | null): string | null {
