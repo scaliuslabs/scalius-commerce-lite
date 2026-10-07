@@ -103,7 +103,7 @@
   },
   "scripts": {
     "lint": "eslint src/",
-    "typecheck": "../../node_modules/typescript7/bin/tsc --noEmit",
+    "typecheck": "../../node_modules/typescript7/bin/tsc --build",
     "test": "vitest run"
   },
   "devDependencies": {

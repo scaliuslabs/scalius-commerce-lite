@@ -1,9 +1,18 @@
 {
   "extends": "@scalius/tsconfig/base.json",
   "compilerOptions": {
-    "outDir": "./dist",
-    "rootDir": "./src",
-    "lib": ["ES2022", "DOM", "DOM.Iterable"]
+    "outDir": "../../node_modules/.cache/tsbuild/api-client",
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "composite": true,
+    "emitDeclarationOnly": true,
+    "tsBuildInfoFile": "../../node_modules/.cache/tsbuild/api-client.tsbuildinfo",
+    "rootDir": "./src"
   },
-  "include": ["src/**/*.ts"]
+  "include": [
+    "src/**/*.ts"
+  ]
 }

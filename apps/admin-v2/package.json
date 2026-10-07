@@ -8,7 +8,7 @@
     "dev": "vite dev",
     "build": "vite build && node ../../scripts/check-admin-client-boundaries.mjs",
     "preview": "vite preview",
-    "typecheck": "../../node_modules/typescript7/bin/tsc --noEmit",
+    "typecheck": "../../node_modules/typescript7/bin/tsc --build",
     "lint": "eslint src/"
   },
   "dependencies": {

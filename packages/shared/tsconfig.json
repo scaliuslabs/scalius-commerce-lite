@@ -7,9 +7,14 @@
     "lib": [
       "ES2022",
       "DOM"
-    ]
+    ],
+    "composite": true,
+    "emitDeclarationOnly": true,
+    "outDir": "../../node_modules/.cache/tsbuild/shared",
+    "tsBuildInfoFile": "../../node_modules/.cache/tsbuild/shared.tsbuildinfo"
   },
   "include": [
-    "src/**/*"
+    "src/**/*",
+    "src/**/*.json"
   ]
 }

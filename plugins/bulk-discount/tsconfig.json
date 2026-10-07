@@ -10,9 +10,19 @@
       "@scalius/shared/*": [
         "../../packages/shared/src/*"
       ]
-    }
+    },
+    "noEmit": true,
+    "tsBuildInfoFile": "../../node_modules/.cache/tsbuild/plugin-bulk-discount.tsbuildinfo"
   },
   "include": [
     "src/**/*"
+  ],
+  "references": [
+    {
+      "path": "../../packages/shared"
+    },
+    {
+      "path": "../../packages/plugin-sdk"
+    }
   ]
 }

@@ -9,7 +9,7 @@ Install, configure and deploy from the repository root (see the [root README](..
 | Command | What it does |
 | --- | --- |
 | `pnpm dev:storefront` (root) | Starts the API Worker and `astro dev` together. Ports come from `scripts/dev-ports.mjs` (default storefront `:4322`, API `:8787`). |
-| `pnpm --filter ./apps/storefront build` | Runs `scripts/generate-build-id.js`, `astro check`, `astro build`, then `scripts/check-dist-secrets.mjs`. |
+| `pnpm --filter ./apps/storefront build` | Runs `scripts/generate-build-id.js`, `astro build`, then `scripts/check-dist-secrets.mjs`. `astro check` runs once, in `typecheck`. |
 | `pnpm --filter ./apps/storefront typecheck`, `lint` | `astro check` (after the build ID), and ESLint over `src/`. |
 | `pnpm perf:storefront` | Checks TTFB, LCP and CLS budgets against a running stack (`scripts/storefront-perf.mjs`). |
 | `pnpm fidelity:check` | Measures the built storefront against reference sites (`scripts/storefront-fidelity/`). |

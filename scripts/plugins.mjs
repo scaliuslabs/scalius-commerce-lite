@@ -170,14 +170,21 @@ export function scaffoldFiles(id, name) {
       type: "module",
       license: "AGPL-3.0-only",
       exports: { ".": "./src/index.ts" },
-      scripts: { test: "vitest run", typecheck: "../../node_modules/typescript7/bin/tsc --noEmit" },
+      scripts: { test: "vitest run", typecheck: "../../node_modules/typescript7/bin/tsc --build" },
       dependencies: { "@scalius/plugin-sdk": "workspace:*" },
-      devDependencies: { "@scalius/tsconfig": "workspace:*", vitest: "^4.1.11" },
+      devDependencies: { "@scalius/tsconfig": "workspace:*", vitest: "^5.0.3" },
     }, null, 2)}\n`,
     "tsconfig.json": `${JSON.stringify({
       extends: "@scalius/tsconfig/base.json",
-      compilerOptions: { types: [], lib: ["ES2022", "DOM"], paths: { "@scalius/shared/*": ["../../packages/shared/src/*"] } },
+      compilerOptions: {
+        types: [],
+        lib: ["ES2022", "DOM"],
+        paths: { "@scalius/shared/*": ["../../packages/shared/src/*"] },
+        noEmit: true,
+        tsBuildInfoFile: `../../node_modules/.cache/tsbuild/plugin-${name}.tsbuildinfo`,
+      },
       include: ["src/**/*"],
+      references: [{ path: "../../packages/shared" }, { path: "../../packages/plugin-sdk" }],
     }, null, 2)}\n`,
     "src/index.ts": `import { definePlugin, PLUGIN_API_VERSION, type PluginManifestInput } from "@scalius/plugin-sdk";
 

@@ -110,7 +110,7 @@ Run every command from the repository root.
 | `pnpm dev:admin:create`, `dev:admin:reset`, `dev:admin:status` | Manage the local admin |
 | `pnpm db:generate` | Generate Drizzle migrations after a schema change |
 | `pnpm db:migrate:local`, `db:migrate:remote` | Apply pending migrations to local or remote D1 |
-| `pnpm typecheck` | `tsc` for every workspace, one at a time |
+| `pnpm typecheck` | One TypeScript 7 `tsc --build` over every project (project references), then `astro check` for the storefront |
 | `pnpm lint` | ESLint for every workspace; the dashboard also enforces its design rules |
 | `pnpm test` | Vitest for the whole repository ([tests/README.md](tests/README.md)) |
 | `pnpm check:env` | Fail on Wrangler `vars`, bindings outside the allowed set, and a missing `CF_VERSION_METADATA` |

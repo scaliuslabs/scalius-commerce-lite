@@ -15,7 +15,7 @@
   "scripts": {
     "lint": "eslint src/",
     "test": "vitest run",
-    "typecheck": "../../node_modules/typescript7/bin/tsc --noEmit"
+    "typecheck": "../../node_modules/typescript7/bin/tsc --build"
   },
   "dependencies": {
     "@scalius/shared": "workspace:*"

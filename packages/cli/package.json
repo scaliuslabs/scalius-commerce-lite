@@ -41,7 +41,7 @@
     "lint": "eslint src/ test/",
     "prepublishOnly": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
     "test": "vitest run",
-    "typecheck": "../../node_modules/typescript7/bin/tsc --noEmit"
+    "typecheck": "../../node_modules/typescript7/bin/tsc --build"
   },
   "dependencies": {
     "commander": "15.0.0",

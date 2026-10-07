@@ -7,9 +7,18 @@
     "lib": [
       "ES2022",
       "DOM"
-    ]
+    ],
+    "composite": true,
+    "emitDeclarationOnly": true,
+    "outDir": "../../node_modules/.cache/tsbuild/plugin-sdk",
+    "tsBuildInfoFile": "../../node_modules/.cache/tsbuild/plugin-sdk.tsbuildinfo"
   },
   "include": [
     "src/**/*"
+  ],
+  "references": [
+    {
+      "path": "../shared"
+    }
   ]
 }

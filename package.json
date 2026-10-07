@@ -22,7 +22,7 @@
     "demo:store": "node scripts/demo-store.mjs",
     "secret:derive": "node scripts/derive-runtime-secret.mjs",
     "auth:handoff-token": "node scripts/mint-identity-handoff-token.mjs",
-    "typecheck": "node scripts/turbo-run.mjs typecheck --concurrency=1",
+    "typecheck": "node scripts/typecheck.mjs",
     "dev:setup": "node scripts/dev-setup.mjs",
     "dev:reset": "node scripts/dev-reset.mjs",
     "dev:admin:create": "node scripts/dev-admin.mjs create",

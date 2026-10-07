@@ -10,7 +10,9 @@
     "outDir": "dist",
     "declaration": true,
     "declarationMap": true,
-    "sourceMap": true
+    "sourceMap": true,
+    "noEmit": true,
+    "tsBuildInfoFile": "../../node_modules/.cache/tsbuild/cli.tsbuildinfo"
   },
   "include": ["src/**/*.ts", "test/**/*.ts"]
 }
